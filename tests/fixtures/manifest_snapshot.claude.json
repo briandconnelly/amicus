@@ -58,6 +58,7 @@
       "unsupported_isolation",
       "unsupported_sandbox",
       "unsupported_tier",
+      "user_config_rejected",
       "workspace_outside_roots",
       "worktree_error"
     ],
@@ -117,6 +118,7 @@
       "redacted_paths",
       "usage",
       "context_summary",
+      "instructions_append",
       "job_id",
       "job_kind",
       "task_id",
@@ -784,7 +786,7 @@
           "stability": "alpha"
         },
         "dev.bconnelly.amicus/triage": {
-          "size_bytes": 10428
+          "size_bytes": 11049
         }
       },
       "mimeType": "application/schema+json",
@@ -978,6 +980,7 @@
                   "unsupported_isolation",
                   "unsupported_sandbox",
                   "unsupported_tier",
+                  "user_config_rejected",
                   "workspace_outside_roots",
                   "worktree_error"
                 ],
@@ -1093,6 +1096,28 @@
               }
             },
             "title": "ErrorInfo",
+            "type": "object"
+          },
+          "InstructionsFingerprint": {
+            "additionalProperties": false,
+            "description": "What a result discloses about `instructions_append`: a digest and a byte count,\nnever the text (the parameter contract promises only a fingerprint is echoed).",
+            "properties": {
+              "bytes": {
+                "minimum": 1,
+                "title": "Bytes",
+                "type": "integer"
+              },
+              "sha256": {
+                "pattern": "^[0-9a-f]{64}$",
+                "title": "Sha256",
+                "type": "string"
+              }
+            },
+            "required": [
+              "bytes",
+              "sha256"
+            ],
+            "title": "InstructionsFingerprint",
             "type": "object"
           },
           "InvalidArgument": {
@@ -1214,7 +1239,7 @@
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-1",
+                "default": "amicus/0.1/schema-2",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -1230,6 +1255,17 @@
                 ],
                 "default": null,
                 "title": "Idempotency Replayed"
+              },
+              "instructions_append": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/InstructionsFingerprint"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
               },
               "job_id": {
                 "anyOf": [
@@ -1764,7 +1800,7 @@
           "stability": "alpha"
         },
         "dev.bconnelly.amicus/triage": {
-          "size_bytes": 10428
+          "size_bytes": 11049
         }
       },
       "description": "The full ErrorResult schema; tool outputSchemas carry only an opaque error branch.",
@@ -1794,7 +1830,7 @@
           "stability": "alpha"
         },
         "dev.bconnelly.amicus/triage": {
-          "size_bytes": 4652
+          "size_bytes": 5249
         }
       },
       "description": "The full Meta schema every success envelope's opaque `meta` points at.",
@@ -1811,7 +1847,7 @@
           "stability": "alpha"
         },
         "dev.bconnelly.amicus/triage": {
-          "size_bytes": 4652
+          "size_bytes": 5249
         }
       },
       "mimeType": "application/schema+json",
@@ -1837,6 +1873,28 @@
               }
             },
             "title": "ContextSummary",
+            "type": "object"
+          },
+          "InstructionsFingerprint": {
+            "additionalProperties": false,
+            "description": "What a result discloses about `instructions_append`: a digest and a byte count,\nnever the text (the parameter contract promises only a fingerprint is echoed).",
+            "properties": {
+              "bytes": {
+                "minimum": 1,
+                "title": "Bytes",
+                "type": "integer"
+              },
+              "sha256": {
+                "pattern": "^[0-9a-f]{64}$",
+                "title": "Sha256",
+                "type": "string"
+              }
+            },
+            "required": [
+              "bytes",
+              "sha256"
+            ],
+            "title": "InstructionsFingerprint",
             "type": "object"
           },
           "Usage": {
@@ -1998,7 +2056,7 @@
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-1",
+            "default": "amicus/0.1/schema-2",
             "title": "Fingerprint",
             "type": "string"
           },
@@ -2014,6 +2072,17 @@
             ],
             "default": null,
             "title": "Idempotency Replayed"
+          },
+          "instructions_append": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/InstructionsFingerprint"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           },
           "job_id": {
             "anyOf": [
