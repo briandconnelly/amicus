@@ -232,11 +232,8 @@ def delegate_result(
         summary = f"The backend made no changes. {summary}"
         bounded = ""
     else:
-        # Bound first, then redact: a byte-cap cut can land mid-hunk, but a still-visible
-        # `diff --git a/PATH b/PATH` header is enough for DiffRedactor to drop that file's
-        # remainder, so a secret-looking file is scrubbed even out of a truncated diff.
-        capped = _bound_diff(diff, meta, max_diff_bytes)
-        bounded, meta.redacted_paths = redaction.redact(capped)
+        redacted, meta.redacted_paths = redaction.redact(diff)
+        bounded = _bound_diff(redacted, meta, max_diff_bytes)
     plural = lambda n, word: f"{n} {word}{'' if n == 1 else 's'}"  # noqa: E731
     diffstat = (
         f"{plural(stat.files_changed, 'file')} changed, "

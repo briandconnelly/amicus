@@ -140,14 +140,22 @@ def test_delegate_relativizes_redacts_and_bounds(tmp_path):
     assert none["diff"] is None and none["summary"].startswith("The backend made no changes.")
     secret_diff = "diff --git a/.env b/.env\n+API_KEY=sk-" + "e" * 40 + "\n"
     meta = Meta()
-    bounded = fz.delegate_result(
-        ExecResult(answer="ok"), meta, diff=secret_diff + "x" * 500, aliases=(), max_diff_bytes=100
+    redacted = fz.delegate_result(
+        ExecResult(answer="ok"), meta, diff=secret_diff, aliases=(), max_diff_bytes=10_000
     )
-    assert "sk-" + "e" * 40 not in bounded["diff"] and bounded["meta"]["truncated"] is True
+    assert "sk-" + "e" * 40 not in redacted["diff"]
+    assert redacted["meta"]["redacted_paths"] and redacted["meta"]["truncated"] is False
+    big = "diff --git a/f.py b/f.py\n" + "+x\n" * 200
+    meta = Meta()
+    bounded = fz.delegate_result(
+        ExecResult(answer="ok"), meta, diff=big, aliases=(), max_diff_bytes=100
+    )
+    assert bounded["meta"]["truncated"] is True
     assert (
         "AMICUS_MAX_DELEGATE_DIFF_BYTES" in bounded["meta"]["truncation_hint"]
         and len(bounded["diff"].encode()) <= 100
     )
+    assert bounded["meta"]["redacted_paths"] == []
 
 
 def test_coerce_findings_drops_malformed_entries():
