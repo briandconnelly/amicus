@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:  # pragma: no cover
     from fastmcp import FastMCP
 
+    from amicus.appstate import AppState
     from amicus.config import Settings
     from amicus.registry import BackendRegistry
 
@@ -43,7 +44,9 @@ PAIRS: tuple[tuple[str, str], ...] = (
 )
 
 
-def register_all(app: FastMCP, settings: Settings, registry: BackendRegistry) -> None:
+def register_all(
+    app: FastMCP, settings: Settings, registry: BackendRegistry, state: AppState
+) -> None:
     from amicus.tools import consult, delegate, discovery, dry_run, jobs, review  # noqa: PLC0415
 
     registered: tuple[str, ...] = ()
@@ -52,7 +55,7 @@ def register_all(app: FastMCP, settings: Settings, registry: BackendRegistry) ->
     registered += delegate.register(app, settings, registry)
     registered += review.register_adversarial(app, settings, registry)
     registered += dry_run.register(app, settings, registry)
-    registered += discovery.register(app, settings, registry)
+    registered += discovery.register(app, settings, registry, state)
     registered += jobs.register(app, settings, registry)
     if registered != TOOL_ORDER:
         raise RuntimeError(f"tool registration order drifted: {registered} != {TOOL_ORDER}")

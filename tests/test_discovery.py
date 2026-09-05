@@ -84,11 +84,10 @@ async def test_every_tool_output_schema_is_valid_and_every_error_envelope_valida
             if tool.name in args:
                 res = await c.call_tool(tool.name, args[tool.name], raise_on_error=False)
                 Draft202012Validator(tool.output_schema).validate(res.structured_content)
-                if tool.name != "amicus_models":
-                    assert res.structured_content["error"]["code"] in {
-                        "not_implemented",
-                        "backend_unavailable",
-                    }
+                assert res.structured_content["error"]["code"] in {
+                    "not_implemented",
+                    "backend_unavailable",
+                }
 
 
 async def test_dry_runs_validate_options_then_report_backend_state():
@@ -181,7 +180,7 @@ async def test_backends_status_probe_failure_is_a_warning_not_a_crash():
 async def test_models_for_available_and_unavailable_backends():
     async with Client(_app(registry=_mixed_registry())) as c:
         codex = await c.call_tool("amicus_models", {"backend": "codex"})
-        kimi = await c.call_tool("amicus_models", {"backend": "kimi"})
+        kimi = await c.call_tool("amicus_models", {"backend": "kimi"}, raise_on_error=False)
         tool = next(t for t in await c.list_tools() if t.name == "amicus_models")
     Draft202012Validator(tool.output_schema).validate(codex.structured_content)
     assert codex.structured_content["models"] == [
@@ -193,7 +192,15 @@ async def test_models_for_available_and_unavailable_backends():
         }
     ]
     assert codex.structured_content["source"] == "static"
-    assert kimi.structured_content["available"] is False and kimi.structured_content["models"] == []
+    # amicus_models on an unavailable backend now reports the same backend_unavailable
+    # envelope every paid tool reports, rather than the resource's informational
+    # available:false payload (that stays on amicus://models/{backend}).
+    assert kimi.is_error
+    Draft202012Validator(tool.output_schema).validate(kimi.structured_content)
+    err = kimi.structured_content["error"]
+    assert err["code"] == "backend_unavailable"
+    assert err["repair"]["tool"] == "amicus_backends"
+    assert "import_failed" in err["message"]
 
 
 async def test_capabilities_summary_full_contracts_and_include_schemas():
@@ -236,12 +243,17 @@ async def test_capabilities_summary_full_contracts_and_include_schemas():
 
 
 async def test_capabilities_reports_unknown_include_schemas_as_invalid_arguments():
+    # include_schemas is now a Literal list, so this is rejected at the call boundary
+    # (ValidationEnvelopeMiddleware) rather than by hand-rolled validation in the tool
+    # body; field, allowed_values and repair.tool are unchanged, only the pydantic
+    # literal_error message text differs from the old hand-written "unknown schema name".
     async with Client(_app()) as c:
         res = await c.call_tool(
             "amicus_capabilities", {"include_schemas": ["nope"]}, raise_on_error=False
         )
     err = res.structured_content["error"]
     assert err["code"] == "invalid_arguments" and err["details"]["field"] == "include_schemas[0]"
+    assert err["repair"]["tool"] == "amicus_capabilities"
     assert err["details"]["allowed_values"] == [
         "error-envelope",
         "result-meta",

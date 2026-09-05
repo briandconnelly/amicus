@@ -56,6 +56,15 @@ async def test_templates_are_listed_and_readable():
         assert json.loads(models.text)["models"][0]["slug"] == "fake-1"
         [kimi] = await c.read_resource("amicus://backends/kimi")
         assert json.loads(kimi.text)["available"] is False
+        # Unlike the amicus_models TOOL (backend_unavailable envelope), the resource
+        # keeps the informational available:false payload for a known-but-unloaded
+        # backend: no repair carrier exists on a resource read.
+        [kimi_models] = await c.read_resource("amicus://models/kimi")
+        kimi_models_body = json.loads(kimi_models.text)
+        assert kimi_models_body["ok"] is True
+        assert kimi_models_body["available"] is False
+        assert kimi_models_body["models"] == []
+        assert kimi_models_body["source"] == "none"
         with pytest.raises(MCPError) as exc:
             await c.read_resource("amicus://backends/gemini")
         assert exc.value.error.data["machine_code"] == "resource_not_found"

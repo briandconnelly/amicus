@@ -10,7 +10,7 @@ from amicus import SERVER_NAME, __version__, surface
 from amicus.backends import KNOWN_DISPLAY_NAMES, KNOWN_EFFECTS
 from amicus.errors import error_envelope
 from amicus.schemas.codes import BACKEND_IDS, ERROR_CODES
-from amicus.schemas.envelope import ERROR_ENVELOPE_SCHEMA, RESULT_META_SCHEMA, InvalidArgument, Meta
+from amicus.schemas.envelope import ERROR_ENVELOPE_SCHEMA, RESULT_META_SCHEMA, Meta
 from amicus.schemas.options import OPTION_ALLOWED_VALUES
 from amicus.schemas.params import (
     BackendParam,
@@ -52,18 +52,15 @@ from amicus.tools._meta import (
 from amicus.tools._resolve import FREE_MARKER
 
 if TYPE_CHECKING:  # pragma: no cover
+    from collections.abc import Sequence
+
     from fastmcp import FastMCP
 
+    from amicus.appstate import AppState
     from amicus.config import Settings
     from amicus.plugin import BackendPlugin
     from amicus.registry import BackendRegistry
 
-INCLUDE_SCHEMAS_VALUES: tuple[str, ...] = (
-    "error-envelope",
-    "result-meta",
-    "capabilities-result",
-    "parameter-contracts",
-)
 _SUMMARY_FIELDS = ("name", "cost", "stability", "backends", "error_codes")
 
 # Per-tool inventory facts tools/list does not carry. required/key params are derived
@@ -205,7 +202,7 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
         "backends": list(BACKEND_IDS),
         "use_when": "Before overriding model or reasoning_effort.",
         "returns": "advisory model slugs with effort sets and the catalog source.",
-        "error_codes": ["invalid_arguments"],
+        "error_codes": ["invalid_arguments", "backend_unavailable"],
     },
     "amicus_capabilities": {
         "cost": "free",
@@ -404,7 +401,7 @@ async def capabilities_payload(
     config_errors: list[str],  # noqa: ARG001 - accepted; not yet surfaced in CapabilitiesResult
     tasks_active: bool,
     detail: str = "summary",
-    include_schemas: list[str] | None = None,
+    include_schemas: Sequence[str] | None = None,
 ) -> dict[str, Any]:
     effects = effects_for(settings)
     details = [
@@ -464,7 +461,8 @@ async def capabilities_payload(
         ),
         tool_error_carrier=(
             "tool result with isError: true; the error envelope is in structuredContent, and "
-            "content[0].text mirrors it as JSON"
+            "content[0].text mirrors it as JSON. error.request_id carries the same value as "
+            "meta.request_id (mirrored)."
         ),
         resource_error_carrier=(
             "JSON-RPC error; the envelope (machine_code/human_message/backend/temporary/"
@@ -510,9 +508,9 @@ async def capabilities_payload(
     return caps
 
 
-def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tuple[str, ...]:
-    from amicus.server import state_of  # noqa: PLC0415
-
+def register(
+    app: FastMCP, settings: Settings, registry: BackendRegistry, state: AppState
+) -> tuple[str, ...]:
     @app.tool(
         name="amicus_backends",
         annotations=annotations_for("free", settings),
@@ -530,7 +528,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
     @guard("amicus_backends", settings)
     async def amicus_backends(backend: OptionalBackendParam = None) -> dict[str, Any]:
         """List backends."""
-        return backends_payload(settings, registry, state_of(app).config_errors, backend)
+        return backends_payload(settings, registry, state.config_errors, backend)
 
     @app.tool(
         name="amicus_models",
@@ -546,7 +544,18 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
     )
     @guard("amicus_models", settings)
     async def amicus_models(backend: BackendParam) -> dict[str, Any]:
-        """List a backend's models."""
+        """List a backend's models. Reports `backend_unavailable`, like every paid tool,
+        when the backend has no loaded plugin (see `resolve_paid_call`'s same shape)."""
+        plugin = registry.get(backend)
+        if plugin is None:
+            why = registry.unavailable_for(backend)
+            detail = f"{why.reason}: {why.detail}" if why else "not enabled in AMICUS_BACKENDS"
+            return error_envelope(
+                "backend_unavailable",
+                f"backend {backend!r} is unavailable ({detail})",
+                base_meta(settings, backend=backend),
+                backend=backend,
+            )
         return models_payload(registry, backend)
 
     @app.tool(
@@ -567,27 +576,8 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
     async def amicus_capabilities(
         detail: CapabilitiesDetailParam = "summary", include_schemas: IncludeSchemasParam = None
     ) -> dict[str, Any]:
-        """List capabilities."""
-        if include_schemas:
-            bad = [(i, v) for i, v in enumerate(include_schemas) if v not in INCLUDE_SCHEMAS_VALUES]
-            if bad:
-                items = [
-                    InvalidArgument(
-                        field=f"include_schemas[{i}]",
-                        reason="unknown schema name",
-                        allowed_values=list(INCLUDE_SCHEMAS_VALUES),
-                    )
-                    for i, _ in bad
-                ]
-                return error_envelope(
-                    "invalid_arguments",
-                    f"amicus_capabilities: {len(items)} invalid argument(s): "
-                    f"{items[0].field} — unknown schema name",
-                    base_meta(settings),
-                    repair_tool="amicus_capabilities",
-                    invalid_arguments=items,
-                )
-        state = state_of(app)
+        """List capabilities. An unknown `include_schemas` name is rejected at the call
+        boundary (ValidationEnvelopeMiddleware) since the parameter is a Literal list."""
         return await capabilities_payload(
             app,
             settings,

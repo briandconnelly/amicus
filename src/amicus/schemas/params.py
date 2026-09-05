@@ -8,7 +8,7 @@ from it, so a tool cannot grow a parameter the spec table does not grant it.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from pydantic import Field
 
@@ -394,7 +394,8 @@ JobStatusFilterParam = Annotated[
     JobState | None, Field(description="Only jobs in this state; omit for all.")
 ]
 IncludeSchemasParam = Annotated[
-    list[str] | None,
+    list[Literal["error-envelope", "result-meta", "capabilities-result", "parameter-contracts"]]
+    | None,
     Field(
         description=(
             "Embed these documents in `schemas`: error-envelope, result-meta, "

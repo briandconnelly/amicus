@@ -104,6 +104,13 @@ def test_serialize_strips_none_but_keeps_retry_after_ms():
     assert errors.serialize_error_info(no_backend)["backend"] is None
 
 
+def test_serialize_error_mirrors_meta_request_id_onto_error():
+    info = errors.make_error("internal_error", "m")
+    meta = Meta()
+    out = errors.serialize_error(ErrorResult(error=info, meta=meta))
+    assert out["error"]["request_id"] == out["meta"]["request_id"] == meta.request_id
+
+
 def test_error_envelope_helper():
     out = errors.error_envelope("not_implemented", "later", Meta(), backend="kimi")
     assert out["error"]["code"] == "not_implemented" and out["error"]["backend"] == "kimi"

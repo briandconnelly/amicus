@@ -20,6 +20,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from fastmcp import FastMCP
     from mcp import MCPError
 
+    from amicus.appstate import AppState
     from amicus.config import Settings
     from amicus.registry import BackendRegistry
 
@@ -68,9 +69,9 @@ def _resource_not_found(uri: str) -> MCPError:
     return middleware.resource_error("resource_not_found", code, "Resource not found.", uri)
 
 
-def register_resources(app: FastMCP, settings: Settings, registry: BackendRegistry) -> None:
-    from amicus.server import state_of  # noqa: PLC0415
-
+def register_resources(
+    app: FastMCP, settings: Settings, registry: BackendRegistry, state: AppState
+) -> None:
     @app.resource(
         "amicus://capabilities",
         name="amicus-capabilities",
@@ -80,7 +81,6 @@ def register_resources(app: FastMCP, settings: Settings, registry: BackendRegist
     )
     async def capabilities_resource() -> dict[str, Any]:
         """The amicus_capabilities payload (detail=summary) as a resource."""
-        state = state_of(app)
         return await discovery.capabilities_payload(
             app, settings, registry, state.config_errors, state.tasks_active
         )
@@ -127,9 +127,7 @@ def register_resources(app: FastMCP, settings: Settings, registry: BackendRegist
     )
     def backend_resource(backend: str) -> dict[str, Any]:
         """The amicus_backends entry for one backend."""
-        payload = discovery.backends_payload(
-            settings, registry, state_of(app).config_errors, backend
-        )
+        payload = discovery.backends_payload(settings, registry, state.config_errors, backend)
         if not payload["backends"]:
             raise _resource_not_found(f"amicus://backends/{backend}")
         return {**payload["backends"][0], "unavailable": payload["unavailable"]}
@@ -142,7 +140,11 @@ def register_resources(app: FastMCP, settings: Settings, registry: BackendRegist
         meta=_meta(volatile=True),
     )
     def models_resource(backend: str) -> dict[str, Any]:
-        """The amicus_models payload for one backend."""
+        """The amicus_models payload for one backend, unlike the `amicus_models` TOOL:
+        for an unavailable (but known) backend id this returns the informational
+        `available: false` payload rather than a `backend_unavailable` error envelope,
+        because a resource read has no repair carrier to put one in. Only an unknown
+        backend id (not in BACKEND_IDS and not a loaded plugin) is resource_not_found."""
         if backend not in BACKEND_IDS and registry.get(backend) is None:
             raise _resource_not_found(f"amicus://models/{backend}")
         return discovery.models_payload(registry, backend)

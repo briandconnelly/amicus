@@ -135,3 +135,9 @@ name = "orchestration and jobs never import the server layer"
 type = "forbidden"
 source_modules = ["amicus.orchestration", "amicus.jobs"]
 forbidden_modules = ["amicus.server", "amicus.tools"]
+
+[[tool.importlinter.contracts]]
+name = "tools never import the server module"
+type = "forbidden"
+source_modules = ["amicus.tools"]
+forbidden_modules = ["amicus.server"]

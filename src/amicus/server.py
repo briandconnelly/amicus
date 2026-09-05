@@ -6,12 +6,12 @@ import contextlib
 import os
 import signal
 import sys
-from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from fastmcp import FastMCP
 
 from amicus import SERVER_NAME, __version__, config, obs, tools
+from amicus.appstate import AppState
 from amicus.middleware import (
     InputSchemaDialectMiddleware,
     ResourceErrorMiddleware,
@@ -73,19 +73,15 @@ CAPABILITY_SUMMARY = (
 )
 
 
-@dataclass
-class AppState:
-    settings: Settings
-    registry: BackendRegistry
-    tasks_active: bool = False
-    config_errors: list[str] = field(default_factory=list)
-
-
-_STATE: dict[int, AppState] = {}
-
-
 def state_of(app: FastMCP) -> AppState:
-    return _STATE[id(app)]
+    """The `AppState` `create_app` attached to `app`. Raises `RuntimeError` for an app
+    this module did not build (e.g. a bare `FastMCP()` in a test)."""
+    state = getattr(app, "_amicus_state", None)
+    if state is None:
+        raise RuntimeError(
+            "state_of: app has no _amicus_state; it was not built by amicus.server.create_app"
+        )
+    return state
 
 
 def _filter_capabilities(original: Callable[..., Any]) -> Callable[..., Any]:
@@ -114,7 +110,7 @@ def create_app(
     state = AppState(
         settings=settings, registry=registry, config_errors=list(settings.config_errors)
     )
-    _STATE[id(app)] = state
+    app._amicus_state = state  # ty: ignore[unresolved-attribute]
     lowlevel = app._mcp_server
     lowlevel.get_capabilities = _filter_capabilities(lowlevel.get_capabilities)  # ty: ignore[invalid-assignment]
     app.add_middleware(InputSchemaDialectMiddleware())
@@ -132,8 +128,8 @@ def create_app(
                 f"AMICUS_TASKS=1 but the tasks extension is not installed "
                 f"(install the fastmcp[tasks] extra): {exc}"
             )
-    tools.register_all(app, settings, registry)
-    resources.register_resources(app, settings, registry)
+    tools.register_all(app, settings, registry, state)
+    resources.register_resources(app, settings, registry, state)
     return app
 
 

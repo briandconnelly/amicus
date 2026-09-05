@@ -46,6 +46,13 @@ async def test_ui_filter_preserves_other_extensions(monkeypatch):
     assert wire["extensions"] == {"io.example/x": {"a": 1}}
 
 
+def test_state_of_raises_on_an_app_create_app_did_not_build():
+    from fastmcp import FastMCP
+
+    with pytest.raises(RuntimeError, match="_amicus_state"):
+        server.state_of(FastMCP(name="bare"))
+
+
 def test_state_is_attached_and_summary_is_rules_then_context():
     app = _app()
     state = server.state_of(app)

@@ -14,4 +14,4 @@ def test_import_linter_contracts_hold():
     assert exe, "import-linter is a dev dependency; run under `uv run`"
     proc = subprocess.run([exe], cwd=ROOT, capture_output=True, text=True, check=False)
     assert proc.returncode == 0, proc.stdout + proc.stderr
-    assert "Contracts: 2 kept, 0 broken" in proc.stdout
+    assert "Contracts: 3 kept, 0 broken" in proc.stdout

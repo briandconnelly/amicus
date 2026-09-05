@@ -82,6 +82,15 @@ async def test_without_a_loaded_backend_every_paid_tool_reports_backend_unavaila
     Draft202012Validator(tool.output_schema).validate(res.structured_content)
 
 
+async def test_live_tool_error_request_id_mirrors_meta_request_id():
+    app = _app()
+    async with Client(app) as c:
+        res = await c.call_tool("amicus_consult", VALID["amicus_consult"], raise_on_error=False)
+    assert res.is_error
+    sc = res.structured_content
+    assert sc["error"]["request_id"] == sc["meta"]["request_id"]
+
+
 @pytest.mark.parametrize("name", sorted(VALID))
 async def test_with_a_loaded_backend_every_paid_tool_is_not_implemented_yet(name):
     app = _app(registry=_fake_registry())

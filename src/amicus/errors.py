@@ -189,8 +189,11 @@ def serialize_error_info(error: ErrorInfo) -> dict[str, Any]:
 
 
 def serialize_error(result: ErrorResult) -> dict[str, Any]:
+    """Serialize the envelope, then mirror `meta.request_id` onto `error.request_id`
+    when the error carries none, so both carriers always agree on one request id."""
     payload = result.model_dump(mode="json", exclude_none=True)
     payload["error"] = serialize_error_info(result.error)
+    payload["error"].setdefault("request_id", payload["meta"]["request_id"])
     return payload
 
 
