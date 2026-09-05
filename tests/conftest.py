@@ -34,3 +34,14 @@ def make_run(
     timed_out: bool = False,
 ) -> CommandRun:
     return CommandRun(stdout, stderr, exit_code, elapsed_ms, timed_out)
+
+
+@pytest.fixture
+def pinned_codex_bin(monkeypatch):
+    """Let AMICUS_CODEX_BIN=/CODEX resolve without a file on disk (argv tests only)."""
+    from amicus.backends.codex import binary
+
+    monkeypatch.setattr(
+        binary, "_is_executable_file", lambda path: str(path) == "/CODEX" or path.is_file()
+    )
+    return monkeypatch

@@ -24,14 +24,13 @@ def test_in_tree_declarations():
     assert backends.KNOWN_DISPLAY_NAMES["claude"] == "Claude Code"
 
 
-def test_default_load_records_the_unported_in_tree_backends_as_unavailable():
+def test_default_load_records_the_unported_in_tree_backends_as_unavailable(clean_env):
+    # codex shipped its plugin factory in M1 (Task 6); it never raises, so it loads. kimi
+    # and claude still land in later milestones and stay unavailable.
     reg = registry.BackendRegistry.load(("codex", "kimi", "claude"), entry_points=())
-    assert reg.available == {}
-    assert set(reg.unavailable) == {"codex", "kimi", "claude"}
-    assert reg.unavailable["codex"].reason in ("import_failed", "load_failed")
-    assert "amicus.backends.codex" in reg.unavailable["codex"].detail
-    assert reg.get("codex") is None
-    assert reg.ids == ()
+    assert set(reg.unavailable) == {"kimi", "claude"}
+    assert reg.get("codex") is not None
+    assert reg.ids == ("codex",)
 
 
 def test_entry_point_plugin_loads_through_the_real_path():

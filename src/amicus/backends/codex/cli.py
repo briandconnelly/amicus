@@ -364,21 +364,24 @@ def classify_failure(
         )
     if contract.is_auth_failure(run.stderr, run.stdout, last_message, event_error):
         return ClassifiedFailure(code="codex_auth_required", detail="codex is not authenticated.")
+    # The reasoning-effort rejection markers are checked on their own, ahead of the generic
+    # drift-pattern gate: the sibling's actual message shape does not always also match one
+    # of CONTRACT_DRIFT_STDERR_PATTERNS (e.g. it may omit "invalid value"), and the bracketed
+    # markers are specific enough on their own to distinguish a caller error from drift.
+    if reasoning_effort is not None and contract.is_reasoning_effort_rejection(
+        run.stderr, run.stdout, event_error
+    ):
+        return ClassifiedFailure(
+            code="invalid_reasoning_effort",
+            detail=(
+                "The Codex backend rejected the requested reasoning_effort for this model/account."
+            ),
+            details={"field": "reasoning_effort"},
+        )
     if contract.is_contract_drift(run.stderr, run.stdout, event_error):
         matched = _extra_args_drift_match(extra_args, run.stderr, run.stdout, event_error)
         if matched is not None and contract.is_reasoning_effort_rejection(*matched):
             return _extra_args_rejected(matched)
-        if reasoning_effort is not None and contract.is_reasoning_effort_rejection(
-            run.stderr, run.stdout, event_error
-        ):
-            return ClassifiedFailure(
-                code="invalid_reasoning_effort",
-                detail=(
-                    "The Codex backend rejected the requested reasoning_effort for this "
-                    "model/account."
-                ),
-                details={"field": "reasoning_effort"},
-            )
         plugin_owns_dash_c = reasoning_effort is not None or bool(plugin_config_keys)
         if matched is not None and not (plugin_owns_dash_c and set(matched) <= {"-c"}):
             return _extra_args_rejected(matched)

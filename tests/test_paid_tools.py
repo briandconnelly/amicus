@@ -8,7 +8,7 @@ from jsonschema import Draft202012Validator
 from tests.support import fakeplugin
 
 from amicus import config, server, tools
-from amicus.registry import BackendRegistry
+from amicus.registry import BackendRegistry, UnavailableBackend
 from amicus.schemas import params
 from amicus.tools import _resolve
 
@@ -30,6 +30,19 @@ def _app(env: dict | None = None, registry: BackendRegistry | None = None):
     # but its plugin factory lands in Task 6, so the registry records it as load_failed;
     # kimi/claude stay import_failed. This is the realistic intermediate state this milestone is in.
     return server.create_app(config.settings(env or {}), registry)
+
+
+def _no_backends_registry() -> BackendRegistry:
+    # codex shipped its plugin factory in M1 (Task 6), so the real load path now loads it
+    # for real; an explicit no-plugins registry keeps this test proving the
+    # backend_unavailable envelope rather than falling through to not_implemented.
+    return BackendRegistry(
+        {},
+        {
+            "codex": UnavailableBackend("codex", "import_failed", "x"),
+            "claude": UnavailableBackend("claude", "import_failed", "x"),
+        },
+    )
 
 
 def _fake_registry() -> BackendRegistry:
@@ -69,7 +82,7 @@ async def test_backend_enum_is_the_v1_set():
 
 @pytest.mark.parametrize("name", sorted(VALID))
 async def test_without_a_loaded_backend_every_paid_tool_reports_backend_unavailable(name):
-    app = _app()
+    app = _app(registry=_no_backends_registry())
     async with Client(app) as c:
         res = await c.call_tool(name, VALID[name], raise_on_error=False)
         tool = next(t for t in await c.list_tools() if t.name == name)
