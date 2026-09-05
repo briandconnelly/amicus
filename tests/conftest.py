@@ -19,6 +19,16 @@ fastmcp.settings.mcp_camelcase_compat = False
 # consults. Stripped so tests see built-in defaults.
 ENV_PREFIXES = ("AMICUS_", "CODEX_IN_CLAUDE_", "MOONBRIDGE_", "CLAUDE_IN_CODEX_")
 
+NEVER_SPAWN_CODEX = "/nonexistent/amicus-test-codex"
+
+
+@pytest.fixture(autouse=True)
+def _never_spawn_real_codex(monkeypatch):
+    """No unit test may run the real codex CLI: an unusable AMICUS_CODEX_BIN makes every
+    codex run short-circuit to backend_not_found. Tests that want a run point the override
+    at the `fake_codex` fixture; the live suite (tests/test_codex_live.py) deletes it."""
+    monkeypatch.setenv("AMICUS_CODEX_BIN", NEVER_SPAWN_CODEX)
+
 
 @pytest.fixture
 def clean_env(monkeypatch):
@@ -26,6 +36,7 @@ def clean_env(monkeypatch):
     for key in list(os.environ):
         if key.startswith(ENV_PREFIXES):
             monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv("AMICUS_CODEX_BIN", NEVER_SPAWN_CODEX)
     return monkeypatch
 
 

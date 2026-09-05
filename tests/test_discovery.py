@@ -97,21 +97,23 @@ async def test_dry_runs_validate_options_then_report_backend_state():
             {"backend": "codex", "backend_options": {"access": "readonly"}},
             raise_on_error=False,
         )
+        # No workspace_root from a sessionless client: zero-spend invalid_workspace_root,
+        # reached only once options and backend availability already checked out.
         ok = await c.call_tool("amicus_dry_run", {"backend": "codex"}, raise_on_error=False)
         kimi = await c.call_tool(
             "amicus_delegate_dry_run", {"backend": "kimi", "task": "t"}, raise_on_error=False
         )
     assert bad.structured_content["error"]["details"]["field"] == "backend_options.access"
-    assert ok.structured_content["error"]["code"] == "not_implemented"
+    assert ok.structured_content["error"]["code"] == "invalid_workspace_root"
     assert kimi.structured_content["error"]["code"] == "backend_unavailable"
 
 
-async def test_delegate_dry_run_not_implemented_once_the_backend_resolves():
+async def test_delegate_dry_run_needs_a_workspace_once_the_backend_resolves():
     async with Client(_app(registry=_mixed_registry())) as c:
         res = await c.call_tool(
             "amicus_delegate_dry_run", {"backend": "codex", "task": "t"}, raise_on_error=False
         )
-    assert res.structured_content["error"]["code"] == "not_implemented"
+    assert res.structured_content["error"]["code"] == "invalid_workspace_root"
 
 
 async def test_delegate_dry_run_rejects_a_blank_task():

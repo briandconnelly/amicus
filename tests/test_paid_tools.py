@@ -105,8 +105,11 @@ async def test_live_tool_error_request_id_mirrors_meta_request_id():
     assert sc["error"]["request_id"] == sc["meta"]["request_id"]
 
 
-@pytest.mark.parametrize("name", sorted(VALID))
-async def test_with_a_loaded_backend_every_paid_tool_is_not_implemented_yet(name):
+ASYNC_TOOLS = tuple(n for n in VALID if n.endswith("_async"))
+
+
+@pytest.mark.parametrize("name", sorted(ASYNC_TOOLS))
+async def test_with_a_loaded_backend_every_async_tool_is_not_implemented_until_m2(name):
     app = _app(registry=_fake_registry())
     async with Client(app) as c:
         res = await c.call_tool(name, VALID[name], raise_on_error=False)
@@ -115,6 +118,15 @@ async def test_with_a_loaded_backend_every_paid_tool_is_not_implemented_yet(name
     assert err["code"] == "not_implemented", err
     assert err["temporary"] is False and err["repair"]["tool"] == "amicus_capabilities"
     Draft202012Validator(tool.output_schema).validate(res.structured_content)
+
+
+async def test_sync_tools_need_a_workspace_from_a_sessionless_client():
+    app = _app(registry=_fake_registry())
+    async with Client(app) as c:
+        res = await c.call_tool("amicus_consult", VALID["amicus_consult"], raise_on_error=False)
+    err = res.structured_content["error"]
+    assert err["code"] == "invalid_workspace_root" and err["details"]["field"] == "workspace_root"
+    assert res.structured_content["meta"]["roots_source"] == "not_negotiated"
 
 
 async def test_feature_gating():

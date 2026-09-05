@@ -45,8 +45,9 @@ async def test_task_augmented_paid_call_delivers_the_same_envelope():
         task = await call_tool_task(c, "amicus_consult", args, raise_on_error=False)
         status = await task.status()
         result = await task.result()
-    assert plain.structured_content["error"]["code"] == "not_implemented"
-    assert result.structured_content["error"]["code"] == "not_implemented"
+    # No workspace_root from a sessionless client: zero-spend invalid_workspace_root.
+    assert plain.structured_content["error"]["code"] == "invalid_workspace_root"
+    assert result.structured_content["error"]["code"] == "invalid_workspace_root"
     # Spike finding: the semantic isError flip does NOT survive task delivery. A
     # task-augmented call is intercepted by TasksExtension before it reaches
     # SemanticErrorMiddleware's call_next (the server returns a CreateTaskResult
@@ -84,7 +85,7 @@ async def test_legacy_era_client_still_gets_a_plain_result():
     args = {"backend": "codex", "question": "q"}
     async with Client(app, mode="legacy") as c:
         res = await c.call_tool("amicus_consult", args, raise_on_error=False)
-    assert res.structured_content["error"]["code"] == "not_implemented"
+    assert res.structured_content["error"]["code"] == "invalid_workspace_root"
 
 
 async def test_free_tools_are_unaffected_by_the_extension():

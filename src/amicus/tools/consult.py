@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from fastmcp import Context
+
+from amicus.jobs import lifecycle
 from amicus.schemas.params import (
     BackendOptionsParam,
     BackendParam,
@@ -21,6 +24,7 @@ from amicus.schemas.results import CONSULT_RESULT_SCHEMA, JOB_STARTED_SCHEMA
 from amicus.tools import _resolve
 from amicus.tools._guard import guard
 from amicus.tools._meta import annotations_for, lifecycle_meta
+from amicus.tools._prepare import prepare_run
 
 if TYPE_CHECKING:  # pragma: no cover
     from fastmcp import FastMCP
@@ -46,7 +50,9 @@ _ASYNC_DESC = (
 
 
 def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tuple[str, ...]:
-    async def _run(tool_name: str, backend: str, question: str, options: Any) -> dict[str, Any]:
+    async def _async_run(
+        tool_name: str, backend: str, question: str, options: Any
+    ) -> dict[str, Any]:
         err = _resolve.blank_input_error(question, "question", tool_name, settings, backend)
         if err is not None:
             return err
@@ -75,6 +81,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
     async def amicus_consult(
         backend: BackendParam,
         question: QuestionParam,
+        ctx: Context | None = None,
         workspace_root: WorkspaceRootParam = None,
         extra_context: ExtraContextParam = None,
         instructions_append: InstructionsAppendParam = None,
@@ -85,7 +92,36 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
         backend_options: BackendOptionsParam = None,
     ) -> dict[str, Any]:
         """Consult the selected backend for a read-only second opinion."""
-        return await _run("amicus_consult", backend, question, backend_options)
+        err = _resolve.blank_input_error(question, "question", "amicus_consult", settings, backend)
+        if err is not None:
+            return err
+        prep = await prepare_run(
+            registry=registry,
+            settings=settings,
+            tool_name="amicus_consult",
+            verb="consult",
+            backend=backend,
+            backend_options=backend_options,
+            ctx=ctx,
+            workspace_root=workspace_root,
+            model=model,
+            reasoning_effort=reasoning_effort,
+            timeout_seconds=timeout_seconds,
+            instructions_append=instructions_append,
+            extra_context=extra_context,
+            question=question,
+        )
+        if isinstance(prep, dict):
+            return prep
+        return await lifecycle.run_sync(
+            lifecycle.job_store(settings),
+            prep.spec,
+            prep.meta,
+            prep.plugin,
+            timeout=prep.spec.timeout_seconds,
+            detail=detail,
+            ctx=ctx,
+        )
 
     @app.tool(
         name="amicus_consult_async",
@@ -108,6 +144,6 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
         backend_options: BackendOptionsParam = None,
     ) -> dict[str, Any]:
         """Start a background consult on the selected backend."""
-        return await _run("amicus_consult_async", backend, question, backend_options)
+        return await _async_run("amicus_consult_async", backend, question, backend_options)
 
     return ("amicus_consult", "amicus_consult_async")

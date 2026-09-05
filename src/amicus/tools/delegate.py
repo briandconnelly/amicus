@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from fastmcp import Context
+
+from amicus.jobs import lifecycle
 from amicus.schemas.params import (
     BackendOptionsParam,
     BackendParam,
@@ -19,6 +22,7 @@ from amicus.schemas.results import DELEGATE_RESULT_SCHEMA, JOB_STARTED_SCHEMA
 from amicus.tools import _resolve
 from amicus.tools._guard import guard
 from amicus.tools._meta import annotations_for, lifecycle_meta
+from amicus.tools._prepare import prepare_run
 
 if TYPE_CHECKING:  # pragma: no cover
     from fastmcp import FastMCP
@@ -42,7 +46,7 @@ _ASYNC_DESC = (
 
 
 def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tuple[str, ...]:
-    async def _run(tool_name: str, backend: str, task: str, options: Any) -> dict[str, Any]:
+    async def _async_run(tool_name: str, backend: str, task: str, options: Any) -> dict[str, Any]:
         err = _resolve.blank_input_error(task, "task", tool_name, settings, backend)
         if err is not None:
             return err
@@ -71,6 +75,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
     async def amicus_delegate(
         backend: BackendParam,
         task: TaskParam,
+        ctx: Context | None = None,
         workspace_root: WorkspaceRootParam = None,
         model: ModelParam = None,
         reasoning_effort: ReasoningEffortParam = None,
@@ -79,7 +84,34 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
         backend_options: BackendOptionsParam = None,
     ) -> dict[str, Any]:
         """Delegate a task to the selected backend in a throwaway worktree."""
-        return await _run("amicus_delegate", backend, task, backend_options)
+        err = _resolve.blank_input_error(task, "task", "amicus_delegate", settings, backend)
+        if err is not None:
+            return err
+        prep = await prepare_run(
+            registry=registry,
+            settings=settings,
+            tool_name="amicus_delegate",
+            verb="delegate",
+            backend=backend,
+            backend_options=backend_options,
+            ctx=ctx,
+            workspace_root=workspace_root,
+            model=model,
+            reasoning_effort=reasoning_effort,
+            timeout_seconds=timeout_seconds,
+            task=task,
+        )
+        if isinstance(prep, dict):
+            return prep
+        return await lifecycle.run_sync(
+            lifecycle.job_store(settings),
+            prep.spec,
+            prep.meta,
+            prep.plugin,
+            timeout=prep.spec.timeout_seconds,
+            detail=detail,
+            ctx=ctx,
+        )
 
     @app.tool(
         name="amicus_delegate_async",
@@ -100,6 +132,6 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
         backend_options: BackendOptionsParam = None,
     ) -> dict[str, Any]:
         """Start a background delegate on the selected backend."""
-        return await _run("amicus_delegate_async", backend, task, backend_options)
+        return await _async_run("amicus_delegate_async", backend, task, backend_options)
 
     return ("amicus_delegate", "amicus_delegate_async")

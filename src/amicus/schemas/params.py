@@ -85,6 +85,19 @@ CONTROL_CHAR_FREE_PATTERN = r"^[^\x00-\x1F\x7F-\x9F]*$"
 REASONING_EFFORT_MAX_LENGTH = 128
 MAX_INSTRUCTIONS_APPEND_BYTES = 4096
 
+
+def reasoning_effort_shape_error(value: str) -> str | None:
+    """Why `value` fails the transport-shape bounds (value-free), else None. Checked
+    character-wise so a trailing newline — which the advertised regex admits — is caught."""
+    if len(value) > REASONING_EFFORT_MAX_LENGTH:
+        return f"exceeds {REASONING_EFFORT_MAX_LENGTH} characters"
+    if any(ord(c) < 0x20 or 0x7F <= ord(c) <= 0x9F for c in value):
+        return "contains a control character"
+    if any(0xD800 <= ord(c) <= 0xDFFF for c in value):
+        return "contains a surrogate code point"
+    return None
+
+
 PARAMS_RESOURCE_URI = "amicus://params"
 
 

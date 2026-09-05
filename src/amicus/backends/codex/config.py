@@ -14,7 +14,7 @@ from pontonier.core import redaction
 
 from amicus.backends.codex import contract
 from amicus.config.envspec import EnvConflictError, EnvNamespace, EnvVar, is_env_placeholder
-from amicus.schemas.params import REASONING_EFFORT_MAX_LENGTH
+from amicus.schemas.params import reasoning_effort_shape_error  # noqa: F401
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Mapping
@@ -87,18 +87,6 @@ def isolation_flags(isolation: str) -> list[str]:
     if isolation == "ignore-rules":
         return ["--ignore-user-config", "--ignore-rules"]
     raise ValueError(f"unsupported isolation: {isolation}")
-
-
-def reasoning_effort_shape_error(value: str) -> str | None:
-    """Why `value` fails the transport-shape bounds (value-free), else None. Character-wise,
-    not the advertised regex, so a trailing newline is caught too."""
-    if len(value) > REASONING_EFFORT_MAX_LENGTH:
-        return f"exceeds {REASONING_EFFORT_MAX_LENGTH} characters"
-    if any(ord(c) < 0x20 or 0x7F <= ord(c) <= 0x9F for c in value):
-        return "contains a control character"
-    if any(0xD800 <= ord(c) <= 0xDFFF for c in value):
-        return "contains a surrogate code point"
-    return None
 
 
 # --- Operator extra args (allowlist, never arbitrary argv) ------------------------------------
