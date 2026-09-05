@@ -24,6 +24,7 @@ from amicus.errors import error_envelope
 from amicus.orchestration.run import run_request
 from amicus.registry import BackendRegistry
 from amicus.request import RunSpec, meta_for
+from amicus.schemas.envelope import Meta
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Callable
@@ -99,6 +100,21 @@ async def _run(job_dir: Path, spec: RunSpec, plugin: BackendPlugin) -> dict[str,
         recorder.flush()
 
 
+def _parse_stdin_inputs(raw_inputs: str) -> dict[str, Any]:
+    """Undecodable or non-object stdin must fail the job rather than silently degrade to
+    an empty prompt (which would spend a real backend call on nothing); the message never
+    echoes the stdin text itself."""
+    if not raw_inputs.strip():
+        return {}
+    try:
+        inputs = json.loads(raw_inputs)
+    except ValueError as exc:
+        raise ValueError("worker stdin was not valid JSON") from exc
+    if not isinstance(inputs, dict):
+        raise ValueError("worker stdin was not a JSON object")
+    return inputs
+
+
 def main(argv: list[str] | None = None, stdin_text: str | None = None) -> int:
     args = argv if argv is not None else sys.argv[1:]
     if not args:
@@ -108,26 +124,25 @@ def main(argv: list[str] | None = None, stdin_text: str | None = None) -> int:
     if not spec_path.exists():
         return 2
     _hold_job_lock(job_dir)
-    public = json.loads(spec_path.read_text())
-    raw_inputs = stdin_text if stdin_text is not None else sys.stdin.read()
+    spec: RunSpec | None = None
+    plugin: BackendPlugin | None = None
     try:
-        inputs = json.loads(raw_inputs) if raw_inputs.strip() else {}
-    except ValueError:
-        inputs = {}
-    spec = RunSpec.from_parts(public, inputs if isinstance(inputs, dict) else {})
-    plugin = load_plugin(spec.backend)
-    if plugin is None:
-        _atomic_write(
-            job_dir / "result.json",
-            error_envelope(
-                "backend_unavailable",
-                f"backend {spec.backend!r} could not be loaded in the worker",
-                meta_for(spec),
-                backend=spec.backend,
-            ),
-        )
-        return 0
-    try:
+        public = json.loads(spec_path.read_text())
+        raw_inputs = stdin_text if stdin_text is not None else sys.stdin.read()
+        inputs = _parse_stdin_inputs(raw_inputs)
+        spec = RunSpec.from_parts(public, inputs)
+        plugin = load_plugin(spec.backend)
+        if plugin is None:
+            _atomic_write(
+                job_dir / "result.json",
+                error_envelope(
+                    "backend_unavailable",
+                    f"backend {spec.backend!r} could not be loaded in the worker",
+                    meta_for(spec),
+                    backend=spec.backend,
+                ),
+            )
+            return 0
         payload = asyncio.run(_run(job_dir, spec, plugin))
     except asyncio.CancelledError:
         return 0  # graceful termination: the JobStore owns the terminal status
@@ -135,7 +150,7 @@ def main(argv: list[str] | None = None, stdin_text: str | None = None) -> int:
         payload = error_envelope(
             "internal_error",
             f"background worker crashed: {redaction.exc_summary(exc)}"[:300],
-            meta_for(spec),
+            meta_for(spec) if spec is not None else Meta(),
             plugin=plugin,
         )
     _atomic_write(job_dir / "result.json", payload)

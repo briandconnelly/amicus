@@ -205,7 +205,7 @@ async def await_job_result(
             await asyncio.sleep(SYNC_POLL_INTERVAL_S)
     except asyncio.CancelledError:
         with contextlib.suppress(Exception):
-            store.cancel(cwd, job_id)
+            await asyncio.shield(asyncio.to_thread(store.cancel, cwd, job_id))
         raise
     rec2, payload = await asyncio.to_thread(store.result_payload, cwd, job_id)
     if rec2 is None:

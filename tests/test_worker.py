@@ -83,6 +83,51 @@ def test_worker_reports_an_unavailable_backend(tmp_path, monkeypatch):
     assert out["error"]["code"] == "backend_unavailable"
 
 
+def _spy_load_plugin(monkeypatch, calls: list[str]):
+    def spy(backend_id):
+        calls.append(backend_id)
+        return fakeplugin.make_plugin(backend_id)
+
+    monkeypatch.setattr(_worker, "load_plugin", spy)
+
+
+def test_worker_refuses_undecodable_stdin(tmp_path, monkeypatch):
+    plugin_calls: list[str] = []
+    run_calls: list[str] = []
+    _spy_load_plugin(monkeypatch, plugin_calls)
+
+    async def fake_run(spec, plugin, *, on_event=None, on_worktree_parent=None):
+        run_calls.append("ran")
+        return {"ok": True, "tool": "amicus_consult", "summary": "s"}
+
+    monkeypatch.setattr(_worker, "run_request", fake_run)
+    jd = _job(tmp_path)
+    assert _worker.main([str(jd)], stdin_text="not json") == 0
+    out = json.loads((jd / "result.json").read_text())
+    assert out["ok"] is False and out["error"]["code"] == "internal_error"
+    assert "stdin" in out["error"]["message"]
+    assert "not json" not in out["error"]["message"]
+    assert not plugin_calls and not run_calls
+
+
+def test_worker_refuses_a_non_object_stdin_payload(tmp_path, monkeypatch):
+    plugin_calls: list[str] = []
+    run_calls: list[str] = []
+    _spy_load_plugin(monkeypatch, plugin_calls)
+
+    async def fake_run(spec, plugin, *, on_event=None, on_worktree_parent=None):
+        run_calls.append("ran")
+        return {"ok": True, "tool": "amicus_consult", "summary": "s"}
+
+    monkeypatch.setattr(_worker, "run_request", fake_run)
+    jd = _job(tmp_path)
+    assert _worker.main([str(jd)], stdin_text="[]") == 0
+    out = json.loads((jd / "result.json").read_text())
+    assert out["ok"] is False and out["error"]["code"] == "internal_error"
+    assert "stdin" in out["error"]["message"]
+    assert not plugin_calls and not run_calls
+
+
 def test_worker_no_args_and_missing_spec(tmp_path):
     assert _worker.main([]) == 2
     empty = tmp_path / "nospec"

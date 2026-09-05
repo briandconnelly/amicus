@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import sys
+import threading
 
 import pytest
 from tests.support import fakeplugin
@@ -137,6 +138,84 @@ async def test_spawn_failure_is_an_internal_error_with_no_record(tmp_path, monke
     assert store.list_jobs(str(tmp_path)) == []
 
 
+async def test_orphaned_start_cleanup_cancels_the_spawned_job(tmp_path, monkeypatch):
+    """A cancellation racing the spawn (store.start already running in its thread) must
+    not orphan the paid job: the done-callback registered under `asyncio.shield` cancels
+    it once the spawn actually completes."""
+    store = lifecycle.job_store(_settings(tmp_path))
+    monkeypatch.setattr(lifecycle, "worker_cmd", _sleeping_worker_cmd())
+    release = threading.Event()
+    real_start = store.start
+
+    def blocking_start(worker_cmd_factory, cwd, **kw):
+        release.wait(5)
+        return real_start(worker_cmd_factory, cwd, **kw)
+
+    monkeypatch.setattr(store, "start", blocking_start)
+    spec = _spec(str(tmp_path))
+    task = asyncio.create_task(
+        lifecycle.start_job(store, spec, meta_for(spec), fakeplugin.make_plugin(), deadline=10)
+    )
+    await asyncio.sleep(0.05)  # let asyncio.to_thread enter store.start and block on release
+    assert not task.done()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    release.set()
+    # A concurrent store.status()/list_jobs() poll here would race the orphan cleanup's
+    # own unlocked termination window in pontonier's JobStore (a real library property,
+    # not something this task owns) and can observe/persist a transient "failed" read.
+    # A single check after a fixed grace period avoids that race; real callers never
+    # poll this tightly against their own just-cancelled start anyway.
+    await asyncio.sleep(0.5)
+    jobs = store.list_jobs(str(tmp_path))
+    assert jobs
+    status = store.status(str(tmp_path), jobs[0]["job_id"])
+    assert status is not None and status["status"] == "cancelled"
+
+
+async def test_orphaned_start_cleanup_swallows_a_raising_cancel(tmp_path, monkeypatch):
+    """`_swallow` must retrieve a raised exception from the cleanup's cancel future
+    rather than letting it propagate (which would surface as an unhandled-exception
+    warning or crash the event loop)."""
+    store = lifecycle.job_store(_settings(tmp_path))
+    monkeypatch.setattr(lifecycle, "worker_cmd", _sleeping_worker_cmd())
+    release = threading.Event()
+    real_start = store.start
+
+    def blocking_start(worker_cmd_factory, cwd, **kw):
+        release.wait(5)
+        return real_start(worker_cmd_factory, cwd, **kw)
+
+    monkeypatch.setattr(store, "start", blocking_start)
+    cancel_calls: list[str] = []
+
+    def raising_cancel(cwd, job_id):
+        cancel_calls.append(job_id)
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(store, "cancel", raising_cancel)
+    spec = _spec(str(tmp_path))
+    task = asyncio.create_task(
+        lifecycle.start_job(store, spec, meta_for(spec), fakeplugin.make_plugin(), deadline=10)
+    )
+    await asyncio.sleep(0.05)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    release.set()
+    for _ in range(200):
+        if cancel_calls:
+            break
+        await asyncio.sleep(0.01)
+    assert cancel_calls  # store.cancel was invoked for the orphaned job
+    # If _swallow failed to retrieve the exception, it would still be pending here and
+    # asyncio would log it (or, on some loops, raise) when the future is garbage
+    # collected; give the loop a beat and rely on pytest-asyncio's strict warning
+    # handling to catch a regression.
+    await asyncio.sleep(0.05)
+
+
 async def test_grace_exhausted_cancels_and_times_out(tmp_path, monkeypatch):
     store = lifecycle.job_store(_settings(tmp_path))
     monkeypatch.setattr(lifecycle, "SYNC_AWAIT_GRACE_S", 0.05)
@@ -177,6 +256,41 @@ async def test_cancellation_cancels_the_job(tmp_path, monkeypatch):
     assert store.status(str(tmp_path), job_id)["status"] == "cancelled"
 
 
+async def test_cancellation_runs_store_cancel_off_the_event_loop(tmp_path, monkeypatch):
+    store = lifecycle.job_store(_settings(tmp_path))
+    monkeypatch.setattr(lifecycle, "SYNC_POLL_INTERVAL_S", 0.01)
+    job_id, _ = store.start(
+        _sleeping_worker_cmd(), str(tmp_path), kind="consult", extra={"result_format": 1}
+    )
+    event_loop_thread = threading.get_ident()
+    recorded: list[int] = []
+    real_cancel = store.cancel
+
+    def spy_cancel(cwd, jid):
+        recorded.append(threading.get_ident())
+        return real_cancel(cwd, jid)
+
+    monkeypatch.setattr(store, "cancel", spy_cancel)
+    task = asyncio.create_task(
+        lifecycle.await_job_result(
+            store,
+            str(tmp_path),
+            job_id,
+            "consult",
+            Meta(),
+            "summary",
+            60,
+            None,
+            fakeplugin.make_plugin(),
+        )
+    )
+    await asyncio.sleep(0.05)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert recorded and recorded[0] != event_loop_thread
+
+
 async def test_vanished_record_and_missing_payload_are_internal_errors(tmp_path, monkeypatch):
     store = lifecycle.job_store(_settings(tmp_path))
     out = await lifecycle.await_job_result(
@@ -191,6 +305,32 @@ async def test_vanished_record_and_missing_payload_are_internal_errors(tmp_path,
         fakeplugin.make_plugin(),
     )
     assert out["error"]["code"] == "internal_error" and "disappeared" in out["error"]["message"]
+
+
+async def test_missing_stored_payload_after_done_is_an_internal_error(tmp_path, monkeypatch):
+    """rec exists and is done, but result_payload comes back empty (record expired
+    between the status check and the read) -> covers lifecycle.py's other guard."""
+    store = lifecycle.job_store(_settings(tmp_path))
+    monkeypatch.setattr(lifecycle, "SYNC_POLL_INTERVAL_S", 0.01)
+    monkeypatch.setattr(store, "result_payload", lambda cwd, jid: (None, None))
+    job_id, _ = store.start(
+        _fake_worker_cmd(_success(str(tmp_path))), str(tmp_path), kind="consult", extra={}
+    )
+    out = await lifecycle.await_job_result(
+        store,
+        str(tmp_path),
+        job_id,
+        "consult",
+        Meta(),
+        "summary",
+        10,
+        None,
+        fakeplugin.make_plugin(),
+    )
+    assert (
+        out["error"]["code"] == "internal_error"
+        and "expired before its result was read" in out["error"]["message"]
+    )
 
 
 async def test_progress_is_reported_throttled_while_running(tmp_path, monkeypatch):
