@@ -200,7 +200,7 @@ async def test_models_for_available_and_unavailable_backends():
     err = kimi.structured_content["error"]
     assert err["code"] == "backend_unavailable"
     assert err["repair"]["tool"] == "amicus_backends"
-    assert "import_failed" in err["message"]
+    assert "unavailable" in err["message"]
 
 
 async def test_capabilities_summary_full_contracts_and_include_schemas():

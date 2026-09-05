@@ -28,7 +28,7 @@ def test_default_load_records_the_unported_in_tree_backends_as_unavailable():
     reg = registry.BackendRegistry.load(("codex", "kimi", "claude"), entry_points=())
     assert reg.available == {}
     assert set(reg.unavailable) == {"codex", "kimi", "claude"}
-    assert reg.unavailable["codex"].reason == "import_failed"
+    assert reg.unavailable["codex"].reason in ("import_failed", "load_failed")
     assert "amicus.backends.codex" in reg.unavailable["codex"].detail
     assert reg.get("codex") is None
     assert reg.ids == ()

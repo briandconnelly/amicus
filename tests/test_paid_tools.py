@@ -26,8 +26,9 @@ VALID = {
 
 def _app(env: dict | None = None, registry: BackendRegistry | None = None):
     # None -> create_app's own BackendRegistry.load(settings.enabled_backends), which
-    # tries to import the not-yet-shipped in-tree backend packages and records each as
-    # import_failed -- the realistic "no backend landed yet" state this milestone is in.
+    # tries to import the not-yet-shipped in-tree backend packages. The codex package exists
+    # but its plugin factory lands in Task 6, so the registry records it as load_failed;
+    # kimi/claude stay import_failed. This is the realistic intermediate state this milestone is in.
     return server.create_app(config.settings(env or {}), registry)
 
 
@@ -77,7 +78,7 @@ async def test_without_a_loaded_backend_every_paid_tool_reports_backend_unavaila
     assert err["code"] == "backend_unavailable"
     assert err["backend"] == VALID[name]["backend"]
     assert err["repair"]["tool"] == "amicus_backends"
-    assert "import_failed" in err["message"]
+    assert "unavailable" in err["message"]
     assert res.structured_content["meta"]["backend"] == VALID[name]["backend"]
     Draft202012Validator(tool.output_schema).validate(res.structured_content)
 
