@@ -46,5 +46,7 @@ FINGERPRINT_COVERS_DESC = (
     "A contract-semantic change in any listed category changes the fingerprint; nothing "
     "outside them does. Release identity is excluded: serverInfo.version, version, "
     "server_version change every release WITHOUT moving the fingerprint. surface_digest "
-    "is the sha256 of the built manifest and moves with the fingerprint, never alone."
+    "is the sha256 of the server-side tool, resource and template records plus the "
+    "instructions text; the full-manifest hash is pinned separately in tests and moves "
+    "with the fingerprint, never alone."
 )

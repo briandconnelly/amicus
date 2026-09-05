@@ -19,3 +19,13 @@ Resource-read failures carry the same envelope in JSON-RPC `error.data` with `ma
 
 - One serializer (`amicus.errors`) is the only producer of the wire shape.
 - `RepairStep` is pontonier's `REPAIR_STEPS` vocabulary; a new symbol is added upstream, never invented here.
+
+## Numeric code on the handshake era
+
+amicus emits `-32002` for resource-not-found on a 2025-11-25 connection.
+It emits `-32602` for the same failure on a 2026-07-28 connection.
+This knowingly overrides the vendored checklist's `[6.jsonrpc-code-allocation]` rule, "never emit the retired -32002".
+The override is for era fidelity, not oversight.
+A handshake-era client — Claude Code and Codex CLI today — was built against the era that defines `-32002`, and matches on that numeric.
+`error.data.machine_code` is the stable discriminator on both eras, so no client needs the numeric to classify the failure correctly.
+Emitting the checklist-preferred `-32602` on a handshake-era connection would be spec-correct for 2026-07-28 and wrong for the client actually connected.

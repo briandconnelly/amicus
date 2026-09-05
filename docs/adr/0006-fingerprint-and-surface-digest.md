@@ -9,7 +9,9 @@ A hand-bumped string cannot prove the surface changed; a digest cannot be read b
 
 ## Decision
 
-`amicus_capabilities` reports both: the static `FINGERPRINT` (`amicus/0.1/schema-N`, bumped by hand on any covered change) and `surface_digest`, the sha256 of the canonical manifest JSON computed from the live app.
+`amicus_capabilities` reports both: the static `FINGERPRINT` (`amicus/0.1/schema-N`, bumped by hand on any covered change) and `surface_digest`.
+`surface_digest` is the sha256 of the server-side tool, resource and template records plus the instructions text, not the full built manifest.
+The full-manifest hash is a separate, stronger check pinned only in tests; it moves with the fingerprint but is never reported alone as `surface_digest`.
 The committed snapshot (`tests/fixtures/manifest_snapshot.<profile>.json`) and pinned hash guard both per profile.
 `ttlMs`/`cacheScope` stay at the SDK default (`ttlMs: 0`, `cacheScope: "private"`): fastmcp applies one server-wide hint to every list and read result, and `amicus://models/{backend}` is volatile, so a positive TTL would be wrong for it.
 The manifest pins the emitted values so a framework change is reviewed, not silent.
