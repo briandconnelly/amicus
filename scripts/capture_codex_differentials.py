@@ -170,7 +170,7 @@ ENVELOPE_CASES: dict[str, dict] = {
         kind="consult",
         stdout=(
             '{"type":"error","message":"[ReasoningEffortParam] [reasoning.effort] '
-            '[invalid_enum_value] bad"}\n'
+            "[invalid_enum_value] Invalid value: 'zz'\"}\n"
         ),
         stderr="",
         exit_code=1,

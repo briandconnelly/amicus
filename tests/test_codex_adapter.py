@@ -157,7 +157,13 @@ def test_classify_failure_uses_the_request_shape_and_aliases(pinned_codex_bin, t
     )
     assert out.code == "nonzero_exit" and wt not in out.detail and "./f.py" in out.detail
     effort = RunOutcome(
-        run=CommandRun("", "[ReasoningEffortParam] [reasoning.effort] bad", 1, 5, False)
+        run=CommandRun(
+            "",
+            "[ReasoningEffortParam] [reasoning.effort] [invalid_enum_value] Invalid value: 'zz'",
+            1,
+            5,
+            False,
+        )
     )
     assert (
         backend.classify_failure(effort, _req(reasoning_effort="zz")).code
