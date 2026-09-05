@@ -127,6 +127,7 @@ forbidden_modules = [
     "amicus.middleware",
     "amicus.errors",
     "amicus.registry",
+    "amicus.manifest",
 ]
 
 [[tool.importlinter.contracts]]
