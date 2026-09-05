@@ -7,7 +7,11 @@ import pytest
 from amicus import manifest, surface
 from amicus.schemas.fingerprint import FINGERPRINT
 
-EXPECTED_SURFACE_DIGEST: dict[str, str] = {"all": "", "codex-kimi": "", "claude": ""}
+EXPECTED_SURFACE_DIGEST: dict[str, str] = {
+    "all": "550c76029d528a557d1ada59ef36a7726e6ed4801839da9f897d8d0e97f9d889",
+    "codex-kimi": "512337aa0a74f1107c6035a6066af252eb8659f3ba573136dbd6fa7013db022c",
+    "claude": "550c76029d528a557d1ada59ef36a7726e6ed4801839da9f897d8d0e97f9d889",
+}
 
 
 @pytest.mark.parametrize("profile", sorted(manifest.PROFILES))
