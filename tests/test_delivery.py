@@ -110,14 +110,14 @@ def test_lifecycle_states():
         assert (
             not delivered
             and env["error"]["code"] == code
-            and env["error"]["repair"]["arguments"] is None
+            and env["error"]["repair"].get("arguments") is None
         )
 
 
 def test_stored_presentation_is_sanitized_only_when_a_control_char_is_present():
     env = _stored_success()
     env["summary"] = "a\x07b"
-    env["findings"] = [{"title": "t\x07", "severity": "pa\x07ss", "file": "f.py"}]
+    env["findings"] = [{"title": "t\x07", "severity": "medium", "file": "f\x07.py"}]
     out, _ = delivery.finished_job_envelope(_rec(), env, _JOB, "consult", Meta(), "full", None)
     assert out["summary"] == "ab" and out["findings"][0]["title"] == "t"
-    assert out["findings"][0]["severity"] == "pa\x07ss"  # a machine field is never repaired
+    assert out["findings"][0]["file"] == "f\x07.py"  # a machine field is never repaired

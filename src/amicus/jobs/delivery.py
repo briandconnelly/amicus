@@ -117,20 +117,6 @@ def _unreadable(
     )
 
 
-def _only_finding_severity_errors(exc: ValidationError) -> bool:
-    """True when every error is an out-of-domain `findings[].severity` literal: a
-    corrupted machine field (e.g. control-char injection) that stays un-repaired on the
-    wire rather than making the whole stored result unreadable."""
-    errors = exc.errors()
-    return bool(errors) and all(
-        err["type"] == "literal_error"
-        and len(err["loc"]) == 3
-        and err["loc"][0] == "findings"
-        and err["loc"][2] == "severity"
-        for err in errors
-    )
-
-
 def _validate_success(
     payload: dict[str, Any], kind: str, rec: dict[str, Any], meta: Meta
 ) -> dict[str, Any]:
@@ -140,10 +126,9 @@ def _validate_success(
     try:
         model.model_validate(payload)
     except ValidationError as exc:
-        if not _only_finding_severity_errors(exc):
-            return _unreadable(
-                f"stored {kind} result did not match its schema: {exc}", rec, payload, meta
-            )
+        return _unreadable(
+            f"stored {kind} result did not match its schema: {exc}", rec, payload, meta
+        )
     return payload
 
 
@@ -196,17 +181,13 @@ def finished_job_envelope(
     poll_params: dict[str, Any] = {"job_id": job_id}
     if workspace_root:
         poll_params["workspace_root"] = workspace_root
-    envelope = error_envelope(
-        code,
-        message,
-        meta,
-        repair_arguments=poll_params if running else None,
-        retry_after_ms=rec.get("poll_after_ms") if running else None,
+    return (
+        error_envelope(
+            code,
+            message,
+            meta,
+            repair_arguments=poll_params if running else None,
+            retry_after_ms=rec.get("poll_after_ms") if running else None,
+        ),
+        False,
     )
-    repair = envelope.get("error", {}).get("repair")
-    if isinstance(repair, dict):
-        # A lifecycle-state error's repair.arguments is a wire-shape guarantee of this
-        # chokepoint (poll params when running, explicitly None otherwise) even though
-        # serialize_error's general exclude_none drops an absent optional.
-        repair.setdefault("arguments", None)
-    return envelope, False
