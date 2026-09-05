@@ -95,3 +95,29 @@ def test_every_declared_var_has_a_description_and_is_documented():
     for var in config.GLOBAL_ENV.vars:
         assert var.description
         assert var.name.startswith("AMICUS_")
+
+
+def test_m1_run_knobs_have_defaults_floors_and_legacy_names(clean_env):
+    from amicus import config
+
+    s = config.settings({})
+    assert (s.max_output_bytes, s.max_delegate_diff_bytes, s.git_timeout_seconds) == (
+        10 * 1024 * 1024,
+        200_000,
+        60,
+    )
+    s = config.settings(
+        {
+            "AMICUS_MAX_OUTPUT_BYTES": "1",
+            "AMICUS_MAX_DELEGATE_DIFF_BYTES": "5",
+            "AMICUS_GIT_TIMEOUT_SECONDS": "0",
+        }
+    )
+    assert (s.max_output_bytes, s.max_delegate_diff_bytes, s.git_timeout_seconds) == (
+        65_536,
+        1_000,
+        1,
+    )
+    legacy = config.settings({"CODEX_IN_CLAUDE_GIT_TIMEOUT_SECONDS": "7"})
+    assert legacy.git_timeout_seconds == 7
+    assert any("AMICUS_GIT_TIMEOUT_SECONDS read from legacy" in w for w in legacy.env_warnings)

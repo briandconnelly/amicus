@@ -20,6 +20,9 @@ DEFAULT_MAX_INPUT_BYTES = 200_000
 DEFAULT_JOB_TTL_SECONDS = 86_400
 DEFAULT_JOB_MAX_SECONDS = 1_800
 DEFAULT_JOB_MAX_COUNT = 50
+DEFAULT_MAX_OUTPUT_BYTES = 10 * 1024 * 1024
+DEFAULT_MAX_DELEGATE_DIFF_BYTES = 200_000
+DEFAULT_GIT_TIMEOUT_SECONDS = 60
 DEFAULT_LOG_LEVEL = "WARNING"
 VALID_LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
 _TRUE = frozenset({"1", "true", "yes", "on"})
@@ -68,6 +71,24 @@ GLOBAL_ENV = EnvNamespace(
             _legacy("JOB_MAX_COUNT"),
         ),
         EnvVar(
+            "AMICUS_MAX_OUTPUT_BYTES",
+            "Byte ceiling for a backend process's captured stdout+stderr (head+tail kept).",
+            str(DEFAULT_MAX_OUTPUT_BYTES),
+            _legacy("MAX_OUTPUT_BYTES"),
+        ),
+        EnvVar(
+            "AMICUS_MAX_DELEGATE_DIFF_BYTES",
+            "Byte cap for the diff a delegate returns inline (diffstat stays whole).",
+            str(DEFAULT_MAX_DELEGATE_DIFF_BYTES),
+            _legacy("MAX_DELEGATE_DIFF_BYTES"),
+        ),
+        EnvVar(
+            "AMICUS_GIT_TIMEOUT_SECONDS",
+            "Per-git-command timeout for diff gathering and worktrees (1-3600).",
+            str(DEFAULT_GIT_TIMEOUT_SECONDS),
+            _legacy("GIT_TIMEOUT_SECONDS"),
+        ),
+        EnvVar(
             "AMICUS_STATE_DIR", "Directory for job records; default $XDG_CACHE_HOME/amicus/jobs."
         ),
         EnvVar(
@@ -106,6 +127,9 @@ class Settings:
     job_ttl_seconds: int
     job_max_seconds: int
     job_max_count: int
+    max_output_bytes: int
+    max_delegate_diff_bytes: int
+    git_timeout_seconds: int
     state_dir: Path
     log_level: str
     log_file: str | None
@@ -209,6 +233,30 @@ def settings(environ: Mapping[str, str] | None = None) -> Settings:
             DEFAULT_JOB_MAX_COUNT,
             1,
             1_000,
+            warnings,
+        ),
+        max_output_bytes=_bounded_int(
+            "AMICUS_MAX_OUTPUT_BYTES",
+            get("AMICUS_MAX_OUTPUT_BYTES"),
+            DEFAULT_MAX_OUTPUT_BYTES,
+            65_536,
+            10**10,
+            warnings,
+        ),
+        max_delegate_diff_bytes=_bounded_int(
+            "AMICUS_MAX_DELEGATE_DIFF_BYTES",
+            get("AMICUS_MAX_DELEGATE_DIFF_BYTES"),
+            DEFAULT_MAX_DELEGATE_DIFF_BYTES,
+            1_000,
+            10**9,
+            warnings,
+        ),
+        git_timeout_seconds=_bounded_int(
+            "AMICUS_GIT_TIMEOUT_SECONDS",
+            get("AMICUS_GIT_TIMEOUT_SECONDS"),
+            DEFAULT_GIT_TIMEOUT_SECONDS,
+            1,
+            3_600,
             warnings,
         ),
         state_dir=state_dir,
