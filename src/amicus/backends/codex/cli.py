@@ -286,24 +286,11 @@ def _descriptor_in_blob(descriptor: str, blob: str) -> bool:
     return re.search(pattern, blob, re.IGNORECASE) is not None
 
 
-# codex's clap-based CLI reports a rejected flag by its long form even when the operator
-# passed the short form (e.g. `-p` -> `'--profile'`); match either spelling but attribute
-# using whichever form actually appears in the rejection text.
-_FLAG_CANONICAL_ALIASES: dict[str, str] = {"-c": "--config", "-p": "--profile"}
-
-
 def _extra_args_drift_match(extra: ExtraArgs, *texts: str | None) -> list[str] | None:
     if not extra.configured or not extra.valid or not extra.descriptors:
         return None
     blob = "\n".join(t for t in texts if t)
-    matched: list[str] = []
-    for d in extra.descriptors:
-        if _descriptor_in_blob(d, blob):
-            matched.append(d)
-            continue
-        alias = _FLAG_CANONICAL_ALIASES.get(d)
-        if alias is not None and _descriptor_in_blob(alias, blob):
-            matched.append(alias)
+    matched = [d for d in extra.descriptors if _descriptor_in_blob(d, blob)]
     return matched or None
 
 

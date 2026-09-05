@@ -246,7 +246,7 @@ def test_classify_effort_rejection_only_when_effort_sent():
 
 
 def test_classify_attributes_drift_to_operator_extra_args_when_named():
-    ea = cc.parse_extra_args("-p work")
+    ea = cc.parse_extra_args("--profile work")
     out = _classify(
         CommandRun("", "error: unexpected argument '--profile' found", 2, 1, False), extra_args=ea
     )
