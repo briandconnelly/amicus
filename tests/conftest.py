@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import os
+import shutil
+import stat
+from pathlib import Path
 
 import fastmcp
 import pytest
@@ -45,3 +48,13 @@ def pinned_codex_bin(monkeypatch):
         binary, "_is_executable_file", lambda path: str(path) == "/CODEX" or path.is_file()
     )
     return monkeypatch
+
+
+@pytest.fixture(scope="session")
+def fake_codex(tmp_path_factory) -> Path:
+    """An executable stand-in `codex` (tests/support/fake_codex.py) for spend-free runs."""
+    src = Path(__file__).parent / "support" / "fake_codex.py"
+    exe = tmp_path_factory.mktemp("fake-codex") / "codex"
+    shutil.copy(src, exe)
+    exe.chmod(exe.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP)
+    return exe
