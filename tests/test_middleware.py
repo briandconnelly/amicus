@@ -40,6 +40,15 @@ async def test_input_schema_dialect_is_stamped():
     assert tool.input_schema["$schema"] == "https://json-schema.org/draft/2020-12/schema"
 
 
+async def test_input_schema_dialect_middleware_does_not_mutate_the_shared_tool():
+    app = _scratch_app()
+    async with Client(app) as c:
+        [tool] = await c.list_tools()
+    server_tool = await app.get_tool("probe")
+    assert "$schema" not in (server_tool.parameters or {})
+    assert tool.input_schema["$schema"] == "https://json-schema.org/draft/2020-12/schema"
+
+
 async def test_semantic_error_flips_is_error():
     async with Client(_scratch_app()) as c:
         res = await c.call_tool("probe", {"mode": "fail"}, raise_on_error=False)

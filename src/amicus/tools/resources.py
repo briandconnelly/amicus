@@ -5,13 +5,10 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
-from uuid import uuid4
 
-from mcp import MCPError
 from mcp_types import ResourceTemplateReference
 
 from amicus import middleware
-from amicus.errors import make_error, serialize_error_info
 from amicus.schemas.codes import BACKEND_IDS
 from amicus.schemas.envelope import ERROR_ENVELOPE_SCHEMA, RESULT_META_SCHEMA
 from amicus.schemas.fingerprint import LIFECYCLE_META_KEY, TRIAGE_META_KEY
@@ -21,6 +18,7 @@ from amicus.tools._meta import SERVER_STABILITY
 
 if TYPE_CHECKING:  # pragma: no cover
     from fastmcp import FastMCP
+    from mcp import MCPError
 
     from amicus.config import Settings
     from amicus.registry import BackendRegistry
@@ -59,20 +57,15 @@ def _resource_not_found(uri: str) -> MCPError:
     `fastmcp.exceptions.NotFoundError`: that type does not subclass FastMCPError, so
     FastMCP's own read_resource masks a handler-raised instance into a generic
     ResourceError before ResourceErrorMiddleware ever sees it. An MCPError we build
-    ourselves is passed through unmodified by both FastMCP and that middleware."""
+    ourselves (via the same `middleware.resource_error` builder the middleware itself
+    uses) is passed through unmodified by both FastMCP and that middleware."""
     try:
         from fastmcp.server.dependencies import get_context  # noqa: PLC0415
 
         code = middleware.resource_not_found_code(SimpleNamespace(fastmcp_context=get_context()))
     except RuntimeError:
         code = middleware.RESOURCE_NOT_FOUND_HANDSHAKE
-    info = make_error("resource_not_found", "Resource not found.")
-    info.resource_uri = uri
-    info.request_id = uuid4().hex
-    data = serialize_error_info(info)
-    data["machine_code"] = data.pop("code")
-    data["human_message"] = data.pop("message")
-    return MCPError(code=code, message="Resource not found.", data=data)
+    return middleware.resource_error("resource_not_found", code, "Resource not found.", uri)
 
 
 def register_resources(app: FastMCP, settings: Settings, registry: BackendRegistry) -> None:

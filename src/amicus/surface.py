@@ -28,16 +28,9 @@ def _dump(model: Any) -> dict[str, Any]:
 
 
 async def surface_records(app: FastMCP) -> dict[str, Any]:
-    """Tool, resource and template records as the server holds them, sorted by identity,
-    plus the instructions text. Tools run WITH middleware (default): FastMCP's own client
-    stamps the input-schema dialect onto the shared Tool.parameters dict in place the
-    first time any `tools/list` (including an implicit one during a `call_tool` result's
-    output-schema validation) runs with middleware, so a `run_middleware=False` read taken
-    before that first stamp disagrees with one taken after it. Running middleware here
-    applies (and stabilizes) that stamp instead of racing it. Resources/templates have no
-    registered `on_list_*` middleware, so `run_middleware=False` is equivalent for them
-    and kept for a minimal, deterministic dump."""
-    tools = [_dump(t.to_mcp_tool()) for t in await app.list_tools()]
+    """Tool, resource and template records as the server holds them (middleware not run),
+    sorted by identity, plus the instructions text."""
+    tools = [_dump(t.to_mcp_tool()) for t in await app.list_tools(run_middleware=False)]
     resources = [_dump(r.to_mcp_resource()) for r in await app.list_resources(run_middleware=False)]
     templates = [
         _dump(t.to_mcp_template()) for t in await app.list_resource_templates(run_middleware=False)

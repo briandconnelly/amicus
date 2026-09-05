@@ -138,14 +138,23 @@ def invalid_arguments_envelope(
 
 
 class InputSchemaDialectMiddleware(Middleware):
-    """Stamp the JSON Schema dialect onto every tool's input schema ([3.dialect])."""
+    """Stamp the JSON Schema dialect onto every tool's input schema ([3.dialect]).
+
+    Returns COPIES, never mutating the registry's own `Tool.parameters` dict in place:
+    an in-place stamp would leak into every other reader of that shared object (e.g.
+    `surface.surface_records`'s `run_middleware=False` dump), making the visible schema
+    depend on whether a middleware-driven `tools/list` happened to run first."""
 
     async def on_list_tools(self, context, call_next):  # type: ignore[no-untyped-def]
         tools = await call_next(context)
-        for tool in tools:
-            if tool.parameters is not None:
-                tool.parameters["$schema"] = JSON_SCHEMA_DIALECT
-        return tools
+        return [
+            tool.model_copy(
+                update={"parameters": {**tool.parameters, "$schema": JSON_SCHEMA_DIALECT}}
+            )
+            if tool.parameters is not None
+            else tool
+            for tool in tools
+        ]
 
 
 class SemanticErrorMiddleware(Middleware):
@@ -203,6 +212,22 @@ def resource_not_found_code(context: object) -> int:
     return RESOURCE_NOT_FOUND_HANDSHAKE
 
 
+def resource_error(code: str, mcp_code: int, message: str, resource_uri: str | None) -> MCPError:
+    """Build the §6 JSON-RPC envelope for a resource-read failure, with code/message
+    renamed machine_code/human_message ([6.rename]). Shared by ResourceErrorMiddleware
+    (a read failure it observes) and any resource/template handler that needs to raise
+    the same envelope itself — a handler-raised `MCPError` passes through both FastMCP's
+    own read_resource and this middleware unmodified, unlike `NotFoundError` (which does
+    not subclass FastMCPError and gets masked into a generic ResourceError first)."""
+    info = make_error(code, message)
+    info.resource_uri = resource_uri
+    info.request_id = uuid4().hex
+    data = serialize_error_info(info)
+    data["machine_code"] = data.pop("code")
+    data["human_message"] = data.pop("message")
+    return MCPError(code=mcp_code, message=message, data=data)
+
+
 class ResourceErrorMiddleware(Middleware):
     """Carry the §6 envelope in a resource-read failure's JSON-RPC error.data, with
     code/message renamed machine_code/human_message ([6.rename])."""
@@ -213,20 +238,10 @@ class ResourceErrorMiddleware(Middleware):
         try:
             return await call_next(context)
         except (NotFoundError, DisabledError) as exc:
-            raise self._envelope_error(
+            raise resource_error(
                 "resource_not_found", resource_not_found_code(context), "Resource not found.", uri
             ) from exc
         except ResourceError as exc:
-            raise self._envelope_error(
+            raise resource_error(
                 "internal_error", INTERNAL_ERROR, "Resource read failed.", uri
             ) from exc
-
-    @staticmethod
-    def _envelope_error(code: str, mcp_code: int, message: str, uri: str | None) -> MCPError:
-        info = make_error(code, message)
-        info.resource_uri = uri
-        info.request_id = uuid4().hex
-        data = serialize_error_info(info)
-        data["machine_code"] = data.pop("code")
-        data["human_message"] = data.pop("message")
-        return MCPError(code=mcp_code, message=message, data=data)
