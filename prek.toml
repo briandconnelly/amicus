@@ -1,0 +1,39 @@
+# prek (https://prek.j178.dev) — local Git hooks mirroring the CI gate.
+# One-time: `uv run prek install --prepare-hooks`.
+default_install_hook_types = ["pre-commit", "pre-push", "commit-msg"]
+
+[[repos]]
+repo = "builtin"
+hooks = [
+  { id = "trailing-whitespace" },
+  { id = "end-of-file-fixer" },
+  { id = "check-merge-conflict" },
+  { id = "detect-private-key" },
+  { id = "check-added-large-files" },
+  { id = "check-yaml" },
+  { id = "check-toml" },
+  { id = "check-json" },
+]
+
+[[repos]]
+repo = "local"
+hooks = [
+  { id = "ruff-check", name = "ruff check", language = "system", entry = "uv run ruff check --force-exclude --fix", types = ["python"] },
+  { id = "ruff-format", name = "ruff format", language = "system", entry = "uv run ruff format --force-exclude", types = ["python"] },
+  { id = "ty", name = "ty check", language = "system", entry = "uv run ty check", types_or = ["python", "toml"], files = "(\\.py|^pyproject\\.toml)$", pass_filenames = false },
+  { id = "lint-imports", name = "import-linter", language = "system", entry = "uv run lint-imports", types = ["python"], pass_filenames = false },
+  { id = "actions-pinning", name = "github actions sha pinning", language = "system", entry = "uv run python scripts/check_github_actions_pinning.py", files = "^\\.github/workflows/.*\\.ya?ml$", pass_filenames = false },
+  { id = "uv-lock-check", name = "uv lock --check", language = "system", entry = "uv lock --check", pass_filenames = false, files = "^(pyproject\\.toml|uv\\.lock|uv\\.toml)$" },
+]
+
+[[repos]]
+repo = "local"
+hooks = [
+  { id = "pytest", name = "pytest", language = "system", entry = "uv run pytest", stages = ["pre-push"], pass_filenames = false, always_run = true },
+]
+
+[[repos]]
+repo = "local"
+hooks = [
+  { id = "commit-msg", name = "conventional commit", language = "system", entry = "uv run python scripts/check_commit_message.py", stages = ["commit-msg"], pass_filenames = true },
+]
