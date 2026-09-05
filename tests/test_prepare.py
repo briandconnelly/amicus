@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import subprocess
+
+from pontonier.core import worktree
 from tests.support import fakeplugin
 
 from amicus import config
@@ -182,6 +185,45 @@ async def test_delegate_preflights_the_repo(tmp_path):
         out["error"]["code"] == "not_a_git_repo"
         and out["error"]["details"]["field"] == "workspace_root"
     )
+
+
+async def test_delegate_preflight_missing_git_is_git_unavailable(tmp_path, monkeypatch):
+    def boom(*args, **kwargs):
+        raise FileNotFoundError("git")
+
+    monkeypatch.setattr(worktree, "ensure_repo_with_head", boom)
+    out = await _prep(
+        tmp_path, verb="delegate", tool_name="amicus_delegate", task="t", question=None
+    )
+    assert out["error"]["code"] == "git_unavailable"
+    assert "Traceback" not in out["error"]["message"]
+    assert len(out["error"]["message"]) <= 300
+
+
+async def test_delegate_preflight_hung_git_is_worktree_error(tmp_path, monkeypatch):
+    def boom(*args, **kwargs):
+        raise subprocess.TimeoutExpired("git", 1)
+
+    monkeypatch.setattr(worktree, "ensure_repo_with_head", boom)
+    out = await _prep(
+        tmp_path, verb="delegate", tool_name="amicus_delegate", task="t", question=None
+    )
+    assert out["error"]["code"] == "worktree_error"
+    assert "Traceback" not in out["error"]["message"]
+    assert len(out["error"]["message"]) <= 300
+
+
+async def test_non_delegate_verbs_never_run_the_delegate_preflight(tmp_path, monkeypatch):
+    def boom(*args, **kwargs):
+        raise AssertionError("the delegate preflight must not run for consult/review_changes")
+
+    monkeypatch.setattr(worktree, "ensure_repo_with_head", boom)
+    consult = await _prep(tmp_path)
+    assert isinstance(consult, _prepare.Prepared)
+    review = await _prep(
+        tmp_path, verb="review_changes", tool_name="amicus_review_changes", question=None
+    )
+    assert isinstance(review, _prepare.Prepared)
 
 
 def test_clamp_and_deadline_advisory():

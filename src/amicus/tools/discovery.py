@@ -204,6 +204,7 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
             "input_too_large",
             "invalid_reasoning_effort",
             "not_a_git_repo",
+            "git_unavailable",
             "worktree_error",
             "not_implemented",
         ],

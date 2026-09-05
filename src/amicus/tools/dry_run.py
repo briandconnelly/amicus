@@ -1,4 +1,5 @@
-"""amicus_dry_run and amicus_delegate_dry_run (free previews; bodies land in M1)."""
+"""amicus_dry_run and amicus_delegate_dry_run: free previews of a review/delegate call's
+scope, size and resolved options, failing pre-spend exactly where the paid call would."""
 
 from __future__ import annotations
 

@@ -5,6 +5,7 @@ preflight. Returns a `Prepared` (spec + meta + plugin) or a ready error envelope
 
 from __future__ import annotations
 
+import subprocess
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -220,6 +221,17 @@ async def prepare_run(
                 details=ErrorDetail(field="workspace_root"),
             )
         except (worktree.NoCommitsError, worktree.WorktreeError) as exc:
+            return error_envelope(
+                "worktree_error", redaction.sanitize_echo_prose(str(exc))[:300], meta, plugin=plugin
+            )
+        except FileNotFoundError as exc:
+            return error_envelope(
+                "git_unavailable",
+                redaction.sanitize_echo_prose(str(exc))[:300],
+                meta,
+                plugin=plugin,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
             return error_envelope(
                 "worktree_error", redaction.sanitize_echo_prose(str(exc))[:300], meta, plugin=plugin
             )
