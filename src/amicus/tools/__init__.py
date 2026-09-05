@@ -54,6 +54,5 @@ def register_all(app: FastMCP, settings: Settings, registry: BackendRegistry) ->
     registered += dry_run.register(app, settings, registry)
     registered += discovery.register(app, settings, registry)
     registered += jobs.register(app, settings, registry)
-    # Task 13 fills in dry_run/discovery/jobs; until then, only the prefix is checked.
-    if registered != TOOL_ORDER[: len(registered)]:
+    if registered != TOOL_ORDER:
         raise RuntimeError(f"tool registration order drifted: {registered} != {TOOL_ORDER}")
