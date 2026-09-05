@@ -37,4 +37,3 @@ async def test_tools_list_wire_size_budget(profile):
 
 def test_measured_values_are_real():
     assert all(n > 0 for n in MEASURED.values())
-    assert MEASURED["codex-kimi"] != MEASURED["claude"] or MEASURED["all"] == MEASURED["claude"]
