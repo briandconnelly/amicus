@@ -453,11 +453,11 @@
         "kind": "consult",
         "last_message": null,
         "stderr": "",
-        "stdout": "{\"type\":\"error\",\"message\":\"[ReasoningEffortParam] [reasoning.effort] [invalid_enum_value] bad\"}\n"
+        "stdout": "{\"type\":\"error\",\"message\":\"[ReasoningEffortParam] [reasoning.effort] [invalid_enum_value] Invalid value: 'zz'\"}\n"
       },
       "sibling": {
         "error": {
-          "code": "nonzero_exit",
+          "code": "invalid_reasoning_effort",
           "retry_after_ms": null,
           "temporary": false
         },
