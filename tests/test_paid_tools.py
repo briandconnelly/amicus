@@ -153,6 +153,29 @@ async def test_blank_inputs_are_refused_pre_spend():
     assert t.structured_content["error"]["repair"]["tool"] == "amicus_delegate_async"
 
 
+async def test_blank_target_is_refused_pre_spend_for_adversarial_review():
+    app = _app(registry=_fake_registry())
+    async with Client(app) as c:
+        sync = await c.call_tool(
+            "amicus_adversarial_review",
+            {"backend": "claude", "target": "  "},
+            raise_on_error=False,
+        )
+        asy = await c.call_tool(
+            "amicus_adversarial_review_async",
+            {"backend": "claude", "target": "  "},
+            raise_on_error=False,
+        )
+    sync_err = sync.structured_content["error"]
+    assert sync_err["code"] == "invalid_arguments"
+    assert sync_err["details"]["field"] == "target"
+    assert sync_err["repair"]["tool"] == "amicus_adversarial_review"
+    async_err = asy.structured_content["error"]
+    assert async_err["code"] == "invalid_arguments"
+    assert async_err["details"]["field"] == "target"
+    assert async_err["repair"]["tool"] == "amicus_adversarial_review_async"
+
+
 async def test_unknown_backend_is_a_boundary_invalid_arguments():
     async with Client(_app()) as c:
         res = await c.call_tool(
@@ -202,6 +225,7 @@ async def test_guard_turns_an_unexpected_exception_into_internal_error(monkeypat
     err = res.structured_content["error"]
     assert err["code"] == "internal_error" and "kaboom" not in err["message"]
     assert "RuntimeError" in err["message"]
+    assert res.structured_content["meta"]["backend"] == "codex"
 
 
 async def test_lifecycle_meta_on_every_paid_tool():
