@@ -23,14 +23,23 @@ def test_errorinfo_requires_temporary_and_retry_after_ms_in_schema():
     schema = e.ErrorInfo.model_json_schema()
     assert "temporary" in schema["required"]
     assert "retry_after_ms" in schema["required"]
+    assert "backend" in schema["required"]
     assert "backend" in schema["properties"]
 
 
 def test_errorinfo_non_temporary_forbids_retry_after_ms():
     with pytest.raises(ValidationError):
-        e.ErrorInfo(code="internal_error", message="x", temporary=False, retry_after_ms=5)
+        e.ErrorInfo(
+            code="internal_error", message="x", backend=None, temporary=False, retry_after_ms=5
+        )
     with pytest.raises(ValidationError):
-        e.ErrorInfo(code="backend_rate_limited", message="x", temporary=True, retry_after_ms=-1)
+        e.ErrorInfo(
+            code="backend_rate_limited",
+            message="x",
+            backend=None,
+            temporary=True,
+            retry_after_ms=-1,
+        )
     ok = e.ErrorInfo(
         code="backend_rate_limited", message="x", backend="codex", temporary=True, retry_after_ms=1
     )
@@ -39,7 +48,9 @@ def test_errorinfo_non_temporary_forbids_retry_after_ms():
 
 def test_errorinfo_rejects_unknown_code_and_malformed_backend_id():
     with pytest.raises(ValidationError):
-        e.ErrorInfo(code="codex_not_found", message="x", temporary=False, retry_after_ms=None)
+        e.ErrorInfo(
+            code="codex_not_found", message="x", backend=None, temporary=False, retry_after_ms=None
+        )
     # `backend` is an open lowercase identifier (third-party plugins carry their own id),
     # not the v1 enum; only the shape is validated.
     with pytest.raises(ValidationError):

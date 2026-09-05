@@ -11,7 +11,6 @@ from amicus.schemas.codes import ErrorCode  # noqa: TC001 - pydantic needs this 
 from amicus.schemas.envelope import (
     BackendRef,
     ContextSummary,
-    Meta,  # noqa: F401 - re-exported for callers building envelopes alongside results
     Repair,
     SuccessBase,
     Workspace,

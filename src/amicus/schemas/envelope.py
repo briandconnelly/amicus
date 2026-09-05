@@ -158,7 +158,7 @@ class ErrorInfo(BaseModel):
     model_config = ConfigDict(extra="forbid")
     code: ErrorCode
     message: str
-    backend: BackendRef | None = None
+    backend: BackendRef | None = Field(...)
     temporary: bool = Field(...)
     retry_after_ms: int | None = Field(..., ge=0)
     repair: Repair | None = None
