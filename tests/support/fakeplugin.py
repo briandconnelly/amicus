@@ -62,7 +62,7 @@ class FakeBackend:
     def prepare(self, request: RunRequest) -> Any:
         @contextlib.asynccontextmanager
         async def _cm() -> AsyncIterator[PreparedRun]:
-            yield PreparedRun(argv=("fake",), env={}, cwd=request.cwd)
+            yield PreparedRun(argv=("fake",), env={}, cwd=request.cwd, stdin_text=request.prompt)
 
         return _cm()
 
@@ -118,3 +118,15 @@ def make_plugin(backend_id: str = "fake", **overrides: Any) -> BackendPlugin:
 
 
 plugin = make_plugin()
+
+
+class InspectingBackend(FakeBackend):
+    """A FakeBackend with the OutcomeInspector capability: any stdout containing
+    `INSPECT_FAIL` is a zero-exit failure."""
+
+    def inspect_outcome(self, outcome: RunOutcome, request: RunRequest) -> ClassifiedFailure | None:
+        if "INSPECT_FAIL" in outcome.run.stdout:
+            return ClassifiedFailure(
+                code="nonzero_exit", detail="inspector said no", retryable=False
+            )
+        return None
