@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from amicus.config.envspec import EnvConflictError, EnvNamespace, EnvVar
+from amicus.config.envspec import EnvConflictError, EnvNamespace, EnvVar, is_env_placeholder
 from amicus.schemas.codes import BACKEND_IDS
 from amicus.schemas.params import MAX_TIMEOUT_SECONDS, MIN_TIMEOUT_SECONDS
 
@@ -158,8 +158,11 @@ def settings(environ: Mapping[str, str] | None = None) -> Settings:
         try:
             return GLOBAL_ENV.resolve(name, environ).value
         except EnvConflictError:
-            # Already recorded by report(); fall back to the amicus name or the default.
+            # Already recorded by report(); fall back to the amicus name (unless it's an
+            # unexpanded placeholder, already recorded in report.placeholders) or the default.
             own = env.get(name)
+            if is_env_placeholder(own):
+                own = None
             return own if own is not None else GLOBAL_ENV.var(name).default
 
     state_raw = get("AMICUS_STATE_DIR")

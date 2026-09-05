@@ -53,6 +53,24 @@ def test_placeholder_is_reported_and_treated_as_unset(clean_env):
     assert s.host_name == "Codex"
 
 
+def test_conflict_fallback_never_leaks_a_placeholder(clean_env):
+    s = config.settings(
+        {
+            "AMICUS_LOG_FILE": "${LOG_FILE}",
+            "CODEX_IN_CLAUDE_LOG_FILE": "/a.log",
+            "MOONBRIDGE_LOG_FILE": "/b.log",
+        }
+    )
+    assert s.log_file is None
+    assert s.placeholders == ("AMICUS_LOG_FILE",)
+    assert any("LOG_FILE" in e for e in s.config_errors)
+
+
+def test_state_dir_override(clean_env):
+    s = config.settings({"AMICUS_STATE_DIR": "~/x"})
+    assert s.state_dir == Path("~/x").expanduser()
+
+
 def test_flags(clean_env):
     s = config.settings(
         {
