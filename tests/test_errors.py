@@ -37,6 +37,22 @@ def test_plugin_overrides_win_per_code_and_local_codes_are_added():
     assert errors.repair_table()["backend_auth_required"].alternative != "Run `fake login`."
 
 
+def test_make_error_with_a_plugin_uses_its_table_and_backend_id():
+    plugin = fakeplugin.make_plugin(
+        repair_overrides={
+            "fake_auth_required": RepairRule("authenticate", None, False, "Run `fake login`.")
+        },
+        local_codes={"fake_only": RepairRule("inspect_and_retry", None, True, "fake-only")},
+    )
+    info = errors.make_error("backend_auth_required", "m", plugin=plugin)
+    assert info.backend == "fake"
+    assert info.repair is not None and info.repair.alternative == "Run `fake login`."
+    # An explicit backend wins over the plugin's id.
+    assert (
+        errors.make_error("internal_error", "m", backend="codex", plugin=plugin).backend == "codex"
+    )
+
+
 def test_make_error_derives_repair_and_temporary_from_the_table():
     info = errors.make_error("job_running", "still running", retry_after_ms=500)
     assert info.temporary is True and info.retry_after_ms == 500
