@@ -33,4 +33,3 @@ an agent executes that plan with `superpowers:subagent-driven-development` or
 perturbation check is recorded, and the human has merged.
 
 ---
-

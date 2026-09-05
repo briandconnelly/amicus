@@ -317,4 +317,3 @@ fixtures in `skills/collaborating-with-amicus/tests/`.
 - Paid smoke per backend milestone; end-to-end install into Claude Code and Codex with cold-start scenarios.
 
 ---
-
