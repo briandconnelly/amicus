@@ -592,7 +592,8 @@
         ],
         "cost": "free",
         "error_codes": [
-          "invalid_arguments"
+          "invalid_arguments",
+          "backend_unavailable"
         ],
         "key_optional_params": [],
         "name": "amicus_models",
@@ -749,7 +750,7 @@
         "use_when": "Recover job_ids, including the job behind a task_id."
       }
     ],
-    "tool_error_carrier": "tool result with isError: true; the error envelope is in structuredContent, and content[0].text mirrors it as JSON",
+    "tool_error_carrier": "tool result with isError: true; the error envelope is in structuredContent, and content[0].text mirrors it as JSON. error.request_id carries the same value as meta.request_id (mirrored).",
     "transport": "stdio"
   },
   "discover": {
@@ -1734,7 +1735,7 @@
           "volatile": true
         }
       },
-      "description": "The amicus_models payload for one backend.",
+      "description": "The amicus_models payload for one backend, unlike the `amicus_models` TOOL:\nfor an unavailable (but known) backend id this returns the informational\n`available: false` payload rather than a `backend_unavailable` error envelope,\nbecause a resource read has no repair carrier to put one in. Only an unknown\nbackend id (not in BACKEND_IDS and not a loaded plugin) is resource_not_found.",
       "mimeType": "application/json",
       "name": "amicus-models",
       "title": "One backend's model catalog",
@@ -3501,6 +3502,12 @@
             "anyOf": [
               {
                 "items": {
+                  "enum": [
+                    "capabilities-result",
+                    "error-envelope",
+                    "parameter-contracts",
+                    "result-meta"
+                  ],
                   "type": "string"
                 },
                 "type": "array"
@@ -3555,7 +3562,7 @@
                 "type": "string"
               },
               "fingerprint_covers": {
-                "description": "A contract-semantic change in any listed category changes the fingerprint; nothing outside them does. Release identity is excluded: serverInfo.version, version, server_version change every release WITHOUT moving the fingerprint. surface_digest is the sha256 of the built manifest and moves with the fingerprint, never alone.",
+                "description": "A contract-semantic change in any listed category changes the fingerprint; nothing outside them does. Release identity is excluded: serverInfo.version, version, server_version change every release WITHOUT moving the fingerprint. surface_digest is the sha256 of the server-side tool, resource and template records plus the instructions text; the full-manifest hash is pinned separately in tests and moves with the fingerprint, never alone.",
                 "items": {
                   "type": "string"
                 },
