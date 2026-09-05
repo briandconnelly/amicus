@@ -1,4 +1,4 @@
-"""Tool registration in a fixed order (filled in by the tool modules)."""
+"""Tool registration in a FIXED order: the wire order is contract ([9.deterministic-order])."""
 
 from __future__ import annotations
 
@@ -10,8 +10,50 @@ if TYPE_CHECKING:  # pragma: no cover
     from amicus.config import Settings
     from amicus.registry import BackendRegistry
 
-TOOL_ORDER: tuple[str, ...] = ()
+ACTIVE_TOOLS: tuple[str, ...] = (
+    "amicus_consult",
+    "amicus_consult_async",
+    "amicus_review_changes",
+    "amicus_review_changes_async",
+    "amicus_delegate",
+    "amicus_delegate_async",
+    "amicus_adversarial_review",
+    "amicus_adversarial_review_async",
+)
+FREE_TOOLS: tuple[str, ...] = (
+    "amicus_dry_run",
+    "amicus_delegate_dry_run",
+    "amicus_backends",
+    "amicus_models",
+    "amicus_capabilities",
+)
+JOB_TOOLS: tuple[str, ...] = (
+    "amicus_job_status",
+    "amicus_job_result",
+    "amicus_job_consume_result",
+    "amicus_job_cancel",
+    "amicus_job_list",
+)
+TOOL_ORDER: tuple[str, ...] = ACTIVE_TOOLS + FREE_TOOLS + JOB_TOOLS
+PAIRS: tuple[tuple[str, str], ...] = (
+    ("amicus_consult", "amicus_consult_async"),
+    ("amicus_review_changes", "amicus_review_changes_async"),
+    ("amicus_delegate", "amicus_delegate_async"),
+    ("amicus_adversarial_review", "amicus_adversarial_review_async"),
+)
 
 
 def register_all(app: FastMCP, settings: Settings, registry: BackendRegistry) -> None:
-    """Register every tool in TOOL_ORDER (no tools yet in this task)."""
+    from amicus.tools import consult, delegate, discovery, dry_run, jobs, review  # noqa: PLC0415
+
+    registered: tuple[str, ...] = ()
+    registered += consult.register(app, settings, registry)
+    registered += review.register_review_changes(app, settings, registry)
+    registered += delegate.register(app, settings, registry)
+    registered += review.register_adversarial(app, settings, registry)
+    registered += dry_run.register(app, settings, registry)
+    registered += discovery.register(app, settings, registry)
+    registered += jobs.register(app, settings, registry)
+    # Task 13 fills in dry_run/discovery/jobs; until then, only the prefix is checked.
+    if registered != TOOL_ORDER[: len(registered)]:
+        raise RuntimeError(f"tool registration order drifted: {registered} != {TOOL_ORDER}")

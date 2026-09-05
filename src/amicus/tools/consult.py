@@ -1,0 +1,113 @@
+"""amicus_consult and amicus_consult_async."""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
+from amicus.schemas.params import (
+    BackendOptionsParam,
+    BackendParam,
+    DetailParam,
+    ExtraContextParam,
+    IdempotencyKeyParam,
+    InstructionsAppendParam,
+    ModelParam,
+    QuestionParam,
+    ReasoningEffortParam,
+    TimeoutSecondsParam,
+    WorkspaceRootParam,
+)
+from amicus.schemas.results import CONSULT_RESULT_SCHEMA, JOB_STARTED_SCHEMA
+from amicus.tools import _resolve
+from amicus.tools._guard import guard
+from amicus.tools._meta import annotations_for, lifecycle_meta
+
+if TYPE_CHECKING:  # pragma: no cover
+    from fastmcp import FastMCP
+
+    from amicus.config import Settings
+    from amicus.registry import BackendRegistry
+
+_EGRESS = (
+    "Egress: sends question, extra_context and instructions_append raw to the backend's "
+    "provider; the backend can read files outside the workspace."
+)
+_DESC = (
+    f"{_resolve.PAID_MARKER} Read-only second opinion or Q&A from `backend` on a question, "
+    "design, or a diff you paste inline; use amicus_review_changes when the diff is in "
+    f"git. {_EGRESS} Recorded as a job (meta.job_id). Prefer amicus_consult_async for a "
+    "high-effort or broad repo-grounded consult that can exceed the deadline."
+)
+_ASYNC_DESC = (
+    f"{_resolve.PAID_MARKER} Async twin of amicus_consult: returns a job handle "
+    f"immediately; poll amicus_job_status, read amicus_job_result. {_EGRESS} Starting a "
+    "job commits to spend."
+)
+
+
+def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tuple[str, ...]:
+    async def _run(tool_name: str, backend: str, question: str, options: Any) -> dict[str, Any]:
+        err = _resolve.blank_input_error(question, "question", tool_name, settings, backend)
+        if err is not None:
+            return err
+        resolved = _resolve.resolve_paid_call(
+            registry=registry,
+            settings=settings,
+            tool_name=tool_name,
+            verb="consult",
+            backend=backend,
+            backend_options=options,
+        )
+        if isinstance(resolved, dict):
+            return resolved
+        return _resolve.not_implemented(tool_name, settings, backend)
+
+    @app.tool(
+        name="amicus_consult",
+        annotations=annotations_for("active", settings),
+        output_schema=CONSULT_RESULT_SCHEMA,
+        title="Consult a backend model (paid)",
+        meta=lifecycle_meta("amicus_consult"),
+        description=_DESC,
+        task=settings.tasks_enabled,
+    )
+    @guard("amicus_consult", settings)
+    async def amicus_consult(
+        backend: BackendParam,
+        question: QuestionParam,
+        workspace_root: WorkspaceRootParam = None,
+        extra_context: ExtraContextParam = None,
+        instructions_append: InstructionsAppendParam = None,
+        model: ModelParam = None,
+        reasoning_effort: ReasoningEffortParam = None,
+        timeout_seconds: TimeoutSecondsParam = None,
+        detail: DetailParam = "summary",
+        backend_options: BackendOptionsParam = None,
+    ) -> dict[str, Any]:
+        """Consult the selected backend for a read-only second opinion."""
+        return await _run("amicus_consult", backend, question, backend_options)
+
+    @app.tool(
+        name="amicus_consult_async",
+        annotations=annotations_for("active", settings),
+        output_schema=JOB_STARTED_SCHEMA,
+        title="Start a background consult (paid)",
+        meta=lifecycle_meta("amicus_consult_async"),
+        description=_ASYNC_DESC,
+    )
+    @guard("amicus_consult_async", settings)
+    async def amicus_consult_async(
+        backend: BackendParam,
+        question: QuestionParam,
+        workspace_root: WorkspaceRootParam = None,
+        extra_context: ExtraContextParam = None,
+        instructions_append: InstructionsAppendParam = None,
+        model: ModelParam = None,
+        reasoning_effort: ReasoningEffortParam = None,
+        idempotency_key: IdempotencyKeyParam = None,
+        backend_options: BackendOptionsParam = None,
+    ) -> dict[str, Any]:
+        """Start a background consult on the selected backend."""
+        return await _run("amicus_consult_async", backend, question, backend_options)
+
+    return ("amicus_consult", "amicus_consult_async")
