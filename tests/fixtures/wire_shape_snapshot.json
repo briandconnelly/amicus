@@ -409,6 +409,187 @@
       }
     }
   },
+  "lifecycle": {
+    "cancelled": {
+      "error": {
+        "backend": null,
+        "code": "job_cancelled",
+        "message": "The job was cancelled.",
+        "repair": {
+          "alternative": "Start a new job.",
+          "next_step": "start_new_job"
+        },
+        "request_id": "00000000000000000000000000000000",
+        "retry_after_ms": null,
+        "temporary": false
+      },
+      "meta": {
+        "backend": "codex",
+        "compat_warnings": [],
+        "cwd": "/repo",
+        "elapsed_ms": 1,
+        "fingerprint": "<fingerprint>",
+        "job_id": "00000000000000000000000000000000",
+        "redacted_paths": [],
+        "request_id": "00000000000000000000000000000000",
+        "security_warnings": [],
+        "server_version": "0.0.0",
+        "timeout_seconds": 1,
+        "truncated": false
+      },
+      "ok": false
+    },
+    "done_error": {
+      "error": {
+        "backend": "codex",
+        "code": "nonzero_exit",
+        "message": "the backend command exited nonzero",
+        "repair": {
+          "alternative": "The CLI exited nonzero; inspect the detail, run amicus_backends, then retry.",
+          "next_step": "inspect_and_retry"
+        },
+        "request_id": "00000000000000000000000000000000",
+        "retry_after_ms": null,
+        "temporary": true
+      },
+      "meta": {
+        "backend": "codex",
+        "compat_warnings": [],
+        "cwd": "/repo",
+        "elapsed_ms": 1,
+        "fingerprint": "<fingerprint>",
+        "job_id": "00000000000000000000000000000000",
+        "redacted_paths": [],
+        "request_id": "00000000000000000000000000000000",
+        "security_warnings": [],
+        "server_version": "0.0.0",
+        "timeout_seconds": 1,
+        "truncated": false
+      },
+      "ok": false
+    },
+    "done_incompatible": {
+      "error": {
+        "backend": null,
+        "code": "job_result_incompatible",
+        "message": "stored job result was written under a different result format (result_format 2; this release reads 1, producer server_version 0.0.0): stored review_changes result did not match its schema: 3 validation errors for ReviewResult\ntool\n  Input should be 'amicus_review_changes' [type=literal_error, input_value='amicus_consult', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.13/v/literal_error\nverdict\n  Field required [type=missing, input_value={'ok': True, 'meta': {'ba",
+        "repair": {
+          "alternative": "The stored result predates this server version; start a new job.",
+          "next_step": "start_new_job"
+        },
+        "request_id": "00000000000000000000000000000000",
+        "retry_after_ms": null,
+        "temporary": false
+      },
+      "meta": {
+        "backend": "codex",
+        "compat_warnings": [],
+        "cwd": "/repo",
+        "elapsed_ms": 1,
+        "fingerprint": "<fingerprint>",
+        "job_id": "00000000000000000000000000000000",
+        "redacted_paths": [],
+        "request_id": "00000000000000000000000000000000",
+        "security_warnings": [],
+        "server_version": "0.0.0",
+        "timeout_seconds": 1,
+        "truncated": false
+      },
+      "ok": false
+    },
+    "failed": {
+      "error": {
+        "backend": null,
+        "code": "job_failed",
+        "message": "The job failed without producing a result.",
+        "repair": {
+          "alternative": "Inspect the stored failure, then start a new job.",
+          "next_step": "inspect_and_retry"
+        },
+        "request_id": "00000000000000000000000000000000",
+        "retry_after_ms": null,
+        "temporary": false
+      },
+      "meta": {
+        "backend": "codex",
+        "compat_warnings": [],
+        "cwd": "/repo",
+        "elapsed_ms": 1,
+        "fingerprint": "<fingerprint>",
+        "job_id": "00000000000000000000000000000000",
+        "redacted_paths": [],
+        "request_id": "00000000000000000000000000000000",
+        "security_warnings": [],
+        "server_version": "0.0.0",
+        "timeout_seconds": 1,
+        "truncated": false
+      },
+      "ok": false
+    },
+    "running": {
+      "error": {
+        "backend": null,
+        "code": "job_running",
+        "message": "The job is still running.",
+        "repair": {
+          "alternative": "Poll amicus_job_status until result_available, honoring poll_after_ms.",
+          "arguments": {
+            "job_id": "00000000000000000000000000000000",
+            "workspace_root": "/repo"
+          },
+          "next_step": "poll_job_status",
+          "tool": "amicus_job_status"
+        },
+        "request_id": "00000000000000000000000000000000",
+        "retry_after_ms": 500,
+        "temporary": true
+      },
+      "meta": {
+        "backend": "codex",
+        "compat_warnings": [],
+        "cwd": "/repo",
+        "elapsed_ms": 1,
+        "fingerprint": "<fingerprint>",
+        "job_id": "00000000000000000000000000000000",
+        "redacted_paths": [],
+        "request_id": "00000000000000000000000000000000",
+        "security_warnings": [],
+        "server_version": "0.0.0",
+        "timeout_seconds": 1,
+        "truncated": false
+      },
+      "ok": false
+    },
+    "timeout": {
+      "error": {
+        "backend": null,
+        "code": "job_timeout",
+        "message": "The job exceeded its wall-clock deadline and was stopped.",
+        "repair": {
+          "alternative": "Start a new job.",
+          "next_step": "start_new_job"
+        },
+        "request_id": "00000000000000000000000000000000",
+        "retry_after_ms": null,
+        "temporary": false
+      },
+      "meta": {
+        "backend": "codex",
+        "compat_warnings": [],
+        "cwd": "/repo",
+        "elapsed_ms": 1,
+        "fingerprint": "<fingerprint>",
+        "job_id": "00000000000000000000000000000000",
+        "redacted_paths": [],
+        "request_id": "00000000000000000000000000000000",
+        "security_warnings": [],
+        "server_version": "0.0.0",
+        "timeout_seconds": 1,
+        "truncated": false
+      },
+      "ok": false
+    }
+  },
   "omitted_meta_keys": {
     "consult": [
       "context_summary",
