@@ -92,3 +92,22 @@ def test_snapshot_is_sensitive_to_key_loss():
     mutated = json.loads(json.dumps(snap))
     del mutated["delivered"]["summary"]["consult"]["summary"]
     assert mutated != snap
+
+
+def test_lifecycle_covers_every_non_done_success_outcome():
+    snap = wss.build_snapshot()
+    lifecycle = snap["lifecycle"]
+    assert set(lifecycle) == {
+        "running",
+        "cancelled",
+        "timeout",
+        "failed",
+        "done_error",
+        "done_incompatible",
+    }
+    running = lifecycle["running"]["error"]
+    assert running["retry_after_ms"] is not None
+    assert running["repair"]["arguments"] == {
+        "job_id": "0" * 32,
+        "workspace_root": "/repo",
+    }

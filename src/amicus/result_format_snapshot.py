@@ -19,16 +19,25 @@ _VERSION_SENTINEL = "0.0.0"
 _REQUEST_ID_SENTINEL = "0" * 32
 
 
-def _normalize_schema(node: Any) -> Any:
+_FIELD_NAME_CONTAINERS = ("properties", "$defs")
+
+
+def _normalize_schema(node: Any, *, in_field_map: bool = False) -> Any:
+    """Strip `description` and pin the fingerprint default — but never at the immediate
+    child level of a `properties` or `$defs` map, whose keys are field/definition NAMES
+    (a field could itself be named `description`), not schema keywords."""
     if isinstance(node, dict):
         out: dict[str, Any] = {}
         for key, value in node.items():
+            if in_field_map:
+                out[key] = _normalize_schema(value)
+                continue
             if key == "description":
                 continue
             if key == "default" and value == FINGERPRINT:
                 out[key] = _FINGERPRINT_SENTINEL
                 continue
-            out[key] = _normalize_schema(value)
+            out[key] = _normalize_schema(value, in_field_map=key in _FIELD_NAME_CONTAINERS)
         return out
     if isinstance(node, list):
         return [_normalize_schema(v) for v in node]

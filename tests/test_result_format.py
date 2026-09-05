@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from pydantic import BaseModel, Field
+
 from amicus import __version__
 from amicus import result_format_snapshot as rfs
 from amicus.schemas.fingerprint import FINGERPRINT, RESULT_FORMAT
@@ -55,3 +57,12 @@ def test_render_is_deterministic_and_sensitive():
     mutated = json.loads(json.dumps(snap))
     mutated["schemas"]["ConsultResult"]["properties"]["field_from_the_future"] = {"type": "string"}
     assert mutated != snap
+
+
+def test_normalize_schema_keeps_a_field_literally_named_description():
+    class _HasDescriptionField(BaseModel):
+        description: str = Field(description="a field that happens to share its name")
+
+    out = rfs._normalize_schema(_HasDescriptionField.model_json_schema())
+    assert "description" in out["properties"]
+    assert "description" not in out["properties"]["description"]

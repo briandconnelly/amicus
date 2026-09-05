@@ -10,10 +10,12 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from amicus.errors import make_error, serialize_error
 from amicus.jobs.delivery import finished_job_envelope
 from amicus.orchestration.workspace import workspace_warning_for
 from amicus.schemas.envelope import (
     ContextSummary,
+    ErrorResult,
     InstructionsFingerprint,
     Meta,
     Usage,
@@ -125,6 +127,71 @@ def _deliver(stored: dict[str, Any], name: str, detail: str) -> dict[str, Any]:
     return envelope
 
 
+_POLL_AFTER_MS_SENTINEL = 500
+# result_format the chokepoint reads today; a stored record claiming a DIFFERENT value
+# (never None, never the current one) is what makes `_unreadable` report
+# job_result_incompatible instead of internal_error.
+_INCOMPATIBLE_RESULT_FORMAT = RESULT_FORMAT + 1
+
+
+def _lifecycle_envelope(
+    rec: dict[str, Any],
+    payload: dict[str, Any] | None,
+    kind: str,
+    workspace_root: str | None = None,
+) -> dict[str, Any]:
+    envelope, _delivered = finished_job_envelope(
+        rec, payload, _JOB_ID_SENTINEL, kind, _meta(), "summary", workspace_root
+    )
+    if envelope["meta"].get("fingerprint") == FINGERPRINT:
+        envelope["meta"]["fingerprint"] = _FINGERPRINT_SENTINEL
+    return envelope
+
+
+def _lifecycle_envelopes() -> dict[str, dict[str, Any]]:
+    """The non-`done`-success outcomes `finished_job_envelope` produces: the four
+    still-in-flight/terminal-without-a-result states, a `done` record whose stored
+    payload IS an error envelope (passthrough), and a `done` record whose payload
+    fails its kind's schema under a result_format the chokepoint no longer reads."""
+    running = _lifecycle_envelope(
+        {"status": "running", "poll_after_ms": _POLL_AFTER_MS_SENTINEL},
+        None,
+        "consult",
+        workspace_root="/repo",
+    )
+    cancelled = _lifecycle_envelope({"status": "cancelled"}, None, "consult")
+    timeout = _lifecycle_envelope({"status": "timeout"}, None, "consult")
+    failed = _lifecycle_envelope({"status": "failed"}, None, "consult")
+
+    stored_error = serialize_error(
+        ErrorResult(
+            error=make_error("nonzero_exit", "the backend command exited nonzero", backend="codex"),
+            meta=_meta(),
+        )
+    )
+    done_error = _lifecycle_envelope(
+        {"status": "done", "extra": {"result_format": RESULT_FORMAT}},
+        json.loads(json.dumps(stored_error)),
+        "consult",
+    )
+
+    mismatched_payload = dump_success(ConsultResult(summary="s", raw_response=_raw(), meta=_meta()))
+    done_incompatible = _lifecycle_envelope(
+        {"status": "done", "extra": {"result_format": _INCOMPATIBLE_RESULT_FORMAT}},
+        json.loads(json.dumps(mismatched_payload)),
+        "review_changes",
+    )
+
+    return {
+        "running": running,
+        "cancelled": cancelled,
+        "timeout": timeout,
+        "failed": failed,
+        "done_error": done_error,
+        "done_incompatible": done_incompatible,
+    }
+
+
 def build_snapshot() -> dict[str, Any]:
     stored = _stored_envelopes()
     return {
@@ -136,6 +203,7 @@ def build_snapshot() -> dict[str, Any]:
             name: sorted(set(env["meta"]) - set(_deliver(env, name, "summary")["meta"]))
             for name, env in stored.items()
         },
+        "lifecycle": _lifecycle_envelopes(),
     }
 
 
