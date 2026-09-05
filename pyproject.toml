@@ -110,10 +110,18 @@ root_package = "amicus"
 name = "backends never import the server layer"
 type = "forbidden"
 source_modules = ["amicus.backends"]
-forbidden_modules = ["amicus.tools", "amicus.orchestration", "amicus.jobs"]
+forbidden_modules = [
+    "amicus.tools",
+    "amicus.server",
+    "amicus.orchestration",
+    "amicus.jobs",
+    "amicus.middleware",
+    "amicus.errors",
+    "amicus.registry",
+]
 
 [[tool.importlinter.contracts]]
 name = "orchestration and jobs never import the server layer"
 type = "forbidden"
 source_modules = ["amicus.orchestration", "amicus.jobs"]
-forbidden_modules = ["amicus.tools"]
+forbidden_modules = ["amicus.server", "amicus.tools"]
