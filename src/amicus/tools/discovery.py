@@ -96,6 +96,17 @@ _REVIEW_CODES = [
     "schema_violation",
     "context_too_large",
 ]
+# Lifecycle codes a sync tool's amicus_job_result-shaped envelope can carry once
+# lifecycle.run_sync reaches jobs/delivery.py's STATE_TO_ERROR; not_implemented is not
+# among them because these three tools always resolve (no pending-jobs-surface path).
+_SYNC_LIFECYCLE_CODES = [
+    "job_failed",
+    "job_cancelled",
+    "job_timeout",
+    "job_result_incompatible",
+]
+_COMMON_PAID_CODES_SYNC = [c for c in _COMMON_PAID_CODES if c != "not_implemented"]
+_REVIEW_CODES_EMITTED = [c for c in _REVIEW_CODES if c != "context_too_large"]
 TOOL_DETAILS: dict[str, dict[str, Any]] = {
     "amicus_consult": {
         "cost": "active",
@@ -105,7 +116,7 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
             "pasted inline."
         ),
         "returns": "summary, findings, questions, next_steps, raw_response (detail=full) and meta.",
-        "error_codes": _COMMON_PAID_CODES,
+        "error_codes": _COMMON_PAID_CODES_SYNC + _SYNC_LIFECYCLE_CODES,
     },
     "amicus_consult_async": {
         "cost": "active",
@@ -119,7 +130,7 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
         "backends": list(BACKEND_IDS),
         "use_when": "A structured review of changes that live in git.",
         "returns": "verdict, confidence, findings, review_status, context_summary and meta.",
-        "error_codes": _COMMON_PAID_CODES + _REVIEW_CODES,
+        "error_codes": _COMMON_PAID_CODES_SYNC + _REVIEW_CODES_EMITTED + _SYNC_LIFECYCLE_CODES,
     },
     "amicus_review_changes_async": {
         "cost": "active",
@@ -138,7 +149,13 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
             "apply yourself."
         ),
         "returns": "diff, diffstat, summary and meta.",
-        "error_codes": [*_COMMON_PAID_CODES, "not_a_git_repo", "git_unavailable", "worktree_error"],
+        "error_codes": [
+            *_COMMON_PAID_CODES_SYNC,
+            "not_a_git_repo",
+            "git_unavailable",
+            "worktree_error",
+            *_SYNC_LIFECYCLE_CODES,
+        ],
     },
     "amicus_delegate_async": {
         "cost": "active",
@@ -186,7 +203,6 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
             "input_too_large",
             "invalid_reasoning_effort",
             *_REVIEW_CODES[:6],
-            "not_implemented",
         ],
     },
     "amicus_delegate_dry_run": {
@@ -206,7 +222,6 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
             "not_a_git_repo",
             "git_unavailable",
             "worktree_error",
-            "not_implemented",
         ],
     },
     "amicus_backends": {
