@@ -12,8 +12,6 @@ import tempfile
 import time
 from pathlib import Path
 
-from pontonier.core.jobs import JobStore
-
 from amicus import config
 from amicus.jobs import lifecycle
 from amicus.orchestration.isolation import WORKTREE_PREFIX
@@ -44,8 +42,8 @@ async def test_cancel_hard_kills_a_worker_that_ignores_sigterm_and_removes_its_w
 ):
     worktree = Path(tempfile.mkdtemp(prefix=WORKTREE_PREFIX, dir=tempfile.gettempdir()))
     (worktree / "file").write_text("x")
-    monkeypatch.setattr(JobStore, "terminate_grace_seconds", 1.0)
     store = lifecycle.job_store(_settings(tmp_path))
+    store.terminate_grace_seconds = 1.0
     monkeypatch.setattr(lifecycle, "worker_cmd", _stubborn_worker_cmd(worktree))
     job_id, _ = store.start(
         lifecycle.worker_cmd, str(tmp_path), kind="delegate", extra={"backend": "codex"}
@@ -75,8 +73,8 @@ async def test_cancel_hard_kills_a_worker_that_ignores_sigterm_and_removes_its_w
 async def test_cancel_reports_a_worktree_it_may_not_remove(tmp_path, monkeypatch):
     outside = tmp_path / "not-a-worktree"
     outside.mkdir()
-    monkeypatch.setattr(JobStore, "terminate_grace_seconds", 0.2)
     store = lifecycle.job_store(_settings(tmp_path))
+    store.terminate_grace_seconds = 0.2
     monkeypatch.setattr(lifecycle, "worker_cmd", _stubborn_worker_cmd(outside))
     job_id, _ = store.start(
         lifecycle.worker_cmd, str(tmp_path), kind="delegate", extra={"backend": "codex"}
@@ -124,7 +122,7 @@ async def test_a_job_survives_the_server_that_started_it(tmp_path, fake_codex, m
         tool="amicus_consult_async",
         cwd=str(tmp_path),
         workspace_source="param",
-        roots_source="none",
+        roots_source="not_negotiated",
         host_name="H",
         timeout_seconds=60,
         question="why?",
