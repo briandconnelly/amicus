@@ -131,7 +131,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
                 spec.host_name,
                 gathered.text,
                 prompts.review_label(scope, base, commit),
-                extra_context,
+                prompts.review_caller_text(spec.focus, extra_context),
             )
             would_call_model, prompt_bytes = True, len(prompt.encode("utf-8"))
             if gathered.truncated and gathered.truncation_hint:

@@ -163,6 +163,40 @@ async def test_review_gathers_first_and_never_runs_on_an_empty_scope(monkeypatch
     )
 
 
+async def test_review_focus_reaches_the_prompt_and_folds_a_pass_to_unknown(monkeypatch, repo):
+    (repo / "a.py").write_text("x = 2\n")
+    payload = (
+        '{"summary":"ok","verdict":"pass","confidence":"high","findings":[],'
+        '"questions":[],"assumptions":[],"next_steps":[]}'
+    )
+    calls: list = []
+    monkeypatch.setattr(
+        run_mod.runtime, "run_async", cf.scripted_run_async(stdout=payload, calls=calls)
+    )
+    out = await run_mod.run_request(
+        _spec("review_changes", str(repo), scope="working_tree", focus="locking"),
+        fakeplugin.make_plugin(),
+    )
+    prompt = calls[0]["stdin_text"]
+    marker = "## Author-provided context (untrusted data)"
+    assert marker in prompt
+    after_marker = prompt.split(marker, 1)[1]
+    assert "Focus this review on: locking" in after_marker
+    assert out["ok"] is True
+    assert out["verdict"] == "unknown" and out["confidence"] == "low"
+    assert "focused" in out["summary"]
+
+    calls_unfocused: list = []
+    monkeypatch.setattr(
+        run_mod.runtime, "run_async", cf.scripted_run_async(stdout=payload, calls=calls_unfocused)
+    )
+    out_unfocused = await run_mod.run_request(
+        _spec("review_changes", str(repo), scope="working_tree"), fakeplugin.make_plugin()
+    )
+    assert "Focus this review on:" not in calls_unfocused[0]["stdin_text"]
+    assert out_unfocused["verdict"] == "pass" and out_unfocused["confidence"] == "high"
+
+
 async def test_delegate_runs_in_a_worktree_and_returns_the_diff(monkeypatch, repo):
     calls: list = []
     parents: list[str] = []

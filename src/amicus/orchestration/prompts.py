@@ -48,6 +48,21 @@ def review_prompt(
     )
 
 
+def review_caller_text(focus: str | None, extra_context: str | None) -> str | None:
+    """Fold `focus` into the text that goes in review_prompt's `extra_context` slot, so
+    focus rides inside the same UNTRUSTED caller-supplied framing ("narrows focus only")
+    as extra_context, without changing review_prompt's signature."""
+    focus_line = f"Focus this review on: {focus.strip()}" if focus and focus.strip() else None
+    context = extra_context.strip() if extra_context and extra_context.strip() else None
+    if focus_line is None and context is None:
+        return None
+    if focus_line is None:
+        return context
+    if context is None:
+        return focus_line
+    return f"{focus_line}\n\n{context}"
+
+
 def delegate_prompt(host_name: str, task: str) -> str:
     return _pp.build_delegate_prompt(_pp.framings(host_name).delegate, task)
 

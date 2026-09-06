@@ -72,3 +72,24 @@ def test_output_schemas_are_strict_and_match_the_finding_model():
         "fail",
         "unknown",
     ]
+
+
+@pytest.mark.parametrize(
+    ("focus", "extra_context", "expected"),
+    [
+        (None, None, None),
+        ("", "", None),
+        ("   ", "   ", None),
+        ("locking", None, "Focus this review on: locking"),
+        ("locking", "", "Focus this review on: locking"),
+        (None, "some context", "some context"),
+        ("", "some context", "some context"),
+        ("locking", "some context", "Focus this review on: locking\n\nsome context"),
+    ],
+)
+def test_review_caller_text_combinations(focus, extra_context, expected):
+    assert p.review_caller_text(focus, extra_context) == expected
+
+
+def test_review_caller_text_strips_focus_and_context():
+    assert p.review_caller_text("  locking  ", "  ctx  ") == "Focus this review on: locking\n\nctx"

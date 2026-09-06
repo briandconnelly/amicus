@@ -63,11 +63,15 @@ async def run_request(
         if isinstance(gathered, dict):
             return gathered
         reasons = review.coverage_reasons(spec.scope or "working_tree", gathered)
+        if spec.focus and spec.focus.strip():
+            # A focused pass is never a full review (per the `focus` parameter contract):
+            # fold it into apply_coverage so a model `pass` is downgraded with a caveat.
+            reasons.append("focused")
         prompt = prompts.review_prompt(
             spec.host_name,
             gathered.text,
             prompts.review_label(spec.scope or "working_tree", spec.base, spec.commit),
-            spec.extra_context,
+            prompts.review_caller_text(spec.focus, spec.extra_context),
         )
         schema: dict[str, Any] | None = prompts.REVIEW_OUTPUT_SCHEMA
     elif spec.kind == "consult":
