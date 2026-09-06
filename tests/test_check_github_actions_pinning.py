@@ -206,3 +206,25 @@ def test_main_returns_1_on_flow_mapping_uses(tmp_path):
     wf.mkdir(parents=True)
     (wf / "x.yml").write_text("jobs:\n  a:\n    steps:\n      - { uses: actions/checkout@v4 }\n")
     assert check.main([str(tmp_path)]) == 1
+
+
+# --- this repository's checkouts never persist the job token ------------------
+
+
+def test_this_repository_checkouts_do_not_persist_credentials():
+    """Every actions/checkout step must set persist-credentials: false: the gate runs
+    PR-controlled code (build hooks, tests) after checkout and needs no git auth."""
+    workflows = sorted((_REPO_ROOT / ".github" / "workflows").glob("*.yml"))
+    assert workflows
+    for path in workflows:
+        lines = path.read_text(encoding="utf-8").splitlines()
+        for i, line in enumerate(lines):
+            if "uses: actions/checkout@" not in line:
+                continue
+            indent = len(line) - len(line.lstrip(" "))
+            block = []
+            for nxt in lines[i + 1 :]:
+                if nxt.strip() and (len(nxt) - len(nxt.lstrip(" "))) <= indent:
+                    break
+                block.append(nxt.strip())
+            assert "persist-credentials: false" in block, f"{path.name}:{i + 1}"
