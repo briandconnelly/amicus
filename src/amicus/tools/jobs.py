@@ -9,7 +9,6 @@ import asyncio
 from typing import TYPE_CHECKING, Any
 
 from fastmcp import Context
-from pontonier.core.jobs import DiscardOutcome
 
 from amicus.jobs import lifecycle, lookup
 from amicus.jobs.delivery import finished_job_envelope
@@ -102,9 +101,11 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
             envelope["meta"]["task_id"] = meta.task_id
         if not (consume and delivered):
             return envelope
-        outcome = await asyncio.to_thread(store().discard, cwd, job_id)
-        if outcome is DiscardOutcome.MISSING:
-            return lookup.job_not_found(job_id, meta, workspace_root)
+        # Once delivered is true, every discard outcome still returns the envelope: MISSING
+        # means the record is already gone (what consume promised), DELETE_FAILED means
+        # deletion is best-effort and the TTL reaper owns the retained record, and REMOVED
+        # is the normal case.
+        await asyncio.to_thread(store().discard, cwd, job_id)
         return envelope
 
     @app.tool(
@@ -242,8 +243,6 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
             ),
             meta=lookup.job_meta(settings, cwd, source, roots_source),
         ).model_dump(mode="json")
-        if result["truncation_hint"] is None:
-            del result["truncation_hint"]
         return result
 
     return (

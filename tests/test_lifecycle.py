@@ -552,6 +552,47 @@ async def test_keyed_start_runs_off_the_event_loop(tmp_path, monkeypatch):
     }
 
 
+async def test_keyed_start_cancellation_leaves_the_job_running_and_replayable(
+    tmp_path, monkeypatch
+):
+    """Cancelling the awaiting task while the thread is inside store.start_idempotent
+    must not orphan the job: the reservation and the worker are already committed by the
+    time the thread finishes, so a same-key replay recovers the real job (ADR 0008;
+    F1)."""
+    store = lifecycle.job_store(_settings(tmp_path))
+    monkeypatch.setattr(lifecycle, "worker_cmd", _fake_worker_cmd(_success(str(tmp_path))))
+    entered = threading.Event()
+    finished = threading.Event()
+    real_start_idempotent = store.start_idempotent
+
+    def slow_start_idempotent(*args, **kwargs):
+        entered.set()
+        time.sleep(0.3)
+        try:
+            return real_start_idempotent(*args, **kwargs)
+        finally:
+            finished.set()
+
+    monkeypatch.setattr(store, "start_idempotent", slow_start_idempotent)
+    spec = _spec(str(tmp_path), tool="amicus_consult_async", timeout_seconds=1800)
+
+    task = asyncio.create_task(_start(store, spec, "k-cancel"))
+    while not entered.is_set():
+        await asyncio.sleep(0.01)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    deadline = time.monotonic() + 5
+    while not finished.is_set():
+        assert time.monotonic() < deadline
+        await asyncio.sleep(0.01)
+
+    replayed = await _start(store, spec, "k-cancel")
+    assert replayed["ok"] is True and replayed["meta"]["idempotency_replayed"] is True
+    assert len(store.list_jobs(str(tmp_path))) == 1
+
+
 def test_mark_replayed_stamps_meta_only_when_present():
     replayed = lifecycle.mark_replayed({"ok": True, "meta": {"job_id": "x"}})
     assert replayed["meta"]["idempotency_replayed"] is True

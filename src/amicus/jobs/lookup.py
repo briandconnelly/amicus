@@ -111,7 +111,8 @@ def job_not_found(job_id: str, meta: Meta, workspace_root: str | None) -> dict[s
 def status_model(
     row: dict[str, Any], workspace: Workspace, task_id: str | None, meta: Meta
 ) -> dict[str, Any]:
-    """A JobStatus dump. Raises ValueError for a foreign row; callers report not-found."""
+    """A JobStatus dump. Raises ValueError for a foreign row; callers report not-found.
+    Sets `meta.job_id` and `meta.task_id` on the caller's Meta in place."""
     backend = backend_of(row)
     if backend is None:
         raise ValueError("record carries no amicus backend tag")

@@ -62,6 +62,8 @@ _IDEM_TERMINAL: dict[str, tuple[str, int | None]] = {
     "unavailable": ("idempotency_result_unavailable", None),
     "in_progress": ("idempotency_in_progress", IDEM_IN_PROGRESS_RETRY_MS),
 }
+# An unexpected pontonier outcome degrades to the retryable in_progress.
+_IDEM_UNKNOWN_OUTCOME = _IDEM_TERMINAL["in_progress"]
 
 
 def job_store(settings: Settings) -> JobStore:
@@ -240,19 +242,18 @@ async def start_async(
     *,
     deadline: int,
     idempotency_key: str | None,
-    task_id: str | None = None,
 ) -> dict[str, Any]:
     """The _async return path. Unkeyed it is exactly start_job. Keyed it reserves
     (tool, key) in the workspace index: a first reservation spawns and returns a running
     handle; a duplicate returns the existing job's REAL handle; the other outcomes become
     their envelopes (ADR 0008 decision 2). The store call blocks on a cross-process lock,
-    so it runs off the event loop; an _async caller never waits on in_progress."""
+    so it runs off the event loop; an _async caller never waits on in_progress.
+
+    A cancellation that lands during a keyed spawn leaves the job running (the reservation
+    and worker are already committed); the caller recovers it by replaying the same key or
+    via amicus_job_list — deliberately unlike the unkeyed path, which cancels its orphan."""
     if idempotency_key is None:
-        handle = await start_job(store, spec, meta, plugin, deadline=deadline)
-        if handle.get("ok") is True and task_id is not None:
-            handle["task_id"] = task_id
-            handle["meta"]["task_id"] = task_id
-        return handle
+        return await start_job(store, spec, meta, plugin, deadline=deadline)
     try:
         outcome = await asyncio.to_thread(
             store.start_idempotent,
@@ -279,7 +280,6 @@ async def start_async(
             deadline=deadline,
             expires_at=None,
             meta=meta,
-            task_id=task_id,
         )
     if result_kind == "replay":
         snap = await asyncio.to_thread(store.status, spec.cwd, outcome["job_id"])
@@ -295,12 +295,11 @@ async def start_async(
                 expires_at=snap["expires_at"],
                 meta=meta,
                 poll_after_ms=snap["poll_after_ms"],
-                task_id=task_id,
             )
         )
     if result_kind == "io_error":
         return _idem_io_error(meta, plugin, tool=spec.tool)
-    code, retry = _IDEM_TERMINAL.get(result_kind, _IDEM_TERMINAL["in_progress"])
+    code, retry = _IDEM_TERMINAL.get(result_kind, _IDEM_UNKNOWN_OUTCOME)
     return idem_error(code, meta, plugin, tool=spec.tool, retry_after_ms=retry)
 
 

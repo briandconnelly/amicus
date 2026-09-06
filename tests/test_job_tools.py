@@ -9,7 +9,7 @@ import time
 import pytest
 from fastmcp import Client
 from jsonschema import Draft202012Validator
-from pontonier.core.jobs import JobStore
+from pontonier.core.jobs import DiscardOutcome, JobStore
 
 from amicus import config, server
 from amicus.jobs import lifecycle, lookup
@@ -159,6 +159,37 @@ async def test_consume_keeps_a_record_it_could_not_deliver(app, store, tmp_path,
         assert store.status(str(tmp_path), job2) is not None
 
 
+async def test_consume_delivers_even_when_the_record_is_already_gone(
+    app, store, tmp_path, monkeypatch
+):
+    """A MISSING discard outcome (someone else already removed the record, or a race)
+    is exactly what consume promised: the record is gone. Delivery still happens."""
+    monkeypatch.setattr(JobStore, "discard", lambda self, cwd, job_id: DiscardOutcome.MISSING)
+    ws = {"workspace_root": str(tmp_path)}
+    async with Client(app) as c:
+        job_id = await _start(c, tmp_path)
+        await _wait_done(store, tmp_path, job_id)
+        consumed = (
+            await c.call_tool("amicus_job_consume_result", {"job_id": job_id, **ws})
+        ).structured_content
+        assert consumed["ok"] is True and consumed["summary"] == "Looks fine"
+
+
+async def test_consume_delivers_when_deletion_fails(app, store, tmp_path, monkeypatch):
+    """Deletion is best-effort: a DELETE_FAILED outcome still delivers, and the TTL
+    reaper (not this call) owns the retained record."""
+    monkeypatch.setattr(JobStore, "discard", lambda self, cwd, job_id: DiscardOutcome.DELETE_FAILED)
+    ws = {"workspace_root": str(tmp_path)}
+    async with Client(app) as c:
+        job_id = await _start(c, tmp_path)
+        await _wait_done(store, tmp_path, job_id)
+        consumed = (
+            await c.call_tool("amicus_job_consume_result", {"job_id": job_id, **ws})
+        ).structured_content
+        assert consumed["ok"] is True and consumed["summary"] == "Looks fine"
+        assert store.status(str(tmp_path), job_id) is not None, "retained until its TTL"
+
+
 async def test_cancel_running_then_terminal_is_idempotent(app, store, tmp_path, monkeypatch):
     monkeypatch.setenv("FAKE_CODEX_SLEEP", "30")
     # The tools build a fresh JobStore per call, so patch the class default, not `store`.
@@ -206,7 +237,7 @@ async def test_list_filters_and_the_task_id_lookup(app, store, settings, tmp_pat
         listed = (await c.call_tool("amicus_job_list", ws)).structured_content
         schemas["amicus_job_list"].validate(listed)
         assert [j["job_id"] for j in listed["jobs"]] == [second, first]
-        assert listed["truncated"] is False and "truncation_hint" not in listed
+        assert listed["truncated"] is False and listed["truncation_hint"] is None
         assert listed["jobs"][1]["task_id"] == "task-xyz" and listed["jobs"][0]["task_id"] is None
         assert listed["jobs"][0]["backend"] == "codex" and listed["jobs"][0]["result_ok"] is True
         limited = (await c.call_tool("amicus_job_list", {"limit": 1, **ws})).structured_content
