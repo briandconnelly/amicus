@@ -121,6 +121,16 @@ def fake_codex(tmp_path_factory) -> Path:
     return exe
 
 
+@pytest.fixture(scope="session")
+def fake_kimi(tmp_path_factory) -> Path:
+    """An executable stand-in `kimi` (tests/support/fake_kimi.py) for spend-free runs."""
+    src = Path(__file__).parent / "support" / "fake_kimi.py"
+    exe = tmp_path_factory.mktemp("fake-kimi") / "kimi"
+    shutil.copy(src, exe)
+    exe.chmod(exe.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP)
+    return exe
+
+
 @pytest.fixture
 def live_codex(monkeypatch, tmp_path):
     """Opt back into the real codex CLI for `-m integration` tests. Skips when codex is
