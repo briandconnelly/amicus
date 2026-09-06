@@ -4,37 +4,62 @@
 
 **Goal:** Make the three `_async` twins (`amicus_consult_async`, `amicus_review_changes_async`, `amicus_delegate_async`) and the five `amicus_job_*` tools real: keyed idempotent starts, the task-id lookup, cancellation with hard-kill cleanup, restart survival, and delivery through the one chokepoint.
 
-**Architecture:** The twins run the same `prepare_run` as their sync siblings with the job deadline as the run timeout, then start the detached worker either unkeyed (`start_job`, M1) or keyed through pontonier's `JobStore.start_idempotent`, whose identity is the public `RunSpec` half minus per-connection fields plus a digest of the inputs. The job tools resolve the workspace per ADR 0003, read the store, and deliver stored results through `jobs.delivery.finished_job_envelope`; the task map (`jobs.taskmap.TaskJobMap`) is read for `task_id` filters and echoes. Nothing new is persisted, so `RESULT_FORMAT` stays 1; descriptions change, so `FINGERPRINT` moves to `schema-3`.
+**Architecture:** The twins run the same `prepare_run` as their sync siblings with the job deadline as the run timeout, then start the detached worker either unkeyed (`start_job`, M1) or keyed through pontonier's `JobStore.start_idempotent`, whose identity is the public `RunSpec` half minus per-connection fields plus a digest of the inputs.
+The job tools resolve the workspace per ADR 0003, read the store, and deliver stored results through `jobs.delivery.finished_job_envelope`; the task map (`jobs.taskmap.TaskJobMap`) is read for `task_id` filters and echoes.
+Nothing new is persisted, so `RESULT_FORMAT` stays 1; descriptions change, so `FINGERPRINT` moves to `schema-3`.
 
-**Tech Stack:** Python ≥3.11, `uv`, `ruff`, `ty`, `pytest` (95% branch coverage), `import-linter`, `prek`. Runtime: `pontonier==0.9.0` (`JobStore.start_idempotent`, `DiscardOutcome`, `idempotency.arg_hash`/`canonical_json`), `fastmcp>=4.0,<4.1`, `mcp>=2.1,<2.2`, `pydantic>=2`, `anyio>=4`. No new dependency.
+**Tech Stack:** Python ≥3.11, `uv`, `ruff`, `ty`, `pytest` (95% branch coverage), `import-linter`, `prek`.
+Runtime: `pontonier==0.9.0` (`JobStore.start_idempotent`, `DiscardOutcome`, `idempotency.arg_hash`/`canonical_json`), `fastmcp>=4.0,<4.1`, `mcp>=2.1,<2.2`, `pydantic>=2`, `anyio>=4`.
+No new dependency.
 
-**Spec:** `docs/superpowers/specs/2026-09-04-amicus-design.md` — "Milestones" row M2 (scope: `_async` twins, `amicus_job_*`, idempotency, task↔job mapping, delivery; gate: keyed replay, cancel (keyed/unkeyed), hard-kill cleanup, restart-survival, task-id lookup); "Jobs and tasks"; "Error envelope and codes"; "Testing architecture". ADR 0003 (workspace), ADR 0004 (tasks and jobs), ADR 0005 (envelope), ADR 0007 (M1 decisions). Execution rules: `docs/superpowers/plans/2026-09-04-amicus-execution-model.md`; binding repo rules: `AGENTS.md`. Sibling read for reference (never edited): `/Users/bdc/projects/codex-in-claude` at `fcd2674` (`server.py` `_start_async`, `_run_sync`, `codex_job_*`).
+**Spec:** `docs/superpowers/specs/2026-09-04-amicus-design.md` — "Milestones" row M2 (scope: `_async` twins, `amicus_job_*`, idempotency, task↔job mapping, delivery; gate: keyed replay, cancel (keyed/unkeyed), hard-kill cleanup, restart-survival, task-id lookup); "Jobs and tasks"; "Error envelope and codes"; "Testing architecture".
+ADR 0003 (workspace), ADR 0004 (tasks and jobs), ADR 0005 (envelope), ADR 0007 (M1 decisions).
+Execution rules: `docs/superpowers/plans/2026-09-04-amicus-execution-model.md`; binding repo rules: `AGENTS.md`.
+Sibling read for reference (never edited): `/Users/bdc/projects/codex-in-claude` at `fcd2674` (`server.py` `_start_async`, `_run_sync`, `codex_job_*`).
 
 ## Global Constraints
 
-- Repo: `/Users/bdc/projects/amicus`. Work on branch `feat/m2-jobs` in the sibling git worktree `/Users/bdc/projects/amicus-wt-m2` (created from `main` at `376b763`; baseline 575 tests green, 97.05% branch coverage). Never commit to `main`.
+- Repo: `/Users/bdc/projects/amicus`.
+  Work on branch `feat/m2-jobs` in the sibling git worktree `/Users/bdc/projects/amicus-wt-m2` (created from `main` at `376b763`; baseline 575 tests green, 97.05% branch coverage).
+  Never commit to `main`.
 - Dependencies exactly as `pyproject.toml` has them; this plan adds none.
-- Gate (AGENTS.md rule 2): `uv run ruff check . && uv run ruff format --check . && uv run ty check && uv run lint-imports && uv run pytest` at ≥95% branch coverage. Coverage floor never lowered. Every `uv run` assumes `uv sync` ran once; `uv run --no-sync` is fine while iterating.
-- Import rules (import-linter, `pyproject.toml`): `amicus.backends.*` never imports `amicus.tools`/`server`/`orchestration`/`jobs`/`middleware`/`errors`/`registry`/`manifest`; `amicus.orchestration`, `amicus.jobs` and `amicus._worker` never import `amicus.server` or `amicus.tools`; `amicus.tools` never imports `amicus.server`. New module `amicus/jobs/lookup.py` may import `amicus.errors`, `amicus.orchestration.workspace`, `amicus.schemas.*`, `amicus.jobs.*`.
-- Tool surface stays exactly 18 tools in `amicus.tools.TOOL_ORDER`; 6 resources; no prompts. No tool gains or loses a parameter (`tests/test_paid_tools.py` derives every schema from the matrix; a `ctx: Context | None = None` argument is invisible to the schema and is added freely).
+- Gate (AGENTS.md rule 2): `uv run ruff check . && uv run ruff format --check . && uv run ty check && uv run lint-imports && uv run pytest` at ≥95% branch coverage.
+  Coverage floor never lowered.
+  Every `uv run` assumes `uv sync` ran once; `uv run --no-sync` is fine while iterating.
+- Import rules (import-linter, `pyproject.toml`): `amicus.backends.*` never imports `amicus.tools`/`server`/`orchestration`/`jobs`/`middleware`/`errors`/`registry`/`manifest`; `amicus.orchestration`, `amicus.jobs` and `amicus._worker` never import `amicus.server` or `amicus.tools`; `amicus.tools` never imports `amicus.server`.
+  New module `amicus/jobs/lookup.py` may import `amicus.errors`, `amicus.orchestration.workspace`, `amicus.schemas.*`, `amicus.jobs.*`.
+- Tool surface stays exactly 18 tools in `amicus.tools.TOOL_ORDER`; 6 resources; no prompts.
+  No tool gains or loses a parameter (`tests/test_paid_tools.py` derives every schema from the matrix; a `ctx: Context | None = None` argument is invisible to the schema and is added freely).
 - `backend="kimi"` and `"claude"` keep returning `backend_unavailable`; `amicus_adversarial_review_async` keeps returning `not_implemented` with a loaded backend (verb lands in M4); `task=True` wiring and recording into the task map stay M5.
-- Fingerprint: `FINGERPRINT` moves from `amicus/0.1/schema-2` to `amicus/0.1/schema-3` in Task 1 and stays there. `RESULT_FORMAT` stays `1`. Snapshot, hash and digest regeneration is always its own commit (Task 1 Step 6, Task 8 Step 1).
-- Prompt inputs never land in `spec.json`, on the worker's argv, in the idempotency index or in a log. The identity hash carries only a sha256 of the canonical inputs JSON.
-- Spend guard: `tests/conftest.py` keeps `AMICUS_CODEX_BIN` unusable (autouse); every test in this plan drives `tests/support/fake_codex.py` or a fake worker command. No `-m integration` test is added or run in this milestone (AGENTS.md rule 5).
-- Commit messages: Conventional Commits `type(scope): subject`; scopes from `scripts/check_commit_message.py` (`schemas`, `plugin`, `registry`, `config`, `errors`, `middleware`, `server`, `tools`, `resources`, `manifest`, `orchestration`, `jobs`, `tasks`, `backends`, `packaging`, `docs`, `ci`, `deps`, `release`). Imperative lowercase subject, no trailing period. End every commit body with the attribution trailer given in the session.
+- Fingerprint: `FINGERPRINT` moves from `amicus/0.1/schema-2` to `amicus/0.1/schema-3` in Task 1 and stays there.
+  `RESULT_FORMAT` stays `1`.
+  Snapshot, hash and digest regeneration is always its own commit (Task 1 Step 6, Task 8 Step 1).
+- Prompt inputs never land in `spec.json`, on the worker's argv, in the idempotency index or in a log.
+  The identity hash carries only a sha256 of the canonical inputs JSON.
+- Spend guard: `tests/conftest.py` keeps `AMICUS_CODEX_BIN` unusable (autouse); every test in this plan drives `tests/support/fake_codex.py` or a fake worker command.
+  No `-m integration` test is added or run in this milestone (AGENTS.md rule 5).
+- Commit messages: Conventional Commits `type(scope): subject`; scopes from `scripts/check_commit_message.py` (`schemas`, `plugin`, `registry`, `config`, `errors`, `middleware`, `server`, `tools`, `resources`, `manifest`, `orchestration`, `jobs`, `tasks`, `backends`, `packaging`, `docs`, `ci`, `deps`, `release`).
+  Imperative lowercase subject, no trailing period.
+  End every commit body with the attribution trailer given in the session.
 - Markdown under `docs/`: one sentence per line.
 - Off limits (AGENTS.md rules 9, 17): `.github/**`, `AGENTS.md`, `CLAUDE.md`; any sibling checkout; releasing; merging or approving the PR.
 
 ## Decisions made here (surface in ADR 0008 and the PR body)
 
-1. **Idempotency identity** = `RunSpec.public()` minus `cwd`, `workspace_source`, `roots_source`, `host_name`, `kind`, `tool` (the index is already keyed by tool, and the rest is per-connection or provenance) plus `inputs_digest` = sha256 of `canonical_json(RunSpec.inputs())`. Same key with a different prompt is `idempotency_conflict`. Supersedes the `request.py` docstring's "public half" wording.
-2. **Outcome mapping** for a keyed start: `created` → running handle; `replay` → the existing job's REAL handle (its true status, timestamps, poll hint) with `meta.idempotency_replayed: true`; `conflict` → `idempotency_conflict` (repair `use_new_idempotency_key`, tool = the twin); `unavailable` → `idempotency_result_unavailable` (same repair); `in_progress` → `idempotency_in_progress` with `retry_after_ms: 250`; `io_error` → `internal_error` with `retry_after_ms: 1000` and the repair "retry the same call with the same idempotency_key". An `_async` caller never blocks on `in_progress`.
+1. **Idempotency identity** = `RunSpec.public()` minus `cwd`, `workspace_source`, `roots_source`, `host_name`, `kind`, `tool` (the index is already keyed by tool, and the rest is per-connection or provenance) plus `inputs_digest` = sha256 of `canonical_json(RunSpec.inputs())`.
+   Same key with a different prompt is `idempotency_conflict`.
+   Supersedes the `request.py` docstring's "public half" wording.
+2. **Outcome mapping** for a keyed start: `created` → running handle; `replay` → the existing job's REAL handle (its true status, timestamps, poll hint) with `meta.idempotency_replayed: true`; `conflict` → `idempotency_conflict` (repair `use_new_idempotency_key`, tool = the twin); `unavailable` → `idempotency_result_unavailable` (same repair); `in_progress` → `idempotency_in_progress` with `retry_after_ms: 250`; `io_error` → `internal_error` with `retry_after_ms: 1000` and the repair "retry the same call with the same idempotency_key".
+   An `_async` caller never blocks on `in_progress`.
 3. **Sync tools stay unkeyed** (M1 deviation 8); the sibling's keyed-await path (`_await_job_result(keyed=True)`) is not ported.
 4. **Async deadline**: a twin's `RunSpec.timeout_seconds` is `settings.job_max_seconds` (default 1800), unclamped; `JobStarted.deadline_seconds` and `meta.timeout_seconds` report it.
-5. **`task_id` is a filter**: `amicus_job_list(task_id=...)` with no mapping returns an empty list (`truncated: false`), never an error. The task map lives at `<AMICUS_STATE_DIR>/tasks.json`; every handle, status and summary echoes `task_id` by reverse lookup (null until M5 records entries).
+5. **`task_id` is a filter**: `amicus_job_list(task_id=...)` with no mapping returns an empty list (`truncated: false`), never an error.
+   The task map lives at `<AMICUS_STATE_DIR>/tasks.json`; every handle, status and summary echoes `task_id` by reverse lookup (null until M5 records entries).
 6. **Foreign records**: a record whose `extra.backend` is missing or not a valid backend ref was not written by amicus; status/result/consume/cancel report `job_not_found` for it and list omits it.
 7. **Lifecycle-error meta**: a job tool's generated error carries `backend` = the record's backend when resolved (else null), `job_kind` = the record's kind when resolved, `timeout_seconds` = `job_max_seconds`, and the roots state this lookup saw.
-8. **Cancel**: `amicus_job_cancel` is the store's `cancel` (SIGTERM, grace `terminate_grace_seconds`, then SIGKILL of the process group, guarded external-path cleanup). A terminal job is returned unchanged. Task-scoped cancel semantics are M5.
+8. **Cancel**: `amicus_job_cancel` is the store's `cancel` (SIGTERM, grace `terminate_grace_seconds`, then SIGKILL of the process group, guarded external-path cleanup).
+   A terminal job is returned unchanged.
+   Task-scoped cancel semantics are M5.
 9. **Snapshots**: the wire-shape fixture gains a `handles` section (JobStarted, JobStatus, JobListResult) rendered through the real builders; the result-format fixture is unchanged (nothing new is persisted).
 
 ## File map
@@ -96,7 +121,8 @@ Expected: `575 passed, 5 deselected`, coverage ≥ 95%.
 
 **Interfaces:**
 - Consumes: `pontonier.core.idempotency.canonical_json(payload) -> str`, `idempotency.arg_hash(payload: dict) -> str`.
-- Produces: `request.IDENTITY_EXCLUDE: frozenset[str]`; `RunSpec.identity() -> dict[str, Any]`; `RunSpec.arg_hash() -> str` (64 hex chars). Task 2 hashes with `spec.arg_hash()`.
+- Produces: `request.IDENTITY_EXCLUDE: frozenset[str]`; `RunSpec.identity() -> dict[str, Any]`; `RunSpec.arg_hash() -> str` (64 hex chars).
+  Task 2 hashes with `spec.arg_hash()`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -223,7 +249,8 @@ PY
 git diff --stat tests/fixtures
 ```
 
-Review the diffs: only the fingerprint literal should have moved in the manifest snapshots (and the sentinel-pinned wire/result snapshots should be byte-identical; if they are not, stop and find out why before pinning). Paste the printed hashes into `EXPECTED_MANIFEST_HASH` (`tests/test_manifest.py`), the digests into `EXPECTED_SURFACE_DIGEST` (`tests/test_fingerprint.py`), and the byte counts into `MEASURED` (`tests/test_discovery_cost.py`, update its docstring's "Measured … at schema-2" line to schema-3 and today's date).
+Review the diffs: only the fingerprint literal should have moved in the manifest snapshots (and the sentinel-pinned wire/result snapshots should be byte-identical; if they are not, stop and find out why before pinning).
+Paste the printed hashes into `EXPECTED_MANIFEST_HASH` (`tests/test_manifest.py`), the digests into `EXPECTED_SURFACE_DIGEST` (`tests/test_fingerprint.py`), and the byte counts into `MEASURED` (`tests/test_discovery_cost.py`, update its docstring's "Measured … at schema-2" line to schema-3 and today's date).
 
 ```bash
 uv run --no-sync pytest -q
@@ -241,7 +268,8 @@ git commit -m "test(manifest): re-pin the snapshots at schema-3"
 
 **Interfaces:**
 - Consumes: `RunSpec.arg_hash()` (Task 1); `JobStore.start_idempotent(cmd_factory, cwd, *, kind, tool, key, arg_hash, extra, write_spec, stdin_text, lock_timeout) -> dict` with `kind` in `created | replay | conflict | unavailable | in_progress | io_error`; `JobStore.status(cwd, job_id) -> dict | None`.
-- Produces: `lifecycle.IDEM_LOCK_ACQUIRE_TIMEOUT_S = 0.5`, `IDEM_IN_PROGRESS_RETRY_MS = 250`, `IDEM_IO_ERROR_RETRY_MS = 1000`; `lifecycle.idem_error(code: str, meta: Meta, plugin: BackendPlugin, *, tool: str, retry_after_ms: int | None = None) -> dict`; `lifecycle.mark_replayed(envelope: dict) -> dict`; `lifecycle.job_started_handle(job_id, *, spec, status, started_at, deadline, expires_at, meta, poll_after_ms: int = 1000, task_id: str | None = None) -> dict`; `async lifecycle.start_async(store, spec, meta, plugin, *, deadline: int, idempotency_key: str | None, task_id: str | None = None) -> dict`. Task 3 calls `start_async`.
+- Produces: `lifecycle.IDEM_LOCK_ACQUIRE_TIMEOUT_S = 0.5`, `IDEM_IN_PROGRESS_RETRY_MS = 250`, `IDEM_IO_ERROR_RETRY_MS = 1000`; `lifecycle.idem_error(code: str, meta: Meta, plugin: BackendPlugin, *, tool: str, retry_after_ms: int | None = None) -> dict`; `lifecycle.mark_replayed(envelope: dict) -> dict`; `lifecycle.job_started_handle(job_id, *, spec, status, started_at, deadline, expires_at, meta, poll_after_ms: int = 1000, task_id: str | None = None) -> dict`; `async lifecycle.start_async(store, spec, meta, plugin, *, deadline: int, idempotency_key: str | None, task_id: str | None = None) -> dict`.
+  Task 3 calls `start_async`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -605,7 +633,8 @@ async def start_async(
 - [ ] **Step 4: Run the tests to verify they pass**
 
 Run: `uv run --no-sync pytest tests/test_lifecycle.py tests/test_request.py -q --no-cov`
-Expected: all pass. If `test_keyed_start_with_different_inputs_is_a_conflict` reports `in_progress` instead of `conflict`, the first job's reservation was still being published: the fake worker finishes in milliseconds and pontonier publishes inside the same critical section, so this indicates a real bug in the call (check that `write_spec`/`stdin_text` are passed and no exception was swallowed).
+Expected: all pass.
+If `test_keyed_start_with_different_inputs_is_a_conflict` reports `in_progress` instead of `conflict`, the first job's reservation was still being published: the fake worker finishes in milliseconds and pontonier publishes inside the same critical section, so this indicates a real bug in the call (check that `write_spec`/`stdin_text` are passed and no exception was swallowed).
 
 Run: `uv run --no-sync pytest -q --no-cov -x -k "not manifest and not fingerprint and not discovery_cost and not wire_shape and not result_format"`
 Expected: pass.
@@ -880,7 +909,8 @@ In `src/amicus/tools/_prepare.py`, replace `deadline_advisory`'s returned text:
     )
 ```
 
-and delete the `# M2: once the async twins are real, recommend them directly.` comment. In `prepare_run` add the keyword after `timeout_seconds: int | None,`:
+and delete the `# M2: once the async twins are real, recommend them directly.` comment.
+In `prepare_run` add the keyword after `timeout_seconds: int | None,`:
 
 ```python
     background: bool = False,
@@ -949,7 +979,8 @@ and replace the timeout computation:
         )
 ```
 
-Update `_ASYNC_DESC` to name the deadline: append `" The job runs to AMICUS_JOB_MAX_SECONDS (default 1800s); idempotency_key dedups a retry."` to the existing string (keep the egress sentence). Update `_DESC`: keep as is (it already says to prefer the twin).
+Update `_ASYNC_DESC` to name the deadline: append `" The job runs to AMICUS_JOB_MAX_SECONDS (default 1800s); idempotency_key dedups a retry."` to the existing string (keep the egress sentence).
+Update `_DESC`: keep as is (it already says to prefer the twin).
 
 `src/amicus/tools/review.py`: in `register_review_changes` delete the inner `_async_run` and replace `amicus_review_changes_async` with:
 
@@ -1007,7 +1038,8 @@ Update `_ASYNC_DESC` to name the deadline: append `" The job runs to AMICUS_JOB_
         )
 ```
 
-Append to `_REVIEW_ASYNC_DESC`: `" The job runs to AMICUS_JOB_MAX_SECONDS (default 1800s); idempotency_key dedups a retry."`. `register_adversarial` is unchanged (both adversarial tools keep `_run` → `not_implemented`).
+Append to `_REVIEW_ASYNC_DESC`: `" The job runs to AMICUS_JOB_MAX_SECONDS (default 1800s); idempotency_key dedups a retry."`.
+`register_adversarial` is unchanged (both adversarial tools keep `_run` → `not_implemented`).
 
 `src/amicus/tools/delegate.py`: delete the inner `_async_run`; replace `amicus_delegate_async` with:
 
@@ -1066,12 +1098,14 @@ _IDEMPOTENCY_CODES = [
 ]
 ```
 
-and set the three real twins' `error_codes` to `_COMMON_PAID_CODES_SYNC + _IDEMPOTENCY_CODES` (consult), `_COMMON_PAID_CODES_SYNC + _REVIEW_CODES + _IDEMPOTENCY_CODES` (review), and `[*_COMMON_PAID_CODES_SYNC, "not_a_git_repo", "git_unavailable", "worktree_error", *_IDEMPOTENCY_CODES]` (delegate). `amicus_adversarial_review_async` keeps `_COMMON_PAID_CODES` (it still returns `not_implemented`) and gains `_IDEMPOTENCY_CODES` in place of its two-code list for consistency.
+and set the three real twins' `error_codes` to `_COMMON_PAID_CODES_SYNC + _IDEMPOTENCY_CODES` (consult), `_COMMON_PAID_CODES_SYNC + _REVIEW_CODES + _IDEMPOTENCY_CODES` (review), and `[*_COMMON_PAID_CODES_SYNC, "not_a_git_repo", "git_unavailable", "worktree_error", *_IDEMPOTENCY_CODES]` (delegate).
+`amicus_adversarial_review_async` keeps `_COMMON_PAID_CODES` (it still returns `not_implemented`) and gains `_IDEMPOTENCY_CODES` in place of its two-code list for consistency.
 
 - [ ] **Step 5: Run the tests to verify they pass**
 
 Run: `uv run --no-sync pytest tests/test_async_tools.py tests/test_prepare.py tests/test_paid_tools.py tests/test_sync_tools.py tests/test_discovery.py -q --no-cov`
-Expected: all pass. If `test_review_and_delegate_async_run_in_the_background` fails on `payload["tool"]`, check that `RunSpec.tool` (not the sync name) reaches `finalize`; the worker stamps `tool` from the spec.
+Expected: all pass.
+If `test_review_and_delegate_async_run_in_the_background` fails on `payload["tool"]`, check that `RunSpec.tool` (not the sync name) reaches `finalize`; the worker stamps `tool` from the spec.
 
 Run: `uv run --no-sync pytest -q --no-cov -x -k "not manifest and not fingerprint and not discovery_cost and not wire_shape and not result_format"`
 Expected: pass.
@@ -1408,7 +1442,8 @@ __all__ = [
 - [ ] **Step 4: Run the tests to verify they pass**
 
 Run: `uv run --no-sync pytest tests/test_lookup.py -q --no-cov && uv run --no-sync lint-imports && uv run --no-sync ty check`
-Expected: all pass; contracts kept; no type errors. If `ty` flags `roots_source=roots_source` on `Meta`, keep the targeted `# ty: ignore[invalid-argument-type]` shown above (the `RootsSource` literal is narrower than `str`).
+Expected: all pass; contracts kept; no type errors.
+If `ty` flags `roots_source=roots_source` on `Meta`, keep the targeted `# ty: ignore[invalid-argument-type]` shown above (the `RootsSource` literal is narrower than `str`).
 
 - [ ] **Step 5: Commit**
 
@@ -1934,7 +1969,9 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
 - [ ] **Step 4: Run the tests to verify they pass**
 
 Run: `uv run --no-sync pytest tests/test_job_tools.py tests/test_lookup.py tests/test_discovery.py -q --no-cov`
-Expected: all pass. `test_cancel_running_then_terminal_is_idempotent` takes about 1–3 s (the SIGTERM path: the worker's signal handler cancels the run and the runtime terminates the fake codex with its process group). If it exceeds 10 s, the worker did not act on SIGTERM within the 2 s grace and was SIGKILLed instead; that is a finding about `_worker._run`'s signal handler to report, not a reason to widen the assertion.
+Expected: all pass.
+`test_cancel_running_then_terminal_is_idempotent` takes about 1–3 s (the SIGTERM path: the worker's signal handler cancels the run and the runtime terminates the fake codex with its process group).
+If it exceeds 10 s, the worker did not act on SIGTERM within the 2 s grace and was SIGKILLed instead; that is a finding about `_worker._run`'s signal handler to report, not a reason to widen the assertion.
 
 Run: `uv run --no-sync pytest -q --no-cov -x -k "not manifest and not fingerprint and not discovery_cost and not wire_shape and not result_format"`
 Expected: pass.
@@ -2098,7 +2135,9 @@ async def test_a_job_survives_the_server_that_started_it(tmp_path, fake_codex, m
 - [ ] **Step 2: Run the tests**
 
 Run: `uv run --no-sync pytest tests/test_job_durability.py -q --no-cov -v`
-Expected: 3 passed in roughly 6–8 s. If `test_a_job_survives_the_server_that_started_it` sees `"failed"` first, the worker had not yet taken `worker.lock` when the other process looked (the lock is taken at `_hold_job_lock` before the spec is read); report this as a finding with the timing rather than adding a sleep — the M1 worker holds the lock before any other work, so a real race here is a bug. If the hard-kill test's timing assertion fails on a loaded machine, widen only the upper bound.
+Expected: 3 passed in roughly 6–8 s.
+If `test_a_job_survives_the_server_that_started_it` sees `"failed"` first, the worker had not yet taken `worker.lock` when the other process looked (the lock is taken at `_hold_job_lock` before the spec is read); report this as a finding with the timing rather than adding a sleep — the M1 worker holds the lock before any other work, so a real race here is a bug.
+If the hard-kill test's timing assertion fails on a loaded machine, widen only the upper bound.
 
 - [ ] **Step 3: Commit**
 
@@ -2237,7 +2276,8 @@ def _handles() -> dict[str, Any]:
     }
 ```
 
-In `build_snapshot`, add `"handles": _handles()` to the returned dict (after the existing `"delivered"` key). Every meta above is built by `_meta`, which pins the fingerprint, version and request-id sentinels.
+In `build_snapshot`, add `"handles": _handles()` to the returned dict (after the existing `"delivered"` key).
+Every meta above is built by `_meta`, which pins the fingerprint, version and request-id sentinels.
 
 - [ ] **Step 4: Run the tests and regenerate the fixture**
 
@@ -2348,7 +2388,10 @@ PY
 git diff --stat tests/fixtures
 ```
 
-Review the manifest diff: only the async twins' and job tools' descriptions, the `JobStarted.status` enum, and `capabilities.tool_details[*].error_codes` should have moved since Task 1. The result-format fixture must be byte-identical (nothing new is persisted); if it moved, stop and explain in the PR body. Paste the hashes into `EXPECTED_MANIFEST_HASH`, the digests into `EXPECTED_SURFACE_DIGEST`, the byte counts into `MEASURED`. If a profile's `tools/list` bytes exceed its `BUDGET`, compact the twin descriptions (the appended deadline sentence is the first candidate) rather than raising the budget; raising it is a reviewed decision that must be argued in the PR body.
+Review the manifest diff: only the async twins' and job tools' descriptions, the `JobStarted.status` enum, and `capabilities.tool_details[*].error_codes` should have moved since Task 1.
+The result-format fixture must be byte-identical (nothing new is persisted); if it moved, stop and explain in the PR body.
+Paste the hashes into `EXPECTED_MANIFEST_HASH`, the digests into `EXPECTED_SURFACE_DIGEST`, the byte counts into `MEASURED`.
+If a profile's `tools/list` bytes exceed its `BUDGET`, compact the twin descriptions (the appended deadline sentence is the first candidate) rather than raising the budget; raising it is a reviewed decision that must be argued in the PR body.
 
 ```bash
 uv run --no-sync pytest -q
@@ -2359,19 +2402,27 @@ git commit -m "test(manifest): regenerate the snapshots after the M2 surface upd
 - [ ] **Step 2: Full gate**
 
 Run: `uv run ruff check . && uv run ruff format --check . && uv run ty check && uv run lint-imports && uv run pytest && uv run prek run --all-files`
-Expected: every step clean; pytest ≥ 95% branch coverage. Record the test count and coverage for the PR body.
+Expected: every step clean; pytest ≥ 95% branch coverage.
+Record the test count and coverage for the PR body.
 
 - [ ] **Step 3: Perturbation checks (negative-result rule)**
 
-1. Identity: in `src/amicus/request.py` remove `"inputs_digest"` from `identity()`; run `uv run --no-sync pytest tests/test_request.py tests/test_lifecycle.py -q --no-cov -k "arg_hash or conflict"`; expected: FAIL (a different prompt now replays). Revert with `git checkout -- src/amicus/request.py`.
-2. Replay stamp: in `src/amicus/jobs/lifecycle.py` make `mark_replayed` return the envelope unchanged; run `uv run --no-sync pytest tests/test_async_tools.py tests/test_wire_shape.py -q --no-cov -k "replays or handles"`; expected: FAIL. Revert.
-3. Foreign records: in `src/amicus/jobs/lookup.py` make `backend_of` return `"codex"` unconditionally; run `uv run --no-sync pytest tests/test_job_tools.py tests/test_lookup.py -q --no-cov -k "foreign"`; expected: FAIL. Revert.
-4. Consume safety: in `src/amicus/tools/jobs.py` change `if not (consume and delivered):` to `if not consume:`; run `uv run --no-sync pytest tests/test_job_tools.py -q --no-cov -k could_not_deliver`; expected: FAIL. Revert.
-5. Manifest: append ` probe` to `_ASYNC_DESC` in `src/amicus/tools/consult.py`; run `uv run --no-sync pytest tests/test_manifest.py tests/test_fingerprint.py -q --no-cov`; expected: FAIL for every profile. Revert.
+1. Identity: in `src/amicus/request.py` remove `"inputs_digest"` from `identity()`; run `uv run --no-sync pytest tests/test_request.py tests/test_lifecycle.py -q --no-cov -k "arg_hash or conflict"`; expected: FAIL (a different prompt now replays).
+   Revert with `git checkout -- src/amicus/request.py`.
+2. Replay stamp: in `src/amicus/jobs/lifecycle.py` make `mark_replayed` return the envelope unchanged; run `uv run --no-sync pytest tests/test_async_tools.py tests/test_wire_shape.py -q --no-cov -k "replays or handles"`; expected: FAIL.
+   Revert.
+3. Foreign records: in `src/amicus/jobs/lookup.py` make `backend_of` return `"codex"` unconditionally; run `uv run --no-sync pytest tests/test_job_tools.py tests/test_lookup.py -q --no-cov -k "foreign"`; expected: FAIL.
+   Revert.
+4. Consume safety: in `src/amicus/tools/jobs.py` change `if not (consume and delivered):` to `if not consume:`; run `uv run --no-sync pytest tests/test_job_tools.py -q --no-cov -k could_not_deliver`; expected: FAIL.
+   Revert.
+5. Manifest: append ` probe` to `_ASYNC_DESC` in `src/amicus/tools/consult.py`; run `uv run --no-sync pytest tests/test_manifest.py tests/test_fingerprint.py -q --no-cov`; expected: FAIL for every profile.
+   Revert.
 6. Spend guard: run `AMICUS_CODEX_BIN=/usr/bin/true uv run --no-sync pytest tests/test_paid_tools.py -q --no-cov -k async_twins_refuse` and confirm it still passes without spawning (every case fails pre-spend on the workspace).
-7. Import contracts: add `from amicus import tools  # noqa: F401` to `src/amicus/jobs/lookup.py`; run `uv run --no-sync lint-imports`; expected: the "orchestration and jobs" contract broken. Revert.
+7. Import contracts: add `from amicus import tools  # noqa: F401` to `src/amicus/jobs/lookup.py`; run `uv run --no-sync lint-imports`; expected: the "orchestration and jobs" contract broken.
+   Revert.
 
-Re-run the full gate after the reverts; expected: green. `git status --short` must be clean.
+Re-run the full gate after the reverts; expected: green.
+`git status --short` must be clean.
 
 - [ ] **Step 4: Push and open the draft PR**
 
@@ -2416,13 +2467,18 @@ Milestone M2 of amicus (spec: `docs/superpowers/specs/2026-09-04-amicus-design.m
 
 - [ ] **Step 5: Stop**
 
-Do not merge, approve, tag, or release. The maintainer reviews and merges (AGENTS.md rule 8).
+Do not merge, approve, tag, or release.
+The maintainer reviews and merges (AGENTS.md rule 8).
 
 ---
 
 ## Self-review (writing-plans checklist)
 
-- **Spec coverage (M2 row):** `_async` twins → Task 3 (consult, review, delegate; adversarial stays `not_implemented` per the M4 boundary); `amicus_job_*` → Tasks 4–5; idempotency → Tasks 1–2 (identity) and 3 (twins carry `idempotency_key`); task↔job mapping → Task 5 (`task_id` filter and echo via `TaskJobMap`; recording is M5 per ADR 0004); delivery → Task 5 through `finished_job_envelope`. Gate items: keyed replay → Tasks 2, 3; cancel (keyed/unkeyed) → Task 5 (`amicus_job_cancel` on a keyed and an unkeyed job are the same store cancel; the keyed job's index entry then classifies as replay-of-a-cancelled-job, exercised by `test_keyed_start_creates_then_replays_the_real_handle`'s shape) and Task 6; hard-kill cleanup → Task 6; restart-survival → Task 6; task-id lookup → Task 5. Spec "Jobs and tasks": `extra.backend` on every record (M1, asserted in Task 3), arg hash includes `backend` (Task 1), `meta.job_id` always stamped (Task 2 handle, Task 5 delivery). Spec "Error envelope": idempotency codes render through the repair table with the twin named as the tool (Task 2).
-- **Decisions:** the nine items in "Decisions made here" (ADR 0008, Task 7). The plan makes no change to `.github/**`, `AGENTS.md`, `CLAUDE.md`.
+- **Spec coverage (M2 row):** `_async` twins → Task 3 (consult, review, delegate; adversarial stays `not_implemented` per the M4 boundary); `amicus_job_*` → Tasks 4–5; idempotency → Tasks 1–2 (identity) and 3 (twins carry `idempotency_key`); task↔job mapping → Task 5 (`task_id` filter and echo via `TaskJobMap`; recording is M5 per ADR 0004); delivery → Task 5 through `finished_job_envelope`.
+  Gate items: keyed replay → Tasks 2, 3; cancel (keyed/unkeyed) → Task 5 (`amicus_job_cancel` on a keyed and an unkeyed job are the same store cancel; the keyed job's index entry then classifies as replay-of-a-cancelled-job, exercised by `test_keyed_start_creates_then_replays_the_real_handle`'s shape) and Task 6; hard-kill cleanup → Task 6; restart-survival → Task 6; task-id lookup → Task 5.
+  Spec "Jobs and tasks": `extra.backend` on every record (M1, asserted in Task 3), arg hash includes `backend` (Task 1), `meta.job_id` always stamped (Task 2 handle, Task 5 delivery).
+  Spec "Error envelope": idempotency codes render through the repair table with the twin named as the tool (Task 2).
+- **Decisions:** the nine items in "Decisions made here" (ADR 0008, Task 7).
+  The plan makes no change to `.github/**`, `AGENTS.md`, `CLAUDE.md`.
 - **Placeholder scan:** angle-bracket placeholders exist only in Task 8 Step 4's PR body and are filled from measured output by instruction; every pinned hash/digest/count is pasted from a printed value in Tasks 1 and 8; `status_model(row, workspace, task_id, meta)` is defined with its four arguments in Task 4 and used in that form by Tasks 5 and 7.
 - **Type consistency:** `RunSpec.arg_hash()` (Task 1) is what `start_async` passes as `arg_hash=` (Task 2); `start_async(store, spec, meta, plugin, *, deadline, idempotency_key, task_id=None)` is called identically from the three twins (Task 3); `prepare_run(..., background=True)` (Task 3) yields `spec.timeout_seconds == settings.job_max_seconds`, which the twins pass as `deadline=`; `job_started_handle(..., poll_after_ms, task_id)` (Task 2) is used by `start_async` and by `wire_shape_snapshot._handles` (Task 7); `lookup.resolve_job_workspace(settings, ctx, workspace_root) -> (cwd, source, roots_source, err)` (Task 4) is consumed by every tool in Task 5; `lookup.status_model(row, workspace, task_id, meta)` and `lookup.summary_model(row, task_id)` (Tasks 4–5) are used by Task 5 and Task 7; `finished_job_envelope(rec, payload, job_id, kind, meta, detail, workspace_root) -> (dict, bool)` (M1) is called with `lookup.kind_of(rec)` and `lookup.job_meta(...)` in Task 5; `DiscardOutcome.MISSING` is the only outcome mapped to not-found (Task 5), matching pontonier 0.9.0's enum (verified in Task 0 Step 2).
