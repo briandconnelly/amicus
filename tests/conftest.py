@@ -21,6 +21,35 @@ ENV_PREFIXES = ("AMICUS_", "CODEX_IN_CLAUDE_", "MOONBRIDGE_", "CLAUDE_IN_CODEX_"
 
 NEVER_SPAWN_CODEX = "/nonexistent/amicus-test-codex"
 
+# git exports these into the environment of every hook it runs, and prek's pre-push hook
+# runs this very suite (`entry = "uv run pytest"`, `stages = ["pre-push"]`). Without
+# scrubbing them, a test that spawns `git` inside a tmp_path repo would inherit GIT_DIR
+# (etc.) from the enclosing hook and silently operate on the real checkout instead of its
+# fixture repo — which is exactly what corrupted the real worktree's index the first time
+# `git push` ran this suite as a pre-push hook.
+GIT_HOOK_ENV = (
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_INDEX_FILE",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_COMMON_DIR",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_NAMESPACE",
+    "GIT_PREFIX",
+)
+
+
+def _scrub_git_hook_env(monkeypatch) -> None:
+    """Delete GIT_HOOK_ENV from the environment, so a test-spawned `git` in a tmp_path repo
+    cannot be redirected at the real checkout by a hook's environment."""
+    for key in GIT_HOOK_ENV:
+        monkeypatch.delenv(key, raising=False)
+
+
+@pytest.fixture(autouse=True)
+def _scrub_git_hook_env_fixture(monkeypatch):
+    _scrub_git_hook_env(monkeypatch)
+
 
 @pytest.fixture(autouse=True)
 def _never_spawn_real_codex(monkeypatch):
