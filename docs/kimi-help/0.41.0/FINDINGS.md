@@ -34,6 +34,9 @@ All 6 tests passed in 109.78s.
   The test asserts only on the parsed name set and did not print the raw reply, and no failure occurred, so the assertion's own pass is the only evidence this run produced: the literal comma-separated list the model returned was not captured to a log, and a second live call to capture it verbatim was not made, since the maintainer authorized exactly one live run for this milestone.
 - `test_review_changes_live` PASSED — `amicus_review_changes` returned `ok=True`, `review_status="completed"`, a verdict in the allowed set, and `meta.context_summary.files_changed == 1`.
 - `test_delegate_live` PASSED — `amicus_delegate` returned `ok=True` with a non-empty diff, left the working-tree file unchanged, and left no worktree registered afterward.
-- `test_unknown_model_alias_is_invalid_model_live` PASSED — an unknown model alias was refused pre-spend with `error.code == "invalid_model"`.
+- `test_unknown_model_alias_is_invalid_model_live` PASSED — kimi was spawned with the unknown model alias.
+  kimi itself rejected the alias before making any model call.
+  amicus classified kimi's rejection as `error.code == "invalid_model"`.
+  There is no amicus-side pre-spend gate for `model`; the live catalog is authoritative only for what `amicus_models` lists, and ADR 0009 decision 3's pre-spend gate covers `reasoning_effort`, not `model`.
 
 No failure envelope was produced; the release-blocker and model-quality-retry procedures were not triggered.
