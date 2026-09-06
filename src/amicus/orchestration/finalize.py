@@ -151,8 +151,13 @@ def consult_result(result: ExecResult, meta: Meta) -> dict[str, Any]:
 def review_result(
     result: ExecResult, meta: Meta, reasons: list[str], plugin: BackendPlugin
 ) -> dict[str, Any]:
-    """Strict: the verdict/findings ARE the product, so exit-0 output that ignored the
-    schema is invalid_json / schema_violation, never a prose downgrade."""
+    """Strict about SHAPE, lenient about FIELDS: exit-0 output that is not JSON, or not a
+    JSON object, is a hard invalid_json/schema_violation error, never a prose downgrade.
+    A JSON object that clears that bar but deviates field-by-field is coerced instead —
+    verdict defaults to unknown and confidence to medium — so a malformed object can
+    never be delivered as a `pass`. This deliberately mirrors codex-in-claude, whose
+    normalize.py says a missing verdict "defaults to unknown, which is honest, so it is
+    intentionally accepted"."""
     apply_exec(meta, result)
     status, parsed = classify_structured(result.answer)
     if status != "ok":

@@ -48,7 +48,8 @@ GLOBAL_ENV = EnvNamespace(
         ),
         EnvVar(
             "AMICUS_MAX_INPUT_BYTES",
-            "Byte budget for caller inputs plus the gathered diff.",
+            "Byte budget applied independently to the caller-input sum and to the "
+            "gathered diff (the diff is truncated on excess, not rejected).",
             str(DEFAULT_MAX_INPUT_BYTES),
             _legacy("MAX_INPUT_BYTES"),
         ),

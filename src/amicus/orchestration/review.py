@@ -113,7 +113,11 @@ def _not_run(spec: RunSpec, meta: Meta, diff: DiffResult) -> dict[str, Any]:
 
 def gather(spec: RunSpec, meta: Meta, plugin: BackendPlugin) -> DiffResult | dict[str, Any]:
     """Gather + validate the diff BEFORE any model call. Returns the DiffResult, or a ready
-    envelope: a structured error (zero spend) or the `not_run` success for an empty scope."""
+    envelope: a structured error (zero spend) or the `not_run` success for an empty scope.
+    The gathered diff has its own max_input_bytes budget (truncated with meta.truncated,
+    not rejected), separate from the caller-input sum enforced in tools/_prepare.py; both
+    mirror codex-in-claude, which limits each input independently rather than sharing one
+    budget."""
     extra_bytes = len((spec.extra_context or "").encode("utf-8"))
     if extra_bytes > spec.max_input_bytes:
         return error_envelope(
