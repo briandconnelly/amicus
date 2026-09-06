@@ -183,7 +183,10 @@
           "extra_args_rejected",
           "user_config_rejected",
           "internal_error",
-          "not_implemented"
+          "job_failed",
+          "job_cancelled",
+          "job_timeout",
+          "job_result_incompatible"
         ],
         "key_optional_params": [
           "backend_options",
@@ -276,7 +279,6 @@
           "extra_args_rejected",
           "user_config_rejected",
           "internal_error",
-          "not_implemented",
           "invalid_scope",
           "invalid_base",
           "invalid_commit",
@@ -285,7 +287,10 @@
           "git_unavailable",
           "invalid_json",
           "schema_violation",
-          "context_too_large"
+          "job_failed",
+          "job_cancelled",
+          "job_timeout",
+          "job_result_incompatible"
         ],
         "key_optional_params": [
           "backend_options",
@@ -396,10 +401,13 @@
           "extra_args_rejected",
           "user_config_rejected",
           "internal_error",
-          "not_implemented",
           "not_a_git_repo",
           "git_unavailable",
-          "worktree_error"
+          "worktree_error",
+          "job_failed",
+          "job_cancelled",
+          "job_timeout",
+          "job_result_incompatible"
         ],
         "key_optional_params": [
           "backend_options",
@@ -604,8 +612,7 @@
           "invalid_commit",
           "invalid_paths",
           "not_a_git_repo",
-          "git_unavailable",
-          "not_implemented"
+          "git_unavailable"
         ],
         "key_optional_params": [
           "scope",
@@ -640,8 +647,7 @@
           "invalid_reasoning_effort",
           "not_a_git_repo",
           "git_unavailable",
-          "worktree_error",
-          "not_implemented"
+          "worktree_error"
         ],
         "key_optional_params": [
           "workspace_root",
