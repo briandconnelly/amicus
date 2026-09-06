@@ -1,13 +1,17 @@
 """RunSpec: the one serializable description of a paid run, split into a PUBLIC half
-(spec.json in the job record; the idempotency identity in M2) and an INPUT half that only
-ever travels over the worker's stdin, so amicus itself never persists a prompt."""
+(spec.json in the job record) and an INPUT half that only ever travels over the worker's
+stdin, so amicus itself never persists a prompt. The keyed-dedup identity (ADR 0008) is
+the public half minus per-connection fields plus a digest of the input half."""
 
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 import json
 from dataclasses import dataclass, field
 from typing import Any
+
+from pontonier.core import idempotency
 
 from amicus.schemas import instructions
 from amicus.schemas.envelope import Meta
@@ -18,6 +22,12 @@ INPUT_FIELDS: tuple[str, ...] = (
     "extra_context",
     "instructions_append",
     "focus",
+)
+# Public fields that describe HOW a call was resolved, not WHAT it asks for: the index is
+# already keyed by tool and workspace, and the rest is per-connection (a reconnect must
+# replay, not conflict).
+IDENTITY_EXCLUDE: frozenset[str] = frozenset(
+    {"cwd", "workspace_source", "roots_source", "host_name", "kind", "tool"}
 )
 
 
@@ -62,6 +72,17 @@ class RunSpec:
 
     def inputs_json(self) -> str:
         return json.dumps(self.inputs())
+
+    def identity(self) -> dict[str, Any]:
+        """The effective run inputs a keyed start is deduplicated on. Prompt text never
+        enters it; only a sha256 of the canonical inputs JSON does."""
+        ident = {k: v for k, v in self.public().items() if k not in IDENTITY_EXCLUDE}
+        digest = hashlib.sha256(idempotency.canonical_json(self.inputs()).encode("utf-8"))
+        ident["inputs_digest"] = digest.hexdigest()
+        return ident
+
+    def arg_hash(self) -> str:
+        return idempotency.arg_hash(self.identity())
 
     @classmethod
     def from_parts(cls, public: dict[str, Any], inputs: dict[str, Any]) -> RunSpec:

@@ -72,3 +72,26 @@ def test_meta_for_fingerprints_instructions_and_carries_provenance():
     assert meta.timeout_seconds == 60 and meta.model is None
     assert meta_for(_spec(instructions_append=None, options={})).instructions_append is None
     assert meta_for(_spec(options={})).backend_details is None
+
+
+def test_identity_drops_connection_and_provenance_fields_and_digests_the_inputs():
+    spec = _spec()
+    ident = spec.identity()
+    for name in ("cwd", "workspace_source", "roots_source", "host_name", "kind", "tool"):
+        assert name not in ident, name
+    for name in INPUT_FIELDS:
+        assert name not in ident, name
+    assert ident["backend"] == "codex" and ident["timeout_seconds"] == 60
+    assert len(ident["inputs_digest"]) == 64 and int(ident["inputs_digest"], 16) >= 0
+    assert "why?" not in json.dumps(ident) and "focus" not in json.dumps(ident)
+
+
+def test_arg_hash_is_stable_across_connections_but_not_across_prompts_or_knobs():
+    a = _spec().arg_hash()
+    assert len(a) == 64
+    assert _spec(cwd="/elsewhere", host_name="Codex", roots_source="none").arg_hash() == a
+    assert _spec(question="why not?").arg_hash() != a
+    assert _spec(extra_context=None).arg_hash() != a
+    assert _spec(model="o3").arg_hash() != a
+    assert _spec(scope="branch").arg_hash() != a
+    assert _spec(options={"isolation": "worktree"}).arg_hash() != a

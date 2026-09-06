@@ -15,6 +15,7 @@ from amicus.registry import BackendRegistry, UnavailableBackend
 from amicus.schemas import field_policy
 from amicus.schemas.codes import ERROR_CODES
 from amicus.schemas.envelope import Meta
+from amicus.schemas.fingerprint import FINGERPRINT
 from amicus.schemas.results import CapabilitiesDetail
 from amicus.tools import _resolve
 
@@ -239,7 +240,7 @@ async def test_capabilities_summary_full_contracts_and_include_schemas():
     assert contracts["tool_details"] == []
     assert set(with_schemas["schemas"]) == {"error-envelope", "parameter-contracts"}
     assert with_schemas["schemas"]["error-envelope"]["$schema"]
-    assert "surface_digest" in summary and summary["fingerprint"] == "amicus/0.1/schema-2"
+    assert "surface_digest" in summary and summary["fingerprint"] == FINGERPRINT
     assert "delivery statement" in summary["tasks"]["fallback"]
     assert set(get_args(CapabilitiesDetail)) == {"summary", "full", "contracts"}
 
