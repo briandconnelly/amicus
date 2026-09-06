@@ -56,7 +56,11 @@ CARRIERS = (
 def plugin(environ: Mapping[str, str] | None = None) -> BackendPlugin:
     cfg = codex_config.load_config(environ)
     binary = CodexBinary(cfg)
-    token = binary.resolve() or contract.CODEX_BIN
+    # resolve() is None only for an unusable AMICUS_CODEX_BIN override (codex_bin() raises
+    # exactly then), which always means bin_override is set; probe that same
+    # already-known-unusable value rather than falling back to a PATH-searched "codex",
+    # which would silently ignore the operator's override and spawn the real CLI.
+    token = binary.resolve() or cfg.bin_override or contract.CODEX_BIN
     help_probe = HelpProbe(
         help_argv=(token, *contract.EXEC_HELP_ARGS),
         always_send_flags=contract.CONTRACT.always_send_flags,

@@ -14,7 +14,8 @@ from typing import TYPE_CHECKING
 from pontonier.backend.protocol import ClassifiedFailure, ExecResult, PreparedRun, Usage
 from pontonier.core import worktree
 
-from amicus.backends.codex import cli, contract, normalize
+from amicus.backends.codex import cli, normalize
+from amicus.backends.codex.binary import BinaryNotFoundError
 from amicus.backends.codex.config import reasoning_effort_shape_error, sandbox_for_kind
 from amicus.backends.codex.models import CodexModels
 from amicus.schemas import instructions
@@ -97,6 +98,15 @@ class CodexBackend:
         # Fail closed for a direct caller that skipped validate_request.
         if (invalid := self.validate_request(request)) is not None:
             raise ValueError(invalid.detail)
+        resolved_bin = self._binary.resolve()
+        if resolved_bin is None:
+            # The run-loop's ordering check normally keeps us from ever getting here with
+            # an unresolved binary; this is defense in depth against spawning whatever
+            # `codex` happens to be on PATH if that check were ever lost or bypassed.
+            raise BinaryNotFoundError(
+                "the codex binary could not be resolved; refusing to spawn a PATH-searched "
+                "fallback."
+            )
         with tempfile.TemporaryDirectory(prefix=TEMP_PREFIX) as tmp:
             last_msg_path = str(Path(tmp) / "last-message.txt")
             schema_path: str | None = None
@@ -104,7 +114,7 @@ class CodexBackend:
                 schema_path = str(Path(tmp) / "schema.json")
                 Path(schema_path).write_text(json.dumps(request.schema), encoding="utf-8")
             cmd, dropped = cli.build_exec_command(
-                codex_bin=self._binary.resolve() or contract.CODEX_BIN,
+                codex_bin=resolved_bin,
                 cwd=request.cwd,
                 sandbox=self._sandbox(request),
                 isolation=self._isolation(request),

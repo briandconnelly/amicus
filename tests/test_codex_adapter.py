@@ -182,3 +182,19 @@ def test_list_models_auth_probe_and_scrub_env(pinned_codex_bin, monkeypatch):
     assert backend.auth_probe() is True
     env = {"PATH": "/bin", "CODEX_HOME": "/x", "ANTHROPIC_API_KEY": "k"}
     assert backend.scrub_env(dict(env), None) == env
+
+
+async def test_prepare_fails_closed_on_an_unresolved_binary():
+    """No `pinned_codex_bin`, no override: the autouse `_never_spawn_real_codex` fixture
+    leaves AMICUS_CODEX_BIN pointed at an unusable path, so binary.resolve() is None. The
+    run-loop's ordering check normally keeps prepare() from ever being reached like this;
+    this proves the adapter itself also fails closed rather than falling back to a
+    PATH-searched "codex" (defense in depth if that ordering check were ever lost)."""
+    from amicus.backends.codex import binary as binary_mod
+    from amicus.backends.codex import plugin as plugin_factory
+
+    plugin = plugin_factory()
+    assert plugin.binary.resolve() is None
+    with pytest.raises(binary_mod.BinaryNotFoundError):
+        async with plugin.backend.prepare(_req()):
+            pytest.fail("prepare() must not yield a PreparedRun for an unresolved binary")
