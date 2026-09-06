@@ -168,3 +168,41 @@ def test_main_scans_yaml_extension_too(tmp_path):
 def test_this_repository_is_fully_pinned():
     """Enforcement that rides the already-required pytest gate, not just a CI step."""
     assert check.main([str(_REPO_ROOT)]) == 0
+
+
+# --- alternate YAML forms: flow mappings are extracted, block scalars are rejected ---
+
+
+def test_iter_uses_extracts_flow_mapping_entry():
+    text = "    steps:\n      - { uses: actions/checkout@v4, with: { fetch-depth: 1 } }\n"
+    assert check.iter_uses(text) == [(2, "actions/checkout@v4")]
+
+
+def test_iter_uses_extracts_flow_mapping_inside_flow_sequence():
+    text = "    steps: [{ uses: actions/checkout@" + "b" * 40 + " }]\n"
+    assert check.iter_uses(text) == [(1, "actions/checkout@" + "b" * 40)]
+
+
+def test_iter_uses_reports_block_scalar_uses_with_sentinel():
+    text = "    steps:\n      - uses: >-\n          actions/checkout@v4\n      - run: echo hi\n"
+    assert check.iter_uses(text) == [(2, check.BLOCK_SCALAR)]
+
+
+def test_classify_block_scalar_sentinel_is_violation():
+    assert check.classify(check.BLOCK_SCALAR) is not None
+
+
+def test_main_returns_1_on_folded_scalar_uses(tmp_path):
+    wf = tmp_path / ".github" / "workflows"
+    wf.mkdir(parents=True)
+    (wf / "x.yml").write_text(
+        "jobs:\n  a:\n    steps:\n      - uses: >-\n          actions/checkout@v4\n"
+    )
+    assert check.main([str(tmp_path)]) == 1
+
+
+def test_main_returns_1_on_flow_mapping_uses(tmp_path):
+    wf = tmp_path / ".github" / "workflows"
+    wf.mkdir(parents=True)
+    (wf / "x.yml").write_text("jobs:\n  a:\n    steps:\n      - { uses: actions/checkout@v4 }\n")
+    assert check.main([str(tmp_path)]) == 1

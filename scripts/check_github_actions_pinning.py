@@ -13,8 +13,10 @@ This script scans the committed workflow YAML and fails if any reference is muta
     * an external action / reusable workflow -> ``owner/repo[/path]@<40-hex SHA>``
     * a Docker action           -> ``docker://image@sha256:<64-hex digest>``
 
-Pure stdlib (no PyYAML): it matches scalar ``uses:`` keys line by line, which is
-all Actions ever emits, and avoids adding a parse dependency to a CI gate.
+Pure stdlib (no PyYAML): it matches ``uses:`` keys line by line — plain scalars
+and single-line flow mappings (``- { uses: ... }``) — and avoids adding a parse
+dependency to a CI gate. A ``uses:`` written as a block scalar (``uses: >-``) is
+reported as a violation rather than parsed: the reference belongs inline.
 
 Usage:
     uv run python scripts/check_github_actions_pinning.py [ROOT]
@@ -42,6 +44,12 @@ _USES_RE = re.compile(r"^\s*(?:-\s*)?uses:\s*(.+?)\s*$")
 # line beginning ``uses:`` must NOT be treated as an action reference. The header may
 # carry chomping (``+``/``-``) and indentation (digit) indicators in either order.
 _BLOCK_SCALAR_RE = re.compile(r"^\s*(?:-\s*)?[^\s:#]+:\s*[|>][-+0-9]*\s*(?:#.*)?$")
+# A ``uses:`` key inside a single-line flow mapping (``- { uses: x, with: {...} }``
+# or ``steps: [{ uses: x }]``); the value ends at the next ``,`` or ``}``.
+_FLOW_USES_RE = re.compile(r"\{[^}]*?\buses:\s*([^,}]+)")
+# Sentinel reported for a ``uses:`` key that opens a block scalar: the script does not
+# reassemble folded content, so the entry is classified as a violation instead.
+BLOCK_SCALAR = "<block scalar>"
 # A full 40-char git commit SHA (case-insensitive; GitHub emits lowercase).
 _SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 # A Docker image pinned by immutable digest: docker://image@sha256:<64 hex>.
@@ -76,8 +84,10 @@ def iter_uses(text: str) -> list[tuple[int, str]]:
             continue
         if _BLOCK_SCALAR_RE.match(line):
             block_indent = indent
+            if _USES_RE.match(line):
+                found.append((lineno, BLOCK_SCALAR))
             continue
-        match = _USES_RE.match(line)
+        match = _USES_RE.match(line) or _FLOW_USES_RE.search(line)
         if not match:
             continue
         value = _clean_value(match.group(1))
@@ -88,6 +98,8 @@ def iter_uses(text: str) -> list[tuple[int, str]]:
 
 def classify(value: str) -> str | None:
     """Return ``None`` if ``value`` is immutably pinned, else a violation reason."""
+    if value == BLOCK_SCALAR:
+        return "uses: written as a block scalar is not checked; write the reference inline"
     if value.startswith("./"):
         return None
     if value.startswith("docker://"):
