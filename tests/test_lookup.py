@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from amicus import config
 from amicus.jobs import lookup
@@ -77,8 +78,10 @@ def test_job_meta_and_not_found(tmp_path):
     meta = lookup.job_meta(settings, "/repo", "param", "client", backend="codex", kind="delegate")
     assert meta.backend == "codex" and meta.job_kind == "delegate" and meta.cwd == "/repo"
     assert meta.timeout_seconds == 1800 and meta.roots_source == "client"
-    bare = lookup.job_meta(settings, None, None, "none")
+    bare = lookup.job_meta(settings, None, None, "not_negotiated")
     assert bare.backend is None and bare.job_kind is None and bare.cwd is None
+    with pytest.raises(ValidationError):
+        lookup.job_meta(settings, None, None, "none")
     env = lookup.job_not_found("b" * 32, meta, "/repo")
     assert env["error"]["code"] == "job_not_found" and "b" * 32 in env["error"]["message"]
     assert env["error"]["repair"]["tool"] == "amicus_job_list"

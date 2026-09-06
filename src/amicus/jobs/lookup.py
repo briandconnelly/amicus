@@ -14,7 +14,7 @@ from amicus.errors import error_envelope
 from amicus.jobs.delivery import STATE_TO_ERROR
 from amicus.jobs.taskmap import TaskJobMap
 from amicus.orchestration import workspace as ws
-from amicus.schemas.envelope import ErrorDetail, Meta, Workspace
+from amicus.schemas.envelope import ErrorDetail, Meta, RootsSource, Workspace
 from amicus.schemas.results import JobStatus, JobSummary
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -22,7 +22,6 @@ if TYPE_CHECKING:  # pragma: no cover
 
 BACKEND_REF_RE = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 TASK_MAP_FILENAME = "tasks.json"
-_ROOTS_SOURCES = frozenset({"client", "not_negotiated", "probe_failed"})
 
 
 def backend_of(row: dict[str, Any]) -> str | None:
@@ -53,7 +52,7 @@ def job_meta(
     settings: Settings,
     cwd: str | None,
     source: str | None,
-    roots_source: str,
+    roots_source: RootsSource,
     *,
     backend: str | None = None,
     kind: str | None = None,
@@ -65,7 +64,7 @@ def job_meta(
         cwd=cwd,
         workspace_source=source,  # ty: ignore[invalid-argument-type]
         workspace_warning=ws.workspace_warning_for(source, cwd),
-        roots_source=roots_source if roots_source in _ROOTS_SOURCES else None,  # ty: ignore[invalid-argument-type]
+        roots_source=roots_source,
         timeout_seconds=settings.job_max_seconds,
         job_kind=kind or None,
     )
@@ -79,7 +78,7 @@ async def resolve_job_workspace(
     roots, roots_source = await ws.roots_from_ctx(ctx)
     res = ws.resolve(workspace_root, roots, allow_cwd=settings.allow_cwd_workspace)
     if res.error_code is not None:
-        meta = job_meta(settings, None, None, roots_source)
+        meta = job_meta(settings, None, None, roots_source)  # ty: ignore[invalid-argument-type]
         return (
             None,
             None,
