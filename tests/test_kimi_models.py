@@ -86,3 +86,10 @@ def test_read_reports_none_when_the_probe_fails(pinned_kimi_bin, monkeypatch):
     assert _reader(monkeypatch, "", binary_missing=True)[0].read().source == "none"
     unresolved = models.KimiModels(kc.load_config({}), kb.KimiBinary(kc.load_config({})))
     assert unresolved.read().source == "none"
+
+
+def test_read_does_not_cache_a_failed_probe(pinned_kimi_bin, monkeypatch):
+    reader, calls = _reader(monkeypatch, "", exit_code=1)
+    assert reader.read().source == "none"
+    assert reader.read().source == "none"
+    assert len(calls) == 2  # a failing probe is never cached: each read() probes again

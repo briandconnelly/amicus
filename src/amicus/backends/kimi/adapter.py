@@ -57,8 +57,10 @@ class KimiBackend:
 
     @staticmethod
     def _read_only(request: RunRequest) -> bool:
+        # Fail closed: the agent file is the only thing making a kimi consult
+        # read-only, so only the explicit write posture drops it.
         if request.access is not None:
-            return request.access == contract.SANDBOX_READ_ONLY
+            return request.access != contract.SANDBOX_WORKSPACE_WRITE
         return request.kind != "delegate"
 
     @staticmethod
@@ -99,6 +101,8 @@ class KimiBackend:
                     details={"field": "reasoning_effort"},
                 )
             supported = models.supported_efforts_for(self._model(request), self._models.read())
+            # An alias declaring an explicitly empty supportEfforts is treated the same as
+            # an absent/unusable one (supported == ()), so the fallback vocabulary decides.
             if supported:
                 if effort not in supported:
                     return self._effort_refusal(
@@ -110,6 +114,15 @@ class KimiBackend:
                     "the requested reasoning_effort matches no known kimi effort level.",
                     tuple(sorted(contract.REASONING_EFFORT_FALLBACK_VOCABULARY)),
                 )
+        if request.access is not None and request.access not in (
+            contract.SANDBOX_READ_ONLY,
+            contract.SANDBOX_WORKSPACE_WRITE,
+        ):
+            return ClassifiedFailure(
+                code="invalid_arguments",
+                detail="the requested access posture is not one kimi supports.",
+                details={"field": "access"},
+            )
         raw = request.instructions_append
         if raw is not None and request.kind not in _INSTRUCTION_KINDS:
             return ClassifiedFailure(

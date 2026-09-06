@@ -108,13 +108,13 @@ class KimiModels:
                 return listing
         binary = self._binary.resolve()
         parsed = parse_catalog(probe_catalog(binary)) if binary is not None else None
-        listing = (
-            ModelListing(models=tuple(parsed), source="live")
-            if parsed
-            else ModelListing(models=(), source="none")
-        )
-        self._cache = (now, listing)
-        return listing
+        if parsed:
+            listing = ModelListing(models=tuple(parsed), source="live")
+            self._cache = (now, listing)
+            return listing
+        # A failed probe is transient (auth hiccup, timeout, ...); do not cache "none" for
+        # the full TTL, or amicus_models would report an empty catalog for 300 s.
+        return ModelListing(models=(), source="none")
 
 
 def supported_efforts_for(model: str | None, listing: ModelListing) -> tuple[str, ...] | None:

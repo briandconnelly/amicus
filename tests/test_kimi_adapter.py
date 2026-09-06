@@ -153,6 +153,26 @@ def test_validate_request_catalog_first_then_fallback_then_fail_open(pinned_kimi
     assert from_env.validate_request(_req(reasoning_effort="low")) is None
 
 
+def test_validate_request_refuses_an_unexpected_access_posture(pinned_kimi_bin):
+    _, backend = kf.make_backend()
+    for bad in ("readonly", "toolless", "garbage"):
+        refused = backend.validate_request(_req(access=bad))
+        assert refused is not None and refused.code == "invalid_arguments"
+        assert refused.details == {"field": "access"}
+        assert bad not in refused.detail
+    assert backend.validate_request(_req(access=contract.SANDBOX_READ_ONLY)) is None
+    assert backend.validate_request(_req(access=contract.SANDBOX_WORKSPACE_WRITE)) is None
+    assert backend.validate_request(_req(access=None)) is None
+
+
+def test_read_only_fails_closed_on_an_unexpected_access_posture(pinned_kimi_bin):
+    from amicus.backends.kimi.adapter import KimiBackend
+
+    assert KimiBackend._read_only(_req(access="garbage")) is True
+    assert KimiBackend._read_only(_req(access=contract.SANDBOX_WORKSPACE_WRITE)) is False
+    assert KimiBackend._read_only(_req(access=contract.SANDBOX_READ_ONLY)) is True
+
+
 def test_validate_request_instructions_rules(pinned_kimi_bin):
     _, backend = kf.make_backend()
     bad_kind = backend.validate_request(_req(kind="delegate", instructions_append="x"))
