@@ -267,7 +267,8 @@ async def test_unkeyed_async_start_returns_a_running_handle(tmp_path, monkeypatc
     assert out["poll_after_ms"] == 1000 and out["expires_at"] is None
     assert out["follow_up"]["tool"] == "amicus_job_status"
     assert out["follow_up"]["arguments"] == {"job_id": out["job_id"], "workspace_root": str(tmp_path)}
-    assert out["meta"]["job_id"] == out["job_id"] and "idempotency_replayed" not in out["meta"]
+    # A handle is a plain model dump (nulls kept; only delivered paid results are slimmed).
+    assert out["meta"]["job_id"] == out["job_id"] and out["meta"]["idempotency_replayed"] is None
     store.cancel(str(tmp_path), out["job_id"])
 
 
@@ -276,7 +277,7 @@ async def test_keyed_start_creates_then_replays_the_real_handle(tmp_path, monkey
     monkeypatch.setattr(lifecycle, "worker_cmd", _fake_worker_cmd(_success(str(tmp_path))))
     spec = _spec(str(tmp_path), tool="amicus_consult_async", timeout_seconds=1800)
     first = await _start(store, spec, "k1")
-    assert first["ok"] is True and "idempotency_replayed" not in first["meta"]
+    assert first["ok"] is True and first["meta"]["idempotency_replayed"] is None
     deadline = time.monotonic() + 10
     while store.status(str(tmp_path), first["job_id"])["status"] == "running":
         assert time.monotonic() < deadline
@@ -741,7 +742,7 @@ async def test_keyed_consult_async_replays_and_conflicts(app, store, tmp_path):
         other = await c.call_tool(
             "amicus_consult_async", {**args, "question": "why not?"}, raise_on_error=False
         )
-    assert "idempotency_replayed" not in first["meta"]
+    assert first["meta"]["idempotency_replayed"] is None  # a handle keeps null meta keys
     assert again["ok"] is True and again["job_id"] == first["job_id"]
     assert again["meta"]["idempotency_replayed"] is True and again["status"] == "done"
     assert other.is_error and other.structured_content["error"]["code"] == "idempotency_conflict"
