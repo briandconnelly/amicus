@@ -103,10 +103,10 @@ def build_exec_command(
     tokens += [contract.OUTPUT_FORMAT_FLAG, contract.OUTPUT_FORMAT_JSON]
     if agent_file_path:
         tokens += [contract.AGENT_FILE_FLAG, agent_file_path]
-    if model:
-        tokens += [contract.MODEL_FLAG, model]
     if skills_dir:
         tokens += [contract.SKILLS_DIR_FLAG, skills_dir]
+    if model:
+        tokens += [contract.MODEL_FLAG, model]
     return _gate_optional(tokens, flag_support)
 
 

@@ -66,7 +66,7 @@ def test_argv_shape_and_never_sent_flags():
 def test_model_and_skills_dir_are_help_gated_with_their_values():
     cmd, dropped = _cmd(model="k3", skills_dir="/T/s", flag_support=NO_MODEL)
     assert "--model" not in cmd and "k3" not in cmd and "/T/s" not in cmd
-    assert dropped == ["--model", "--skills-dir"]
+    assert dropped == ["--skills-dir", "--model"]
     fail_open, dropped2 = _cmd(model="k3", flag_support=FlagSupport(frozenset(), help_parsed=False))
     assert "--model" in fail_open and dropped2 == []
 
