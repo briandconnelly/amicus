@@ -6512,7 +6512,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Free — no model call. List the jobs known for this workspace, newest first, across all backends; narrow with `backend`, `status`, or `task_id` (the tasks-extension id recorded at task creation; no match is an empty list). Only an explicit `limit` truncates (truncated: true, no cursor). Records expire after AMICUS_JOB_TTL (default 24h) and a per-workspace cap evicts the oldest terminal records; read results promptly.",
+      "description": "Free — no model call. List the jobs known for this workspace, newest first, across all backends; narrow with `backend`, `status`, or `task_id` (no match is an empty list). Only an explicit `limit` truncates (truncated: true, no cursor). Records expire after AMICUS_JOB_TTL (default 24h) and a per-workspace cap evicts the oldest terminal records; read results promptly.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
