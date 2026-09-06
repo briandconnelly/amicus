@@ -1,6 +1,6 @@
 # ADR 0004: Async is both durable jobs and the tasks extension
 
-**Status:** Proposed (2026-09-04; spike in M0, wiring in M5)
+**Status:** Accepted for the durable-jobs half (2026-09-06, M2: `_async` twins, `amicus_job_*`, keyed replay, task-id lookup); the `task=True` half stays Proposed until M5.
 
 ## Context
 
