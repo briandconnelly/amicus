@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+from pathlib import Path
 
 from tests.conftest import GIT_HOOK_ENV, NEVER_SPAWN_CODEX, _scrub_git_hook_env
 
@@ -90,3 +91,29 @@ def test_positive_control_a_usable_override_does_resolve(monkeypatch):
     monkeypatch.setenv("AMICUS_CODEX_BIN", "/usr/bin/true")
     plugin = codex_pkg.plugin(os.environ)
     assert plugin.binary.resolve() is not None
+
+
+# --- the never-spawn guard for Kimi: AMICUS_KIMI_BIN is unusable
+
+
+def test_never_spawn_kimi_env_is_set_to_the_unusable_path():
+    from tests.conftest import NEVER_SPAWN_KIMI
+
+    assert os.environ["AMICUS_KIMI_BIN"] == NEVER_SPAWN_KIMI
+    assert not Path(NEVER_SPAWN_KIMI).exists()
+
+
+def test_the_real_kimi_plugin_config_does_not_resolve_a_binary():
+    from amicus.backends.kimi import binary, config
+
+    assert binary.KimiBinary(config.load_config()).resolve() is None
+
+
+def test_positive_control_a_usable_kimi_override_does_resolve(monkeypatch, tmp_path):
+    from amicus.backends.kimi import binary, config
+
+    exe = tmp_path / "kimi"
+    exe.write_text("#!/bin/sh\nexit 0\n")
+    exe.chmod(0o755)
+    monkeypatch.setenv("AMICUS_KIMI_BIN", str(exe))
+    assert binary.KimiBinary(config.load_config()).resolve() == str(exe)

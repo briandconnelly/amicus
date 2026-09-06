@@ -20,6 +20,7 @@ fastmcp.settings.mcp_camelcase_compat = False
 ENV_PREFIXES = ("AMICUS_", "CODEX_IN_CLAUDE_", "MOONBRIDGE_", "CLAUDE_IN_CODEX_")
 
 NEVER_SPAWN_CODEX = "/nonexistent/amicus-test-codex"
+NEVER_SPAWN_KIMI = "/nonexistent/amicus-test-kimi"
 
 # git exports these into the environment of every hook it runs, and prek's pre-push hook
 # runs this very suite (`entry = "uv run pytest"`, `stages = ["pre-push"]`). Without
@@ -59,6 +60,14 @@ def _never_spawn_real_codex(monkeypatch):
     monkeypatch.setenv("AMICUS_CODEX_BIN", NEVER_SPAWN_CODEX)
 
 
+@pytest.fixture(autouse=True)
+def _never_spawn_real_kimi(monkeypatch):
+    """No unit test may run the real kimi CLI: an unusable AMICUS_KIMI_BIN makes every kimi
+    run, probe and catalog read short-circuit. Tests that want a run point the override at
+    the `fake_kimi` fixture; the live suite (tests/test_kimi_live.py) deletes it."""
+    monkeypatch.setenv("AMICUS_KIMI_BIN", NEVER_SPAWN_KIMI)
+
+
 @pytest.fixture
 def clean_env(monkeypatch):
     """Strip every amicus and legacy env var so tests see built-in defaults."""
@@ -66,6 +75,7 @@ def clean_env(monkeypatch):
         if key.startswith(ENV_PREFIXES):
             monkeypatch.delenv(key, raising=False)
     monkeypatch.setenv("AMICUS_CODEX_BIN", NEVER_SPAWN_CODEX)
+    monkeypatch.setenv("AMICUS_KIMI_BIN", NEVER_SPAWN_KIMI)
     return monkeypatch
 
 
@@ -86,6 +96,17 @@ def pinned_codex_bin(monkeypatch):
 
     monkeypatch.setattr(
         binary, "_is_executable_file", lambda path: str(path) == "/CODEX" or path.is_file()
+    )
+    return monkeypatch
+
+
+@pytest.fixture
+def pinned_kimi_bin(monkeypatch):
+    """Let AMICUS_KIMI_BIN=/KIMI resolve without a file on disk (argv tests only)."""
+    from amicus.backends.kimi import binary
+
+    monkeypatch.setattr(
+        binary, "_is_executable_file", lambda path: str(path) == "/KIMI" or path.is_file()
     )
     return monkeypatch
 
