@@ -69,3 +69,22 @@ def fake_codex(tmp_path_factory) -> Path:
     shutil.copy(src, exe)
     exe.chmod(exe.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP)
     return exe
+
+
+@pytest.fixture
+def live_codex(monkeypatch, tmp_path):
+    """Opt back into the real codex CLI for `-m integration` tests. Skips when codex is
+    absent or logged out, unless AMICUS_REQUIRE_LIVE=1 makes that a failure."""
+    import shutil
+    import subprocess
+
+    monkeypatch.delenv("AMICUS_CODEX_BIN", raising=False)
+    monkeypatch.setenv("AMICUS_STATE_DIR", str(tmp_path / "state"))
+    require = os.environ.get("AMICUS_REQUIRE_LIVE") == "1"
+    codex = shutil.which("codex")
+    if codex is None:
+        (pytest.fail if require else pytest.skip)("codex CLI not installed")
+    status = subprocess.run([codex, "login", "status"], capture_output=True, text=True, check=False)
+    if status.returncode != 0:
+        (pytest.fail if require else pytest.skip)("codex is not logged in")
+    return codex
