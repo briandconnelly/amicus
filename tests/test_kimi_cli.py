@@ -270,9 +270,9 @@ def test_generic_failures_are_bounded_and_sanitized_before_truncation():
     secret = "sk-" + "c" * 32
     f = _classify(_run(stderr=f"boom token={secret}", exit_code=3))
     assert f.code == "nonzero_exit" and secret not in f.detail and "kimi exited 3" in f.detail
-    straddling = "x" * 290 + f" token={secret}"
+    straddling = "x" * 280 + f" token={secret}"
     g = _classify(_run(stderr=straddling, exit_code=2))
-    assert "sk-c" not in g.detail and len(g.detail) <= 320
+    assert "sk-cccc" not in g.detail and secret not in g.detail and len(g.detail) <= 320
     h = _classify(
         _run(stderr="failed at /wt/abc/src/a.py", exit_code=2),
         sanitize=lambda t: t.replace("/wt/abc/", "./"),

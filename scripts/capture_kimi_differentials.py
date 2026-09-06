@@ -187,7 +187,7 @@ ENVELOPE_CASES: dict[str, dict] = {
         kind="consult", events="", stderr="failed reading {WT}/src/a.py", exit_code=2
     ),
     "nonzero_secret_straddles_cut": dict(
-        kind="consult", events="", stderr="x" * 290 + f" token={SECRET}", exit_code=2
+        kind="consult", events="", stderr="x" * 280 + f" token={SECRET}", exit_code=2
     ),
 }
 
