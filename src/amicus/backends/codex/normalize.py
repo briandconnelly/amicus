@@ -10,6 +10,14 @@ import json
 from pontonier.backend.protocol import Usage
 
 from amicus.backends.codex import contract
+from amicus.schemas.structured import _strip_code_fence, classify_structured
+
+__all__ = [
+    "classify_structured",
+    "extract_error_message",
+    "parse_event_metadata",
+    "parse_structured",
+]
 
 _REPLACEMENT_CHAR = "�"
 
@@ -130,18 +138,6 @@ def _usage_from(blob: dict) -> Usage | None:
     )
 
 
-def _strip_code_fence(text: str) -> str:
-    stripped = text.strip()
-    if stripped.startswith("```"):
-        lines = stripped.splitlines()
-        if lines and lines[0].startswith("```"):
-            lines = lines[1:]
-        if lines and lines[-1].strip() == "```":
-            lines = lines[:-1]
-        return "\n".join(lines).strip()
-    return stripped
-
-
 def parse_structured(last_message: str | None) -> dict | None:
     if not last_message:
         return None
@@ -150,17 +146,3 @@ def parse_structured(last_message: str | None) -> dict | None:
     except (json.JSONDecodeError, ValueError):
         return None
     return parsed if isinstance(parsed, dict) else None
-
-
-def classify_structured(last_message: str | None) -> tuple[str, dict | None]:
-    """("ok", dict) | ("invalid_json", None) | ("schema_violation", None) for the strict
-    review path: absent/unparseable vs parseable-but-not-an-object."""
-    if not last_message or not last_message.strip():
-        return ("invalid_json", None)
-    try:
-        parsed = json.loads(_strip_code_fence(last_message))
-    except (json.JSONDecodeError, ValueError):
-        return ("invalid_json", None)
-    if not isinstance(parsed, dict):
-        return ("schema_violation", None)
-    return ("ok", parsed)

@@ -20,6 +20,7 @@ from amicus.schemas.results import (
     RawResponse,
     ReviewResult,
 )
+from amicus.schemas.structured import classify_structured
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Iterable
@@ -152,10 +153,8 @@ def review_result(
 ) -> dict[str, Any]:
     """Strict: the verdict/findings ARE the product, so exit-0 output that ignored the
     schema is invalid_json / schema_violation, never a prose downgrade."""
-    from amicus.backends.codex import normalize  # noqa: PLC0415  # generic JSON classification
-
     apply_exec(meta, result)
-    status, parsed = normalize.classify_structured(result.answer)
+    status, parsed = classify_structured(result.answer)
     if status != "ok":
         preview = redaction.sanitize_echo_prose(result.answer).strip()[:300]
         tail = f" Raw output preview: {preview}" if preview else ""
