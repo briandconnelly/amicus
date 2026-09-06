@@ -142,7 +142,7 @@ async def prepare_run(
         cwd=resolution.path,
         workspace_source=resolution.source,  # ty: ignore[invalid-argument-type]
         workspace_warning=ws.workspace_warning_for(resolution.source, resolution.path),
-        roots_source=roots_source,  # ty: ignore[invalid-argument-type]
+        roots_source=roots_source,
         model=model_v,
         reasoning_effort=effort,
         timeout_seconds=timeout,

@@ -10,10 +10,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import unquote, urlparse
 
 from pontonier.core import workspace as _pw
+
+if TYPE_CHECKING:  # pragma: no cover
+    from amicus.schemas.envelope import RootsSource
 
 
 @dataclass(frozen=True)
@@ -65,7 +68,7 @@ def _session(ctx: Any) -> Any | None:
         return None
 
 
-async def roots_from_ctx(ctx: Any) -> tuple[list[str], str]:
+async def roots_from_ctx(ctx: Any) -> tuple[list[str], RootsSource]:
     """Absolute local paths from the client's file:// roots, plus which of three states
     produced them: client | not_negotiated | probe_failed."""
     session = _session(ctx)

@@ -72,13 +72,13 @@ def job_meta(
 
 async def resolve_job_workspace(
     settings: Settings, ctx: Any, workspace_root: str | None
-) -> tuple[str | None, str | None, str, dict[str, Any] | None]:
+) -> tuple[str | None, str | None, RootsSource, dict[str, Any] | None]:
     """(cwd, source, roots_source, error). The error is a ready envelope whose meta
     carries the roots state, which is often why the caller looks in the wrong place."""
     roots, roots_source = await ws.roots_from_ctx(ctx)
     res = ws.resolve(workspace_root, roots, allow_cwd=settings.allow_cwd_workspace)
     if res.error_code is not None:
-        meta = job_meta(settings, None, None, roots_source)  # ty: ignore[invalid-argument-type]
+        meta = job_meta(settings, None, None, roots_source)
         return (
             None,
             None,
