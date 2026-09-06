@@ -88,6 +88,7 @@ async def test_every_tool_output_schema_is_valid_and_every_error_envelope_valida
                 assert res.structured_content["error"]["code"] in {
                     "not_implemented",
                     "backend_unavailable",
+                    "invalid_workspace_root",
                 }
 
 

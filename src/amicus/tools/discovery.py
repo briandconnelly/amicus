@@ -253,7 +253,11 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
         "backends": list(BACKEND_IDS),
         "use_when": "Poll a job without fetching its result.",
         "returns": "status, result_available, result_ok, poll_after_ms.",
-        "error_codes": ["job_not_found", "invalid_workspace_root", "not_implemented"],
+        "error_codes": [
+            "job_not_found",
+            "invalid_workspace_root",
+            "workspace_outside_roots",
+        ],
     },
     "amicus_job_result": {
         "cost": "free",
@@ -267,7 +271,8 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
             "job_cancelled",
             "job_timeout",
             "job_result_incompatible",
-            "not_implemented",
+            "invalid_workspace_root",
+            "workspace_outside_roots",
         ],
     },
     "amicus_job_consume_result": {
@@ -282,7 +287,8 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
             "job_cancelled",
             "job_timeout",
             "job_result_incompatible",
-            "not_implemented",
+            "invalid_workspace_root",
+            "workspace_outside_roots",
         ],
     },
     "amicus_job_cancel": {
@@ -290,14 +296,18 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
         "backends": list(BACKEND_IDS),
         "use_when": "Stop a running job.",
         "returns": "the job's status after cancellation.",
-        "error_codes": ["job_not_found", "not_implemented"],
+        "error_codes": [
+            "job_not_found",
+            "invalid_workspace_root",
+            "workspace_outside_roots",
+        ],
     },
     "amicus_job_list": {
         "cost": "free",
         "backends": list(BACKEND_IDS),
         "use_when": "Recover job_ids, including the job behind a task_id.",
         "returns": "job summaries, truncated flag.",
-        "error_codes": ["invalid_workspace_root", "not_implemented"],
+        "error_codes": ["invalid_workspace_root", "workspace_outside_roots"],
     },
 }
 _JOB_PARAMS: dict[str, tuple[list[str], list[str]]] = {
