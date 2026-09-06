@@ -116,8 +116,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
         description=(
             f"{FREE_MARKER} Poll a job's state without fetching its result: status, elapsed "
             "time, result_available, result_ok, and poll_after_ms to honor before the next "
-            f"poll (it grows with elapsed time). Works for any _async job and any sync call's "
-            f"meta.job_id. {_RETENTION}"
+            f"poll (it grows with elapsed time). {_RETENTION}"
         ),
     )
     @guard("amicus_job_status", settings)
@@ -157,9 +156,8 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
         meta=lifecycle_meta("amicus_job_consume_result"),
         description=(
             f"{FREE_MARKER} Like amicus_job_result, then delete the record: a repeat call "
-            "returns job_not_found, so this is not idempotent. Only a result read intact "
-            "(a success or the job's own error) is deleted; a corrupt or incompatible "
-            "record survives for amicus_job_result."
+            "returns job_not_found, so this is not idempotent. A corrupt or incompatible "
+            "record is not deleted."
         ),
     )
     @guard("amicus_job_consume_result", settings)
@@ -179,10 +177,9 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
         title="Cancel a background job (free)",
         meta=lifecycle_meta("amicus_job_cancel"),
         description=(
-            f"{FREE_MARKER} Ask the worker to stop (SIGTERM, then SIGKILL after a grace "
-            "period), remove its throwaway worktree, and mark the job cancelled; a terminal "
-            "job is returned unchanged, so cancel is idempotent. cleanup_warnings names any "
-            "leftover path."
+            f"{FREE_MARKER} Stop the worker (SIGTERM, then SIGKILL), remove its worktree, "
+            "and mark the job cancelled; a terminal job is returned unchanged, so cancel is "
+            "idempotent. cleanup_warnings names any leftover path."
         ),
     )
     @guard("amicus_job_cancel", settings)

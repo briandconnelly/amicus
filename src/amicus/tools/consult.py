@@ -45,8 +45,7 @@ _DESC = (
 _ASYNC_DESC = (
     f"{_resolve.PAID_MARKER} Async twin of amicus_consult: returns a job handle "
     f"immediately; poll amicus_job_status, read amicus_job_result. {_EGRESS} Starting a "
-    "job commits to spend. The job runs to AMICUS_JOB_MAX_SECONDS (default 1800s); "
-    "idempotency_key dedups a retry."
+    "job commits to spend. Deadline: AMICUS_JOB_MAX_SECONDS (default 1800s)."
 )
 
 

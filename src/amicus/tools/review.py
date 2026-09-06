@@ -54,8 +54,7 @@ _REVIEW_DESC = (
 _REVIEW_ASYNC_DESC = (
     f"{_resolve.PAID_MARKER} Async twin of amicus_review_changes: returns a job handle; "
     "poll amicus_job_status, read amicus_job_result. Same egress. Starting a job commits "
-    "to spend. The job runs to AMICUS_JOB_MAX_SECONDS (default 1800s); idempotency_key "
-    "dedups a retry."
+    "to spend. Deadline: AMICUS_JOB_MAX_SECONDS (default 1800s)."
 )
 _ADV_DESC = (
     f"{_resolve.PAID_MARKER} A fixed adversarial critic on `backend` attacks `target` (a "
