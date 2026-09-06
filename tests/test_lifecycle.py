@@ -6,8 +6,10 @@ import asyncio
 import json
 import sys
 import threading
+import time
 
 import pytest
+from pontonier.core import jobs as pjobs
 from tests.support import fakeplugin
 
 from amicus import config
@@ -399,3 +401,158 @@ async def test_a_hanging_report_progress_does_not_stall_the_poll_loop(tmp_path, 
         timeout=10,
     )
     assert out["ok"] is True
+
+
+async def _start(store, spec, key, **kw):
+    return await lifecycle.start_async(
+        store,
+        spec,
+        meta_for(spec),
+        fakeplugin.make_plugin(),
+        deadline=1800,
+        idempotency_key=key,
+        **kw,
+    )
+
+
+async def test_unkeyed_async_start_returns_a_running_handle(tmp_path, monkeypatch):
+    store = lifecycle.job_store(_settings(tmp_path))
+    monkeypatch.setattr(lifecycle, "worker_cmd", _sleeping_worker_cmd(30))
+    spec = _spec(str(tmp_path), tool="amicus_consult_async", timeout_seconds=1800)
+    out = await _start(store, spec, None)
+    assert out["ok"] is True and out["status"] == "running" and out["deadline_seconds"] == 1800
+    assert out["backend"] == "fake" and out["kind"] == "consult" and out["task_id"] is None
+    assert out["poll_after_ms"] == 1000 and out["expires_at"] is None
+    assert out["follow_up"]["tool"] == "amicus_job_status"
+    assert out["follow_up"]["arguments"] == {
+        "job_id": out["job_id"],
+        "workspace_root": str(tmp_path),
+    }
+    # A handle is a plain model dump (nulls kept; only delivered paid results are slimmed).
+    assert out["meta"]["job_id"] == out["job_id"] and out["meta"]["idempotency_replayed"] is None
+    store.cancel(str(tmp_path), out["job_id"])
+
+
+async def test_keyed_start_creates_then_replays_the_real_handle(tmp_path, monkeypatch):
+    store = lifecycle.job_store(_settings(tmp_path))
+    monkeypatch.setattr(lifecycle, "worker_cmd", _fake_worker_cmd(_success(str(tmp_path))))
+    spec = _spec(str(tmp_path), tool="amicus_consult_async", timeout_seconds=1800)
+    first = await _start(store, spec, "k1")
+    assert first["ok"] is True and first["meta"]["idempotency_replayed"] is None
+    deadline = time.monotonic() + 10
+    while store.status(str(tmp_path), first["job_id"])["status"] == "running":
+        assert time.monotonic() < deadline
+        await asyncio.sleep(0.05)
+    again = await _start(store, spec, "k1")
+    assert again["ok"] is True and again["job_id"] == first["job_id"]
+    assert again["meta"]["idempotency_replayed"] is True
+    assert again["status"] == "done" and again["expires_at"] is not None
+    assert again["started_at"] == first["started_at"]
+    assert len(store.list_jobs(str(tmp_path))) == 1
+    spec_on_disk = json.loads(
+        (store._job_dir(str(tmp_path), first["job_id"]) / "spec.json").read_text()
+    )
+    assert "why?" not in json.dumps(spec_on_disk)
+
+
+async def test_keyed_start_with_different_inputs_is_a_conflict(tmp_path, monkeypatch):
+    store = lifecycle.job_store(_settings(tmp_path))
+    monkeypatch.setattr(lifecycle, "worker_cmd", _fake_worker_cmd(_success(str(tmp_path))))
+    spec = _spec(str(tmp_path), tool="amicus_consult_async", timeout_seconds=1800)
+    first = await _start(store, spec, "k2")
+    other_spec = _spec(
+        str(tmp_path), tool="amicus_consult_async", timeout_seconds=1800, question="else?"
+    )
+    other = await _start(store, other_spec, "k2")
+    assert other["ok"] is False and other["error"]["code"] == "idempotency_conflict"
+    assert other["error"]["temporary"] is False
+    assert other["error"]["repair"]["next_step"] == "use_new_idempotency_key"
+    assert other["error"]["repair"]["tool"] == "amicus_consult_async"
+    assert other["meta"]["backend"] == "fake" and "job_id" not in other["meta"]
+    assert len(store.list_jobs(str(tmp_path))) == 1 and first["ok"] is True
+
+
+async def test_keyed_start_after_the_record_is_gone_is_unavailable(tmp_path, monkeypatch):
+    store = lifecycle.job_store(_settings(tmp_path))
+    monkeypatch.setattr(lifecycle, "worker_cmd", _fake_worker_cmd(_success(str(tmp_path))))
+    spec = _spec(str(tmp_path), tool="amicus_consult_async", timeout_seconds=1800)
+    first = await _start(store, spec, "k3")
+    deadline = time.monotonic() + 10
+    while store.status(str(tmp_path), first["job_id"])["status"] == "running":
+        assert time.monotonic() < deadline
+        await asyncio.sleep(0.05)
+    assert store.discard(str(tmp_path), first["job_id"]) is pjobs.DiscardOutcome.REMOVED
+    gone = await _start(store, spec, "k3")
+    assert gone["ok"] is False and gone["error"]["code"] == "idempotency_result_unavailable"
+    assert gone["error"]["repair"]["next_step"] == "use_new_idempotency_key"
+
+
+@pytest.mark.parametrize(
+    ("outcome", "code", "retry"),
+    [
+        ({"kind": "in_progress"}, "idempotency_in_progress", 250),
+        ({"kind": "io_error"}, "internal_error", 1000),
+        ({"kind": "something_new"}, "idempotency_in_progress", 250),
+    ],
+)
+async def test_transient_keyed_outcomes_are_retryable_envelopes(
+    tmp_path, monkeypatch, outcome, code, retry
+):
+    store = lifecycle.job_store(_settings(tmp_path))
+    monkeypatch.setattr(store, "start_idempotent", lambda *a, **kw: outcome)
+    spec = _spec(str(tmp_path), tool="amicus_consult_async", timeout_seconds=1800)
+    out = await _start(store, spec, "k4")
+    assert out["ok"] is False and out["error"]["code"] == code
+    assert out["error"]["temporary"] is True and out["error"]["retry_after_ms"] == retry
+    assert "idempotency_key" in out["error"]["repair"]["alternative"]
+
+
+async def test_keyed_replay_whose_record_vanished_is_unavailable(tmp_path, monkeypatch):
+    store = lifecycle.job_store(_settings(tmp_path))
+    monkeypatch.setattr(
+        store, "start_idempotent", lambda *a, **kw: {"kind": "replay", "job_id": "0" * 32}
+    )
+    spec = _spec(str(tmp_path), tool="amicus_consult_async", timeout_seconds=1800)
+    out = await _start(store, spec, "k5")
+    assert out["ok"] is False and out["error"]["code"] == "idempotency_result_unavailable"
+
+
+async def test_keyed_spawn_failure_is_an_internal_error(tmp_path, monkeypatch):
+    store = lifecycle.job_store(_settings(tmp_path))
+    monkeypatch.setattr(lifecycle, "worker_cmd", lambda jd: ["/nonexistent-binary-xyz"])
+    spec = _spec(str(tmp_path), tool="amicus_consult_async", timeout_seconds=1800)
+    out = await _start(store, spec, "k6")
+    assert out["ok"] is False and out["error"]["code"] == "internal_error"
+    assert "failed to start background job" in out["error"]["message"]
+    assert store.list_jobs(str(tmp_path)) == []
+
+
+async def test_keyed_start_runs_off_the_event_loop(tmp_path, monkeypatch):
+    store = lifecycle.job_store(_settings(tmp_path))
+    seen: dict = {}
+
+    def blocking(cmd_factory, cwd, **kw):
+        seen["thread"] = threading.current_thread().name
+        seen["kw"] = kw
+        return {"kind": "conflict"}
+
+    monkeypatch.setattr(store, "start_idempotent", blocking)
+    spec = _spec(str(tmp_path), tool="amicus_consult_async", timeout_seconds=1800)
+    await _start(store, spec, "k7")
+    assert seen["thread"] != threading.main_thread().name
+    assert seen["kw"]["key"] == "k7" and seen["kw"]["tool"] == "amicus_consult_async"
+    assert seen["kw"]["arg_hash"] == spec.arg_hash() and seen["kw"]["kind"] == "consult"
+    assert seen["kw"]["lock_timeout"] == lifecycle.IDEM_LOCK_ACQUIRE_TIMEOUT_S
+    assert seen["kw"]["write_spec"] == spec.public()
+    assert seen["kw"]["stdin_text"] == spec.inputs_json()
+    assert seen["kw"]["extra"] == {
+        "result_format": 1,
+        "backend": "fake",
+        "tool": "amicus_consult_async",
+    }
+
+
+def test_mark_replayed_stamps_meta_only_when_present():
+    replayed = lifecycle.mark_replayed({"ok": True, "meta": {"job_id": "x"}})
+    assert replayed["meta"]["idempotency_replayed"] is True
+    assert lifecycle.mark_replayed({"ok": False}) == {"ok": False}

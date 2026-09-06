@@ -1,6 +1,7 @@
 """start / await / run_sync over pontonier's JobStore (ported from codex-in-claude
-server.py's `_start_job`/`_await_job_result`/`_run_sync`; the keyed/idempotent paths are M2).
-The prompt inputs stream to the worker over stdin; only `RunSpec.public()` is persisted."""
+server.py's `_start_job`/`_await_job_result`/`_run_sync`; the keyed path lands here in M2;
+ADR 0008). The prompt inputs stream to the worker over stdin; only `RunSpec.public()` is
+persisted."""
 
 from __future__ import annotations
 
@@ -35,6 +36,33 @@ SYNC_AWAIT_GRACE_S = 30
 SYNC_PROGRESS_THROTTLE_S = 1.0
 SYNC_PROGRESS_REPORT_TIMEOUT_S = 5.0
 
+# Bound on acquiring the idempotency coordination locks for a keyed start: a peer holding
+# the flock degrades to a retryable idempotency_in_progress instead of hanging a worker.
+IDEM_LOCK_ACQUIRE_TIMEOUT_S = 0.5
+IDEM_IN_PROGRESS_RETRY_MS = 250
+IDEM_IO_ERROR_RETRY_MS = 1000
+_IDEM_MESSAGES: dict[str, str] = {
+    "idempotency_conflict": (
+        "idempotency_key already used with different effective arguments (backend, model, "
+        "reasoning_effort, scope, options or the prompt inputs)."
+    ),
+    "idempotency_result_unavailable": (
+        "A prior run for this idempotency_key already completed; its result is no longer "
+        "available (consumed or evicted)."
+    ),
+    "idempotency_in_progress": (
+        "Idempotency coordination is momentarily busy (a run is still starting or the "
+        "workspace lock is contended); retry shortly."
+    ),
+}
+# Terminal keyed outcomes -> (code, retry_after_ms). Anything unexpected degrades to the
+# retryable in_progress so a new pontonier outcome can never become a silent success.
+_IDEM_TERMINAL: dict[str, tuple[str, int | None]] = {
+    "conflict": ("idempotency_conflict", None),
+    "unavailable": ("idempotency_result_unavailable", None),
+    "in_progress": ("idempotency_in_progress", IDEM_IN_PROGRESS_RETRY_MS),
+}
+
 
 def job_store(settings: Settings) -> JobStore:
     return JobStore(
@@ -64,8 +92,11 @@ def job_started_handle(
     deadline: int,
     expires_at: str | None,
     meta: Meta,
+    poll_after_ms: int = 1000,
+    task_id: str | None = None,
 ) -> dict[str, Any]:
     meta.job_id = job_id
+    meta.task_id = task_id
     poll_arguments: dict[str, Any] = {"job_id": job_id, "workspace_root": spec.cwd}
     return JobStarted(
         job_id=job_id,
@@ -74,8 +105,9 @@ def job_started_handle(
         status=status,  # ty: ignore[invalid-argument-type]
         started_at=started_at,
         deadline_seconds=deadline,
-        poll_after_ms=1000,
+        poll_after_ms=poll_after_ms,
         expires_at=expires_at,
+        task_id=task_id,
         follow_up=Repair(
             next_step="poll_job_status",
             tool="amicus_job_status",
@@ -98,6 +130,50 @@ def _spawn_failure(exc: Exception, meta: Meta, plugin: BackendPlugin) -> dict[st
         plugin=plugin,
         repair_alternative="Check the job state-dir permissions (AMICUS_STATE_DIR) and retry.",
     )
+
+
+def idem_error(
+    code: str,
+    meta: Meta,
+    plugin: BackendPlugin,
+    *,
+    tool: str,
+    retry_after_ms: int | None = None,
+) -> dict[str, Any]:
+    return error_envelope(
+        code,
+        _IDEM_MESSAGES[code],
+        meta,
+        plugin=plugin,
+        retry_after_ms=retry_after_ms,
+        repair_tool=tool,
+        repair_alternative=(
+            "Retry the same call with the same idempotency_key after retry_after_ms."
+            if code == "idempotency_in_progress"
+            else "Call the same tool again with a new idempotency_key (a new paid run)."
+        ),
+    )
+
+
+def _idem_io_error(meta: Meta, plugin: BackendPlugin, *, tool: str) -> dict[str, Any]:
+    return error_envelope(
+        "internal_error",
+        "Transient storage error reading the idempotency record.",
+        meta,
+        plugin=plugin,
+        retry_after_ms=IDEM_IO_ERROR_RETRY_MS,
+        repair_tool=tool,
+        repair_alternative="Retry the same call with the same idempotency_key.",
+    )
+
+
+def mark_replayed(envelope: dict[str, Any]) -> dict[str, Any]:
+    """Stamp meta.idempotency_replayed on an outgoing envelope so the caller can see that no
+    new spend occurred. Applied after the envelope is built, never persisted."""
+    meta = envelope.get("meta")
+    if isinstance(meta, dict):
+        meta["idempotency_replayed"] = True
+    return envelope
 
 
 _PENDING_START_CLEANUPS: set[asyncio.Future] = set()
@@ -154,6 +230,78 @@ async def start_job(
         expires_at=None,
         meta=meta,
     )
+
+
+async def start_async(
+    store: JobStore,
+    spec: RunSpec,
+    meta: Meta,
+    plugin: BackendPlugin,
+    *,
+    deadline: int,
+    idempotency_key: str | None,
+    task_id: str | None = None,
+) -> dict[str, Any]:
+    """The _async return path. Unkeyed it is exactly start_job. Keyed it reserves
+    (tool, key) in the workspace index: a first reservation spawns and returns a running
+    handle; a duplicate returns the existing job's REAL handle; the other outcomes become
+    their envelopes (ADR 0008 decision 2). The store call blocks on a cross-process lock,
+    so it runs off the event loop; an _async caller never waits on in_progress."""
+    if idempotency_key is None:
+        handle = await start_job(store, spec, meta, plugin, deadline=deadline)
+        if handle.get("ok") is True and task_id is not None:
+            handle["task_id"] = task_id
+            handle["meta"]["task_id"] = task_id
+        return handle
+    try:
+        outcome = await asyncio.to_thread(
+            store.start_idempotent,
+            worker_cmd,
+            spec.cwd,
+            kind=spec.kind,
+            tool=spec.tool,
+            key=idempotency_key,
+            arg_hash=spec.arg_hash(),
+            extra=_extra(spec),
+            write_spec=spec.public(),
+            stdin_text=spec.inputs_json(),
+            lock_timeout=IDEM_LOCK_ACQUIRE_TIMEOUT_S,
+        )
+    except OSError as exc:
+        return _spawn_failure(exc, meta, plugin)
+    result_kind = outcome["kind"]
+    if result_kind == "created":
+        return job_started_handle(
+            outcome["job_id"],
+            spec=spec,
+            status="running",
+            started_at=outcome["started_at"],
+            deadline=deadline,
+            expires_at=None,
+            meta=meta,
+            task_id=task_id,
+        )
+    if result_kind == "replay":
+        snap = await asyncio.to_thread(store.status, spec.cwd, outcome["job_id"])
+        if snap is None:
+            return idem_error("idempotency_result_unavailable", meta, plugin, tool=spec.tool)
+        return mark_replayed(
+            job_started_handle(
+                outcome["job_id"],
+                spec=spec,
+                status=snap["status"],
+                started_at=snap["started_at"],
+                deadline=snap["deadline_seconds"],
+                expires_at=snap["expires_at"],
+                meta=meta,
+                poll_after_ms=snap["poll_after_ms"],
+                task_id=task_id,
+            )
+        )
+    if result_kind == "io_error":
+        return _idem_io_error(meta, plugin, tool=spec.tool)
+    code, retry = _IDEM_TERMINAL.get(result_kind, _IDEM_TERMINAL["in_progress"])
+    return idem_error(code, meta, plugin, tool=spec.tool, retry_after_ms=retry)
 
 
 async def await_job_result(
