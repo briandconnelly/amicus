@@ -135,6 +135,14 @@ async def test_a_job_survives_the_server_that_started_it(tmp_path, fake_codex, m
         write_spec=spec.public(),
         stdin_text=spec.inputs_json(),
     )
+    # The worker takes worker.lock only after its imports; an unowned reader before that
+    # reads a young job as failed (pontonier liveness rule) — recorded as a follow-up,
+    # not tested here.
+    jd = store._job_dir(str(tmp_path), job_id)
+    deadline = time.monotonic() + 10
+    while not (jd / "worker.lock").exists():
+        assert time.monotonic() < deadline
+        await asyncio.sleep(0.02)
     # "Restart": a different Python process (a fresh _PROCESS_OWNER) reads the same store.
     other = subprocess.run(
         [sys.executable, "-c", _OTHER_PROCESS, str(tmp_path / "state"), str(tmp_path), job_id],
