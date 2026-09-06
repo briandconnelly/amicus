@@ -191,9 +191,9 @@ async def test_delegate_preflight_and_other_backends(app, tmp_path):
             {"backend": "codex", "task": "t", "workspace_root": str(tmp_path)},
             raise_on_error=False,
         )
-        kimi = await c.call_tool(
+        claude = await c.call_tool(
             "amicus_consult",
-            {"backend": "kimi", "question": "q", "workspace_root": str(tmp_path)},
+            {"backend": "claude", "question": "q", "workspace_root": str(tmp_path)},
             raise_on_error=False,
         )
         asy = await c.call_tool(
@@ -202,7 +202,7 @@ async def test_delegate_preflight_and_other_backends(app, tmp_path):
             raise_on_error=False,
         )
     assert plain.structured_content["error"]["code"] == "not_a_git_repo"
-    assert kimi.structured_content["error"]["code"] == "backend_unavailable"
+    assert claude.structured_content["error"]["code"] == "backend_unavailable"
     assert asy.structured_content["error"]["code"] == "backend_unavailable"
     assert not (tmp_path / "argv.jsonl").exists()
 

@@ -184,9 +184,9 @@ async def test_async_pre_spend_refusals_never_spawn(app, tmp_path):
             {"backend": "codex", "task": "t", "workspace_root": str(tmp_path)},
             raise_on_error=False,
         )
-        kimi = await c.call_tool(
+        claude = await c.call_tool(
             "amicus_consult_async",
-            {"backend": "kimi", "question": "q", "workspace_root": str(tmp_path)},
+            {"backend": "claude", "question": "q", "workspace_root": str(tmp_path)},
             raise_on_error=False,
         )
         sessionless = await c.call_tool(
@@ -195,6 +195,6 @@ async def test_async_pre_spend_refusals_never_spawn(app, tmp_path):
     assert blank.structured_content["error"]["code"] == "invalid_arguments"
     assert opts.structured_content["error"]["code"] == "invalid_arguments"
     assert norepo.structured_content["error"]["code"] == "not_a_git_repo"
-    assert kimi.structured_content["error"]["code"] == "backend_unavailable"
+    assert claude.structured_content["error"]["code"] == "backend_unavailable"
     assert sessionless.structured_content["error"]["code"] == "invalid_workspace_root"
     assert _argv_lines(tmp_path) == []
