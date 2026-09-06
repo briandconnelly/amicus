@@ -11,8 +11,10 @@ import json
 from typing import Any
 
 from amicus.errors import make_error, serialize_error
+from amicus.jobs import lifecycle, lookup
 from amicus.jobs.delivery import finished_job_envelope
 from amicus.orchestration.workspace import workspace_warning_for
+from amicus.request import RunSpec
 from amicus.schemas.envelope import (
     ContextSummary,
     ErrorResult,
@@ -22,7 +24,13 @@ from amicus.schemas.envelope import (
     dump_success,
 )
 from amicus.schemas.fingerprint import FINGERPRINT, RESULT_FORMAT
-from amicus.schemas.results import ConsultResult, DelegateResult, RawResponse, ReviewResult
+from amicus.schemas.results import (
+    ConsultResult,
+    DelegateResult,
+    JobListResult,
+    RawResponse,
+    ReviewResult,
+)
 
 _FINGERPRINT_SENTINEL = "<fingerprint>"
 _VERSION_SENTINEL = "0.0.0"
@@ -192,6 +200,118 @@ def _lifecycle_envelopes() -> dict[str, dict[str, Any]]:
     }
 
 
+_STARTED_AT = "1970-01-01T00:00:00+00:00"
+_EXPIRES_AT = "1970-01-02T00:00:00+00:00"
+
+
+def _spec() -> RunSpec:
+    return RunSpec(
+        backend="codex",
+        kind="consult",
+        tool="amicus_consult_async",
+        cwd="/repo",
+        workspace_source="param",
+        roots_source="client",
+        host_name="Host",
+        timeout_seconds=1800,
+    )
+
+
+def _row(**overrides: Any) -> dict[str, Any]:
+    row: dict[str, Any] = {
+        "job_id": _JOB_ID_SENTINEL,
+        "kind": "consult",
+        "status": "running",
+        "started_at": _STARTED_AT,
+        "elapsed_ms": 1,
+        "deadline_seconds": 1800,
+        "expires_at": None,
+        "result_available": False,
+        "result_ok": None,
+        "poll_after_ms": 1000,
+        "cleanup_warnings": [],
+        "extra": {
+            "result_format": RESULT_FORMAT,
+            "backend": "codex",
+            "tool": "amicus_consult_async",
+        },
+    }
+    row.update(overrides)
+    return row
+
+
+def _handle_meta() -> Meta:
+    # `_meta` fixes timeout_seconds=1 itself (a duplicate keyword would raise); the
+    # handle's deadline rides JobStarted.deadline_seconds, not the meta.
+    return _meta(workspace_source="param", roots_source="client")
+
+
+def _job_meta() -> Meta:
+    meta = _handle_meta()
+    meta.job_kind = "consult"
+    return meta
+
+
+def _handles() -> dict[str, Any]:
+    ws = lookup.workspace_of("/repo", "param")
+    started = lifecycle.job_started_handle(
+        _JOB_ID_SENTINEL,
+        spec=_spec(),
+        status="running",
+        started_at=_STARTED_AT,
+        deadline=1800,
+        expires_at=None,
+        meta=_handle_meta(),
+    )
+    replayed = lifecycle.mark_replayed(
+        lifecycle.job_started_handle(
+            _JOB_ID_SENTINEL,
+            spec=_spec(),
+            status="done",
+            started_at=_STARTED_AT,
+            deadline=1800,
+            expires_at=_EXPIRES_AT,
+            meta=_handle_meta(),
+            poll_after_ms=1000,
+            task_id="task-0",
+        )
+    )
+    running = lookup.status_model(_row(), ws, None, _job_meta())
+    cancelled = lookup.status_model(
+        _row(
+            status="cancelled",
+            cleanup_warnings=["/tmp/amicus-wt-leftover"],
+            expires_at=_EXPIRES_AT,
+        ),
+        ws,
+        "task-0",
+        _job_meta(),
+    )
+    listed = JobListResult(
+        jobs=[
+            lookup.summary_model(
+                _row(status="done", result_available=True, result_ok=True, expires_at=_EXPIRES_AT),
+                "task-0",
+            ),
+            lookup.summary_model(_row(), None),
+        ],
+        workspace=ws,
+        truncated=True,
+        truncation_hint=(
+            "showing the 2 newest of more matching jobs; omit `limit` for every retained match, "
+            "or narrow with `status`, `backend` or `task_id`"
+        ),
+        meta=_handle_meta(),
+    ).model_dump(mode="json")
+    return {
+        "job_started": started,
+        "job_started_replayed": replayed,
+        "job_status_running": running,
+        "job_status_cancelled": cancelled,
+        "job_list": listed,
+    }
+
+
 def build_snapshot() -> dict[str, Any]:
     stored = _stored_envelopes()
     return {
@@ -204,6 +324,7 @@ def build_snapshot() -> dict[str, Any]:
             for name, env in stored.items()
         },
         "lifecycle": _lifecycle_envelopes(),
+        "handles": _handles(),
     }
 
 
