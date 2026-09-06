@@ -20,7 +20,7 @@ The sibling's surface and amicus's M0 surface disagree in a few places; each is 
 - Prompt inputs never touch disk or argv on the amicus side: `RunSpec.public()` is `spec.json`; the input half streams over the worker's stdin. Codex's own carriers (stdin prompt; `-c developer_instructions` on argv) are disclosed on `amicus_backends`.
 - The worktree prefix `amicus-wt-` and the baseline identity `amicus <amicus@local>` are orchestration policy.
 - `tests/test_codex_result_differential.py` carries `KNOWN_TEMPORARY_DEVIATIONS = {"nonzero_exit": (False, True)}`: for a plain non-zero exit the sibling marked the failure non-retryable while pontonier's default classification marks it retryable; amicus keeps pontonier's default and pins the difference until the sibling and pontonier agree.
-- The effort-rejection check runs inside the CLI-drift gate (a rejected `reasoning_effort` is only reported as such when the CLI's help output still matches the pinned contract); the sibling's code for it is `invalid_reasoning_effort`.
+- The effort-rejection check runs inside the CLI-drift gate (a rejected `reasoning_effort` is only reported as such when the CLI's help output still matches the pinned contract); `invalid_reasoning_effort` is the code amicus itself emits for it (`src/amicus/backends/codex/cli.py`), shared with the sibling.
 
 ## Consequences
 
