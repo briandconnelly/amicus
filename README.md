@@ -12,8 +12,9 @@ Kimi (M3) and Claude Code (M4) still return `backend_unavailable`; the `_async` 
 ```sh
 uv sync
 uv run prek install --prepare-hooks   # one-time local hooks
-uv run ruff check . && uv run ruff format --check . && uv run ty check && uv run pytest
 ```
+
+The gate is defined once, in `AGENTS.md` (Rules, item 2); CI runs it on every supported Python version.
 
 ## Where things are
 

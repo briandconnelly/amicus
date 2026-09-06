@@ -17,11 +17,11 @@ The rules bind; the context after them explains and points elsewhere.
 5. Never run `-m integration` tests unless the maintainer asked for it in the current session; when asked, run them as `AMICUS_REQUIRE_LIVE=1 uv run pytest -m integration --no-cov`.
 6. Never weaken the guard in `tests/conftest.py` that makes the real backend binaries unreachable for unit tests.
 7. Write one implementation plan per milestone and open one draft PR per plan.
-8. Never merge a PR, never approve your own PR, and never commit to `main`; the maintainer merges.
+8. Unless you are the maintainer, never merge a PR and never approve your own PR; never commit to `main`.
 9. Never change `.github/**`, `AGENTS.md` or `CLAUDE.md` inside a milestone plan; those change only in a PR of their own.
 10. When a change touches a category in `FINGERPRINT_COVERS` (`src/amicus/schemas/fingerprint.py`), bump `FINGERPRINT` and regenerate the pins under `tests/fixtures/` in their own commit.
 11. When a stored job result's shape changes, bump `RESULT_FORMAT` in the same file.
-12. Write commit messages and PR titles as Conventional Commits, `type(scope): subject`, with an imperative lowercase subject and no trailing period, using only the types and scopes in `scripts/check_commit_message.py`.
+12. Write commit messages and PR titles as Conventional Commits, `type(scope)?!?: subject` (scope optional, `!` marks a breaking change), with an imperative lowercase subject and no trailing period, using only the types and scopes in `scripts/check_commit_message.py`.
 13. When a change needs a new commit scope, extend `scripts/check_commit_message.py` in that same change.
 14. Pin every `uses:` in a workflow to a full commit SHA with the version in a trailing comment.
 15. Never add a `pull_request_target` workflow.
@@ -47,7 +47,7 @@ CI (`.github/workflows/test.yml`) runs exactly those commands on every supported
 ### How work is organized
 
 The design spec is `docs/superpowers/specs/2026-09-04-amicus-design.md`; its "Milestones" table defines each milestone's scope and gate.
-The execution model, `docs/superpowers/plans/2026-09-04-amicus-execution-model.md`, is the source of rules 7 to 9.
+The execution model, `docs/superpowers/plans/2026-09-04-amicus-execution-model.md`, is the source of rules 7 and 8; rule 9 widens its rule 6 (workflows, CODEOWNERS, AGENTS.md) to the whole `.github/` tree and `CLAUDE.md`, so every governance file changes the same way.
 Each milestone is planned as `docs/superpowers/plans/YYYY-MM-DD-amicus-M<n>-<slug>.md` and executed task by task in a sibling worktree (`~/projects/amicus-wt-<slug>`) on a `feat/` branch.
 Decisions with lasting consequences are ADRs under `docs/adr/`.
 The README's "Where things are" table indexes the rest.
