@@ -158,6 +158,23 @@ def test_delegate_relativizes_redacts_and_bounds(tmp_path):
     assert bounded["meta"]["redacted_paths"] == []
 
 
+def test_delegate_redacts_before_bounding_a_diff_that_still_exceeds_the_budget():
+    """A diff with both a secret-bearing hunk and enough non-secret content to exceed
+    max_delegate_diff_bytes: pins redact-then-bound. Bound-then-redact could leave a
+    partial secret (truncation lands mid-hunk before redaction ever runs) or truncate the
+    marker itself before it can replace the hunk."""
+    secret = "sk-" + "e" * 40
+    secret_hunk = f"diff --git a/.env b/.env\n+API_KEY={secret}\n"
+    padding = "diff --git a/f.py b/f.py\n" + "+x\n" * 200
+    diff = secret_hunk + padding
+    meta = Meta()
+    out = fz.delegate_result(
+        ExecResult(answer="ok"), meta, diff=diff, aliases=(), max_diff_bytes=100
+    )
+    assert secret not in out["diff"]
+    assert out["meta"]["truncated"] is True
+
+
 def test_coerce_findings_drops_malformed_entries():
     findings = fz.coerce_findings(
         [
