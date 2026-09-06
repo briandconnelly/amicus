@@ -17,7 +17,9 @@ The maintainer settled the open choices on 2026-09-06.
 - The sync tools stay unkeyed (ADR 0007, deviation 8); the sibling's keyed-await path is not ported.
 - A twin's run timeout is `AMICUS_JOB_MAX_SECONDS` (default 1800 s), unclamped; the handle's `deadline_seconds` and `meta.timeout_seconds` report it.
 - `amicus_job_list(task_id=...)` is a filter: no match is an empty list.
-  The task map lives at `<AMICUS_STATE_DIR>/tasks.json`; handles, statuses and summaries echo `task_id` by reverse lookup (recording lands in M5).
+  The task map lives at `<AMICUS_STATE_DIR>/tasks.json`.
+  `amicus_job_status`, `amicus_job_list` summaries and delivered results echo `task_id` by reverse lookup in the task map (null until M5 records entries).
+  A `JobStarted` handle carries `task_id` only when the starter supplies it, which M5 wires.
 - A record without a valid `extra.backend` tag was not written by amicus: the job tools report `job_not_found` for it and `amicus_job_list` omits it; nothing deletes it.
 - A job tool's generated error carries the record's backend and kind when resolved, the job deadline as `timeout_seconds`, and the roots state the lookup saw.
 - `amicus_job_cancel` is the store's cancel: SIGTERM, a grace period, SIGKILL of the process group, then guarded removal of the declared worktree; a terminal job is returned unchanged.
