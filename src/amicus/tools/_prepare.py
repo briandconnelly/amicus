@@ -57,12 +57,11 @@ def deadline_advisory(
         return None
     if prompt_bytes <= DEADLINE_ADVISORY_PROMPT_BYTES and effort not in _HIGH_EFFORTS:
         return None
-    # M2: once the async twins are real, recommend them directly.
     return (
         f"This previewed call's prompt size or reasoning effort may exceed the "
-        f"{timeout_seconds}s synchronous deadline; narrow the input or raise "
-        f"timeout_seconds. {async_tool}, the async counterpart that lands in M2, will be "
-        "polled instead of terminated when a run outlasts the deadline."
+        f"{timeout_seconds}s synchronous deadline; narrow the input, raise "
+        f"timeout_seconds, or call {async_tool}: a background job is polled instead of "
+        "terminated and runs to its own deadline (AMICUS_JOB_MAX_SECONDS)."
     )
 
 
@@ -97,6 +96,7 @@ async def prepare_run(
     model: str | None,
     reasoning_effort: str | None,
     timeout_seconds: int | None,
+    background: bool = False,
     instructions_append: str | None = None,
     extra_context: str | None = None,
     question: str | None = None,
@@ -126,8 +126,12 @@ async def prepare_run(
     model_v = model or defaults.get("model")
     effort_from_config = reasoning_effort is None
     effort = reasoning_effort if reasoning_effort is not None else defaults.get("reasoning_effort")
-    timeout = clamp_timeout(
-        timeout_seconds if timeout_seconds is not None else settings.timeout_seconds
+    timeout = (
+        settings.job_max_seconds
+        if background
+        else clamp_timeout(
+            timeout_seconds if timeout_seconds is not None else settings.timeout_seconds
+        )
     )
 
     roots, roots_source = await ws.roots_from_ctx(ctx)

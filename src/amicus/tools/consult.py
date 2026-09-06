@@ -45,29 +45,12 @@ _DESC = (
 _ASYNC_DESC = (
     f"{_resolve.PAID_MARKER} Async twin of amicus_consult: returns a job handle "
     f"immediately; poll amicus_job_status, read amicus_job_result. {_EGRESS} Starting a "
-    "job commits to spend."
+    "job commits to spend. The job runs to AMICUS_JOB_MAX_SECONDS (default 1800s); "
+    "idempotency_key dedups a retry."
 )
 
 
 def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tuple[str, ...]:
-    async def _async_run(
-        tool_name: str, backend: str, question: str, options: Any
-    ) -> dict[str, Any]:
-        err = _resolve.blank_input_error(question, "question", tool_name, settings, backend)
-        if err is not None:
-            return err
-        resolved = _resolve.resolve_paid_call(
-            registry=registry,
-            settings=settings,
-            tool_name=tool_name,
-            verb="consult",
-            backend=backend,
-            backend_options=options,
-        )
-        if isinstance(resolved, dict):
-            return resolved
-        return _resolve.not_implemented(tool_name, settings, backend)
-
     @app.tool(
         name="amicus_consult",
         annotations=annotations_for("active", settings),
@@ -135,6 +118,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
     async def amicus_consult_async(
         backend: BackendParam,
         question: QuestionParam,
+        ctx: Context | None = None,
         workspace_root: WorkspaceRootParam = None,
         extra_context: ExtraContextParam = None,
         instructions_append: InstructionsAppendParam = None,
@@ -144,6 +128,37 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
         backend_options: BackendOptionsParam = None,
     ) -> dict[str, Any]:
         """Start a background consult on the selected backend."""
-        return await _async_run("amicus_consult_async", backend, question, backend_options)
+        err = _resolve.blank_input_error(
+            question, "question", "amicus_consult_async", settings, backend
+        )
+        if err is not None:
+            return err
+        prep = await prepare_run(
+            registry=registry,
+            settings=settings,
+            tool_name="amicus_consult_async",
+            verb="consult",
+            backend=backend,
+            backend_options=backend_options,
+            ctx=ctx,
+            workspace_root=workspace_root,
+            model=model,
+            reasoning_effort=reasoning_effort,
+            timeout_seconds=None,
+            background=True,
+            instructions_append=instructions_append,
+            extra_context=extra_context,
+            question=question,
+        )
+        if isinstance(prep, dict):
+            return prep
+        return await lifecycle.start_async(
+            lifecycle.job_store(settings),
+            prep.spec,
+            prep.meta,
+            prep.plugin,
+            deadline=prep.spec.timeout_seconds,
+            idempotency_key=idempotency_key,
+        )
 
     return ("amicus_consult", "amicus_consult_async")
