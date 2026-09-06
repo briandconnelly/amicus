@@ -148,3 +148,29 @@ def live_codex(monkeypatch, tmp_path):
     if status.returncode != 0:
         (pytest.fail if require else pytest.skip)("codex is not logged in")
     return codex
+
+
+@pytest.fixture
+def live_kimi(monkeypatch, tmp_path):
+    """Opt back into the real kimi CLI for `-m integration` tests. Skips when kimi is absent
+    or has no provider, unless AMICUS_REQUIRE_LIVE=1 makes that a failure."""
+    import json
+    import shutil
+    import subprocess
+
+    monkeypatch.delenv("AMICUS_KIMI_BIN", raising=False)
+    monkeypatch.setenv("AMICUS_STATE_DIR", str(tmp_path / "state"))
+    require = os.environ.get("AMICUS_REQUIRE_LIVE") == "1"
+    kimi = shutil.which("kimi")
+    if kimi is None:
+        (pytest.fail if require else pytest.skip)("kimi CLI not installed")
+    probe = subprocess.run(
+        [kimi, "provider", "list", "--json"], capture_output=True, text=True, check=False
+    )
+    try:
+        providers = json.loads(probe.stdout).get("providers") or {}
+    except (json.JSONDecodeError, AttributeError):
+        providers = {}
+    if probe.returncode != 0 or not providers:
+        (pytest.fail if require else pytest.skip)("kimi has no configured provider")
+    return kimi

@@ -20,4 +20,20 @@ Its outcome is recorded below after the run.
 
 ## Live gate outcome
 
-(filled in by Task 9)
+Run once (2026-09-06, per Task 9), against the maintainer's real kimi 0.41.0 with one configured provider (`runpod`, model `moonshotai/Kimi-K3`):
+
+```
+AMICUS_REQUIRE_LIVE=1 uv run pytest -m integration --no-cov tests/test_kimi_live.py -v
+```
+
+All 6 tests passed in 109.78s.
+
+- `test_backends_reports_kimi_ready_live` PASSED — `amicus_backends` reported `available=True`, `installed=True`, `authenticated=True`, a `version` starting `0.41`, and no warnings; `amicus_models` reported `source="live"` with a non-empty model list.
+- `test_consult_outside_a_repo_live` PASSED — a consult with `workspace_root` outside a git repo succeeded with `ok=True`, a non-empty summary, a session id, a job id, and `meta.security_warnings == [NO_REPO_WARNING]`.
+- `test_read_only_profile_is_enforced_live` PASSED — asked to list its exact tool names, the model's reply, split and lowercased, excluded `bash`, `write`, `edit`, `shell` and included at least one of `read`, `glob`, `grep`.
+  The test asserts only on the parsed name set and did not print the raw reply, and no failure occurred, so the assertion's own pass is the only evidence this run produced: the literal comma-separated list the model returned was not captured to a log, and a second live call to capture it verbatim was not made, since the maintainer authorized exactly one live run for this milestone.
+- `test_review_changes_live` PASSED — `amicus_review_changes` returned `ok=True`, `review_status="completed"`, a verdict in the allowed set, and `meta.context_summary.files_changed == 1`.
+- `test_delegate_live` PASSED — `amicus_delegate` returned `ok=True` with a non-empty diff, left the working-tree file unchanged, and left no worktree registered afterward.
+- `test_unknown_model_alias_is_invalid_model_live` PASSED — an unknown model alias was refused pre-spend with `error.code == "invalid_model"`.
+
+No failure envelope was produced; the release-blocker and model-quality-retry procedures were not triggered.
