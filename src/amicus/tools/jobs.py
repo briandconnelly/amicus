@@ -197,8 +197,8 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
         meta=lifecycle_meta("amicus_job_list"),
         description=(
             f"{FREE_MARKER} List the jobs known for this workspace, newest first, across all "
-            "backends; narrow with `backend`, `status`, or `task_id` (the tasks-extension id "
-            "recorded at task creation; no match is an empty list). Only an explicit `limit` "
+            "backends; narrow with `backend`, `status`, or `task_id` (no match is an empty "
+            "list). Only an explicit `limit` "
             f"truncates (truncated: true, no cursor). {_RETENTION}"
         ),
     )
