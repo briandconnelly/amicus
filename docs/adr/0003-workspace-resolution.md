@@ -1,6 +1,6 @@
 # ADR 0003: Workspace resolution never silently falls back to the server cwd
 
-**Status:** Proposed (2026-09-04; implemented in M1)
+**Status:** Accepted (2026-09-05, implemented in M1)
 
 ## Context
 
@@ -15,4 +15,4 @@ The server cwd is used only under `AMICUS_ALLOW_CWD_WORKSPACE=1`, and then the r
 ## Consequences
 
 - Sessionless (2026-07-28) clients must pass `workspace_root`; the parameter description says so.
-- M1 implements the resolver and the roots probe; M0 declares the setting.
+- M1 implements the resolver (orchestration/workspace.py) and the handshake-era roots probe; a sessionless client without workspace_root receives invalid_workspace_root with zero spend.

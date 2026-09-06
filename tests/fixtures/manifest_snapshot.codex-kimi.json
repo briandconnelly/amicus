@@ -59,6 +59,7 @@
       "unsupported_isolation",
       "unsupported_sandbox",
       "unsupported_tier",
+      "user_config_rejected",
       "workspace_outside_roots",
       "worktree_error"
     ],
@@ -118,6 +119,7 @@
       "redacted_paths",
       "usage",
       "context_summary",
+      "instructions_append",
       "job_id",
       "job_kind",
       "task_id",
@@ -168,12 +170,22 @@
           "invalid_arguments",
           "invalid_workspace_root",
           "workspace_outside_roots",
+          "unexpanded_env_placeholder",
           "input_too_large",
+          "invalid_reasoning_effort",
           "timeout",
           "nonzero_exit",
+          "backend_not_found",
           "backend_auth_required",
           "backend_rate_limited",
-          "not_implemented"
+          "cli_contract_changed",
+          "extra_args_rejected",
+          "user_config_rejected",
+          "internal_error",
+          "job_failed",
+          "job_cancelled",
+          "job_timeout",
+          "job_result_incompatible"
         ],
         "key_optional_params": [
           "backend_options",
@@ -207,11 +219,18 @@
           "invalid_arguments",
           "invalid_workspace_root",
           "workspace_outside_roots",
+          "unexpanded_env_placeholder",
           "input_too_large",
+          "invalid_reasoning_effort",
           "timeout",
           "nonzero_exit",
+          "backend_not_found",
           "backend_auth_required",
           "backend_rate_limited",
+          "cli_contract_changed",
+          "extra_args_rejected",
+          "user_config_rejected",
+          "internal_error",
           "not_implemented",
           "idempotency_conflict",
           "idempotency_in_progress"
@@ -247,17 +266,30 @@
           "invalid_arguments",
           "invalid_workspace_root",
           "workspace_outside_roots",
+          "unexpanded_env_placeholder",
           "input_too_large",
+          "invalid_reasoning_effort",
           "timeout",
           "nonzero_exit",
+          "backend_not_found",
           "backend_auth_required",
           "backend_rate_limited",
-          "not_implemented",
+          "cli_contract_changed",
+          "extra_args_rejected",
+          "user_config_rejected",
+          "internal_error",
+          "invalid_scope",
           "invalid_base",
           "invalid_commit",
           "invalid_paths",
           "not_a_git_repo",
-          "context_too_large"
+          "git_unavailable",
+          "invalid_json",
+          "schema_violation",
+          "job_failed",
+          "job_cancelled",
+          "job_timeout",
+          "job_result_incompatible"
         ],
         "key_optional_params": [
           "backend_options",
@@ -296,16 +328,27 @@
           "invalid_arguments",
           "invalid_workspace_root",
           "workspace_outside_roots",
+          "unexpanded_env_placeholder",
           "input_too_large",
+          "invalid_reasoning_effort",
           "timeout",
           "nonzero_exit",
+          "backend_not_found",
           "backend_auth_required",
           "backend_rate_limited",
+          "cli_contract_changed",
+          "extra_args_rejected",
+          "user_config_rejected",
+          "internal_error",
           "not_implemented",
+          "invalid_scope",
           "invalid_base",
           "invalid_commit",
           "invalid_paths",
           "not_a_git_repo",
+          "git_unavailable",
+          "invalid_json",
+          "schema_violation",
           "context_too_large",
           "idempotency_conflict",
           "idempotency_in_progress"
@@ -345,15 +388,25 @@
           "invalid_arguments",
           "invalid_workspace_root",
           "workspace_outside_roots",
+          "unexpanded_env_placeholder",
           "input_too_large",
+          "invalid_reasoning_effort",
           "timeout",
           "nonzero_exit",
+          "backend_not_found",
           "backend_auth_required",
           "backend_rate_limited",
-          "not_implemented",
+          "cli_contract_changed",
+          "extra_args_rejected",
+          "user_config_rejected",
+          "internal_error",
           "not_a_git_repo",
           "git_unavailable",
-          "worktree_error"
+          "worktree_error",
+          "job_failed",
+          "job_cancelled",
+          "job_timeout",
+          "job_result_incompatible"
         ],
         "key_optional_params": [
           "backend_options",
@@ -384,11 +437,18 @@
           "invalid_arguments",
           "invalid_workspace_root",
           "workspace_outside_roots",
+          "unexpanded_env_placeholder",
           "input_too_large",
+          "invalid_reasoning_effort",
           "timeout",
           "nonzero_exit",
+          "backend_not_found",
           "backend_auth_required",
           "backend_rate_limited",
+          "cli_contract_changed",
+          "extra_args_rejected",
+          "user_config_rejected",
+          "internal_error",
           "not_implemented",
           "not_a_git_repo",
           "git_unavailable",
@@ -423,16 +483,27 @@
           "invalid_arguments",
           "invalid_workspace_root",
           "workspace_outside_roots",
+          "unexpanded_env_placeholder",
           "input_too_large",
+          "invalid_reasoning_effort",
           "timeout",
           "nonzero_exit",
+          "backend_not_found",
           "backend_auth_required",
           "backend_rate_limited",
+          "cli_contract_changed",
+          "extra_args_rejected",
+          "user_config_rejected",
+          "internal_error",
           "not_implemented",
+          "invalid_scope",
           "invalid_base",
           "invalid_commit",
           "invalid_paths",
           "not_a_git_repo",
+          "git_unavailable",
+          "invalid_json",
+          "schema_violation",
           "context_too_large"
         ],
         "key_optional_params": [
@@ -471,16 +542,27 @@
           "invalid_arguments",
           "invalid_workspace_root",
           "workspace_outside_roots",
+          "unexpanded_env_placeholder",
           "input_too_large",
+          "invalid_reasoning_effort",
           "timeout",
           "nonzero_exit",
+          "backend_not_found",
           "backend_auth_required",
           "backend_rate_limited",
+          "cli_contract_changed",
+          "extra_args_rejected",
+          "user_config_rejected",
+          "internal_error",
           "not_implemented",
+          "invalid_scope",
           "invalid_base",
           "invalid_commit",
           "invalid_paths",
           "not_a_git_repo",
+          "git_unavailable",
+          "invalid_json",
+          "schema_violation",
           "context_too_large",
           "idempotency_conflict",
           "idempotency_in_progress"
@@ -520,8 +602,16 @@
           "backend_unavailable",
           "invalid_arguments",
           "invalid_workspace_root",
+          "workspace_outside_roots",
+          "unexpanded_env_placeholder",
+          "input_too_large",
+          "invalid_reasoning_effort",
+          "invalid_scope",
+          "invalid_base",
+          "invalid_commit",
+          "invalid_paths",
           "not_a_git_repo",
-          "not_implemented"
+          "git_unavailable"
         ],
         "key_optional_params": [
           "scope",
@@ -549,8 +639,14 @@
           "backend_unavailable",
           "feature_unsupported",
           "invalid_arguments",
+          "invalid_workspace_root",
+          "workspace_outside_roots",
+          "unexpanded_env_placeholder",
+          "input_too_large",
+          "invalid_reasoning_effort",
           "not_a_git_repo",
-          "not_implemented"
+          "git_unavailable",
+          "worktree_error"
         ],
         "key_optional_params": [
           "workspace_root",
@@ -785,7 +881,7 @@
           "stability": "alpha"
         },
         "dev.bconnelly.amicus/triage": {
-          "size_bytes": 10428
+          "size_bytes": 11049
         }
       },
       "mimeType": "application/schema+json",
@@ -979,6 +1075,7 @@
                   "unsupported_isolation",
                   "unsupported_sandbox",
                   "unsupported_tier",
+                  "user_config_rejected",
                   "workspace_outside_roots",
                   "worktree_error"
                 ],
@@ -1094,6 +1191,28 @@
               }
             },
             "title": "ErrorInfo",
+            "type": "object"
+          },
+          "InstructionsFingerprint": {
+            "additionalProperties": false,
+            "description": "What a result discloses about `instructions_append`: a digest and a byte count,\nnever the text (the parameter contract promises only a fingerprint is echoed).",
+            "properties": {
+              "bytes": {
+                "minimum": 1,
+                "title": "Bytes",
+                "type": "integer"
+              },
+              "sha256": {
+                "pattern": "^[0-9a-f]{64}$",
+                "title": "Sha256",
+                "type": "string"
+              }
+            },
+            "required": [
+              "bytes",
+              "sha256"
+            ],
+            "title": "InstructionsFingerprint",
             "type": "object"
           },
           "InvalidArgument": {
@@ -1215,7 +1334,7 @@
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-1",
+                "default": "amicus/0.1/schema-2",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -1231,6 +1350,17 @@
                 ],
                 "default": null,
                 "title": "Idempotency Replayed"
+              },
+              "instructions_append": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/InstructionsFingerprint"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
               },
               "job_id": {
                 "anyOf": [
@@ -1765,7 +1895,7 @@
           "stability": "alpha"
         },
         "dev.bconnelly.amicus/triage": {
-          "size_bytes": 10428
+          "size_bytes": 11049
         }
       },
       "description": "The full ErrorResult schema; tool outputSchemas carry only an opaque error branch.",
@@ -1795,7 +1925,7 @@
           "stability": "alpha"
         },
         "dev.bconnelly.amicus/triage": {
-          "size_bytes": 4652
+          "size_bytes": 5249
         }
       },
       "description": "The full Meta schema every success envelope's opaque `meta` points at.",
@@ -1812,7 +1942,7 @@
           "stability": "alpha"
         },
         "dev.bconnelly.amicus/triage": {
-          "size_bytes": 4652
+          "size_bytes": 5249
         }
       },
       "mimeType": "application/schema+json",
@@ -1838,6 +1968,28 @@
               }
             },
             "title": "ContextSummary",
+            "type": "object"
+          },
+          "InstructionsFingerprint": {
+            "additionalProperties": false,
+            "description": "What a result discloses about `instructions_append`: a digest and a byte count,\nnever the text (the parameter contract promises only a fingerprint is echoed).",
+            "properties": {
+              "bytes": {
+                "minimum": 1,
+                "title": "Bytes",
+                "type": "integer"
+              },
+              "sha256": {
+                "pattern": "^[0-9a-f]{64}$",
+                "title": "Sha256",
+                "type": "string"
+              }
+            },
+            "required": [
+              "bytes",
+              "sha256"
+            ],
+            "title": "InstructionsFingerprint",
             "type": "object"
           },
           "Usage": {
@@ -1999,7 +2151,7 @@
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-1",
+            "default": "amicus/0.1/schema-2",
             "title": "Fingerprint",
             "type": "string"
           },
@@ -2015,6 +2167,17 @@
             ],
             "default": null,
             "title": "Idempotency Replayed"
+          },
+          "instructions_append": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/InstructionsFingerprint"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           },
           "job_id": {
             "anyOf": [

@@ -65,6 +65,13 @@ _LOCAL_RULES: dict[str, RepairRule] = {
         "This backend does not support this verb; amicus_backends lists each backend's "
         "features. Pick a backend that declares it.",
     ),
+    "user_config_rejected": RepairRule(
+        "correct_config",
+        None,
+        False,
+        "The backend CLI refused to start because of a key or value in the user's own CLI "
+        "config; fix that setting (the message names it), then retry. No model call was made.",
+    ),
 }
 
 # Prose that must name amicus tools rather than a sibling's.

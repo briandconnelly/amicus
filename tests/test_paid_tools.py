@@ -8,7 +8,7 @@ from jsonschema import Draft202012Validator
 from tests.support import fakeplugin
 
 from amicus import config, server, tools
-from amicus.registry import BackendRegistry
+from amicus.registry import BackendRegistry, UnavailableBackend
 from amicus.schemas import params
 from amicus.tools import _resolve
 
@@ -26,9 +26,23 @@ VALID = {
 
 def _app(env: dict | None = None, registry: BackendRegistry | None = None):
     # None -> create_app's own BackendRegistry.load(settings.enabled_backends), which
-    # tries to import the not-yet-shipped in-tree backend packages and records each as
-    # import_failed -- the realistic "no backend landed yet" state this milestone is in.
+    # tries to import the not-yet-shipped in-tree backend packages. The codex package exists
+    # but its plugin factory lands in Task 6, so the registry records it as load_failed;
+    # kimi/claude stay import_failed. This is the realistic intermediate state this milestone is in.
     return server.create_app(config.settings(env or {}), registry)
+
+
+def _no_backends_registry() -> BackendRegistry:
+    # codex shipped its plugin factory in M1 (Task 6), so the real load path now loads it
+    # for real; an explicit no-plugins registry keeps this test proving the
+    # backend_unavailable envelope rather than falling through to not_implemented.
+    return BackendRegistry(
+        {},
+        {
+            "codex": UnavailableBackend("codex", "import_failed", "x"),
+            "claude": UnavailableBackend("claude", "import_failed", "x"),
+        },
+    )
 
 
 def _fake_registry() -> BackendRegistry:
@@ -68,7 +82,7 @@ async def test_backend_enum_is_the_v1_set():
 
 @pytest.mark.parametrize("name", sorted(VALID))
 async def test_without_a_loaded_backend_every_paid_tool_reports_backend_unavailable(name):
-    app = _app()
+    app = _app(registry=_no_backends_registry())
     async with Client(app) as c:
         res = await c.call_tool(name, VALID[name], raise_on_error=False)
         tool = next(t for t in await c.list_tools() if t.name == name)
@@ -77,7 +91,7 @@ async def test_without_a_loaded_backend_every_paid_tool_reports_backend_unavaila
     assert err["code"] == "backend_unavailable"
     assert err["backend"] == VALID[name]["backend"]
     assert err["repair"]["tool"] == "amicus_backends"
-    assert "import_failed" in err["message"]
+    assert "unavailable" in err["message"]
     assert res.structured_content["meta"]["backend"] == VALID[name]["backend"]
     Draft202012Validator(tool.output_schema).validate(res.structured_content)
 
@@ -91,8 +105,11 @@ async def test_live_tool_error_request_id_mirrors_meta_request_id():
     assert sc["error"]["request_id"] == sc["meta"]["request_id"]
 
 
-@pytest.mark.parametrize("name", sorted(VALID))
-async def test_with_a_loaded_backend_every_paid_tool_is_not_implemented_yet(name):
+ASYNC_TOOLS = tuple(n for n in VALID if n.endswith("_async"))
+
+
+@pytest.mark.parametrize("name", sorted(ASYNC_TOOLS))
+async def test_with_a_loaded_backend_every_async_tool_is_not_implemented_until_m2(name):
     app = _app(registry=_fake_registry())
     async with Client(app) as c:
         res = await c.call_tool(name, VALID[name], raise_on_error=False)
@@ -101,6 +118,15 @@ async def test_with_a_loaded_backend_every_paid_tool_is_not_implemented_yet(name
     assert err["code"] == "not_implemented", err
     assert err["temporary"] is False and err["repair"]["tool"] == "amicus_capabilities"
     Draft202012Validator(tool.output_schema).validate(res.structured_content)
+
+
+async def test_sync_tools_need_a_workspace_from_a_sessionless_client():
+    app = _app(registry=_fake_registry())
+    async with Client(app) as c:
+        res = await c.call_tool("amicus_consult", VALID["amicus_consult"], raise_on_error=False)
+    err = res.structured_content["error"]
+    assert err["code"] == "invalid_workspace_root" and err["details"]["field"] == "workspace_root"
+    assert res.structured_content["meta"]["roots_source"] == "not_negotiated"
 
 
 async def test_feature_gating():

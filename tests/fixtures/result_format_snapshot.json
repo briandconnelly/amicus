@@ -1,0 +1,2896 @@
+{
+  "result_format": 1,
+  "schemas": {
+    "ConsultResult": {
+      "$defs": {
+        "ContextSummary": {
+          "additionalProperties": false,
+          "properties": {
+            "files_changed": {
+              "default": 0,
+              "title": "Files Changed",
+              "type": "integer"
+            },
+            "lines_added": {
+              "default": 0,
+              "title": "Lines Added",
+              "type": "integer"
+            },
+            "lines_removed": {
+              "default": 0,
+              "title": "Lines Removed",
+              "type": "integer"
+            }
+          },
+          "title": "ContextSummary",
+          "type": "object"
+        },
+        "Finding": {
+          "additionalProperties": false,
+          "properties": {
+            "evidence": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Evidence"
+            },
+            "file": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "File"
+            },
+            "line": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Line"
+            },
+            "severity": {
+              "default": "medium",
+              "enum": [
+                "critical",
+                "high",
+                "medium",
+                "low",
+                "nit"
+              ],
+              "title": "Severity",
+              "type": "string"
+            },
+            "suggestion": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Suggestion"
+            },
+            "title": {
+              "title": "Title",
+              "type": "string"
+            }
+          },
+          "required": [
+            "title"
+          ],
+          "title": "Finding",
+          "type": "object"
+        },
+        "InstructionsFingerprint": {
+          "additionalProperties": false,
+          "properties": {
+            "bytes": {
+              "minimum": 1,
+              "title": "Bytes",
+              "type": "integer"
+            },
+            "sha256": {
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Sha256",
+              "type": "string"
+            }
+          },
+          "required": [
+            "sha256",
+            "bytes"
+          ],
+          "title": "InstructionsFingerprint",
+          "type": "object"
+        },
+        "Meta": {
+          "additionalProperties": false,
+          "properties": {
+            "backend": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "pattern": "^[a-z][a-z0-9_]*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Backend"
+            },
+            "backend_details": {
+              "anyOf": [
+                {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Backend Details"
+            },
+            "command_exit_code": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Command Exit Code"
+            },
+            "compat_warnings": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Compat Warnings",
+              "type": "array"
+            },
+            "context_summary": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ContextSummary"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "cwd": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Cwd"
+            },
+            "elapsed_ms": {
+              "default": 0,
+              "title": "Elapsed Ms",
+              "type": "integer"
+            },
+            "fingerprint": {
+              "default": "<fingerprint>",
+              "title": "Fingerprint",
+              "type": "string"
+            },
+            "idempotency_replayed": {
+              "anyOf": [
+                {
+                  "const": true,
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Idempotency Replayed"
+            },
+            "instructions_append": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/InstructionsFingerprint"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "job_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Job Id"
+            },
+            "job_kind": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Job Kind"
+            },
+            "model": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Model"
+            },
+            "reasoning_effort": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Reasoning Effort"
+            },
+            "redacted_paths": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Redacted Paths",
+              "type": "array"
+            },
+            "request_id": {
+              "title": "Request Id",
+              "type": "string"
+            },
+            "roots_source": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "client",
+                    "not_negotiated",
+                    "probe_failed"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Roots Source"
+            },
+            "security_warnings": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Security Warnings",
+              "type": "array"
+            },
+            "server_version": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Server Version"
+            },
+            "session_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Session Id"
+            },
+            "task_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Task Id"
+            },
+            "timeout_seconds": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Timeout Seconds"
+            },
+            "truncated": {
+              "default": false,
+              "title": "Truncated",
+              "type": "boolean"
+            },
+            "truncation_hint": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Truncation Hint"
+            },
+            "usage": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Usage"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "workspace_source": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "param",
+                    "roots",
+                    "cwd"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Workspace Source"
+            },
+            "workspace_warning": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Workspace Warning"
+            }
+          },
+          "title": "Meta",
+          "type": "object"
+        },
+        "RawResponse": {
+          "additionalProperties": false,
+          "properties": {
+            "model": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Model"
+            },
+            "session_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Session Id"
+            },
+            "text": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Text"
+            }
+          },
+          "title": "RawResponse",
+          "type": "object"
+        },
+        "Usage": {
+          "additionalProperties": false,
+          "properties": {
+            "cache_creation_input_tokens": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Cache Creation Input Tokens"
+            },
+            "cached_input_tokens": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Cached Input Tokens"
+            },
+            "cost_usd": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Cost Usd"
+            },
+            "input_tokens": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Input Tokens"
+            },
+            "output_tokens": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Output Tokens"
+            },
+            "total_tokens": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Total Tokens"
+            }
+          },
+          "title": "Usage",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "assumptions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Assumptions",
+          "type": "array"
+        },
+        "findings": {
+          "items": {
+            "$ref": "#/$defs/Finding"
+          },
+          "title": "Findings",
+          "type": "array"
+        },
+        "meta": {
+          "$ref": "#/$defs/Meta"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Next Steps",
+          "type": "array"
+        },
+        "ok": {
+          "const": true,
+          "default": true,
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "questions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Questions",
+          "type": "array"
+        },
+        "raw_response": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RawResponse"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "tool": {
+          "const": "amicus_consult",
+          "default": "amicus_consult",
+          "title": "Tool",
+          "type": "string"
+        }
+      },
+      "required": [
+        "meta",
+        "summary"
+      ],
+      "title": "ConsultResult",
+      "type": "object"
+    },
+    "DelegateResult": {
+      "$defs": {
+        "ContextSummary": {
+          "additionalProperties": false,
+          "properties": {
+            "files_changed": {
+              "default": 0,
+              "title": "Files Changed",
+              "type": "integer"
+            },
+            "lines_added": {
+              "default": 0,
+              "title": "Lines Added",
+              "type": "integer"
+            },
+            "lines_removed": {
+              "default": 0,
+              "title": "Lines Removed",
+              "type": "integer"
+            }
+          },
+          "title": "ContextSummary",
+          "type": "object"
+        },
+        "Finding": {
+          "additionalProperties": false,
+          "properties": {
+            "evidence": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Evidence"
+            },
+            "file": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "File"
+            },
+            "line": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Line"
+            },
+            "severity": {
+              "default": "medium",
+              "enum": [
+                "critical",
+                "high",
+                "medium",
+                "low",
+                "nit"
+              ],
+              "title": "Severity",
+              "type": "string"
+            },
+            "suggestion": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Suggestion"
+            },
+            "title": {
+              "title": "Title",
+              "type": "string"
+            }
+          },
+          "required": [
+            "title"
+          ],
+          "title": "Finding",
+          "type": "object"
+        },
+        "InstructionsFingerprint": {
+          "additionalProperties": false,
+          "properties": {
+            "bytes": {
+              "minimum": 1,
+              "title": "Bytes",
+              "type": "integer"
+            },
+            "sha256": {
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Sha256",
+              "type": "string"
+            }
+          },
+          "required": [
+            "sha256",
+            "bytes"
+          ],
+          "title": "InstructionsFingerprint",
+          "type": "object"
+        },
+        "Meta": {
+          "additionalProperties": false,
+          "properties": {
+            "backend": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "pattern": "^[a-z][a-z0-9_]*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Backend"
+            },
+            "backend_details": {
+              "anyOf": [
+                {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Backend Details"
+            },
+            "command_exit_code": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Command Exit Code"
+            },
+            "compat_warnings": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Compat Warnings",
+              "type": "array"
+            },
+            "context_summary": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ContextSummary"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "cwd": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Cwd"
+            },
+            "elapsed_ms": {
+              "default": 0,
+              "title": "Elapsed Ms",
+              "type": "integer"
+            },
+            "fingerprint": {
+              "default": "<fingerprint>",
+              "title": "Fingerprint",
+              "type": "string"
+            },
+            "idempotency_replayed": {
+              "anyOf": [
+                {
+                  "const": true,
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Idempotency Replayed"
+            },
+            "instructions_append": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/InstructionsFingerprint"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "job_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Job Id"
+            },
+            "job_kind": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Job Kind"
+            },
+            "model": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Model"
+            },
+            "reasoning_effort": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Reasoning Effort"
+            },
+            "redacted_paths": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Redacted Paths",
+              "type": "array"
+            },
+            "request_id": {
+              "title": "Request Id",
+              "type": "string"
+            },
+            "roots_source": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "client",
+                    "not_negotiated",
+                    "probe_failed"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Roots Source"
+            },
+            "security_warnings": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Security Warnings",
+              "type": "array"
+            },
+            "server_version": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Server Version"
+            },
+            "session_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Session Id"
+            },
+            "task_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Task Id"
+            },
+            "timeout_seconds": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Timeout Seconds"
+            },
+            "truncated": {
+              "default": false,
+              "title": "Truncated",
+              "type": "boolean"
+            },
+            "truncation_hint": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Truncation Hint"
+            },
+            "usage": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Usage"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "workspace_source": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "param",
+                    "roots",
+                    "cwd"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Workspace Source"
+            },
+            "workspace_warning": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Workspace Warning"
+            }
+          },
+          "title": "Meta",
+          "type": "object"
+        },
+        "RawResponse": {
+          "additionalProperties": false,
+          "properties": {
+            "model": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Model"
+            },
+            "session_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Session Id"
+            },
+            "text": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Text"
+            }
+          },
+          "title": "RawResponse",
+          "type": "object"
+        },
+        "Usage": {
+          "additionalProperties": false,
+          "properties": {
+            "cache_creation_input_tokens": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Cache Creation Input Tokens"
+            },
+            "cached_input_tokens": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Cached Input Tokens"
+            },
+            "cost_usd": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Cost Usd"
+            },
+            "input_tokens": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Input Tokens"
+            },
+            "output_tokens": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Output Tokens"
+            },
+            "total_tokens": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Total Tokens"
+            }
+          },
+          "title": "Usage",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "assumptions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Assumptions",
+          "type": "array"
+        },
+        "diff": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Diff"
+        },
+        "diffstat": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Diffstat"
+        },
+        "findings": {
+          "items": {
+            "$ref": "#/$defs/Finding"
+          },
+          "title": "Findings",
+          "type": "array"
+        },
+        "meta": {
+          "$ref": "#/$defs/Meta"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Next Steps",
+          "type": "array"
+        },
+        "ok": {
+          "const": true,
+          "default": true,
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "questions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Questions",
+          "type": "array"
+        },
+        "raw_response": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RawResponse"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "tool": {
+          "const": "amicus_delegate",
+          "default": "amicus_delegate",
+          "title": "Tool",
+          "type": "string"
+        }
+      },
+      "required": [
+        "meta",
+        "summary",
+        "diff"
+      ],
+      "title": "DelegateResult",
+      "type": "object"
+    },
+    "ErrorResult": {
+      "$defs": {
+        "ContextSummary": {
+          "additionalProperties": false,
+          "properties": {
+            "files_changed": {
+              "default": 0,
+              "title": "Files Changed",
+              "type": "integer"
+            },
+            "lines_added": {
+              "default": 0,
+              "title": "Lines Added",
+              "type": "integer"
+            },
+            "lines_removed": {
+              "default": 0,
+              "title": "Lines Removed",
+              "type": "integer"
+            }
+          },
+          "title": "ContextSummary",
+          "type": "object"
+        },
+        "ErrorDetail": {
+          "additionalProperties": false,
+          "properties": {
+            "allowed_values": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Allowed Values"
+            },
+            "field": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Field"
+            },
+            "field_withheld": {
+              "default": false,
+              "title": "Field Withheld",
+              "type": "boolean"
+            },
+            "fields": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "type": "array",
+                  "uniqueItems": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Fields"
+            },
+            "reason": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Reason"
+            }
+          },
+          "title": "ErrorDetail",
+          "type": "object"
+        },
+        "ErrorInfo": {
+          "additionalProperties": false,
+          "properties": {
+            "actual_bytes": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Actual Bytes"
+            },
+            "backend": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "pattern": "^[a-z][a-z0-9_]*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Backend"
+            },
+            "candidate_roots": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Candidate Roots"
+            },
+            "code": {
+              "enum": [
+                "backend_auth_indeterminate",
+                "backend_auth_required",
+                "backend_not_found",
+                "backend_rate_limited",
+                "backend_unavailable",
+                "cli_contract_changed",
+                "context_too_large",
+                "empty_response",
+                "extra_args_rejected",
+                "feature_unsupported",
+                "git_unavailable",
+                "idempotency_conflict",
+                "idempotency_in_progress",
+                "idempotency_result_unavailable",
+                "input_too_large",
+                "internal_error",
+                "invalid_arguments",
+                "invalid_base",
+                "invalid_commit",
+                "invalid_json",
+                "invalid_model",
+                "invalid_paths",
+                "invalid_reasoning_effort",
+                "invalid_scope",
+                "invalid_workspace_root",
+                "job_cancelled",
+                "job_failed",
+                "job_not_found",
+                "job_result_incompatible",
+                "job_running",
+                "job_timeout",
+                "nonzero_exit",
+                "not_a_git_repo",
+                "not_implemented",
+                "resource_not_found",
+                "schema_violation",
+                "timeout",
+                "unexpanded_env_placeholder",
+                "unsupported_detail",
+                "unsupported_isolation",
+                "unsupported_sandbox",
+                "unsupported_tier",
+                "user_config_rejected",
+                "workspace_outside_roots",
+                "worktree_error"
+              ],
+              "title": "Code",
+              "type": "string"
+            },
+            "details": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ErrorDetail"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "invalid_arguments": {
+              "anyOf": [
+                {
+                  "items": {
+                    "$ref": "#/$defs/InvalidArgument"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Invalid Arguments"
+            },
+            "limit_bytes": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Limit Bytes"
+            },
+            "message": {
+              "title": "Message",
+              "type": "string"
+            },
+            "repair": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Repair"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "request_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Request Id"
+            },
+            "resource_uri": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Resource Uri"
+            },
+            "retry_after_ms": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Retry After Ms"
+            },
+            "temporary": {
+              "title": "Temporary",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "code",
+            "message",
+            "backend",
+            "temporary",
+            "retry_after_ms"
+          ],
+          "title": "ErrorInfo",
+          "type": "object"
+        },
+        "InstructionsFingerprint": {
+          "additionalProperties": false,
+          "properties": {
+            "bytes": {
+              "minimum": 1,
+              "title": "Bytes",
+              "type": "integer"
+            },
+            "sha256": {
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Sha256",
+              "type": "string"
+            }
+          },
+          "required": [
+            "sha256",
+            "bytes"
+          ],
+          "title": "InstructionsFingerprint",
+          "type": "object"
+        },
+        "InvalidArgument": {
+          "additionalProperties": false,
+          "properties": {
+            "allowed_values": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Allowed Values"
+            },
+            "field": {
+              "title": "Field",
+              "type": "string"
+            },
+            "field_withheld": {
+              "default": false,
+              "title": "Field Withheld",
+              "type": "boolean"
+            },
+            "reason": {
+              "title": "Reason",
+              "type": "string"
+            }
+          },
+          "required": [
+            "field",
+            "reason"
+          ],
+          "title": "InvalidArgument",
+          "type": "object"
+        },
+        "Meta": {
+          "additionalProperties": false,
+          "properties": {
+            "backend": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "pattern": "^[a-z][a-z0-9_]*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Backend"
+            },
+            "backend_details": {
+              "anyOf": [
+                {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Backend Details"
+            },
+            "command_exit_code": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Command Exit Code"
+            },
+            "compat_warnings": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Compat Warnings",
+              "type": "array"
+            },
+            "context_summary": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ContextSummary"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "cwd": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Cwd"
+            },
+            "elapsed_ms": {
+              "default": 0,
+              "title": "Elapsed Ms",
+              "type": "integer"
+            },
+            "fingerprint": {
+              "default": "<fingerprint>",
+              "title": "Fingerprint",
+              "type": "string"
+            },
+            "idempotency_replayed": {
+              "anyOf": [
+                {
+                  "const": true,
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Idempotency Replayed"
+            },
+            "instructions_append": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/InstructionsFingerprint"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "job_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Job Id"
+            },
+            "job_kind": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Job Kind"
+            },
+            "model": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Model"
+            },
+            "reasoning_effort": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Reasoning Effort"
+            },
+            "redacted_paths": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Redacted Paths",
+              "type": "array"
+            },
+            "request_id": {
+              "title": "Request Id",
+              "type": "string"
+            },
+            "roots_source": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "client",
+                    "not_negotiated",
+                    "probe_failed"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Roots Source"
+            },
+            "security_warnings": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Security Warnings",
+              "type": "array"
+            },
+            "server_version": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Server Version"
+            },
+            "session_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Session Id"
+            },
+            "task_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Task Id"
+            },
+            "timeout_seconds": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Timeout Seconds"
+            },
+            "truncated": {
+              "default": false,
+              "title": "Truncated",
+              "type": "boolean"
+            },
+            "truncation_hint": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Truncation Hint"
+            },
+            "usage": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Usage"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "workspace_source": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "param",
+                    "roots",
+                    "cwd"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Workspace Source"
+            },
+            "workspace_warning": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Workspace Warning"
+            }
+          },
+          "title": "Meta",
+          "type": "object"
+        },
+        "Repair": {
+          "additionalProperties": false,
+          "properties": {
+            "alternative": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Alternative"
+            },
+            "arguments": {
+              "anyOf": [
+                {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Arguments"
+            },
+            "next_step": {
+              "enum": [
+                "authenticate",
+                "correct_arguments",
+                "correct_config",
+                "init_git_repo",
+                "inspect_and_retry",
+                "install_backend",
+                "install_git",
+                "list_jobs",
+                "list_resources",
+                "poll_job_status",
+                "reduce_input",
+                "retry_after_delay",
+                "retry_then_report",
+                "start_new_job",
+                "update_plugin",
+                "use_allowed_value",
+                "use_new_idempotency_key",
+                "use_workspace_in_roots"
+              ],
+              "title": "Next Step",
+              "type": "string"
+            },
+            "tool": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Tool"
+            }
+          },
+          "required": [
+            "next_step"
+          ],
+          "title": "Repair",
+          "type": "object"
+        },
+        "Usage": {
+          "additionalProperties": false,
+          "properties": {
+            "cache_creation_input_tokens": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Cache Creation Input Tokens"
+            },
+            "cached_input_tokens": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Cached Input Tokens"
+            },
+            "cost_usd": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Cost Usd"
+            },
+            "input_tokens": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Input Tokens"
+            },
+            "output_tokens": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Output Tokens"
+            },
+            "total_tokens": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Total Tokens"
+            }
+          },
+          "title": "Usage",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "error": {
+          "$ref": "#/$defs/ErrorInfo"
+        },
+        "meta": {
+          "$ref": "#/$defs/Meta"
+        },
+        "ok": {
+          "const": false,
+          "default": false,
+          "title": "Ok",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "error",
+        "meta"
+      ],
+      "title": "ErrorResult",
+      "type": "object"
+    },
+    "ReviewResult": {
+      "$defs": {
+        "ContextSummary": {
+          "additionalProperties": false,
+          "properties": {
+            "files_changed": {
+              "default": 0,
+              "title": "Files Changed",
+              "type": "integer"
+            },
+            "lines_added": {
+              "default": 0,
+              "title": "Lines Added",
+              "type": "integer"
+            },
+            "lines_removed": {
+              "default": 0,
+              "title": "Lines Removed",
+              "type": "integer"
+            }
+          },
+          "title": "ContextSummary",
+          "type": "object"
+        },
+        "Finding": {
+          "additionalProperties": false,
+          "properties": {
+            "evidence": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Evidence"
+            },
+            "file": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "File"
+            },
+            "line": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Line"
+            },
+            "severity": {
+              "default": "medium",
+              "enum": [
+                "critical",
+                "high",
+                "medium",
+                "low",
+                "nit"
+              ],
+              "title": "Severity",
+              "type": "string"
+            },
+            "suggestion": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Suggestion"
+            },
+            "title": {
+              "title": "Title",
+              "type": "string"
+            }
+          },
+          "required": [
+            "title"
+          ],
+          "title": "Finding",
+          "type": "object"
+        },
+        "InstructionsFingerprint": {
+          "additionalProperties": false,
+          "properties": {
+            "bytes": {
+              "minimum": 1,
+              "title": "Bytes",
+              "type": "integer"
+            },
+            "sha256": {
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Sha256",
+              "type": "string"
+            }
+          },
+          "required": [
+            "sha256",
+            "bytes"
+          ],
+          "title": "InstructionsFingerprint",
+          "type": "object"
+        },
+        "Meta": {
+          "additionalProperties": false,
+          "properties": {
+            "backend": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "pattern": "^[a-z][a-z0-9_]*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Backend"
+            },
+            "backend_details": {
+              "anyOf": [
+                {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Backend Details"
+            },
+            "command_exit_code": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Command Exit Code"
+            },
+            "compat_warnings": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Compat Warnings",
+              "type": "array"
+            },
+            "context_summary": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ContextSummary"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "cwd": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Cwd"
+            },
+            "elapsed_ms": {
+              "default": 0,
+              "title": "Elapsed Ms",
+              "type": "integer"
+            },
+            "fingerprint": {
+              "default": "<fingerprint>",
+              "title": "Fingerprint",
+              "type": "string"
+            },
+            "idempotency_replayed": {
+              "anyOf": [
+                {
+                  "const": true,
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Idempotency Replayed"
+            },
+            "instructions_append": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/InstructionsFingerprint"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "job_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Job Id"
+            },
+            "job_kind": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Job Kind"
+            },
+            "model": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Model"
+            },
+            "reasoning_effort": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Reasoning Effort"
+            },
+            "redacted_paths": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Redacted Paths",
+              "type": "array"
+            },
+            "request_id": {
+              "title": "Request Id",
+              "type": "string"
+            },
+            "roots_source": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "client",
+                    "not_negotiated",
+                    "probe_failed"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Roots Source"
+            },
+            "security_warnings": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Security Warnings",
+              "type": "array"
+            },
+            "server_version": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Server Version"
+            },
+            "session_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Session Id"
+            },
+            "task_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Task Id"
+            },
+            "timeout_seconds": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Timeout Seconds"
+            },
+            "truncated": {
+              "default": false,
+              "title": "Truncated",
+              "type": "boolean"
+            },
+            "truncation_hint": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Truncation Hint"
+            },
+            "usage": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Usage"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "workspace_source": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "param",
+                    "roots",
+                    "cwd"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Workspace Source"
+            },
+            "workspace_warning": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Workspace Warning"
+            }
+          },
+          "title": "Meta",
+          "type": "object"
+        },
+        "RawResponse": {
+          "additionalProperties": false,
+          "properties": {
+            "model": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Model"
+            },
+            "session_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Session Id"
+            },
+            "text": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Text"
+            }
+          },
+          "title": "RawResponse",
+          "type": "object"
+        },
+        "Usage": {
+          "additionalProperties": false,
+          "properties": {
+            "cache_creation_input_tokens": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Cache Creation Input Tokens"
+            },
+            "cached_input_tokens": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Cached Input Tokens"
+            },
+            "cost_usd": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Cost Usd"
+            },
+            "input_tokens": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Input Tokens"
+            },
+            "output_tokens": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Output Tokens"
+            },
+            "total_tokens": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Total Tokens"
+            }
+          },
+          "title": "Usage",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "assumptions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Assumptions",
+          "type": "array"
+        },
+        "confidence": {
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "title": "Confidence",
+          "type": "string"
+        },
+        "context_summary": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ContextSummary"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "findings": {
+          "items": {
+            "$ref": "#/$defs/Finding"
+          },
+          "title": "Findings",
+          "type": "array"
+        },
+        "meta": {
+          "$ref": "#/$defs/Meta"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Next Steps",
+          "type": "array"
+        },
+        "ok": {
+          "const": true,
+          "default": true,
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "questions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Questions",
+          "type": "array"
+        },
+        "raw_response": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RawResponse"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "review_status": {
+          "default": "completed",
+          "enum": [
+            "completed",
+            "not_run"
+          ],
+          "title": "Review Status",
+          "type": "string"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "tool": {
+          "const": "amicus_review_changes",
+          "default": "amicus_review_changes",
+          "title": "Tool",
+          "type": "string"
+        },
+        "verdict": {
+          "enum": [
+            "pass",
+            "concerns",
+            "fail",
+            "unknown"
+          ],
+          "title": "Verdict",
+          "type": "string"
+        }
+      },
+      "required": [
+        "meta",
+        "summary",
+        "verdict",
+        "confidence"
+      ],
+      "title": "ReviewResult",
+      "type": "object"
+    }
+  },
+  "serialized": {
+    "consult_success": {
+      "assumptions": [],
+      "findings": [],
+      "meta": {
+        "backend": "codex",
+        "backend_details": null,
+        "command_exit_code": null,
+        "compat_warnings": [],
+        "context_summary": null,
+        "cwd": "/repo",
+        "elapsed_ms": 1,
+        "fingerprint": "<fingerprint>",
+        "idempotency_replayed": null,
+        "instructions_append": null,
+        "job_id": null,
+        "job_kind": null,
+        "model": null,
+        "reasoning_effort": null,
+        "redacted_paths": [],
+        "request_id": "00000000000000000000000000000000",
+        "roots_source": null,
+        "security_warnings": [],
+        "server_version": "0.0.0",
+        "session_id": null,
+        "task_id": null,
+        "timeout_seconds": 1,
+        "truncated": false,
+        "truncation_hint": null,
+        "usage": null,
+        "workspace_source": null,
+        "workspace_warning": null
+      },
+      "next_steps": [],
+      "ok": true,
+      "questions": [],
+      "raw_response": null,
+      "summary": "s",
+      "tool": "amicus_consult"
+    },
+    "delegate_success": {
+      "assumptions": [],
+      "diff": null,
+      "diffstat": null,
+      "findings": [],
+      "meta": {
+        "backend": "codex",
+        "backend_details": null,
+        "command_exit_code": null,
+        "compat_warnings": [],
+        "context_summary": null,
+        "cwd": "/repo",
+        "elapsed_ms": 1,
+        "fingerprint": "<fingerprint>",
+        "idempotency_replayed": null,
+        "instructions_append": null,
+        "job_id": null,
+        "job_kind": null,
+        "model": null,
+        "reasoning_effort": null,
+        "redacted_paths": [],
+        "request_id": "00000000000000000000000000000000",
+        "roots_source": null,
+        "security_warnings": [],
+        "server_version": "0.0.0",
+        "session_id": null,
+        "task_id": null,
+        "timeout_seconds": 1,
+        "truncated": false,
+        "truncation_hint": null,
+        "usage": null,
+        "workspace_source": null,
+        "workspace_warning": null
+      },
+      "next_steps": [],
+      "ok": true,
+      "questions": [],
+      "raw_response": null,
+      "summary": "s",
+      "tool": "amicus_delegate"
+    },
+    "error": {
+      "error": {
+        "backend": null,
+        "code": "internal_error",
+        "message": "m",
+        "repair": {
+          "alternative": "Retry; if it persists, report a bug.",
+          "next_step": "retry_then_report"
+        },
+        "request_id": "00000000000000000000000000000000",
+        "retry_after_ms": null,
+        "temporary": true
+      },
+      "meta": {
+        "backend": "codex",
+        "compat_warnings": [],
+        "cwd": "/repo",
+        "elapsed_ms": 1,
+        "fingerprint": "<fingerprint>",
+        "redacted_paths": [],
+        "request_id": "00000000000000000000000000000000",
+        "security_warnings": [],
+        "server_version": "0.0.0",
+        "timeout_seconds": 1,
+        "truncated": false
+      },
+      "ok": false
+    },
+    "error_user_config_rejected": {
+      "error": {
+        "backend": "codex",
+        "code": "user_config_rejected",
+        "message": "m",
+        "repair": {
+          "alternative": "The backend CLI refused to start because of a key or value in the user's own CLI config; fix that setting (the message names it), then retry. No model call was made.",
+          "next_step": "correct_config"
+        },
+        "request_id": "00000000000000000000000000000000",
+        "retry_after_ms": null,
+        "temporary": false
+      },
+      "meta": {
+        "backend": "codex",
+        "command_exit_code": 1,
+        "compat_warnings": [],
+        "cwd": "/repo",
+        "elapsed_ms": 1,
+        "fingerprint": "<fingerprint>",
+        "redacted_paths": [],
+        "request_id": "00000000000000000000000000000000",
+        "security_warnings": [],
+        "server_version": "0.0.0",
+        "timeout_seconds": 1,
+        "truncated": false
+      },
+      "ok": false
+    },
+    "review_success": {
+      "assumptions": [],
+      "confidence": "high",
+      "context_summary": null,
+      "findings": [],
+      "meta": {
+        "backend": "codex",
+        "backend_details": null,
+        "command_exit_code": null,
+        "compat_warnings": [],
+        "context_summary": null,
+        "cwd": "/repo",
+        "elapsed_ms": 1,
+        "fingerprint": "<fingerprint>",
+        "idempotency_replayed": null,
+        "instructions_append": {
+          "bytes": 5,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "job_id": null,
+        "job_kind": null,
+        "model": null,
+        "reasoning_effort": null,
+        "redacted_paths": [],
+        "request_id": "00000000000000000000000000000000",
+        "roots_source": null,
+        "security_warnings": [],
+        "server_version": "0.0.0",
+        "session_id": null,
+        "task_id": null,
+        "timeout_seconds": 1,
+        "truncated": false,
+        "truncation_hint": null,
+        "usage": null,
+        "workspace_source": null,
+        "workspace_warning": null
+      },
+      "next_steps": [],
+      "ok": true,
+      "questions": [],
+      "raw_response": null,
+      "review_status": "completed",
+      "summary": "s",
+      "tool": "amicus_review_changes",
+      "verdict": "pass"
+    }
+  }
+}

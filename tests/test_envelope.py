@@ -115,6 +115,7 @@ def test_meta_field_names_are_the_documented_set():
         "redacted_paths",
         "usage",
         "context_summary",
+        "instructions_append",
         "job_id",
         "job_kind",
         "task_id",
@@ -158,3 +159,13 @@ def test_dump_success_retains_nulls():
     out = e.dump_success(Model(meta=e.Meta()))
     assert out["ok"] is True
     assert "cwd" in out["meta"] and out["meta"]["cwd"] is None
+
+
+def test_meta_carries_an_instructions_fingerprint_never_the_text():
+    from amicus.schemas.envelope import InstructionsFingerprint, Meta
+
+    fp = InstructionsFingerprint(sha256="a" * 64, bytes=12)
+    meta = Meta(instructions_append=fp)
+    dumped = meta.model_dump(mode="json")
+    assert dumped["instructions_append"] == {"sha256": "a" * 64, "bytes": 12}
+    assert Meta().instructions_append is None

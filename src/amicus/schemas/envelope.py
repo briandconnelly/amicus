@@ -63,6 +63,15 @@ class Workspace(BaseModel):
     workspace_warning: str | None = None
 
 
+class InstructionsFingerprint(BaseModel):
+    """What a result discloses about `instructions_append`: a digest and a byte count,
+    never the text (the parameter contract promises only a fingerprint is echoed)."""
+
+    model_config = ConfigDict(extra="forbid")
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    bytes: int = Field(ge=1)
+
+
 class Meta(BaseModel):
     """Execution metadata on every envelope. Every field is optional except the
     identity trio at the end; `cwd` is None when no workspace was resolved (argument
@@ -87,6 +96,7 @@ class Meta(BaseModel):
     redacted_paths: list[str] = Field(default_factory=list)
     usage: Usage | None = None
     context_summary: ContextSummary | None = None
+    instructions_append: InstructionsFingerprint | None = None
     job_id: str | None = None
     job_kind: str | None = None
     task_id: str | None = None

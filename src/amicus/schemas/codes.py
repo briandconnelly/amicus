@@ -35,6 +35,9 @@ LOCAL_CODES = frozenset(
         "backend_unavailable",
         # The backend does not declare the feature this verb needs (e.g. claude+delegate).
         "feature_unsupported",
+        # Codex-local (M1): the user's own CLI config carries a key or value the installed
+        # CLI refuses at startup; zero spend. Preserved verbatim, never generalized.
+        "user_config_rejected",
     }
 )
 
@@ -84,6 +87,7 @@ ErrorCode = Literal[
     "unsupported_isolation",
     "unsupported_sandbox",
     "unsupported_tier",
+    "user_config_rejected",
     "workspace_outside_roots",
     "worktree_error",
 ]
