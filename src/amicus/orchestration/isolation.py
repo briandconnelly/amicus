@@ -4,6 +4,7 @@ policy, shared by every backend and by the JobStore's cleanup guard."""
 
 from __future__ import annotations
 
+import tempfile
 from typing import TYPE_CHECKING
 
 from pontonier.backend.contract import IsolationPolicy
@@ -18,6 +19,14 @@ if TYPE_CHECKING:  # pragma: no cover
 WORKTREE_PREFIX = "amicus-wt-"
 WORKTREE_CONFIG = worktree.WorktreeConfig(
     prefix=WORKTREE_PREFIX, identity_name="amicus", identity_email="amicus@local"
+)
+
+# Stamped on meta.security_warnings when a consult runs outside a git repository under a
+# backend that isolates every tier: the run is still isolated (an empty temp dir), but the
+# backend can read nothing, so an answer that appears repo-grounded would be unfounded.
+NO_REPO_WARNING = (
+    "workspace_root is not a git repository, so this ran in an empty temporary directory: "
+    "the backend could not read any repository files and answered only from the prompt."
 )
 
 
@@ -49,6 +58,31 @@ class DirectSite:
         return self
 
     def __exit__(self, *exc: object) -> bool:
+        return False
+
+    def capture_diff(self) -> str | None:
+        return None
+
+
+class EmptyDirSite:
+    """An empty temp dir for a consult outside any repository (ADR 0009): isolation is kept,
+    nothing is readable, and the caller is told so."""
+
+    def __init__(self) -> None:
+        self._tmp: tempfile.TemporaryDirectory[str] | None = None
+        self.cwd = ""
+        self.aliases: tuple[str, ...] = ()
+        self.security_warnings: tuple[str, ...] = (NO_REPO_WARNING,)
+
+    def __enter__(self) -> EmptyDirSite:
+        self._tmp = tempfile.TemporaryDirectory(prefix=WORKTREE_PREFIX)
+        self.cwd = self._tmp.name
+        self.aliases = worktree.path_aliases(self.cwd)
+        return self
+
+    def __exit__(self, *exc: object) -> bool:
+        if self._tmp is not None:
+            self._tmp.cleanup()
         return False
 
     def capture_diff(self) -> str | None:
@@ -106,10 +140,17 @@ class WorktreeSite:
 
 def select_site(
     spec: RunSpec, plugin: BackendPlugin, on_parent: Callable[[str], None] | None = None
-) -> DirectSite | WorktreeSite:
+) -> DirectSite | WorktreeSite | EmptyDirSite:
+    all_tiers = plugin.contract.isolation_policy is IsolationPolicy.WORKTREE_ALL_TIERS
+    if spec.kind != "delegate" and not all_tiers:
+        return DirectSite(spec.cwd)
+    # A consult has no diff to gather and nothing to apply, so outside a repository it can
+    # still run — isolated in an empty dir. Review needs the repo's diff and delegate needs
+    # a baseline, so both keep failing not_a_git_repo (review at gather, delegate at preflight).
     if (
-        spec.kind == "delegate"
-        or plugin.contract.isolation_policy is IsolationPolicy.WORKTREE_ALL_TIERS
+        spec.kind == "consult"
+        and all_tiers
+        and not worktree.is_git_repo(spec.cwd, timeout=spec.git_timeout)
     ):
-        return WorktreeSite(spec.cwd, git_timeout=spec.git_timeout, on_parent=on_parent)
-    return DirectSite(spec.cwd)
+        return EmptyDirSite()
+    return WorktreeSite(spec.cwd, git_timeout=spec.git_timeout, on_parent=on_parent)

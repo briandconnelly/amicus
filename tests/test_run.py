@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 import subprocess
+from pathlib import Path
 
 import pytest
 from pontonier.backend.protocol import ClassifiedFailure
@@ -248,3 +249,59 @@ async def test_orphan_sweep_runs_when_the_contract_asks(monkeypatch):
     monkeypatch.setattr(run_mod.runtime, "run_async", cf.scripted_run_async(stdout="ok"))
     await run_mod.run_request(_spec(), fakeplugin.make_plugin(contract=contract, backend=Marked()))
     assert swept == ["amicus-marker-123"]
+
+
+async def test_non_repo_consult_under_all_tiers_runs_in_an_empty_dir_with_a_warning(
+    monkeypatch, tmp_path
+):
+    import dataclasses
+
+    from pontonier.backend.contract import IsolationPolicy
+
+    from amicus.orchestration import isolation
+
+    calls: list = []
+    monkeypatch.setattr(
+        run_mod.runtime, "run_async", cf.scripted_run_async(stdout="answer", calls=calls)
+    )
+    plugin = fakeplugin.make_plugin(
+        contract=dataclasses.replace(
+            fakeplugin.make_contract(), isolation_policy=IsolationPolicy.WORKTREE_ALL_TIERS
+        )
+    )
+    out = await run_mod.run_request(_spec(cwd=str(tmp_path)), plugin)
+    assert out["ok"] is True and out["meta"]["security_warnings"] == [isolation.NO_REPO_WARNING]
+    assert calls[0]["cwd"] != str(tmp_path) and not Path(calls[0]["cwd"]).exists()
+    review = await run_mod.run_request(_spec(kind="review_changes", cwd=str(tmp_path)), plugin)
+    assert review["ok"] is False and review["error"]["code"] == "not_a_git_repo"
+
+
+def test_artifact_reads_are_hardened(tmp_path):
+    import os
+
+    from pontonier.backend.protocol import PreparedRun
+
+    normal = tmp_path / "a.txt"
+    normal.write_text("hello")
+    link = tmp_path / "link.txt"
+    link.symlink_to(normal)
+    big = tmp_path / "big.txt"
+    big.write_bytes(b"x" * (run_mod.MAX_ARTIFACT_BYTES + 1))
+    fifo = tmp_path / "fifo"
+    os.mkfifo(fifo)
+    empty = tmp_path / "empty.txt"
+    empty.write_text("")
+    prepared = PreparedRun(
+        argv=("x",),
+        env={},
+        cwd=str(tmp_path),
+        artifact_paths={
+            "normal": str(normal),
+            "link": str(link),
+            "big": str(big),
+            "fifo": str(fifo),
+            "empty": str(empty),
+            "missing": str(tmp_path / "missing"),
+        },
+    )
+    assert run_mod._read_artifacts(prepared) == {"normal": "hello"}

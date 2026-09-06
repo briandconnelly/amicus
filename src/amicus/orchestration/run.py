@@ -5,7 +5,8 @@ jobs run exactly this."""
 
 from __future__ import annotations
 
-from pathlib import Path
+import os
+from stat import S_ISREG
 from typing import TYPE_CHECKING, Any
 
 from pontonier.backend.protocol import RunOutcome, RunRequest, inspect_outcome
@@ -25,14 +26,34 @@ if TYPE_CHECKING:  # pragma: no cover
     from amicus.plugin import BackendPlugin
     from amicus.request import RunSpec
 
+MAX_ARTIFACT_BYTES = 1_000_000
+
+
+def _read_bounded(path: str) -> str:
+    """An artifact, or "" if it is anything but a plain small regular file. A delegate's
+    answer file is written by a full-tool agent, so its path is model-controlled at read
+    time: O_NOFOLLOW rejects a substituted symlink, O_NONBLOCK keeps a FIFO from blocking
+    before fstat can reject it, and the cap bounds memory (ADR 0009)."""
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError:
+        return ""
+    try:
+        st = os.fstat(fd)
+        if not S_ISREG(st.st_mode) or st.st_size > MAX_ARTIFACT_BYTES:
+            return ""
+        raw = os.read(fd, MAX_ARTIFACT_BYTES)
+    except OSError:
+        return ""
+    finally:
+        os.close(fd)
+    return raw.decode("utf-8", "replace")
+
 
 def _read_artifacts(prepared: PreparedRun) -> dict[str, str]:
     texts: dict[str, str] = {}
     for name, path in prepared.artifact_paths.items():
-        try:
-            text = Path(path).read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            continue
+        text = _read_bounded(path)
         if text:
             texts[name] = text
     return texts

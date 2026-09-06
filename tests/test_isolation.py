@@ -94,8 +94,10 @@ def test_select_site_by_kind_and_policy(tmp_path):
             fakeplugin.make_contract(), isolation_policy=IsolationPolicy.WORKTREE_ALL_TIERS
         )
     )
+    # Non-repo consult under WORKTREE_ALL_TIERS now runs in an EmptyDirSite (Task 6, ADR
+    # 0009), not a WorktreeSite: see test_select_site_uses_the_empty_dir_only_... below.
     assert isinstance(
-        isolation.select_site(_spec("consult", str(tmp_path)), all_tiers), isolation.WorktreeSite
+        isolation.select_site(_spec("consult", str(tmp_path)), all_tiers), isolation.EmptyDirSite
     )
 
 
@@ -104,4 +106,48 @@ def test_worktree_config_is_orchestration_policy():
     assert (isolation.WORKTREE_CONFIG.identity_name, isolation.WORKTREE_CONFIG.identity_email) == (
         "amicus",
         "amicus@local",
+    )
+
+
+def test_empty_dir_site_is_isolated_warned_and_torn_down():
+    with isolation.EmptyDirSite() as site:
+        assert Path(site.cwd).is_dir() and Path(site.cwd).name.startswith(isolation.WORKTREE_PREFIX)
+        assert site.security_warnings == (isolation.NO_REPO_WARNING,)
+        assert site.aliases and site.capture_diff() is None
+        Path(site.cwd, "scratch.txt").write_text("x")
+        cwd = site.cwd
+    assert not Path(cwd).exists()
+
+
+def test_select_site_uses_the_empty_dir_only_for_a_non_repo_consult_under_all_tiers(
+    tmp_path_factory, repo
+):
+    import dataclasses
+
+    # `repo` git-inits `tmp_path` in place and returns it, so a non-repo directory for this
+    # test has to live outside that tree entirely (a subdirectory would still resolve to the
+    # same repository, since git discovery walks upward) — a fresh tmp_path_factory dir.
+    non_repo = tmp_path_factory.mktemp("non_repo")
+
+    all_tiers = fakeplugin.make_plugin(
+        contract=dataclasses.replace(
+            fakeplugin.make_contract(), isolation_policy=IsolationPolicy.WORKTREE_ALL_TIERS
+        )
+    )
+    assert isinstance(
+        isolation.select_site(_spec("consult", str(non_repo)), all_tiers), isolation.EmptyDirSite
+    )
+    assert isinstance(
+        isolation.select_site(_spec("consult", str(repo)), all_tiers), isolation.WorktreeSite
+    )
+    assert isinstance(
+        isolation.select_site(_spec("review_changes", str(non_repo)), all_tiers),
+        isolation.WorktreeSite,
+    )
+    assert isinstance(
+        isolation.select_site(_spec("delegate", str(non_repo)), all_tiers), isolation.WorktreeSite
+    )
+    sandboxed = fakeplugin.make_plugin()
+    assert isinstance(
+        isolation.select_site(_spec("consult", str(non_repo)), sandboxed), isolation.DirectSite
     )
