@@ -124,7 +124,11 @@ def _validate_success(
     if model is None:
         return _unreadable(f"unknown job kind {kind!r}", rec, payload, meta)
     try:
-        model.model_validate(payload)
+        # Strict mode: lax validation would coerce e.g. meta.elapsed_ms: "1" and the
+        # original string-valued payload would then be delivered in violation of the
+        # published wire schema. The stored payload is a dump_success JSON dump, so
+        # strict mode accepts every genuine record.
+        model.model_validate(payload, strict=True)
     except ValidationError as exc:
         return _unreadable(
             f"stored {kind} result did not match its schema: {exc}", rec, payload, meta

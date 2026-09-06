@@ -133,3 +133,20 @@ def test_stored_presentation_is_sanitized_only_when_a_control_char_is_present():
     out, _ = delivery.finished_job_envelope(_rec(), env, _JOB, "consult", Meta(), "full", None)
     assert out["summary"] == "ab" and out["findings"][0]["title"] == "t"
     assert out["findings"][0]["file"] == "f\x07.py"  # a machine field is never repaired
+
+
+def test_a_coerced_field_in_the_stored_payload_is_not_delivered():
+    env = _stored_success()
+    env["meta"]["elapsed_ms"] = "1"  # lax validation would coerce this; strict must not
+    out, delivered = delivery.finished_job_envelope(
+        _rec(), env, _JOB, "consult", Meta(), "full", None
+    )
+    assert not delivered and out["error"]["code"] == "internal_error"
+    assert out["meta"]["job_id"] == _JOB
+
+
+def test_a_genuine_stored_success_still_delivers():
+    out, delivered = delivery.finished_job_envelope(
+        _rec(), _stored_success(), _JOB, "consult", Meta(), "full", None
+    )
+    assert delivered and out["ok"] is True and out["meta"]["job_id"] == _JOB
