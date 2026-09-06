@@ -236,4 +236,5 @@ def test_clamp_and_deadline_advisory():
     assert _prepare.deadline_advisory(True, 10, "low", 300, "amicus_consult_async") is None
     text = _prepare.deadline_advisory(True, 10, "high", 300, "amicus_review_changes_async")
     assert text and "amicus_review_changes_async" in text and "300s" in text
+    assert "narrow the input" in text
     assert _prepare.deadline_advisory(True, 200_000, None, 300, "amicus_delegate_async")

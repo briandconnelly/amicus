@@ -57,11 +57,12 @@ def deadline_advisory(
         return None
     if prompt_bytes <= DEADLINE_ADVISORY_PROMPT_BYTES and effort not in _HIGH_EFFORTS:
         return None
+    # M2: once the async twins are real, recommend them directly.
     return (
         f"This previewed call's prompt size or reasoning effort may exceed the "
-        f"{timeout_seconds}s synchronous deadline; prefer {async_tool} (the async counterpart "
-        "of the previewed call), which is polled instead of terminated if the run outlasts "
-        "the deadline."
+        f"{timeout_seconds}s synchronous deadline; narrow the input or raise "
+        f"timeout_seconds. {async_tool}, the async counterpart that lands in M2, will be "
+        "polled instead of terminated when a run outlasts the deadline."
     )
 
 
