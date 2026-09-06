@@ -159,20 +159,25 @@ def test_delegate_relativizes_redacts_and_bounds(tmp_path):
 
 
 def test_delegate_redacts_before_bounding_a_diff_that_still_exceeds_the_budget():
-    """A diff with both a secret-bearing hunk and enough non-secret content to exceed
-    max_delegate_diff_bytes: pins redact-then-bound. Bound-then-redact could leave a
-    partial secret (truncation lands mid-hunk before redaction ever runs) or truncate the
-    marker itself before it can replace the hunk."""
+    """Pins redact-then-bound with a byte cap that lands INSIDE the secret token. Under
+    bound-then-redact the cut leaves `sk-` plus a few characters, too short for the
+    redactor's minimum value length, so a partial key would reach the wire; under
+    redact-then-bound the whole token is replaced before the cap applies. (A cap that
+    keeps the whole token passes under both orderings and pins nothing.)"""
+    prefix = "diff --git a/f.py b/f.py\n+x = 1\n"
     secret = "sk-" + "e" * 40
-    secret_hunk = f"diff --git a/.env b/.env\n+API_KEY={secret}\n"
-    padding = "diff --git a/f.py b/f.py\n" + "+x\n" * 200
-    diff = secret_hunk + padding
+    secret_line = f'+TOKEN = "{secret}"\n'
+    trailer = "+y = 2\n" * 20
+    diff = prefix + secret_line + trailer
+    keep = 10  # characters of the token that would survive a raw cut
+    cap = len(prefix.encode()) + len(b'+TOKEN = "sk-') + keep
     meta = Meta()
     out = fz.delegate_result(
-        ExecResult(answer="ok"), meta, diff=diff, aliases=(), max_diff_bytes=100
+        ExecResult(answer="ok"), meta, diff=diff, aliases=(), max_diff_bytes=cap
     )
-    assert secret not in out["diff"]
     assert out["meta"]["truncated"] is True
+    assert out["diff"].startswith(prefix)  # the cut happened past the prefix, as designed
+    assert "sk-e" not in out["diff"]  # bound-then-redact would leave 'sk-eeeeeeeeee'
 
 
 def test_coerce_findings_drops_malformed_entries():
