@@ -114,6 +114,18 @@ def test_lifecycle_states():
         )
 
 
+def test_done_with_an_unreadable_payload_is_distinct_from_a_failed_job():
+    env, delivered = delivery.finished_job_envelope(
+        _rec("done"), None, _JOB, "consult", Meta(), "full", None
+    )
+    assert (
+        not delivered
+        and env["error"]["code"] == "job_failed"
+        and env["error"]["message"] == "The job finished but its stored result could not be read."
+    )
+    assert env["error"]["repair"].get("arguments") is None
+
+
 def test_stored_presentation_is_sanitized_only_when_a_control_char_is_present():
     env = _stored_success()
     env["summary"] = "a\x07b"

@@ -33,6 +33,7 @@ if TYPE_CHECKING:  # pragma: no cover
 SYNC_POLL_INTERVAL_S = 0.25
 SYNC_AWAIT_GRACE_S = 30
 SYNC_PROGRESS_THROTTLE_S = 1.0
+SYNC_PROGRESS_REPORT_TIMEOUT_S = 5.0
 
 
 def job_store(settings: Settings) -> JobStore:
@@ -191,8 +192,14 @@ async def await_job_result(
                 last_events = events
                 last_progress_at = now
                 with contextlib.suppress(Exception):
-                    await ctx.report_progress(
-                        progress=float(events), message=f"backend events: {events}"
+                    # asyncio.TimeoutError is an Exception subclass on 3.11+, so a hung
+                    # report_progress is bounded and still swallowed here, not left to
+                    # stall the poll loop past the job's own deadline.
+                    await asyncio.wait_for(
+                        ctx.report_progress(
+                            progress=float(events), message=f"backend events: {events}"
+                        ),
+                        timeout=SYNC_PROGRESS_REPORT_TIMEOUT_S,
                     )
             if time.monotonic() > deadline:
                 await asyncio.to_thread(store.cancel, cwd, job_id)

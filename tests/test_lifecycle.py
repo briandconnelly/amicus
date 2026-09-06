@@ -364,3 +364,38 @@ async def test_progress_is_reported_throttled_while_running(tmp_path, monkeypatc
     )
     assert out["ok"] is True
     assert any(m and "events" in m for _, m in reports)
+
+
+async def test_a_hanging_report_progress_does_not_stall_the_poll_loop(tmp_path, monkeypatch):
+    store = lifecycle.job_store(_settings(tmp_path))
+    monkeypatch.setattr(lifecycle, "SYNC_POLL_INTERVAL_S", 0.01)
+    monkeypatch.setattr(lifecycle, "SYNC_PROGRESS_THROTTLE_S", 0.0)
+    monkeypatch.setattr(lifecycle, "SYNC_PROGRESS_REPORT_TIMEOUT_S", 0.05)
+
+    class HangingCtx:
+        async def report_progress(self, progress, total=None, message=None):
+            await asyncio.Event().wait()  # never sets: a report_progress call that hangs
+
+    def worker(job_dir):
+        code = (
+            "import json,sys,time,pathlib;d=pathlib.Path(sys.argv[1]);"
+            "(d/'activity.json').write_text(json.dumps({'events_seen':3,'last_event_epoch':time.time()}));time.sleep(0.2);"
+            "(d/'result.json').write_text(sys.argv[2])"
+        )
+        return [sys.executable, "-c", code, str(job_dir), json.dumps(_success(str(tmp_path)))]
+
+    monkeypatch.setattr(lifecycle, "worker_cmd", worker)
+    spec = _spec(str(tmp_path))
+    out = await asyncio.wait_for(
+        lifecycle.run_sync(
+            store,
+            spec,
+            meta_for(spec),
+            fakeplugin.make_plugin(),
+            timeout=10,
+            detail="summary",
+            ctx=HangingCtx(),
+        ),
+        timeout=10,
+    )
+    assert out["ok"] is True

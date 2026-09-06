@@ -176,7 +176,12 @@ def finished_job_envelope(
                 error.error.repair.alternative
             )
         return serialize_error(error), True
-    code, message = STATE_TO_ERROR.get(state, ("job_failed", "The job did not complete."))
+    if state == "done":
+        # done but payload is None: the record itself could not be read back, distinct
+        # from STATE_TO_ERROR's "failed" (the job ran and produced no result).
+        code, message = "job_failed", "The job finished but its stored result could not be read."
+    else:
+        code, message = STATE_TO_ERROR.get(state, ("job_failed", "The job did not complete."))
     running = state == "running"
     poll_params: dict[str, Any] = {"job_id": job_id}
     if workspace_root:
