@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 """Assert every GitHub Actions ``uses:`` reference is pinned to an immutable ref.
 
-This repo has no workflows yet (no ``.github/workflows/``); this script is the CI
-lint half of the enforcement (issue #101) that arrives with the first one. Once a
-workflow exists, ``allowed_actions: all`` and ``sha_pinning_required: false`` at the
-repo level mean nothing *enforces* pinning on their own, so a future workflow edit
-could introduce a mutable tag (``@v4``) or branch (``@main``) reference unnoticed.
+Every workflow ``uses:`` entry in this repo is pinned to a full commit SHA, but
+nothing at the repo level *enforces* it (``allowed_actions: all`` and
+``sha_pinning_required: false``), so a future workflow edit could reintroduce a
+mutable tag (``@v4``) or branch (``@main``) reference unnoticed. This is the CI lint
+half of that enforcement (the ``prek`` pre-commit hook is the local half).
 This script scans the committed workflow YAML and fails if any reference is mutable.
 
 "Immutable" means:
