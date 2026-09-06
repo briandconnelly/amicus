@@ -48,26 +48,31 @@ async def test_cancel_hard_kills_a_worker_that_ignores_sigterm_and_removes_its_w
     job_id, _ = store.start(
         lifecycle.worker_cmd, str(tmp_path), kind="delegate", extra={"backend": "codex"}
     )
-    deadline = time.monotonic() + 5
-    while not (store._job_dir(str(tmp_path), job_id) / "cleanup.json").exists():
-        assert time.monotonic() < deadline
-        await asyncio.sleep(0.05)
-    t0 = time.monotonic()
-    row = await asyncio.to_thread(store.cancel, str(tmp_path), job_id)
-    assert row is not None and row["status"] == "cancelled"
-    assert 0.9 <= time.monotonic() - t0 < 5, "graceful wait, then the kill"
-    assert row["cleanup_warnings"] == [] and not worktree.exists()
-    pid = json.loads((store._job_dir(str(tmp_path), job_id) / "meta.json").read_text())["pid"]
-    deadline = time.monotonic() + 3
-    while time.monotonic() < deadline:
-        alive = (
-            subprocess.run(["kill", "-0", str(pid)], capture_output=True, check=False).returncode
-            == 0
-        )
-        if not alive:
-            break
-        await asyncio.sleep(0.05)
-    assert not alive
+    try:
+        deadline = time.monotonic() + 5
+        while not (store._job_dir(str(tmp_path), job_id) / "cleanup.json").exists():
+            assert time.monotonic() < deadline
+            await asyncio.sleep(0.05)
+        t0 = time.monotonic()
+        row = await asyncio.to_thread(store.cancel, str(tmp_path), job_id)
+        assert row is not None and row["status"] == "cancelled"
+        assert 0.9 <= time.monotonic() - t0 < 5, "graceful wait, then the kill"
+        assert row["cleanup_warnings"] == [] and not worktree.exists()
+        pid = json.loads((store._job_dir(str(tmp_path), job_id) / "meta.json").read_text())["pid"]
+        deadline = time.monotonic() + 3
+        while time.monotonic() < deadline:
+            alive = (
+                subprocess.run(
+                    ["kill", "-0", str(pid)], capture_output=True, check=False
+                ).returncode
+                == 0
+            )
+            if not alive:
+                break
+            await asyncio.sleep(0.05)
+        assert not alive
+    finally:
+        store.cancel(str(tmp_path), job_id)
 
 
 async def test_cancel_reports_a_worktree_it_may_not_remove(tmp_path, monkeypatch):
@@ -79,13 +84,16 @@ async def test_cancel_reports_a_worktree_it_may_not_remove(tmp_path, monkeypatch
     job_id, _ = store.start(
         lifecycle.worker_cmd, str(tmp_path), kind="delegate", extra={"backend": "codex"}
     )
-    deadline = time.monotonic() + 5
-    while not (store._job_dir(str(tmp_path), job_id) / "cleanup.json").exists():
-        assert time.monotonic() < deadline
-        await asyncio.sleep(0.05)
-    row = await asyncio.to_thread(store.cancel, str(tmp_path), job_id)
-    assert row["status"] == "cancelled" and outside.exists()
-    assert row["cleanup_warnings"] and str(outside) in row["cleanup_warnings"][0]
+    try:
+        deadline = time.monotonic() + 5
+        while not (store._job_dir(str(tmp_path), job_id) / "cleanup.json").exists():
+            assert time.monotonic() < deadline
+            await asyncio.sleep(0.05)
+        row = await asyncio.to_thread(store.cancel, str(tmp_path), job_id)
+        assert row["status"] == "cancelled" and outside.exists()
+        assert row["cleanup_warnings"] and str(outside) in row["cleanup_warnings"][0]
+    finally:
+        store.cancel(str(tmp_path), job_id)
 
 
 _OTHER_PROCESS = """

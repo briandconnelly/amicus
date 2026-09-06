@@ -192,8 +192,6 @@ async def test_consume_delivers_when_deletion_fails(app, store, tmp_path, monkey
 
 async def test_cancel_running_then_terminal_is_idempotent(app, store, tmp_path, monkeypatch):
     monkeypatch.setenv("FAKE_CODEX_SLEEP", "30")
-    # The tools build a fresh JobStore per call, so patch the class default, not `store`.
-    monkeypatch.setattr(JobStore, "terminate_grace_seconds", 2.0)
     ws = {"workspace_root": str(tmp_path)}
     async with Client(app) as c:
         schemas = await _schemas(c)
