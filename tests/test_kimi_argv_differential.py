@@ -34,7 +34,7 @@ async def test_staged_argv_matches_the_sibling(pinned_kimi_bin, monkeypatch, tmp
         cwd=str(tmp_path),
         timeout_seconds=60,
         model=req.get("model"),
-        access=None if req["read_only"] or req["kind"] == "delegate" else "read-only",
+        access=None,  # kind decides: consult/review are read-only, delegate writes
     )
     async with backend.prepare(request) as prepared:
         ours = kf.normalize_argv(prepared.argv)

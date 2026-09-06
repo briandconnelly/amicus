@@ -35,6 +35,6 @@ The gate is defined once, in `AGENTS.md` (Rules, item 2); CI runs it on every su
 
 1. `main` carries M3.
 2. In a fresh session say "Resume amicus at milestone M4 per the execution model".
-3. The agent writes the M3 plan from the spec and executes it.
+3. The agent writes the M4 plan from the spec and executes it.
 
 Open items only the maintainer can settle: trademark clearance for the name before any PyPI publish; the pontonier repo-layout question (separate repo vs uv workspace) is deferred until after M1.
