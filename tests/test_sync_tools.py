@@ -197,13 +197,13 @@ async def test_delegate_preflight_and_other_backends(app, tmp_path):
             raise_on_error=False,
         )
         asy = await c.call_tool(
-            "amicus_consult_async",
-            {"backend": "codex", "question": "q", "workspace_root": str(tmp_path)},
+            "amicus_adversarial_review_async",
+            {"backend": "claude", "target": "t", "workspace_root": str(tmp_path)},
             raise_on_error=False,
         )
     assert plain.structured_content["error"]["code"] == "not_a_git_repo"
     assert kimi.structured_content["error"]["code"] == "backend_unavailable"
-    assert asy.structured_content["error"]["code"] == "not_implemented"
+    assert asy.structured_content["error"]["code"] == "backend_unavailable"
     assert not (tmp_path / "argv.jsonl").exists()
 
 

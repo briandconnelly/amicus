@@ -111,3 +111,28 @@ def test_lifecycle_covers_every_non_done_success_outcome():
         "job_id": "0" * 32,
         "workspace_root": "/repo",
     }
+
+
+def test_handles_section_pins_the_job_envelopes():
+    snap = wss.build_snapshot()
+    handles = snap["handles"]
+    assert set(handles) == {
+        "job_started",
+        "job_started_replayed",
+        "job_status_running",
+        "job_status_cancelled",
+        "job_list",
+    }
+    assert handles["job_started"]["status"] == "running"
+    assert handles["job_started"]["task_id"] is None
+    assert handles["job_started_replayed"]["meta"]["idempotency_replayed"] is True
+    assert handles["job_started_replayed"]["status"] == "done"
+    assert handles["job_status_running"]["poll_after_ms"] == 1000
+    assert handles["job_status_cancelled"]["poll_after_ms"] is None
+    assert handles["job_status_cancelled"]["cleanup_warnings"] == ["/tmp/amicus-wt-leftover"]
+    assert handles["job_list"]["truncated"] is True
+    assert "omit `limit`" in handles["job_list"]["truncation_hint"]
+    assert handles["job_list"]["jobs"][0]["task_id"] == "task-0"
+    for env in handles.values():
+        assert env["meta"]["fingerprint"] == "<fingerprint>"
+        assert env["meta"]["request_id"] == "0" * 32

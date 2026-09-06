@@ -231,9 +231,9 @@
           "extra_args_rejected",
           "user_config_rejected",
           "internal_error",
-          "not_implemented",
           "idempotency_conflict",
-          "idempotency_in_progress"
+          "idempotency_in_progress",
+          "idempotency_result_unavailable"
         ],
         "key_optional_params": [
           "backend_options",
@@ -340,7 +340,6 @@
           "extra_args_rejected",
           "user_config_rejected",
           "internal_error",
-          "not_implemented",
           "invalid_scope",
           "invalid_base",
           "invalid_commit",
@@ -351,7 +350,8 @@
           "schema_violation",
           "context_too_large",
           "idempotency_conflict",
-          "idempotency_in_progress"
+          "idempotency_in_progress",
+          "idempotency_result_unavailable"
         ],
         "key_optional_params": [
           "backend_options",
@@ -449,12 +449,12 @@
           "extra_args_rejected",
           "user_config_rejected",
           "internal_error",
-          "not_implemented",
           "not_a_git_repo",
           "git_unavailable",
           "worktree_error",
           "idempotency_conflict",
-          "idempotency_in_progress"
+          "idempotency_in_progress",
+          "idempotency_result_unavailable"
         ],
         "key_optional_params": [
           "backend_options",
@@ -565,7 +565,8 @@
           "schema_violation",
           "context_too_large",
           "idempotency_conflict",
-          "idempotency_in_progress"
+          "idempotency_in_progress",
+          "idempotency_result_unavailable"
         ],
         "key_optional_params": [
           "backend_options",
@@ -730,7 +731,7 @@
         "error_codes": [
           "job_not_found",
           "invalid_workspace_root",
-          "not_implemented"
+          "workspace_outside_roots"
         ],
         "key_optional_params": [
           "workspace_root"
@@ -757,7 +758,8 @@
           "job_cancelled",
           "job_timeout",
           "job_result_incompatible",
-          "not_implemented"
+          "invalid_workspace_root",
+          "workspace_outside_roots"
         ],
         "key_optional_params": [
           "workspace_root",
@@ -785,7 +787,8 @@
           "job_cancelled",
           "job_timeout",
           "job_result_incompatible",
-          "not_implemented"
+          "invalid_workspace_root",
+          "workspace_outside_roots"
         ],
         "key_optional_params": [
           "workspace_root",
@@ -808,7 +811,8 @@
         "cost": "free",
         "error_codes": [
           "job_not_found",
-          "not_implemented"
+          "invalid_workspace_root",
+          "workspace_outside_roots"
         ],
         "key_optional_params": [
           "workspace_root"
@@ -830,7 +834,7 @@
         "cost": "free",
         "error_codes": [
           "invalid_workspace_root",
-          "not_implemented"
+          "workspace_outside_roots"
         ],
         "key_optional_params": [
           "workspace_root",
@@ -1334,7 +1338,7 @@
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-2",
+                "default": "amicus/0.1/schema-3",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -2151,7 +2155,7 @@
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-2",
+            "default": "amicus/0.1/schema-3",
             "title": "Fingerprint",
             "type": "string"
           },
@@ -3258,7 +3262,13 @@
                 "type": "string"
               },
               "status": {
-                "const": "running",
+                "enum": [
+                  "cancelled",
+                  "done",
+                  "failed",
+                  "running",
+                  "timeout"
+                ],
                 "type": "string"
               },
               "task_id": {
@@ -4315,7 +4325,7 @@
         "openWorldHint": true,
         "readOnlyHint": false
       },
-      "description": "PAID — spends the selected backend's quota on every new call. Async twin of amicus_consult: returns a job handle immediately; poll amicus_job_status, read amicus_job_result. Egress: sends question, extra_context and instructions_append raw to the backend's provider; the backend can read files outside the workspace. Starting a job commits to spend.",
+      "description": "PAID — spends the selected backend's quota on every new call. Async twin of amicus_consult: returns a job handle immediately; poll amicus_job_status, read amicus_job_result. Egress: sends question, extra_context and instructions_append raw to the backend's provider; the backend can read files outside the workspace. Starting a job commits to spend. Deadline: AMICUS_JOB_MAX_SECONDS (default 1800s).",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
@@ -4608,7 +4618,13 @@
                 "type": "string"
               },
               "status": {
-                "const": "running",
+                "enum": [
+                  "cancelled",
+                  "done",
+                  "failed",
+                  "running",
+                  "timeout"
+                ],
                 "type": "string"
               },
               "task_id": {
@@ -5071,7 +5087,7 @@
         "openWorldHint": true,
         "readOnlyHint": false
       },
-      "description": "PAID — spends the selected backend's quota on every new call. Async twin of amicus_delegate: returns a job handle; poll amicus_job_status, read amicus_job_result. Same egress and feature gate. Starting a job commits to spend.",
+      "description": "PAID — spends the selected backend's quota on every new call. Async twin of amicus_delegate: returns a job handle; poll amicus_job_status, read amicus_job_result. Same egress and feature gate. Starting a job commits to spend. Deadline: AMICUS_JOB_MAX_SECONDS (default 1800s).",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
@@ -5340,7 +5356,13 @@
                 "type": "string"
               },
               "status": {
-                "const": "running",
+                "enum": [
+                  "cancelled",
+                  "done",
+                  "failed",
+                  "running",
+                  "timeout"
+                ],
                 "type": "string"
               },
               "task_id": {
@@ -6168,7 +6190,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Free — no model call. Ask the worker to stop and mark the job cancelled; a terminal job is returned unchanged, so cancel is idempotent. An unkeyed task-augmented call cancels its job; a keyed job survives and the result names its job_id.",
+      "description": "Free — no model call. Stop the worker (SIGTERM, then SIGKILL), remove its worktree, and mark the job cancelled; a terminal job is returned unchanged, so cancel is idempotent. cleanup_warnings names any leftover path.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
@@ -6383,7 +6405,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Free — no model call. Like amicus_job_result, then delete the record: a repeat call returns job_not_found, so this is not idempotent.",
+      "description": "Free — no model call. Like amicus_job_result, then delete the record: a repeat call returns job_not_found, so this is not idempotent. A corrupt or incompatible record is not deleted.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
@@ -6490,7 +6512,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Free — no model call. List the jobs known for this workspace, newest first, across all backends; narrow with `backend`, `status`, or `task_id` (the tasks-extension id recorded at task creation). Only an explicit `limit` truncates (truncated: true, no cursor). Records expire after AMICUS_JOB_TTL (default 24h) and a per-workspace cap evicts the oldest terminal records; read results promptly.",
+      "description": "Free — no model call. List the jobs known for this workspace, newest first, across all backends; narrow with `backend`, `status`, or `task_id` (no match is an empty list). Only an explicit `limit` truncates (truncated: true, no cursor). Records expire after AMICUS_JOB_TTL (default 24h) and a per-workspace cap evicts the oldest terminal records; read results promptly.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
@@ -6878,7 +6900,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Free — no model call. Poll a job's state without fetching its result: status, elapsed time, result_available, result_ok, and poll_after_ms to honor before the next poll. Records expire after AMICUS_JOB_TTL (default 24h) and a per-workspace cap evicts the oldest terminal records; read results promptly.",
+      "description": "Free — no model call. Poll a job's state without fetching its result: status, elapsed time, result_available, result_ok, and poll_after_ms to honor before the next poll (it grows with elapsed time). Records expire after AMICUS_JOB_TTL (default 24h) and a per-workspace cap evicts the oldest terminal records; read results promptly.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
@@ -7777,7 +7799,7 @@
         "openWorldHint": true,
         "readOnlyHint": false
       },
-      "description": "PAID — spends the selected backend's quota on every new call. Async twin of amicus_review_changes: returns a job handle; poll amicus_job_status, read amicus_job_result. Same egress. Starting a job commits to spend.",
+      "description": "PAID — spends the selected backend's quota on every new call. Async twin of amicus_review_changes: returns a job handle; poll amicus_job_status, read amicus_job_result. Same egress. Starting a job commits to spend. Deadline: AMICUS_JOB_MAX_SECONDS (default 1800s).",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
@@ -8141,7 +8163,13 @@
                 "type": "string"
               },
               "status": {
-                "const": "running",
+                "enum": [
+                  "cancelled",
+                  "done",
+                  "failed",
+                  "running",
+                  "timeout"
+                ],
                 "type": "string"
               },
               "task_id": {

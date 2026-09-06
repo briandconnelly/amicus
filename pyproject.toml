@@ -88,7 +88,7 @@ ignore = [
 "src/amicus/tools/review.py" = ["ARG001", "TC001", "TC002"]
 "src/amicus/tools/delegate.py" = ["ARG001", "TC001", "TC002"]
 "src/amicus/tools/dry_run.py" = ["ARG001", "TC001", "TC002"]
-"src/amicus/tools/jobs.py" = ["ARG001", "TC001"]
+"src/amicus/tools/jobs.py" = ["ARG001", "TC001", "TC002", "PLR0915"]
 
 [tool.ty.src]
 include = ["src"]

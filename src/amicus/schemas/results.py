@@ -100,7 +100,7 @@ class JobStarted(SuccessBase):
     job_id: str
     backend: BackendRef
     kind: str
-    status: Literal["running"] = "running"
+    status: JobState = "running"
     started_at: str
     deadline_seconds: int
     poll_after_ms: int

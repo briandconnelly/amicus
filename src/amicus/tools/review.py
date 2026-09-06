@@ -54,7 +54,7 @@ _REVIEW_DESC = (
 _REVIEW_ASYNC_DESC = (
     f"{_resolve.PAID_MARKER} Async twin of amicus_review_changes: returns a job handle; "
     "poll amicus_job_status, read amicus_job_result. Same egress. Starting a job commits "
-    "to spend."
+    "to spend. Deadline: AMICUS_JOB_MAX_SECONDS (default 1800s)."
 )
 _ADV_DESC = (
     f"{_resolve.PAID_MARKER} A fixed adversarial critic on `backend` attacks `target` (a "
@@ -72,19 +72,6 @@ _ADV_ASYNC_DESC = (
 def register_review_changes(
     app: FastMCP, settings: Settings, registry: BackendRegistry
 ) -> tuple[str, ...]:
-    async def _async_run(tool_name: str, backend: str, options: Any) -> dict[str, Any]:
-        resolved = _resolve.resolve_paid_call(
-            registry=registry,
-            settings=settings,
-            tool_name=tool_name,
-            verb="review_changes",
-            backend=backend,
-            backend_options=options,
-        )
-        if isinstance(resolved, dict):
-            return resolved
-        return _resolve.not_implemented(tool_name, settings, backend)
-
     @app.tool(
         name="amicus_review_changes",
         annotations=annotations_for("active", settings),
@@ -158,6 +145,7 @@ def register_review_changes(
     @guard("amicus_review_changes_async", settings)
     async def amicus_review_changes_async(
         backend: BackendParam,
+        ctx: Context | None = None,
         scope: ScopeParam = "working_tree",
         base: BaseParam = None,
         commit: CommitParam = None,
@@ -173,7 +161,38 @@ def register_review_changes(
         backend_options: BackendOptionsParam = None,
     ) -> dict[str, Any]:
         """Start a background review with the selected backend."""
-        return await _async_run("amicus_review_changes_async", backend, backend_options)
+        prep = await prepare_run(
+            registry=registry,
+            settings=settings,
+            tool_name="amicus_review_changes_async",
+            verb="review_changes",
+            backend=backend,
+            backend_options=backend_options,
+            ctx=ctx,
+            workspace_root=workspace_root,
+            model=model,
+            reasoning_effort=reasoning_effort,
+            timeout_seconds=None,
+            background=True,
+            instructions_append=instructions_append,
+            extra_context=extra_context,
+            focus=focus,
+            scope=scope,
+            base=base,
+            commit=commit,
+            paths=paths,
+            untracked=untracked,
+        )
+        if isinstance(prep, dict):
+            return prep
+        return await lifecycle.start_async(
+            lifecycle.job_store(settings),
+            prep.spec,
+            prep.meta,
+            prep.plugin,
+            deadline=prep.spec.timeout_seconds,
+            idempotency_key=idempotency_key,
+        )
 
     return ("amicus_review_changes", "amicus_review_changes_async")
 

@@ -107,6 +107,11 @@ _SYNC_LIFECYCLE_CODES = [
 ]
 _COMMON_PAID_CODES_SYNC = [c for c in _COMMON_PAID_CODES if c != "not_implemented"]
 _REVIEW_CODES_EMITTED = [c for c in _REVIEW_CODES if c != "context_too_large"]
+_IDEMPOTENCY_CODES = [
+    "idempotency_conflict",
+    "idempotency_in_progress",
+    "idempotency_result_unavailable",
+]
 TOOL_DETAILS: dict[str, dict[str, Any]] = {
     "amicus_consult": {
         "cost": "active",
@@ -123,7 +128,7 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
         "backends": list(BACKEND_IDS),
         "use_when": "The same consult when it may exceed the sync deadline; returns a job handle.",
         "returns": "job_id, poll_after_ms, expires_at, follow_up; result via amicus_job_result.",
-        "error_codes": [*_COMMON_PAID_CODES, "idempotency_conflict", "idempotency_in_progress"],
+        "error_codes": _COMMON_PAID_CODES_SYNC + _IDEMPOTENCY_CODES,
     },
     "amicus_review_changes": {
         "cost": "active",
@@ -137,9 +142,7 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
         "backends": list(BACKEND_IDS),
         "use_when": "A multi-file or whole-branch review that may exceed the sync deadline.",
         "returns": "a job handle; result via amicus_job_result.",
-        "error_codes": _COMMON_PAID_CODES
-        + _REVIEW_CODES
-        + ["idempotency_conflict", "idempotency_in_progress"],
+        "error_codes": _COMMON_PAID_CODES_SYNC + _REVIEW_CODES + _IDEMPOTENCY_CODES,
     },
     "amicus_delegate": {
         "cost": "active",
@@ -163,12 +166,11 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
         "use_when": "A substantial delegate that may exceed the sync deadline.",
         "returns": "a job handle; result via amicus_job_result.",
         "error_codes": [
-            *_COMMON_PAID_CODES,
+            *_COMMON_PAID_CODES_SYNC,
             "not_a_git_repo",
             "git_unavailable",
             "worktree_error",
-            "idempotency_conflict",
-            "idempotency_in_progress",
+            *_IDEMPOTENCY_CODES,
         ],
     },
     "amicus_adversarial_review": {
@@ -183,9 +185,7 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
         "backends": ["claude"],
         "use_when": "The same critique when it may exceed the sync deadline.",
         "returns": "a job handle; result via amicus_job_result.",
-        "error_codes": _COMMON_PAID_CODES
-        + _REVIEW_CODES
-        + ["idempotency_conflict", "idempotency_in_progress"],
+        "error_codes": _COMMON_PAID_CODES + _REVIEW_CODES + _IDEMPOTENCY_CODES,
     },
     "amicus_dry_run": {
         "cost": "free",
@@ -253,7 +253,11 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
         "backends": list(BACKEND_IDS),
         "use_when": "Poll a job without fetching its result.",
         "returns": "status, result_available, result_ok, poll_after_ms.",
-        "error_codes": ["job_not_found", "invalid_workspace_root", "not_implemented"],
+        "error_codes": [
+            "job_not_found",
+            "invalid_workspace_root",
+            "workspace_outside_roots",
+        ],
     },
     "amicus_job_result": {
         "cost": "free",
@@ -267,7 +271,8 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
             "job_cancelled",
             "job_timeout",
             "job_result_incompatible",
-            "not_implemented",
+            "invalid_workspace_root",
+            "workspace_outside_roots",
         ],
     },
     "amicus_job_consume_result": {
@@ -282,7 +287,8 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
             "job_cancelled",
             "job_timeout",
             "job_result_incompatible",
-            "not_implemented",
+            "invalid_workspace_root",
+            "workspace_outside_roots",
         ],
     },
     "amicus_job_cancel": {
@@ -290,14 +296,18 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
         "backends": list(BACKEND_IDS),
         "use_when": "Stop a running job.",
         "returns": "the job's status after cancellation.",
-        "error_codes": ["job_not_found", "not_implemented"],
+        "error_codes": [
+            "job_not_found",
+            "invalid_workspace_root",
+            "workspace_outside_roots",
+        ],
     },
     "amicus_job_list": {
         "cost": "free",
         "backends": list(BACKEND_IDS),
         "use_when": "Recover job_ids, including the job behind a task_id.",
         "returns": "job summaries, truncated flag.",
-        "error_codes": ["invalid_workspace_root", "not_implemented"],
+        "error_codes": ["invalid_workspace_root", "workspace_outside_roots"],
     },
 }
 _JOB_PARAMS: dict[str, tuple[list[str], list[str]]] = {

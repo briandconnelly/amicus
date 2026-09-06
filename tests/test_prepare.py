@@ -236,5 +236,27 @@ def test_clamp_and_deadline_advisory():
     assert _prepare.deadline_advisory(True, 10, "low", 300, "amicus_consult_async") is None
     text = _prepare.deadline_advisory(True, 10, "high", 300, "amicus_review_changes_async")
     assert text and "amicus_review_changes_async" in text and "300s" in text
-    assert "narrow the input" in text
+    assert "narrow the input" in text and "AMICUS_JOB_MAX_SECONDS" in text and "M2" not in text
     assert _prepare.deadline_advisory(True, 200_000, None, 300, "amicus_delegate_async")
+
+
+async def test_background_prepare_uses_the_job_deadline_unclamped():
+    settings = config.settings({"AMICUS_JOB_MAX_SECONDS": "1500", "AMICUS_TIMEOUT_SECONDS": "60"})
+    registry = BackendRegistry({"codex": fakeplugin.make_plugin("codex")}, {})
+    prep = await _prepare.prepare_run(
+        registry=registry,
+        settings=settings,
+        tool_name="amicus_consult_async",
+        verb="consult",
+        backend="codex",
+        backend_options=None,
+        ctx=None,
+        workspace_root="/tmp",
+        model=None,
+        reasoning_effort=None,
+        timeout_seconds=5,
+        background=True,
+        question="q",
+    )
+    assert not isinstance(prep, dict)
+    assert prep.spec.timeout_seconds == 1500 and prep.meta.timeout_seconds == 1500

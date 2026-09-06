@@ -109,14 +109,17 @@ ASYNC_TOOLS = tuple(n for n in VALID if n.endswith("_async"))
 
 
 @pytest.mark.parametrize("name", sorted(ASYNC_TOOLS))
-async def test_with_a_loaded_backend_every_async_tool_is_not_implemented_until_m2(name):
+async def test_async_twins_refuse_pre_spend_without_a_workspace(name):
     app = _app(registry=_fake_registry())
     async with Client(app) as c:
         res = await c.call_tool(name, VALID[name], raise_on_error=False)
         tool = next(t for t in await c.list_tools() if t.name == name)
     err = res.structured_content["error"]
-    assert err["code"] == "not_implemented", err
-    assert err["temporary"] is False and err["repair"]["tool"] == "amicus_capabilities"
+    if name == "amicus_adversarial_review_async":
+        assert err["code"] == "not_implemented", err
+        assert err["temporary"] is False and err["repair"]["tool"] == "amicus_capabilities"
+    else:
+        assert err["code"] == "invalid_workspace_root", err
     Draft202012Validator(tool.output_schema).validate(res.structured_content)
 
 
