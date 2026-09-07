@@ -198,6 +198,25 @@ async def test_server_boots_in_process_with_no_amicus_env_set(monkeypatch):
     assert len(tools) == 18
 
 
+def _path_without_repo_venv() -> str:
+    """The ambient `PATH` with every entry under this checkout stripped out.
+
+    `uv run pytest` prepends this repo's dev `.venv/bin` to `PATH`, and that `.venv` already
+    has a real `amicus-mcp` installed (the dev/editable install this repo's own tooling
+    uses). If the subprocess below inherited that PATH unfiltered, a broken `--from`
+    substitution — wrong wheel, wrong console script, wrong package entirely — could still
+    resolve `amicus-mcp` by falling through to the dev venv's copy on PATH, and the test
+    would pass for the wrong reason. Stripping those entries forces the only possible
+    `amicus-mcp` to be the one `uvx` builds from the substituted `--from` source."""
+    repo_root = REPO_ROOT.resolve()
+    kept = [
+        entry
+        for entry in os.environ["PATH"].split(os.pathsep)
+        if entry and not Path(entry).resolve().is_relative_to(repo_root)
+    ]
+    return os.pathsep.join(kept)
+
+
 @pytest.mark.slow
 async def test_the_committed_manifest_command_starts_a_real_server(tmp_path):
     """Smoke the manifest's own command line, not an in-process app.
@@ -206,7 +225,11 @@ async def test_the_committed_manifest_command_starts_a_real_server(tmp_path):
     substitutes a locally built wheel for that ONE field and asserts every other field —
     command, console script, arg order — exactly as committed. What stays unproven until
     release is the tag's resolvability; that is the release workflow's gate, and Task 10's
-    ADR records it as a known limit of the M6 claim."""
+    ADR records it as a known limit of the M6 claim.
+
+    `PATH` is stripped of this repo's own dev `.venv` (see `_path_without_repo_venv`) so a
+    broken substitution cannot pass by silently resolving the dev venv's already-installed
+    `amicus-mcp` instead of the one the substituted `--from` source provides."""
     server = json.loads((REPO_ROOT / ".mcp.json").read_text())["mcpServers"]["amicus"]
     subprocess.run(
         ["uv", "build", "--wheel", "--out-dir", str(tmp_path), str(REPO_ROOT)],
@@ -216,7 +239,7 @@ async def test_the_committed_manifest_command_starts_a_real_server(tmp_path):
     wheel = next(tmp_path.glob("*.whl"))
     args = [str(wheel) if a.startswith("git+") else a for a in server["args"]]
     assert args[-1] == "amicus-mcp", "the console script name must survive substitution"
-    env = {"PATH": os.environ["PATH"], "HOME": str(tmp_path)}
+    env = {"PATH": _path_without_repo_venv(), "HOME": str(tmp_path)}
     transport = StdioTransport(command=server["command"], args=args, env=env)
     async with Client(transport) as client:
         tools = await client.list_tools()
