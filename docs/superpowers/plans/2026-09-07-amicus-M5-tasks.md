@@ -63,7 +63,7 @@ The maintainer approved decisions 1–3 in the planning session (2026-09-07); 4�
 6. **Cancel propagation is the existing `CancelledError` path.** `tasks/cancel` is `docket.cancel(execution.key)`, which cancels the coroutine cooperatively; `await_job_result` already cancels the job on `CancelledError` (M1).
    Nothing new is wired; the in-memory test proves the chain end to end against the job record.
 7. **Docket timing.** `TasksExtension` 4.0.x does not expose Docket's `execution_ttl`, so a task result stays readable through `tasks/get` for 15 minutes after completion (Docket's default; `ttlMs` = 900000); the job record outlives it for `AMICUS_JOB_TTL` (default 24 h) and the summary says so.
-   Docket renews a running task's lease, so a run longer than `redelivery_timeout` (default 5 min) is not re-executed; amicus still sets `redelivery_timeout` to `job_max_seconds + SYNC_AWAIT_GRACE_S` as belt and braces, and a probe test pins the single-execution behaviour.
+   Docket renews a running task's lease, so a run longer than `redelivery_timeout` (default 5 min) is not re-executed; amicus still sets `redelivery_timeout` to `max(job_max_seconds, MAX_TIMEOUT_SECONDS) + SYNC_AWAIT_GRACE_S` as belt and braces, and a probe test pins the single-execution behaviour.
 8. **The connection line is a middleware**, `ConnectionLogMiddleware`, first in the chain, one DEBUG line per `tools/call` naming the tool, the protocol version, `clientInfo` name/version and whether the tasks extension was declared for the request.
    It is the instrument behind the captures and stays useful to operators.
 9. **Host identity is fixed here, not deferred.** The connection log and the host captures both read the client's declared name, and it was unreadable: the MCP SDK v2 field is `client_info`, `client_name_from_ctx` read `clientInfo`, and the covering test's hand-built fake used the wrong name so it could never fail.
@@ -753,12 +753,13 @@ def test_tasks_extension_redelivery_covers_the_sync_deadline():
     settings = config.settings({"AMICUS_TASKS": "1", "AMICUS_JOB_MAX_SECONDS": "120"})
     app = server.create_app(settings, BackendRegistry({}, {}))
     ext = app._extensions["io.modelcontextprotocol/tasks"]
-    assert server.tasks_redelivery_seconds(settings) == 150
-    assert ext.docket_settings.redelivery_timeout == timedelta(seconds=150)
+    assert server.tasks_redelivery_seconds(settings) == 630
+    assert ext.docket_settings.redelivery_timeout == timedelta(seconds=630)
     assert ext.docket_settings.url == "memory://"
 ```
 
-(If `AMICUS_JOB_MAX_SECONDS` has a floor above 120 in `config/__init__.py`, use a value at the floor and adjust `150` to floor + 30.)
+(`tasks_redelivery_seconds` is `max(job_max_seconds, MAX_TIMEOUT_SECONDS) + SYNC_AWAIT_GRACE_S`; with `MAX_TIMEOUT_SECONDS` at 600 and `SYNC_AWAIT_GRACE_S` at 30, a `job_max_seconds` of 120 gives `max(120, 600) + 30 == 630`.
+If either constant changes, recompute the expected value the same way.)
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
@@ -833,15 +834,16 @@ In `src/amicus/tools/consult.py`, `tools/review.py` and `tools/delegate.py`, cha
 
 - [ ] **Step 5: Implement the extension timing**
 
-In `src/amicus/server.py`, add `from datetime import timedelta` and `from amicus.jobs.lifecycle import SYNC_AWAIT_GRACE_S` to the imports, add after `UI_EXTENSION_ID`:
+In `src/amicus/server.py`, add `from datetime import timedelta`, `from amicus.jobs.lifecycle import SYNC_AWAIT_GRACE_S` and `from amicus.schemas.params import MAX_TIMEOUT_SECONDS` to the imports, add after `UI_EXTENSION_ID`:
 
 ```python
 def tasks_redelivery_seconds(settings: Settings) -> int:
     """Docket's redelivery_timeout for the tasks extension: longer than any sync run can
-    take (deadline plus the await grace), so a healthy worker is never asked to re-run a
-    paid call. Docket renews a running task's lease anyway; this is belt and braces
+    take (the largest of the configured job deadline and a caller's own clamped
+    `timeout_seconds`, plus the await grace), so a healthy worker is never asked to re-run
+    a paid call. Docket renews a running task's lease anyway; this is belt and braces
     (ADR 0011)."""
-    return settings.job_max_seconds + SYNC_AWAIT_GRACE_S
+    return max(settings.job_max_seconds, MAX_TIMEOUT_SECONDS) + SYNC_AWAIT_GRACE_S
 ```
 
 (`Settings` is imported under `TYPE_CHECKING` in this module already; move the import out from under `TYPE_CHECKING` only if `ty` requires it, otherwise keep the string annotation as `from __future__ import annotations` makes it valid.)
@@ -1568,7 +1570,7 @@ The maintainer approved decisions 1–3 in the M5 planning session.
 - The `isError` carrier is the `guard` wrapper: `tools._guard.as_tool_result` returns `ToolResult(structured_content=envelope, is_error=True)` for every `ok: false` envelope on both delivery paths; the wire shape equals FastMCP's own dict conversion (pinned by a parity test); `SemanticErrorMiddleware` stays as a foreground safety net.
 - Task-map recording lives in `jobs.lifecycle.run_sync`, keyed by `lifecycle.current_task_id()` (the extension's `get_task_context`, imported lazily), through a `task_map` keyword the four sync tools pass; the id also rides `meta.task_id`; a map write failure is logged and never fails the run.
 - Cancel propagation is the existing `CancelledError` path in `await_job_result`; nothing new is wired.
-- `TasksExtension` gets `redelivery_timeout = AMICUS_JOB_MAX_SECONDS + SYNC_AWAIT_GRACE_S` as belt and braces; Docket's lease renewal already prevents re-execution of a live task, and a probe test pins that.
+- `TasksExtension` gets `redelivery_timeout = max(AMICUS_JOB_MAX_SECONDS, MAX_TIMEOUT_SECONDS) + SYNC_AWAIT_GRACE_S` as belt and braces; Docket's lease renewal already prevents re-execution of a live task, and a probe test pins that.
 - `ConnectionLogMiddleware` logs one DEBUG line per `tools/call` (tool name, protocol version, client name/version, tasks declared); it is the capture instrument and carries no argument (rule 18).
 - Host identity was broken and is fixed here: MCP SDK v2 names the field `client_info` (snake_case), `client_name_from_ctx` read `clientInfo`, so `host_display_name` always fell back to the neutral `Caller` and the spec's first branch was dead.
   The test that covered it built its own `SimpleNamespace(clientInfo=...)` fake, so it could not fail; the fake now uses `mcp.types.InitializeRequestParams`, and a real-client test pins the whole path.
