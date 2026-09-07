@@ -52,6 +52,7 @@ def test_budget_bounds_are_in_the_schema_and_enforced():
     props = o.BackendOptions.model_json_schema()["properties"]["max_budget_usd"]
     branch = next(b for b in props["anyOf"] if b.get("type") == "number")
     assert (branch["minimum"], branch["maximum"]) == o.MAX_BUDGET_BOUNDS
+    assert o.MAX_BUDGET_BOUNDS == (0.01, 5.0)
     with pytest.raises(ValidationError):
         o.BackendOptions(max_budget_usd=0)
     assert o.option_violations("claude", o.BackendOptions(max_budget_usd=1.5)) == []

@@ -8,7 +8,7 @@ import pytest
 from jsonschema import Draft202012Validator
 
 from amicus.schemas import results as r
-from amicus.schemas.envelope import Meta, Repair
+from amicus.schemas.envelope import ContextSummary, Meta, Repair
 from amicus.schemas.fingerprint import JSON_SCHEMA_DIALECT
 
 ALL_SCHEMAS = {
@@ -88,6 +88,20 @@ def test_success_payloads_validate_against_their_schemas():
             ),
         ),
     ]
+    adv = r.AdversarialReviewResult(summary="s", verdict="fail", confidence="high", meta=meta)
+    assert adv.review_status == "completed" and adv.context_summary is None
+    not_run = r.AdversarialReviewResult(
+        summary="s",
+        verdict="unknown",
+        confidence="low",
+        review_status="not_run",
+        context_summary=ContextSummary(files_changed=0),
+        meta=meta,
+    )
+    assert not_run.review_status == "not_run"
+    # Both adversarial shapes (completed, and the zero-spend not_run with a context summary)
+    # must validate against the advertised schema, not only the default one above.
+    cases.append((r.ADVERSARIAL_RESULT_SCHEMA, not_run))
     for schema, model in cases:
         Draft202012Validator(schema).validate(model.model_dump(mode="json"))
 

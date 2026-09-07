@@ -85,6 +85,8 @@ class AdversarialReviewResult(_ModelResult):
     tool: Literal["amicus_adversarial_review"] = "amicus_adversarial_review"
     verdict: Verdict
     confidence: Confidence
+    review_status: ReviewStatus = "completed"
+    context_summary: ContextSummary | None = None
 
 
 class DelegateResult(_ModelResult):

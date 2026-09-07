@@ -28,8 +28,8 @@ def _app(env: dict | None = None, registry: BackendRegistry | None = None):
     # None -> create_app's own BackendRegistry.load(settings.enabled_backends), which
     # tries to import the not-yet-shipped in-tree backend packages. The codex package exists
     # but its plugin factory lands in Task 6, so the registry records it as load_failed;
-    # kimi loads since M3; claude stays import_failed. This is the realistic intermediate
-    # state this milestone is in.
+    # kimi loads since M3 and claude since M4. This is the realistic
+    # intermediate state this milestone is in.
     return server.create_app(config.settings(env or {}), registry)
 
 
@@ -116,11 +116,7 @@ async def test_async_twins_refuse_pre_spend_without_a_workspace(name):
         res = await c.call_tool(name, VALID[name], raise_on_error=False)
         tool = next(t for t in await c.list_tools() if t.name == name)
     err = res.structured_content["error"]
-    if name == "amicus_adversarial_review_async":
-        assert err["code"] == "not_implemented", err
-        assert err["temporary"] is False and err["repair"]["tool"] == "amicus_capabilities"
-    else:
-        assert err["code"] == "invalid_workspace_root", err
+    assert err["code"] == "invalid_workspace_root", err
     Draft202012Validator(tool.output_schema).validate(res.structured_content)
 
 

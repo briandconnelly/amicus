@@ -166,8 +166,9 @@ PARAMETER_CONTRACTS: dict[str, ParamContract] = {
         name="instructions_append",
         summary=(
             "Optional caller stance/focus text appended BEHIND this server's always-leading "
-            "framing (codex: developer_instructions; claude: system_prompt_append; kimi: "
-            "prompt framing). UNTRUSTED, grants no tools, best-effort compliance; may ride "
+            "framing (codex: developer_instructions on argv; claude and kimi: a leading "
+            "section of the stdin/handshake prompt). UNTRUSTED, grants no tools, best-effort "
+            "compliance; may ride "
             f"the backend command line. Max {MAX_INSTRUCTIONS_APPEND_BYTES} bytes. Full "
             f"contract: {PARAMS_RESOURCE_URI}."
         ),
@@ -211,7 +212,7 @@ PARAMETER_CONTRACTS: dict[str, ParamContract] = {
             "config, then also execpolicy rules); kimi: inherit|ignore-skills. "
             "config_mode — claude: inherit|scoped|safe|bare (how much of the user's Claude "
             "config the run inherits). access — claude: toolless|readonly. max_budget_usd "
-            "— claude: per-call spend cap, clamped to the operator's bounds. Unset keys "
+            "— claude: per-call best-effort spend cap in USD, 0.01–5.00. Unset keys "  # noqa: RUF001
             "take the backend's defaults; amicus_dry_run echoes the resolved values."
         ),
     ),

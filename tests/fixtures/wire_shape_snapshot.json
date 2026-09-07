@@ -1,6 +1,70 @@
 {
   "delivered": {
     "full": {
+      "adversarial": {
+        "assumptions": [],
+        "confidence": "medium",
+        "context_summary": {
+          "files_changed": 1,
+          "lines_added": 2,
+          "lines_removed": 3
+        },
+        "findings": [],
+        "meta": {
+          "backend": "codex",
+          "backend_details": {
+            "access": "toolless",
+            "config_mode": "inherit",
+            "max_budget_usd": 1.0
+          },
+          "command_exit_code": 0,
+          "compat_warnings": [],
+          "context_summary": {
+            "files_changed": 1,
+            "lines_added": 2,
+            "lines_removed": 3
+          },
+          "cwd": "/repo",
+          "elapsed_ms": 1,
+          "fingerprint": "<fingerprint>",
+          "instructions_append": {
+            "bytes": 5,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "job_id": "00000000000000000000000000000000",
+          "model": "a-model",
+          "reasoning_effort": "high",
+          "redacted_paths": [],
+          "request_id": "00000000000000000000000000000000",
+          "roots_source": "client",
+          "security_warnings": [],
+          "server_version": "0.0.0",
+          "session_id": "sess-1",
+          "timeout_seconds": 1,
+          "truncated": false,
+          "usage": {
+            "cache_creation_input_tokens": null,
+            "cached_input_tokens": 3,
+            "cost_usd": null,
+            "input_tokens": 1,
+            "output_tokens": 2,
+            "total_tokens": 6
+          },
+          "workspace_source": "param"
+        },
+        "next_steps": [],
+        "ok": true,
+        "questions": [],
+        "raw_response": {
+          "model": "a-model",
+          "session_id": "sess-1",
+          "text": "RAW MODEL TEXT"
+        },
+        "review_status": "completed",
+        "summary": "s",
+        "tool": "amicus_adversarial_review",
+        "verdict": "concerns"
+      },
       "consult": {
         "assumptions": [],
         "findings": [],
@@ -205,6 +269,70 @@
       }
     },
     "summary": {
+      "adversarial": {
+        "assumptions": [],
+        "confidence": "medium",
+        "context_summary": {
+          "files_changed": 1,
+          "lines_added": 2,
+          "lines_removed": 3
+        },
+        "findings": [],
+        "meta": {
+          "backend": "codex",
+          "backend_details": {
+            "access": "toolless",
+            "config_mode": "inherit",
+            "max_budget_usd": 1.0
+          },
+          "command_exit_code": 0,
+          "compat_warnings": [],
+          "context_summary": {
+            "files_changed": 1,
+            "lines_added": 2,
+            "lines_removed": 3
+          },
+          "cwd": "/repo",
+          "elapsed_ms": 1,
+          "fingerprint": "<fingerprint>",
+          "instructions_append": {
+            "bytes": 5,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "job_id": "00000000000000000000000000000000",
+          "model": "a-model",
+          "reasoning_effort": "high",
+          "redacted_paths": [],
+          "request_id": "00000000000000000000000000000000",
+          "roots_source": "client",
+          "security_warnings": [],
+          "server_version": "0.0.0",
+          "session_id": "sess-1",
+          "timeout_seconds": 1,
+          "truncated": false,
+          "usage": {
+            "cache_creation_input_tokens": null,
+            "cached_input_tokens": 3,
+            "cost_usd": null,
+            "input_tokens": 1,
+            "output_tokens": 2,
+            "total_tokens": 6
+          },
+          "workspace_source": "param"
+        },
+        "next_steps": [],
+        "ok": true,
+        "questions": [],
+        "raw_response": {
+          "model": "a-model",
+          "session_id": "sess-1",
+          "text": null
+        },
+        "review_status": "completed",
+        "summary": "s",
+        "tool": "amicus_adversarial_review",
+        "verdict": "concerns"
+      },
       "consult": {
         "assumptions": [],
         "findings": [],
@@ -737,7 +865,7 @@
       "error": {
         "backend": null,
         "code": "job_result_incompatible",
-        "message": "stored job result was written under a different result format (result_format 2; this release reads 1, producer server_version 0.0.0): stored review_changes result did not match its schema: 3 validation errors for ReviewResult\ntool\n  Input should be 'amicus_review_changes' [type=literal_error, input_value='amicus_consult', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.13/v/literal_error\nverdict\n  Field required [type=missing, input_value={'ok': True, 'meta': {'ba",
+        "message": "stored job result was written under a different result format (result_format 3; this release reads 2, producer server_version 0.0.0): stored review_changes result did not match its schema: 3 validation errors for ReviewResult\ntool\n  Input should be 'amicus_review_changes' [type=literal_error, input_value='amicus_consult', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.13/v/literal_error\nverdict\n  Field required [type=missing, input_value={'ok': True, 'meta': {'ba",
         "repair": {
           "alternative": "The stored result predates this server version; start a new job.",
           "next_step": "start_new_job"
@@ -856,6 +984,13 @@
     }
   },
   "omitted_meta_keys": {
+    "adversarial": [
+      "idempotency_replayed",
+      "job_kind",
+      "task_id",
+      "truncation_hint",
+      "workspace_warning"
+    ],
     "consult": [
       "context_summary",
       "idempotency_replayed",

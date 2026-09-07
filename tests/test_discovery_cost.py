@@ -5,7 +5,7 @@ catalog is a per-session token tax. The budget is a ceiling; the target is the l
 deliberate measurement so a failure message shows the drift. Raising a budget is a
 reviewed decision — say why in the PR body.
 
-Measured 2026-09-06 at schema-3 (18 tools, schema-only): see MEASURED.
+Measured 2026-09-07 at schema-4 (18 tools; claude live, adversarial result shape): see MEASURED.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ import pytest
 
 from amicus import manifest
 
-MEASURED: dict[str, int] = {"all": 90979, "codex-kimi": 90987, "claude": 90979}
+MEASURED: dict[str, int] = {"all": 92082, "codex-kimi": 92090, "claude": 92082}
 BUDGET: dict[str, int] = {p: ((n // 1000) + 1) * 1000 for p, n in MEASURED.items()}
 # ceil(bytes/4): a dependency-free, conservative token proxy (~4.13 bytes per token).
 TOKEN_PROXY_BUDGET: dict[str, int] = {p: -(-b // 4) for p, b in BUDGET.items()}

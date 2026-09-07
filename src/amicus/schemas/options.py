@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from amicus.schemas.envelope import InvalidArgument
 
-MAX_BUDGET_BOUNDS: tuple[float, float] = (0.01, 100.0)
+MAX_BUDGET_BOUNDS: tuple[float, float] = (0.01, 5.0)
 
 # option -> backend -> allowed values (None: a numeric option bounded by the schema).
 # The backends absent for an option do not accept it.
@@ -45,7 +45,10 @@ class BackendOptions(BaseModel):
         default=None,
         ge=MAX_BUDGET_BOUNDS[0],
         le=MAX_BUDGET_BOUNDS[1],
-        description="claude only: per-call spend cap in USD, clamped to the operator bounds.",
+        description=(
+            "claude only: per-call best-effort spend cap in USD, 0.01–5.00. Omit for the "  # noqa: RUF001
+            "server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
+        ),
     )
 
 

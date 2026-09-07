@@ -61,7 +61,8 @@ _ADV_DESC = (
     "plan, claim or decision) using `evidence` and an optionally attached git diff; the "
     "critic stance is the product, so there is no instructions_append. Claude only in v1 "
     "(feature adversarial_review). Egress: sends target, evidence, extra_context and the "
-    "redacted diff raw to the backend's provider."
+    "redacted diff raw to the backend's provider. An attached scope that gathers nothing "
+    "returns review_status=not_run with no spend. Recorded as a job (meta.job_id)."
 )
 _ADV_ASYNC_DESC = (
     f"{_resolve.PAID_MARKER} Async twin of amicus_adversarial_review: returns a job "
@@ -200,22 +201,6 @@ def register_review_changes(
 def register_adversarial(
     app: FastMCP, settings: Settings, registry: BackendRegistry
 ) -> tuple[str, ...]:
-    async def _run(tool_name: str, backend: str, target: str, options: Any) -> dict[str, Any]:
-        err = _resolve.blank_input_error(target, "target", tool_name, settings, backend)
-        if err is not None:
-            return err
-        resolved = _resolve.resolve_paid_call(
-            registry=registry,
-            settings=settings,
-            tool_name=tool_name,
-            verb="adversarial_review",
-            backend=backend,
-            backend_options=options,
-        )
-        if isinstance(resolved, dict):
-            return resolved
-        return _resolve.not_implemented(tool_name, settings, backend)
-
     @app.tool(
         name="amicus_adversarial_review",
         annotations=annotations_for("active", settings),
@@ -229,6 +214,7 @@ def register_adversarial(
     async def amicus_adversarial_review(
         backend: BackendParam,
         target: TargetParam,
+        ctx: Context | None = None,
         evidence: EvidenceParam = None,
         scope: OptionalScopeParam = None,
         base: BaseParam = None,
@@ -245,7 +231,44 @@ def register_adversarial(
         backend_options: BackendOptionsParam = None,
     ) -> dict[str, Any]:
         """Attack a target with a fixed adversarial critic on the selected backend."""
-        return await _run("amicus_adversarial_review", backend, target, backend_options)
+        err = _resolve.blank_input_error(
+            target, "target", "amicus_adversarial_review", settings, backend
+        )
+        if err is not None:
+            return err
+        prep = await prepare_run(
+            registry=registry,
+            settings=settings,
+            tool_name="amicus_adversarial_review",
+            verb="adversarial_review",
+            backend=backend,
+            backend_options=backend_options,
+            ctx=ctx,
+            workspace_root=workspace_root,
+            model=model,
+            reasoning_effort=reasoning_effort,
+            timeout_seconds=timeout_seconds,
+            extra_context=extra_context,
+            focus=focus,
+            scope=scope,
+            base=base,
+            commit=commit,
+            paths=paths,
+            untracked=untracked,
+            target=target,
+            evidence=evidence,
+        )
+        if isinstance(prep, dict):
+            return prep
+        return await lifecycle.run_sync(
+            lifecycle.job_store(settings),
+            prep.spec,
+            prep.meta,
+            prep.plugin,
+            timeout=prep.spec.timeout_seconds,
+            detail=detail,
+            ctx=ctx,
+        )
 
     @app.tool(
         name="amicus_adversarial_review_async",
@@ -259,6 +282,7 @@ def register_adversarial(
     async def amicus_adversarial_review_async(
         backend: BackendParam,
         target: TargetParam,
+        ctx: Context | None = None,
         evidence: EvidenceParam = None,
         scope: OptionalScopeParam = None,
         base: BaseParam = None,
@@ -274,6 +298,43 @@ def register_adversarial(
         backend_options: BackendOptionsParam = None,
     ) -> dict[str, Any]:
         """Start a background adversarial critique on the selected backend."""
-        return await _run("amicus_adversarial_review_async", backend, target, backend_options)
+        err = _resolve.blank_input_error(
+            target, "target", "amicus_adversarial_review_async", settings, backend
+        )
+        if err is not None:
+            return err
+        prep = await prepare_run(
+            registry=registry,
+            settings=settings,
+            tool_name="amicus_adversarial_review_async",
+            verb="adversarial_review",
+            backend=backend,
+            backend_options=backend_options,
+            ctx=ctx,
+            workspace_root=workspace_root,
+            model=model,
+            reasoning_effort=reasoning_effort,
+            timeout_seconds=None,
+            background=True,
+            extra_context=extra_context,
+            focus=focus,
+            scope=scope,
+            base=base,
+            commit=commit,
+            paths=paths,
+            untracked=untracked,
+            target=target,
+            evidence=evidence,
+        )
+        if isinstance(prep, dict):
+            return prep
+        return await lifecycle.start_async(
+            lifecycle.job_store(settings),
+            prep.spec,
+            prep.meta,
+            prep.plugin,
+            deadline=prep.spec.timeout_seconds,
+            idempotency_key=idempotency_key,
+        )
 
     return ("amicus_adversarial_review", "amicus_adversarial_review_async")

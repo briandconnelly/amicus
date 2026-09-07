@@ -3,8 +3,9 @@
 The catalog is DERIVED from pontonier's shared taxonomy so it cannot drift from it:
 universal codes, the four per-backend codes generalized to ``backend_*`` (the concrete
 backend rides ``error.backend``), the feature codes some v1 backend declares, and the
-amicus-local codes. A backend-LOCAL code (codex's ``user_config_rejected``) joins this
-catalog when its backend is ported, as a deliberate fingerprint bump.
+amicus-local codes. A backend-LOCAL code (codex's ``user_config_rejected``; Claude's
+``budget_exceeded``, ``claude_permission_error``, ``api_key_invalid``, ``api_key_missing``)
+joins this catalog when its backend is ported, as a deliberate fingerprint bump.
 """
 
 from __future__ import annotations
@@ -38,6 +39,15 @@ LOCAL_CODES = frozenset(
         # Codex-local (M1): the user's own CLI config carries a key or value the installed
         # CLI refuses at startup; zero spend. Preserved verbatim, never generalized.
         "user_config_rejected",
+        # Claude-local (M4), all preserved verbatim: the best-effort spend cap stopped the run
+        # (a zero-exit envelope; MAY have spent) ...
+        "budget_exceeded",
+        # ... a tool call was denied under the access allowlist and nothing usable came back ...
+        "claude_permission_error",
+        # ... ANTHROPIC_API_KEY was rejected by the provider ...
+        "api_key_invalid",
+        # ... config_mode=bare was requested without ANTHROPIC_API_KEY; refused pre-spend.
+        "api_key_missing",
     }
 )
 
@@ -45,11 +55,15 @@ ERROR_CODES: tuple[str, ...] = tuple(
     sorted(_pe.UNIVERSAL_CODES | GENERALIZED_BACKEND_CODES | _FEATURE_CODES | LOCAL_CODES)
 )
 ErrorCode = Literal[
+    "api_key_invalid",
+    "api_key_missing",
     "backend_auth_indeterminate",
     "backend_auth_required",
     "backend_not_found",
     "backend_rate_limited",
     "backend_unavailable",
+    "budget_exceeded",
+    "claude_permission_error",
     "cli_contract_changed",
     "context_too_large",
     "empty_response",

@@ -202,8 +202,9 @@ async def test_delegate_preflight_and_other_backends(app, tmp_path):
             raise_on_error=False,
         )
     assert plain.structured_content["error"]["code"] == "not_a_git_repo"
-    assert claude.structured_content["error"]["code"] == "backend_unavailable"
-    assert asy.structured_content["error"]["code"] == "backend_unavailable"
+    assert claude.structured_content["error"]["code"] == "backend_not_found"
+    asy_body = asy.structured_content
+    assert asy_body["ok"] is True and asy_body["backend"] == "claude" and asy_body["job_id"]
     assert not (tmp_path / "argv.jsonl").exists()
 
 

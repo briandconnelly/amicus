@@ -91,7 +91,15 @@ async def test_dry_run_fails_where_the_review_would(app, tmp_path, repo):
         )
     assert bad_base.structured_content["error"]["code"] == "invalid_base"
     assert no_ws.structured_content["error"]["code"] == "invalid_workspace_root"
-    assert claude.structured_content["error"]["code"] == "backend_unavailable"
+    body = claude.structured_content
+    # The `repo` fixture has no uncommitted changes, so this mirrors the codex clean-repo
+    # case above (test_dry_run_previews_the_review), which also asserts would_call_model is False.
+    assert body["ok"] is True and body["would_call_model"] is False
+    assert body["backend_options"] == {
+        "config_mode": "inherit",
+        "access": "toolless",
+        "max_budget_usd": 1.0,
+    }
 
 
 async def test_delegate_dry_run(app, repo, tmp_path):

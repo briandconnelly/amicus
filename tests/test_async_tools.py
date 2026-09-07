@@ -96,7 +96,7 @@ async def test_consult_async_returns_a_handle_and_the_job_completes(app, store, 
     }
     rec = await _wait_done(store, tmp_path, body["job_id"])
     assert rec["status"] == "done" and rec["result_ok"] is True
-    assert rec["extra"] == {"result_format": 1, "backend": "codex", "tool": "amicus_consult_async"}
+    assert rec["extra"] == {"result_format": 2, "backend": "codex", "tool": "amicus_consult_async"}
     _rec, payload = store.result_payload(str(tmp_path), body["job_id"])
     assert payload["ok"] is True and payload["summary"] == "Looks fine"
     assert "why?" in (tmp_path / "prompt.txt").read_text()
@@ -195,6 +195,7 @@ async def test_async_pre_spend_refusals_never_spawn(app, tmp_path):
     assert blank.structured_content["error"]["code"] == "invalid_arguments"
     assert opts.structured_content["error"]["code"] == "invalid_arguments"
     assert norepo.structured_content["error"]["code"] == "not_a_git_repo"
-    assert claude.structured_content["error"]["code"] == "backend_unavailable"
+    body = claude.structured_content
+    assert body["ok"] is True and body["backend"] == "claude" and body["job_id"]
     assert sessionless.structured_content["error"]["code"] == "invalid_workspace_root"
     assert _argv_lines(tmp_path) == []

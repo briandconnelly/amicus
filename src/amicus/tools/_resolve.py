@@ -80,11 +80,3 @@ def resolve_paid_call(
             repair_arguments={"backend": backend},
         )
     return plugin, resolved_options(backend, backend_options)
-
-
-def not_implemented(tool_name: str, settings: Settings, backend: str) -> dict[str, Any]:
-    return error_envelope(
-        "not_implemented",
-        f"{tool_name} is registered but backend {backend!r} has not landed in this release",
-        base_meta(settings, backend=backend),
-    )

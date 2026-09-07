@@ -102,6 +102,8 @@ async def prepare_run(
     question: str | None = None,
     task: str | None = None,
     focus: str | None = None,
+    target: str | None = None,
+    evidence: str | None = None,
     scope: str | None = None,
     base: str | None = None,
     commit: str | None = None,
@@ -191,6 +193,30 @@ async def prepare_run(
             repair_alternative=repair,
             invalid_arguments=[InvalidArgument(field="instructions_append", reason=reason)],
         )
+    if verb == "adversarial_review" and scope is None:
+        offending = next(
+            (
+                name
+                for name, value in (("paths", paths), ("base", base), ("commit", commit))
+                if value
+            ),
+            None,
+        )
+        if offending is None and untracked != "explicit_only":
+            offending = "untracked"
+        if offending is not None:
+            reason = (
+                f"{offending} requires scope on {tool_name}: attach a diff with scope, or drop "
+                f"{offending} to critique the target alone."
+            )
+            return error_envelope(
+                "invalid_arguments",
+                f"{tool_name}: 1 invalid argument(s): {offending} — {reason}",
+                meta,
+                plugin=plugin,
+                repair_tool=tool_name,
+                invalid_arguments=[InvalidArgument(field=offending, reason=reason)],
+            )
     sized = [
         (n, v)
         for n, v in (
@@ -199,6 +225,8 @@ async def prepare_run(
             ("extra_context", extra_context),
             ("instructions_append", text),
             ("focus", focus),
+            ("target", target),
+            ("evidence", evidence),
         )
         if v
     ]
@@ -266,5 +294,7 @@ async def prepare_run(
         extra_context=extra_context,
         instructions_append=text,
         focus=focus,
+        target=target,
+        evidence=evidence,
     )
     return Prepared(spec=spec, meta=meta_for(spec), plugin=plugin)

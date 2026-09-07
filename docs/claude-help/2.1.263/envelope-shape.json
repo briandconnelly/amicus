@@ -1,0 +1,23 @@
+{
+  "top_level_keys": [
+    "is_error",
+    "modelUsage",
+    "result",
+    "session_id",
+    "subtype",
+    "total_cost_usd",
+    "type",
+    "usage"
+  ],
+  "usage_keys": [
+    "cache_creation_input_tokens",
+    "cache_read_input_tokens",
+    "input_tokens",
+    "output_tokens"
+  ],
+  "modelUsage_inner_keys": [
+    "inputTokens",
+    "outputTokens"
+  ],
+  "note": "Key names only, from the sibling's recorded real envelope (claude-in-codex tests/golden/claude_envelope.json); no values."
+}

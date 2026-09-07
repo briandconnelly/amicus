@@ -25,6 +25,7 @@ from amicus.schemas.envelope import (
 )
 from amicus.schemas.fingerprint import FINGERPRINT, RESULT_FORMAT
 from amicus.schemas.results import (
+    AdversarialReviewResult,
     ConsultResult,
     DelegateResult,
     JobListResult,
@@ -82,6 +83,24 @@ def _stored_envelopes() -> dict[str, dict[str, Any]]:
                 ),
             )
         ),
+        "adversarial": dump_success(
+            AdversarialReviewResult(
+                summary="s",
+                verdict="concerns",
+                confidence="medium",
+                review_status="completed",
+                context_summary=ContextSummary(files_changed=1, lines_added=2, lines_removed=3),
+                raw_response=_raw(),
+                meta=_populated(
+                    context_summary=ContextSummary(files_changed=1, lines_added=2, lines_removed=3),
+                    backend_details={
+                        "config_mode": "inherit",
+                        "access": "toolless",
+                        "max_budget_usd": 1.0,
+                    },
+                ),
+            )
+        ),
         # The states the branch review cannot hold at once: a cwd-resolved workspace and a
         # truncated diff, so every producible optional is populated SOMEWHERE.
         "review_commit_truncated": dump_success(
@@ -111,6 +130,7 @@ def _stored_envelopes() -> dict[str, dict[str, Any]]:
 _KIND_BY_NAME = {
     "consult": "consult",
     "review": "review_changes",
+    "adversarial": "adversarial_review",
     "review_commit_truncated": "review_changes",
     "delegate_no_changes": "delegate",
 }

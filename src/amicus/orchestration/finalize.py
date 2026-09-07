@@ -14,6 +14,7 @@ from amicus.errors import error_envelope
 from amicus.orchestration import review as review_mod
 from amicus.schemas.envelope import ContextSummary, Usage, dump_success
 from amicus.schemas.results import (
+    AdversarialReviewResult,
     ConsultResult,
     DelegateResult,
     Finding,
@@ -48,6 +49,11 @@ def stamp_run(meta: Meta, run: CommandRun, dropped_flags: Iterable[str]) -> None
 def apply_exec(meta: Meta, result: ExecResult) -> None:
     meta.usage = Usage(**dataclasses.asdict(result.usage)) if result.usage is not None else None
     meta.session_id = result.session_id
+    # A backend's own per-run warnings (Claude: the workspace defines hooks) join the site's;
+    # idempotent, since the loop calls this before inspection and the kind's finalizer again.
+    for warning in result.warnings:
+        if warning not in meta.security_warnings:
+            meta.security_warnings.append(warning)
 
 
 def sanitize_prose_value(value: object) -> object:
@@ -148,27 +154,30 @@ def consult_result(result: ExecResult, meta: Meta) -> dict[str, Any]:
     )
 
 
-def review_result(
-    result: ExecResult, meta: Meta, reasons: list[str], plugin: BackendPlugin
-) -> dict[str, Any]:
+def _parse_reviewed(
+    result: ExecResult, meta: Meta, reasons: list[str], plugin: BackendPlugin, noun: str
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
     """Strict about SHAPE, lenient about FIELDS: exit-0 output that is not JSON, or not a
     JSON object, is a hard invalid_json/schema_violation error, never a prose downgrade.
     A JSON object that clears that bar but deviates field-by-field is coerced instead —
     verdict defaults to unknown and confidence to medium — so a malformed object can
     never be delivered as a `pass`. This deliberately mirrors codex-in-claude, whose
     normalize.py says a missing verdict "defaults to unknown, which is honest, so it is
-    intentionally accepted"."""
+    intentionally accepted". Returns (error_envelope, None) or (None, model fields)."""
     apply_exec(meta, result)
     status, parsed = classify_structured(result.answer)
     if status != "ok":
         preview = redaction.sanitize_echo_prose(result.answer).strip()[:300]
         tail = f" Raw output preview: {preview}" if preview else ""
-        return error_envelope(
-            status,
-            "the backend exited 0 but did not return a schema-valid JSON object for the "
-            f"review (the output schema appears to have been ignored).{tail}",
-            meta,
-            plugin=plugin,
+        return (
+            error_envelope(
+                status,
+                "the backend exited 0 but did not return a schema-valid JSON object for the "
+                f"{noun} (the output schema appears to have been ignored).{tail}",
+                meta,
+                plugin=plugin,
+            ),
+            None,
         )
     s = cast("dict[str, Any]", _sanitize_structured(cast("dict", parsed)))
     verdict, confidence, summary = review_mod.apply_coverage(
@@ -177,21 +186,39 @@ def review_result(
         _summary_of(s),
         reasons,
     )
-    return dump_success(
-        ReviewResult(
-            summary=summary,
-            verdict=cast("Any", verdict),
-            confidence=cast("Any", confidence),
-            review_status="completed",
-            context_summary=meta.context_summary,
-            findings=coerce_findings(s.get("findings")),
-            questions=_str_list(s.get("questions")),
-            assumptions=_str_list(s.get("assumptions")),
-            next_steps=_str_list(s.get("next_steps")),
-            raw_response=_raw(result, meta),
-            meta=meta,
-        )
-    )
+    return None, {
+        "summary": summary,
+        "verdict": verdict,
+        "confidence": confidence,
+        "review_status": "completed",
+        "context_summary": meta.context_summary,
+        "findings": coerce_findings(s.get("findings")),
+        "questions": _str_list(s.get("questions")),
+        "assumptions": _str_list(s.get("assumptions")),
+        "next_steps": _str_list(s.get("next_steps")),
+        "raw_response": _raw(result, meta),
+        "meta": meta,
+    }
+
+
+def review_result(
+    result: ExecResult, meta: Meta, reasons: list[str], plugin: BackendPlugin
+) -> dict[str, Any]:
+    error, fields = _parse_reviewed(result, meta, reasons, plugin, "review")
+    if error is not None:
+        return error
+    return dump_success(ReviewResult(**cast("dict[str, Any]", fields)))
+
+
+def adversarial_result(
+    result: ExecResult, meta: Meta, reasons: list[str], plugin: BackendPlugin
+) -> dict[str, Any]:
+    """The critique's envelope: the review shape (verdict, confidence, findings), the same
+    strict/lenient rule, and the same coverage fold for an attached diff or a focus."""
+    error, fields = _parse_reviewed(result, meta, reasons, plugin, "critique")
+    if error is not None:
+        return error
+    return dump_success(AdversarialReviewResult(**cast("dict[str, Any]", fields)))
 
 
 def _diffstat(diff: str) -> ContextSummary:

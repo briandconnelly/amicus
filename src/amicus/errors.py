@@ -72,6 +72,34 @@ _LOCAL_RULES: dict[str, RepairRule] = {
         "The backend CLI refused to start because of a key or value in the user's own CLI "
         "config; fix that setting (the message names it), then retry. No model call was made.",
     ),
+    "budget_exceeded": RepairRule(
+        "reduce_input",
+        None,
+        False,
+        "The backend stopped at its best-effort spend cap; raise backend_options.max_budget_usd "
+        "or narrow the request, then retry (a retry spends again).",
+    ),
+    "claude_permission_error": RepairRule(
+        "correct_arguments",
+        None,
+        False,
+        "The backend was denied a tool it requested; use backend_options.access='toolless' or "
+        "grant read-only access, then retry.",
+    ),
+    "api_key_invalid": RepairRule(
+        "authenticate",
+        "amicus_backends",
+        False,
+        "The provider rejected the API key; fix it or use a login mode, then rerun "
+        "amicus_backends.",
+    ),
+    "api_key_missing": RepairRule(
+        "correct_config",
+        "amicus_backends",
+        False,
+        "This config_mode needs an API key the server process does not have; set it or pick a "
+        "login mode. No model call was made.",
+    ),
 }
 
 # Prose that must name amicus tools rather than a sibling's.

@@ -117,3 +117,23 @@ def test_positive_control_a_usable_kimi_override_does_resolve(monkeypatch, tmp_p
     exe.chmod(0o755)
     monkeypatch.setenv("AMICUS_KIMI_BIN", str(exe))
     assert binary.KimiBinary(config.load_config()).resolve() == str(exe)
+
+
+# --- the never-spawn guard for Claude: AMICUS_CLAUDE_BIN is unusable
+
+
+def test_claude_guard_is_in_force_by_default():
+    from tests.conftest import NEVER_SPAWN_CLAUDE
+
+    assert os.environ["AMICUS_CLAUDE_BIN"] == NEVER_SPAWN_CLAUDE
+    assert not Path(NEVER_SPAWN_CLAUDE).exists()
+
+
+def test_positive_control_a_usable_claude_override_does_resolve(monkeypatch, tmp_path):
+    from amicus.backends.claude import binary, config
+
+    exe = tmp_path / "claude"
+    exe.write_text("#!/bin/sh\nexit 0\n")
+    exe.chmod(0o755)
+    monkeypatch.setenv("AMICUS_CLAUDE_BIN", str(exe))
+    assert binary.ClaudeBinary(config.load_config()).resolve() == str(exe)

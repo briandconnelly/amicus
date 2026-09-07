@@ -9,7 +9,12 @@ from pontonier.core import gitdiff, redaction
 
 from amicus.errors import error_envelope
 from amicus.schemas.envelope import ContextSummary, ErrorDetail, InvalidArgument, dump_success
-from amicus.schemas.results import ReviewResult, ReviewScope, Untracked
+from amicus.schemas.results import (
+    AdversarialReviewResult,
+    ReviewResult,
+    ReviewScope,
+    Untracked,
+)
 
 if TYPE_CHECKING:  # pragma: no cover
     from pontonier.core.gitdiff import DiffResult
@@ -87,18 +92,43 @@ def apply_coverage(
 
 def _not_run(spec: RunSpec, meta: Meta, diff: DiffResult) -> dict[str, Any]:
     omitted = max(0, (diff.untracked_detected or 0) - diff.untracked_included)
+    remedy = (
+        'Re-run with untracked="include" to review them.'
+        if spec.untracked == "exclude"
+        else 'Re-run with untracked="include", or name them in paths, to review them.'
+    )
     if omitted > 0:
-        remedy = (
-            'Re-run with untracked="include" to review them.'
-            if spec.untracked == "exclude"
-            else 'Re-run with untracked="include", or name them in paths, to review them.'
-        )
         summary = (
             f"No reviewable changes were gathered for scope={spec.scope}, but {omitted} "
             f"untracked file(s) were detected and omitted. {remedy}"
         )
     else:
         summary = f"No changes to review for scope={spec.scope}."
+    if spec.kind == "adversarial_review":
+        # The critique's tail differs, but the untracked remedy does not: an omitted
+        # untracked file is a change the caller can surface with one flag, so saying
+        # "attach a scope that has changes" here would be actively misleading.
+        critique_summary = (
+            f"No reviewable changes were gathered for scope={spec.scope}, but {omitted} "
+            "untracked file(s) were detected and omitted, so the critique did not run "
+            f"(zero spend). {remedy} Or drop scope to critique the target alone."
+            if omitted > 0
+            else (
+                f"No changes were gathered for scope={spec.scope}, so the critique did not run "
+                "(zero spend). Drop scope to critique the target alone, or attach a scope that "
+                "has changes."
+            )
+        )
+        return dump_success(
+            AdversarialReviewResult(
+                summary=critique_summary,
+                verdict="unknown",
+                confidence="low",
+                review_status="not_run",
+                context_summary=meta.context_summary,
+                meta=meta,
+            )
+        )
     return dump_success(
         ReviewResult(
             summary=summary,

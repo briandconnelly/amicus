@@ -26,6 +26,7 @@ from pontonier.conventions import preflight
 from pontonier.core import redaction, runtime
 
 from amicus.backends.kimi import contract, normalize
+from amicus.schemas.structured import schema_instruction  # noqa: F401 - re-exported for callers
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Callable
@@ -47,16 +48,6 @@ def read_only_agent_document() -> str:
         "---\n"
         "You are a read-only consultant. Answer using only the tools you have. "
         "You cannot modify files, and you must not ask for permission to do so.\n"
-    )
-
-
-def schema_instruction(output_schema: dict) -> str:
-    """The prompt-appended structured-output instruction (kimi has no --output-schema)."""
-    return (
-        "\n\n# Required output format\n"
-        "Reply with a single JSON object and nothing else — no prose, no code fence. "
-        "It must validate against this JSON Schema:\n\n"
-        f"{json.dumps(output_schema, indent=2)}\n"
     )
 
 

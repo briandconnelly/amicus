@@ -21,6 +21,7 @@ ENV_PREFIXES = ("AMICUS_", "CODEX_IN_CLAUDE_", "MOONBRIDGE_", "CLAUDE_IN_CODEX_"
 
 NEVER_SPAWN_CODEX = "/nonexistent/amicus-test-codex"
 NEVER_SPAWN_KIMI = "/nonexistent/amicus-test-kimi"
+NEVER_SPAWN_CLAUDE = "/nonexistent/amicus-test-claude"
 
 # git exports these into the environment of every hook it runs, and prek's pre-push hook
 # runs this very suite (`entry = "uv run pytest"`, `stages = ["pre-push"]`). Without
@@ -68,6 +69,14 @@ def _never_spawn_real_kimi(monkeypatch):
     monkeypatch.setenv("AMICUS_KIMI_BIN", NEVER_SPAWN_KIMI)
 
 
+@pytest.fixture(autouse=True)
+def _never_spawn_real_claude(monkeypatch):
+    """No unit test may run the real claude CLI: an unusable AMICUS_CLAUDE_BIN makes every
+    claude run and probe short-circuit. Tests that want a run point the override at the
+    `fake_claude` fixture; the live suite (tests/test_claude_live.py) deletes it."""
+    monkeypatch.setenv("AMICUS_CLAUDE_BIN", NEVER_SPAWN_CLAUDE)
+
+
 @pytest.fixture
 def clean_env(monkeypatch):
     """Strip every amicus and legacy env var so tests see built-in defaults."""
@@ -76,6 +85,7 @@ def clean_env(monkeypatch):
             monkeypatch.delenv(key, raising=False)
     monkeypatch.setenv("AMICUS_CODEX_BIN", NEVER_SPAWN_CODEX)
     monkeypatch.setenv("AMICUS_KIMI_BIN", NEVER_SPAWN_KIMI)
+    monkeypatch.setenv("AMICUS_CLAUDE_BIN", NEVER_SPAWN_CLAUDE)
     return monkeypatch
 
 
@@ -111,6 +121,17 @@ def pinned_kimi_bin(monkeypatch):
     return monkeypatch
 
 
+@pytest.fixture
+def pinned_claude_bin(monkeypatch):
+    """Let AMICUS_CLAUDE_BIN=/CLAUDE resolve without a file on disk (argv tests only)."""
+    from amicus.backends.claude import binary
+
+    monkeypatch.setattr(
+        binary, "_is_executable_file", lambda path: str(path) == "/CLAUDE" or path.is_file()
+    )
+    return monkeypatch
+
+
 @pytest.fixture(scope="session")
 def fake_codex(tmp_path_factory) -> Path:
     """An executable stand-in `codex` (tests/support/fake_codex.py) for spend-free runs."""
@@ -126,6 +147,16 @@ def fake_kimi(tmp_path_factory) -> Path:
     """An executable stand-in `kimi` (tests/support/fake_kimi.py) for spend-free runs."""
     src = Path(__file__).parent / "support" / "fake_kimi.py"
     exe = tmp_path_factory.mktemp("fake-kimi") / "kimi"
+    shutil.copy(src, exe)
+    exe.chmod(exe.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP)
+    return exe
+
+
+@pytest.fixture(scope="session")
+def fake_claude(tmp_path_factory) -> Path:
+    """An executable stand-in `claude` (tests/support/fake_claude.py) for spend-free runs."""
+    src = Path(__file__).parent / "support" / "fake_claude.py"
+    exe = tmp_path_factory.mktemp("fake-claude") / "claude"
     shutil.copy(src, exe)
     exe.chmod(exe.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP)
     return exe
@@ -174,3 +205,32 @@ def live_kimi(monkeypatch, tmp_path):
     if probe.returncode != 0 or not providers:
         (pytest.fail if require else pytest.skip)("kimi has no configured provider")
     return kimi
+
+
+@pytest.fixture
+def live_claude(monkeypatch, tmp_path):
+    """Opt back into the real claude CLI for `-m integration` tests. Skips when claude is
+    absent or logged out, unless AMICUS_REQUIRE_LIVE=1 makes that a failure. The auth probe
+    is exit-code only: `claude auth status` prints the account, which must not reach a log."""
+    import shutil
+    import subprocess
+
+    monkeypatch.delenv("AMICUS_CLAUDE_BIN", raising=False)
+    monkeypatch.setenv("AMICUS_STATE_DIR", str(tmp_path / "state"))
+    require = os.environ.get("AMICUS_REQUIRE_LIVE") == "1"
+    claude = shutil.which("claude")
+    if claude is None:
+        (pytest.fail if require else pytest.skip)("claude CLI not installed")
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if k not in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN")
+    }
+    status = subprocess.run(
+        [claude, "auth", "status", "--text"], capture_output=True, text=True, check=False, env=env
+    )
+    if status.returncode != 0:
+        (pytest.fail if require else pytest.skip)(
+            "claude is not logged in (config_mode=inherit needs a login)"
+        )
+    return claude

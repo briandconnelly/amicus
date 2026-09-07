@@ -132,6 +132,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
                 gathered.text,
                 prompts.review_label(scope, base, commit),
                 prompts.review_caller_text(spec.focus, extra_context),
+                plugin=prep.plugin,
             )
             would_call_model, prompt_bytes = True, len(prompt.encode("utf-8"))
             if gathered.truncated and gathered.truncation_hint:
@@ -218,7 +219,9 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
                 plugin=prep.plugin,
             )
         task_bytes = len(task.encode("utf-8"))
-        prompt_bytes = len(prompts.delegate_prompt(spec.host_name, task).encode("utf-8"))
+        prompt_bytes = len(
+            prompts.delegate_prompt(spec.host_name, task, plugin=prep.plugin).encode("utf-8")
+        )
         warnings: list[str] = []
         advisory = deadline_advisory(
             True, prompt_bytes, spec.reasoning_effort, spec.timeout_seconds, "amicus_delegate_async"

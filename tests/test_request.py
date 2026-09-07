@@ -51,6 +51,8 @@ def test_public_half_never_carries_inputs_and_round_trips():
         "extra_context": "ctx",
         "instructions_append": "focus",
         "focus": None,
+        "target": None,
+        "evidence": None,
     }
     assert RunSpec.from_parts(json.loads(json.dumps(public)), inputs) == spec
 

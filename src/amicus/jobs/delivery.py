@@ -14,7 +14,13 @@ from amicus.errors import error_envelope, serialize_error
 from amicus.orchestration.finalize import sanitize_finding, sanitize_prose_value
 from amicus.schemas.envelope import ErrorResult
 from amicus.schemas.fingerprint import FINGERPRINT, RESULT_FORMAT
-from amicus.schemas.results import PAID_TOOLS, ConsultResult, DelegateResult, ReviewResult
+from amicus.schemas.results import (
+    PAID_TOOLS,
+    AdversarialReviewResult,
+    ConsultResult,
+    DelegateResult,
+    ReviewResult,
+)
 
 if TYPE_CHECKING:  # pragma: no cover
     from amicus.schemas.envelope import Meta
@@ -22,6 +28,7 @@ if TYPE_CHECKING:  # pragma: no cover
 JOB_RESULT_MODELS: dict[str, type[BaseModel]] = {
     "consult": ConsultResult,
     "review_changes": ReviewResult,
+    "adversarial_review": AdversarialReviewResult,
     "delegate": DelegateResult,
 }
 STATE_TO_ERROR: dict[str, tuple[str, str]] = {

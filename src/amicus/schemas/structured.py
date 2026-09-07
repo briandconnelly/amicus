@@ -34,3 +34,14 @@ def classify_structured(last_message: str | None) -> tuple[str, dict | None]:
     if not isinstance(parsed, dict):
         return ("schema_violation", None)
     return ("ok", parsed)
+
+
+def schema_instruction(output_schema: dict) -> str:
+    """The prompt-appended structured-output instruction for a backend with no schema flag
+    (kimi, claude). One text, so both backends ask for the object the same way."""
+    return (
+        "\n\n# Required output format\n"
+        "Reply with a single JSON object and nothing else — no prose, no code fence. "
+        "It must validate against this JSON Schema:\n\n"
+        f"{json.dumps(output_schema, indent=2)}\n"
+    )
