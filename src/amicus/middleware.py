@@ -1,5 +1,5 @@
-"""FastMCP middlewares: schema dialect, semantic isError, the invalid_arguments envelope
-at the call boundary, and the JSON-RPC error.data envelope for resource reads."""
+"""FastMCP middlewares: connection log, schema dialect, semantic isError, the invalid_arguments
+envelope at the call boundary, and the JSON-RPC error.data envelope for resource reads."""
 
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ from mcp.types.version import MODERN_PROTOCOL_VERSIONS
 from pontonier.core import redaction
 from pydantic import ValidationError
 
+from amicus import obs
 from amicus.errors import make_error, serialize_error, serialize_error_info
 from amicus.schemas.envelope import ErrorResult, InvalidArgument, Meta
 from amicus.schemas.fingerprint import JSON_SCHEMA_DIALECT
@@ -33,6 +34,7 @@ WITHHELD_FIELD = "<withheld>"
 _MISSING_TYPES = frozenset({"missing", "missing_argument"})
 RESOURCE_NOT_FOUND_HANDSHAKE = -32002
 RESOURCE_NOT_FOUND_MODERN = INVALID_PARAMS
+TASKS_EXTENSION_ID = "io.modelcontextprotocol/tasks"
 
 
 def _has_control_char(text: str) -> bool:
@@ -135,6 +137,59 @@ def invalid_arguments_envelope(
             meta=meta,
         )
     )
+
+
+def connection_facts(context: object) -> dict[str, Any]:
+    """What a tool call's connection negotiated: the protocol version, the handshake-era
+    clientInfo (modern connections carry none) and whether the client declared the tasks
+    extension for this request. Every read is defensive: an in-memory client, a legacy
+    session and a sessionless request each lack some of these."""
+    fastmcp_context = getattr(context, "fastmcp_context", None)
+    request_context = getattr(fastmcp_context, "request_context", None)
+    version = getattr(request_context, "protocol_version", None)
+    session = None
+    if fastmcp_context is not None:
+        try:
+            session = fastmcp_context.session
+        except RuntimeError:
+            session = None
+    params = getattr(session, "client_params", None)
+    # `client_info` on the MCP SDK v2; `clientInfo` is the pre-v2 alias (see Task 2's fix).
+    info = getattr(params, "client_info", None) or getattr(params, "clientInfo", None)
+    name = getattr(info, "name", None)
+    client_version = getattr(info, "version", None)
+    tasks = False
+    if fastmcp_context is not None:
+        try:
+            tasks = fastmcp_context.client_extension_settings(TASKS_EXTENSION_ID) is not None
+        except Exception:
+            tasks = False
+    return {
+        "protocol": str(version) if version else "unknown",
+        "client": name if isinstance(name, str) and name else "unknown",
+        "client_version": (
+            client_version if isinstance(client_version, str) and client_version else "unknown"
+        ),
+        "tasks": tasks,
+    }
+
+
+class ConnectionLogMiddleware(Middleware):
+    """One DEBUG line per tool call naming what the connection negotiated. The line carries
+    the tool NAME and connection facts only, never an argument (AGENTS.md rule 18); it is
+    the instrument behind the host captures under docs/host-captures/ (M5)."""
+
+    async def on_call_tool(self, context, call_next):  # type: ignore[no-untyped-def]
+        facts = connection_facts(context)
+        obs.get_logger(__name__).debug(
+            "tools/call %s: protocol=%s client=%s/%s tasks_negotiated=%s",
+            getattr(getattr(context, "message", None), "name", "?"),
+            facts["protocol"],
+            facts["client"],
+            facts["client_version"],
+            facts["tasks"],
+        )
+        return await call_next(context)
 
 
 class InputSchemaDialectMiddleware(Middleware):

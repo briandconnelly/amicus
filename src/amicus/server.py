@@ -13,6 +13,7 @@ from fastmcp import FastMCP
 from amicus import SERVER_NAME, __version__, config, obs, tools
 from amicus.appstate import AppState
 from amicus.middleware import (
+    ConnectionLogMiddleware,
     InputSchemaDialectMiddleware,
     ResourceErrorMiddleware,
     SemanticErrorMiddleware,
@@ -113,6 +114,7 @@ def create_app(
     app._amicus_state = state  # ty: ignore[unresolved-attribute]
     lowlevel = app._mcp_server
     lowlevel.get_capabilities = _filter_capabilities(lowlevel.get_capabilities)  # ty: ignore[invalid-assignment]
+    app.add_middleware(ConnectionLogMiddleware())
     app.add_middleware(InputSchemaDialectMiddleware())
     app.add_middleware(SemanticErrorMiddleware())
     app.add_middleware(ValidationEnvelopeMiddleware(app, settings))
