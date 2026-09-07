@@ -45,6 +45,7 @@ ALLOWED_SCOPES = (
     "server",
     "tools",
     "resources",
+    "skills",
     "manifest",
     "orchestration",
     "jobs",
