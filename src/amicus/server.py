@@ -22,6 +22,7 @@ from amicus.middleware import (
     ValidationEnvelopeMiddleware,
 )
 from amicus.registry import BackendRegistry
+from amicus.schemas.params import MAX_TIMEOUT_SECONDS
 from amicus.tools import resources
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -35,10 +36,11 @@ UI_EXTENSION_ID = "io.modelcontextprotocol/ui"
 
 def tasks_redelivery_seconds(settings: Settings) -> int:
     """Docket's redelivery_timeout for the tasks extension: longer than any sync run can
-    take (deadline plus the await grace), so a healthy worker is never asked to re-run a
-    paid call. Docket renews a running task's lease anyway; this is belt and braces
+    take (the largest of the configured job deadline and a caller's own clamped
+    `timeout_seconds`, plus the await grace), so a healthy worker is never asked to re-run
+    a paid call. Docket renews a running task's lease anyway; this is belt and braces
     (ADR 0011)."""
-    return settings.job_max_seconds + SYNC_AWAIT_GRACE_S
+    return max(settings.job_max_seconds, MAX_TIMEOUT_SECONDS) + SYNC_AWAIT_GRACE_S
 
 
 # Rules-then-context ([2.rules-then-context]): does/does-not lead, one imperative rule

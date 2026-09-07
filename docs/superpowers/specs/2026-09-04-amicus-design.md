@@ -233,8 +233,8 @@ backend. `_worker.py` re-resolves the plugin by id and runs the same loop. Sync 
 keep codex-in-claude's model; `meta.job_id` is always stamped. `task=True` wraps the
 same coroutine; the job store persists `task_id → job_id` at task creation,
 `amicus_job_list` accepts a `task_id` filter, cancellation propagation is explicit
-(unkeyed task cancels the job; keyed job survives and the cancel result names its
-`job_id`), legacy fallback is claimed only after a host capture. Gated by
+(a tasked call is always unkeyed, so `tasks/cancel` always cancels the job, per ADR
+0011's amendment), legacy fallback is claimed only after a host capture. Gated by
 `AMICUS_TASKS`. ADR 0004.
 
 ### Error envelope and codes

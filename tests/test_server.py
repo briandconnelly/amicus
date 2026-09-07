@@ -134,6 +134,15 @@ def test_tasks_extension_redelivery_covers_the_sync_deadline():
     settings = config.settings({"AMICUS_TASKS": "1", "AMICUS_JOB_MAX_SECONDS": "120"})
     app = server.create_app(settings, BackendRegistry({}, {}))
     ext = app._extensions["io.modelcontextprotocol/tasks"]
-    assert server.tasks_redelivery_seconds(settings) == 150
-    assert ext.docket_settings.redelivery_timeout == timedelta(seconds=150)
+    # AMICUS_JOB_MAX_SECONDS (120) is below MAX_TIMEOUT_SECONDS (600), so the bound is the
+    # clamped per-call timeout ceiling, not the configured job deadline.
+    assert server.tasks_redelivery_seconds(settings) == 630
+    assert ext.docket_settings.redelivery_timeout == timedelta(seconds=630)
     assert ext.docket_settings.url == "memory://"
+
+
+def test_tasks_extension_redelivery_covers_a_large_job_deadline():
+    settings = config.settings({"AMICUS_TASKS": "1", "AMICUS_JOB_MAX_SECONDS": "1800"})
+    # AMICUS_JOB_MAX_SECONDS (1800) exceeds MAX_TIMEOUT_SECONDS (600), so the configured
+    # job deadline is the bound, proving the max() picks whichever side is larger.
+    assert server.tasks_redelivery_seconds(settings) == 1830

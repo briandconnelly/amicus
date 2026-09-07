@@ -36,7 +36,7 @@ def _app(env: dict | None = None, registry: BackendRegistry | None = None):
 def _no_backends_registry() -> BackendRegistry:
     # codex shipped its plugin factory in M1 (Task 6), so the real load path now loads it
     # for real; an explicit no-plugins registry keeps this test proving the
-    # backend_unavailable envelope rather than falling through to not_implemented.
+    # backend_unavailable envelope rather than exercising the real codex plugin's own path.
     return BackendRegistry(
         {},
         {

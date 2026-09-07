@@ -140,10 +140,10 @@ def invalid_arguments_envelope(
 
 
 def connection_facts(context: object) -> dict[str, Any]:
-    """What a tool call's connection negotiated: the protocol version, the handshake-era
-    clientInfo (modern connections carry none) and whether the client declared the tasks
-    extension for this request. Every read is defensive: an in-memory client, a legacy
-    session and a sessionless request each lack some of these."""
+    """What a tool call's connection negotiated: the protocol version, the client's
+    declared name and version (both protocol eras carry these) and whether the client
+    declared the tasks extension for this request. Every read is defensive: an in-memory
+    client, a legacy session and a sessionless request each lack some of these."""
     fastmcp_context = getattr(context, "fastmcp_context", None)
     request_context = getattr(fastmcp_context, "request_context", None)
     version = getattr(request_context, "protocol_version", None)
