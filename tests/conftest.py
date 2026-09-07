@@ -205,3 +205,32 @@ def live_kimi(monkeypatch, tmp_path):
     if probe.returncode != 0 or not providers:
         (pytest.fail if require else pytest.skip)("kimi has no configured provider")
     return kimi
+
+
+@pytest.fixture
+def live_claude(monkeypatch, tmp_path):
+    """Opt back into the real claude CLI for `-m integration` tests. Skips when claude is
+    absent or logged out, unless AMICUS_REQUIRE_LIVE=1 makes that a failure. The auth probe
+    is exit-code only: `claude auth status` prints the account, which must not reach a log."""
+    import shutil
+    import subprocess
+
+    monkeypatch.delenv("AMICUS_CLAUDE_BIN", raising=False)
+    monkeypatch.setenv("AMICUS_STATE_DIR", str(tmp_path / "state"))
+    require = os.environ.get("AMICUS_REQUIRE_LIVE") == "1"
+    claude = shutil.which("claude")
+    if claude is None:
+        (pytest.fail if require else pytest.skip)("claude CLI not installed")
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if k not in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN")
+    }
+    status = subprocess.run(
+        [claude, "auth", "status", "--text"], capture_output=True, text=True, check=False, env=env
+    )
+    if status.returncode != 0:
+        (pytest.fail if require else pytest.skip)(
+            "claude is not logged in (config_mode=inherit needs a login)"
+        )
+    return claude
