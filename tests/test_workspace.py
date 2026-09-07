@@ -5,6 +5,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+from mcp.types import ClientCapabilities, Implementation, InitializeRequestParams
+
 from amicus.orchestration import workspace as ws
 
 
@@ -46,7 +48,13 @@ class _Session:
         self._roots = roots or []
         self._raise = raise_on_list
         self.client_params = (
-            SimpleNamespace(clientInfo=SimpleNamespace(name=name)) if name else None
+            InitializeRequestParams(
+                protocol_version="2025-11-25",
+                capabilities=ClientCapabilities(),
+                client_info=Implementation(name=name, version="1.0"),
+            )
+            if name
+            else None
         )
 
     async def list_roots(self):
@@ -98,3 +106,33 @@ def test_client_name_from_ctx():
     assert ws.client_name_from_ctx(_Ctx(None)) is None
     assert ws.client_name_from_ctx(_Ctx(_Session(None))) is None
     assert ws.client_name_from_ctx(_Ctx(_Session(None, name="claude-code"))) == "claude-code"
+
+
+async def test_client_name_reaches_the_host_framing_from_a_real_client():
+    """Regression: the SDK v2 field is `client_info` (snake_case). Reading `clientInfo`
+    silently yielded None on every real connection, so host framing was always neutral."""
+    from fastmcp import Client, FastMCP
+    from fastmcp.server.middleware import Middleware
+
+    from amicus.orchestration import prompts
+
+    seen: list[str | None] = []
+
+    class _Probe(Middleware):
+        async def on_call_tool(self, context, call_next):
+            seen.append(ws.client_name_from_ctx(context.fastmcp_context))
+            return await call_next(context)
+
+    app = FastMCP(name="scratch")
+    app.add_middleware(_Probe())
+
+    @app.tool(name="t", output_schema={"type": "object", "additionalProperties": True})
+    async def t() -> dict:
+        return {"ok": True}
+
+    async with Client(
+        app, mode="legacy", client_info={"name": "claude-code", "version": "2.1.263"}
+    ) as c:
+        await c.call_tool("t", {})
+    assert seen == ["claude-code"]
+    assert prompts.host_display_name(seen[0], None) == prompts.HOST_DISPLAY_NAMES["claude-code"]
