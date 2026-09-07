@@ -36,6 +36,21 @@ RESOURCE_NOT_FOUND_HANDSHAKE = -32002
 RESOURCE_NOT_FOUND_MODERN = INVALID_PARAMS
 TASKS_EXTENSION_ID = "io.modelcontextprotocol/tasks"
 
+# Bound on a client-controlled field (declared name/version, negotiated protocol, or the
+# requested tool name) before it reaches the connection-log line. Generous for any real
+# value in these fields, tight enough that a client cannot flood a log record.
+MAX_LOGGED_FIELD_CHARS = 200
+
+
+def _safe_logged_field(text: str) -> str:
+    """Sanitize one client-controlled field for the connection-log line. `sanitize_echo`
+    deletes every Cc control code point — newlines included — before redacting, which is
+    what stops a value like ``"claude-code\\n2026-... DEBUG ...: tools/call ..."`` from
+    splitting into what looks like a second, forged log record; the length bound (applied
+    AFTER sanitizing, per that function's own contract) stops an unbounded value from
+    flooding the log instead."""
+    return redaction.sanitize_echo(text)[:MAX_LOGGED_FIELD_CHARS]
+
 
 def _has_control_char(text: str) -> bool:
     return any(unicodedata.category(c) == "Cc" for c in text)
@@ -143,7 +158,11 @@ def connection_facts(context: object) -> dict[str, Any]:
     """What a tool call's connection negotiated: the protocol version, the client's
     declared name and version (both protocol eras carry these) and whether the client
     declared the tasks extension for this request. Every read is defensive: an in-memory
-    client, a legacy session and a sessionless request each lack some of these."""
+    client, a legacy session and a sessionless request each lack some of these.
+
+    The protocol, client name and client version are all client-controlled — sanitized
+    and length-bounded (`_safe_logged_field`) before being returned, since this dict's
+    values are formatted straight into the connection-log line."""
     fastmcp_context = getattr(context, "fastmcp_context", None)
     request_context = getattr(fastmcp_context, "request_context", None)
     version = getattr(request_context, "protocol_version", None)
@@ -165,10 +184,12 @@ def connection_facts(context: object) -> dict[str, Any]:
         except Exception:
             tasks = False
     return {
-        "protocol": str(version) if version else "unknown",
-        "client": name if isinstance(name, str) and name else "unknown",
+        "protocol": _safe_logged_field(str(version)) if version else "unknown",
+        "client": _safe_logged_field(name) if isinstance(name, str) and name else "unknown",
         "client_version": (
-            client_version if isinstance(client_version, str) and client_version else "unknown"
+            _safe_logged_field(client_version)
+            if isinstance(client_version, str) and client_version
+            else "unknown"
         ),
         "tasks": tasks,
     }
@@ -177,13 +198,18 @@ def connection_facts(context: object) -> dict[str, Any]:
 class ConnectionLogMiddleware(Middleware):
     """One DEBUG line per tool call naming what the connection negotiated. The line carries
     the tool NAME and connection facts only, never an argument (AGENTS.md rule 18); it is
-    the instrument behind the host captures under docs/host-captures/ (M5)."""
+    the instrument behind the host captures under docs/host-captures/ (M5). The tool name
+    is client-controlled (it comes off the incoming tools/call request, ahead of any
+    dispatch validation), so it is sanitized and length-bounded the same as the
+    connection facts before it reaches the log line."""
 
     async def on_call_tool(self, context, call_next):  # type: ignore[no-untyped-def]
         facts = connection_facts(context)
+        raw_name = getattr(getattr(context, "message", None), "name", None)
+        tool_name = _safe_logged_field(str(raw_name)) if raw_name else "?"
         obs.get_logger(__name__).debug(
             "tools/call %s: protocol=%s client=%s/%s tasks_negotiated=%s",
-            getattr(getattr(context, "message", None), "name", "?"),
+            tool_name,
             facts["protocol"],
             facts["client"],
             facts["client_version"],

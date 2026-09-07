@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from types import SimpleNamespace
 from typing import Literal
 
@@ -162,6 +163,53 @@ async def test_connection_log_names_the_negotiated_facts_and_never_an_argument(c
     assert "protocol=2025-11-25" in legacy and "client=claude-code/2.1.263" in legacy
     assert "tasks_negotiated=False" in modern and "tasks_negotiated=False" in legacy
     assert all("SECRET-PATH" not in line for line in lines)
+
+
+async def test_connection_log_survives_a_newline_bearing_client_name(caplog, monkeypatch):
+    """A client whose declared name embeds a newline and a forged log line must not be
+    able to make that forged line appear as its own DEBUG record: the newline (and any
+    other control character) must be gone from the logged text before formatting."""
+    monkeypatch.setattr(extension_hooks, "_internal_client_extension_factories", [])
+    app = _scratch_app()
+    forged_tail = (
+        "2026-01-01 00:00:00,000 DEBUG amicus.middleware: tools/call amicus_backends: "
+        "protocol=FORGED client=forged/0.0 tasks_negotiated=True"
+    )
+    forged_name = "claude-code\n" + forged_tail
+    with caplog.at_level(logging.DEBUG, logger="amicus.middleware"):
+        async with Client(
+            app, mode="legacy", client_info={"name": forged_name, "version": "1.0"}
+        ) as c:
+            await c.call_tool("probe", {"mode": "ok"})
+    lines = [r.getMessage() for r in caplog.records if r.name == "amicus.middleware"]
+    assert len(lines) == 1
+    # No control character (a bare newline included) survives into the logged text: a
+    # log handler that formats this record and writes it to a file (as connection.log
+    # does) therefore can never split it into what looks like a second, forged line.
+    assert "\n" not in lines[0]
+    # test_host_captures.py's LINE regex is $-anchored on tasks_negotiated=(True|False):
+    # the genuine value (this scratch app never negotiates tasks) still ends the line,
+    # proving the client-supplied "tasks_negotiated=True" it tried to inject mid-field
+    # can never be read back as the record's authoritative trailing field.
+    assert lines[0].endswith("tasks_negotiated=False")
+    assert not re.search(r"tasks_negotiated=True$", lines[0])
+
+
+async def test_connection_log_bounds_an_overlong_client_name(caplog, monkeypatch):
+    """A client whose declared name is unbounded must not be able to flood the log with
+    it: the logged field must be capped, not merely present."""
+    monkeypatch.setattr(extension_hooks, "_internal_client_extension_factories", [])
+    app = _scratch_app()
+    huge_name = "A" * 5000
+    with caplog.at_level(logging.DEBUG, logger="amicus.middleware"):
+        async with Client(
+            app, mode="legacy", client_info={"name": huge_name, "version": "1.0"}
+        ) as c:
+            await c.call_tool("probe", {"mode": "ok"})
+    lines = [r.getMessage() for r in caplog.records if r.name == "amicus.middleware"]
+    assert len(lines) == 1
+    assert len(lines[0]) < len(huge_name)
+    assert lines[0].count("A") <= middleware.MAX_LOGGED_FIELD_CHARS
 
 
 def test_connection_facts_are_unknown_without_a_request():
