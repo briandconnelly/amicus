@@ -3,7 +3,8 @@
     AMICUS_REQUIRE_LIVE=1 uv run pytest -m integration --no-cov tests/test_claude_live.py
 
 AMICUS_REQUIRE_LIVE=1 makes a missing or logged-out claude a failure (the publish gate). Every
-test asserts on the parsed envelope only; no raw model text is printed."""
+test asserts on the parsed envelope only; failure messages carry counts, enums and tool names,
+never model prose (pinned by tests/test_claude_live_hygiene.py)."""
 
 from __future__ import annotations
 
@@ -19,6 +20,14 @@ from amicus.registry import BackendRegistry
 pytestmark = pytest.mark.integration
 
 _VERDICTS = ("pass", "concerns", "fail", "unknown")
+
+
+_SHAPE_KEYS = ("findings", "questions", "next_steps", "verdict", "confidence", "review_status")
+
+
+def _shape(body):
+    """Envelope-only failure diagnostics: list lengths and enums, never the model's prose."""
+    return {k: (len(v) if isinstance(v, list) else v) for k, v in body.items() if k in _SHAPE_KEYS}
 
 
 def _app():
@@ -76,7 +85,7 @@ async def test_consult_in_a_repo_spends_and_reports_it_live(live_claude, tmp_pat
         "access": "toolless",
         "max_budget_usd": 1.0,
     }
-    assert body["findings"] or body["next_steps"] or body["questions"], body
+    assert body["findings"] or body["next_steps"] or body["questions"], _shape(body)
 
 
 async def test_toolless_is_enforced_live(live_claude, tmp_path):
@@ -99,7 +108,8 @@ async def test_toolless_is_enforced_live(live_claude, tmp_path):
     body = res.structured_content
     assert body["ok"] is True, body.get("error")
     names = {t.strip().lower() for t in re.split(r"[,\s]+", body["summary"]) if t.strip()}
-    assert not names & {"bash", "write", "edit", "read", "glob", "grep", "shell"}, body["summary"]
+    leaked = names & {"bash", "write", "edit", "read", "glob", "grep", "shell"}
+    assert not leaked, sorted(leaked)
 
 
 async def test_review_changes_live(live_claude, tmp_path):
@@ -141,7 +151,7 @@ async def test_adversarial_review_live(live_claude, tmp_path):
     assert body["tool"] == "amicus_adversarial_review" and body["review_status"] == "completed"
     assert body["verdict"] in _VERDICTS and body["summary"]
     assert body["context_summary"] is None and body["meta"].get("instructions_append") is None
-    assert body["findings"] or body["questions"] or body["next_steps"], body
+    assert body["findings"] or body["questions"] or body["next_steps"], _shape(body)
 
 
 async def test_safe_mode_consult_live(live_claude, tmp_path):
