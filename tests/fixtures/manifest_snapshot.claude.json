@@ -16,11 +16,15 @@
       "claude"
     ],
     "error_codes": [
+      "api_key_invalid",
+      "api_key_missing",
       "backend_auth_indeterminate",
       "backend_auth_required",
       "backend_not_found",
       "backend_rate_limited",
       "backend_unavailable",
+      "budget_exceeded",
+      "claude_permission_error",
       "cli_contract_changed",
       "context_too_large",
       "empty_response",
@@ -180,6 +184,10 @@
           "cli_contract_changed",
           "extra_args_rejected",
           "user_config_rejected",
+          "budget_exceeded",
+          "claude_permission_error",
+          "api_key_invalid",
+          "api_key_missing",
           "internal_error",
           "job_failed",
           "job_cancelled",
@@ -229,6 +237,10 @@
           "cli_contract_changed",
           "extra_args_rejected",
           "user_config_rejected",
+          "budget_exceeded",
+          "claude_permission_error",
+          "api_key_invalid",
+          "api_key_missing",
           "internal_error",
           "idempotency_conflict",
           "idempotency_in_progress",
@@ -276,6 +288,10 @@
           "cli_contract_changed",
           "extra_args_rejected",
           "user_config_rejected",
+          "budget_exceeded",
+          "claude_permission_error",
+          "api_key_invalid",
+          "api_key_missing",
           "internal_error",
           "invalid_scope",
           "invalid_base",
@@ -338,6 +354,10 @@
           "cli_contract_changed",
           "extra_args_rejected",
           "user_config_rejected",
+          "budget_exceeded",
+          "claude_permission_error",
+          "api_key_invalid",
+          "api_key_missing",
           "internal_error",
           "invalid_scope",
           "invalid_base",
@@ -398,6 +418,10 @@
           "cli_contract_changed",
           "extra_args_rejected",
           "user_config_rejected",
+          "budget_exceeded",
+          "claude_permission_error",
+          "api_key_invalid",
+          "api_key_missing",
           "internal_error",
           "not_a_git_repo",
           "git_unavailable",
@@ -447,6 +471,10 @@
           "cli_contract_changed",
           "extra_args_rejected",
           "user_config_rejected",
+          "budget_exceeded",
+          "claude_permission_error",
+          "api_key_invalid",
+          "api_key_missing",
           "internal_error",
           "not_a_git_repo",
           "git_unavailable",
@@ -493,6 +521,10 @@
           "cli_contract_changed",
           "extra_args_rejected",
           "user_config_rejected",
+          "budget_exceeded",
+          "claude_permission_error",
+          "api_key_invalid",
+          "api_key_missing",
           "internal_error",
           "not_implemented",
           "invalid_scope",
@@ -552,6 +584,10 @@
           "cli_contract_changed",
           "extra_args_rejected",
           "user_config_rejected",
+          "budget_exceeded",
+          "claude_permission_error",
+          "api_key_invalid",
+          "api_key_missing",
           "internal_error",
           "not_implemented",
           "invalid_scope",
@@ -884,7 +920,7 @@
           "stability": "alpha"
         },
         "dev.bconnelly.amicus/triage": {
-          "size_bytes": 11049
+          "size_bytes": 11133
         }
       },
       "mimeType": "application/schema+json",
@@ -1036,11 +1072,15 @@
               },
               "code": {
                 "enum": [
+                  "api_key_invalid",
+                  "api_key_missing",
                   "backend_auth_indeterminate",
                   "backend_auth_required",
                   "backend_not_found",
                   "backend_rate_limited",
                   "backend_unavailable",
+                  "budget_exceeded",
+                  "claude_permission_error",
                   "cli_contract_changed",
                   "context_too_large",
                   "empty_response",
@@ -1337,7 +1377,7 @@
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-3",
+                "default": "amicus/0.1/schema-4",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -1804,7 +1844,7 @@
           "stability": "alpha"
         },
         "dev.bconnelly.amicus/triage": {
-          "size_bytes": 4789
+          "size_bytes": 4812
         }
       },
       "mimeType": "application/json",
@@ -1812,7 +1852,7 @@
         "description": "Full semantics for parameters whose tools/list description is a compressed summary. Each entry's `summary` ships inline; `full` is the authoritative contract.",
         "params": {
           "backend_options": {
-            "full": "isolation — codex: inherit|ignore-config|ignore-rules (drop $CODEX_HOME config, then also execpolicy rules); kimi: inherit|ignore-skills. config_mode — claude: inherit|scoped|safe|bare (how much of the user's Claude config the run inherits). access — claude: toolless|readonly. max_budget_usd — claude: per-call spend cap, clamped to the operator's bounds. Unset keys take the backend's defaults; amicus_dry_run echoes the resolved values.",
+            "full": "isolation — codex: inherit|ignore-config|ignore-rules (drop $CODEX_HOME config, then also execpolicy rules); kimi: inherit|ignore-skills. config_mode — claude: inherit|scoped|safe|bare (how much of the user's Claude config the run inherits). access — claude: toolless|readonly. max_budget_usd — claude: per-call best-effort spend cap in USD, 0.01–5.00. Unset keys take the backend's defaults; amicus_dry_run echoes the resolved values.",
             "summary": "Backend-specific knobs as one closed object: isolation (codex, kimi), config_mode and access and max_budget_usd (claude). A key or value the selected backend does not accept fails pre-spend as invalid_arguments naming backend_options.<key>. Per-backend values: amicus://params."
           },
           "extra_context": {
@@ -1825,7 +1865,7 @@
           },
           "instructions_append": {
             "full": "Normalized once (stripped; blank means omitted); refused pre-spend as invalid_arguments when over 4096 bytes, when it carries a NUL, another C0 control (tab/LF/CR excepted), DEL, or a lone surrogate, or when it contains one of the server's framing marker lines. The backend is instructed not to let it determine a verdict; compliance is behavioral, not mechanical, and non-compliance may be silent. Each backend's carrier (argv or handshake file) is disclosed on amicus_backends. Never put secrets here; result envelopes report only a fingerprint of the text.",
-            "summary": "Optional caller stance/focus text appended BEHIND this server's always-leading framing (codex: developer_instructions; claude: system_prompt_append; kimi: prompt framing). UNTRUSTED, grants no tools, best-effort compliance; may ride the backend command line. Max 4096 bytes. Full contract: amicus://params."
+            "summary": "Optional caller stance/focus text appended BEHIND this server's always-leading framing (codex: developer_instructions on argv; claude and kimi: a leading section of the stdin/handshake prompt). UNTRUSTED, grants no tools, best-effort compliance; may ride the backend command line. Max 4096 bytes. Full contract: amicus://params."
           },
           "reasoning_effort": {
             "full": "A backend-rejected value fails as invalid_reasoning_effort (repair steers to amicus_models). Backends whose CLI silently ignores a bad effort (kimi) are validated pre-spend from the catalog. Control characters, surrogates, and values over 128 chars are rejected at the MCP boundary as invalid_arguments.",
@@ -1898,7 +1938,7 @@
           "stability": "alpha"
         },
         "dev.bconnelly.amicus/triage": {
-          "size_bytes": 11049
+          "size_bytes": 11133
         }
       },
       "description": "The full ErrorResult schema; tool outputSchemas carry only an opaque error branch.",
@@ -1913,7 +1953,7 @@
           "stability": "alpha"
         },
         "dev.bconnelly.amicus/triage": {
-          "size_bytes": 4789
+          "size_bytes": 4812
         }
       },
       "description": "Full semantics for parameters whose inline description is a compressed summary.",
@@ -2154,7 +2194,7 @@
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-3",
+            "default": "amicus/0.1/schema-4",
             "title": "Fingerprint",
             "type": "string"
           },
@@ -2390,7 +2430,7 @@
         "openWorldHint": true,
         "readOnlyHint": false
       },
-      "description": "PAID — spends the selected backend's quota on every new call. A fixed adversarial critic on `backend` attacks `target` (a plan, claim or decision) using `evidence` and an optionally attached git diff; the critic stance is the product, so there is no instructions_append. Claude only in v1 (feature adversarial_review). Egress: sends target, evidence, extra_context and the redacted diff raw to the backend's provider.",
+      "description": "PAID — spends the selected backend's quota on every new call. A fixed adversarial critic on `backend` attacks `target` (a plan, claim or decision) using `evidence` and an optionally attached git diff; the critic stance is the product, so there is no instructions_append. Claude only in v1 (feature adversarial_review). Egress: sends target, evidence, extra_context and the redacted diff raw to the backend's provider. An attached scope that gathers nothing returns review_status=not_run with no spend. Recorded as a job (meta.job_id).",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
@@ -2465,7 +2505,7 @@
                   "max_budget_usd": {
                     "anyOf": [
                       {
-                        "maximum": 100.0,
+                        "maximum": 5.0,
                         "minimum": 0.01,
                         "type": "number"
                       },
@@ -2474,7 +2514,7 @@
                       }
                     ],
                     "default": null,
-                    "description": "claude only: per-call spend cap in USD, clamped to the operator bounds."
+                    "description": "claude only: per-call best-effort spend cap in USD, 0.01–5.00. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
                   }
                 },
                 "type": "object"
@@ -2686,6 +2726,28 @@
                 ],
                 "type": "string"
               },
+              "context_summary": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "files_changed": {
+                        "type": "integer"
+                      },
+                      "lines_added": {
+                        "type": "integer"
+                      },
+                      "lines_removed": {
+                        "type": "integer"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
               "findings": {
                 "items": {
                   "additionalProperties": false,
@@ -2813,6 +2875,13 @@
                     "type": "null"
                   }
                 ]
+              },
+              "review_status": {
+                "enum": [
+                  "completed",
+                  "not_run"
+                ],
+                "type": "string"
               },
               "summary": {
                 "type": "string"
@@ -2960,7 +3029,7 @@
                   "max_budget_usd": {
                     "anyOf": [
                       {
-                        "maximum": 100.0,
+                        "maximum": 5.0,
                         "minimum": 0.01,
                         "type": "number"
                       },
@@ -2969,7 +3038,7 @@
                       }
                     ],
                     "default": null,
-                    "description": "claude only: per-call spend cap in USD, clamped to the operator bounds."
+                    "description": "claude only: per-call best-effort spend cap in USD, 0.01–5.00. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
                   }
                 },
                 "type": "object"
@@ -4006,7 +4075,7 @@
                   "max_budget_usd": {
                     "anyOf": [
                       {
-                        "maximum": 100.0,
+                        "maximum": 5.0,
                         "minimum": 0.01,
                         "type": "number"
                       },
@@ -4015,7 +4084,7 @@
                       }
                     ],
                     "default": null,
-                    "description": "claude only: per-call spend cap in USD, clamped to the operator bounds."
+                    "description": "claude only: per-call best-effort spend cap in USD, 0.01–5.00. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
                   }
                 },
                 "type": "object"
@@ -4058,7 +4127,7 @@
               }
             ],
             "default": null,
-            "description": "Optional caller stance/focus text appended BEHIND this server's always-leading framing (codex: developer_instructions; claude: system_prompt_append; kimi: prompt framing). UNTRUSTED, grants no tools, best-effort compliance; may ride the backend command line. Max 4096 bytes. Full contract: amicus://params."
+            "description": "Optional caller stance/focus text appended BEHIND this server's always-leading framing (codex: developer_instructions on argv; claude and kimi: a leading section of the stdin/handshake prompt). UNTRUSTED, grants no tools, best-effort compliance; may ride the backend command line. Max 4096 bytes. Full contract: amicus://params."
           },
           "model": {
             "anyOf": [
@@ -4399,7 +4468,7 @@
                   "max_budget_usd": {
                     "anyOf": [
                       {
-                        "maximum": 100.0,
+                        "maximum": 5.0,
                         "minimum": 0.01,
                         "type": "number"
                       },
@@ -4408,7 +4477,7 @@
                       }
                     ],
                     "default": null,
-                    "description": "claude only: per-call spend cap in USD, clamped to the operator bounds."
+                    "description": "claude only: per-call best-effort spend cap in USD, 0.01–5.00. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
                   }
                 },
                 "type": "object"
@@ -4455,7 +4524,7 @@
               }
             ],
             "default": null,
-            "description": "Optional caller stance/focus text appended BEHIND this server's always-leading framing (codex: developer_instructions; claude: system_prompt_append; kimi: prompt framing). UNTRUSTED, grants no tools, best-effort compliance; may ride the backend command line. Max 4096 bytes. Full contract: amicus://params."
+            "description": "Optional caller stance/focus text appended BEHIND this server's always-leading framing (codex: developer_instructions on argv; claude and kimi: a leading section of the stdin/handshake prompt). UNTRUSTED, grants no tools, best-effort compliance; may ride the backend command line. Max 4096 bytes. Full contract: amicus://params."
           },
           "model": {
             "anyOf": [
@@ -4771,7 +4840,7 @@
                   "max_budget_usd": {
                     "anyOf": [
                       {
-                        "maximum": 100.0,
+                        "maximum": 5.0,
                         "minimum": 0.01,
                         "type": "number"
                       },
@@ -4780,7 +4849,7 @@
                       }
                     ],
                     "default": null,
-                    "description": "claude only: per-call spend cap in USD, clamped to the operator bounds."
+                    "description": "claude only: per-call best-effort spend cap in USD, 0.01–5.00. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
                   }
                 },
                 "type": "object"
@@ -5161,7 +5230,7 @@
                   "max_budget_usd": {
                     "anyOf": [
                       {
-                        "maximum": 100.0,
+                        "maximum": 5.0,
                         "minimum": 0.01,
                         "type": "number"
                       },
@@ -5170,7 +5239,7 @@
                       }
                     ],
                     "default": null,
-                    "description": "claude only: per-call spend cap in USD, clamped to the operator bounds."
+                    "description": "claude only: per-call best-effort spend cap in USD, 0.01–5.00. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
                   }
                 },
                 "type": "object"
@@ -5507,7 +5576,7 @@
                   "max_budget_usd": {
                     "anyOf": [
                       {
-                        "maximum": 100.0,
+                        "maximum": 5.0,
                         "minimum": 0.01,
                         "type": "number"
                       },
@@ -5516,7 +5585,7 @@
                       }
                     ],
                     "default": null,
-                    "description": "claude only: per-call spend cap in USD, clamped to the operator bounds."
+                    "description": "claude only: per-call best-effort spend cap in USD, 0.01–5.00. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
                   }
                 },
                 "type": "object"
@@ -5818,7 +5887,7 @@
                   "max_budget_usd": {
                     "anyOf": [
                       {
-                        "maximum": 100.0,
+                        "maximum": 5.0,
                         "minimum": 0.01,
                         "type": "number"
                       },
@@ -5827,7 +5896,7 @@
                       }
                     ],
                     "default": null,
-                    "description": "claude only: per-call spend cap in USD, clamped to the operator bounds."
+                    "description": "claude only: per-call best-effort spend cap in USD, 0.01–5.00. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
                   }
                 },
                 "type": "object"
@@ -5889,7 +5958,7 @@
               }
             ],
             "default": null,
-            "description": "Optional caller stance/focus text appended BEHIND this server's always-leading framing (codex: developer_instructions; claude: system_prompt_append; kimi: prompt framing). UNTRUSTED, grants no tools, best-effort compliance; may ride the backend command line. Max 4096 bytes. Full contract: amicus://params."
+            "description": "Optional caller stance/focus text appended BEHIND this server's always-leading framing (codex: developer_instructions on argv; claude and kimi: a leading section of the stdin/handshake prompt). UNTRUSTED, grants no tools, best-effort compliance; may ride the backend command line. Max 4096 bytes. Full contract: amicus://params."
           },
           "model": {
             "anyOf": [
@@ -7361,7 +7430,7 @@
                   "max_budget_usd": {
                     "anyOf": [
                       {
-                        "maximum": 100.0,
+                        "maximum": 5.0,
                         "minimum": 0.01,
                         "type": "number"
                       },
@@ -7370,7 +7439,7 @@
                       }
                     ],
                     "default": null,
-                    "description": "claude only: per-call spend cap in USD, clamped to the operator bounds."
+                    "description": "claude only: per-call best-effort spend cap in USD, 0.01–5.00. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
                   }
                 },
                 "type": "object"
@@ -7454,7 +7523,7 @@
               }
             ],
             "default": null,
-            "description": "Optional caller stance/focus text appended BEHIND this server's always-leading framing (codex: developer_instructions; claude: system_prompt_append; kimi: prompt framing). UNTRUSTED, grants no tools, best-effort compliance; may ride the backend command line. Max 4096 bytes. Full contract: amicus://params."
+            "description": "Optional caller stance/focus text appended BEHIND this server's always-leading framing (codex: developer_instructions on argv; claude and kimi: a leading section of the stdin/handshake prompt). UNTRUSTED, grants no tools, best-effort compliance; may ride the backend command line. Max 4096 bytes. Full contract: amicus://params."
           },
           "model": {
             "anyOf": [
@@ -7873,7 +7942,7 @@
                   "max_budget_usd": {
                     "anyOf": [
                       {
-                        "maximum": 100.0,
+                        "maximum": 5.0,
                         "minimum": 0.01,
                         "type": "number"
                       },
@@ -7882,7 +7951,7 @@
                       }
                     ],
                     "default": null,
-                    "description": "claude only: per-call spend cap in USD, clamped to the operator bounds."
+                    "description": "claude only: per-call best-effort spend cap in USD, 0.01–5.00. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
                   }
                 },
                 "type": "object"
@@ -7970,7 +8039,7 @@
               }
             ],
             "default": null,
-            "description": "Optional caller stance/focus text appended BEHIND this server's always-leading framing (codex: developer_instructions; claude: system_prompt_append; kimi: prompt framing). UNTRUSTED, grants no tools, best-effort compliance; may ride the backend command line. Max 4096 bytes. Full contract: amicus://params."
+            "description": "Optional caller stance/focus text appended BEHIND this server's always-leading framing (codex: developer_instructions on argv; claude and kimi: a leading section of the stdin/handshake prompt). UNTRUSTED, grants no tools, best-effort compliance; may ride the backend command line. Max 4096 bytes. Full contract: amicus://params."
           },
           "model": {
             "anyOf": [
