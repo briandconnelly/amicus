@@ -3,10 +3,10 @@
 One MCP server for every second-opinion model: a verb-first surface (`amicus_consult`, `amicus_review_changes`, `amicus_delegate`, …) with the backend (`codex`, `kimi`, `claude`, …) as a parameter, built on FastMCP 4.0.x and MCP 2026-07-28 on top of the [pontonier](https://github.com/briandconnelly/pontonier) backend SDK.
 It replaces `codex-in-claude`, `moonbridge` and `claude-in-codex`.
 
-**Status:** milestone M4 (Claude Code).
+**Status:** milestone M5 (tasks extension).
 `amicus_consult`, `amicus_review_changes`, their `_async` twins, both dry runs and the five `amicus_job_*` tools work for `backend="codex"`, `"kimi"` and `"claude"`; `amicus_delegate(_async)` works for Codex and Kimi (Claude is review-only, `feature_unsupported`); `amicus_adversarial_review(_async)` works for Claude (the only backend declaring `adversarial_review`).
 Every paid call runs in a detached worker and records a job (`meta.job_id`), and `idempotency_key` dedups an `_async` retry.
-`task=True` wiring lands in M5.
+With `AMICUS_TASKS=1` the four paid sync tools are also tasks for a modern-era client that declares the `io.modelcontextprotocol/tasks` extension; both v1 hosts negotiate the handshake era and get plain results (`docs/host-captures/`).
 
 ## Development
 

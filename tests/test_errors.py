@@ -17,7 +17,7 @@ def test_repair_table_covers_the_whole_catalog_and_no_more():
     table = errors.repair_table()
     assert set(table) == set(ERROR_CODES)
     assert table["backend_not_found"].next_step == "install_backend"
-    assert table["not_implemented"].tool == "amicus_capabilities"
+    assert table["backend_unavailable"].tool == "amicus_backends"
     assert "amicus_backends" in table["backend_unavailable"].alternative
     # Prose overrides name amicus tools, never a sibling's.
     assert "amicus_consult_async" in table["timeout"].alternative
@@ -112,8 +112,8 @@ def test_serialize_error_mirrors_meta_request_id_onto_error():
 
 
 def test_error_envelope_helper():
-    out = errors.error_envelope("not_implemented", "later", Meta(), backend="kimi")
-    assert out["error"]["code"] == "not_implemented" and out["error"]["backend"] == "kimi"
+    out = errors.error_envelope("feature_unsupported", "later", Meta(), backend="kimi")
+    assert out["error"]["code"] == "feature_unsupported" and out["error"]["backend"] == "kimi"
 
 
 def test_render_failure_generalizes_minted_codes_and_names_the_backend():
