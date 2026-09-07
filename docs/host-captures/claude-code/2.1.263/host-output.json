@@ -1,0 +1,94 @@
+{
+  "api_error_status": null,
+  "duration_api_ms": 31211,
+  "duration_ms": 33008,
+  "fast_mode_disabled_reason": "sdk_opt_in_required",
+  "fast_mode_state": "off",
+  "first_content_frame_ms": 1891,
+  "is_error": false,
+  "modelUsage": {
+    "claude-opus-5[1m]": {
+      "cacheCreationInputTokens": 29876,
+      "cacheReadInputTokens": 53191,
+      "canonicalModel": "claude-opus-5",
+      "contextWindow": 1000000,
+      "costBasis": "list",
+      "costUSD": 0.4045605,
+      "inputTokens": 6,
+      "maxOutputTokens": 64000,
+      "outputTokens": 3167,
+      "provider": "firstParty",
+      "thinkingTokens": 69,
+      "webSearchRequests": 0
+    }
+  },
+  "num_turns": 3,
+  "permission_denials": [],
+  "queued_turn_count": 0,
+  "result": "{\"ok\":true,\"backends\":[{\"id\":\"codex\",\"display_name\":\"Codex\",\"enabled\":true,\"available\":true,\"status\":{\"installed\":true,\"version\":\"codex-cli 0.153.4\",\"authenticated\":true,\"warnings\":[]},\"features\":[\"delegate\",\"usage_accounting\"],\"effects\":{\"paid_calls_destructive\":false,\"job_reads_read_only\":true},\"options\":[{\"name\":\"isolation\",\"allowed_values\":[\"inherit\",\"ignore-config\",\"ignore-rules\"],\"default\":\"inherit\"}],\"egress\":\"Sends your question/task, extra_context and instructions_append raw, and the secret-redacted diff for reviews, to OpenAI via the codex CLI. Codex can read files outside the workspace \u2014 up to everything the OS user running it can read \u2014 and send them to OpenAI. The sandbox bounds writes, not reads, so no choice of workspace is a read boundary. Codex auto-loads the resolved workspace's AGENTS.md and, in a repository, ancestor AGENTS.md files through its root, plus a user-global $CODEX_HOME/AGENTS.override.md, else $CODEX_HOME/AGENTS.md; it discovers skills in the workspace's .agents/skills/ and user-global $CODEX_HOME/skills/ (default ~/.codex/skills/), reachable from outside the workspace. The isolation option does not suppress any of it. A skill's name and description arrive up front; selecting one makes the model read its body, which can reach OpenAI even if your inputs never mention it. The worktree does not bound Codex's writes: codex's workspace-write sandbox also lets commands write the OS temp roots (/tmp and $TMPDIR) by default.\",\"carriers\":\"The prompt (framing, question/task/diff, extra_context) rides the codex process's stdin; instructions_append rides the command line as the `-c developer_instructions` config override, so it is visible in local process listings for the run's duration.\",\"readonly_honesty\":\"Read-only runs under codex's --sandbox read-only OS sandbox. Redaction of gathered diffs and returned output is best-effort defense-in-depth; it never covers supplied inputs or files Codex reads itself. Codex can read files outside the workspace \u2014 up to everything the OS user running it can read \u2014 and send them to OpenAI. The sandbox bounds writes, not reads, so no choice of workspace is a read boundary.\",\"implicit_context\":\"Codex auto-loads the resolved workspace's AGENTS.md and, in a repository, ancestor AGENTS.md files through its root, plus a user-global $CODEX_HOME/AGENTS.override.md, else $CODEX_HOME/AGENTS.md; it discovers skills in the workspace's .agents/skills/ and user-global $CODEX_HOME/skills/ (default ~/.codex/skills/), reachable from outside the workspace. The isolation option does not suppress any of it. A skill's name and description arrive up front; selecting one makes the model read its body, which can reach OpenAI even if your inputs never mention it.\"},{\"id\":\"kimi\",\"display_name\":\"Kimi\",\"enabled\":true,\"available\":true,\"status\":{\"installed\":true,\"version\":\"0.41.0\",\"authenticated\":true,\"warnings\":[]},\"features\":[\"delegate\",\"empty_response_detection\",\"model_validation\"],\"effects\":{\"paid_calls_destructive\":false,\"job_reads_read_only\":true},\"options\":[{\"name\":\"isolation\",\"allowed_values\":[\"inherit\",\"ignore-skills\"],\"default\":\"inherit\"}],\"egress\":\"Sends your question/task, extra_context and instructions_append raw, and the secret-redacted diff for reviews, to your configured Kimi provider (Moonshot or any OpenAI-compatible endpoint named in kimi's config.toml) via the kimi CLI. Your inputs are sent raw and unredacted. Secret redaction is best-effort and covers the gathered diff and Kimi's returned output \u2014 not what you type, and not the files Kimi reads for itself. Kimi auto-loads the resolved workspace's AGENTS.md and discovers skills from its own config (including `extra_skill_dirs`, which may point outside the workspace). Skill names and descriptions are exposed to the model up front, so that content can be sent even if your prompt never mentions it. The isolation option does not suppress any of it: kimi's built-in skills always load, and AGENTS.md is read regardless. backend_options.isolation='ignore-skills' replaces the auto-discovered user/project skill directories via --skills-dir, but kimi's BUILT-IN skills still load. It is a reduction in exposure, not an elimination.\",\"carriers\":\"The prompt (framing, question/task/diff, extra_context, and instructions_append as a leading caller-instructions section) is written to a private handshake file under a temp dir outside the workspace; argv carries only a short pointer naming that file's path, the stream-json output flag and, for consult and review, the path of the generated read-only agent profile. Nothing you type rides argv, and kimi ignores stdin.\",\"readonly_honesty\":\"Read-only means Kimi cannot MODIFY anything \u2014 it has no shell or write tool. It does NOT mean Kimi can only see the workspace: its Read tool accepts absolute paths, so a prompt-injected repository could make it read other files on this machine and send them to your configured Kimi provider. Do not point it at a workspace whose contents you would not hand to that provider.\",\"implicit_context\":\"Kimi auto-loads the resolved workspace's AGENTS.md and discovers skills from its own config (including `extra_skill_dirs`, which may point outside the workspace). Skill names and descriptions are exposed to the model up front, so that content can be sent even if your prompt never mentions it. The isolation option does not suppress any of it: kimi's built-in skills always load, and AGENTS.md is read regardless.\"},{\"id\":\"claude\",\"display_name\":\"Claude Code\",\"enabled\":true,\"available\":true,\"status\":{\"installed\":true,\"version\":\"2.1.263 (Claude Code)\",\"authenticated\":true,\"warnings\":[]},\"features\":[\"adversarial_review\",\"usage_accounting\"],\"effects\":{\"paid_calls_destructive\":true,\"job_reads_read_only\":true},\"options\":[{\"name\":\"config_mode\",\"allowed_values\":[\"inherit\",\"scoped\",\"safe\",\"bare\"],\"default\":\"inherit\"},{\"name\":\"access\",\"allowed_values\":[\"toolless\",\"readonly\"],\"default\":\"toolless\"},{\"name\":\"max_budget_usd\",\"allowed_values\":null,\"default\":1}],\"egress\":\"Sends your question/target/evidence, extra_context and instructions_append raw, and the secret-redacted diff for reviews and critiques, to Anthropic via the claude CLI, using your Claude login (config_mode inherit/scoped/safe) or ANTHROPIC_API_KEY (bare). access=toolless grants Claude no tools at all; access=readonly grants Read/Grep/Glob, which lets Claude read files itself \u2014 bypassing diff redaction \u2014 and Read accepts absolute paths outside the workspace. Neither is an OS sandbox. What the claude CLI auto-loads depends on backend_options.config_mode: inherit/scoped read the workspace's CLAUDE.md and .claude/settings*.json \u2014 including hooks, which run OUTSIDE the tool allowlist (reported on meta.security_warnings); safe disables customizations and hooks while preserving the login; bare loads nothing but requires ANTHROPIC_API_KEY. Every mode strips the user's MCP servers.\",\"carriers\":\"The prompt (framing, question/target/evidence/diff, extra_context, and instructions_append as a leading caller-instructions section) rides the claude process's stdin. argv carries only constant text and flags: the independent-critic guardrails on --append-system-prompt (fixed text, never composed with caller input), the config-mode and access flags, the budget, and the help-gated --effort/--model. Nothing you type rides argv.\",\"readonly_honesty\":\"access=toolless grants Claude no tools at all; access=readonly grants Read/Grep/Glob, which lets Claude read files itself \u2014 bypassing diff redaction \u2014 and Read accepts absolute paths outside the workspace. Neither is an OS sandbox.\",\"implicit_context\":\"What the claude CLI auto-loads depends on backend_options.config_mode: inherit/scoped read the workspace's CLAUDE.md and .claude/settings*.json \u2014 including hooks, which run OUTSIDE the tool allowlist (reported on meta.security_warnings); safe disables customizations and hooks while preserving the login; bare loads nothing but requires ANTHROPIC_API_KEY. Every mode strips the user's MCP servers.\"}],\"unavailable\":[],\"env_warnings\":[],\"config_errors\":[],\"fingerprint\":\"amicus/0.1/schema-5\",\"server_version\":\"0.1.0\"}",
+  "stop_reason": "end_turn",
+  "subagent_stats": {
+    "by_type": {},
+    "completed": 0,
+    "failed": 0,
+    "killed": {
+      "parent": 0,
+      "system": 0,
+      "user": 0
+    },
+    "max_depth": 0,
+    "refused": {
+      "budget": 0,
+      "concurrency_limit": 0,
+      "depth_limit": 0
+    },
+    "requested": {
+      "background": 0,
+      "foreground": 0,
+      "unset": 0
+    },
+    "spawned": 0,
+    "spawned_by_subagents": 0,
+    "started_in_background": 0
+  },
+  "subtype": "success",
+  "terminal_reason": "completed",
+  "time_to_request_ms": 21,
+  "total_cost_usd": 0.4045605,
+  "ttft_ms": 2599,
+  "ttft_stream_ms": 995,
+  "type": "result",
+  "usage": {
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 29876,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "cache_creation_input_tokens": 29876,
+    "cache_read_input_tokens": 53191,
+    "inference_geo": "not_available",
+    "input_tokens": 6,
+    "iterations": [
+      {
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 3036,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "cache_creation_input_tokens": 3036,
+        "cache_read_input_tokens": 26840,
+        "input_tokens": 2,
+        "output_tokens": 2972,
+        "type": "message"
+      }
+    ],
+    "output_tokens": 3167,
+    "output_tokens_details": {
+      "thinking_tokens": 69
+    },
+    "server_tool_use": {
+      "web_fetch_requests": 0,
+      "web_search_requests": 0
+    },
+    "service_tier": "standard",
+    "speed": "standard"
+  }
+}

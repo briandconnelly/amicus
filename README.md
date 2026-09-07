@@ -31,13 +31,15 @@ The gate is defined once, in `AGENTS.md` (Rules, item 2); CI runs it on every su
 | The M2 plan (jobs surface) | `docs/superpowers/plans/2026-09-06-amicus-M2-jobs-surface.md` |
 | The M3 plan (Kimi) | `docs/superpowers/plans/2026-09-06-amicus-M3-kimi.md` |
 | The M4 plan (Claude Code) | `docs/superpowers/plans/2026-09-07-amicus-M4-claude.md` |
+| The M5 plan (tasks extension) | `docs/superpowers/plans/2026-09-07-amicus-M5-tasks.md` |
 | Claude Code CLI evidence captures | `docs/claude-help/` |
 | Kimi CLI evidence captures | `docs/kimi-help/` |
+| Host captures (Claude Code, Codex CLI with `AMICUS_TASKS=1`) | `docs/host-captures/` |
 
 ## Resuming the work
 
-1. `main` carries M4.
-2. In a fresh session say "Resume amicus at milestone M5 per the execution model".
-3. The agent writes the M5 plan from the spec and executes it.
+1. `main` carries M5.
+2. In a fresh session say "Resume amicus at milestone M6 per the execution model".
+3. The agent writes the M6 plan from the spec and executes it.
 
 Open items only the maintainer can settle: trademark clearance for the name before any PyPI publish; the pontonier repo-layout question (separate repo vs uv workspace) is deferred until after M1.
