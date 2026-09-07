@@ -30,8 +30,6 @@ _FEATURE_CODES = _pe.feature_codes(frozenset({"model_validation", "empty_respons
 
 LOCAL_CODES = frozenset(
     {
-        # The tool is registered but its backend has not landed in this release.
-        "not_implemented",
         # The registry recorded the backend as unavailable (import, conformance, config).
         "backend_unavailable",
         # The backend does not declare the feature this verb needs (e.g. claude+delegate).
@@ -92,7 +90,6 @@ ErrorCode = Literal[
     "job_timeout",
     "nonzero_exit",
     "not_a_git_repo",
-    "not_implemented",
     "resource_not_found",
     "schema_violation",
     "timeout",

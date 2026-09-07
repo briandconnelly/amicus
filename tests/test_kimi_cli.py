@@ -158,11 +158,6 @@ def test_prompt_pointers_stay_small_and_name_the_files():
     assert len(ro) < 300 and len(rw) < 300
 
 
-def test_schema_instruction_names_the_schema():
-    text = cli.schema_instruction({"type": "object"})
-    assert text.startswith("\n\n# Required output format") and '"type": "object"' in text
-
-
 # --- probes ------------------------------------------------------------------------------
 
 

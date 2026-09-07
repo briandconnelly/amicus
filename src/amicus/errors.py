@@ -44,13 +44,6 @@ NEUTRAL_VOCABULARY = BackendErrorVocabulary(
 _FEATURES = frozenset({"model_validation", "empty_response_detection"})
 
 _LOCAL_RULES: dict[str, RepairRule] = {
-    "not_implemented": RepairRule(
-        "update_plugin",
-        "amicus_capabilities",
-        False,
-        "This tool's backend has not landed in this amicus release; amicus_capabilities "
-        "lists what is implemented. Update amicus when the backend ships.",
-    ),
     "backend_unavailable": RepairRule(
         "inspect_and_retry",
         "amicus_backends",

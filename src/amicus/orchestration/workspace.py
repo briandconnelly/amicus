@@ -92,11 +92,13 @@ async def roots_from_ctx(ctx: Any) -> tuple[list[str], RootsSource]:
 
 
 def client_name_from_ctx(ctx: Any) -> str | None:
-    """The handshake-era clientInfo.name, or None (modern connections carry no client info)."""
+    """The client's declared name (`clientInfo.name`, `client_info` on the v2 SDK), or None."""
     session = _session(ctx)
     if session is None:
         return None
     params = getattr(session, "client_params", None)
-    info = getattr(params, "clientInfo", None)
+    # MCP SDK v2 names it `client_info`; `clientInfo` is the pre-v2 alias, kept as a
+    # fallback so a handshake-era session object built by an older client still reads.
+    info = getattr(params, "client_info", None) or getattr(params, "clientInfo", None)
     name = getattr(info, "name", None)
     return name if isinstance(name, str) and name.strip() else None

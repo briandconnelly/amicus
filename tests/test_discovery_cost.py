@@ -5,7 +5,7 @@ catalog is a per-session token tax. The budget is a ceiling; the target is the l
 deliberate measurement so a failure message shows the drift. Raising a budget is a
 reviewed decision — say why in the PR body.
 
-Measured 2026-09-07 at schema-4 (18 tools; claude live, adversarial result shape): see MEASURED.
+Measured 2026-09-07 at schema-6 (18 tools; job-outlives-task claim corrected): see MEASURED.
 """
 
 from __future__ import annotations

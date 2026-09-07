@@ -56,8 +56,7 @@ def test_vocabularies():
     assert "Bash" not in contract.READONLY_TOOLS and "Write" not in contract.READONLY_TOOLS
     assert "Bash" in contract.READONLY_DISALLOWED_TOOLS
     assert contract.SUCCESS_SUBTYPES == (None, "success")
-    assert "usage" in contract.ENVELOPE_KEYS
-    assert contract.USAGE_KEYS.isdisjoint(contract.ENVELOPE_KEYS)
+    assert "input_tokens" in contract.USAGE_KEYS
 
 
 def test_forbidden_phrases_are_re_derived_for_a_multi_backend_server():
@@ -106,6 +105,8 @@ def test_captured_version_is_a_supported_major():
         ("The author's approach is sound.", False, False, False, False, False, False, False),
         ("Budget stop threshold reached.", False, False, False, True, False, False, False),
         ("Permission denied for tool Read.", False, False, False, False, True, False, False),
+        ("Access denied.", False, False, False, False, True, False, False),
+        ("The reviewer denied the claim.", False, False, False, False, False, False, False),
         ("Rate limited; try later.", False, False, False, False, False, True, False),
         ("API is overloaded (529)", False, False, False, False, False, True, False),
         ("429 Too Many Requests", False, False, False, False, False, True, False),

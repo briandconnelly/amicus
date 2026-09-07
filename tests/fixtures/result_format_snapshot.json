@@ -2061,7 +2061,6 @@
                 "job_timeout",
                 "nonzero_exit",
                 "not_a_git_repo",
-                "not_implemented",
                 "resource_not_found",
                 "schema_violation",
                 "timeout",

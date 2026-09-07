@@ -1,5 +1,5 @@
-"""FastMCP middlewares: schema dialect, semantic isError, the invalid_arguments envelope
-at the call boundary, and the JSON-RPC error.data envelope for resource reads."""
+"""FastMCP middlewares: connection log, schema dialect, semantic isError, the invalid_arguments
+envelope at the call boundary, and the JSON-RPC error.data envelope for resource reads."""
 
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ from mcp.types.version import MODERN_PROTOCOL_VERSIONS
 from pontonier.core import redaction
 from pydantic import ValidationError
 
+from amicus import obs
 from amicus.errors import make_error, serialize_error, serialize_error_info
 from amicus.schemas.envelope import ErrorResult, InvalidArgument, Meta
 from amicus.schemas.fingerprint import JSON_SCHEMA_DIALECT
@@ -33,6 +34,22 @@ WITHHELD_FIELD = "<withheld>"
 _MISSING_TYPES = frozenset({"missing", "missing_argument"})
 RESOURCE_NOT_FOUND_HANDSHAKE = -32002
 RESOURCE_NOT_FOUND_MODERN = INVALID_PARAMS
+TASKS_EXTENSION_ID = "io.modelcontextprotocol/tasks"
+
+# Bound on a client-controlled field (declared name/version, negotiated protocol, or the
+# requested tool name) before it reaches the connection-log line. Generous for any real
+# value in these fields, tight enough that a client cannot flood a log record.
+MAX_LOGGED_FIELD_CHARS = 200
+
+
+def _safe_logged_field(text: str) -> str:
+    """Sanitize one client-controlled field for the connection-log line. `sanitize_echo`
+    deletes every Cc control code point — newlines included — before redacting, which is
+    what stops a value like ``"claude-code\\n2026-... DEBUG ...: tools/call ..."`` from
+    splitting into what looks like a second, forged log record; the length bound (applied
+    AFTER sanitizing, per that function's own contract) stops an unbounded value from
+    flooding the log instead."""
+    return redaction.sanitize_echo(text)[:MAX_LOGGED_FIELD_CHARS]
 
 
 def _has_control_char(text: str) -> bool:
@@ -137,6 +154,70 @@ def invalid_arguments_envelope(
     )
 
 
+def connection_facts(context: object) -> dict[str, Any]:
+    """What a tool call's connection negotiated: the protocol version, the client's
+    declared name and version (both protocol eras carry these) and whether the client
+    declared the tasks extension for this request. Every read is defensive: an in-memory
+    client, a legacy session and a sessionless request each lack some of these.
+
+    The protocol, client name and client version are all client-controlled — sanitized
+    and length-bounded (`_safe_logged_field`) before being returned, since this dict's
+    values are formatted straight into the connection-log line."""
+    fastmcp_context = getattr(context, "fastmcp_context", None)
+    request_context = getattr(fastmcp_context, "request_context", None)
+    version = getattr(request_context, "protocol_version", None)
+    session = None
+    if fastmcp_context is not None:
+        try:
+            session = fastmcp_context.session
+        except RuntimeError:
+            session = None
+    params = getattr(session, "client_params", None)
+    # `client_info` on the MCP SDK v2; `clientInfo` is the pre-v2 alias (see Task 2's fix).
+    info = getattr(params, "client_info", None) or getattr(params, "clientInfo", None)
+    name = getattr(info, "name", None)
+    client_version = getattr(info, "version", None)
+    tasks = False
+    if fastmcp_context is not None:
+        try:
+            tasks = fastmcp_context.client_extension_settings(TASKS_EXTENSION_ID) is not None
+        except Exception:
+            tasks = False
+    return {
+        "protocol": _safe_logged_field(str(version)) if version else "unknown",
+        "client": _safe_logged_field(name) if isinstance(name, str) and name else "unknown",
+        "client_version": (
+            _safe_logged_field(client_version)
+            if isinstance(client_version, str) and client_version
+            else "unknown"
+        ),
+        "tasks": tasks,
+    }
+
+
+class ConnectionLogMiddleware(Middleware):
+    """One DEBUG line per tool call naming what the connection negotiated. The line carries
+    the tool NAME and connection facts only, never an argument (AGENTS.md rule 18); it is
+    the instrument behind the host captures under docs/host-captures/ (M5). The tool name
+    is client-controlled (it comes off the incoming tools/call request, ahead of any
+    dispatch validation), so it is sanitized and length-bounded the same as the
+    connection facts before it reaches the log line."""
+
+    async def on_call_tool(self, context, call_next):  # type: ignore[no-untyped-def]
+        facts = connection_facts(context)
+        raw_name = getattr(getattr(context, "message", None), "name", None)
+        tool_name = _safe_logged_field(str(raw_name)) if raw_name else "?"
+        obs.get_logger(__name__).debug(
+            "tools/call %s: protocol=%s client=%s/%s tasks_negotiated=%s",
+            tool_name,
+            facts["protocol"],
+            facts["client"],
+            facts["client_version"],
+            facts["tasks"],
+        )
+        return await call_next(context)
+
+
 class InputSchemaDialectMiddleware(Middleware):
     """Stamp the JSON Schema dialect onto every tool's input schema ([3.dialect]).
 
@@ -160,12 +241,12 @@ class InputSchemaDialectMiddleware(Middleware):
 class SemanticErrorMiddleware(Middleware):
     """An `ok: false` envelope is an MCP `isError: true` result ([6.tool-errors]).
 
-    A task-augmented call (`fastmcp[tasks]`, ADR 0004) intercepts `tools/call` before
-    this middleware's `call_next` reaches the tool body and returns a `CreateTaskResult`
-    instead of a `ToolResult` — there is no `structured_content` to inspect yet, and the
-    eventual task result never re-enters this middleware (the worker invokes the tool
-    directly), so the semantic flip is a no-op for the tasked path. See the M0 spike
-    (`tests/test_tasks_spike.py`, ADR 0004) for the observed behaviour.
+    Safety net for the foreground path only. A task-augmented call (`fastmcp[tasks]`,
+    ADR 0004) intercepts `tools/call` before this middleware's `call_next` reaches the
+    tool body and returns a `CreateTaskResult` instead of a `ToolResult`, and the eventual
+    task result never re-enters this middleware (the worker invokes the tool directly), so
+    the flip an agent relies on is produced by the tool itself: `tools._guard.as_tool_result`
+    returns an `is_error` `ToolResult` for every `ok: false` envelope on both paths (M5).
     """
 
     async def on_call_tool(self, context, call_next):  # type: ignore[no-untyped-def]

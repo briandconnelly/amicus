@@ -15,6 +15,7 @@ from pontonier.conventions.prompts import (
 from tests.support import kimifixtures as kf
 
 from amicus.backends.kimi import cli
+from amicus.schemas.structured import schema_instruction
 
 SIBLING_HOST = "Claude Code"
 FIXTURE = kf.load_fixture()
@@ -45,7 +46,7 @@ async def test_staged_argv_matches_the_sibling(pinned_kimi_bin, monkeypatch, tmp
 def test_agent_document_schema_instruction_and_env_match_the_sibling():
     theirs = FIXTURE["agent_document"].replace("moonbridge-readonly", "amicus-readonly")
     assert cli.read_only_agent_document() == theirs
-    assert cli.schema_instruction({"type": "object"}) == FIXTURE["schema_instruction"]
+    assert schema_instruction({"type": "object"}) == FIXTURE["schema_instruction"]
     env = cli.build_run_env({}, "high")
     assert {k: v for k, v in env.items() if k.startswith("KIMI_MODEL_")} == FIXTURE["run_env"]
 

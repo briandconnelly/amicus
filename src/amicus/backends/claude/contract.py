@@ -97,18 +97,6 @@ SUPPORTED_MAJORS = frozenset({2})
 
 # --- The JSON envelope `claude -p --output-format json` prints -------------------------------
 SUCCESS_SUBTYPES: tuple[str | None, ...] = (None, "success")
-ENVELOPE_KEYS = frozenset(
-    {
-        "is_error",
-        "subtype",
-        "result",
-        "total_cost_usd",
-        "usage",
-        "session_id",
-        "modelUsage",
-        "permission_denials",
-    }
-)
 USAGE_KEYS = frozenset(
     {"input_tokens", "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"}
 )
@@ -163,7 +151,10 @@ _AUTHISH_PATTERNS = (
     re.compile(r"\blogin\b", re.I),
 )
 _BUDGET_PATTERNS = (re.compile(r"\bbudget\b", re.I),)
-_PERMISSION_PATTERNS = (re.compile(r"\bpermission\b", re.I), re.compile(r"\bdenied\b", re.I))
+_PERMISSION_PATTERNS = (
+    re.compile(r"\bpermission\b", re.I),
+    re.compile(r"\baccess denied\b", re.I),
+)
 _RATE_LIMIT_PATTERNS = (
     re.compile(r"\b429\b"),
     re.compile(r"\b529\b"),

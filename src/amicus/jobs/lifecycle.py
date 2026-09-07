@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 from pontonier.core import redaction
 from pontonier.core.jobs import JobStore
 
+from amicus import obs
 from amicus.errors import error_envelope
 from amicus.jobs.delivery import finished_job_envelope
 from amicus.orchestration.isolation import WORKTREE_PREFIX
@@ -27,6 +28,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Callable
 
     from amicus.config import Settings
+    from amicus.jobs.taskmap import TaskJobMap
     from amicus.plugin import BackendPlugin
     from amicus.request import RunSpec
     from amicus.schemas.envelope import Meta
@@ -370,6 +372,25 @@ async def await_job_result(
     return envelope
 
 
+def current_task_id() -> str | None:
+    """The tasks-extension task id when this coroutine runs inside a task-augmented call
+    (ADR 0004), else None. The import is lazy: the extension is only active under
+    AMICUS_TASKS=1, and a server without it must never pay for the import."""
+    try:
+        from fastmcp_tasks.context import get_task_context  # noqa: PLC0415
+    except ImportError:
+        return None
+    task_id = getattr(get_task_context(), "task_id", None)
+    return task_id if isinstance(task_id, str) and task_id else None
+
+
+def _with_task_id(envelope: dict[str, Any], task_id: str | None) -> dict[str, Any]:
+    meta = envelope.get("meta")
+    if task_id is not None and isinstance(meta, dict):
+        meta["task_id"] = task_id
+    return envelope
+
+
 async def run_sync(
     store: JobStore,
     spec: RunSpec,
@@ -379,11 +400,37 @@ async def run_sync(
     timeout: int,
     detail: str,
     ctx: Any,
+    task_map: TaskJobMap | None = None,
 ) -> dict[str, Any]:
-    """The synchronous paid-tool tail: start the detached job and await it."""
+    """The synchronous paid-tool tail: start the detached job and await it. Under a
+    task-augmented call the task id is recorded against the job as soon as the job exists,
+    so amicus_job_list(task_id=...) recovers it after a cancel or after the task's result
+    window lapses, and it rides meta.task_id on whatever envelope is returned."""
     handle = await start_job(store, spec, meta, plugin, deadline=timeout)
+    task_id = current_task_id()
     if handle.get("ok") is False:
-        return handle
-    return await await_job_result(
-        store, spec.cwd, handle["job_id"], spec.kind, meta, detail, timeout, ctx, plugin
+        return _with_task_id(handle, task_id)
+    job_id = handle["job_id"]
+    if task_id is not None and task_map is not None:
+        try:
+            await asyncio.to_thread(task_map.record, task_id, job_id)
+        except asyncio.CancelledError:
+            # A cancellation landing between start_job returning and await_job_result
+            # being entered would otherwise propagate straight out of run_sync, past
+            # await_job_result's own cancel-on-CancelledError handler, and orphan the
+            # already-spawned job. Shield the cleanup (mirrors await_job_result) and
+            # re-raise so the caller still sees the cancellation.
+            with contextlib.suppress(Exception):
+                await asyncio.shield(asyncio.to_thread(store.cancel, spec.cwd, job_id))
+            raise
+        except OSError as exc:
+            obs.get_logger(__name__).warning(
+                "task map write failed for task %s -> job %s: %s",
+                task_id,
+                job_id,
+                redaction.exc_summary(exc),
+            )
+    envelope = await await_job_result(
+        store, spec.cwd, job_id, spec.kind, meta, detail, timeout, ctx, plugin
     )
+    return _with_task_id(envelope, task_id)

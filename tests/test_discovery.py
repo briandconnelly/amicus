@@ -86,7 +86,6 @@ async def test_every_tool_output_schema_is_valid_and_every_error_envelope_valida
                 res = await c.call_tool(tool.name, args[tool.name], raise_on_error=False)
                 Draft202012Validator(tool.output_schema).validate(res.structured_content)
                 assert res.structured_content["error"]["code"] in {
-                    "not_implemented",
                     "backend_unavailable",
                     "invalid_workspace_root",
                 }
