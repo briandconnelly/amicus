@@ -173,6 +173,18 @@ async def test_adversarial_with_an_empty_scope_is_not_run_and_never_spawns(monke
     assert "critique did not run" in out["summary"] and spawned == []
 
 
+async def test_adversarial_not_run_keeps_the_untracked_remedy(monkeypatch, repo):
+    (repo / "new.py").write_text("y = 1\n")
+    spawned: list = []
+    monkeypatch.setattr(
+        run_mod.runtime, "run_async", cxf.scripted_run_async(stdout=STRUCTURED, calls=spawned)
+    )
+    out = await run_mod.run_request(_spec(cwd=str(repo), scope="working_tree"), _plugin())
+    assert out["ok"] is True and out["review_status"] == "not_run"
+    assert "1 untracked file" in out["summary"] and 'untracked="include"' in out["summary"]
+    assert "critique did not run" in out["summary"] and spawned == []
+
+
 async def test_adversarial_with_changes_attaches_the_diff_and_folds_coverage(monkeypatch, repo):
     (repo / "a.py").write_text("x = 2\n")
     calls: list = []
