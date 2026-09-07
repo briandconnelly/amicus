@@ -72,6 +72,9 @@ async def test_guarded_tool_delivers_is_error_without_any_middleware():
     assert res.is_error is True and res.structured_content["error"]["code"] == "internal_error"
     assert exc.is_error is True
     err = exc.structured_content["error"]
-    assert err["code"] == "internal_error" and err["backend"] == "codex"
+    assert err["code"] == "internal_error"
+    # The guard puts the caller's backend on meta, not on error.backend (which only
+    # error_envelope's own `backend=` kwarg sets, and the guard has never passed it).
+    assert exc.structured_content["meta"]["backend"] == "codex"
     assert "RuntimeError" in err["message"] and "secret detail" not in err["message"]
     assert ok.is_error is False and ok.structured_content == {"ok": True, "answer": 42}
