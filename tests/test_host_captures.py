@@ -11,7 +11,7 @@ import pytest
 from mcp.types.version import MODERN_PROTOCOL_VERSIONS
 
 CAPTURES = Path("docs/host-captures")
-HOSTS = ["claude-code"]  # Task 7 adds "codex"
+HOSTS = ["claude-code", "codex"]
 LINE = re.compile(
     r"tools/call amicus_backends: protocol=(?P<protocol>\S+) client=(?P<client>\S+) "
     r"tasks_negotiated=(?P<tasks>True|False)$"
