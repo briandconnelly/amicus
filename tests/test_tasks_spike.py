@@ -48,14 +48,11 @@ async def test_task_augmented_paid_call_delivers_the_same_envelope():
     # No workspace_root from a sessionless client: zero-spend invalid_workspace_root.
     assert plain.structured_content["error"]["code"] == "invalid_workspace_root"
     assert result.structured_content["error"]["code"] == "invalid_workspace_root"
-    # Spike finding: the semantic isError flip does NOT survive task delivery. A
-    # task-augmented call is intercepted by TasksExtension before it reaches
-    # SemanticErrorMiddleware's call_next (the server returns a CreateTaskResult
-    # in place of the tool's ToolResult), and the eventual task result is produced
-    # by the Docket worker invoking the tool directly, never re-entering the
-    # middleware chain — so `ok: false` in the delivered structured_content is
-    # never promoted to `isError: true` for a tasked call. See ADR 0004.
-    assert result.is_error is False  # finding: the flip does not survive
+    # M0 finding: the SemanticErrorMiddleware flip did NOT survive task delivery (the
+    # extension intercepts tools/call before call_next, and the Docket worker invokes the
+    # tool directly). M5 closes it: the guard returns an is_error ToolResult for every
+    # ok: false envelope, and the tasks handler passes a ToolResult through intact.
+    assert result.is_error is True
     assert task.task_id and task.create_result.ttl_ms is not None
     assert status.status in {"working", "completed"}
 

@@ -160,12 +160,12 @@ class InputSchemaDialectMiddleware(Middleware):
 class SemanticErrorMiddleware(Middleware):
     """An `ok: false` envelope is an MCP `isError: true` result ([6.tool-errors]).
 
-    A task-augmented call (`fastmcp[tasks]`, ADR 0004) intercepts `tools/call` before
-    this middleware's `call_next` reaches the tool body and returns a `CreateTaskResult`
-    instead of a `ToolResult` — there is no `structured_content` to inspect yet, and the
-    eventual task result never re-enters this middleware (the worker invokes the tool
-    directly), so the semantic flip is a no-op for the tasked path. See the M0 spike
-    (`tests/test_tasks_spike.py`, ADR 0004) for the observed behaviour.
+    Safety net for the foreground path only. A task-augmented call (`fastmcp[tasks]`,
+    ADR 0004) intercepts `tools/call` before this middleware's `call_next` reaches the
+    tool body and returns a `CreateTaskResult` instead of a `ToolResult`, and the eventual
+    task result never re-enters this middleware (the worker invokes the tool directly), so
+    the flip an agent relies on is produced by the tool itself: `tools._guard.as_tool_result`
+    returns an `is_error` `ToolResult` for every `ok: false` envelope on both paths (M5).
     """
 
     async def on_call_tool(self, context, call_next):  # type: ignore[no-untyped-def]
