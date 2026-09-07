@@ -708,3 +708,50 @@ async def test_run_sync_spawn_failure_still_carries_the_task_id(tmp_path, monkey
     )
     assert out["ok"] is False and out["meta"]["task_id"] == "task-abc"
     assert TaskJobMap(tmp_path / "tasks.json").entries() == {}
+
+
+async def test_cancellation_during_task_map_record_still_cancels_the_job(tmp_path, monkeypatch):
+    """A cancellation landing between start_job returning and await_job_result being
+    entered (i.e. while the task-map record is in flight) must still cancel the already
+    -spawned job, not orphan it (finding 2, fix round 1)."""
+    store = lifecycle.job_store(_settings(tmp_path))
+    monkeypatch.setattr(lifecycle, "worker_cmd", _sleeping_worker_cmd())
+    monkeypatch.setattr(lifecycle, "current_task_id", lambda: "task-abc")
+    entered = threading.Event()
+    release = threading.Event()
+
+    class _BlockingMap:
+        def record(self, task_id, job_id):
+            entered.set()
+            release.wait(5)
+
+    spec = _spec(str(tmp_path))
+    task = asyncio.create_task(
+        lifecycle.run_sync(
+            store,
+            spec,
+            meta_for(spec),
+            fakeplugin.make_plugin(),
+            timeout=10,
+            detail="summary",
+            ctx=None,
+            task_map=_BlockingMap(),
+        )
+    )
+    deadline = time.monotonic() + 5
+    while not entered.is_set():
+        assert time.monotonic() < deadline
+        await asyncio.sleep(0.01)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    release.set()
+
+    jobs = store.list_jobs(str(tmp_path))
+    assert jobs
+    job_id = jobs[0]["job_id"]
+    deadline = time.monotonic() + 5
+    while store.status(str(tmp_path), job_id)["status"] != "cancelled":
+        assert time.monotonic() < deadline
+        await asyncio.sleep(0.05)
+    assert store.status(str(tmp_path), job_id)["status"] == "cancelled"

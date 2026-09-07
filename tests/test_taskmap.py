@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import threading
+
 from amicus.jobs.taskmap import TaskJobMap
 
 
@@ -26,3 +28,27 @@ def test_corrupt_or_missing_file_reads_as_empty(tmp_path):
     TaskJobMap(path).record("t", "j")
     assert TaskJobMap(path).job_for("t") == "j"
     assert not list(path.parent.glob("*.tmp"))
+
+
+def test_record_survives_concurrent_writers(tmp_path):
+    """N threads calling record() on one TaskJobMap concurrently must all survive: a
+    tasked call's task_id -> job_id mapping is this task's entire recovery guarantee,
+    and losing an entry under concurrency means amicus_job_list(task_id=...) comes back
+    empty for a job that is still running and still spending money."""
+    task_map = TaskJobMap(tmp_path / "tasks.json")
+    n = 200
+    barrier = threading.Barrier(n)
+
+    def _record(i: int) -> None:
+        barrier.wait()
+        task_map.record(f"task-{i}", f"job-{i}")
+
+    threads = [threading.Thread(target=_record, args=(i,)) for i in range(n)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    entries = task_map.entries()
+    assert len(entries) == n
+    assert entries == {f"task-{i}": f"job-{i}" for i in range(n)}

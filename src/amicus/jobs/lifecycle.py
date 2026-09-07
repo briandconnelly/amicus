@@ -414,6 +414,15 @@ async def run_sync(
     if task_id is not None and task_map is not None:
         try:
             await asyncio.to_thread(task_map.record, task_id, job_id)
+        except asyncio.CancelledError:
+            # A cancellation landing between start_job returning and await_job_result
+            # being entered would otherwise propagate straight out of run_sync, past
+            # await_job_result's own cancel-on-CancelledError handler, and orphan the
+            # already-spawned job. Shield the cleanup (mirrors await_job_result) and
+            # re-raise so the caller still sees the cancellation.
+            with contextlib.suppress(Exception):
+                await asyncio.shield(asyncio.to_thread(store.cancel, spec.cwd, job_id))
+            raise
         except OSError as exc:
             obs.get_logger(__name__).warning(
                 "task map write failed for task %s -> job %s: %s",
