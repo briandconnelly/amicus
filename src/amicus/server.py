@@ -6,12 +6,14 @@ import contextlib
 import os
 import signal
 import sys
+from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
 from fastmcp import FastMCP
 
 from amicus import SERVER_NAME, __version__, config, obs, tools
 from amicus.appstate import AppState
+from amicus.jobs.lifecycle import SYNC_AWAIT_GRACE_S
 from amicus.middleware import (
     ConnectionLogMiddleware,
     InputSchemaDialectMiddleware,
@@ -29,6 +31,15 @@ if TYPE_CHECKING:  # pragma: no cover
     from amicus.config import Settings
 
 UI_EXTENSION_ID = "io.modelcontextprotocol/ui"
+
+
+def tasks_redelivery_seconds(settings: Settings) -> int:
+    """Docket's redelivery_timeout for the tasks extension: longer than any sync run can
+    take (deadline plus the await grace), so a healthy worker is never asked to re-run a
+    paid call. Docket renews a running task's lease anyway; this is belt and braces
+    (ADR 0011)."""
+    return settings.job_max_seconds + SYNC_AWAIT_GRACE_S
+
 
 # Rules-then-context ([2.rules-then-context]): does/does-not lead, one imperative rule
 # per sentence, background last. Also served at amicus://capabilities.
@@ -123,7 +134,12 @@ def create_app(
         try:
             from fastmcp_tasks import TasksExtension  # noqa: PLC0415
 
-            app.add_extension(TasksExtension(url=settings.tasks_backend_url))
+            app.add_extension(
+                TasksExtension(
+                    url=settings.tasks_backend_url,
+                    redelivery_timeout=timedelta(seconds=tasks_redelivery_seconds(settings)),
+                )
+            )
             state.tasks_active = True
         except ImportError as exc:
             state.config_errors.append(

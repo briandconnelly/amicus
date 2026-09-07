@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from fastmcp import Context
 
-from amicus.jobs import lifecycle
+from amicus.jobs import lifecycle, lookup
 from amicus.schemas.params import (
     BackendOptionsParam,
     BackendParam,
@@ -95,6 +95,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
             timeout=prep.spec.timeout_seconds,
             detail=detail,
             ctx=ctx,
+            task_map=lookup.task_map(settings),
         )
 
     @app.tool(

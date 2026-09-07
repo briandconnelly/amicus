@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import builtins
 import json
+import logging
 import sys
 import threading
 import time
@@ -14,6 +16,7 @@ from tests.support import fakeplugin
 
 from amicus import config
 from amicus.jobs import lifecycle
+from amicus.jobs.taskmap import TaskJobMap
 from amicus.request import RunSpec, meta_for
 from amicus.schemas.envelope import Meta, dump_success
 from amicus.schemas.results import ConsultResult, RawResponse
@@ -597,3 +600,111 @@ def test_mark_replayed_stamps_meta_only_when_present():
     replayed = lifecycle.mark_replayed({"ok": True, "meta": {"job_id": "x"}})
     assert replayed["meta"]["idempotency_replayed"] is True
     assert lifecycle.mark_replayed({"ok": False}) == {"ok": False}
+
+
+def test_current_task_id_is_none_outside_a_task_and_without_the_extension(monkeypatch):
+    assert lifecycle.current_task_id() is None
+    real_import = builtins.__import__
+
+    def fake_import(name, *args, **kwargs):
+        if name.startswith("fastmcp_tasks"):
+            raise ImportError("no fastmcp_tasks")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+    assert lifecycle.current_task_id() is None
+
+
+def test_current_task_id_ignores_a_blank_task_context(monkeypatch):
+    import fastmcp_tasks.context as task_context
+
+    class _Info:
+        task_id = ""
+
+    monkeypatch.setattr(task_context, "get_task_context", lambda: _Info())  # noqa: PLW0108
+    assert lifecycle.current_task_id() is None
+    monkeypatch.setattr(task_context, "get_task_context", lambda: None)
+    assert lifecycle.current_task_id() is None
+
+
+async def test_run_sync_records_the_task_id_when_inside_a_task(tmp_path, monkeypatch):
+    store = lifecycle.job_store(_settings(tmp_path))
+    monkeypatch.setattr(lifecycle, "worker_cmd", _fake_worker_cmd(_success(str(tmp_path))))
+    monkeypatch.setattr(lifecycle, "current_task_id", lambda: "task-abc")
+    task_map = TaskJobMap(tmp_path / "tasks.json")
+    spec = _spec(str(tmp_path))
+    out = await lifecycle.run_sync(
+        store,
+        spec,
+        meta_for(spec),
+        fakeplugin.make_plugin(),
+        timeout=10,
+        detail="summary",
+        ctx=None,
+        task_map=task_map,
+    )
+    assert out["ok"] is True and out["meta"]["task_id"] == "task-abc"
+    assert task_map.job_for("task-abc") == out["meta"]["job_id"]
+
+
+async def test_run_sync_outside_a_task_records_nothing(tmp_path, monkeypatch):
+    store = lifecycle.job_store(_settings(tmp_path))
+    monkeypatch.setattr(lifecycle, "worker_cmd", _fake_worker_cmd(_success(str(tmp_path))))
+    task_map = TaskJobMap(tmp_path / "tasks.json")
+    spec = _spec(str(tmp_path))
+    out = await lifecycle.run_sync(
+        store,
+        spec,
+        meta_for(spec),
+        fakeplugin.make_plugin(),
+        timeout=10,
+        detail="summary",
+        ctx=None,
+        task_map=task_map,
+    )
+    assert out["ok"] is True and "task_id" not in out["meta"]
+    assert task_map.entries() == {}
+
+
+async def test_run_sync_survives_a_task_map_write_failure(tmp_path, monkeypatch, caplog):
+    store = lifecycle.job_store(_settings(tmp_path))
+    monkeypatch.setattr(lifecycle, "worker_cmd", _fake_worker_cmd(_success(str(tmp_path))))
+    monkeypatch.setattr(lifecycle, "current_task_id", lambda: "task-abc")
+
+    class _BrokenMap:
+        def record(self, task_id, job_id):
+            raise OSError("disk full")
+
+    spec = _spec(str(tmp_path))
+    with caplog.at_level(logging.WARNING, logger="amicus.jobs.lifecycle"):
+        out = await lifecycle.run_sync(
+            store,
+            spec,
+            meta_for(spec),
+            fakeplugin.make_plugin(),
+            timeout=10,
+            detail="summary",
+            ctx=None,
+            task_map=_BrokenMap(),
+        )
+    assert out["ok"] is True and out["meta"]["task_id"] == "task-abc"
+    assert any("task map" in r.getMessage() for r in caplog.records)
+
+
+async def test_run_sync_spawn_failure_still_carries_the_task_id(tmp_path, monkeypatch):
+    monkeypatch.setattr(lifecycle, "current_task_id", lambda: "task-abc")
+    store = lifecycle.job_store(_settings(tmp_path))
+    monkeypatch.setattr(lifecycle, "worker_cmd", lambda job_dir: ["/nonexistent-binary-xyz"])
+    spec = _spec(str(tmp_path))
+    out = await lifecycle.run_sync(
+        store,
+        spec,
+        meta_for(spec),
+        fakeplugin.make_plugin(),
+        timeout=10,
+        detail="summary",
+        ctx=None,
+        task_map=TaskJobMap(tmp_path / "tasks.json"),
+    )
+    assert out["ok"] is False and out["meta"]["task_id"] == "task-abc"
+    assert TaskJobMap(tmp_path / "tasks.json").entries() == {}
