@@ -540,9 +540,11 @@ async def capabilities_payload(
                 "the delivered result's ok field (isError is set on it too). Only a modern-era "
                 "client that declares the extension gets a task; a handshake-era client gets "
                 "the plain result. A task result is readable through tasks/get for 15 minutes "
-                "after completion; the job behind it outlives that for AMICUS_JOB_TTL, "
-                "amicus_job_list(task_id=...) recovers it, cancelling the task cancels the job, "
-                "and every host can use the amicus_job_* tools instead."
+                "after completion; the job behind it is retained separately for AMICUS_JOB_TTL "
+                "(default 24h, operator-configurable down to 60s, so it can expire before or "
+                "after the task result), amicus_job_list(task_id=...) recovers it while "
+                "retained, cancelling the task cancels the job, and every host can use the "
+                "amicus_job_* tools instead."
             ),
         ),
         meta_fields=list(Meta.model_fields),
