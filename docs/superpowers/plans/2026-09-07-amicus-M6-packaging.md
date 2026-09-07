@@ -438,16 +438,21 @@ Expected: PASS, 12 tests.
 
 - [ ] **Step 7: The boot check — decision 7's precondition**
 
+No async marker: `pyproject.toml` sets `asyncio_mode = "auto"`, and `addopts` carries
+`--strict-markers` with only `integration` registered, so an unregistered `@pytest.mark.anyio`
+would error rather than skip.
+`create_app()` takes no arguments here on purpose — both parameters default to `None`
+(`src/amicus/server.py:124-128`), so it resolves real settings and loads the real registry,
+which is what a boot check should exercise.
+
 Add to `tests/test_packaging.py`:
 
 ```python
-import pytest
 from fastmcp import Client
 
 from amicus.server import create_app
 
 
-@pytest.mark.anyio
 async def test_server_starts_and_lists_tools_under_the_manifest_env(monkeypatch):
     """The manifest passes env through; the server must come up with only declared names set.
 
@@ -810,6 +815,19 @@ git commit -m "docs(packaging): add the migration guide with a test-asserted env
 
 This is the gate item "FakePlugin as a wheel". `tests/support/fakeplugin.py` already registers under a test-only entry point, but that is a same-repo import path; it cannot fail the way a real installed distribution can.
 
+- [ ] **Step 0: Register the `slow` marker first**
+
+`addopts` carries `--strict-markers` and `markers` currently registers only `integration`
+(`pyproject.toml:99-107`), so an unregistered `slow` marker is a collection ERROR, not a skip.
+Add to the `markers` list:
+
+```toml
+    "slow: builds and installs a wheel into a throwaway venv; minutes, not seconds",
+```
+
+Note this keeps the test in the default gate run — `addopts` deselects only `integration`.
+That is deliberate: the seam is a gate item, so it must run in the gate.
+
 - [ ] **Step 1: Write the failing test**
 
 Create `tests/test_wheel_seam.py`:
@@ -833,7 +851,7 @@ import pytest
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "fakebackend"
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
-pytestmark = pytest.mark.slow
+pytestmark = pytest.mark.slow  # registered in pyproject.toml by Step 0 below
 
 
 def _build_and_install(tmp_path: Path, api_version: int) -> Path:
