@@ -25,11 +25,10 @@ def test_in_tree_declarations():
 
 
 def test_default_load_records_the_unported_in_tree_backends_as_unavailable(clean_env):
-    # codex (M1) and kimi (M3) load; claude stays import_failed.
+    # codex (M1), kimi (M3) and claude (M4) all load.
     reg = registry.BackendRegistry.load(("codex", "kimi", "claude"), entry_points=())
-    assert set(reg.unavailable) == {"claude"}
+    assert reg.unavailable == {} and set(reg.ids) == {"codex", "kimi", "claude"}
     assert reg.get("codex") is not None
-    assert reg.ids == ("codex", "kimi")
 
 
 def test_entry_point_plugin_loads_through_the_real_path():

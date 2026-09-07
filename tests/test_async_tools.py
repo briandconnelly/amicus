@@ -195,6 +195,7 @@ async def test_async_pre_spend_refusals_never_spawn(app, tmp_path):
     assert blank.structured_content["error"]["code"] == "invalid_arguments"
     assert opts.structured_content["error"]["code"] == "invalid_arguments"
     assert norepo.structured_content["error"]["code"] == "not_a_git_repo"
-    assert claude.structured_content["error"]["code"] == "backend_unavailable"
+    body = claude.structured_content
+    assert body["ok"] is True and body["backend"] == "claude" and body["job_id"]
     assert sessionless.structured_content["error"]["code"] == "invalid_workspace_root"
     assert _argv_lines(tmp_path) == []

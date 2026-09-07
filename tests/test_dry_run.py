@@ -91,7 +91,20 @@ async def test_dry_run_fails_where_the_review_would(app, tmp_path, repo):
         )
     assert bad_base.structured_content["error"]["code"] == "invalid_base"
     assert no_ws.structured_content["error"]["code"] == "invalid_workspace_root"
-    assert claude.structured_content["error"]["code"] == "backend_unavailable"
+    body = claude.structured_content
+    # DEVIATION from the task-5 brief: the brief's literal text asserts
+    # `would_call_model is True`, but this test's `repo` fixture (as written) has no
+    # uncommitted changes, so amicus_dry_run's review_changes gather() reports "no changes
+    # to review" for scope=working_tree — exactly like the clean-repo case the codex test
+    # above (test_dry_run_previews_the_review) asserts `would_call_model is False` for.
+    # Observed here: {"ok": True, "would_call_model": False, ...}. Asserting False keeps
+    # this test internally consistent with the codex test right above it; see task-5-report.
+    assert body["ok"] is True and body["would_call_model"] is False
+    assert body["backend_options"] == {
+        "config_mode": "inherit",
+        "access": "toolless",
+        "max_budget_usd": 1.0,
+    }
 
 
 async def test_delegate_dry_run(app, repo, tmp_path):

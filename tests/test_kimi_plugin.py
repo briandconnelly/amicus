@@ -43,6 +43,6 @@ def test_plugin_factory_reads_the_process_env_by_default(pinned_kimi_bin, monkey
     assert plugin.help_probe.always_send_flags == contract.ALWAYS_SEND_FLAGS
 
 
-def test_both_in_tree_plugins_load_together_with_the_guards_in_place():
+def test_kimi_loads_beside_the_other_in_tree_plugins():
     reg = registry.BackendRegistry.load(("codex", "kimi", "claude"), entry_points=())
-    assert set(reg.ids) == {"codex", "kimi"} and set(reg.unavailable) == {"claude"}
+    assert set(reg.ids) == {"codex", "kimi", "claude"} and reg.unavailable == {}
