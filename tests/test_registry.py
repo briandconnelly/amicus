@@ -25,12 +25,11 @@ def test_in_tree_declarations():
 
 
 def test_default_load_records_the_unported_in_tree_backends_as_unavailable(clean_env):
-    # codex shipped its plugin factory in M1 (Task 6); it never raises, so it loads. kimi
-    # and claude still land in later milestones and stay unavailable.
+    # codex (M1) and kimi (M3) load; claude stays import_failed.
     reg = registry.BackendRegistry.load(("codex", "kimi", "claude"), entry_points=())
-    assert set(reg.unavailable) == {"kimi", "claude"}
+    assert set(reg.unavailable) == {"claude"}
     assert reg.get("codex") is not None
-    assert reg.ids == ("codex",)
+    assert reg.ids == ("codex", "kimi")
 
 
 def test_entry_point_plugin_loads_through_the_real_path():

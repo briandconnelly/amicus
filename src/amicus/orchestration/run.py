@@ -5,7 +5,8 @@ jobs run exactly this."""
 
 from __future__ import annotations
 
-from pathlib import Path
+import os
+from stat import S_ISREG
 from typing import TYPE_CHECKING, Any
 
 from pontonier.backend.protocol import RunOutcome, RunRequest, inspect_outcome
@@ -25,14 +26,34 @@ if TYPE_CHECKING:  # pragma: no cover
     from amicus.plugin import BackendPlugin
     from amicus.request import RunSpec
 
+MAX_ARTIFACT_BYTES = 1_000_000
+
+
+def _read_bounded(path: str) -> str:
+    """An artifact, or "" if it is anything but a plain small regular file. A delegate's
+    answer file is written by a full-tool agent, so its path is model-controlled at read
+    time: O_NOFOLLOW rejects a substituted symlink, O_NONBLOCK keeps a FIFO from blocking
+    before fstat can reject it, and the cap bounds memory (ADR 0009)."""
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError:
+        return ""
+    try:
+        st = os.fstat(fd)
+        if not S_ISREG(st.st_mode) or st.st_size > MAX_ARTIFACT_BYTES:
+            return ""
+        raw = os.read(fd, MAX_ARTIFACT_BYTES)
+    except OSError:
+        return ""
+    finally:
+        os.close(fd)
+    return raw.decode("utf-8", "replace")
+
 
 def _read_artifacts(prepared: PreparedRun) -> dict[str, str]:
     texts: dict[str, str] = {}
     for name, path in prepared.artifact_paths.items():
-        try:
-            text = Path(path).read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            continue
+        text = _read_bounded(path)
         if text:
             texts[name] = text
     return texts
@@ -128,12 +149,21 @@ async def run_request(
                 runtime.sweep_orphans(prepared.orphan_marker)
             outcome = RunOutcome(run=run, events=run.stdout, artifact_texts=artifact_texts)
             finalize.stamp_run(meta, run, prepared.dropped_flags)
+            # Parse usage/session_id from the process output BEFORE classifying: a run
+            # can fail (or, like kimi's empty_response, be reclassified from an exit-0
+            # outcome) after the model already reported a session id or token count, and
+            # that accounting belongs on the error envelope's meta too (ported from
+            # moonbridge's runspace.apply_run_meta / orchestration._stamp_meta, both of
+            # which stamp meta before checking whether the run succeeded). Both backends'
+            # `finalize` tolerate an empty or malformed answer, so calling it unconditionally
+            # is safe.
+            result = plugin.backend.finalize(outcome, request)
+            finalize.apply_exec(meta, result)
             failure = inspect_outcome(plugin.backend, outcome, request)
             if failure is None and (run.exit_code != 0 or run.binary_missing or run.timed_out):
                 failure = plugin.backend.classify_failure(outcome, request)
             if failure is not None:
                 return render_failure(plugin, failure, meta)
-            result = plugin.backend.finalize(outcome, request)
             diff = site.capture_diff() if spec.kind == "delegate" else None
             aliases = site.aliases
     except SiteError as exc:

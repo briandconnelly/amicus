@@ -22,6 +22,7 @@ FORBIDDEN_SURFACE_PHRASES: tuple[str, ...] = (
     "codex-in-claude",
     "moonbridge",
     "claude-in-codex",
+    "read-only sandbox",
 )
 
 

@@ -28,7 +28,8 @@ def _app(env: dict | None = None, registry: BackendRegistry | None = None):
     # None -> create_app's own BackendRegistry.load(settings.enabled_backends), which
     # tries to import the not-yet-shipped in-tree backend packages. The codex package exists
     # but its plugin factory lands in Task 6, so the registry records it as load_failed;
-    # kimi/claude stay import_failed. This is the realistic intermediate state this milestone is in.
+    # kimi loads since M3; claude stays import_failed. This is the realistic intermediate
+    # state this milestone is in.
     return server.create_app(config.settings(env or {}), registry)
 
 

@@ -1,0 +1,18 @@
+{
+  "top_level_keys": [
+    "models",
+    "providers"
+  ],
+  "providers_type": "dict",
+  "models_type": "dict",
+  "model_entry_keys": [
+    "capabilities",
+    "defaultEffort",
+    "displayName",
+    "maxContextSize",
+    "model",
+    "provider",
+    "supportEfforts"
+  ],
+  "model_count": 1
+}

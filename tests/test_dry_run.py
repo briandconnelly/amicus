@@ -84,12 +84,14 @@ async def test_dry_run_fails_where_the_review_would(app, tmp_path, repo):
             raise_on_error=False,
         )
         no_ws = await c.call_tool("amicus_dry_run", {"backend": "codex"}, raise_on_error=False)
-        kimi = await c.call_tool(
-            "amicus_dry_run", {"backend": "kimi", "workspace_root": str(repo)}, raise_on_error=False
+        claude = await c.call_tool(
+            "amicus_dry_run",
+            {"backend": "claude", "workspace_root": str(repo)},
+            raise_on_error=False,
         )
     assert bad_base.structured_content["error"]["code"] == "invalid_base"
     assert no_ws.structured_content["error"]["code"] == "invalid_workspace_root"
-    assert kimi.structured_content["error"]["code"] == "backend_unavailable"
+    assert claude.structured_content["error"]["code"] == "backend_unavailable"
 
 
 async def test_delegate_dry_run(app, repo, tmp_path):
