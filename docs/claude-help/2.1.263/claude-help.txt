@@ -104,4 +104,3 @@ Commands:
   stop|kill <id>                        Stop a background session. Its conversation is kept: `claude attach <id>` opens it again, `claude --resume` works once it is stopped
   ultrareview [options] [target]        Run a cloud-hosted multi-agent code review of the current branch (or a PR number / base branch) and print the findings
   update|upgrade                        Check for updates and install if available
-[?25h

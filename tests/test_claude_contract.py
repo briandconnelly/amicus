@@ -71,6 +71,10 @@ def test_evidence_the_instrument_can_fail():
     assert "--definitely-not-a-claude-flag" not in HELP
 
 
+def test_captured_help_has_no_terminal_escape_bytes():
+    assert "\x1b" not in HELP
+
+
 @pytest.mark.parametrize(
     "flag",
     [*contract.ALWAYS_SEND_FLAGS, *contract.HELP_GATED_FLAGS, "--print", "--tools"],
