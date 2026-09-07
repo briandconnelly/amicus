@@ -8,7 +8,33 @@ cross-process coordination (an advisory ``flock`` on a lockfile, bounded by a ti
 a contended lock degrades to a raised OSError rather than hanging a worker) for
 consistency with ``lifecycle.py``'s idempotency locking, rather than an in-process
 ``threading.Lock`` — which would not protect two separate server processes sharing one
-state dir, the exact scenario the tasks extension is built for."""
+state dir, the exact scenario the tasks extension is built for.
+
+The map is bounded, not job-store-aware: it deliberately does NOT check whether a job_id
+still exists on disk to decide staleness. Job records live under the job store's root
+(``settings.state_dir``, the same directory this file's parent is), keyed by a
+workspace-hash directory a caller-supplied ``cwd`` produces — but a map entry only ever
+records a ``job_id``, never the ``cwd`` that produced it, so "does this job still exist"
+cannot be answered without either changing the persisted shape (out of scope for a prune
+fix) or re-deriving cwd hashes by brute force. Even a filesystem probe scoped to "does any
+workspace directory under this root contain a directory named ``job_id``" is unsound as a
+staleness signal on its own: nothing here guarantees the job store and the task map share
+a root in every deployment, and a probe that treats "no such directory" as "stale" would
+prune an entry the instant it's written in any environment where the two roots diverge —
+turning a bookkeeping decoupling elsewhere in the codebase into a silent loss of the
+recovery guarantee this map exists to provide. Given ``amicus.jobs`` is free to import
+pontonier's job store (import-linter only forbids ``amicus.server``/``amicus.tools`` from
+this package) but pontonier's own store API requires a ``cwd`` for every existence check,
+there is no coupling that is both correct and decoupled from the persisted shape. So this
+prunes by a bounded, oldest-first eviction instead: entries are written in insertion order
+(the JSON object key order, no longer alphabetically sorted) and, once the map holds more
+than MAX_ENTRIES, the oldest are dropped first. This can, in principle, evict a mapping
+for a job that is still running if a single amicus process ever has more than MAX_ENTRIES
+tasked jobs in flight at once across every workspace sharing this state dir — the bound
+below is chosen to make that practically impossible: it comfortably exceeds
+AMICUS_JOB_MAX_COUNT's default (50, itself a per-workspace cap) many times over, and this
+suite's own largest concurrency scenario (200 simultaneous writers, all of which must
+survive)."""
 
 from __future__ import annotations
 
@@ -25,6 +51,13 @@ from pathlib import Path
 # OSError handler) rather than blocking a worker indefinitely.
 LOCK_ACQUIRE_TIMEOUT_S = 2.0
 _LOCK_POLL_SECONDS = 0.01
+
+# Bound on the number of task_id -> job_id entries the map retains. Once record() would
+# push the map past this, the oldest entries (by insertion order) are dropped first, under
+# the same lock as the write, so the file — and the read-modify-write cost and lock hold
+# time around it — can never grow without bound. See the module docstring for why this is
+# a size bound rather than a job-liveness check, and how the value below was chosen.
+MAX_ENTRIES = 1000
 
 
 def _acquire_flock(fd: int, timeout: float) -> None:
@@ -86,7 +119,14 @@ class TaskJobMap:
     def record(self, task_id: str, job_id: str) -> None:
         """Read-modify-write the whole map under an exclusive cross-process lock, so
         concurrent tasked runs never clobber each other's entries. Raises OSError (never
-        blocks indefinitely) if the lock cannot be taken within LOCK_ACQUIRE_TIMEOUT_S."""
+        blocks indefinitely) if the lock cannot be taken within LOCK_ACQUIRE_TIMEOUT_S.
+
+        Prunes under the SAME lock, before writing: once the map would hold more than
+        MAX_ENTRIES, the oldest entries (by insertion order, i.e. JSON object key order —
+        the file is no longer written with sort_keys, since alphabetical order would
+        destroy the recency signal eviction depends on) are dropped first. A second lock
+        or a background sweep would let pruning race a concurrent record(); doing it here
+        makes that impossible."""
         self._path.parent.mkdir(parents=True, exist_ok=True)
         lock_path = self._path.with_name(self._path.name + ".lock")
         lock_fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR, 0o644)
@@ -95,11 +135,14 @@ class TaskJobMap:
             try:
                 data = self._read()
                 data[task_id] = job_id
+                if len(data) > MAX_ENTRIES:
+                    for stale_task_id in list(data)[: len(data) - MAX_ENTRIES]:
+                        del data[stale_task_id]
                 fd, tmp_name = tempfile.mkstemp(dir=self._path.parent, suffix=".tmp")
                 tmp = Path(tmp_name)
                 try:
                     with os.fdopen(fd, "w", encoding="utf-8") as fh:
-                        json.dump(data, fh, sort_keys=True)
+                        json.dump(data, fh)
                     tmp.replace(self._path)
                 finally:
                     if tmp.exists():

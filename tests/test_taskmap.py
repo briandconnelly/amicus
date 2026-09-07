@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import threading
 
-from amicus.jobs.taskmap import TaskJobMap
+from amicus.jobs.taskmap import MAX_ENTRIES, TaskJobMap
 
 
 def test_record_and_lookup_survive_a_reopen(tmp_path):
@@ -52,3 +52,36 @@ def test_record_survives_concurrent_writers(tmp_path):
     entries = task_map.entries()
     assert len(entries) == n
     assert entries == {f"task-{i}": f"job-{i}" for i in range(n)}
+
+
+def test_map_does_not_grow_without_bound(tmp_path):
+    """Recording well past MAX_ENTRIES must never leave the file holding more than
+    MAX_ENTRIES mappings — the whole point of pruning is that the read-modify-write cost
+    and the lock hold time around it stop growing on a long-running server."""
+    task_map = TaskJobMap(tmp_path / "tasks.json")
+    overflow = 50
+    for i in range(MAX_ENTRIES + overflow):
+        task_map.record(f"task-{i}", f"job-{i}")
+
+    entries = task_map.entries()
+    assert len(entries) == MAX_ENTRIES
+
+
+def test_pruning_keeps_the_most_recently_recorded_entries(tmp_path):
+    """Pruning must evict the OLDEST entries, never a recently-recorded one: a client
+    that just started a paid job must still be able to recover it via
+    amicus_job_list(task_id=...) even while the map is at capacity."""
+    task_map = TaskJobMap(tmp_path / "tasks.json")
+    overflow = 50
+    total = MAX_ENTRIES + overflow
+    for i in range(total):
+        task_map.record(f"task-{i}", f"job-{i}")
+
+    entries = task_map.entries()
+    # The earliest-recorded entries are gone...
+    for i in range(overflow):
+        assert f"task-{i}" not in entries
+    # ...but every entry recorded within the last MAX_ENTRIES record() calls survived,
+    # proving pruning never evicts a mapping for a job that could still be live.
+    for i in range(overflow, total):
+        assert entries[f"task-{i}"] == f"job-{i}"
