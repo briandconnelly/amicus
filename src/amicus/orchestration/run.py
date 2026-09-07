@@ -26,6 +26,7 @@ if TYPE_CHECKING:  # pragma: no cover
 
     from amicus.plugin import BackendPlugin
     from amicus.request import RunSpec
+    from amicus.schemas.envelope import Meta
 
 MAX_ARTIFACT_BYTES = 1_000_000
 
@@ -72,7 +73,7 @@ def _site_error(exc: SiteError, meta: Any, plugin: BackendPlugin) -> dict[str, A
 
 
 def _compose(
-    spec: RunSpec, meta: Any, plugin: BackendPlugin
+    spec: RunSpec, meta: Meta, plugin: BackendPlugin
 ) -> tuple[str, dict[str, Any] | None, list[str]] | dict[str, Any]:
     """Gather (when the kind attaches a diff) and frame. Returns (prompt, schema, coverage
     reasons), or a ready envelope when gathering ended the run before any spend."""
