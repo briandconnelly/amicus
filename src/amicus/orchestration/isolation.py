@@ -22,11 +22,15 @@ WORKTREE_CONFIG = worktree.WorktreeConfig(
 )
 
 # Stamped on meta.security_warnings when a consult runs outside a git repository under a
-# backend that isolates every tier: the run is still isolated (an empty temp dir), but the
-# backend can read nothing, so an answer that appears repo-grounded would be unfounded.
+# backend that isolates every tier. The site changes only the working directory: no
+# repository was made available there, so an answer that appears repo-grounded would be
+# unfounded. It is NOT a read boundary — a backend whose tools accept absolute paths can
+# still read host files (amicus_backends discloses each backend's read reach).
 NO_REPO_WARNING = (
     "workspace_root is not a git repository, so this ran in an empty temporary directory: "
-    "the backend could not read any repository files and answered only from the prompt."
+    "no repository was made available as the working directory, so the answer has no "
+    "repository context. This changes only the working directory; the backend's own read "
+    "reach (see amicus_backends readonly_honesty) is unchanged."
 )
 
 
