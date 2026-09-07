@@ -1,4 +1,5 @@
-"""run_request: THE loop. Gather (review) → frame → site → RunRequest → validate → binary →
+"""run_request: THE loop. Gather (review; a critique with an attached scope) → frame (through
+the plugin's framing hook) → site → RunRequest → validate → binary →
 prepare → run → orphan sweep → inspect (every completed process) → classify or finalize →
 delegate diff → the kind's envelope. Both the sync tools (via the worker) and the M2 async
 jobs run exactly this."""
@@ -70,6 +71,59 @@ def _site_error(exc: SiteError, meta: Any, plugin: BackendPlugin) -> dict[str, A
     )
 
 
+def _compose(
+    spec: RunSpec, meta: Any, plugin: BackendPlugin
+) -> tuple[str, dict[str, Any] | None, list[str]] | dict[str, Any]:
+    """Gather (when the kind attaches a diff) and frame. Returns (prompt, schema, coverage
+    reasons), or a ready envelope when gathering ended the run before any spend."""
+    reasons: list[str] = []
+    gathered_text: str | None = None
+    attaches_diff = spec.kind == "review_changes" or (
+        spec.kind == "adversarial_review" and spec.scope is not None
+    )
+    if attaches_diff:
+        gathered = review.gather(spec, meta, plugin)
+        if isinstance(gathered, dict):
+            return gathered
+        reasons = review.coverage_reasons(spec.scope or "working_tree", gathered)
+        gathered_text = gathered.text
+    if spec.kind in ("review_changes", "adversarial_review") and spec.focus and spec.focus.strip():
+        # A focused pass is never a full review (per the `focus` parameter contract): fold it
+        # into apply_coverage so a model `pass` is downgraded with a caveat.
+        reasons.append("focused")
+    scope_label = prompts.review_label(spec.scope or "working_tree", spec.base, spec.commit)
+    schema: dict[str, Any] | None
+    if spec.kind == "review_changes":
+        prompt = prompts.review_prompt(
+            spec.host_name,
+            gathered_text or "",
+            scope_label,
+            prompts.review_caller_text(spec.focus, spec.extra_context),
+            plugin=plugin,
+        )
+        schema = prompts.REVIEW_OUTPUT_SCHEMA
+    elif spec.kind == "adversarial_review":
+        prompt = prompts.adversarial_prompt(
+            spec.host_name,
+            spec.target or "",
+            spec.evidence,
+            gathered_text,
+            scope_label if gathered_text is not None else "",
+            prompts.review_caller_text(spec.focus, spec.extra_context, noun="critique"),
+            plugin=plugin,
+        )
+        schema = prompts.REVIEW_OUTPUT_SCHEMA
+    elif spec.kind == "consult":
+        prompt = prompts.consult_prompt(
+            spec.host_name, spec.question or "", spec.extra_context, plugin=plugin
+        )
+        schema = prompts.CONSULT_OUTPUT_SCHEMA
+    else:
+        prompt = prompts.delegate_prompt(spec.host_name, spec.task or "", plugin=plugin)
+        schema = None
+    return prompt, schema, reasons
+
+
 async def run_request(
     spec: RunSpec,
     plugin: BackendPlugin,
@@ -78,29 +132,10 @@ async def run_request(
     on_worktree_parent: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
     meta = meta_for(spec)
-    reasons: list[str] = []
-    if spec.kind == "review_changes":
-        gathered = review.gather(spec, meta, plugin)
-        if isinstance(gathered, dict):
-            return gathered
-        reasons = review.coverage_reasons(spec.scope or "working_tree", gathered)
-        if spec.focus and spec.focus.strip():
-            # A focused pass is never a full review (per the `focus` parameter contract):
-            # fold it into apply_coverage so a model `pass` is downgraded with a caveat.
-            reasons.append("focused")
-        prompt = prompts.review_prompt(
-            spec.host_name,
-            gathered.text,
-            prompts.review_label(spec.scope or "working_tree", spec.base, spec.commit),
-            prompts.review_caller_text(spec.focus, spec.extra_context),
-        )
-        schema: dict[str, Any] | None = prompts.REVIEW_OUTPUT_SCHEMA
-    elif spec.kind == "consult":
-        prompt = prompts.consult_prompt(spec.host_name, spec.question or "", spec.extra_context)
-        schema = prompts.CONSULT_OUTPUT_SCHEMA
-    else:
-        prompt = prompts.delegate_prompt(spec.host_name, spec.task or "")
-        schema = None
+    composed = _compose(spec, meta, plugin)
+    if isinstance(composed, dict):
+        return composed
+    prompt, schema, reasons = composed
 
     try:
         with select_site(spec, plugin, on_worktree_parent) as site:
@@ -171,6 +206,8 @@ async def run_request(
 
     if spec.kind == "review_changes":
         return finalize.review_result(result, meta, reasons, plugin)
+    if spec.kind == "adversarial_review":
+        return finalize.adversarial_result(result, meta, reasons, plugin)
     if spec.kind == "consult":
         return finalize.consult_result(result, meta)
     return finalize.delegate_result(

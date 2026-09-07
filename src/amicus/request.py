@@ -22,6 +22,8 @@ INPUT_FIELDS: tuple[str, ...] = (
     "extra_context",
     "instructions_append",
     "focus",
+    "target",
+    "evidence",
 )
 # Public fields that describe HOW a call was resolved, not WHAT it asks for: the index is
 # already keyed by tool and workspace, and the rest is per-connection (a reconnect must
@@ -59,6 +61,8 @@ class RunSpec:
     extra_context: str | None = None
     instructions_append: str | None = None
     focus: str | None = None
+    target: str | None = None
+    evidence: str | None = None
 
     def public(self) -> dict[str, Any]:
         return {

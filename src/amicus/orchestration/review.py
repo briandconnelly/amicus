@@ -9,7 +9,12 @@ from pontonier.core import gitdiff, redaction
 
 from amicus.errors import error_envelope
 from amicus.schemas.envelope import ContextSummary, ErrorDetail, InvalidArgument, dump_success
-from amicus.schemas.results import ReviewResult, ReviewScope, Untracked
+from amicus.schemas.results import (
+    AdversarialReviewResult,
+    ReviewResult,
+    ReviewScope,
+    Untracked,
+)
 
 if TYPE_CHECKING:  # pragma: no cover
     from pontonier.core.gitdiff import DiffResult
@@ -99,6 +104,21 @@ def _not_run(spec: RunSpec, meta: Meta, diff: DiffResult) -> dict[str, Any]:
         )
     else:
         summary = f"No changes to review for scope={spec.scope}."
+    if spec.kind == "adversarial_review":
+        return dump_success(
+            AdversarialReviewResult(
+                summary=(
+                    f"No changes were gathered for scope={spec.scope}, so the critique did not run "
+                    "(zero spend). Drop scope to critique the target alone, or attach a scope that "
+                    "has changes."
+                ),
+                verdict="unknown",
+                confidence="low",
+                review_status="not_run",
+                context_summary=meta.context_summary,
+                meta=meta,
+            )
+        )
     return dump_success(
         ReviewResult(
             summary=summary,
