@@ -6,15 +6,28 @@ generated from the declarations, never typed by hand.
 
 from __future__ import annotations
 
+import json
+import os
 import re
+import subprocess
 import tomllib
 from pathlib import Path
+
+import pytest
+from fastmcp import Client
+from fastmcp.client.transports import StdioTransport
 
 import amicus
 from amicus import packaging
 from amicus.config import GLOBAL_ENV
+from amicus.server import create_app
 
 ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = ROOT
+
+
+def _read(relative: str) -> dict:
+    return json.loads((REPO_ROOT / relative).read_text())
 
 
 def _pyproject() -> dict:
@@ -134,3 +147,77 @@ def test_declared_names_are_all_amicus_namespaced():
     would put a credential in the migration table as if amicus declared it."""
     assert all(name.startswith("AMICUS_") for name in packaging.declared_env_names())
     assert not any(n.startswith("AMICUS_") for n in packaging.vendor_auth_env_names())
+
+
+def test_mcp_json_env_vars_equal_the_generated_list():
+    server = _read(".mcp.json")["mcpServers"]["amicus"]
+    assert server["env_vars"] == packaging.env_vars_list()
+
+
+def test_mcp_json_invokes_the_console_script():
+    server = _read(".mcp.json")["mcpServers"]["amicus"]
+    assert server["command"] == "uvx"
+    assert server["args"][-1] == "amicus-mcp"
+
+
+def test_mcp_json_has_no_unexpanded_placeholders():
+    """The ${VAR} check the spec keeps: env_vars is a passthrough list, not a value map."""
+    raw = (REPO_ROOT / ".mcp.json").read_text()
+    assert "${" not in raw
+
+
+def test_both_plugin_manifests_point_at_the_one_mcp_json():
+    assert _read(".claude-plugin/plugin.json")["mcpServers"] == "./.mcp.json"
+    assert _read(".codex-plugin/plugin.json")["mcpServers"] == "./.mcp.json"
+
+
+def test_plugin_manifest_version_matches_the_package():
+    from importlib.metadata import version
+
+    package_version = version("amicus")
+    assert _read(".claude-plugin/plugin.json")["version"] == package_version
+    assert _read(".codex-plugin/plugin.json")["version"] == package_version
+
+
+def test_claude_manifest_declares_skills_and_commands():
+    manifest = _read(".claude-plugin/plugin.json")
+    assert manifest["skills"] == "./skills/"
+    assert manifest["commands"] == "./commands/"
+
+
+async def test_server_boots_in_process_with_no_amicus_env_set(monkeypatch):
+    """A server-unit boot test: the app comes up and lists 18 tools with no AMICUS_* set.
+
+    This does NOT test the manifest. It reads no `.mcp.json`, starts no `uvx`, and applies no
+    `env_vars` list. Step 8 is the test that covers the manifest; this one only rules out an
+    in-process regression first, because it is the cheaper of the two to diagnose."""
+    for name in packaging.declared_env_names():
+        monkeypatch.delenv(name, raising=False)
+    async with Client(create_app()) as client:
+        tools = await client.list_tools()
+    assert len(tools) == 18
+
+
+@pytest.mark.slow
+async def test_the_committed_manifest_command_starts_a_real_server(tmp_path):
+    """Smoke the manifest's own command line, not an in-process app.
+
+    The committed `--from` names a git tag that does not exist until release, so this
+    substitutes a locally built wheel for that ONE field and asserts every other field —
+    command, console script, arg order — exactly as committed. What stays unproven until
+    release is the tag's resolvability; that is the release workflow's gate, and Task 10's
+    ADR records it as a known limit of the M6 claim."""
+    server = json.loads((REPO_ROOT / ".mcp.json").read_text())["mcpServers"]["amicus"]
+    subprocess.run(
+        ["uv", "build", "--wheel", "--out-dir", str(tmp_path), str(REPO_ROOT)],
+        check=True,
+        capture_output=True,
+    )
+    wheel = next(tmp_path.glob("*.whl"))
+    args = [str(wheel) if a.startswith("git+") else a for a in server["args"]]
+    assert args[-1] == "amicus-mcp", "the console script name must survive substitution"
+    env = {"PATH": os.environ["PATH"], "HOME": str(tmp_path)}
+    transport = StdioTransport(command=server["command"], args=args, env=env)
+    async with Client(transport) as client:
+        tools = await client.list_tools()
+    assert len(tools) == 18
