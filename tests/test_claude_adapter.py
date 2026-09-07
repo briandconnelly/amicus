@@ -39,17 +39,14 @@ def test_a_perturbed_backend_fails_conformance(pinned_claude_bin):
             return None
 
     loose = AcceptsAnything(backend._config, backend._binary, backend._help_probe)
-    # DEVIATION from the task-5 brief: the brief's literal text asserts a "bogus
-    # reasoning_effort" finding here, mirroring the kimi suite. But pontonier's
-    # check_backend only runs that probe when contract.effort_silently_ignored_upstream is
-    # True (see .venv/.../pontonier/testing/conformance.py:63-79) — and Claude's contract
-    # correctly declares it False (claude rejects an unknown --effort at arg-parse, loud,
-    # per contract.py's comment). So check_backend(plugin.contract, loose) observed here
-    # returns [] rather than a differently-worded message: the probe never runs for a
-    # backend whose CLI itself validates the value. This is accurate, contract-honest
-    # behaviour, not a bug in contract.py or conformance.py, so neither is changed here;
-    # see task-5-report.md for the exact assertion and observed value.
-    assert conformance.check_backend(plugin.contract, loose) == []
+    # pontonier's kit probes a bogus effort only when the CLI would silently ignore it;
+    # Claude's CLI rejects an unknown --effort itself, so the adapter's validate_request is
+    # the gate under test here, not check_backend.
+    assert plugin.contract.effort_silently_ignored_upstream is False
+    bogus = _req(reasoning_effort="ultra")
+    assert backend.validate_request(bogus) is not None
+    assert backend.validate_request(bogus).code == "invalid_reasoning_effort"
+    assert loose.validate_request(bogus) is None  # the perturbation really removes the gate
 
     class Raises(type(backend)):  # type: ignore[misc]
         def inspect_outcome(self, outcome, request):
