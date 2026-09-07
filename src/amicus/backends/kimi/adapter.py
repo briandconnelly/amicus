@@ -87,10 +87,11 @@ class KimiBackend:
         )
 
     def validate_request(self, request: RunRequest) -> ClassifiedFailure | None:
-        # ORDER MATTERS: shape, then the catalog (it decides alone when it names the alias),
-        # then the fallback vocabulary ONLY when the catalog is silent. Compare the EXACT
-        # value prepare() will send: normalizing here would validate a string the run never
-        # uses. See ADR 0009.
+        # ORDER MATTERS: shape, then the catalog (it decides alone when it names the alias
+        # with efforts; an alias it does not name at all fails open), then the fallback
+        # vocabulary ONLY when the catalog is silent or the alias declares no efforts.
+        # Compare the EXACT value prepare() will send: normalizing here would validate a
+        # string the run never uses. See ADR 0009.
         effort = self._effort(request)
         if effort is not None:
             reason = reasoning_effort_shape_error(effort)
@@ -100,7 +101,9 @@ class KimiBackend:
                     detail=f"the requested reasoning_effort {reason}.",
                     details={"field": "reasoning_effort"},
                 )
-            supported = models.supported_efforts_for(self._model(request), self._models.read())
+            model = self._model(request)
+            listing = self._models.read()
+            supported = models.supported_efforts_for(model, listing)
             # An alias declaring an explicitly empty supportEfforts is treated the same as
             # an absent/unusable one (supported == ()), so the fallback vocabulary decides.
             if supported:
@@ -109,6 +112,12 @@ class KimiBackend:
                         "the requested reasoning_effort is not one this model declares.",
                         supported,
                     )
+            elif models.is_unlisted_alias(model, listing):
+                # A live catalog that does not name the alias: the alias set is
+                # authoritative, so kimi itself will reject the run as invalid_model. No
+                # effort verdict is issued here (fail open) — the vocabulary would only
+                # replace that accurate error with a misleading invalid_reasoning_effort.
+                pass
             elif effort not in contract.REASONING_EFFORT_FALLBACK_VOCABULARY:
                 return self._effort_refusal(
                     "the requested reasoning_effort matches no known kimi effort level.",

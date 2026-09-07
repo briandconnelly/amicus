@@ -71,6 +71,20 @@ def test_model_and_skills_dir_are_help_gated_with_their_values():
     assert "--model" in fail_open and dropped2 == []
 
 
+def test_a_supported_flag_consumes_its_value_so_an_alias_cannot_alter_argv():
+    # A model alias that looks like a flag must ride as --model's value, never be re-scanned.
+    only_model = FlagSupport(
+        supported=frozenset(set(contract.ALWAYS_SEND_FLAGS) | {contract.MODEL_FLAG}),
+        help_parsed=True,
+    )
+    cmd, dropped = _cmd(model="--skills-dir", flag_support=only_model)
+    assert cmd[-2:] == ["--model", "--skills-dir"] and dropped == []
+    cmd, dropped = _cmd(model="--skills-dir", skills_dir="/T/s", flag_support=only_model)
+    assert cmd[-2:] == ["--model", "--skills-dir"] and dropped == ["--skills-dir"]
+    cmd, dropped = _cmd(model="--skills-dir", flag_support=NO_MODEL)
+    assert "--model" not in cmd and "--skills-dir" not in cmd and dropped == ["--model"]
+
+
 def test_an_oversized_pointer_is_refused():
     with pytest.raises(ValueError, match="argv prompt exceeds"):
         _cmd(prompt_pointer="x" * (contract.MAX_ARGV_PROMPT_CHARS + 1))

@@ -136,10 +136,16 @@ def test_validate_request_catalog_first_then_fallback_then_fail_open(pinned_kimi
     }
     assert refused.repair is not None and refused.repair.tool == "amicus_models"
     assert catalog.validate_request(_req(model="unlisted", reasoning_effort="xhigh")) is None
-    assert catalog.validate_request(_req(model="unlisted", reasoning_effort="nope")) is not None
+    # A live catalog that does not list the alias: kimi will reject the alias itself
+    # (invalid_model), so no effort verdict is issued here — fail open, no vocabulary check.
+    assert catalog.validate_request(_req(model="unlisted", reasoning_effort="nope")) is None
+    # A listed alias with no effort metadata is "cannot tell": the vocabulary decides.
     assert catalog.validate_request(_req(model="bare", reasoning_effort="max")) is None
+    assert catalog.validate_request(_req(model="bare", reasoning_effort="nope")) is not None
     _, silent = kf.make_backend(catalog=kf.SILENT)
     assert silent.validate_request(_req(reasoning_effort="xhigh")) is None
+    # Silent catalog: nothing authoritative, so the vocabulary decides even for a named alias.
+    assert silent.validate_request(_req(model="unlisted", reasoning_effort="nope")) is not None
     fallback = silent.validate_request(_req(reasoning_effort="not-a-real-effort-level"))
     assert fallback is not None and fallback.details["allowed_values"] == sorted(
         contract.REASONING_EFFORT_FALLBACK_VOCABULARY

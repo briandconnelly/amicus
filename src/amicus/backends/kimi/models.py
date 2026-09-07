@@ -117,6 +117,15 @@ class KimiModels:
         return ModelListing(models=(), source="none")
 
 
+def is_unlisted_alias(model: str | None, listing: ModelListing) -> bool:
+    """True only when a LIVE catalog names aliases and `model` is not one of them: kimi will
+    reject such an alias outright, so an effort verdict for it would be misleading. False
+    for no model (the configured default runs) and for a silent catalog."""
+    if not model or listing.source != "live":
+        return False
+    return all(entry.slug != model for entry in listing.models)
+
+
 def supported_efforts_for(model: str | None, listing: ModelListing) -> tuple[str, ...] | None:
     """Efforts the named alias declares, or None for "cannot tell" (no model, absent
     catalog, unlisted alias, or an alias declaring nothing). Callers MUST treat None as

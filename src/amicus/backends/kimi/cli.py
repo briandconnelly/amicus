@@ -67,10 +67,17 @@ def _gate_optional(tokens: list[str], fs: FlagSupport) -> tuple[list[str], list[
     while i < len(tokens):
         token = tokens[i]
         takes_value = contract.HELP_GATED_FLAGS.get(token)
-        if takes_value is not None and not preflight.is_supported(token, fs):
-            dropped.append(token)
-            i += 2 if takes_value else 1
-            continue
+        if takes_value is not None:
+            if not preflight.is_supported(token, fs):
+                dropped.append(token)
+                i += 2 if takes_value else 1
+                continue
+            if takes_value and i + 1 < len(tokens):
+                # Consume the value with its flag: a value that happens to look like a
+                # flag (a model alias such as "--skills-dir") must never be re-scanned as one.
+                kept += [token, tokens[i + 1]]
+                i += 2
+                continue
         kept.append(token)
         i += 1
     return kept, dropped

@@ -56,6 +56,16 @@ def test_supported_efforts_for_none_means_cannot_tell():
     assert models.supported_efforts_for("empty", listing) == ()
 
 
+def test_is_unlisted_alias_only_for_a_live_catalog_that_omits_the_alias():
+    live = models.ModelListing(models=tuple(models.parse_catalog(PAYLOAD) or ()), source="live")
+    silent = models.ModelListing(models=(), source="none")
+    assert models.is_unlisted_alias("unlisted", live) is True
+    assert models.is_unlisted_alias("k3", live) is False
+    assert models.is_unlisted_alias("bare", live) is False
+    assert models.is_unlisted_alias(None, live) is False
+    assert models.is_unlisted_alias("unlisted", silent) is False
+
+
 def _reader(monkeypatch, stdout, exit_code=0, binary_missing=False):
     calls = []
 
