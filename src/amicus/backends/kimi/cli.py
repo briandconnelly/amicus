@@ -26,7 +26,6 @@ from pontonier.conventions import preflight
 from pontonier.core import redaction, runtime
 
 from amicus.backends.kimi import contract, normalize
-from amicus.schemas.structured import schema_instruction  # noqa: F401 - re-exported for callers
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Callable

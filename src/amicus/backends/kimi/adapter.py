@@ -18,6 +18,7 @@ from amicus.backends.kimi import config as kimi_config
 from amicus.backends.kimi.binary import BinaryNotFoundError
 from amicus.schemas import instructions
 from amicus.schemas.params import reasoning_effort_shape_error
+from amicus.schemas.structured import schema_instruction
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import AsyncIterator
@@ -177,7 +178,7 @@ class KimiBackend:
         if caller is not None:
             prompt_text = instructions.compose(caller) + "\n\n" + prompt_text
         if request.schema is not None:
-            prompt_text += cli.schema_instruction(request.schema)
+            prompt_text += schema_instruction(request.schema)
         isolation = request.isolation or self._config.isolation
         handshake_dir = cli.create_handshake_dir()
         try:

@@ -76,8 +76,11 @@ def framing_for(plugin: BackendPlugin | None, verb: str, host_name: str) -> str:
     per-connection, so this is the one place a backend can name it)."""
     if verb == "adversarial_review":
         base = adversarial_framing(host_name)
-    else:
+    elif verb in _FRAMING_ATTR:
         base = getattr(_pp.framings(host_name), _FRAMING_ATTR[verb])
+    else:
+        known = sorted((*_FRAMING_ATTR, "adversarial_review"))
+        raise ValueError(f"framing_for: unknown verb {verb!r}; expected one of {known}")
     if plugin is not None and plugin.framing is not None:
         return plugin.framing.frame(verb, base, host_name)
     return base

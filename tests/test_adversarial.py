@@ -314,3 +314,8 @@ async def test_prepare_run_carries_target_and_evidence_as_inputs(tmp_path):
     )
     assert isinstance(over, dict) and over["error"]["code"] == "input_too_large"
     assert over["error"]["details"]["fields"] == ["target", "evidence"]
+
+
+def test_framing_for_refuses_an_unknown_verb():
+    with pytest.raises(ValueError, match="unknown verb 'transfer'"):
+        prompts.framing_for(None, "transfer", "Codex")
