@@ -96,7 +96,7 @@ async def test_consult_async_returns_a_handle_and_the_job_completes(app, store, 
     }
     rec = await _wait_done(store, tmp_path, body["job_id"])
     assert rec["status"] == "done" and rec["result_ok"] is True
-    assert rec["extra"] == {"result_format": 1, "backend": "codex", "tool": "amicus_consult_async"}
+    assert rec["extra"] == {"result_format": 2, "backend": "codex", "tool": "amicus_consult_async"}
     _rec, payload = store.result_payload(str(tmp_path), body["job_id"])
     assert payload["ok"] is True and payload["summary"] == "Looks fine"
     assert "why?" in (tmp_path / "prompt.txt").read_text()

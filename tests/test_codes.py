@@ -44,6 +44,10 @@ def test_error_codes_cover_the_universal_taxonomy_and_generalized_backend_codes(
                 "backend_unavailable",
                 "feature_unsupported",
                 "user_config_rejected",
+                "budget_exceeded",
+                "claude_permission_error",
+                "api_key_invalid",
+                "api_key_missing",
             }
         )
         == codes.LOCAL_CODES
@@ -76,8 +80,8 @@ def test_generalize_rewrites_only_the_four_minted_codes():
 
 
 def test_fingerprint_constants():
-    assert fingerprint.FINGERPRINT == "amicus/0.1/schema-3"
-    assert fingerprint.RESULT_FORMAT == 1
+    assert fingerprint.FINGERPRINT == "amicus/0.1/schema-4"
+    assert fingerprint.RESULT_FORMAT == 2
     assert fingerprint.JSON_SCHEMA_DIALECT == "https://json-schema.org/draft/2020-12/schema"
     assert fingerprint.LIFECYCLE_META_KEY == "dev.bconnelly.amicus/lifecycle"
     assert fingerprint.PROTOCOL_REVISION == "2026-07-28"
@@ -90,3 +94,15 @@ def test_user_config_rejected_is_a_cataloged_local_code():
 
     assert "user_config_rejected" in LOCAL_CODES
     assert "user_config_rejected" in ERROR_CODES
+
+
+def test_claude_local_codes_are_cataloged_and_never_generalized():
+    for code in (
+        "budget_exceeded",
+        "claude_permission_error",
+        "api_key_invalid",
+        "api_key_missing",
+    ):
+        assert code in codes.LOCAL_CODES and code in codes.ERROR_CODES
+        assert codes.generalize_code(code, "claude") == code
+    assert codes.generalize_code("claude_rate_limited", "claude") == "backend_rate_limited"

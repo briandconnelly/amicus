@@ -82,6 +82,10 @@ _COMMON_PAID_CODES = [
     "cli_contract_changed",
     "extra_args_rejected",
     "user_config_rejected",
+    "budget_exceeded",
+    "claude_permission_error",
+    "api_key_invalid",
+    "api_key_missing",
     "internal_error",
     "not_implemented",
 ]

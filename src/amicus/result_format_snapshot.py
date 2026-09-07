@@ -11,9 +11,20 @@ from typing import Any
 from amicus.errors import make_error, serialize_error
 from amicus.schemas.envelope import ErrorResult, InstructionsFingerprint, Meta, dump_success
 from amicus.schemas.fingerprint import FINGERPRINT, RESULT_FORMAT
-from amicus.schemas.results import ConsultResult, DelegateResult, ReviewResult
+from amicus.schemas.results import (
+    AdversarialReviewResult,
+    ConsultResult,
+    DelegateResult,
+    ReviewResult,
+)
 
-_ENVELOPE_MODELS = (ConsultResult, ReviewResult, DelegateResult, ErrorResult)
+_ENVELOPE_MODELS = (
+    ConsultResult,
+    ReviewResult,
+    AdversarialReviewResult,
+    DelegateResult,
+    ErrorResult,
+)
 _FINGERPRINT_SENTINEL = "<fingerprint>"
 _VERSION_SENTINEL = "0.0.0"
 _REQUEST_ID_SENTINEL = "0" * 32
@@ -64,6 +75,15 @@ def build_snapshot() -> dict[str, Any]:
                 meta=_meta(instructions_append=InstructionsFingerprint(sha256="a" * 64, bytes=5)),
             )
         ),
+        "adversarial_success": dump_success(
+            AdversarialReviewResult(
+                summary="s",
+                verdict="concerns",
+                confidence="medium",
+                review_status="completed",
+                meta=_meta(),
+            )
+        ),
         "delegate_success": dump_success(DelegateResult(summary="s", diff=None, meta=_meta())),
         "error": serialize_error(
             ErrorResult(error=make_error("internal_error", "m"), meta=_meta())
@@ -74,6 +94,13 @@ def build_snapshot() -> dict[str, Any]:
             ErrorResult(
                 error=make_error("user_config_rejected", "m", backend="codex"),
                 meta=_meta(command_exit_code=1),
+            )
+        ),
+        # A Claude-local code (M4), for the same reason.
+        "error_budget_exceeded": serialize_error(
+            ErrorResult(
+                error=make_error("budget_exceeded", "m", backend="claude"),
+                meta=_meta(command_exit_code=0),
             )
         ),
     }

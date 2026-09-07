@@ -15,8 +15,8 @@ from pontonier.core import worktree
 from amicus.backends.claude import adversarial, cli, contract, normalize
 from amicus.backends.claude import config as claude_config
 from amicus.backends.claude.binary import BinaryNotFoundError
-from amicus.backends.kimi.cli import schema_instruction  # Task 6 moves this to schemas.structured
 from amicus.schemas import instructions
+from amicus.schemas.structured import schema_instruction
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import AsyncIterator, Callable

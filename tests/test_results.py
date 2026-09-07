@@ -90,6 +90,12 @@ def test_success_payloads_validate_against_their_schemas():
     ]
     for schema, model in cases:
         Draft202012Validator(schema).validate(model.model_dump(mode="json"))
+    adv = r.AdversarialReviewResult(summary="s", verdict="fail", confidence="high", meta=meta)
+    assert adv.review_status == "completed" and adv.context_summary is None
+    not_run = r.AdversarialReviewResult(
+        summary="s", verdict="unknown", confidence="low", review_status="not_run", meta=meta
+    )
+    assert not_run.review_status == "not_run"
 
 
 def test_capabilities_schema_opaques_tool_details_and_keeps_error_codes_required():

@@ -61,7 +61,8 @@ _ADV_DESC = (
     "plan, claim or decision) using `evidence` and an optionally attached git diff; the "
     "critic stance is the product, so there is no instructions_append. Claude only in v1 "
     "(feature adversarial_review). Egress: sends target, evidence, extra_context and the "
-    "redacted diff raw to the backend's provider."
+    "redacted diff raw to the backend's provider. An attached scope that gathers nothing "
+    "returns review_status=not_run with no spend. Recorded as a job (meta.job_id)."
 )
 _ADV_ASYNC_DESC = (
     f"{_resolve.PAID_MARKER} Async twin of amicus_adversarial_review: returns a job "

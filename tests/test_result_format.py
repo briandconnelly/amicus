@@ -39,15 +39,18 @@ def test_snapshot_pins_null_retention_asymmetry_and_covers_every_type():
     assert set(snap["schemas"]) == {
         "ConsultResult",
         "ReviewResult",
+        "AdversarialReviewResult",
         "DelegateResult",
         "ErrorResult",
     }
     assert set(snap["serialized"]) == {
         "consult_success",
         "review_success",
+        "adversarial_success",
         "delegate_success",
         "error",
         "error_user_config_rejected",
+        "error_budget_exceeded",
     }
 
 
