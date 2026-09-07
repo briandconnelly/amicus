@@ -16,7 +16,13 @@ PROSE_MESSAGE = re.compile(r"^\s*assert .*, body(\[.*\])?\s*$")
 # The forms the reviewer named, matched as plain text on assert lines so a reformat cannot hide
 # them. Only assert lines: reading `body["summary"]` to parse an answer is exactly what the
 # toolless test must do; printing it on failure is the thing being banned.
-FORBIDDEN_SUBSTRINGS = (", body)", ', body["summary"]', 'body["raw_response"]')
+FORBIDDEN_SUBSTRINGS = (
+    ", body)",
+    ', body["summary"]',
+    'body["raw_response"]',
+    ', body.get("error")',
+    ', body["error"]',
+)
 
 # A known-bad line, so a broken regex cannot pass as a clean result.
 KNOWN_BAD = '    assert body["findings"] or body["next_steps"], body'
@@ -30,6 +36,8 @@ def test_the_regex_can_fail():
         ", body)": "    assert ok, body)",
         ', body["summary"]': '    assert ok, body["summary"]',
         'body["raw_response"]': '    assert ok, body["raw_response"]',
+        ', body.get("error")': '    assert body["ok"] is True, body.get("error")',
+        ', body["error"]': '    assert body["ok"] is True, body["error"]',
     }
     assert set(samples) == set(FORBIDDEN_SUBSTRINGS)
     for bad, sample in samples.items():

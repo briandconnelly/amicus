@@ -77,7 +77,7 @@ async def test_consult_in_a_repo_spends_and_reports_it_live(live_claude, tmp_pat
             raise_on_error=False,
         )
     body = res.structured_content
-    assert body["ok"] is True, body.get("error")
+    assert body["ok"] is True, body.get("error", {}).get("code")
     assert body["summary"] and body["meta"]["session_id"] and body["meta"]["job_id"]
     assert body["meta"]["usage"]["cost_usd"] > 0, body["meta"]  # a real run really spent
     assert body["meta"]["backend_details"] == {
@@ -106,7 +106,7 @@ async def test_toolless_is_enforced_live(live_claude, tmp_path):
             raise_on_error=False,
         )
     body = res.structured_content
-    assert body["ok"] is True, body.get("error")
+    assert body["ok"] is True, body.get("error", {}).get("code")
     names = {t.strip().lower() for t in re.split(r"[,\s]+", body["summary"]) if t.strip()}
     leaked = names & {"bash", "write", "edit", "read", "glob", "grep", "shell"}
     assert not leaked, sorted(leaked)
@@ -125,7 +125,7 @@ async def test_review_changes_live(live_claude, tmp_path):
             raise_on_error=False,
         )
     body = res.structured_content
-    assert body["ok"] is True, body.get("error")
+    assert body["ok"] is True, body.get("error", {}).get("code")
     assert body["review_status"] == "completed" and body["verdict"] in _VERDICTS
     assert body["meta"]["context_summary"]["files_changed"] == 1
 
@@ -147,7 +147,7 @@ async def test_adversarial_review_live(live_claude, tmp_path):
             raise_on_error=False,
         )
     body = res.structured_content
-    assert body["ok"] is True, body.get("error")
+    assert body["ok"] is True, body.get("error", {}).get("code")
     assert body["tool"] == "amicus_adversarial_review" and body["review_status"] == "completed"
     assert body["verdict"] in _VERDICTS and body["summary"]
     assert body["context_summary"] is None and body["meta"].get("instructions_append") is None
@@ -169,5 +169,5 @@ async def test_safe_mode_consult_live(live_claude, tmp_path):
             raise_on_error=False,
         )
     body = res.structured_content
-    assert body["ok"] is True, body.get("error")
+    assert body["ok"] is True, body.get("error", {}).get("code")
     assert body["summary"] and body["meta"]["backend_details"]["config_mode"] == "safe"

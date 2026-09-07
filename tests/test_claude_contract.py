@@ -56,7 +56,8 @@ def test_vocabularies():
     assert "Bash" not in contract.READONLY_TOOLS and "Write" not in contract.READONLY_TOOLS
     assert "Bash" in contract.READONLY_DISALLOWED_TOOLS
     assert contract.SUCCESS_SUBTYPES == (None, "success")
-    assert contract.USAGE_KEYS <= contract.ENVELOPE_KEYS | contract.USAGE_KEYS
+    assert "usage" in contract.ENVELOPE_KEYS
+    assert contract.USAGE_KEYS.isdisjoint(contract.ENVELOPE_KEYS)
 
 
 def test_forbidden_phrases_are_re_derived_for_a_multi_backend_server():

@@ -415,3 +415,18 @@ async def test_delegate_is_feature_gated_and_never_spawns(app, tmp_path, repo):
         )
     assert res.structured_content["error"]["code"] == "feature_unsupported"
     assert _runs(tmp_path) == []
+
+
+async def test_dry_run_previews_the_review_without_spawning(app, tmp_path, repo):
+    (repo / "a.py").write_text("x = 2\n")
+    async with Client(app) as c:
+        res = await c.call_tool(
+            "amicus_dry_run",
+            {"backend": "claude", "workspace_root": str(repo)},
+        )
+    body = res.structured_content
+    assert body["ok"] is True
+    assert body["would_call_model"] is True
+    assert body["prompt_bytes"] > 0
+    assert body["prompt_bytes"] >= len(adversarial.critic_stance("TestHost").encode("utf-8"))
+    assert _runs(tmp_path) == []

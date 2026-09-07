@@ -108,6 +108,11 @@ async def test_envelope_projection_matches_the_sibling(
         message = ours["error"]["message"]
         if theirs["ok"] is False:
             assert not theirs["message_has_secret"] and not theirs["message_has_secret_prefix"]
+        if case in ("nonzero_secret", "nonzero_secret_straddles_cut"):
+            # Positive control: prove the instrument actually sees the secret before asserting
+            # it is absent from the message, so a regenerated fixture with a different secret
+            # can't make the negative assertion below pass vacuously.
+            assert SECRET in inp["stderr"]
         assert SECRET not in message and "sk-cccc" not in message
     if theirs["usage"] is None:
         assert ours["meta"].get("usage") is None
