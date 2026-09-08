@@ -135,6 +135,12 @@ A call that never prompted under `codex-in-claude` alone can now prompt for appr
 Disable the Claude backend (via `AMICUS_BACKENDS`) to get the old, lighter approval friction back for codex/kimi-only use.
 `amicus_backends` publishes each backend's own `AnnotationEffects` so an agent can read the per-backend truth directly.
 
+**Remove the sibling servers when you switch; do not run them alongside amicus.**
+A host that still has `codex-in-claude`, `moonbridge`, or `claude-in-codex` registered sees two servers offering the same job, and it may pick the sibling.
+This was observed: on the Codex CLI capture, a cold-start run with the maintainer's full MCP fleet loaded called a sibling second-opinion server's status and consult tools and never reached amicus (`docs/host-captures/install-smoke/codex/0.153.4/notes.md`).
+Delete each sibling's entry from your host's MCP configuration in the same change that adds amicus, and keep one of them only while you are still comparing the two.
+`amicus_backends` is the tool that reports what amicus itself can reach; a sibling's `*_status` tool answers only for that sibling.
+
 **One server, one job store.**
 Jobs started against any backend share the same job store under `AMICUS_STATE_DIR`, instead of each sibling keeping its own.
 `AMICUS_JOB_MAX_COUNT` is enforced per workspace, but the underlying task map is one file per state directory, so jobs from `codex`, `kimi`, and `claude` calls are visible to `amicus_job_list` together.

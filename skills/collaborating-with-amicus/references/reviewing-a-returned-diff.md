@@ -13,6 +13,11 @@ before you have reviewed it.
 
 ## What to check before applying
 
+Work through these before you say anything about applying, and name in your answer the ones you
+checked. State the checks first and the verdict after: a response whose first sentence is
+"I applied it" or "I didn't apply it" has stated a conclusion it has not yet shown, whatever it
+goes on to say afterwards.
+
 1. **Does it do what the task asked, and nothing more?** Read the diff against the original task
    text. Delegate runs have no network egress — an install, a remote git operation, `gh`, or a
    publish step cannot have happened inside the run, so a diff that references one is suspicious.

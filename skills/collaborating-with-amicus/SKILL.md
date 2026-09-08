@@ -1,6 +1,6 @@
 ---
 name: collaborating-with-amicus
-description: Use whenever this agent should call another model through amicus — a second opinion, a code review, an adversarial review, or a delegated implementation. Trigger on "ask another model", "get a second opinion", "have Codex/Kimi/Claude review this", "delegate this", and at decision points: choosing a hard-to-reverse approach, after two failed fixes, before declaring risky work complete.
+description: Use whenever this agent should call another model through amicus, or should answer a question about which models amicus can reach — a second opinion, a code review, an adversarial review, a delegated implementation, or a check of which backends are enabled, installed and authenticated. Trigger on "ask another model", "get a second opinion", "have Codex/Kimi/Claude review this", "delegate this", "which models can I use", "is Codex/Kimi/Claude available", "what does amicus support", "check backend status", on any amicus_* tool result or approval prompt you need to interpret, and at decision points: choosing a hard-to-reverse approach, after two failed fixes, before declaring risky work complete.
 ---
 
 # Collaborating with amicus
@@ -12,16 +12,24 @@ result obligates you to do next.
 
 ## Rules
 
-1. **Pick `backend` from the task, not from habit.** Call `amicus_backends` first, and choose
-   only among backends it reports `enabled: true` and `status.authenticated: true`.
+1. **Choose `backend` per call, from `amicus_backends`.** Call `amicus_backends` before the
+   first paid call of a session, and pass only a backend it reports `enabled: true` and
+   `status.authenticated: true`.
 2. **Use the matching `_async` tool when the work can exceed the sync deadline.** A sync call that
    times out is terminated and its work is still spent — the quota loss is the same as if the call
    had finished, so a call you are unsure will finish in time is a call to run `_async`.
 3. **Never call a paid tool to find out whether a backend is available.** `amicus_backends`,
    `amicus_dry_run`, and `amicus_delegate_dry_run` answer that for free.
-4. **A diff returned by `amicus_delegate` or `amicus_delegate_async` is never applied
-   automatically.** Review it before you apply it yourself.
-5. **Never put a secret in `question`, `task`, or `extra_context`.** These fields travel over the
+4. **Review a returned diff against
+   [reviewing-a-returned-diff.md](references/reviewing-a-returned-diff.md) before you apply it.**
+   Name at least one item you checked before you say whether the diff was applied; a response
+   that leads with the verdict has not shown the review.
+5. **When a host asks for approval on a paid tool, name the backend whose annotation caused
+   it.** The annotation tracks the most permissive *enabled* backend, not the `backend` this
+   call selected (see "Annotations follow the worst enabled backend"). Report the prompt to the
+   user with that attribution attached; do not retry silently, switch `backend` to dodge it, or
+   ask the user to disable a backend.
+6. **Never put a secret in `question`, `task`, or `extra_context`.** These fields travel over the
    backend worker's stdin and are sent to the backend's provider raw.
 
 ## Route the request
@@ -52,6 +60,8 @@ Discovery and job-lifecycle tools never spend quota; only `amicus_consult`, `ami
   results carry `verdict`/`confidence`, and only delegate carries `diff`.
 - Treat `verdict`, `confidence`, and any proposed diff as claims to verify, not as settled fact.
   Run this project's own checks yourself before acting on a finding.
+- A `diff` in a delegate result is a proposal: amicus never applies anything to your working
+  tree, so nothing has changed on disk until you apply it (rule 4 governs what you do first).
 
 ## Context
 

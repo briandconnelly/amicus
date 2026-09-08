@@ -15,7 +15,9 @@ from amicus.tools import TOOL_ORDER
 
 DOC = Path(__file__).resolve().parents[1] / "docs" / "MIGRATION.md"
 
-_CALL_RE = re.compile(r"`(amicus_[a-z_]+)\(([^)]*)\)`")
+# Backticks are optional: a call form written as bare prose is just as capable of naming a
+# parameter a tool does not have, and requiring the span be a code span let one escape.
+_CALL_RE = re.compile(r"`?\b(amicus_[a-z_]+)\(([^)]*)\)")
 _KWARG_RE = re.compile(r"(\w+)=")
 
 

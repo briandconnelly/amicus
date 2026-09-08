@@ -5,6 +5,17 @@ catalog is a per-session token tax. The budget is a ceiling; the target is the l
 deliberate measurement so a failure message shows the drift. Raising a budget is a
 reviewed decision — say why in the PR body.
 
+What this ratchet does and does not cover, scoped against captured host evidence rather
+than assumed. It bounds the TOKEN COST of discovery. It is not a measure of first-call
+success, and a green run here is no evidence that an agent picks the right tool.
+
+The preloading client this budget is written for is real but is not universal. Codex CLI
+0.153.4 preloads the catalog, so the tax is paid per session there. Claude Code 2.1.263
+does not: it defers MCP tool definitions behind a ToolSearch lookup, so the wire size is a
+smaller tax on that host than the budget assumes
+(docs/host-captures/install-smoke/claude-code/2.1.263/notes.md). The budget stays the
+worst-case ceiling for the clients that do preload.
+
 Measured 2026-09-07 at schema-6 (18 tools; job-outlives-task claim corrected): see MEASURED.
 """
 
