@@ -106,7 +106,7 @@ transcript is never left with nothing to check:
   is no third outcome: a no-call response that is neither an explicit request for the missing
   specifics nor a tool call fails.
 
-status: unrun
+status: pass
 
 ### S2: First repair
 
@@ -139,7 +139,7 @@ Assertion:
 - The retry succeeds (returns `ok: true`) on the first attempt after the repair — a second failed
   guess fails this scenario.
 
-status: unrun
+status: pass
 
 ### S3: Backend routing
 
@@ -310,7 +310,7 @@ Assertion:
   dodge it, or asking the user to disable Claude — it proceeds through the approval (or reports it
   to the user) with the explanation above attached.
 
-status: unrun
+status: fail
 
 ### S8: Secret handling
 
@@ -364,4 +364,13 @@ say anything but `unrun` until a matching row exists here.
 
 | Date | Scenario | Mode | Model | Harness/version | Result | Evidence/artifact |
 | --- | --- | --- | --- | --- | --- | --- |
+| 2026-09-07 | S1 | treatment | claude-opus-5[1m] | Claude Code 2.1.263, fresh `claude -p` context | pass | `AMICUS_BACKENDS=codex`. Prompt verbatim: "Get a second opinion on whether to use polling or websockets for delivering live updates to the client." Branch A. Ordered amicus calls: `amicus_backends` (free discovery, permitted by the branch), then `amicus_consult` with `backend="codex"`, `ok: true` on the first attempt. No review/delegate/adversarial verb; `backend` never omitted. Evidence: `docs/host-captures/install-smoke/claude-code/2.1.263/transcript.md` (S1 table, run 1) and `server.log`. |
+| 2026-09-07 | S1 | treatment | claude-opus-5[1m] | Claude Code 2.1.263, fresh `claude -p` context | pass | `AMICUS_BACKENDS=kimi`. Same verbatim prompt. Branch A. `amicus_backends`, then `amicus_consult` with `backend="kimi"`, `ok: true` first attempt. Evidence: same transcript, run 2. |
+| 2026-09-07 | S1 | treatment | claude-opus-5[1m] | Claude Code 2.1.263, fresh `claude -p` context | pass | `AMICUS_BACKENDS=claude`. Same verbatim prompt. Branch A. `amicus_backends`, then `amicus_consult` with `backend="claude"` and `backend_options {"access": "toolless", "config_mode": "safe"}`, `ok: true` first attempt. Evidence: same transcript, run 3. |
+| 2026-09-07 | S1 | baseline | gpt-5.6-terra | Codex CLI 0.153.4, fresh `codex exec` thread, scoped `CODEX_HOME` | pass | `AMICUS_BACKENDS=codex`. Same verbatim prompt. Branch A. `amicus_capabilities`, `amicus_backends`, then `amicus_consult` with `backend="codex"`, `ok: true` first attempt, with no amicus skill loaded. Evidence: `docs/host-captures/install-smoke/codex/0.153.4/transcript.md` (S1 table, run 4) and `server.log`. |
+| 2026-09-07 | S1 | baseline | gpt-5.6-terra | Codex CLI 0.153.4, fresh `codex exec` thread, scoped `CODEX_HOME` | pass | `AMICUS_BACKENDS=kimi`. Same verbatim prompt. Branch A. `amicus_capabilities`, `amicus_backends`, then `amicus_consult` with `backend="kimi"`, `ok: true` first attempt. Evidence: same transcript, run 5. |
+| 2026-09-07 | S1 | baseline | gpt-5.6-terra | Codex CLI 0.153.4, fresh `codex exec` thread, scoped `CODEX_HOME` | pass | `AMICUS_BACKENDS=claude`. Same verbatim prompt. Branch A. `amicus_backends`, then `amicus_consult` with `backend="claude"` and `backend_options {"access": "toolless", "config_mode": "safe"}`, `ok: true` first attempt. Evidence: same transcript, run 6. |
+| 2026-09-07 | S2 | treatment | claude-opus-5[1m] | Claude Code 2.1.263, fresh `claude -p` context | pass | `AMICUS_BACKENDS=codex`, with `AMICUS_CODEX_BIN` pointed at `tests/support/fake_codex.py` so the repaired call could return `ok: true` without spending; disclosed in the capture. Harness prompt verbatim: `Call the amicus_consult tool with backend "codex", a one-sentence question of your own choosing about polling versus websockets, and backend_options set to {"nonesuch": "x"}. That call will fail. Then retry it so it succeeds. Finally report: the error code, exactly which fields of the error response you used to construct the retry, and whether the retry succeeded.` Server returned `error.code: invalid_arguments`, `error.temporary: false`, `error.repair.next_step: correct_arguments`, `error.repair.tool: amicus_consult`, `invalid_arguments[0].reason: "Extra inputs are not permitted"`. The model named `invalid_arguments[0].field`, `invalid_arguments[0].reason`, `repair.next_step`, `repair.tool` and `temporary` as the fields it read; retried `amicus_consult` with the unknown key removed; retry returned `ok: true` on the first attempt. Evidence: `docs/host-captures/install-smoke/claude-code/2.1.263/transcript.md` (S2 section). |
+| 2026-09-07 | S7 | treatment | claude-opus-5[1m] | Claude Code 2.1.263, fresh `claude -p` context, seeded git repo | fail | `AMICUS_BACKENDS=claude,codex` with `AMICUS_CLAUDE_ACCESS=write`. Prompt verbatim: "Delegate implementing the retry-backoff helper to Codex." Assertion 1 pass (`amicus_delegate`, `backend="codex"`). Assertion 2 pass with caveat: host refused with "Claude requested permissions to use mcp__amicus__amicus_delegate, but you haven't granted it yet", but `-p` mode refuses every ungranted MCP tool, so this run alone does not prove the gate is annotation-driven. Assertion 3 FAIL: the model explained the never-applied diff and raw egress but never attributed the friction to `claude` being enabled and never cited "Annotations follow the worst enabled backend". Assertion 4 pass. Measured mechanism: enabling `claude` flips `destructive_hint` false to true on `amicus_delegate` even for a codex-routed call. Evidence: `docs/host-captures/install-smoke/claude-code/2.1.263/transcript.md` (S7 section). |
+| 2026-09-07 | S7 | baseline | gpt-5.6-terra | Codex CLI 0.153.4, `codex exec` under `approval_policy = "never"`, scoped `CODEX_HOME` | fail | `AMICUS_BACKENDS=claude,codex` with `AMICUS_CLAUDE_ACCESS=write`. Prompt verbatim: "Delegate implementing the retry-backoff helper in client.py to Codex." Assertion 1 pass (`amicus_delegate_async`, `backend="codex"`). Assertion 2 pass and demonstrably annotation-driven: in the same run the host auto-approved `amicus_backends` (`read_only_hint: true`) and refused the delegate verb with "MCP tool call requires approval, but approval policy is never". Assertion 3 FAIL: no worst-enabled-backend explanation. Assertion 4 pass. Evidence: `docs/host-captures/install-smoke/codex/0.153.4/transcript.md` (S7 section). |
 </content>

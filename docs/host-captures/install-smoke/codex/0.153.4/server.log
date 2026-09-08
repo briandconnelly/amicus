@@ -1,0 +1,43 @@
+2026-09-07 17:59:12,790 INFO amicus: amicus 0.1.0 starting (stdio)
+2026-09-07 17:59:20,174 DEBUG amicus.middleware: tools/call amicus_backends: protocol=2025-06-18 client=codex-mcp-client/0.153.4 tasks_negotiated=False
+2026-09-07 17:59:24,755 INFO amicus: amicus 0.1.0: received SIGTERM, shutting down
+2026-09-07 18:16:39,420 INFO amicus: amicus 0.1.0 starting (stdio)
+2026-09-07 18:16:45,452 DEBUG amicus.middleware: tools/call amicus_backends: protocol=2025-06-18 client=codex-mcp-client/0.153.4 tasks_negotiated=False
+2026-09-07 18:16:46,807 INFO amicus: amicus 0.1.0: received SIGTERM, shutting down
+2026-09-07 18:18:17,170 INFO amicus: amicus 0.1.0 starting (stdio)
+2026-09-07 18:19:04,156 INFO amicus: amicus 0.1.0: received SIGTERM, shutting down
+2026-09-07 18:19:33,702 INFO amicus: amicus 0.1.0 starting (stdio)
+2026-09-07 18:19:39,364 INFO amicus: amicus 0.1.0: received SIGTERM, shutting down
+2026-09-07 18:19:51,707 INFO amicus: amicus 0.1.0 starting (stdio)
+2026-09-07 18:20:05,150 INFO amicus: amicus 0.1.0: received SIGTERM, shutting down
+2026-09-07 18:20:53,417 INFO amicus: amicus 0.1.0 starting (stdio)
+2026-09-07 18:21:04,941 INFO amicus: amicus 0.1.0: received SIGTERM, shutting down
+2026-09-07 18:21:15,782 INFO amicus: amicus 0.1.0 starting (stdio)
+2026-09-07 18:21:23,075 DEBUG amicus.middleware: tools/call amicus_backends: protocol=2025-06-18 client=codex-mcp-client/0.153.4 tasks_negotiated=False
+2026-09-07 18:21:25,173 INFO amicus: amicus 0.1.0: received SIGTERM, shutting down
+2026-09-07 18:21:56,782 INFO amicus: amicus 0.1.0 starting (stdio)
+2026-09-07 18:22:02,643 DEBUG amicus.middleware: tools/call amicus_backends: protocol=2025-06-18 client=codex-mcp-client/0.153.4 tasks_negotiated=False
+2026-09-07 18:22:05,597 INFO amicus: amicus 0.1.0: received SIGTERM, shutting down
+2026-09-07 18:22:18,647 INFO amicus: amicus 0.1.0 starting (stdio)
+2026-09-07 18:22:35,126 DEBUG amicus.middleware: tools/call amicus_backends: protocol=2025-06-18 client=codex-mcp-client/0.153.4 tasks_negotiated=False
+2026-09-07 18:23:25,582 INFO amicus: amicus 0.1.0: received SIGTERM, shutting down
+2026-09-07 18:24:28,078 INFO amicus: amicus 0.1.0 starting (stdio)
+2026-09-07 18:24:40,896 DEBUG amicus.middleware: tools/call amicus_job_consume_result: protocol=2025-06-18 client=codex-mcp-client/0.153.4 tasks_negotiated=False
+2026-09-07 18:24:45,411 INFO amicus: amicus 0.1.0: received SIGTERM, shutting down
+2026-09-07 18:26:59,853 INFO amicus: amicus 0.1.0 starting (stdio)
+2026-09-07 18:27:13,979 DEBUG amicus.middleware: tools/call amicus_capabilities: protocol=2025-06-18 client=codex-mcp-client/0.153.4 tasks_negotiated=False
+2026-09-07 18:27:18,297 DEBUG amicus.middleware: tools/call amicus_backends: protocol=2025-06-18 client=codex-mcp-client/0.153.4 tasks_negotiated=False
+2026-09-07 18:27:33,368 DEBUG amicus.middleware: tools/call amicus_consult: protocol=2025-06-18 client=codex-mcp-client/0.153.4 tasks_negotiated=False
+2026-09-07 18:27:58,742 INFO amicus: amicus 0.1.0: received SIGTERM, shutting down
+2026-09-07 18:28:08,176 INFO amicus: amicus 0.1.0 starting (stdio)
+2026-09-07 18:28:21,457 DEBUG amicus.middleware: tools/call amicus_capabilities: protocol=2025-06-18 client=codex-mcp-client/0.153.4 tasks_negotiated=False
+2026-09-07 18:28:24,251 DEBUG amicus.middleware: tools/call amicus_backends: protocol=2025-06-18 client=codex-mcp-client/0.153.4 tasks_negotiated=False
+2026-09-07 18:28:39,364 DEBUG amicus.middleware: tools/call amicus_consult: protocol=2025-06-18 client=codex-mcp-client/0.153.4 tasks_negotiated=False
+2026-09-07 18:29:10,209 INFO amicus: amicus 0.1.0: received SIGTERM, shutting down
+2026-09-07 18:30:08,304 INFO amicus: amicus 0.1.0 starting (stdio)
+2026-09-07 18:30:30,866 DEBUG amicus.middleware: tools/call amicus_backends: protocol=2025-06-18 client=codex-mcp-client/0.153.4 tasks_negotiated=False
+2026-09-07 18:30:50,781 DEBUG amicus.middleware: tools/call amicus_consult: protocol=2025-06-18 client=codex-mcp-client/0.153.4 tasks_negotiated=False
+2026-09-07 18:32:14,592 INFO amicus: amicus 0.1.0: received SIGTERM, shutting down
+2026-09-07 18:36:15,658 INFO amicus: amicus 0.1.0 starting (stdio)
+2026-09-07 18:37:24,978 DEBUG amicus.middleware: tools/call amicus_backends: protocol=2025-06-18 client=codex-mcp-client/0.153.4 tasks_negotiated=False
+2026-09-07 18:37:37,473 INFO amicus: amicus 0.1.0: received SIGTERM, shutting down

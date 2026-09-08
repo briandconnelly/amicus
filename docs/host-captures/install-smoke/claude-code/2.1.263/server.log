@@ -1,0 +1,52 @@
+2026-09-07 17:58:23,624 INFO amicus: amicus 0.1.0 starting (stdio)
+2026-09-07 17:58:28,159 DEBUG amicus.middleware: tools/call amicus_backends: protocol=2025-11-25 client=claude-code/2.1.263 tasks_negotiated=False
+2026-09-07 17:58:57,466 INFO amicus: amicus 0.1.0: received SIGINT, shutting down
+2026-09-07 17:58:57,468 INFO amicus: amicus 0.1.0: received SIGTERM, shutting down
+2026-09-07 18:00:49,080 INFO amicus: amicus 0.1.0 starting (stdio)
+2026-09-07 18:00:49,902 INFO amicus: amicus 0.1.0: received SIGINT, shutting down
+2026-09-07 18:00:49,903 INFO amicus: amicus 0.1.0: received SIGTERM, shutting down
+2026-09-07 18:01:34,905 INFO amicus: amicus 0.1.0 starting (stdio)
+2026-09-07 18:01:39,995 DEBUG amicus.middleware: tools/call amicus_capabilities: protocol=2025-11-25 client=claude-code/2.1.263 tasks_negotiated=False
+2026-09-07 18:01:47,588 INFO amicus: amicus 0.1.0: received SIGINT, shutting down
+2026-09-07 18:01:47,589 INFO amicus: amicus 0.1.0: received SIGTERM, shutting down
+2026-09-07 18:04:51,715 INFO amicus: amicus 0.1.0 starting (stdio)
+2026-09-07 18:04:55,495 DEBUG amicus.middleware: tools/call amicus_backends: protocol=2025-11-25 client=claude-code/2.1.263 tasks_negotiated=False
+2026-09-07 18:04:58,278 INFO amicus: amicus 0.1.0: received SIGINT, shutting down
+2026-09-07 18:04:58,280 INFO amicus: amicus 0.1.0: received SIGTERM, shutting down
+2026-09-07 18:05:14,170 INFO amicus: amicus 0.1.0 starting (stdio)
+2026-09-07 18:05:29,826 DEBUG amicus.middleware: tools/call amicus_backends: protocol=2025-11-25 client=claude-code/2.1.263 tasks_negotiated=False
+2026-09-07 18:05:36,983 INFO amicus: amicus 0.1.0: received SIGINT, shutting down
+2026-09-07 18:05:36,984 INFO amicus: amicus 0.1.0: received SIGTERM, shutting down
+2026-09-07 18:06:15,818 INFO amicus: amicus 0.1.0 starting (stdio)
+2026-09-07 18:06:32,870 DEBUG amicus.middleware: tools/call amicus_backends: protocol=2025-11-25 client=claude-code/2.1.263 tasks_negotiated=False
+2026-09-07 18:07:01,899 INFO amicus: amicus 0.1.0: received SIGINT, shutting down
+2026-09-07 18:07:01,901 INFO amicus: amicus 0.1.0: received SIGTERM, shutting down
+2026-09-07 18:07:21,135 INFO amicus: amicus 0.1.0 starting (stdio)
+2026-09-07 18:07:39,136 DEBUG amicus.middleware: tools/call amicus_backends: protocol=2025-11-25 client=claude-code/2.1.263 tasks_negotiated=False
+2026-09-07 18:08:08,115 DEBUG amicus.middleware: tools/call amicus_consult: protocol=2025-11-25 client=claude-code/2.1.263 tasks_negotiated=False
+2026-09-07 18:08:56,065 INFO amicus: amicus 0.1.0: received SIGINT, shutting down
+2026-09-07 18:08:56,066 INFO amicus: amicus 0.1.0: received SIGTERM, shutting down
+2026-09-07 18:09:09,297 INFO amicus: amicus 0.1.0 starting (stdio)
+2026-09-07 18:09:23,111 DEBUG amicus.middleware: tools/call amicus_backends: protocol=2025-11-25 client=claude-code/2.1.263 tasks_negotiated=False
+2026-09-07 18:09:46,930 DEBUG amicus.middleware: tools/call amicus_consult: protocol=2025-11-25 client=claude-code/2.1.263 tasks_negotiated=False
+2026-09-07 18:10:44,162 INFO amicus: amicus 0.1.0: received SIGINT, shutting down
+2026-09-07 18:10:44,166 INFO amicus: amicus 0.1.0: received SIGTERM, shutting down
+2026-09-07 18:12:56,039 INFO amicus: amicus 0.1.0 starting (stdio)
+2026-09-07 18:13:08,420 DEBUG amicus.middleware: tools/call amicus_backends: protocol=2025-11-25 client=claude-code/2.1.263 tasks_negotiated=False
+2026-09-07 18:13:26,379 DEBUG amicus.middleware: tools/call amicus_consult: protocol=2025-11-25 client=claude-code/2.1.263 tasks_negotiated=False
+2026-09-07 18:16:19,504 INFO amicus: amicus 0.1.0: received SIGINT, shutting down
+2026-09-07 18:16:19,506 INFO amicus: amicus 0.1.0: received SIGTERM, shutting down
+2026-09-07 18:33:26,796 INFO amicus: amicus 0.1.0 starting (stdio)
+2026-09-07 18:33:33,570 DEBUG amicus.middleware: tools/call amicus_consult: protocol=2025-11-25 client=claude-code/2.1.263 tasks_negotiated=False
+2026-09-07 18:33:36,838 DEBUG amicus.middleware: tools/call amicus_consult: protocol=2025-11-25 client=claude-code/2.1.263 tasks_negotiated=False
+2026-09-07 18:33:44,972 INFO amicus: amicus 0.1.0: received SIGINT, shutting down
+2026-09-07 18:33:44,974 INFO amicus: amicus 0.1.0: received SIGTERM, shutting down
+2026-09-07 18:34:01,792 INFO amicus: amicus 0.1.0 starting (stdio)
+2026-09-07 18:34:30,400 DEBUG amicus.middleware: tools/call amicus_delegate_dry_run: protocol=2025-11-25 client=claude-code/2.1.263 tasks_negotiated=False
+2026-09-07 18:34:30,434 DEBUG amicus.middleware: tools/call amicus_backends: protocol=2025-11-25 client=claude-code/2.1.263 tasks_negotiated=False
+2026-09-07 18:34:48,143 INFO amicus: amicus 0.1.0: received SIGINT, shutting down
+2026-09-07 18:34:48,145 INFO amicus: amicus 0.1.0: received SIGTERM, shutting down
+2026-09-07 18:35:13,622 INFO amicus: amicus 0.1.0 starting (stdio)
+2026-09-07 18:35:25,119 DEBUG amicus.middleware: tools/call amicus_backends: protocol=2025-11-25 client=claude-code/2.1.263 tasks_negotiated=False
+2026-09-07 18:35:50,825 INFO amicus: amicus 0.1.0: received SIGINT, shutting down
+2026-09-07 18:35:50,826 INFO amicus: amicus 0.1.0: received SIGTERM, shutting down
