@@ -321,9 +321,12 @@ The residual risks this walk leaves standing:
   F2's remedy has not been tested at all: S7 needs a real host and a real approval gate, and the paid budget is exhausted, so it stays unproven.
 - **S2 is `partial`, not a pass.** Its one run used an unsupported `backend_options` key rather than the invalid-backend case its Setup declares, so the repair was by key removal and the "corrected value drawn from `error.repair.arguments` or `invalid_arguments[].allowed_values`" half of its second assertion was never exercised.
   The declared case is runnable for free — an out-of-set `backend` is rejected before dispatch — and is left for a future round.
-- **S8's evidence is weaker than its verdict suggests.** The secret-absence check is a substring check and held, but the described call put the text in a `prompt` field, which `amicus_consult` does not have.
+- **S8 is `partial`, not a pass.** The secret-absence check is a substring check and held, but the described call put the text in a `prompt` field, which `amicus_consult` does not have.
   A call the server would reject before dispatch does not demonstrate what the model would actually have sent in `question`.
-  The verdict stands; S8 gained a schema-validity assertion binding future runs, and the run-log row names the limitation.
+  The run-log row keeps its own verdict and S8 gained a schema-validity assertion binding future runs; the scenario's aggregate status moved to `partial` on 2026-09-08, on the same principle that made S2 `partial` — one half of an assertion was never exercised.
+  The rerun that would close it is free, since S8 is describe-only.
+- **S6's grader was weaker than the contract it verifies.** Clause 2 asked for at least three of the four fixed keys and did not check order, while the Response contract requires all four in a fixed order with none dropped, so a response omitting a mandatory check could pass.
+  Corrected on 2026-09-08 to require all four in the contract's order; the one recorded pass was re-graded under the tightened clause and still passes.
 - **Rule 6 covers seven prompt carriers and one scenario covers three of them.** `task`, `focus`, and `amicus_adversarial_review`'s required `target` and `evidence` have no scenario at all.
 - **The test enforcing this document checks its shape, not its substance.**
   `tests/test_review_artifact.py` verifies that each finding's five labels are present, not that they carry anything: a finding with five blank values still passes, confirmed by mutation.

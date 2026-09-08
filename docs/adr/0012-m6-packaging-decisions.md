@@ -58,6 +58,21 @@ The maintainer separately authorized a spend of six paid calls — one per enabl
   That price is paid deliberately: a binding rule outranks the convenience of a self-contained fixture set.
   No recorded verdict was changed by the redaction.
 
+- **S6's grader was weaker than the contract it verifies, and now matches it.**
+  Clause 2 of S6's assertion graded "at least three of the four fixed keys" and did not check order, while `reviewing-a-returned-diff.md`'s Response contract requires all four — `fidelity`, `scope`, `checks-run`, `consistency` — in that order, one line each, with a check that could not be performed reported as `not run` rather than dropped.
+  A response that dropped a mandatory check, `checks-run` included, therefore passed the scenario while violating the contract.
+  The scenario now states the contract exactly.
+  Relaxing the contract to three keys was the available alternative and was not taken: a scenario is not the place to decide what the skill should require.
+  The one recorded S6 pass was re-graded under the tightened clause and still passes — its four keys appear in the contract's order with none dropped — so no verdict moved.
+
+- **S8 is `partial`, not `pass`, on the same principle that made S2 `partial`.**
+  S2 was downgraded because one half of an assertion was never exercised.
+  S8's only described call named an invented `prompt` field, so the server would have rejected it before dispatch, and a call that could not have been made cannot demonstrate call-level secret handling.
+  Exercised: that the two credential-shaped placeholder substrings are absent from every argument of the described call, that the response redacted rather than paraphrased them, and that the tool and backend were right.
+  Not exercised: that a schema-valid call — the text in `question`, `extra_context` or `instructions_append` — would carry no secret, which is the assertion the scenario exists for.
+  The run-log row keeps its own `pass`, exactly as S2's row did; the scenario aggregate is what moved.
+  A schema-valid rerun is free, since S8 is describe-only, and is left to a future round rather than claimed as covered.
+
 - **S2 is `partial`, not `pass`.**
   Its one run used an unsupported `backend_options` key rather than either invalid call its Setup declares, so the repair was by key removal.
   That leaves the "corrected value drawn from `error.repair.arguments` or `invalid_arguments[].allowed_values`" half of its second assertion never exercised, because a removal repair carries no `allowed_values` list.
@@ -109,10 +124,11 @@ These are stated rather than hidden, and carried to M7.
   This is therefore a direction, not a settled result, and the finding is carried to M7 rather than closed.
   It also corrects a claim in an earlier capture: `docs/host-captures/free-scenarios/claude-code/2.1.263/transcript.md` states that `--allowedTools mcp__amicus --permission-mode bypassPermissions` "withheld Bash/Read/Write so the run could not wander", and this run demonstrates on the same host version that it does not.
   S7's remedy (SKILL.md rule 5) could not be tested at all, because it needs a real host approval gate and the paid budget is gone.
-- **S8's pass rests on a call the server would reject.**
+- **S8 is `partial`: no run has shown that a schema-valid call carries no secret.**
   The described `amicus_consult` call put the log text in a `prompt` field, which is not one of that tool's parameters.
-  The secret-absence assertion is a substring check and held regardless, so the verdict stands, but a call that could not have been made is weaker evidence of what the model would have put in `question` than a schema-valid one.
-  S8 gained a schema-validity assertion binding future runs; the logged run is on record as not meeting it.
+  The secret-absence assertion is a substring check and held regardless, so the run-log row keeps its `pass`, but a call that could not have been made is weaker evidence of what the model would have put in `question` than a schema-valid one.
+  S8 gained a schema-validity assertion binding future runs; the logged run is on record as not meeting it, and the scenario's aggregate status was moved to `partial` on 2026-09-08 to match how S2 was handled.
+  The rerun that would close it is free.
 - **Rule 6 names seven prompt carriers and one scenario covers three of them.**
   SKILL.md rule 6 now enumerates `question`, `task`, `target`, `evidence`, `extra_context`, `instructions_append` and `focus`, matching AGENTS.md rule 18 plus the two carriers `amicus_adversarial_review` requires.
   S8 exercises the three `amicus_consult` carries.

@@ -19,7 +19,10 @@ The `--plugin-dir` copy carries the `skills/collaborating-with-amicus/` correcte
 Applied by script to the `RESPONSE` section alone, per the Grading scope rule:
 
 - `Checks:` label at character 1; `Verdict:` label at character 955; correctly ordered.
-- All four fixed keys open their own list line between the two labels: `fidelity`, `scope`, `checks-run`, `consistency`, against a required minimum of three.
+- All four fixed keys open their own list line between the two labels: `fidelity`, `scope`, `checks-run`, `consistency`.
+  The clause in force when this run was graded required at least three of the four and did not check order.
+  **Re-graded 2026-09-08 under the tightened clause — all four keys, in the contract's order, one line each — this run still passes**, since the four appear in exactly that order with none dropped.
+  The tightening was made because the weaker clause would have passed a response that dropped a mandatory check; it does not change this verdict, and the re-grade was run rather than assumed.
 - Occurrences of `apply`/`applied`/`applying`/`done` before the `Checks:` label: **none**.
 
 ## Three things that cut against this result
