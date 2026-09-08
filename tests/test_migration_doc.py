@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
 from fastmcp import Client
 from tests.support import fakeplugin
 
@@ -42,25 +43,42 @@ async def _tool_param_names() -> dict[str, set[str]]:
     return {t.name: set(t.input_schema.get("properties", {})) for t in tools}
 
 
-def _table_rows() -> dict[str, set[str]]:
+class DuplicateRow(AssertionError):
+    """The table lists the same `AMICUS_*` name twice.
+
+    Both parsers below build a dict keyed by the variable name, so without this a second
+    row silently overwrites the first and every equality assertion in this module still
+    passes against whichever row happened to come last. A duplicate row is a doc bug on
+    its own (a reader cannot tell which one binds), so the parsers refuse it rather than
+    picking a winner.
+    """
+
+
+def _reject_duplicate(seen: dict[str, object], name: str) -> None:
+    if name in seen:
+        raise DuplicateRow(f"MIGRATION.md lists {name} more than once in the env table")
+
+
+def _table_rows(text: str | None = None) -> dict[str, set[str]]:
     """Parse the env table: amicus name -> the legacy names it lists."""
     rows: dict[str, set[str]] = {}
-    for line in DOC.read_text().splitlines():
+    for line in (DOC.read_text() if text is None else text).splitlines():
         match = re.match(r"^\|\s*`(AMICUS_[A-Z0-9_]+)`\s*\|([^|]*)\|", line)
         if match:
             legacy = set(re.findall(r"`([A-Z0-9_]+)`", match.group(2)))
+            _reject_duplicate(rows, match.group(1))
             rows[match.group(1)] = legacy
     return rows
 
 
-def _table_defaults() -> dict[str, str | None]:
+def _table_defaults(text: str | None = None) -> dict[str, str | None]:
     """Parse the env table's third column: amicus name -> the doc's default cell.
 
     A literal `—` (no default) parses to None so it compares directly against
     `EnvVar.default`, which is None for the same case.
     """
     defaults: dict[str, str | None] = {}
-    for line in DOC.read_text().splitlines():
+    for line in (DOC.read_text() if text is None else text).splitlines():
         match = re.match(
             r"^\|\s*`(AMICUS_[A-Z0-9_]+)`\s*\|([^|]*)\|([^|]*)\|",
             line,
@@ -68,6 +86,7 @@ def _table_defaults() -> dict[str, str | None]:
         if match:
             cell = match.group(3).strip()
             default_match = re.match(r"^`(.*)`$", cell)
+            _reject_duplicate(defaults, match.group(1))
             defaults[match.group(1)] = default_match.group(1) if default_match else None
     return defaults
 
@@ -92,10 +111,11 @@ def test_legacy_names_match_the_declarations_exactly():
 
 
 def test_default_column_matches_the_declarations_exactly():
-    """The generation script also emits a `default` column; verify it too.
+    """The table's third column is checked too, not just names and aliases.
 
-    The brief's parser only checks names and legacy aliases, leaving `default`
-    unverified and free to drift. This closes that gap.
+    The brief's parser only checked names and legacy aliases, leaving `default`
+    unverified and free to drift. This closes that gap. The table is hand-maintained,
+    so every column of it needs an assertion or it has none.
     """
     defaults = _table_defaults()
     for var in packaging.declared_vars():
@@ -148,7 +168,7 @@ async def test_call_form_kwargs_are_real_tool_parameters():
             )
 
 
-# The hand-written prose around the generated table is not covered by the table
+# The hand-written prose around the table is not covered by the table
 # assertions above, and shipped a claim that contradicted them: it said
 # `AMICUS_CODEX_BIN` had "no legacy alias" while the table two lines earlier, and the
 # declaration, both carry `CODEX_IN_CLAUDE_CODEX_BIN`.
@@ -162,7 +182,7 @@ def test_prose_no_alias_claims_agree_with_the_declarations():
     line under `docs/`, so a line carrying "no legacy alias" or "no sibling equivalent"
     is exactly one claim, and every `AMICUS_*` name written on it is inside that claim's
     scope. Positive prose ("`AMICUS_CODEX_BIN` does have one") is deliberately left to
-    the generated table, which already asserts every alias exactly; binding free-form
+    the table itself, which is already asserted to match every alias exactly; binding free-form
     positive prose would need a parser for how a sentence attributes an alias to a name,
     which is the kind of check that ends up unable to fail."""
     declarations = {var.name: var for var in packaging.declared_vars()}
@@ -182,3 +202,36 @@ def test_prose_no_alias_claims_agree_with_the_declarations():
         "a passing run would prove nothing. Either the sentences were reworded or the "
         "regex no longer matches them."
     )
+
+
+def _first_table_line() -> str:
+    """The doc's first AMICUS_* env-table row, verbatim."""
+    for line in DOC.read_text().splitlines():
+        if re.match(r"^\|\s*`AMICUS_[A-Z0-9_]+`\s*\|", line):
+            return line
+    raise AssertionError("MIGRATION.md has no env-table row at all")
+
+
+def test_a_duplicated_row_is_rejected_rather_than_silently_overwriting():
+    """Known positive for every table assertion in this module.
+
+    The parsers key a dict by the variable name, so before the `DuplicateRow` guard a
+    second row for the same name overwrote the first and the equality tests still passed
+    against the surviving one. The doubled text below is the real first row plus a copy
+    whose legacy and default cells are deliberately wrong: under the old parser it parsed
+    clean, so this test is what proves the guard, not the dict, is doing the work.
+    """
+    row = _first_table_line()
+    name = re.match(r"^\|\s*`(AMICUS_[A-Z0-9_]+)`", row).group(1)
+    header = "| Variable | Legacy | Default |\n| --- | --- | --- |\n"
+    forged = f"| `{name}` | `NOT_A_REAL_ALIAS` | `not-the-default` |"
+    doubled = f"{header}{row}\n{forged}\n"
+
+    for parser in (_table_rows, _table_defaults):
+        with pytest.raises(DuplicateRow, match=name):
+            parser(doubled)
+
+    # And the same parsers accept the single row, so the raise above is the duplicate and
+    # not the synthetic table's shape.
+    assert _table_rows(f"{header}{row}\n")[name] is not None
+    assert name in _table_defaults(f"{header}{row}\n")
