@@ -117,11 +117,20 @@ def test_every_skipped_probe_records_an_inapplicability_reason():
 
 
 def test_every_finding_carries_all_five_labeled_lines():
+    """The old form checked only that each label's text appeared somewhere in the
+    finding, which a label followed by nothing else also satisfies. Confirmed by
+    mutation: a synthetic finding with all five labels present and every value
+    blank (`- **Severity:**` with nothing after it, for all five) passed the old
+    `missing = [f for f in FINDING_FIELDS if f not in finding.lower()]` body
+    unchanged. Each label must now be followed by a non-empty value on its own
+    line, which a bare label cannot produce."""
     findings = re.findall(r"#### Finding \d+(.+?)(?=\n#### |\n## |\Z)", TEXT, re.S)
     assert findings, "the walk records no findings at all"
     for finding in findings:
-        missing = [f for f in FINDING_FIELDS if f not in finding.lower()]
-        assert not missing, f"finding missing {missing}"
+        for field in FINDING_FIELDS:
+            match = re.search(rf"\*\*{re.escape(field)}\*\*(.*)", finding, re.I)
+            assert match, f"finding missing {field}"
+            assert match.group(1).strip(), f"finding has {field} with an empty value"
 
 
 def test_the_report_names_residual_risks():
