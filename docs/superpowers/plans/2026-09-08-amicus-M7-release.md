@@ -11,7 +11,7 @@ This milestone ships three separate pull requests, in order.
 PR A is a governance-only change to `AGENTS.md` and must be merged before any task below is executed.
 PR B is this plan.
 PR C is a `chore(release): release 0.1.0` metadata PR that the maintainer merges immediately before tagging.
-The three authorized live-gate runs happen after PR C merges, on a clean checkout of the exact commit that will be tagged — not on this branch.
+`docs/RELEASING.md` is the authoritative release sequence: the three authorized live-gate runs happen on a clean checkout of the PR C branch tip, before PR C is merged, not on this branch and not on a post-merge checkout.
 
 **Tech Stack:**
 Python 3.11+, `uv`, `ruff`, `ty`, `pytest`, `import-linter`, `prek`, GitHub Actions.
@@ -26,13 +26,15 @@ The evidence recorder is pure standard library, following `scripts/check_commit_
 - Never lower `fail_under` in `pyproject.toml`. It is `95`; the current branch coverage on `main` is 96.98%.
 - Never run `-m integration` except where this plan says so, and only after asking the maintainer in the current session.
 - Never weaken the guard in `tests/conftest.py` that makes real backend binaries unreachable for unit tests.
-- Commit messages are Conventional Commits using only the types and scopes in `scripts/check_commit_message.py`. The scopes this plan uses — `docs`, `ci`, `release`, `skills`, `packaging` — all already exist. Do not add a scope.
+- Commit messages are Conventional Commits using only the types and scopes in `scripts/check_commit_message.py`.
+  The scopes this plan uses — `docs`, `ci`, `release`, `skills`, `packaging` — all already exist.
+  Do not add a scope.
 - Under `docs/`, write Markdown with one sentence per line.
 - Never edit a sibling checkout (`~/projects/codex-in-claude`, `~/projects/moonbridge`, `~/projects/claude-in-codex`, `~/projects/pontonier`). Reading them is allowed and this plan does read them.
 - Never write a prompt input to disk, argv or a log. Task 5 and Task 8 touch prompt-bearing documents; both record ids and `sha256` values only.
 - Do not change `.github/**`, `AGENTS.md` or `CLAUDE.md` in this PR. Rule 9 forces those into their own PR, which is PR A.
 - Do not push a git tag. Do not publish to pypi.org. Do not run `gh workflow run`.
-- AGENTS.md rules 19, 20 and 21 landed with PR #10 after this plan was drafted. Rule 20 requires the three live gates to have PASSED on the tagged commit, not merely to have been run; rule 21 forbids any `v*` tag until the tag ruleset exists. Neither changes a task below, but both bind the release sequence the runbook describes.
+- AGENTS.md rules 19, 20 and 21 landed with PR #10 after this plan was drafted. Rule 20 requires the three live gates to have PASSED on the tagged commit, not merely to have been run; rule 21 forbids any `v*` tag until the tag ruleset exists. Neither changes a task below, but together they superseded Task 3's release sequence — `docs/RELEASING.md` is the runbook that replaced it and is authoritative; this plan does not restate a binding sequence of its own.
 
 ## Preconditions
 
@@ -708,11 +710,14 @@ The body must record: the gate result and coverage; the perturbation check outco
 
 - [ ] **Step 7: Stop**
 
-Do not merge. Do not approve. Do not tag. AGENTS.md rule 8 reserves all three to the maintainer, and the release sequence in `docs/RELEASING.md` begins only after the maintainer merges this PR and then PR C.
+Do not merge.
+Do not approve.
+Do not tag.
+AGENTS.md rule 8 reserves all three to the maintainer, and the release sequence in `docs/RELEASING.md` begins only after the maintainer merges this PR and then PR C.
 
 ---
 
 ## After this PR — not part of it
 
 PR C (`chore(release): release 0.1.0`) and the tag sequence are documented in `docs/RELEASING.md` and executed by the maintainer.
-The three authorized live-gate runs happen there, on the merged commit that will be tagged, not on this branch.
+`docs/RELEASING.md` is authoritative: the three authorized live-gate runs happen there, on a checkout of the PR C branch tip, before PR C is merged, not on this branch and not on a post-merge checkout.
