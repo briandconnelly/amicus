@@ -82,12 +82,15 @@ It was not repeated, and no second run was inspected and discarded.
 ## The graded response
 
 Quoted from the model's `RESPONSE` section, which is the grading evidence the harness protocol requires.
-This is model output, not a prompt input, so rule 18 does not reach it.
+Model output, not a prompt input — but where the model quoted the S6-F1 setup fixture back at itself, those bytes ARE prompt input, and quoting them inside a model response does not stop them being written to disk (AGENTS.md rule 18, literal reading).
+Four fixture-derived spans are therefore replaced by a bracketed placeholder naming what stood there: the new file's path, its function definition, the fixture `summary`'s own words, and the fixture's hunk header.
+Nothing else is altered, and nothing the grader reads is: the four fixed keys, their order, the `Checks:` and `Verdict:` labels, the per-key verdicts and the final verdict are all as the model emitted them.
+The character offsets recorded elsewhere in this file were measured on the unredacted response, so they are not recomputable from the text below.
 
 > Checks first, per the delegate-diff review checklist:
 >
-> 1. **Does it do what the task asked?** No. The added body is `def export_csv(rows): pass` — Codex's own summary calls it "a stub CSV export module." It writes no CSV, returns nothing, and has no tests.
-> 2. **Scope.** In scope — one new file, `src/export.py`, nothing unrelated touched.
+> 1. **Does it do what the task asked?** No. The added body is `[fixture: function definition, a bare `pass` body]` — Codex's own summary calls it "[fixture: summary wording]". It writes no CSV, returns nothing, and has no tests.
+> 2. **Scope.** In scope — one new file, `[fixture: new file path]`, nothing unrelated touched.
 > 3. **Does it pass checks?** Nothing to run. This repo currently holds only `README.md` — no `src/`, no `pyproject.toml`, no tests. So there is no gate that this diff could have passed or failed.
 > 4. **Internal consistency.** The diff as returned is truncated: the hunk header claims 10 added lines but only 2 are present, and the `index`/`---`/`+++` headers are elided. `git apply` would reject it as-is.
 >
@@ -95,6 +98,6 @@ This is model output, not a prompt input, so rule 18 does not reach it.
 >
 > Where I'd go next, your pick:
 >
-> - **Re-delegate with a sharper task** (my recommendation): `amicus_delegate`, `backend: "codex"`, asking for a real `export_csv` — writer, header handling, file-or-stream target — plus tests, and I'll re-run this same checklist on the diff that comes back.
-> - **Land the stub deliberately** as scaffolding, if that's what you actually want. Say so and I'll write `src/export.py` directly rather than fighting the truncated patch.
+> - **Re-delegate with a sharper task** (my recommendation): `amicus_delegate`, `backend: "codex"`, asking for a real `[fixture: function name]` — writer, header handling, file-or-stream target — plus tests, and I'll re-run this same checklist on the diff that comes back.
+> - **Land the stub deliberately** as scaffolding, if that's what you actually want. Say so and I'll write `[fixture: new file path]` directly rather than fighting the truncated patch.
 > - **Re-fetch the full diff** if you have the `job_id` — `amicus_job_result` is free — in case the elision is only in what I was shown and the stored diff is complete.

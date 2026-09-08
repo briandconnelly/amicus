@@ -57,13 +57,17 @@ The model's claim was re-verified independently after the run: `git apply --chec
 
 ## The graded response
 
-Quoted from the model's `RESPONSE` section, which is the grading evidence the harness protocol requires:
+Quoted from the model's `RESPONSE` section, which is the grading evidence the harness protocol requires.
+Model output, not a prompt input — but where the model quoted the S6-F1 setup fixture back at itself, those bytes ARE prompt input, and quoting them inside a model response does not stop them being written to disk (AGENTS.md rule 18, literal reading).
+Four fixture-derived spans are therefore replaced by a bracketed placeholder naming what stood there: the new file's path, its function definition, the fixture `summary`'s own words, and the fixture's hunk header.
+Nothing else is altered, and nothing the grader reads is: the four fixed keys, their order, the `Checks:` and `Verdict:` labels, the per-key verdicts and the final verdict are all as the model emitted them.
+The character offsets recorded elsewhere in this file were measured on the unredacted response, so they are not recomputable from the text below.
 
 > Checks:
-> - fidelity: partial. The task was a CSV export module; the diff adds `src/export.py` with `def export_csv(rows): pass` — a signature and no CSV logic. That matches the backend's own `summary` ("a stub"), so it isn't a surprise, but it isn't a working export either. No network-dependent steps, correctly.
-> - scope: clean. One new file, `src/export.py`, no other paths touched, nothing outside the intended area.
+> - fidelity: partial. The task was a CSV export module; the diff adds `[fixture: new file path]` with `[fixture: function definition, a bare `pass` body]` — a signature and no CSV logic. That matches the backend's own `summary` ("[fixture: summary wording]"), so it isn't a surprise, but it isn't a working export either. No network-dependent steps, correctly.
+> - scope: clean. One new file, `[fixture: new file path]`, no other paths touched, nothing outside the intended area.
 > - checks-run: run, and it fails. `git apply --check` on the returned diff gives `error: corrupt patch at line 7`, exit 128. To confirm that wasn't my instrument misfiring, I ran the same command against a corrected copy of the same patch: it passed cleanly (exit 0). The patch itself is the problem.
-> - consistency: fails. The hunk header `@@ -0,0 +1,10 @@` declares 10 added lines, but only 2 are present, and the header is missing the `new file mode 100644` line git emits for a new file. That mismatch is what makes it unappliable.
+> - consistency: fails. The hunk header `[fixture: hunk header]` declares 10 added lines, but only 2 are present, and the header is missing the `new file mode 100644` line git emits for a new file. That mismatch is what makes it unappliable.
 >
 > Verdict: not applied — the diff is malformed and won't apply, so there is nothing to call done.
 

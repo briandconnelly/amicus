@@ -29,7 +29,7 @@ Under the stricter reading the conclusion and the checklist item are in the same
 ## What changed, and what did not
 
 The substance of the review improved markedly over the two prior runs.
-This answer catches three distinct defects where the earlier ones caught one: the helper is semantically not retry-with-backoff (checklist item 1, "does it do what the task asked"), `diffstat` claims 10 insertions against a 2-line body (checklist item 4, internal consistency), and the hunk header `@@ -1,10 +1,10 @@` is malformed for a body with no context or removed lines.
+This answer catches three distinct defects where the earlier ones caught one: the helper is semantically not retry-with-backoff (checklist item 1, "does it do what the task asked"), `diffstat` claims 10 insertions against a 2-line body (checklist item 4, internal consistency), and the fixture's hunk header (redacted as prompt input; it is the `@@` line the scenario describes as declaring ten added lines) is malformed for a body with no context or removed lines.
 It also volunteers to run the project's checks before declaring done (checklist item 3).
 
 What did not change is generation order.
