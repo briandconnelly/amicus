@@ -27,7 +27,7 @@ The rules bind; the context after them explains and points elsewhere.
 15. Never add a `pull_request_target` workflow.
 16. Under `docs/`, write Markdown with one sentence per line.
 17. Never edit a sibling checkout (`~/projects/codex-in-claude`, `~/projects/moonbridge`, `~/projects/claude-in-codex`, `~/projects/pontonier`).
-18. Never write a prompt input (`question`, `task`, `extra_context`, `instructions_append`, `focus`) to disk, to a worker's argv or to a log; it travels over the worker's stdin.
+18. Never write a prompt input — every field in `INPUT_FIELDS` (`src/amicus/request.py`): `question`, `task`, `extra_context`, `instructions_append`, `focus`, `target`, `evidence` — to disk, to a worker's argv or to a log; it travels over the worker's stdin.
     This binds amicus's own handling and everything it commits, including host captures and eval prompt bodies, which are recorded as an id and a `sha256` instead.
     A backend's own native carrier is exempt where that backend offers no alternative and the carrier is disclosed in its `CARRIERS` string and surfaced on `amicus_backends`; the two that exist today are Kimi's handshake file, because kimi ignores stdin, and Codex's `-c developer_instructions` argv token.
     Prompt text that a test or capture script assembles entirely from its own literals is exempt, including the `build_*_prompt` output committed in `tests/fixtures/*_differentials.json`; it stays verbatim, because a differential must show what changed and a hash cannot.
@@ -37,8 +37,10 @@ The rules bind; the context after them explains and points elsewhere.
     `uv.lock` mirrors the version rather than declaring it: regenerate it in that same PR with `uv lock`, or the `uv lock --check` hook fails.
     Only the maintainer merges that PR, and only the maintainer pushes the tag.
     Push the matching tag immediately after that merge, before any other work: the interval in which `main` names a tag that does not yet exist cannot be made zero, so closing it is the only task that may follow the merge.
-20. Never push a `v*` tag from a commit whose three live gates — `tests/test_codex_live.py`, `tests/test_kimi_live.py` and `tests/test_claude_live.py`, run under rule 5 — have not all been run and recorded on that exact commit.
+20. Never push a `v*` tag unless the three live gates — `tests/test_codex_live.py`, `tests/test_kimi_live.py` and `tests/test_claude_live.py`, run under rule 5 — have all PASSED on that exact commit, with those passing outcomes recorded.
     The record is `.release-evidence/live-gates.json`, naming that commit, each suite and its outcome; a terminal transcript or a recollection is not a record.
+    A record showing a failed suite does not satisfy this rule; it is a reason not to tag.
+21. Never push a `v*` tag unless a repository ruleset restricts creation, update and deletion of `v*` tags, with no agent identity permitted to bypass it.
 
 ## Context
 
@@ -71,9 +73,8 @@ That window opens at every release and cannot be eliminated, because merging and
 `main` carries exactly that unresolvable pin today, because 0.1.0 has never been tagged, and the first release closes this instance of it.
 Rule 20 is a local pre-tag gate rather than a CI job: hosted runners have no authenticated `codex`, `kimi` or `claude`, so the evidence is recorded on the maintainer's machine against the exact commit to be tagged.
 That evidence is an honest-mistake guard, not an attestation; it is a local file its author can write by hand.
-`v*` tags must be protected by a repository ruleset that restricts creation as well as update and deletion, with no agent identity permitted to bypass it.
-Creation matters as much as the rest: pushing a `v*` tag is by itself what triggers `.github/workflows/publish.yml`, so an identity that can create one can publish a release without rules 19 and 20 ever being satisfied, and a moved tag silently changes what users install under a version they already trust.
-No such ruleset exists yet; creating it is a maintainer prerequisite of the first release, and `docs/RELEASING.md` reads it back rather than assuming it.
+Rule 21 covers creation as well as update and deletion because pushing a `v*` tag is by itself what triggers `.github/workflows/publish.yml`: an identity that can create one can publish a release without rules 19 and 20 ever being satisfied, and a moved tag silently changes what users install under a version they already trust.
+No such ruleset exists yet, so rule 21 currently forbids tagging; creating it is a maintainer prerequisite of the first release, and `docs/RELEASING.md` reads it back rather than assuming it.
 The executable procedure — preconditions, the evidence run, the environment approval pause and the post-tag checks — is `docs/RELEASING.md`.
 
 ### Siblings
