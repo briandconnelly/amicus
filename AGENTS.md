@@ -16,7 +16,7 @@ The rules bind; the context after them explains and points elsewhere.
 4. Never lower the coverage floor (`fail_under` in `pyproject.toml`).
 5. Never run `-m integration` tests unless the maintainer asked for it in the current session; when asked, run them as `AMICUS_REQUIRE_LIVE=1 uv run pytest -m integration --no-cov`.
 6. Never weaken the guard in `tests/conftest.py` that makes the real backend binaries unreachable for unit tests.
-7. Write one implementation plan per milestone and open one draft PR per plan.
+7. Write one implementation plan per milestone and open one draft PR per plan; work that is not a milestone needs no plan, which covers a governance PR under rule 9 and a release PR under rule 19.
 8. Unless you are the maintainer, never merge a PR and never approve your own PR; never commit to `main`.
 9. Never change `.github/**`, `AGENTS.md` or `CLAUDE.md` inside a milestone plan; those change only in a PR of their own.
 10. When a change touches a category in `FINGERPRINT_COVERS` (`src/amicus/schemas/fingerprint.py`), bump `FINGERPRINT` and regenerate the pins under `tests/fixtures/` in their own commit.
@@ -27,7 +27,20 @@ The rules bind; the context after them explains and points elsewhere.
 15. Never add a `pull_request_target` workflow.
 16. Under `docs/`, write Markdown with one sentence per line.
 17. Never edit a sibling checkout (`~/projects/codex-in-claude`, `~/projects/moonbridge`, `~/projects/claude-in-codex`, `~/projects/pontonier`).
-18. Never write a prompt input (`question`, `task`, `extra_context`, `instructions_append`, `focus`) to disk, to a worker's argv or to a log; it travels over the worker's stdin.
+18. Never write a prompt input — every field in `INPUT_FIELDS` (`src/amicus/request.py`): `question`, `task`, `extra_context`, `instructions_append`, `focus`, `target`, `evidence` — to disk, to a worker's argv or to a log; it travels over the worker's stdin.
+    This binds amicus's own handling and everything it commits, including host captures and eval prompt bodies, which are recorded as an id and a `sha256` instead.
+    A backend's own native carrier is exempt where that backend offers no alternative and the carrier is disclosed in its `CARRIERS` string and surfaced on `amicus_backends`; the two that exist today are Kimi's handshake file, because kimi ignores stdin, and Codex's `-c developer_instructions` argv token.
+    Prompt text that a test or capture script assembles entirely from its own literals is exempt, including the `build_*_prompt` output committed in `tests/fixtures/*_differentials.json`; it stays verbatim, because a differential must show what changed and a hash cannot.
+    No exemption reaches text that was copied, derived or replayed from a prompt anyone sent: that stays bound however it is later stored or relabelled.
+19. Release in two PRs: the work lands with the version literals untouched, then a `chore(release):` PR moves them together and rolls `## [Unreleased]` in `CHANGELOG.md` into a dated section.
+    The literals are `pyproject.toml`, `src/amicus/__init__.py`, `.claude-plugin/plugin.json`, `.codex-plugin/plugin.json` and the `.mcp.json` tag pin.
+    `uv.lock` mirrors the version rather than declaring it: regenerate it in that same PR with `uv lock`, or the `uv lock --check` hook fails.
+    Only the maintainer merges that PR, and only the maintainer pushes the tag.
+    Push the matching tag immediately after that merge, before any other work: the interval in which `main` names a tag that does not yet exist cannot be made zero, so closing it is the only task that may follow the merge.
+20. Never push a `v*` tag unless the three live gates — `tests/test_codex_live.py`, `tests/test_kimi_live.py` and `tests/test_claude_live.py`, run under rule 5 — have all PASSED on that exact commit, with those passing outcomes recorded.
+    The record is `.release-evidence/live-gates.json`, naming that commit, each suite and its outcome; a terminal transcript or a recollection is not a record.
+    A record showing a failed suite does not satisfy this rule; it is a reason not to tag.
+21. Never push a `v*` tag unless a repository ruleset restricts creation, update and deletion of `v*` tags, with no agent identity permitted to bypass it.
 
 ## Context
 
@@ -51,6 +64,18 @@ The execution model, `docs/superpowers/plans/2026-09-04-amicus-execution-model.m
 Each milestone is planned as `docs/superpowers/plans/YYYY-MM-DD-amicus-M<n>-<slug>.md` and executed task by task in a sibling worktree (`~/projects/amicus-wt-<slug>`) on a `feat/` branch.
 Decisions with lasting consequences are ADRs under `docs/adr/`.
 The README's "Where things are" table indexes the rest.
+
+### Releases
+
+Rules 19 and 20 exist because `.mcp.json` pins `git+https://github.com/briandconnelly/amicus.git@v{version}`.
+Until the matching tag exists, a plugin install from `main` fails on an unresolvable ref.
+That window opens at every release and cannot be eliminated, because merging and tagging are separate operations; rule 19's last clause keeps it to the seconds between them rather than removing it.
+`main` carries exactly that unresolvable pin today, because 0.1.0 has never been tagged, and the first release closes this instance of it.
+Rule 20 is a local pre-tag gate rather than a CI job: hosted runners have no authenticated `codex`, `kimi` or `claude`, so the evidence is recorded on the maintainer's machine against the exact commit to be tagged.
+That evidence is an honest-mistake guard, not an attestation; it is a local file its author can write by hand.
+Rule 21 covers creation as well as update and deletion because pushing a `v*` tag is by itself what triggers `.github/workflows/publish.yml`: an identity that can create one can publish a release without rules 19 and 20 ever being satisfied, and a moved tag silently changes what users install under a version they already trust.
+No such ruleset exists yet, so rule 21 currently forbids tagging; creating it is a maintainer prerequisite of the first release, and `docs/RELEASING.md` reads it back rather than assuming it.
+The executable procedure — preconditions, the evidence run, the environment approval pause and the post-tag checks — is `docs/RELEASING.md`.
 
 ### Siblings
 
