@@ -33,7 +33,9 @@ Under review-workflow Step 1 that is the Minor band's condition met on a catalog
 - **Severity:** Major
 - **Section:** `§2` (`[2.summary]`, `[2.client-variance]`), `§3` (`[3.descriptions]`)
 - **Summary:** With the maintainer's real MCP fleet loaded, a cold-start Codex run called a sibling second-opinion server's status and consult tools and never reached amicus at all; nothing on amicus's own surface says it supersedes those siblings.
-- **Evidence:** `docs/host-captures/install-smoke/codex/0.153.4/notes.md`, "How the host was driven" and "Findings": the `-c mcp_servers.amicus.*` overrides ADD amicus alongside every already-configured server, "and the host reached for a different second-opinion MCP server before it ever looked at amicus." The probe only became gradable after a scoped `CODEX_HOME` removed every rival. `CAPABILITY_SUMMARY` (`src/amicus/server.py:48`) and every tool description name what amicus does but never name `codex-in-claude`, `moonbridge` or `claude-in-codex`, so an agent seeing two servers offering the same job has no surface signal to prefer one.
+- **Evidence:** `docs/host-captures/install-smoke/codex/0.153.4/notes.md`, "How the host was driven" and "Findings": the `-c mcp_servers.amicus.*` overrides ADD amicus alongside every already-configured server, "and the host reached for a different second-opinion MCP server before it ever looked at amicus."
+  The probe only became gradable after a scoped `CODEX_HOME` removed every rival.
+  `CAPABILITY_SUMMARY` (`src/amicus/server.py:48`) and every tool description name what amicus does but never name `codex-in-claude`, `moonbridge` or `claude-in-codex`, so an agent seeing two servers offering the same job has no surface signal to prefer one.
 - **Remediation:** Applied: `docs/MIGRATION.md` gains a "Remove the sibling servers when you switch" behavior delta that names the captured event, tells a migrating user to delete each sibling's entry from the host's MCP configuration in the same change that registers amicus, and names `amicus_backends` as the tool that answers for amicus (a sibling's `*_status` answers only for that sibling).
   Deferred and recorded in ADR 0012: adding the superseded server names to `CAPABILITY_SUMMARY` would put the signal on the surface itself, at the cost of another fingerprint bump; it is an M7 candidate, not applied here.
 
@@ -58,6 +60,13 @@ Under review-workflow Step 1 that is the Minor band's condition met on a catalog
   The other three S6 assertions passed in both runs, so the model's substance was right and only its ordering was wrong.
 - **Remediation:** Applied: `skills/collaborating-with-amicus/references/reviewing-a-returned-diff.md` now opens "What to check before applying" with an ordering directive — state the checks first and the verdict after — and SKILL.md rule 4 carries the same obligation ("Name at least one item you checked before you say whether the diff was applied").
   The recorded `fail` stands.
+  **The remedy was then tested once, free, and did not work.**
+  A third S6 run against the corrected skill text failed on the same single assertion, graded mechanically under both readings of the response (`docs/host-captures/s6-rerun/claude-code/2.1.263/`).
+  The review's substance improved — that run catches three distinct defects where the earlier runs caught one — but generation order did not move.
+  Three runs, three failures, same structural reason.
+  This finding is therefore NOT closed.
+  A directive constraining the order of generated text is a weaker instrument than the rule beside it, and the stronger remedy is to change the shape of the required output rather than its order: open with a checklist block naming each item and its outcome, so the verdict has somewhere to come after.
+  That is a skill redesign and is carried to M7.
 
 #### Finding 4 — `RESULT_FORMAT` is not readable from the capability summary
 
@@ -66,7 +75,8 @@ Under review-workflow Step 1 that is the Minor band's condition met on a catalog
 - **Summary:** `job_result_incompatible` is in the published error catalog, but the format number that error is about appeared on no agent-visible surface, so an agent that hit it could not learn which format this release reads.
 - **Evidence:** `src/amicus/schemas/results.py` `CapabilitiesResult` carried `fingerprint`, `fingerprint_covers`, `protocol_revision` and `surface_digest` but no `result_format`, while `RESULT_FORMAT` is stamped into every stored job record (`src/amicus/jobs/lifecycle.py:87`) and gates delivery (`src/amicus/jobs/delivery.py:112`).
   Confirmed live from both hosts: "One honesty note: the capability summary has no top-level `result_format` key, so `RESULT_FORMAT` is not readable from `amicus_capabilities` alone" (`docs/host-captures/install-smoke/claude-code/2.1.263/transcript.md`, Cross-version probe).
-- **Remediation:** Applied, and it is the walk's one surface-moving fix: `CapabilitiesResult` gains `result_format: int = RESULT_FORMAT` with a description naming `amicus_job_result` and `job_result_incompatible`, and `amicus_capabilities`'s own description and `use_when` name it. `FINGERPRINT` moved `amicus/0.1/schema-6` → `amicus/0.1/schema-7` with every pin regenerated in a dedicated commit (repo rule 10); `RESULT_FORMAT` stays `2` because no stored result changed shape (rule 11 does not fire).
+- **Remediation:** Applied, and it is the walk's one surface-moving fix: `CapabilitiesResult` gains `result_format: int = RESULT_FORMAT` with a description naming `amicus_job_result` and `job_result_incompatible`, and `amicus_capabilities`'s own description and `use_when` name it.
+  `FINGERPRINT` moved `amicus/0.1/schema-6` → `amicus/0.1/schema-7` with every pin regenerated in a dedicated commit (repo rule 10); `RESULT_FORMAT` stays `2` because no stored result changed shape (rule 11 does not fire).
 
 #### Finding 5 — the discovery-cost ratchet claims a preloading client as universal
 
@@ -287,7 +297,8 @@ One Major finding (F1) was raised, and its remediation is documentation rather t
 
 The residual risks this walk leaves standing:
 
-- **No standing cold-start regression gate.** M6 captured cold-start and first-repair evidence; it pinned no baseline that a future change is measured against. `design-workflow.md` Step 9 describes such a gate and it is not built.
+- **No standing cold-start regression gate.** M6 captured cold-start and first-repair evidence; it pinned no baseline that a future change is measured against.
+  `design-workflow.md` Step 9 describes such a gate and it is not built.
   A later change could regress first-call success and nothing in CI would notice.
 - **The discovery-cost ratchet is not coverage of first-call success.** It bounds the token cost of discovery, which is a different measure.
   F5's fix scopes the claim; it does not add the missing measure.
@@ -295,8 +306,10 @@ The residual risks this walk leaves standing:
 - **No live redaction trace.** S8 verified that the *model* redacted before sending; no captured run traced a server-side redaction of gathered diff or returned output end to end.
 - **Advertised-vs-actual is per host, not per tool.** The captures give one success and one forced error per host; the per-tool obligation rests on the in-repo golden and differential suites.
 - **The committed `.mcp.json` names a git tag that does not exist yet.** Every capture substituted a locally built wheel for that one argument, so tag resolvability is unproven by M6 and belongs to the publish workflow's gate.
-- **F2 and F3 are fixed as skill text, not as verified behavior.** S6 and S7 remain recorded failures.
-  The remedy is text a future run would pass on; no run has yet been made against the fixed text, and the paid budget that S7 needs is exhausted.
+- **F3's remedy is known to be insufficient; F2's is untested.** S6 and S7 remain recorded failures.
+  S6 was re-run once, free, against the corrected skill text and failed again on the same assertion, so F3 is an open defect with a known-inadequate fix rather than a closed one (`docs/host-captures/s6-rerun/claude-code/2.1.263/`).
+  F2's remedy has not been tested at all: S7 needs a real host and a real approval gate, and the paid budget is exhausted.
+  Given that the one remedy of this class that COULD be tested failed, F2's should be treated as unproven rather than probable.
 - **F1's stronger remediation is deferred.** Naming the superseded servers in `CAPABILITY_SUMMARY` would put the signal on the surface; it costs another fingerprint bump and is recorded in ADR 0012 as an M7 candidate.
 
 ## Remediation summary
@@ -305,7 +318,8 @@ The findings cluster in two places, and neither is the server's wire contract.
 
 Four of the nine (F2, F3, F6, F7) are defects in the router skill's text — the surface that tells an agent what a result obligates it to do.
 That is where both graded failures came from, and both were failures of *explanation and ordering*, never of tool choice: every call-shape assertion across S1, S3, S4, S5 and S7 passed.
-Invest there first.
+Invest there first — and invest in a stronger instrument than wording.
+The one remedy of this class that could be tested free was tested and failed, which says the problem is not that the rules were unsaid but that a rule about generated order is not the kind of rule this class of behavior obeys.
 
 Three more (F5, F8, F9) are honesty defects in instruments rather than in the product: a ratchet that over-claimed what it measures, a parser that could not fail on a case it was written for, and evidence that was correct but not countable.
 The remaining two are the surface itself: F4, fixed and fingerprinted, and F1, which documentation can reduce but not close.
@@ -316,7 +330,7 @@ The remaining two are the surface itself: F4, fixed and fingerprinted, and F1, w
 | --- | --- | --- |
 | F1 | `docs/MIGRATION.md`: sibling-removal behavior delta | no |
 | F2 | `SKILL.md`: new rule 5, the annotation-attribution directive | no |
-| F3 | `reviewing-a-returned-diff.md` ordering directive; `SKILL.md` rule 4 | no |
+| F3 | `reviewing-a-returned-diff.md` ordering directive; `SKILL.md` rule 4 — **re-tested and still failing; open** | no |
 | F4 | `CapabilitiesResult.result_format`; `amicus_capabilities` description and `use_when` | **yes — schema-6 → schema-7** |
 | F5 | `tests/test_discovery_cost.py` docstring scoping | no |
 | F6 | `SKILL.md` frontmatter `description` | no |

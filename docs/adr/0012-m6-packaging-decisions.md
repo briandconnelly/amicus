@@ -65,6 +65,11 @@ These are stated rather than hidden, and carried to M7.
 - **An un-migrated host may still prefer a sibling server.**
   The walk's one Major finding is that a cold start with the maintainer's real MCP fleet loaded reached a rival second-opinion server and never called amicus.
   `docs/MIGRATION.md` now tells a migrating user to remove the siblings; naming the superseded servers inside `CAPABILITY_SUMMARY` would put the signal on the surface itself and is deferred to M7, because it costs another fingerprint bump.
+- **The review walk's F3 remedy is known insufficient, and F2's is unproven.**
+  S6 was re-run once after the fix wave, free, against the corrected skill text, and failed again on the same ordering assertion (`docs/host-captures/s6-rerun/claude-code/2.1.263/`).
+  Three runs, three failures.
+  An ordering directive does not change generation order; the stronger remedy changes the shape of the required output and is a skill redesign carried to M7.
+  S7's remedy (the new SKILL.md rule 5) could not be tested at all, because it needs a real host approval gate and the paid budget is gone — and since the comparable remedy that could be tested failed, it should be treated as unproven rather than probable.
 - **The paid budget is exhausted.**
   Six calls were spent, all on cold start, three per host.
   No later probe in this milestone could re-run a paid path, which is why the long-running-operation probe and a live redaction trace are both recorded as skipped.
