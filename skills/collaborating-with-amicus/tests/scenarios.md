@@ -78,7 +78,7 @@ removed, so each pins what the already-logged runs actually used.
 | `S4-P1` | S4 | `32761165e8d944275c1c658a6fb06d3ef9e7d0e91abb340c5191cadcb0f596b7` |
 | `S5-P1` | S5, both modes | `3f2def459ea9e8f2b120e29d170d44ce82bc53daa26bfcfaf6149ed3213deee4` |
 | `S6-P1` | S6, all runs (the user prompt) | `e59366b667d64c1515900ed5841ea384a6564bac8dfb9a79672ededd0e6cd47b` |
-| `S6-F1` | S6, all runs (the prompt-supplied `amicus_delegate` result) | `7967a16cd8137b71307af64905e88a5772ee5805ab5829b70b38c3da0e137a49` |
+| `S6-F1` | S6's fifth run only (the committed rendering of the prompt-supplied `amicus_delegate` result, used verbatim) | `7967a16cd8137b71307af64905e88a5772ee5805ab5829b70b38c3da0e137a49` |
 | `S7-P1` | S7, Claude Code run | `c02a66924ca8a20586830774d79b2d3f9c64fcee8d7cf167ad0ece68398770c5` |
 | `S7-P2` | S7, Codex CLI run (the disclosed variant) | `f5d0c540da7c1b83d126a6c962b42bf6743b64461a557490cf4e8c89f70b8c63` |
 | `S8-P1` | S8 | `ff1d59fc222933d098eb2de8afe6dd9626b4e385f0b7e6562ab16eaab9237fb3` |
@@ -86,9 +86,15 @@ removed, so each pins what the already-logged runs actually used.
 | `S8-SEC2` | the client-secret-shaped placeholder inside `S8-P1` | `b86d4a3bdf8694a2be559bba7c691012fbcb3666d4a968b2ba18722df301bdf2` |
 
 `S6-F1` is hashed from the abbreviated rendering that was committed, which elides part of the diff
-header with an ellipsis; it is not claimed to be the byte-exact fixture run 4 was given, whose bytes
-were never committed. `S8-SEC1` and `S8-SEC2` are hashes of the two placeholder substrings alone, so
-a grader can confirm it is checking for the right two strings without either being written here.
+header with an ellipsis. Only S6's fifth run is disclosed as having used that committed rendering
+verbatim (`docs/host-captures/s6-old-text-new-grader/claude-code/2.1.263/transcript.md:61`). It is
+not claimed to be the byte-exact fixture any of the first four runs were given: run 4's disclosed
+transcript quotes a differently-formed hunk header than the committed rendering's, run 3's disclosed
+transcript quotes a differently-themed diff entirely, and runs 1 and 2 were never quoted verbatim
+anywhere. None of those four runs' fixture bytes were committed to this repository, and none can be
+reconstructed from it; the `S6-F1` id and hash pin what run 5 was given, not what runs 1 through 4
+were given. `S8-SEC1` and `S8-SEC2` are hashes of the two placeholder substrings alone, so a grader
+can confirm it is checking for the right two strings without either being written here.
 
 ### Grading scope
 
