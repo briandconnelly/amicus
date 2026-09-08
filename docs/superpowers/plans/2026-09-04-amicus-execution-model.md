@@ -32,4 +32,11 @@ an agent executes that plan with `superpowers:subagent-driven-development` or
 **Definition of done for a milestone:** the gate is green in CI on the draft PR, the
 perturbation check is recorded, and the human has merged.
 
+**A plan is deleted once it has been executed and merged.** Git history keeps every
+line. A finished plan left in the tree reads as live instructions: in M7 a reviewer
+found the plan still teaching a release sequence that had been superseded within the
+same PR, which an agent reading it top-down would have followed. The durable record of
+what was decided is the ADRs under `docs/adr/`; the durable record of what was built is
+the code and the git log.
+
 ---
