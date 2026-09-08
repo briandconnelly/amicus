@@ -181,7 +181,10 @@ Run: `uv run python -c "
 import yaml, pathlib
 doc = yaml.safe_load(pathlib.Path('.github/workflows/publish.yml').read_text())
 assert set(doc['jobs']) == {'build', 'testpypi', 'pypi'}
-assert doc['jobs']['pypi']['if'].startswith('startsWith(github.ref')
+cond = doc['jobs']['pypi']['if']
+assert 'event_name' in cond and 'push' in cond, cond
+assert 'refs/tags/v' in cond, cond
+assert '&&' in cond and '|' not in cond, cond
 assert doc['jobs']['testpypi']['permissions']['id-token'] == 'write'
 steps = doc['jobs']['pypi']['steps']
 gate = next(i for i, st in enumerate(steps) if 'GITHUB_REF_NAME' in (st.get('run') or ''))
@@ -190,6 +193,10 @@ assert gate < publish, 'the tag/version gate must run before the publish step'
 print('ok')
 "`
 Expected: `ok`.
+
+This snippet is now a convenience only.
+The two assertions that matter live in `tests/test_check_github_actions_pinning.py`, where they run on every gate rather than only when somebody reads this file.
+The version of this step originally written here asserted `if` merely *started with* `startsWith(github.ref`, which went stale the moment review corrected the condition, and which nothing would have caught because no test executed it.
 
 Then confirm the assertion can fail, or it is not evidence: delete the gate step from a scratch copy of the workflow, run the same snippet against that copy, and confirm it raises `StopIteration` rather than printing `ok`.
 Discard the scratch copy.
@@ -230,6 +237,24 @@ If it is listed before merge, this whole step is wrong and the plan should be co
 
 Do **not** work around the constraint by adding a `push:` branch trigger to `publish.yml` for testing.
 A publish workflow with `id-token: write` that fires on a branch push is a materially wider trigger surface than the one this plan reviewed, and removing it afterwards leaves the reviewed file different from the tested one.
+
+- [ ] **Step 0.5: Configure the environments first (maintainer-only, and not optional)**
+
+The workflow names `environment: testpypi` and `environment: pypi`, and this plan originally said nothing about creating them.
+That omission is not benign.
+GitHub does not fail a run that references a missing environment: it creates one, and per its documentation "the newly created environment will not have any protection rules or secrets configured".
+So a `v*` tag pushed before `pypi` exists auto-creates it unprotected and publishes with no human approval, while the `environment: pypi` line still *reads* like a gate.
+
+Required before any tag is ever pushed:
+
+- `pypi`: required reviewers, plus a deployment **tag** rule limited to `v*`.
+  The rule must be a tag rule, not a branch rule, because the job is triggered by a tag and a branch-only rule blocks every release.
+  It is deliberately redundant with the job's `if:` condition, so that a settings-level guard survives that condition being loosened later.
+- `testpypi`: a deployment branch rule limited to `main`, and no reviewer, since it can only ever reach TestPyPI.
+
+Also register the trusted publishers, which are per-index and entirely separate: `amicus` / `briandconnelly` / `amicus` / `publish.yml`, with environment `testpypi` on test.pypi.org and `pypi` on pypi.org.
+Read the result back with `gh api repos/briandconnelly/amicus/environments/<env>` rather than trusting the settings page.
+Adding a reviewer and saving the protection rule are two separate clicks, and the half-done state looks configured.
 
 - [ ] **Step 1: Ask before dispatching**
 
@@ -296,7 +321,8 @@ This is a docs change and must not share a PR with the workflow (rule 9, and Glo
 
 - [ ] **Step 2: Add the README row and commit**
 
-Add a "Release automation" row to "Where things are" pointing at this plan.
+The README already carries a publish-workflow row, so this is an edit rather than an addition; adding a second row would duplicate it.
+Update that row to name the release automation and to drop the stale "executed after M6 merges" wording, and update "Resuming the work" to say `main` carries the publish workflow.
 
 ```bash
 git add README.md
@@ -331,3 +357,40 @@ A green TestPyPI run reduces release risk; it does not eliminate it.
 The `pypi` job is therefore unexercised until M7 tags a release, and this plan says so rather than implying the path is proven.
 Its tag/version gate is unexercised for the same reason: Step 6's parse assertion proves the step is present and ordered before the publish step, not that it rejects a mismatched tag in a real run.
 Exercising it needs a throwaway tag on a fork or a `pypi` job made dispatchable, and neither is in this plan's scope.
+
+---
+
+## Outcome (2026-09-08)
+
+All three tasks are done.
+The record below is the plan's own, because the branch and worktree were removed at cleanup.
+
+**Task 1** merged as `2170a3a` (PR #8), two commits, touching only `.github/workflows/publish.yml`.
+
+Two things in this plan's Task 1 template were wrong, and both were caught outside its own verification list:
+
+- The `--help` step could not have worked.
+  `amicus-mcp` has no help flag: it ignores the argument, starts the stdio server and exits 0 at EOF, so the step would have passed on any binary that exits 0.
+  The plan anticipated this and named the fallback, which is what was built — one JSON-RPC `initialize` over stdin, asserting `serverInfo.name` and that `serverInfo.version` equals the built wheel's version.
+- The checkout was missing `persist-credentials: false`, which this repository requires.
+  Steps 3 to 6 all passed while that test was failing; the rule-2 gate is what caught it.
+
+Review then found a third, more serious defect that this plan's Step 6 assertion had actually blessed.
+The `pypi` job was gated on `startsWith(github.ref, 'refs/tags/v')` alone.
+A workflow can be dispatched against any branch or tag and `github.ref` is then the dispatched ref, so `gh workflow run publish.yml --ref v0.1.0` would have run the production job during a dry run and published to real PyPI, which is immutable.
+Fixed in `cb69700`, and now pinned by a test rather than by prose.
+
+**Task 2** passed on the second dispatch; `amicus 0.1.0` is published on TestPyPI.
+
+The first dispatch failed at the OIDC token exchange with `invalid-publisher`, before any upload, because only the pypi.org publisher had been registered and not the test.pypi.org one.
+Nothing was uploaded by that attempt, so it claimed no namespace.
+The claims in its log were all correct, which is what isolated the fault to the registration rather than the workflow.
+
+Verified beyond the green check, as Step 3 requires: `amicus==0.1.0` installed from TestPyPI with `--index-strategy first-index`, `amicus.__version__` asserted equal to the version in `pyproject.toml`, and the installed console script answered a real `initialize`.
+Provenance was settled more strongly than Step 3 asked, because `pypi.org/pypi/amicus/json` returns 404 while `test.pypi.org/pypi/amicus/json` returns 200, so the install could only have come from TestPyPI.
+The negative control ran too: `amicus==0.0.0` fails to resolve.
+
+**What remains unproven, and should not be overclaimed.**
+The `pypi` job and its tag/version gate are still unexercised.
+The dry run skipped that job, but only because the dispatch ref was a branch, so the superseded one-clause condition would have skipped it too; that run is not evidence for the fix.
+Exercising it needs a real `v*` tag, which is M7's business.
