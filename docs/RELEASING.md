@@ -50,6 +50,14 @@ This is configured on PyPI's own project settings page and has no read-only API 
 Trademark clearance for the name `amicus` is resolved, or the maintainer has decided to proceed without it.
 TestPyPI already has the name claimed under this project; pypi.org does not yet have a release.
 
+### The README describes the released tool
+
+`README.md` reads as a user-facing document: what amicus does, how to install it, and a high-level overview of how to use it.
+The maintainer requires this before any release, so it is a precondition rather than a nicety.
+Check two things by reading the file.
+First, its install section must not still carry the pre-release note saying amicus is unpublished and that the instructions work from the first tagged release onward — once you are releasing, that sentence is false and must be removed in the release PR.
+Second, its "Status and known limits" section must not claim anything the release contradicts, in particular the line stating amicus has never been published to PyPI.
+
 ## The release sequence
 
 Rules 19 and 20 together shape this sequence, and a future maintainer should not "simplify" it back.
