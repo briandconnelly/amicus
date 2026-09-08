@@ -1,0 +1,5 @@
+2026-09-08 14:17:30,482 INFO amicus: amicus 0.1.0 starting (stdio)
+2026-09-08 14:17:45,988 DEBUG amicus.middleware: tools/call amicus_backends: protocol=2025-11-25 client=claude-code/2.1.265 tasks_negotiated=False
+2026-09-08 14:18:05,864 DEBUG amicus.middleware: tools/call amicus_delegate: protocol=2025-11-25 client=claude-code/2.1.265 tasks_negotiated=False
+2026-09-08 14:18:30,187 INFO amicus: amicus 0.1.0: received SIGINT, shutting down
+2026-09-08 14:18:30,188 INFO amicus: amicus 0.1.0: received SIGTERM, shutting down

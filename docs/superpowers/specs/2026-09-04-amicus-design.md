@@ -306,8 +306,8 @@ fixtures in `skills/collaborating-with-amicus/tests/`.
 | M3 | Kimi with adapter fixes, `WorktreeSite` all tiers, orphan sweep, pre-spend effort validation | hot-path differential vs moonbridge incl. sanitize-before-truncate; `check_backend` positive and perturbed; `integration_kimi` |
 | M4 | Claude: outcome inspector, options, `amicus_adversarial_review(_async)`, repair overrides, framing hook | hot-path differential incl. zero-exit `is_error`; upstream golden envelope; feature gating; `integration_claude` non-skipping |
 | M5 | `task=True` on the four paid sync tools behind `AMICUS_TASKS`; capability-summary wording; host captures | in-memory task-client tests; both host captures |
-| M6 | Packaging, docs, eval fixtures, migration doc, annotation-friction capture | install smoke from both manifests; FakePlugin as a wheel; agent-friendly-mcp review walk |
-| M7 | Release + deprecate siblings | all three live gates green and enforced; sibling differentials green; release lockstep CI |
+| M6 | Packaging, docs, eval fixtures, migration doc, annotation-friction capture | install smoke for the shipped command line on both hosts, Codex's own plugin loader unexercised (`docs/host-captures/install-smoke/codex/`); FakePlugin loads as a wheel via the entry point, but `config._profile` and the closed `BackendParam` mean it can be neither enabled nor called (ADR 0012); agent-friendly-mcp review walk |
+| M7 | Release + deprecate siblings | AGENTS.md rules 20-21 (local pre-tag live-gate evidence, tag-protecting ruleset) and `docs/RELEASING.md`'s release procedure, since hosted CI has no authenticated backends to enforce a live gate itself; sibling differentials green; release lockstep CI |
 
 ## Verification (all milestones)
 

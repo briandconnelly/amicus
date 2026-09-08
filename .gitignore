@@ -28,3 +28,6 @@ htmlcov/
 
 # OS
 .DS_Store
+
+# Release evidence (local, per-maintainer; never committed)
+.release-evidence/

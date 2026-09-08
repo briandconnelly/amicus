@@ -98,6 +98,7 @@ It does not show a third-party backend can be used, and two in-tree gates say it
 A third-party wheel therefore loads and then stops.
 **Carried to M7:** deciding whether the enable path and the `backend` parameter should admit ids outside `BACKEND_IDS` at all.
 That is a surface change — it would widen a closed enum on every paid tool and move the fingerprint — so it is a design decision for M7, not a review-response fix, and nothing in M6 depends on it.
+**Update, 2026-09-08:** M7 completed without taking that decision, so it is no longer carried by a milestone; it is tracked as issue #16.
 Until then, read `tests/test_wheel_seam.py` as "the seam is wired and validated", never as "a third-party backend works end to end".
 - **The standing cold-start regression gate is NOT built.**
   `design-workflow.md` Step 9 describes a gate that measures cold-start behavior on every change.
