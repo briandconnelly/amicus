@@ -1,7 +1,10 @@
 # Codex CLI 0.153.4 — amicus M6 install smoke
 
 Captured 2026-09-07 on the maintainer's machine.
-The install came from `.codex-plugin/`, whose `plugin.json` names `./.mcp.json` as its `mcpServers` source, the same file the Claude manifest points at.
+What was smoke-tested is the server command line this repository ships: the `mcpServers` entry in `./.mcp.json`, which `.codex-plugin/plugin.json` names as its source and which the Claude manifest points at too.
+Codex CLI's plugin loader was NOT exercised.
+`plugin.json` was never read by the host in this capture: the run declared the amicus server directly in a scoped `CODEX_HOME/config.toml` (see "How the host was driven"), transcribing the same `command` and `args`.
+So this capture proves the shipped command line boots and serves under Codex CLI 0.153.4; it does not prove `.codex-plugin/plugin.json` installs.
 
 ## The `--from` override
 
