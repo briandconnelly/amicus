@@ -52,10 +52,12 @@ TestPyPI already has the name claimed under this project; pypi.org does not yet 
 
 ## The release sequence
 
-Rules 19 and 20 together force an unusual shape on this sequence, and a future maintainer should not "simplify" it back.
+Rules 19 and 20 together shape this sequence, and a future maintainer should not "simplify" it back.
 Rule 20 requires the live-gate evidence to cover the exact commit being tagged.
 Rule 19 requires the tag push to be the only work that follows the PR C merge, because the interval in which `main` names a tag that does not yet exist cannot be made zero, only closed as fast as possible.
-Those two rules together mean the evidence must be gathered on a commit whose SHA survives the merge unchanged — so the evidence run, the freshness check, and the gate all happen on the PR C branch tip, before the merge, not after it.
+The tag does not have to point at `main`'s head; it has to point at the commit the evidence covers.
+An ordinary merge commit keeps the PR C branch tip in `main`'s history as one of the merge commit's two parents, so tagging that branch tip is legitimate, and it is exactly the commit the evidence names — no fast-forward or branch-protection change is required to satisfy both rules.
+The tag therefore deliberately points at a commit that is in `main`'s history but is not `main`'s head, and the checks in step 5 below prove the two commits' trees are identical.
 
 1. Merge PR B (the milestone work, version literals untouched).
 2. Open PR C, the `chore(release):` PR described by AGENTS.md rule 19, and do not merge it yet.
@@ -64,20 +66,23 @@ Those two rules together mean the evidence must be gathered on a commit whose SH
    For 0.1.0 no literal moves: `pyproject.toml`, `src/amicus/__init__.py`, both `plugin.json` files, and `.mcp.json`'s `@v0.1.0` pin already agree, and the tag is what makes that pin resolve.
    Regenerate `uv.lock` with `uv lock` in this same PR, per AGENTS.md rule 19 — `uv.lock` mirrors the version rather than declaring it, and `prek.toml`'s `uv-lock-check` hook runs `uv lock --check` whenever `pyproject.toml` changes, so a release PR that skips this fails its own hook.
 3. Check out the PR C branch tip (not `main`) into a clean tree and confirm `git status --porcelain` is empty.
-   Record the branch tip's SHA; it is the commit that gets tagged.
+   Record the branch tip's SHA; call it the release commit, and note it well — it is the commit that gets tagged, and it will not be `main`'s head after the next step.
    Run `uv run python scripts/record_live_gate_evidence.py`.
    The script itself forces `AMICUS_REQUIRE_LIVE=1` into each backend's subprocess environment, so prefixing the command with it is optional; its own usage string documents `AMICUS_REQUIRE_LIVE=1 uv run python scripts/record_live_gate_evidence.py`, and either form runs the same live gates.
    This spends real quota on all three backends and requires the maintainer's authorization in the session where it runs.
    Run `AMICUS_RELEASE_CHECK=1 uv run pytest tests/test_release_evidence.py -v --no-cov` and confirm the freshness assertion passes.
    Run the gate defined by AGENTS.md rule 2.
-4. Merge PR C so that `main` fast-forwards to that exact branch tip SHA, not so that a new commit is created.
-   None of GitHub's three merge-button strategies do this: a merge commit, a squash commit, and a rebase commit are each a new commit with a new SHA, even when the diff is identical, so `gh pr merge --merge`, `--squash`, and `--rebase` are all disqualified here.
-   Fast-forward `main` locally instead — `git checkout main && git merge --ff-only <pr-branch> && git push origin main` — and confirm `git rev-parse main` equals the SHA recorded in step 3.
-   This requires push access to `main` sufficient to fast-forward it directly; if branch protection on this repository forces every change through the PR-merge API, no strategy offered by that API preserves the SHA, and this step is blocked until that is resolved — do not substitute a squash or rebase merge to route around it, because that silently invalidates the evidence gathered in step 3.
-5. Re-run only `AMICUS_RELEASE_CHECK=1 uv run pytest tests/test_release_evidence.py -v --no-cov`, now against merged `main`.
-   This is free — it spends no backend quota — and it proves the evidence gathered in step 3 still names the commit that is about to be tagged.
-6. Tag the merged commit and push the tag.
+4. Merge PR C with an ordinary merge commit: `gh pr merge --merge`.
+   This is the strategy this repository already uses for its PRs, including #7 through #10.
+   Squash and rebase are forbidden here, not merely discouraged: both create a new commit and drop the release commit from `main`'s history entirely, which would destroy the subject the evidence names, leaving no commit in `main`'s history for the tag to legitimately point at.
+5. Confirm the release commit is now an ancestor of `main` and that nothing else merged in between: `git merge-base --is-ancestor <release-sha> origin/main` must succeed, `git rev-parse origin/main^2` must equal the release commit, and `git diff --stat <release-sha> origin/main` must be empty.
+   The last check is what proves the tree the tag will point at and the tree `main` now holds are identical.
+6. Push the tag pointing at the release commit, not at `main`'s head: `git tag vX.Y.Z <release-sha>`, then push it.
    Nothing else happens between step 4 and step 6.
+
+A maintainer who instead wants the tag to be `main`'s own head has a permitted alternative: a direct fast-forward push of the PR C branch to `main` (`git checkout main && git merge --ff-only <pr-branch> && git push origin main`) achieves that, if this repository's branch protection allows a direct push to `main`.
+This runbook cannot say whether it does: `gh api repos/briandconnelly/amicus/branches/main/protection` returned `403 Resource not accessible by integration` to the token available while writing it, so that setting is unverified here, and this document does not assert it either way.
+Treat the ordinary-merge-commit path above as the default; use the fast-forward alternative only if a maintainer confirms it is actually available.
 
 ## What happens next
 
