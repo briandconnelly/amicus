@@ -75,8 +75,14 @@ The tag therefore deliberately points at a commit that is in `main`'s history bu
 4. Merge PR C with an ordinary merge commit: `gh pr merge --merge`.
    This is the strategy this repository already uses for its PRs, including #7 through #10.
    Squash and rebase are forbidden here, not merely discouraged: both create a new commit and drop the release commit from `main`'s history entirely, which would destroy the subject the evidence names, leaving no commit in `main`'s history for the tag to legitimately point at.
-5. Confirm the release commit is now an ancestor of `main` and that nothing else merged in between: `git merge-base --is-ancestor <release-sha> origin/main` must succeed, `git rev-parse origin/main^2` must equal the release commit, and `git diff --stat <release-sha> origin/main` must be empty.
-   The last check is what proves the tree the tag will point at and the tree `main` now holds are identical.
+5. Run `git fetch origin` first.
+   `gh pr merge --merge` updates GitHub, not the local `origin/main` remote-tracking ref, so any check below run against a stale local ref can pass while meaning nothing — a check run against a stale ref is worse than no check, because it looks like evidence.
+   Run `git merge-base --is-ancestor <release-sha> origin/main && echo ok`.
+   `git merge-base --is-ancestor` prints nothing itself and exits non-zero on failure, so the `&& echo ok` is what makes success visible: `ok` printed means the release commit is in `main`'s history, and any non-zero exit (no `ok`) means it is not, and the release must stop.
+   Run `git rev-parse origin/main^2`.
+   It must print the release commit's SHA; if the command fails instead, `main`'s head is not a merge commit at all, meaning the merge was squashed or rebased despite the prohibition in step 4, and the release must stop.
+   Run `git diff --stat <release-sha> origin/main`.
+   It must print nothing, which is what proves the tree the tag will point at and the tree `main` now holds are identical; any output means something else merged in between, and the release must stop.
 6. Push the tag pointing at the release commit, not at `main`'s head: `git tag vX.Y.Z <release-sha>`, then push it.
    Nothing else happens between step 4 and step 6.
 
