@@ -21,16 +21,21 @@ result obligates you to do next.
 3. **Never call a paid tool to find out whether a backend is available.** `amicus_backends`,
    `amicus_dry_run`, and `amicus_delegate_dry_run` answer that for free.
 4. **Review a returned diff against
-   [reviewing-a-returned-diff.md](references/reviewing-a-returned-diff.md) before you apply it.**
-   Name at least one item you checked before you say whether the diff was applied; a response
-   that leads with the verdict has not shown the review.
+   [reviewing-a-returned-diff.md](references/reviewing-a-returned-diff.md) before you apply it,
+   and answer in that file's response contract.** Emit a `Checks:` block first, one line per
+   fixed key (`fidelity`, `scope`, `checks-run`, `consistency`), then a separately labelled
+   `Verdict:` line. Nothing about applying, not applying, or being done appears before the
+   `Checks:` block.
 5. **When a host asks for approval on a paid tool, name the backend whose annotation caused
    it.** The annotation tracks the most permissive *enabled* backend, not the `backend` this
    call selected (see "Annotations follow the worst enabled backend"). Report the prompt to the
    user with that attribution attached; do not retry silently, switch `backend` to dodge it, or
    ask the user to disable a backend.
-6. **Never put a secret in `question`, `task`, or `extra_context`.** These fields travel over the
-   backend worker's stdin and are sent to the backend's provider raw.
+6. **Never put a secret in any free-text field you supply.** On this surface those are
+   `question`, `task`, `target`, `evidence`, `extra_context`, `instructions_append`, and
+   `focus` — every one of them travels over the backend worker's stdin and is sent to the
+   backend's provider raw. `target` and `evidence` are the primary carriers on
+   `amicus_adversarial_review`, not optional extras.
 
 ## Route the request
 
@@ -106,9 +111,9 @@ not the one you picked for this call.
 
 ### Data exposure
 
-- `question`, `task`, and `extra_context` are sent to the selected backend's provider raw, and
-  travel to the backend worker over its stdin — never as an argv token or into a log file amicus
-  writes.
+- Every free-text field you supply — `question`, `task`, `target`, `evidence`, `extra_context`,
+  `instructions_append`, `focus` — is sent to the selected backend's provider raw, and travels to
+  the backend worker over its stdin — never as an argv token or into a log file amicus writes.
 - A backend can read files outside the workspace during an active call; the workspace is not a
   read boundary. Redaction (secret scrubbing) is best-effort and applies only to gathered diffs
   and returned output, never to what you supply.
