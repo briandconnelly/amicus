@@ -273,3 +273,21 @@ async def test_the_committed_manifest_command_starts_a_real_server(tmp_path):
     async with Client(transport) as client:
         tools = await client.list_tools()
     assert len(tools) == 18
+
+
+def test_changelog_has_an_unreleased_section():
+    """PR C rolls `## [Unreleased]` into a dated section, so that heading must exist.
+
+    The release procedure in `docs/RELEASING.md` edits this heading by exact text. A
+    renamed or missing heading turns that step into a silent no-op, which is how a
+    release ships with an empty changelog entry. AGENTS.md rule 19 keeps the dated
+    `## [0.1.0] - YYYY-MM-DD` heading out of this change (that heading lands in the
+    release PR), so this only checks that the file opens correctly and that the
+    Unreleased section is not an empty stub -- it must already carry at least one
+    `### `-level subsection.
+    """
+    text = (Path(__file__).resolve().parent.parent / "CHANGELOG.md").read_text()
+    assert text.startswith("# Changelog\n"), "the file must open with the Keep a Changelog title"
+    assert "\n## [Unreleased]\n" in text, "the rollover target heading is missing"
+    unreleased = text.split("\n## [Unreleased]\n", 1)[1]
+    assert "\n### " in unreleased, "the Unreleased section must contain at least one subsection"
