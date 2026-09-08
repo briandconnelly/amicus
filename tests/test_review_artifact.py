@@ -46,8 +46,12 @@ SECTIONS = [f"§{n}" for n in range(1, 10)]
 FINDING_FIELDS = ("severity:", "section:", "summary:", "evidence:", "remediation:")
 # Deviation 2: `**` between the label and the value.
 SEVERITY_RE = re.compile(r"severity:\W*(critical|major)", re.I)
-# A probe body opens with this marker when the walk declined to run it.
-SKIP_MARKER = "**Skipped."
+# A probe body opens with this marker when the walk declined to run it. It is a regex,
+# not an exact string: as a literal `"**Skipped."` it missed `**Skipped:**`,
+# `**Skipped**`, and any other punctuation an author might reach for, and a missed skip
+# marker silently reclassifies a SKIPPED probe as a RUN one -- the one substitution the
+# Done Criteria forbid, and the very hole holes 3 and 4 below were opened by.
+SKIP_RE = re.compile(r"\*\*Skipped\b[.:]?", re.I)
 MANDATORY_PROBES = ("cold-start", "first-repair")
 
 
@@ -60,7 +64,7 @@ def _probes() -> list[tuple[str, str]]:
 
 
 def _is_skipped(body: str) -> bool:
-    return SKIP_MARKER in body
+    return SKIP_RE.search(body) is not None
 
 
 @pytest.mark.parametrize("section", SECTIONS)
@@ -103,9 +107,12 @@ def test_at_least_three_further_probes_were_run():
 
 def test_every_skipped_probe_records_an_inapplicability_reason():
     """A probe the walk declines must say why; silence is the defect the workflow names."""
-    for name, body in _probes():
-        if not _is_skipped(body):
-            continue
+    skipped = [(name, body) for name, body in _probes() if _is_skipped(body)]
+    assert skipped, (
+        "known positive for SKIP_RE: this walk records skipped probes, so a scan that "
+        "finds none is broken, not a report with nothing to excuse"
+    )
+    for name, body in skipped:
         assert "Inapplicability reason:**" in body, f"{name}: skipped with no reason"
 
 
@@ -117,9 +124,19 @@ def test_every_finding_carries_all_five_labeled_lines():
         assert not missing, f"finding missing {missing}"
 
 
-def test_a_clean_report_names_residual_risks():
-    if not SEVERITY_RE.search(TEXT):
-        assert "residual risk" in TEXT.lower(), "a clean report must name residual risks"
+def test_the_report_names_residual_risks():
+    """Unconditional, and it was not always so.
+
+    This assertion used to be guarded by `if not SEVERITY_RE.search(TEXT)` -- "a CLEAN
+    report must name residual risks". The walk carries a Major finding, so the guard was
+    always false and the body never ran: deleting every "residual risk" mention from the
+    walk still left the suite green, confirmed by mutation. The Residual risks section is
+    one of the two durable homes this milestone chose for a known gap (ADR 0012 is the
+    other), so it is required of every report, clean or not -- a report WITH findings has
+    more reason to say what it leaves standing, not less."""
+    assert "residual risk" in TEXT.lower(), (
+        "the walk must name the risks it leaves standing, in a Residual risks section"
+    )
 
 
 def test_the_severity_scan_can_see_this_report_s_own_severities():

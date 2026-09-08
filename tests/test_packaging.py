@@ -161,6 +161,25 @@ def test_mcp_json_invokes_the_console_script():
     assert server["args"][-1] == "amicus-mcp"
 
 
+def test_mcp_json_installs_this_repo_at_this_version_s_tag():
+    """The `--from` source was asserted by nothing, and could not have been.
+
+    The slow smoke below substitutes any `git+` argument for a locally built wheel
+    before it runs, so it proves the command line's SHAPE and never the source; the test
+    above checks only `command` and the trailing console-script name. Rewriting the
+    `--from` to a wrong owner, a wrong repo AND a wrong tag left the whole file green,
+    confirmed by mutation. That is the one field a user installing from the committed
+    manifest actually fetches, so pin it: this repo, and the tag matching the version
+    the package declares, so a release bump that forgets `.mcp.json` fails here."""
+    args = _read(".mcp.json")["mcpServers"]["amicus"]["args"]
+    assert "--from" in args, "the manifest must install from an explicit source"
+    source = args[args.index("--from") + 1]
+    expected = f"git+https://github.com/briandconnelly/amicus.git@v{amicus.__version__}"
+    assert source == expected, (
+        f"unexpected --from source {source!r} for version {amicus.__version__}"
+    )
+
+
 def test_mcp_json_has_no_unexpanded_placeholders():
     """The ${VAR} check the spec keeps: env_vars is a passthrough list, not a value map."""
     raw = (REPO_ROOT / ".mcp.json").read_text()
@@ -184,6 +203,16 @@ def test_claude_manifest_declares_skills_and_commands():
     manifest = _read(".claude-plugin/plugin.json")
     assert manifest["skills"] == "./skills/"
     assert manifest["commands"] == "./commands/"
+
+
+def test_the_directories_both_manifests_point_at_exist():
+    """Both manifests name `./skills/` and `./commands/`; nothing checked they are there.
+
+    Deleting `skills/` failed no test, because every assertion about it compared strings
+    inside the JSON to strings in the test. A manifest that points at a directory the
+    distribution does not carry is a broken plugin at install time, not at test time."""
+    assert (ROOT / "skills").is_dir(), ".claude-plugin/plugin.json points at ./skills/"
+    assert (ROOT / "commands").is_dir(), "both manifests point at ./commands/"
 
 
 async def test_server_boots_in_process_with_no_amicus_env_set(monkeypatch):
