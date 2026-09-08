@@ -16,7 +16,7 @@ The rules bind; the context after them explains and points elsewhere.
 4. Never lower the coverage floor (`fail_under` in `pyproject.toml`).
 5. Never run `-m integration` tests unless the maintainer asked for it in the current session; when asked, run them as `AMICUS_REQUIRE_LIVE=1 uv run pytest -m integration --no-cov`.
 6. Never weaken the guard in `tests/conftest.py` that makes the real backend binaries unreachable for unit tests.
-7. Write one implementation plan per milestone and open one draft PR per plan; the release PR of rule 19 is the only PR that lands without a plan.
+7. Write one implementation plan per milestone and open one draft PR per plan; work that is not a milestone needs no plan, which covers a governance PR under rule 9 and a release PR under rule 19.
 8. Unless you are the maintainer, never merge a PR and never approve your own PR; never commit to `main`.
 9. Never change `.github/**`, `AGENTS.md` or `CLAUDE.md` inside a milestone plan; those change only in a PR of their own.
 10. When a change touches a category in `FINGERPRINT_COVERS` (`src/amicus/schemas/fingerprint.py`), bump `FINGERPRINT` and regenerate the pins under `tests/fixtures/` in their own commit.
@@ -29,11 +29,13 @@ The rules bind; the context after them explains and points elsewhere.
 17. Never edit a sibling checkout (`~/projects/codex-in-claude`, `~/projects/moonbridge`, `~/projects/claude-in-codex`, `~/projects/pontonier`).
 18. Never write a prompt input (`question`, `task`, `extra_context`, `instructions_append`, `focus`) to disk, to a worker's argv or to a log; it travels over the worker's stdin.
     This binds every prompt that was or could be sent to a backend or a host, including committed captures and eval prompt bodies, which are recorded as an id and a `sha256` instead.
-    It does not bind synthetic literals a capture script authors to exercise prompt construction (for example `"Why?"` and `"DIFF TEXT"` in `scripts/capture_*_differentials.py`); those stay verbatim, because a differential must show what changed and a hash cannot.
+    It does not bind a literal that a test or capture script defines for itself to exercise prompt construction, such as `"Why?"` and `"DIFF TEXT"` in `scripts/capture_*_differentials.py`; those stay verbatim, because a differential must show what changed and a hash cannot.
+    A literal qualifies only if it was never copied, derived or replayed from a prompt anyone sent; text that originated in a real backend or host request stays bound however it is later stored or relabelled.
 19. Release in two PRs: the work lands with the version literals untouched, then a `chore(release):` PR moves them together and rolls `## [Unreleased]` in `CHANGELOG.md` into a dated section.
     The literals are `pyproject.toml`, `src/amicus/__init__.py`, `.claude-plugin/plugin.json`, `.codex-plugin/plugin.json` and the `.mcp.json` tag pin.
     Only the maintainer merges that PR, and only the maintainer pushes the tag.
-20. Never push a `v*` tag from a commit whose three live gates have not been run and recorded on that exact commit.
+    Push the matching tag in the same sitting as the merge: `main` must never be left carrying a `.mcp.json` pin that names a tag which does not exist.
+20. Never push a `v*` tag from a commit whose three live gates — `tests/test_codex_live.py`, `tests/test_kimi_live.py` and `tests/test_claude_live.py`, run under rule 5 — have not all been run and recorded on that exact commit.
 
 ## Context
 
@@ -63,6 +65,7 @@ The README's "Where things are" table indexes the rest.
 Rules 19 and 20 exist because `.mcp.json` pins `git+https://github.com/briandconnelly/amicus.git@v{version}`.
 The moment that pin lands on `main` the matching tag must exist, or a plugin install from `main` fails on an unresolvable ref.
 Merging the release PR immediately before pushing the tag is what closes that window.
+`main` carries exactly that unresolvable pin today, because 0.1.0 has never been tagged; the first release closes it, and rule 19's last clause is what stops it recurring.
 Rule 20 is a local pre-tag gate rather than a CI job: hosted runners have no authenticated `codex`, `kimi` or `claude`, so the evidence is recorded on the maintainer's machine against the exact commit to be tagged.
 That evidence is an honest-mistake guard, not an attestation; it is a local file its author can write by hand.
 `v*` tags are protected against update and deletion by a repository ruleset, because the tag is the plugin's installation source and a moved tag silently changes what users install under a version they already trust.
