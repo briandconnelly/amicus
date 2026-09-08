@@ -148,6 +148,7 @@
     ],
     "protocol_revision": "2026-07-28",
     "resource_error_carrier": "JSON-RPC error; the envelope (machine_code/human_message/backend/temporary/retry_after_ms/repair/resource_uri/request_id) is in error.data. Classify by error.data.machine_code: the numeric is era-bound (-32002 on a 2025-11-25 connection, -32602 on 2026-07-28; -32603 for a read failure on both).",
+    "result_format": 2,
     "result_meta_resource": "amicus://result-meta",
     "scope": [
       "Second opinions, git-change reviews, adversarial critiques and delegated diffs from Codex, Kimi or Claude Code, selected per call.",
@@ -753,7 +754,7 @@
         "required_params": [],
         "returns": "this payload.",
         "stability": null,
-        "use_when": "The full inventory, fingerprint, surface_digest and error catalog."
+        "use_when": "The full inventory, fingerprint, surface_digest, result_format and error catalog."
       },
       {
         "backends": [
@@ -1375,7 +1376,7 @@
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-6",
+                "default": "amicus/0.1/schema-7",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -2192,7 +2193,7 @@
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-6",
+            "default": "amicus/0.1/schema-7",
             "title": "Fingerprint",
             "type": "string"
           },
@@ -3722,7 +3723,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Free — no model call. The tool inventory, fingerprint and surface_digest (cache by them), the full error-code catalog, the annotation policy, the tasks/jobs contract, and meta's field list. detail=summary (default) | full | contracts; include_schemas embeds error-envelope, result-meta, capabilities-result and/or parameter-contracts for resource-blind clients.",
+      "description": "Free — no model call. The tool inventory, fingerprint and surface_digest (cache by them), result_format (the stored job-result version this release reads), the full error-code catalog, the annotation policy, the tasks/jobs contract, and meta's field list. detail=summary (default) | full | contracts; include_schemas embeds error-envelope, result-meta, capabilities-result and/or parameter-contracts for resource-blind clients.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
@@ -3852,6 +3853,10 @@
               },
               "resource_error_carrier": {
                 "type": "string"
+              },
+              "result_format": {
+                "description": "The persisted job-result format this release reads and writes. A stored job record stamped with a different value is not delivered; amicus_job_result returns job_result_incompatible instead. It is versioned separately from `fingerprint`: a stored result's shape and the live tool surface move independently.",
+                "type": "integer"
               },
               "result_meta_resource": {
                 "type": "string"

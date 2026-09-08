@@ -22,6 +22,7 @@ from amicus.schemas.fingerprint import (
     FINGERPRINT_COVERS_DESC,
     JSON_SCHEMA_DIALECT,
     PROTOCOL_REVISION,
+    RESULT_FORMAT,
 )
 
 Severity = Literal["critical", "high", "medium", "low", "nit"]
@@ -294,6 +295,14 @@ class ToolCapability(BaseModel):
     error_codes: list[ErrorCode] = Field(default_factory=list)
 
 
+RESULT_FORMAT_DESC = (
+    "The persisted job-result format this release reads and writes. A stored job record "
+    "stamped with a different value is not delivered; amicus_job_result returns "
+    "job_result_incompatible instead. It is versioned separately from `fingerprint`: a "
+    "stored result's shape and the live tool surface move independently."
+)
+
+
 class CapabilitiesResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
     ok: Literal[True] = True
@@ -306,6 +315,7 @@ class CapabilitiesResult(BaseModel):
         default_factory=lambda: list(FINGERPRINT_COVERS), description=FINGERPRINT_COVERS_DESC
     )
     protocol_revision: str = PROTOCOL_REVISION
+    result_format: int = Field(default=RESULT_FORMAT, description=RESULT_FORMAT_DESC)
     transport: str
     stability: str
     enabled_backends: list[BackendRef]
@@ -330,6 +340,7 @@ class CapabilitiesResult(BaseModel):
 
 
 publish.KEPT_DESCRIPTIONS.add(FINGERPRINT_COVERS_DESC)
+publish.KEPT_DESCRIPTIONS.add(RESULT_FORMAT_DESC)
 
 CONSULT_RESULT_SCHEMA = publish.published_schema(ConsultResult)
 REVIEW_RESULT_SCHEMA = publish.published_schema(ReviewResult)

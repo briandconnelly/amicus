@@ -245,7 +245,9 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
     "amicus_capabilities": {
         "cost": "free",
         "backends": list(BACKEND_IDS),
-        "use_when": "The full inventory, fingerprint, surface_digest and error catalog.",
+        "use_when": (
+            "The full inventory, fingerprint, surface_digest, result_format and error catalog."
+        ),
         "returns": "this payload.",
         "error_codes": ["invalid_arguments"],
     },
@@ -620,6 +622,7 @@ def register(
         meta=lifecycle_meta("amicus_capabilities"),
         description=(
             f"{FREE_MARKER} The tool inventory, fingerprint and surface_digest (cache by them), "
+            "result_format (the stored job-result version this release reads), "
             "the full error-code catalog, the annotation policy, the tasks/jobs contract, and "
             "meta's field list. detail=summary (default) | full | contracts; include_schemas "
             "embeds error-envelope, result-meta, capabilities-result and/or "

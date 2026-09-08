@@ -16,7 +16,7 @@ smaller tax on that host than the budget assumes
 (docs/host-captures/install-smoke/claude-code/2.1.263/notes.md). The budget stays the
 worst-case ceiling for the clients that do preload.
 
-Measured 2026-09-07 at schema-6 (18 tools; job-outlives-task claim corrected): see MEASURED.
+Measured 2026-09-07 at schema-7 (18 tools; capabilities gained result_format): see MEASURED.
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ import pytest
 
 from amicus import manifest
 
-MEASURED: dict[str, int] = {"all": 92082, "codex-kimi": 92090, "claude": 92082}
+MEASURED: dict[str, int] = {"all": 92507, "codex-kimi": 92515, "claude": 92507}
 BUDGET: dict[str, int] = {p: ((n // 1000) + 1) * 1000 for p, n in MEASURED.items()}
 # ceil(bytes/4): a dependency-free, conservative token proxy (~4.13 bytes per token).
 TOKEN_PROXY_BUDGET: dict[str, int] = {p: -(-b // 4) for p, b in BUDGET.items()}
