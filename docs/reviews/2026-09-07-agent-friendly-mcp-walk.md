@@ -70,9 +70,11 @@ Under review-workflow Step 1 that is the Minor band's condition met on a catalog
   A fourth run under the corrected instrument **passed** (`docs/host-captures/s6-response-contract/claude-code/2.1.263/`).
   This finding is NOT closed on that basis.
   The capture states the control: graded the old way the same response would have been a fourth failure, and two variables moved together in one run, so the pass is a direction rather than a result.
-  **The experiment that separates them has since been run, free, on 2026-09-08** (`docs/host-captures/s6-old-text-new-grader/claude-code/2.1.263/`): the OLD skill text from `f945b3d^` under the NEW scoped grader **failed**, on assertion 2 alone, with no `Checks:` or `Verdict:` label anywhere in its `RESPONSE`.
+  **An approximation of the experiment that would separate them was run, free, on 2026-09-08** (`docs/host-captures/s6-old-text-new-grader/claude-code/2.1.263/`): the OLD skill text from `f945b3d^` under the NEW scoped grader **failed**, on assertion 2 alone, with no `Checks:` or `Verdict:` label anywhere in its `RESPONSE`.
   The same script passes run 4's response, so the fail is the old text's and not a broken instrument's.
-  That rules out the reading in which the grader change alone produced the pass, and the remedy is supported rather than merely confounded.
+  That is suggestive that the grading scope alone does not account for the pass, and it points the same way as the remedy.
+  It is not an isolating control: three of that run's inputs differ from run 4's — fixture bytes, the harness wrapper prompt, and the model's local-tool behaviour — and each side is a single sample, so it does not distinguish the response contract from wrapper, fixture, tool-use or stochastic differences.
+  The isolating version, identical inputs varying only the skill text, is still outstanding and still free.
   It still does not close F3: one passing run of the current text is one run, and nothing here says the contract holds across other models, hosts or prompts.
   Confirming it, and the S7/F2 remedy that could not be tested at all, are carried to M7.
 
@@ -318,11 +320,11 @@ The residual risks this walk leaves standing:
 - **No live redaction trace.** S8 verified that the *model* redacted before sending; no captured run traced a server-side redaction of gathered diff or returned output end to end.
 - **Advertised-vs-actual is per host, not per tool.** The captures give one success and one forced error per host; the per-tool obligation rests on the in-repo golden and differential suites.
 - **The committed `.mcp.json` names a git tag that does not exist yet.** Every capture substituted a locally built wheel for that one argument, so tag resolvability is unproven by M6 and belongs to the publish workflow's gate.
-- **F3's second remedy passed one run and is now supported by a control; F2's is still untested.** The first remedy — an ordering directive in prose — failed three runs, and the fourth run replaced both the remedy and the grader at once.
+- **F3's second remedy passed one run, with directional support from a non-identical comparison run; F2's is still untested.** The first remedy — an ordering directive in prose — failed three runs, and the fourth run replaced both the remedy and the grader at once.
   The remedy is now a required output SHAPE (a `Checks:` block over four fixed keys, then a labelled `Verdict:` line) rather than an instruction about the order of generated prose, and the grader now reads the model's `RESPONSE` section instead of the whole harness transcript, which had let the harness's own `LOAD` line supply the deciding token.
   S6 passed on that run (`docs/host-captures/s6-response-contract/claude-code/2.1.263/`), and the capture states the control honestly: under the old whole-transcript grading the same response would have been a fourth failure, and one run cannot say which of the two changes did the work.
-  The control that separates the two was run on 2026-09-08: the old skill text under the new grader fails, so the grader change alone does not account for the pass.
-  Read F3 as "one passing run under a corrected instrument, with the instrument's contribution controlled for", not as closed.
+  A comparison run on 2026-09-08 put the old skill text under the new grader and it failed, which is suggestive that the grading scope alone does not account for the pass; three of its inputs differ from run 4's, so it does not isolate the cause, and the isolating experiment is still outstanding.
+  Read F3 as "one passing run under a corrected instrument, with directional support from a non-identical comparison", not as closed.
   F2's remedy has not been tested at all: S7 needs a real host and a real approval gate, and the paid budget is exhausted, so it stays unproven.
 - **S2 is `partial`, not a pass.** Its one run used an unsupported `backend_options` key rather than the invalid-backend case its Setup declares, so the repair was by key removal and the "corrected value drawn from `error.repair.arguments` or `invalid_arguments[].allowed_values`" half of its second assertion was never exercised.
   The declared case is runnable for free — an out-of-set `backend` is rejected before dispatch — and is left for a future round.
@@ -358,7 +360,7 @@ The remaining two are the surface itself: F4, fixed and fingerprinted, and F1, w
 | --- | --- | --- |
 | F1 | `docs/MIGRATION.md`: sibling-removal behavior delta | no |
 | F2 | `SKILL.md`: new rule 5, the annotation-attribution directive | no |
-| F3 | `reviewing-a-returned-diff.md` and `SKILL.md` rule 4: the ordering directive failed three runs and was replaced by a `Checks:`/`Verdict:` response contract; the grader was scoped to the model's `RESPONSE` section — **passed one run under the corrected instrument, and a control run of the old text under the new grader fails, so the remedy is supported; still not closed** | no |
+| F3 | `reviewing-a-returned-diff.md` and `SKILL.md` rule 4: the ordering directive failed three runs and was replaced by a `Checks:`/`Verdict:` response contract; the grader was scoped to the model's `RESPONSE` section — **passed one run under the corrected instrument, with directional support from a non-identical comparison run of the old text; the isolating experiment is outstanding and it is not closed** | no |
 | F4 | `CapabilitiesResult.result_format`; `amicus_capabilities` description and `use_when` | **yes — schema-6 → schema-7** |
 | F5 | `tests/test_discovery_cost.py` docstring scoping | no |
 | F6 | `SKILL.md` frontmatter `description` | no |

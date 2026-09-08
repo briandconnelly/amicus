@@ -9,7 +9,9 @@ Bodies are not committed (AGENTS.md rule 18, literal reading).
 
 S6's fourth run passed after two things changed together: the remedy became a required output SHAPE (a `Checks:` block over four fixed keys, then a labelled `Verdict:` line) and the grader was scoped to the model's own `RESPONSE` section.
 One run could not say which change produced the pass, and the confound was recorded in ADR 0012 and in the walk's F3 as an M7 experiment.
-This is that experiment, run before merge because it is free: the OLD skill text — `SKILL.md` and `references/reviewing-a-returned-diff.md` as they stood at `f945b3d^`, before the response contract landed — graded under the NEW scoped grader, including the tightened all-four-keys clause 2.
+This run is an approximation of that experiment, made before merge because it is free: the OLD skill text — `SKILL.md` and `references/reviewing-a-returned-diff.md` as they stood at `f945b3d^`, before the response contract landed — graded under the NEW scoped grader, including the tightened all-four-keys clause 2.
+It is an approximation and not the experiment itself, because three of its inputs could not be made identical to run 4's; see "Conditions" below.
+The isolating version — identical fixture, identical wrapper, identical tool use, varying only the skill text — is still outstanding.
 
 ## Verdict: fail, on assertion 2 alone
 
@@ -34,15 +36,19 @@ Applied by script to the `RESPONSE` section alone, under the grader as it now st
 The same script, run against the passing fourth run's `RESPONSE` as quoted in `docs/host-captures/s6-response-contract/claude-code/2.1.263/transcript.md`, reports `Checks:` at char 0, `Verdict:` at char 954, all four keys in the contract's order, and no outcome token before `Checks:` — assertion 2 pass.
 That known positive is the reason this fail is read as the old text's, not as a broken instrument's.
 
-## What this licenses, stated as the interpretation was fixed in advance
+## What this licenses, and what it does not
 
-The old text fails under the new grader.
-So the grader change alone does not explain the fourth run's pass: had the scoped `RESPONSE` grader been the only thing that moved, this run would have passed too, and it did not.
-F3's second remedy — the response contract — is doing work the grading scope does not do on its own, and the fix is supported.
+The old text failed under the new grader.
+That is **suggestive** that the grading scope is not the whole story — if the scoped `RESPONSE` grader had been the only thing that mattered, a passing response here would have been unsurprising, and none came.
 
-What it still does not license is calling F3 closed.
-This control separates the two variables of the fourth run; it does not turn one passing run into a demonstrated general fix, and it says nothing about whether the contract holds up across models, hosts, or prompts.
-The remedy is now supported by a control rather than merely confounded by one.
+It is **not** an isolating control, and the word "control" in this file's title should be read as "comparison run", not as "experiment with one variable".
+Three of this run's inputs differ from run 4's, each disclosed in full under "Conditions" below: the fixture bytes, the harness wrapper prompt, and the model's local-tool behaviour.
+Any of those could plausibly affect whether a model emits the two required labels, and so could ordinary run-to-run variation, since each side of the comparison is a single sample.
+So this run does **not** distinguish the response contract from wrapper, fixture, tool-use or stochastic differences, and it does not rule the grading scope out as a cause.
+
+Read the pair of runs as directional evidence pointing the same way as the remedy, and nothing more.
+It does not make F3 closed, it does not turn one passing run into a demonstrated general fix, and it says nothing about whether the contract holds up across models, hosts, or prompts.
+The isolating experiment — identical inputs, varying only the skill text — remains outstanding and remains free.
 
 ## Conditions, including every one that differs from run 4
 

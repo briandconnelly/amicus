@@ -9,15 +9,19 @@ The remedy changed — `reviewing-a-returned-diff.md` and SKILL.md rule 4 stoppe
 The instrument changed too — the grader stopped scanning the whole harness transcript and started reading the model's `RESPONSE` section alone, because the harness's own `LOAD` line had been supplying the deciding "apply" token.
 Either change on its own could have produced the pass, and one run cannot say which did.
 
-This control holds the remedy at its OLD value and the instrument at its NEW one.
-If the old text passes under the new grader, the grader change explains the earlier pass by itself and the remedy is unproven.
-If the old text fails, the remedy is doing work the grader change does not.
-That reading was fixed before the run, and the run was made once.
+This run holds the remedy at its OLD value and the instrument at its NEW one.
+The reading was fixed before the run: if the old text passes under the new grader, the grader change explains the earlier pass by itself and the remedy is unproven; if the old text fails, that points away from the grading scope being the whole story.
+The run was made once.
 
 ## Outcome
 
-Fail, on assertion 2 alone, so the second branch applies: the remedy is supported.
-See `transcript.md` for the mechanical grading, the known-positive check that shows the grader can still pass a response, the graded `RESPONSE`, and every condition that differs from run 4.
+Fail, on assertion 2 alone, so the second branch applies.
+
+**How strong that is, stated here and not only in the transcript.**
+Three of this run's inputs could not be made identical to run 4's — the fixture bytes, the harness wrapper prompt, and the model's local-tool behaviour — and each side of the comparison is a single sample.
+So this is a comparison run, not an isolating control: it is suggestive that the grading scope alone does not account for run 4's pass, and it does not distinguish the response contract from wrapper, fixture, tool-use or stochastic differences.
+The isolating experiment — identical inputs, varying only the skill text — is still outstanding, and still free.
+See `transcript.md` for the mechanical grading, the known-positive check that shows the grader can still pass a response, the graded `RESPONSE`, and every differing condition in full.
 
 ## Recovering the old text
 

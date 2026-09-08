@@ -82,14 +82,15 @@ The maintainer separately authorized a spend of six paid calls — one per enabl
 
 These are stated rather than hidden, and carried to M7.
 
-- **One M7 experiment this milestone identified and did not run; the other was run before merge.**
-  Run, on 2026-09-08: S6 with the OLD skill text under the NEW grader.
-  The fourth run changed the remedy (an output shape) and the instrument (grading scoped to a `RESPONSE` section) together, so it could not say which produced the pass.
-  The superseded skill text from `f945b3d^`, graded by the corrected grader, **fails** — no `Checks:` or `Verdict:` label anywhere in its `RESPONSE` — while the same script passes run 4's response.
-  That rules out the reading in which the grader change alone produced the pass, so F3's remedy is supported rather than merely confounded; it does not make F3 closed, since one passing run of the current text is still one run.
+- **Two M7 experiments remain outstanding; an approximation of one was run before merge.**
+  The fourth S6 run changed the remedy (an output shape) and the instrument (grading scoped to a `RESPONSE` section) together, so it could not say which produced the pass.
+  A comparison run on 2026-09-08 put the superseded skill text from `f945b3d^` under the corrected grader, and it **fails** — no `Checks:` or `Verdict:` label anywhere in its `RESPONSE` — while the same script passes run 4's response.
+  That is suggestive that the grading scope alone does not account for the pass, and it points the same way as the remedy.
+  It is **not** the isolating experiment: three of that run's inputs could not be made identical to run 4's — the fixture bytes, the harness wrapper prompt, and the model's local-tool behaviour — and each side is a single sample, so it does not distinguish the response contract from wrapper, fixture, tool-use or stochastic differences.
+  **Still outstanding, and still free:** the isolating version, with identical inputs varying only the skill text.
   Capture: `docs/host-captures/s6-old-text-new-grader/claude-code/2.1.263/`.
-  Not run, and carried to M7: re-run S6 with the tool surface actually pinned to the amicus tools only — which `--allowedTools` alone does not achieve under `bypassPermissions` — so every run is comparable in what the model could do, not merely in what it was told to do.
-  It is free.
+  **Also still outstanding, and carried to M7:** re-run S6 with the tool surface actually pinned to the amicus tools only — which `--allowedTools` alone does not achieve under `bypassPermissions` — so every run is comparable in what the model could do, not merely in what it was told to do.
+  It is free too.
 - **The standing cold-start regression gate is NOT built.**
   `design-workflow.md` Step 9 describes a gate that measures cold-start behavior on every change.
   M6 captured the evidence and pinned no baseline against which a future change is measured.
@@ -114,7 +115,7 @@ These are stated rather than hidden, and carried to M7.
 - **An un-migrated host may still prefer a sibling server.**
   The walk's one Major finding is that a cold start with the maintainer's real MCP fleet loaded reached a rival second-opinion server and never called amicus.
   `docs/MIGRATION.md` now tells a migrating user to remove the siblings; naming the superseded servers inside `CAPABILITY_SUMMARY` would put the signal on the surface itself and is deferred to M7, because it costs another fingerprint bump.
-- **The review walk's F3 remedy passed one run and is supported by a control, but is not confirmed; F2's is untested.**
+- **The review walk's F3 remedy passed one run, with directional support from a non-identical comparison run, but is not confirmed; F2's is untested.**
   S6's first remedy — an ordering directive in prose — failed three runs on the same assertion.
   A Codex review of the whole branch then found the grader was also implicated: the assertion was applied to the entire harness transcript, so the `LOAD` line the harness itself demands could supply the deciding "apply" token.
   Both were changed for the fourth run: the remedy became a required output SHAPE (a `Checks:` block over `fidelity`, `scope`, `checks-run`, `consistency`, then a labelled `Verdict:` line) and the grader was scoped to a defined `RESPONSE` section.
@@ -124,9 +125,10 @@ These are stated rather than hidden, and carried to M7.
   Two variables moved together in one run, so the pass cannot be attributed to the response contract or to the grading scope alone.
   And `--permission-mode bypassPermissions` overrides `--allowedTools`, so the model had local tools and used them: it ran `git apply --check` on the synthetic diff rather than reasoning about it, which is why its `checks-run` line reads "run, and it fails" instead of "not run", a stronger line than the earlier runs wrote.
   Run 3 was launched with exactly the same flags and did not reach for those tools, so this is a difference in what the model DID, not in what it was permitted — but it still makes the four runs non-identical in a way that plausibly favours the pass.
-  One of the three has since been addressed: the control that separates the remedy from the grader was run on 2026-09-08, and the old skill text fails under the new grader (`docs/host-captures/s6-old-text-new-grader/claude-code/2.1.263/`), so the grader change alone does not account for the pass.
-  The other two stand.
-  This is therefore a supported direction rather than a settled result, and the finding is carried to M7 rather than closed.
+  One of the three was probed on 2026-09-08: the old skill text under the new grader fails (`docs/host-captures/s6-old-text-new-grader/claude-code/2.1.263/`), which is suggestive that the grading scope alone does not account for the pass.
+  That probe is a comparison, not an isolating control — three of its inputs differ from run 4's and each side is a single sample — so the confound is weakened rather than removed, and the isolating experiment is still outstanding.
+  The other two stand untouched.
+  This is therefore a direction with some support rather than a settled result, and the finding is carried to M7 rather than closed.
   It also corrects a claim in an earlier capture: `docs/host-captures/free-scenarios/claude-code/2.1.263/transcript.md` states that `--allowedTools mcp__amicus --permission-mode bypassPermissions` "withheld Bash/Read/Write so the run could not wander", and this run demonstrates on the same host version that it does not.
   S7's remedy (SKILL.md rule 5) could not be tested at all, because it needs a real host approval gate and the paid budget is gone.
 - **S8 is `partial`: no run has shown that a schema-valid call carries no secret.**
