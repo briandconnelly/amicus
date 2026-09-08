@@ -146,3 +146,39 @@ async def test_call_form_kwargs_are_real_tool_parameters():
                 f"{tool_name}({kwarg}=...) in MIGRATION.md: {kwarg!r} is not a real "
                 f"parameter (real params: {sorted(params_by_tool[tool_name])})"
             )
+
+
+# The hand-written prose around the generated table is not covered by the table
+# assertions above, and shipped a claim that contradicted them: it said
+# `AMICUS_CODEX_BIN` had "no legacy alias" while the table two lines earlier, and the
+# declaration, both carry `CODEX_IN_CLAUDE_CODEX_BIN`.
+_NO_ALIAS_CLAIM_RE = re.compile(r"no legacy alias|no sibling equivalent")
+
+
+def test_prose_no_alias_claims_agree_with_the_declarations():
+    """A prose sentence claiming a var has no legacy name must be true of the declaration.
+
+    Only the negative claim is bound, and only per line. Rule 16 puts one sentence on one
+    line under `docs/`, so a line carrying "no legacy alias" or "no sibling equivalent"
+    is exactly one claim, and every `AMICUS_*` name written on it is inside that claim's
+    scope. Positive prose ("`AMICUS_CODEX_BIN` does have one") is deliberately left to
+    the generated table, which already asserts every alias exactly; binding free-form
+    positive prose would need a parser for how a sentence attributes an alias to a name,
+    which is the kind of check that ends up unable to fail."""
+    declarations = {var.name: var for var in packaging.declared_vars()}
+    checked: list[str] = []
+    for line in DOC.read_text().splitlines():
+        if line.startswith("|") or not _NO_ALIAS_CLAIM_RE.search(line):
+            continue
+        for name in re.findall(r"`(AMICUS_[A-Z0-9_]+)`", line):
+            assert name in declarations, f"prose names undeclared var {name}"
+            checked.append(name)
+            assert not declarations[name].legacy, (
+                f"MIGRATION.md prose says {name} has no legacy alias, but the "
+                f"declaration carries {declarations[name].legacy}"
+            )
+    assert checked, (
+        "known positive for the scan above: no prose no-alias claim was found at all, so "
+        "a passing run would prove nothing. Either the sentences were reworded or the "
+        "regex no longer matches them."
+    )

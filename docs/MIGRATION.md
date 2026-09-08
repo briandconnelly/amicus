@@ -49,8 +49,9 @@ Legacy names are removed in `0.3.0`.
 | `AMICUS_CLAUDE_MAX_BUDGET_USD` | `CLAUDE_IN_CODEX_MAX_BUDGET_USD` | `1.0` |
 | `AMICUS_CLAUDE_SUPPORTED_MAJORS` | `CLAUDE_IN_CODEX_SUPPORTED_MAJORS` | — |
 
-`AMICUS_CODEX_BIN`, `AMICUS_KIMI_BIN`, and `AMICUS_CLAUDE_BIN` have no legacy alias because each sibling used a different name (or none) for its CLI path override.
-`AMICUS_STATE_DIR`, `AMICUS_TASKS`, `AMICUS_TASKS_BACKEND_URL`, `AMICUS_HOST_NAME`, `AMICUS_ALLOW_CWD_WORKSPACE`, `AMICUS_BACKENDS`, and `AMICUS_KIMI_BIN` are new in amicus and have no sibling equivalent.
+`AMICUS_KIMI_BIN` and `AMICUS_CLAUDE_BIN` have no legacy alias, because neither `moonbridge` nor `claude-in-codex` offered a CLI-path override to rename.
+`AMICUS_CODEX_BIN` does have one — `CODEX_IN_CLAUDE_CODEX_BIN`, as the table above shows — because `codex-in-claude` did.
+`AMICUS_STATE_DIR`, `AMICUS_TASKS`, `AMICUS_TASKS_BACKEND_URL`, `AMICUS_HOST_NAME`, `AMICUS_ALLOW_CWD_WORKSPACE`, `AMICUS_BACKENDS`, `AMICUS_KIMI_BIN`, and `AMICUS_CLAUDE_BIN` are new in amicus and have no sibling equivalent.
 
 ## Tool-name mapping
 
