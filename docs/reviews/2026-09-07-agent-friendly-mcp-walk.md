@@ -102,7 +102,7 @@ Under review-workflow Step 1 that is the Minor band's condition met on a catalog
 - **Severity:** Minor
 - **Section:** `§2` (`[2.summary]`, `[2.pd-host]` — the description doubles as a retrieval document on hosts that select skills by lexical match)
 - **Summary:** The skill's frontmatter `description` listed only phrases that ask for a model call, so a pure discovery question had nothing to match and the router that carries the reading rules could fail to load.
-- **Evidence:** The pre-fix description's trigger list was "ask another model", "get a second opinion", "have Codex/Kimi/Claude review this", "delegate this", plus three decision points — none of which a question like "is Kimi available right now?" matches.
+- **Evidence:** The pre-fix description's trigger list was "ask another model", "get a second opinion", "have Codex/Kimi/Claude review this", "delegate this", plus three decision points — none of which a bare backend-availability question matches, which is exactly what S5's prompt `S5-P1` (`sha256:3f2def459ea9e8f2b120e29d170d44ce82bc53daa26bfcfaf6149ed3213deee4`) is.
   S5 asks exactly that question and passed in both modes (`docs/host-captures/free-scenarios/claude-code/2.1.263/transcript.md`), so this is a latent gap rather than an observed failure; that bands it Minor rather than Major.
   Its consequence is that the skill's own rules — including the new rule 5 that F2 turns on — are not loaded on discovery-shaped turns.
 - **Remediation:** Applied: the `description` gains discovery phrasing ("which models can I use", "is Codex/Kimi/Claude available", "what does amicus support", "check backend status") and an explicit trigger on interpreting any `amicus_*` result or approval prompt, which is the turn F2's rule must be loaded for.
