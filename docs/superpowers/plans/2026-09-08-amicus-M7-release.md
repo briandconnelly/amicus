@@ -32,6 +32,7 @@ The evidence recorder is pure standard library, following `scripts/check_commit_
 - Never write a prompt input to disk, argv or a log. Task 5 and Task 8 touch prompt-bearing documents; both record ids and `sha256` values only.
 - Do not change `.github/**`, `AGENTS.md` or `CLAUDE.md` in this PR. Rule 9 forces those into their own PR, which is PR A.
 - Do not push a git tag. Do not publish to pypi.org. Do not run `gh workflow run`.
+- AGENTS.md rules 19, 20 and 21 landed with PR #10 after this plan was drafted. Rule 20 requires the three live gates to have PASSED on the tagged commit, not merely to have been run; rule 21 forbids any `v*` tag until the tag ruleset exists. Neither changes a task below, but both bind the release sequence the runbook describes.
 
 ## Preconditions
 
@@ -364,7 +365,9 @@ Create `docs/RELEASING.md`, one sentence per line. It must contain, in this orde
 
 1. **Who may do this.** Only the maintainer. An agent may prepare PR C but never merges it, never pushes a tag, and never dispatches the publish workflow — `gh workflow run` returns 403 for the App token, and that is a boundary, not an obstacle to route around.
 2. **Preconditions, each with the command that checks it and the output that means yes.**
-   - The `v*` tag protection ruleset exists. Read it back: `gh api repos/briandconnelly/amicus/rulesets` and confirm a ruleset targeting `refs/tags/v*` with `deletion` and `update` rules. A settings page that looks right is not evidence; the M6 environment check found exactly that failure mode.
+   - The `v*` tag protection ruleset exists, as AGENTS.md rule 21 requires. Read it back: `gh api repos/briandconnelly/amicus/rulesets` and confirm a ruleset targeting `refs/tags/v*` that restricts `creation` as well as `update` and `deletion`, with no agent identity in its bypass list.
+     Creation is the load-bearing one: `publish.yml` triggers on `push: tags: ["v*"]`, so an identity that can create a tag can publish a release without rules 19 and 20 being satisfied.
+     A settings page that looks right is not evidence; the M6 environment check found exactly that failure mode.
    - The `pypi` environment has `required_reviewers` and a `tag` deployment policy limited to `v*`: `gh api repos/briandconnelly/amicus/environments/pypi` and `gh api repos/briandconnelly/amicus/environments/pypi/deployment-branch-policies`. The policy must be typed `tag`, not `branch`; a branch policy blocks every release and the environments endpoint alone does not distinguish them.
    - A PyPI trusted publisher is registered for `briandconnelly/amicus`, `publish.yml`, environment `pypi`.
    - Trademark clearance for the name `amicus` is resolved, or the maintainer has decided to proceed without it. TestPyPI is already claimed; pypi.org is not.
