@@ -32,7 +32,11 @@ The fake binaries' own optional invocation-capture files (`FAKE_CODEX_ARGV_FILE`
 ## Rule 18 compliance
 
 The model's constructed prompt-carrying arguments (the described `question`/`task`/`extra_context` contents, and S6's synthetic delegate-result framing) were read only in the terminal via the Bash tool's output and never written to a file.
-`transcript.md` and this file quote only tool names, argument shapes, the scenario's own already-committed prompts and synthetic placeholders, server-log lines, and grading prose.
+`transcript.md` and this file quote only tool names, argument shapes, server-log lines, and grading prose.
+**Amended 2026-09-08, no verdict changed.**
+They used to also quote the scenario prompts and S8's synthetic placeholders, on the reading that a fixture authored in the repository is not a runtime prompt input.
+The maintainer has since adopted the literal reading of rule 18, under which those quotations were themselves the violation.
+They are replaced by prompt ids and `sha256` values; the ids, descriptions and hashing recipe are in `skills/collaborating-with-amicus/tests/scenarios.md` under "Prompt bodies are not committed".
 
 ## Corrected Step-3 verification script
 

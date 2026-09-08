@@ -48,6 +48,16 @@ The maintainer separately authorized a spend of six paid calls — one per enabl
   The maintainer overrode that on 2026-09-07: amending an assertion after the run it would grade is the failure mode the scenario file exists to prevent, so those two runs are unscored — neither pass nor fail — and branch A is not widened.
   Both rows and their full ordered call lists stay in the Run log so any reader can re-grade them against either wording.
   Widening branch A remains available to a future round, taken before the runs it would grade.
+- **Rule 18 is complied with literally: no prompt body is committed anywhere in this repository.**
+  A Codex review argued that rule 18's literal wording binds authored test fixtures too, and that documenting the ambiguity does not waive a binding rule; the maintainer conceded on 2026-09-08.
+  Every scenario prompt body, every prompt-supplied setup fixture, and S8's two credential-shaped placeholder values were removed from `skills/collaborating-with-amicus/tests/scenarios.md` and from `docs/host-captures/`.
+  Each is replaced by a stable prompt id, a `sha256` of the exact text, and a non-quoting description of what the prompt asks; the harness protocol's demand for "the exact prompt" in every run-log row — itself the violation — becomes a demand for the id and the hash.
+  The hashes were computed from the bodies as committed at `c360c7d`, before removal, so each pins the text an already-logged run actually used; the recipe is recorded in the scenario file so any holder of a body can recompute one.
+  **What it cost:** the eval suite is no longer reproducible from this repository alone.
+  An operator can reconstruct an equivalent prompt from each description, but not the byte-exact one, and a reconstructed prompt will not match the recorded hash.
+  That price is paid deliberately: a binding rule outranks the convenience of a self-contained fixture set.
+  No recorded verdict was changed by the redaction.
+
 - **S2 is `partial`, not `pass`.**
   Its one run used an unsupported `backend_options` key rather than either invalid call its Setup declares, so the repair was by key removal.
   That leaves the "corrected value drawn from `error.repair.arguments` or `invalid_arguments[].allowed_values`" half of its second assertion never exercised, because a removal repair carries no `allowed_values` list.
@@ -117,13 +127,12 @@ These are stated rather than hidden, and carried to M7.
 
 ## Open questions
 
-- **AGENTS.md rule 18 does not say whether it binds test fixtures as well as runtime prompt handling.**
+- **Whether rule 18's wording should be narrowed is still open; whether M6 conforms to it is not.**
   Rule 18 reads "Never write a prompt input (`question`, `task`, `extra_context`, `instructions_append`, `focus`) to disk, to a worker's argv or to a log; it travels over the worker's stdin."
-  `skills/collaborating-with-amicus/tests/scenarios.md` commits synthetic prompt text, including S8's fabricated credential strings, and every host capture quotes scenario prompts.
-  Read literally the rule covers those; read as a runtime egress rule — which is what its second clause is about — it does not.
-  The milestone proceeded on the second reading and the scenario fixtures stay committed, which is the maintainer's 2026-09-07 ruling.
-  The defect is the ambiguity, not the fixtures.
-  The fix is a governance PR narrowing rule 18's wording to runtime prompt handling, and rule 9 forces that into a PR of its own, so it is recorded here rather than done inside this milestone.
+  It does not say whether it binds authored test fixtures as well as runtime prompt handling.
+  That ambiguity is real and is unresolved.
+  What is resolved is which reading this milestone obeys: the literal one, per the maintainer's 2026-09-08 concession, and the milestone now conforms to it (see the decision above).
+  Narrowing the rule's wording to runtime prompt handling remains available, and rule 9 forces it into a governance PR of its own; nothing in this milestone depends on it any more.
 
 ## Consequences
 
