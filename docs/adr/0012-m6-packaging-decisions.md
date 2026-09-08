@@ -42,6 +42,16 @@ The maintainer separately authorized a spend of six paid calls — one per enabl
   `RESULT_FORMAT` stays `2`: no stored job result changes shape, so rule 11 does not fire.
 - **The walk's other eight findings are fixed without moving the surface**, four of them in the router skill's text.
   The graded failures are left recorded as failures; the remedy is skill text a future run would pass on, never an edited assertion.
+- **S1 is 4 of 6, with two runs unscored — not 6 of 6 "passing on intent".**
+  Branch A of S1 permits `amicus_backends` before the paid call and nothing else; runs 4 and 5 opened with `amicus_capabilities`.
+  An earlier ruling in this milestone scored them as passing on intent with the deviation named.
+  The maintainer overrode that on 2026-09-07: amending an assertion after the run it would grade is the failure mode the scenario file exists to prevent, so those two runs are unscored — neither pass nor fail — and branch A is not widened.
+  Both rows and their full ordered call lists stay in the Run log so any reader can re-grade them against either wording.
+  Widening branch A remains available to a future round, taken before the runs it would grade.
+- **S2 is `partial`, not `pass`.**
+  Its one run used an unsupported `backend_options` key rather than either invalid call its Setup declares, so the repair was by key removal.
+  That leaves the "corrected value drawn from `error.repair.arguments` or `invalid_arguments[].allowed_values`" half of its second assertion never exercised, because a removal repair carries no `allowed_values` list.
+  The declared invalid-backend case (`backend="chatgpt"`) is rejected before dispatch and is therefore runnable for free; it is left to a future round rather than claimed as covered.
 
 ## Known gaps
 
@@ -71,14 +81,38 @@ These are stated rather than hidden, and carried to M7.
 - **An un-migrated host may still prefer a sibling server.**
   The walk's one Major finding is that a cold start with the maintainer's real MCP fleet loaded reached a rival second-opinion server and never called amicus.
   `docs/MIGRATION.md` now tells a migrating user to remove the siblings; naming the superseded servers inside `CAPABILITY_SUMMARY` would put the signal on the surface itself and is deferred to M7, because it costs another fingerprint bump.
-- **The review walk's F3 remedy is known insufficient, and F2's is unproven.**
-  S6 was re-run once after the fix wave, free, against the corrected skill text, and failed again on the same ordering assertion (`docs/host-captures/s6-rerun/claude-code/2.1.263/`).
-  Three runs, three failures.
-  An ordering directive does not change generation order; the stronger remedy changes the shape of the required output and is a skill redesign carried to M7.
-  S7's remedy (the new SKILL.md rule 5) could not be tested at all, because it needs a real host approval gate and the paid budget is gone — and since the comparable remedy that could be tested failed, it should be treated as unproven rather than probable.
+- **The review walk's F3 remedy passed one run and is not confirmed; F2's is untested.**
+  S6's first remedy — an ordering directive in prose — failed three runs on the same assertion.
+  A Codex review of the whole branch then found the grader was also implicated: the assertion was applied to the entire harness transcript, so the `LOAD` line the harness itself demands could supply the deciding "apply" token.
+  Both were changed for the fourth run: the remedy became a required output SHAPE (a `Checks:` block over `fidelity`, `scope`, `checks-run`, `consistency`, then a labelled `Verdict:` line) and the grader was scoped to a defined `RESPONSE` section.
+  That run passed (`docs/host-captures/s6-response-contract/claude-code/2.1.263/`), and the capture records the control: graded the old way the same response would have been a fourth failure.
+  Two variables moved together in one run, so this is a direction, not a settled result, and the finding is carried to M7 rather than closed.
+  S7's remedy (SKILL.md rule 5) could not be tested at all, because it needs a real host approval gate and the paid budget is gone.
+- **S8's pass rests on a call the server would reject.**
+  The described `amicus_consult` call put the log text in a `prompt` field, which is not one of that tool's parameters.
+  The secret-absence assertion is a substring check and held regardless, so the verdict stands, but a call that could not have been made is weaker evidence of what the model would have put in `question` than a schema-valid one.
+  S8 gained a schema-validity assertion binding future runs; the logged run is on record as not meeting it.
+- **Rule 6 names seven prompt carriers and one scenario covers three of them.**
+  SKILL.md rule 6 now enumerates `question`, `task`, `target`, `evidence`, `extra_context`, `instructions_append` and `focus`, matching AGENTS.md rule 18 plus the two carriers `amicus_adversarial_review` requires.
+  S8 exercises the three `amicus_consult` carries.
+  `task`, `focus`, `target` and `evidence` have no scenario; the adversarial pair is the gap most worth closing, since its prompt text is required rather than optional.
+- **`.codex-plugin/plugin.json` declares `"skills": "./skills/"` and no capture ever loaded a skill on the Codex host.**
+  Every Codex CLI run in this milestone was baseline mode — no amicus skill staged — so the Codex host's skill-loading path is declared and unexercised, exactly as the git tag is declared and unresolved.
+  Whether that host discovers, loads, and acts on `collaborating-with-amicus` is unproven by M6.
+  A free treatment-mode run on the Codex host would settle it and is carried to M7.
 - **The paid budget is exhausted.**
   Six calls were spent, all on cold start, three per host.
   No later probe in this milestone could re-run a paid path, which is why the long-running-operation probe and a live redaction trace are both recorded as skipped.
+
+## Open questions
+
+- **AGENTS.md rule 18 does not say whether it binds test fixtures as well as runtime prompt handling.**
+  Rule 18 reads "Never write a prompt input (`question`, `task`, `extra_context`, `instructions_append`, `focus`) to disk, to a worker's argv or to a log; it travels over the worker's stdin."
+  `skills/collaborating-with-amicus/tests/scenarios.md` commits synthetic prompt text, including S8's fabricated credential strings, and every host capture quotes scenario prompts.
+  Read literally the rule covers those; read as a runtime egress rule — which is what its second clause is about — it does not.
+  The milestone proceeded on the second reading and the scenario fixtures stay committed, which is the maintainer's 2026-09-07 ruling.
+  The defect is the ambiguity, not the fixtures.
+  The fix is a governance PR narrowing rule 18's wording to runtime prompt handling, and rule 9 forces that into a PR of its own, so it is recorded here rather than done inside this milestone.
 
 ## Consequences
 

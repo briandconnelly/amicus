@@ -64,9 +64,13 @@ Under review-workflow Step 1 that is the Minor band's condition met on a catalog
   A third S6 run against the corrected skill text failed on the same single assertion, graded mechanically under both readings of the response (`docs/host-captures/s6-rerun/claude-code/2.1.263/`).
   The review's substance improved — that run catches three distinct defects where the earlier runs caught one — but generation order did not move.
   Three runs, three failures, same structural reason.
-  This finding is therefore NOT closed.
-  A directive constraining the order of generated text is a weaker instrument than the rule beside it, and the stronger remedy is to change the shape of the required output rather than its order: open with a checklist block naming each item and its outcome, so the verdict has somewhere to come after.
-  That is a skill redesign and is carried to M7.
+  A directive constraining the order of generated text is a weaker instrument than the rule beside it, and the stronger remedy is to change the SHAPE of the required output rather than its order.
+  **That stronger remedy was then built, and a Codex review found the grader was also part of the failure.**
+  `reviewing-a-returned-diff.md` and SKILL.md rule 4 now require a `Checks:` block over four fixed keys (`fidelity`, `scope`, `checks-run`, `consistency`) followed by a separately labelled `Verdict:` line, so the verdict has a labelled place to come after; S6's assertion was rewritten against that closed vocabulary; and the harness protocol now defines a `RESPONSE` section and grades scoped assertions over it alone, because the previous grading scanned the whole transcript and let the harness's own `LOAD` line — which names a file called `reviewing-a-returned-diff.md` — supply the deciding "apply" token.
+  A fourth run under the corrected instrument **passed** (`docs/host-captures/s6-response-contract/claude-code/2.1.263/`).
+  This finding is NOT closed on that basis.
+  The capture states the control: graded the old way the same response would have been a fourth failure, and two variables moved together in one run, so the pass is a direction rather than a result.
+  Confirming it, and the S7/F2 remedy that could not be tested at all, are carried to M7.
 
 #### Finding 4 — `RESULT_FORMAT` is not readable from the capability summary
 
@@ -167,8 +171,12 @@ Run 6 passed `backend_options` `{"access": "toolless", "config_mode": "safe"}` w
 On the Claude Code host, in treatment mode, all three runs called the free `amicus_backends` first and then `amicus_consult`, `ok: true`, `backend` equal to the enabled backend in every run (`docs/host-captures/install-smoke/claude-code/2.1.263/transcript.md`).
 No run across either host reached for a review, delegate or adversarial verb, and no run omitted the required `backend` argument.
 
-Score: 6/6 correct first paid calls.
-The one literal deviation is named rather than smoothed over: branch A of S1 lists only `amicus_backends` as the permitted free discovery call, and runs 4 and 5 opened with `amicus_capabilities` instead, which is free discovery of the same kind but not the listed call.
+Score, as graded against S1's assertion as written: **4 of 6, with two runs unscored.**
+Branch A of S1 lists only `amicus_backends` as the permitted free discovery call, and runs 4 and 5 opened with `amicus_capabilities` instead.
+That is free discovery of the same kind, but it is not the listed call, and the maintainer's 2026-09-07 ruling is that widening the assertion after the fact would be moving the goalposts: those two runs are unscored — neither pass nor fail — and branch A is left as written.
+An earlier draft of this walk scored them 6/6 "passing on intent"; that grade is overridden here.
+What the six runs do show, independent of the grading question, is that all six reached a correct first paid call: the right verb, the right `backend`, and `ok: true` on the first attempt.
+The two unscored runs bear on whether the assertion was met, not on whether the server was usable.
 
 The negative result is F1: this is a cold start against a **clean** host.
 The one cold start run against a real, un-migrated fleet did not reach amicus at all.
@@ -249,7 +257,7 @@ S4 put a stated 15–20-minute task against the sync/async pair: the model chose
 S5 put an availability question against a catalog containing paid verbs: both runs called only the free `amicus_backends`, and `server.log` shows exactly one `tools/call` line per run.
 Across the six S1 runs no run reached for a review, delegate or adversarial verb when a consult was what was asked for.
 
-Score on this probe: 5/5 correct selections across S3 (×2), S4 and S5 (×2), plus 6/6 on S1.
+Score on this probe: 5/5 correct selections across S3 (×2), S4 and S5 (×2), plus 4/6 scored on S1 (two runs unscored on a discovery-call technicality, both of which nonetheless selected `amicus_consult`).
 The naming discipline behind that is `[3.naming]` and `[3.verbs]`: every tool is `amicus_<verb>_<noun>`, the `_async` suffix is the one axis that distinguishes a twin, and the free/paid split is declared in the description's leading `FREE_MARKER` as well as in `amicus_capabilities.tool_details[].cost`.
 
 ### Probe: cross-version
@@ -306,10 +314,17 @@ The residual risks this walk leaves standing:
 - **No live redaction trace.** S8 verified that the *model* redacted before sending; no captured run traced a server-side redaction of gathered diff or returned output end to end.
 - **Advertised-vs-actual is per host, not per tool.** The captures give one success and one forced error per host; the per-tool obligation rests on the in-repo golden and differential suites.
 - **The committed `.mcp.json` names a git tag that does not exist yet.** Every capture substituted a locally built wheel for that one argument, so tag resolvability is unproven by M6 and belongs to the publish workflow's gate.
-- **F3's remedy is known to be insufficient; F2's is untested.** S6 and S7 remain recorded failures.
-  S6 was re-run once, free, against the corrected skill text and failed again on the same assertion, so F3 is an open defect with a known-inadequate fix rather than a closed one (`docs/host-captures/s6-rerun/claude-code/2.1.263/`).
-  F2's remedy has not been tested at all: S7 needs a real host and a real approval gate, and the paid budget is exhausted.
-  Given that the one remedy of this class that COULD be tested failed, F2's should be treated as unproven rather than probable.
+- **F3's second remedy passed one run; F2's is still untested.** The first remedy — an ordering directive in prose — failed three runs, and the fourth run replaced both the remedy and the grader at once.
+  The remedy is now a required output SHAPE (a `Checks:` block over four fixed keys, then a labelled `Verdict:` line) rather than an instruction about the order of generated prose, and the grader now reads the model's `RESPONSE` section instead of the whole harness transcript, which had let the harness's own `LOAD` line supply the deciding token.
+  S6 passed on that run (`docs/host-captures/s6-response-contract/claude-code/2.1.263/`), and the capture states the control honestly: under the old whole-transcript grading the same response would have been a fourth failure, and one run cannot say which of the two changes did the work.
+  Read F3 as "one passing run under a corrected instrument", not as closed.
+  F2's remedy has not been tested at all: S7 needs a real host and a real approval gate, and the paid budget is exhausted, so it stays unproven.
+- **S2 is `partial`, not a pass.** Its one run used an unsupported `backend_options` key rather than the invalid-backend case its Setup declares, so the repair was by key removal and the "corrected value drawn from `error.repair.arguments` or `invalid_arguments[].allowed_values`" half of its second assertion was never exercised.
+  The declared case is runnable for free — an out-of-set `backend` is rejected before dispatch — and is left for a future round.
+- **S8's evidence is weaker than its verdict suggests.** The secret-absence check is a substring check and held, but the described call put the text in a `prompt` field, which `amicus_consult` does not have.
+  A call the server would reject before dispatch does not demonstrate what the model would actually have sent in `question`.
+  The verdict stands; S8 gained a schema-validity assertion binding future runs, and the run-log row names the limitation.
+- **Rule 6 covers seven prompt carriers and one scenario covers three of them.** `task`, `focus`, and `amicus_adversarial_review`'s required `target` and `evidence` have no scenario at all.
 - **The test enforcing this document checks its shape, not its substance.**
   `tests/test_review_artifact.py` verifies that each finding's five labels are present, not that they carry anything: a finding with five blank values still passes, confirmed by mutation.
   That hole is left open on purpose and is recorded in ADR 0012, because four other holes in the same file were found and closed during M6 and further mutation-testing was judged out of scope here.
@@ -321,9 +336,10 @@ The residual risks this walk leaves standing:
 The findings cluster in two places, and neither is the server's wire contract.
 
 Four of the nine (F2, F3, F6, F7) are defects in the router skill's text — the surface that tells an agent what a result obligates it to do.
-That is where both graded failures came from, and both were failures of *explanation and ordering*, never of tool choice: every call-shape assertion across S1, S3, S4, S5 and S7 passed.
+That is where both graded failures came from, and both were failures of *explanation and ordering*, never of tool choice: every call-shape assertion that was scored across S1, S3, S4, S5 and S7 passed, including in the two S1 runs that are unscored on which free discovery call opened them.
 Invest there first — and invest in a stronger instrument than wording.
-The one remedy of this class that could be tested free was tested and failed, which says the problem is not that the rules were unsaid but that a rule about generated order is not the kind of rule this class of behavior obeys.
+The first remedy of this class was tested free and failed three times, which says the problem is not that the rules were unsaid but that a rule about generated ORDER is not the kind of rule this class of behavior obeys.
+Replacing it with a rule about output SHAPE, and scoping the grader to the model's own response, produced a pass on the one run that followed — one run, with two variables changed together, so it is a direction rather than a result.
 
 Three more (F5, F8, F9) are honesty defects in instruments rather than in the product: a ratchet that over-claimed what it measures, a parser that could not fail on a case it was written for, and evidence that was correct but not countable.
 The remaining two are the surface itself: F4, fixed and fingerprinted, and F1, which documentation can reduce but not close.
@@ -334,7 +350,7 @@ The remaining two are the surface itself: F4, fixed and fingerprinted, and F1, w
 | --- | --- | --- |
 | F1 | `docs/MIGRATION.md`: sibling-removal behavior delta | no |
 | F2 | `SKILL.md`: new rule 5, the annotation-attribution directive | no |
-| F3 | `reviewing-a-returned-diff.md` ordering directive; `SKILL.md` rule 4 — **re-tested and still failing; open** | no |
+| F3 | `reviewing-a-returned-diff.md` and `SKILL.md` rule 4: the ordering directive failed three runs and was replaced by a `Checks:`/`Verdict:` response contract; the grader was scoped to the model's `RESPONSE` section — **passed one run under the corrected instrument; not closed** | no |
 | F4 | `CapabilitiesResult.result_format`; `amicus_capabilities` description and `use_when` | **yes — schema-6 → schema-7** |
 | F5 | `tests/test_discovery_cost.py` docstring scoping | no |
 | F6 | `SKILL.md` frontmatter `description` | no |

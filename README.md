@@ -3,7 +3,8 @@
 One MCP server for every second-opinion model: a verb-first surface (`amicus_consult`, `amicus_review_changes`, `amicus_delegate`, …) with the backend (`codex`, `kimi`, `claude`, …) as a parameter, built on FastMCP 4.0.x and MCP 2026-07-28 on top of the [pontonier](https://github.com/briandconnelly/pontonier) backend SDK.
 It replaces `codex-in-claude`, `moonbridge` and `claude-in-codex`.
 
-**Status:** milestone M6 (packaging, docs, evals and the review walk).
+**Status:** milestone M6 (packaging, docs, evals and the review walk) — shipping with two known-open items, both recorded in `docs/adr/0012-m6-packaging-decisions.md`: skill scenario S7 (a returned diff's approval-friction attribution) is a recorded failure whose remedy could not be tested, and S6's remedy passed one run under a corrected grader rather than being confirmed.
+Neither is a defect in the server's wire contract; both are in the router skill's text.
 `amicus_consult`, `amicus_review_changes`, their `_async` twins, both dry runs and the five `amicus_job_*` tools work for `backend="codex"`, `"kimi"` and `"claude"`; `amicus_delegate(_async)` works for Codex and Kimi (Claude is review-only, `feature_unsupported`); `amicus_adversarial_review(_async)` works for Claude (the only backend declaring `adversarial_review`).
 Every paid call runs in a detached worker and records a job (`meta.job_id`), and `idempotency_key` dedups an `_async` retry.
 With `AMICUS_TASKS=1` the four paid sync tools are also tasks for a modern-era client that declares the `io.modelcontextprotocol/tasks` extension; both v1 hosts negotiate the handshake era and get plain results (`docs/host-captures/`).
@@ -47,4 +48,4 @@ The gate is defined once, in `AGENTS.md` (Rules, item 2); CI runs it on every su
 2. In a fresh session say "Resume amicus at milestone M7 per the execution model".
 3. The agent writes the M7 plan from the spec and executes it.
 
-Open items only the maintainer can settle: trademark clearance for the name before any PyPI publish; the pontonier repo-layout question (separate repo vs uv workspace) is deferred until after M1.
+Open items only the maintainer can settle: trademark clearance for the name before any PyPI publish; the pontonier repo-layout question (separate repo vs uv workspace), still undecided as of M6 and now deferred to M7 or later.
