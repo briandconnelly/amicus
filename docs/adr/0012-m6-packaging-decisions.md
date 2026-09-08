@@ -57,6 +57,11 @@ The maintainer separately authorized a spend of six paid calls — one per enabl
 
 These are stated rather than hidden, and carried to M7.
 
+- **Two M7 experiments this milestone identified and did not run.**
+  First, re-run S6 with the OLD skill text under the NEW grader.
+  The fourth run changed the remedy (an output shape) and the instrument (grading scoped to a `RESPONSE` section) together, so it cannot say which produced the pass; running the superseded skill text under the corrected grader isolates the instrument's contribution and costs one free run.
+  Second, re-run S6 with the tool surface actually pinned to the amicus tools only — which `--allowedTools` alone does not achieve under `bypassPermissions` — so every run is comparable in what the model could do, not merely in what it was told to do.
+  Both are free.
 - **The standing cold-start regression gate is NOT built.**
   `design-workflow.md` Step 9 describes a gate that measures cold-start behavior on every change.
   M6 captured the evidence and pinned no baseline against which a future change is measured.
@@ -85,8 +90,14 @@ These are stated rather than hidden, and carried to M7.
   S6's first remedy — an ordering directive in prose — failed three runs on the same assertion.
   A Codex review of the whole branch then found the grader was also implicated: the assertion was applied to the entire harness transcript, so the `LOAD` line the harness itself demands could supply the deciding "apply" token.
   Both were changed for the fourth run: the remedy became a required output SHAPE (a `Checks:` block over `fidelity`, `scope`, `checks-run`, `consistency`, then a labelled `Verdict:` line) and the grader was scoped to a defined `RESPONSE` section.
-  That run passed (`docs/host-captures/s6-response-contract/claude-code/2.1.263/`), and the capture records the control: graded the old way the same response would have been a fourth failure.
-  Two variables moved together in one run, so this is a direction, not a settled result, and the finding is carried to M7 rather than closed.
+  That run passed (`docs/host-captures/s6-response-contract/claude-code/2.1.263/`).
+  Three things cut against reading it as a fix, and all three are in the capture.
+  Graded the old way, the same response would have been a fourth failure.
+  Two variables moved together in one run, so the pass cannot be attributed to the response contract or to the grading scope alone.
+  And `--permission-mode bypassPermissions` overrides `--allowedTools`, so the model had local tools and used them: it ran `git apply --check` on the synthetic diff rather than reasoning about it, which is why its `checks-run` line reads "run, and it fails" instead of "not run", a stronger line than the earlier runs wrote.
+  Run 3 was launched with exactly the same flags and did not reach for those tools, so this is a difference in what the model DID, not in what it was permitted — but it still makes the four runs non-identical in a way that plausibly favours the pass.
+  This is therefore a direction, not a settled result, and the finding is carried to M7 rather than closed.
+  It also corrects a claim in an earlier capture: `docs/host-captures/free-scenarios/claude-code/2.1.263/transcript.md` states that `--allowedTools mcp__amicus --permission-mode bypassPermissions` "withheld Bash/Read/Write so the run could not wander", and this run demonstrates on the same host version that it does not.
   S7's remedy (SKILL.md rule 5) could not be tested at all, because it needs a real host approval gate and the paid budget is gone.
 - **S8's pass rests on a call the server would reject.**
   The described `amicus_consult` call put the log text in a `prompt` field, which is not one of that tool's parameters.

@@ -12,7 +12,13 @@ The amicus MCP server came from a locally built wheel (`uv build --wheel` from t
 This is the same substitution `docs/host-captures/install-smoke/claude-code/2.1.263/notes.md` used for Task 8.
 `AMICUS_CODEX_BIN`, `AMICUS_KIMI_BIN`, and `AMICUS_CLAUDE_BIN` were pointed at this repo's `tests/support/fake_codex.py` / `fake_kimi.py` / `fake_claude.py` for every run.
 That way even a paid call the model made despite instructions would hit a local stub process rather than a real provider.
-`--allowedTools mcp__amicus --permission-mode bypassPermissions` withheld Bash/Read/Write so the run could not wander.
+`--allowedTools mcp__amicus --permission-mode bypassPermissions` was used with the intent of withholding Bash/Read/Write so the run could not wander.
+
+**Correction, appended 2026-09-07 (no verdict changed).**
+That intent was not achieved: `--permission-mode bypassPermissions` overrides the `--allowedTools` allowlist rather than intersecting with it, so local tools were in fact reachable in these runs.
+This was found when a later S6 run on the same host version, with the same two flags, used `Bash` (`docs/host-captures/s6-response-contract/claude-code/2.1.263/`).
+No run recorded in this capture is known to have used a local tool, and the zero-spend claim is unaffected — it rests on `server.log` and on the fake binaries, not on the tool allowlist.
+What is withdrawn is only the claim that the flags made wandering impossible.
 Treatment runs added `--plugin-dir` pointing at a scratch copy of `.claude-plugin/`, `skills/`, `commands/`, and the wheel-substituted `.mcp.json`, so `collaborating-with-amicus` loaded.
 Baseline runs used `--strict-mcp-config --mcp-config` alone, with no `--plugin-dir`.
 The cwd for every run was a scratch git repository seeded with two commits (`init`, then `feat: change readme`), so S3's branch-review scope had something real to point at.

@@ -47,6 +47,8 @@ The committed `.mcp.json` in this worktree was never modified; `git diff .mcp.js
 `--permission-mode bypassPermissions` does not restrict tools to the `--allowedTools mcp__amicus` list, so the model was able to use local tools, and did.
 It reconstructed the synthetic diff into `/tmp/s6.patch` (outside this repository), ran `git apply --check` against the scratch git repo, and ran its own positive control on a corrected copy before trusting the failure.
 That behaviour is not what S6 asserts and was not graded, but it is the reason the `checks-run` line says "run, and it fails" rather than "not run", so it is disclosed rather than left to be inferred.
+Run 3 was launched with exactly the same flags and did not use local tools, so the difference between that run and this one is in behaviour rather than in permission — but the two runs are still not like-for-like.
+This also corrects `docs/host-captures/free-scenarios/claude-code/2.1.263/transcript.md`, which says that flag combination "withheld Bash/Read/Write so the run could not wander"; `bypassPermissions` overrides the allowlist rather than intersecting with it, and this run shows the tools are reachable.
 Its claim was re-verified independently after the run: `git apply --check -v /tmp/s6.patch` in the same scratch repo returns `error: corrupt patch at /tmp/s6.patch:7`, exit 128.
 
 ## Rule 18 compliance

@@ -20,10 +20,11 @@ Supporting material is optional — put the case for the target in `evidence`, a
 surrounding background in `extra_context`. Pass the absolute repo path as
 `workspace_root`.
 
-`scope` is optional, exactly as it is on `amicus_review_changes` (both default to
-`working_tree`); what differs is that an adversarial review needs no diff at all. Pass
-it the same way (`working_tree` default, `branch`/`base`, or `commit`/`commit`) when
-there is a concrete diff to attack, or omit it to critique a `target` described in
+`scope` is optional on both this tool and `amicus_review_changes`, but omitting it does
+something different here. `amicus_review_changes` defaults `scope` to `working_tree` and
+gathers that diff; `amicus_adversarial_review` defaults it to nothing and attaches **no
+diff at all**. Pass it (`working_tree`, `branch` with `base`, or `commit` with `commit`)
+when there is a concrete diff to attack, or omit it to critique a `target` described in
 `evidence`/`extra_context` alone.
 
 Treat the returned `verdict` and `confidence` as claims to verify, not settled fact

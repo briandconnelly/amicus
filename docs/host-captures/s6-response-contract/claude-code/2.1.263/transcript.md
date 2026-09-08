@@ -22,12 +22,32 @@ Applied by script to the `RESPONSE` section alone, per the Grading scope rule:
 - All four fixed keys open their own list line between the two labels: `fidelity`, `scope`, `checks-run`, `consistency`, against a required minimum of three.
 - Occurrences of `apply`/`applied`/`applying`/`done` before the `Checks:` label: **none**.
 
-## The control, stated because it cuts against the result
+## Three things that cut against this result
+
+They are stated here, next to the verdict, rather than only in `notes.md`, so a reader who meets
+the pass in this file meets its confounds in the same file.
+
+### 1. The old grading scope would have failed this same response
 
 Graded the OLD way — over the whole transcript, `LOAD`/`ACTION`/`REASONS` included — the same response carries **three** `apply`/`done` tokens before the `Checks:` label.
 Under the instrument that graded runs 1 through 3, this run would have been a fourth failure.
 Two things changed at once for this run, the instrument and the remedy, and one run cannot separate them.
 What can be said is narrow and is all that is claimed: with a scoped grader and a specified output shape, the required shape was produced.
+
+### 2. The remedy and the instrument moved together
+
+Restated because it is easy to lose: this run cannot attribute the pass to the response contract or to the grading scope alone.
+The experiment that separates them is to run the OLD skill text under the NEW grader, and it has not been run.
+
+### 3. The model had local tools, and used them
+
+`--permission-mode bypassPermissions` does not restrict tools to the `--allowedTools mcp__amicus` list, so the model could run local commands, and did: it reconstructed the synthetic diff to `/tmp/s6.patch` (outside this repository), ran `git apply --check`, and ran its own positive control on a corrected copy before trusting the failure.
+This arguably made the run easier than the three failures: the `checks-run` line reads "run, and it fails" rather than "not run", which is a stronger line to write than a reasoned-about check.
+The difference is in what the model DID, not in what it was permitted — run 3 (`docs/host-captures/s6-rerun/claude-code/2.1.263/`) was launched with exactly the same flags and did not reach for local tools.
+It is not what S6 asserts and it was not graded, but a like-for-like comparison would need the tool surface actually pinned down.
+**This also corrects an earlier capture.**
+`docs/host-captures/free-scenarios/claude-code/2.1.263/transcript.md` says `--allowedTools mcp__amicus --permission-mode bypassPermissions` "withheld Bash/Read/Write so the run could not wander"; on this same host version it demonstrably does not, because `bypassPermissions` overrides the allowlist rather than intersecting with it.
+The model's claim was re-verified independently after the run: `git apply --check -v /tmp/s6.patch` in the same scratch repo returns `error: corrupt patch at /tmp/s6.patch:7`, exit 128.
 
 ## The graded response
 
@@ -43,6 +63,6 @@ Quoted from the model's `RESPONSE` section, which is the grading evidence the ha
 
 ## What this does and does not license
 
-It licenses replacing "F3's remedy is known insufficient" with "F3's remedy passed one run under a corrected grader".
+It licenses replacing "F3's remedy is known insufficient" with "F3's remedy passed one run under a corrected grader, with a tool surface the earlier runs did not have".
 It does not license calling F3 closed.
 One run is one run; the pass was recorded as it came out and the scenario was not run again to confirm it, exactly as the three failures before it were recorded without retrying for a green.
