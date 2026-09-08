@@ -67,24 +67,32 @@ The tag therefore deliberately points at a commit that is in `main`'s history bu
    Regenerate `uv.lock` with `uv lock` in this same PR, per AGENTS.md rule 19 — `uv.lock` mirrors the version rather than declaring it, and `prek.toml`'s `uv-lock-check` hook runs `uv lock --check` whenever `pyproject.toml` changes, so a release PR that skips this fails its own hook.
 3. Check out the PR C branch tip (not `main`) into a clean tree and confirm `git status --porcelain` is empty.
    Record the branch tip's SHA; call it the release commit, and note it well — it is the commit that gets tagged, and it will not be `main`'s head after the next step.
+   If the PR C branch gains any commit after this point — an "Update branch" click, or a review pushing a change — this step must be redone from the new tip: the evidence would otherwise cover a commit that is no longer what step 4 actually merges.
+   The evidence run below spends real quota on all three backends; a maintainer who has to redo this step must not reuse the earlier record, even though re-spending that quota is tempting.
    Run `uv run python scripts/record_live_gate_evidence.py`.
    The script itself forces `AMICUS_REQUIRE_LIVE=1` into each backend's subprocess environment, so prefixing the command with it is optional; its own usage string documents `AMICUS_REQUIRE_LIVE=1 uv run python scripts/record_live_gate_evidence.py`, and either form runs the same live gates.
    This spends real quota on all three backends and requires the maintainer's authorization in the session where it runs.
    Run `AMICUS_RELEASE_CHECK=1 uv run pytest tests/test_release_evidence.py -v --no-cov` and confirm the freshness assertion passes.
    Run the gate defined by AGENTS.md rule 2.
+   The 24-hour freshness window this evidence carries (`validate`'s `max_age_hours`) is checked only here, at step 3, and nothing re-checks it afterward: if PR C then sits in review overnight, the tag could be pushed on evidence the mechanism itself would now reject.
+   Merge PR C, the next step, before the day is out — otherwise this step must be repeated.
 4. Merge PR C with an ordinary merge commit: `gh pr merge --merge`.
    This is the strategy this repository already uses for its PRs, including #7 through #10.
    Squash and rebase are forbidden here, not merely discouraged: both create a new commit and drop the release commit from `main`'s history entirely, which would destroy the subject the evidence names, leaving no commit in `main`'s history for the tag to legitimately point at.
+   Do not re-run `AMICUS_RELEASE_CHECK=1 uv run pytest tests/test_release_evidence.py` after this merge "just to be sure": the recorded evidence names the release commit, which is no longer `main`'s HEAD once the merge commit exists, so the freshness assertion fails by design from here on.
+   That designed failure is not a stop signal; it is expected, and a cautious re-check at this point will read as one anyway if you are not expecting it.
 5. Run `git fetch origin` first.
    `gh pr merge --merge` updates GitHub, not the local `origin/main` remote-tracking ref, so any check below run against a stale local ref can pass while meaning nothing — a check run against a stale ref is worse than no check, because it looks like evidence.
    Run `git merge-base --is-ancestor <release-sha> origin/main && echo ok`.
    `git merge-base --is-ancestor` prints nothing itself and exits non-zero on failure, so the `&& echo ok` is what makes success visible: `ok` printed means the release commit is in `main`'s history, and any non-zero exit (no `ok`) means it is not, and the release must stop.
    Run `git rev-parse origin/main^2`.
-   It must print the release commit's SHA; if the command fails instead, `main`'s head is not a merge commit at all, meaning the merge was squashed or rebased despite the prohibition in step 4, and the release must stop.
+   It must print the release commit's SHA.
+   If the command fails outright, `main`'s head is not a merge commit at all, meaning the merge was squashed or rebased despite the prohibition in step 4, and the release must stop.
+   If it instead succeeds but prints a different SHA, the merge was an ordinary merge commit but of a branch tip the recorded evidence does not cover — the PR C branch gained a commit after step 3 was run — and the release must stop for that reason instead; do not diagnose this case as a squash or rebase.
    Run `git diff --stat <release-sha> origin/main`.
    It must print nothing, which is what proves the tree the tag will point at and the tree `main` now holds are identical; any output means something else merged in between, and the release must stop.
 6. Push the tag pointing at the release commit, not at `main`'s head: `git tag vX.Y.Z <release-sha>`, then push it.
-   Nothing else happens between step 4 and step 6.
+   Nothing but step 5's read-only checks happens between step 4 and step 6.
 
 A maintainer who instead wants the tag to be `main`'s own head has a permitted alternative: a direct fast-forward push of the PR C branch to `main` (`git checkout main && git merge --ff-only <pr-branch> && git push origin main`) achieves that, if this repository's branch protection allows a direct push to `main`.
 This runbook cannot say whether it does: `gh api repos/briandconnelly/amicus/branches/main/protection` returned `403 Resource not accessible by integration` to the token available while writing it, so that setting is unverified here, and this document does not assert it either way.
@@ -97,7 +105,7 @@ The `build` job runs first, then the `pypi` job waits for the `pypi` environment
 Approve that deployment deliberately once you have confirmed the build artifacts look right.
 The upload is irreversible: PyPI does not allow re-uploading a version, even a broken one.
 A pause here is the workflow waiting on you, not a hang.
-The tagged `pypi` job itself has never actually run: its condition is `github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')`, and the only dispatch exercised so far (2026-09-08, TestPyPI) ran against `refs/heads/main`, a branch, so that job was skipped both by the current two-clause condition and by the original one-clause condition it replaced.
+The tagged `pypi` job itself has never actually run: its condition is `github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')`, and both dispatches exercised so far (2026-09-08, TestPyPI: `34255779351`, which failed at the OIDC token exchange, and `34256365085`, which succeeded) ran against `refs/heads/main`, a branch, so that job was skipped both by the current two-clause condition and by the original one-clause condition it replaced.
 Approving that first real deployment is authorizing untested territory, not a rerun of something already proven.
 
 ## Post-tag completion checks

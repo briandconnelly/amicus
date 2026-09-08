@@ -15,14 +15,14 @@ amicus replaces `codex-in-claude`, `moonbridge`, and `claude-in-codex`.
 It does not replace `pontonier`: that repository is the shared backend SDK amicus depends on (`pontonier==0.9.0` in `pyproject.toml`), and it is not deprecated.
 
 `codex-in-claude` and `claude-in-codex` are published by the maintainer on PyPI under those exact names: `GET https://pypi.org/pypi/codex-in-claude/json` and `GET https://pypi.org/pypi/claude-in-codex/json` both return HTTP 200 with `info.author` "Brian Connelly" and `info.project_urls.Repository` under `github.com/briandconnelly/`, confirmed 2026-09-08.
-`moonbridge` is not published by the maintainer under that name: PyPI's `moonbridge` package (latest `0.16.0`) belongs to an unrelated project, `info.author` "Phaedrus <hello@mistystep.io>" and `info.project_urls.Repository` `https://github.com/misty-step/moonbridge` — a name collision, not the maintainer's package.
+`moonbridge` is not published by the maintainer under that name: PyPI's `moonbridge` package (latest `0.16.0`) belongs to an unrelated project, `info.author_email` "Phaedrus <hello@mistystep.io>" and `info.project_urls.Repository` `https://github.com/misty-step/moonbridge` — a name collision, not the maintainer's package.
 See the `moonbridge` section below for how users actually install `briandconnelly/moonbridge` today.
 
 ### `codex-in-claude`
 
 1. Add a deprecation notice to the top of `README.md`, above the badges, pointing at `amicus` and at `docs/MIGRATION.md`'s "From `codex-in-claude`" section.
 2. Decide the PyPI action: `codex-in-claude`'s classifiers currently declare `Development Status :: 4 - Beta` (`pyproject.toml`).
-   Change that classifier to `Development Status :: 7 - Inactive` and publish a final release so the change reaches PyPI; do not yank any existing release, because yanking would break every pinned install (the `.mcp.json` in this repo pins `codex-in-claude==0.22.0`, and the plugin marketplace launches from that exact pin).
+   Change that classifier to `Development Status :: 7 - Inactive` and publish a final release so the change reaches PyPI; do not yank any existing release, because yanking would break every pinned install (codex-in-claude's own `.mcp.json` pins `codex-in-claude==0.22.0`, and the plugin marketplace launches from that exact pin).
 3. Update the plugin-marketplace listing: `.claude-plugin/marketplace.json` and `.claude-plugin/plugin.json` both describe the plugin as "Call OpenAI Codex from Claude Code for delegation, review, and second opinions."
    Either archive the repository (which leaves the marketplace entry installable but frozen) or update both descriptions to say the plugin is deprecated in favor of amicus.
 4. Update the "Related projects" section of `README.md` (currently lines 336-340), which cross-links `claude-in-codex`; point that link at amicus's repository instead, or note there that both mirror-image servers are superseded by amicus.

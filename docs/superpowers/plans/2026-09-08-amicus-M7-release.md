@@ -372,6 +372,12 @@ Create `docs/RELEASING.md`, one sentence per line. It must contain, in this orde
    - A PyPI trusted publisher is registered for `briandconnelly/amicus`, `publish.yml`, environment `pypi`.
    - Trademark clearance for the name `amicus` is resolved, or the maintainer has decided to proceed without it. TestPyPI is already claimed; pypi.org is not.
 3. **The release sequence.**
+
+   > **Superseded.**
+   > The sequence originally written here — merge PR C, *then* run `scripts/record_live_gate_evidence.py`, *then* tag — was ruled to violate AGENTS.md rule 19, because it evaluates the evidence against the merge commit while never actually running the recorder against that commit, leaving `main` naming an uncovered commit for longer than necessary.
+   > `docs/RELEASING.md` carries the corrected sequence (record the evidence against the still-unmerged PR C branch tip first, merge second, tag third) and is authoritative.
+   > Treat the steps below as the historical record of what this plan originally said, not as instructions to follow.
+
    - Merge PR B.
    - Open and merge PR C: roll `## [Unreleased]` into `## [X.Y.Z] - YYYY-MM-DD`, leave a fresh empty `## [Unreleased]`, and change no version literal unless the version itself is changing. For 0.1.0 no literal moves: `pyproject.toml`, `src/amicus/__init__.py`, both `plugin.json` files and `.mcp.json`'s `@v0.1.0` already agree, and the tag is what makes that pin resolve.
    - Check out the merged commit into a clean tree and confirm `git status --porcelain` is empty.
