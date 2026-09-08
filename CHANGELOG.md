@@ -20,6 +20,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Known limitations
 
 - The tagged publish path to pypi.org has never run. Only the TestPyPI dispatch path has been exercised.
-- Eval scenario S6 in `skills/collaborating-with-amicus/tests/scenarios.md` has one validated pass, with a tool-surface-pinning follow-up carried to M7; S7 (real-host approval friction) failed its one recorded run. See their `status` fields and ADR 0012.
+- Eval scenario S6 in `skills/collaborating-with-amicus/tests/scenarios.md` passed on one run (status: `pass`, validated by that run alone); an M7 follow-up run against the current skill text did not isolate the still-open F3 finding, so F3 remains open. S7 (real-host approval friction) has failed both of its recorded runs (status: `fail`); an M7 zero-spend recheck reached neither a pass nor a fail and is recorded as inconclusive, so it does not move S7's status. See their `status` fields and ADR 0012.
 
 [Unreleased]: https://github.com/briandconnelly/amicus/commits/main
