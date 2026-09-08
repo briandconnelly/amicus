@@ -40,7 +40,10 @@ What can be said is narrow and is all that is claimed: with a scoped grader and 
 ### 2. The remedy and the instrument moved together
 
 Restated because it is easy to lose: this run cannot attribute the pass to the response contract or to the grading scope alone.
-The experiment that separates them is to run the OLD skill text under the NEW grader, and it has not been run.
+The experiment that separates them is to run the OLD skill text under the NEW grader.
+**Appended 2026-09-08, and it does not change this run's verdict:** that experiment has since been run, and the old text fails under the new grader (`docs/host-captures/s6-old-text-new-grader/claude-code/2.1.263/`).
+So the grader change alone does not account for the pass recorded here, and this confound is resolved in the remedy's favour.
+The other two confounds on this page stand.
 
 ### 3. The model had local tools, and used them
 
