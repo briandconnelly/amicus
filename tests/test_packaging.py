@@ -285,9 +285,19 @@ def test_changelog_has_an_unreleased_section():
     release PR), so this only checks that the file opens correctly and that the
     Unreleased section is not an empty stub -- it must already carry at least one
     `### `-level subsection.
+
+    A prior version of this assertion sliced only at the start of the Unreleased
+    heading (`text.split(..., 1)[1]`), so the "rest of the file" it checked included
+    every dated release section below it. Once PR C rolls Unreleased into a dated
+    `## [0.1.0]` section, that section's own `### Added` satisfied `"\n### " in
+    unreleased` even though the Unreleased section above it was left an empty stub --
+    exactly what this test's docstring says must fail. The slice must stop at the next
+    `\n## ` heading so it covers only the Unreleased section itself.
     """
     text = (Path(__file__).resolve().parent.parent / "CHANGELOG.md").read_text()
     assert text.startswith("# Changelog\n"), "the file must open with the Keep a Changelog title"
     assert "\n## [Unreleased]\n" in text, "the rollover target heading is missing"
-    unreleased = text.split("\n## [Unreleased]\n", 1)[1]
+    rest = text.split("\n## [Unreleased]\n", 1)[1]
+    next_heading = rest.find("\n## ")
+    unreleased = rest if next_heading == -1 else rest[:next_heading]
     assert "\n### " in unreleased, "the Unreleased section must contain at least one subsection"

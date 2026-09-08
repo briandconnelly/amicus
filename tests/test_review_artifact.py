@@ -123,12 +123,21 @@ def test_every_finding_carries_all_five_labeled_lines():
     blank (`- **Severity:**` with nothing after it, for all five) passed the old
     `missing = [f for f in FINDING_FIELDS if f not in finding.lower()]` body
     unchanged. Each label must now be followed by a non-empty value on its own
-    line, which a bare label cannot produce."""
+    line, which a bare label cannot produce.
+
+    Sixth instance of this bug class in this file: `re.search(rf"\\*\\*{field}\\*\\*(.*)",
+    finding, re.I)` is not anchored to a line, so inline text such as
+    `note **Severity:** Major` (the label appearing mid-sentence rather than on the
+    artifact's own `- **Severity:** ...` bullet) also satisfies it. Confirmed by
+    mutation: a synthetic finding with `severity` present only inline like that, and
+    every other field correctly on its own bullet line, passed the old regex
+    unchanged. The match is now anchored to the field's own bullet line (`re.M`,
+    matching from line start, allowing the leading `- ` the artifact uses)."""
     findings = re.findall(r"#### Finding \d+(.+?)(?=\n#### |\n## |\Z)", TEXT, re.S)
     assert findings, "the walk records no findings at all"
     for finding in findings:
         for field in FINDING_FIELDS:
-            match = re.search(rf"\*\*{re.escape(field)}\*\*(.*)", finding, re.I)
+            match = re.search(rf"^- \*\*{re.escape(field)}\*\*(.*)$", finding, re.I | re.M)
             assert match, f"finding missing {field}"
             assert match.group(1).strip(), f"finding has {field} with an empty value"
 
