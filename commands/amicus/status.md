@@ -4,8 +4,8 @@ argument-hint: "[backend]"
 ---
 
 Call the `amicus_backends` MCP tool from the amicus server (free — no model call) to
-list backends. Pass `backend` only if the request names one; omit it to list all
-enabled backends.
+list backends. Pass `backend` only if the request names one; omit it to list every backend amicus
+knows about — disabled ones are listed too, marked `enabled: false`.
 
 Request: $ARGUMENTS
 

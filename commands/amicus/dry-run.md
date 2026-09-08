@@ -1,6 +1,6 @@
 ---
 description: Preview a review or delegate call amicus would assemble — free, no model call
-argument-hint: "<backend> review|delegate [working_tree|branch <base>|commit <sha>]"
+argument-hint: "<backend> review [working_tree|branch <base>|commit <sha>] | <backend> delegate <task>"
 ---
 
 Preview what an `amicus_review_changes` or `amicus_delegate` call would send,

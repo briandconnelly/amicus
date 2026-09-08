@@ -1,6 +1,6 @@
 ---
 description: Run a fixed adversarial critic (via amicus) against a plan, claim, or decision
-argument-hint: "<backend> [working_tree|branch <base>|commit <sha>]"
+argument-hint: "<backend> <target> [working_tree|branch <base>|commit <sha>]"
 ---
 
 Use the `amicus_adversarial_review` MCP tool from the amicus server to have a fixed
