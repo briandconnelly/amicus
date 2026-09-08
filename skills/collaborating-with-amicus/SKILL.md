@@ -33,9 +33,10 @@ result obligates you to do next.
    ask the user to disable a backend.
 6. **Never put a secret in any free-text field you supply.** On this surface those are
    `question`, `task`, `target`, `evidence`, `extra_context`, `instructions_append`, and
-   `focus` — every one of them travels over the backend worker's stdin and is sent to the
-   backend's provider raw. `target` and `evidence` are the primary carriers on
-   `amicus_adversarial_review`, not optional extras.
+   `focus` — every one of them is sent to the backend's provider raw, and how each reaches the
+   backend CLI is that backend's own choice: on `codex`, `instructions_append` rides argv and is
+   visible in local process listings (see "Data exposure"). `target` and `evidence` are the
+   primary carriers on `amicus_adversarial_review`, not optional extras.
 
 ## Route the request
 
@@ -112,8 +113,22 @@ not the one you picked for this call.
 ### Data exposure
 
 - Every free-text field you supply — `question`, `task`, `target`, `evidence`, `extra_context`,
-  `instructions_append`, `focus` — is sent to the selected backend's provider raw, and travels to
-  the backend worker over its stdin — never as an argv token or into a log file amicus writes.
+  `instructions_append`, `focus` — is sent to the selected backend's provider raw. Amicus never
+  writes one to its own logs, and for an async job they reach amicus's job worker over that
+  worker's stdin, never on its argv and never into the job directory.
+- That is amicus's own transport only. **How a field reaches the backend CLI is the backend's
+  choice, and one of them puts caller text on a command line.** Read `carriers` on
+  `amicus_backends` for the authoritative per-backend statement; today:
+  - `codex` — the prompt (framing, question/task/diff, `extra_context`) rides the codex process's
+    stdin, but `instructions_append` rides **argv** as the `-c developer_instructions` config
+    override, so its text is visible to anything that can list processes on this machine for the
+    duration of the run. Do not put a secret in `instructions_append` on `codex`.
+  - `claude` — the whole prompt, `instructions_append` included, rides the claude process's stdin;
+    argv carries only fixed text and flags.
+  - `kimi` — kimi ignores stdin and crashes on a long argv, so the whole prompt is written to a
+    file in a private temp directory outside the workspace and argv carries only that file's path;
+    amicus removes the directory when the run ends. Nothing you type rides argv, but the text is
+    briefly on local disk.
 - A backend can read files outside the workspace during an active call; the workspace is not a
   read boundary. Redaction (secret scrubbing) is best-effort and applies only to gathered diffs
   and returned output, never to what you supply.
