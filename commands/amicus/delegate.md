@@ -15,8 +15,9 @@ first and choose only among backends it reports `enabled: true`,
 `status.authenticated: true`, and delegate listed under supported features.
 
 Pass the absolute repository path as `workspace_root` and describe the task
-precisely in `task`; never put a secret in `task` or `extra_context` — both travel
-to the backend's provider raw.
+precisely in `task`; never put a secret in `task` — it travels to the backend's
+provider raw. `task` is the only free-text field this tool carries — it takes no
+extra-context argument.
 
 **This never edits your working tree.** The tool returns a diff (`meta.job_id`,
 `diff` in the result) — it does not apply it. Review the diff yourself before
