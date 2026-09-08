@@ -54,7 +54,9 @@ Legacy names are removed in `0.3.0`.
 
 ## Tool-name mapping
 
-Every amicus tool takes `backend` as a required parameter (no default); pick `"codex"`, `"kimi"`, or `"claude"` to reproduce a sibling's behavior.
+Most amicus tools take `backend` as a required parameter (no default); pick `"codex"`, `"kimi"`, or `"claude"` to reproduce a sibling's behavior.
+`amicus_backends` and `amicus_job_list` take `backend` as an optional filter instead (omit it to see every backend or every job).
+`amicus_capabilities` has no `backend` parameter at all: it reports the whole server (tool inventory, fingerprint, error catalog), not one backend's readiness — use `amicus_backends(backend=...)` for that.
 
 ### From `codex-in-claude`
 
@@ -68,8 +70,8 @@ Every amicus tool takes `backend` as a required parameter (no default); pick `"c
 | `codex_delegate_async` | `amicus_delegate_async(backend="codex", ...)` |
 | `codex_delegate_dry_run` | `amicus_delegate_dry_run(backend="codex", ...)` |
 | `codex_dry_run` | `amicus_dry_run(backend="codex", ...)` |
-| `codex_status` | `amicus_capabilities(backend="codex")` (readiness is folded into capabilities) |
-| `codex_capabilities` | `amicus_capabilities(backend="codex")` |
+| `codex_status` | `amicus_backends(backend="codex")` |
+| `codex_capabilities` | `amicus_capabilities()` (server-wide now; per-backend detail is `amicus_backends(backend="codex")`) |
 | `codex_models` | `amicus_models(backend="codex")` |
 | `codex_transfer` | not ported; there is no amicus equivalent |
 | `codex_job_status` | `amicus_job_status(...)` |
@@ -90,8 +92,8 @@ Every amicus tool takes `backend` as a required parameter (no default); pick `"c
 | `kimi_delegate_async` | `amicus_delegate_async(backend="kimi", ...)` |
 | `kimi_delegate_dry_run` | `amicus_delegate_dry_run(backend="kimi", ...)` |
 | `kimi_dry_run` | `amicus_dry_run(backend="kimi", ...)` |
-| `kimi_status` | `amicus_capabilities(backend="kimi")` |
-| `kimi_capabilities` | `amicus_capabilities(backend="kimi")` |
+| `kimi_status` | `amicus_backends(backend="kimi")` |
+| `kimi_capabilities` | `amicus_capabilities()` (server-wide now; per-backend detail is `amicus_backends(backend="kimi")`) |
 | `kimi_models` | `amicus_models(backend="kimi")` |
 | `kimi_job_status` | `amicus_job_status(...)` |
 | `kimi_job_result` | `amicus_job_result(...)` |
@@ -110,8 +112,8 @@ Every amicus tool takes `backend` as a required parameter (no default); pick `"c
 | `claude_adversarial_review` | `amicus_adversarial_review(backend="claude", ...)` |
 | `claude_adversarial_review_async` | `amicus_adversarial_review_async(backend="claude", ...)` |
 | `claude_dry_run` | `amicus_dry_run(backend="claude", ...)` |
-| `claude_status` | `amicus_capabilities(backend="claude")` |
-| `claude_capabilities` | `amicus_capabilities(backend="claude")` |
+| `claude_status` | `amicus_backends(backend="claude")` |
+| `claude_capabilities` | `amicus_capabilities()` (server-wide now; per-backend detail is `amicus_backends(backend="claude")`) |
 | `claude_models` | `amicus_models(backend="claude")` |
 | `claude_job_status` | `amicus_job_status(...)` |
 | `claude_job_result` | `amicus_job_result(...)` |
@@ -141,7 +143,7 @@ Point `AMICUS_STATE_DIR` at separate directories only if you need to keep job hi
 **`backend_options` is a closed superset (ADR 0002).**
 Every backend's options (`isolation`, `config_mode`, `access`, `max_budget_usd`, and the rest) live in one closed schema shared by all calls.
 A key that the selected backend does not accept is a validation error (`invalid_arguments`, `details.field = "backend_options.<key>"`), not a value that gets silently dropped the way an unrecognized sibling option might have been.
-Check `amicus_capabilities` or a tool's `amicus_dry_run` echo to see which options apply to your chosen backend before spending.
+Check `amicus_backends(backend=...)` or a tool's `amicus_dry_run` echo to see which options apply to your chosen backend before spending.
 
 **Legacy environment names warn now and are removed in `0.3.0`.**
 Every sibling env var above is read automatically until then, but each read logs a warning naming the removal version.
