@@ -23,7 +23,11 @@ Read it back:
 gh api repos/briandconnelly/amicus/rulesets
 ```
 
-Confirm a ruleset targeting `refs/tags/v*` whose rules restrict `creation` as well as `update` and `deletion`, and whose bypass list contains no agent identity.
+Confirm a ruleset targeting `refs/tags/v*` whose rules restrict `creation` as well as `update` and `deletion`, and whose bypass list contains no agent identity — no entry whose `actor_type` is `Integration`.
+Then read the ruleset itself, `gh api repos/briandconnelly/amicus/rulesets/<id>`, and confirm `current_user_can_bypass` is not `never`.
+That field is the one that says whether YOU can push the tag.
+A ruleset with an empty `bypass_actors` list satisfies rule 21 perfectly and blocks the release, because the restriction applies to the repository owner too — this happened on 2026-09-08 and was caught only by reading the ruleset back.
+The fix is to add the repository admin role to the bypass list, never to weaken a rule: rule 21 forbids agent identities from bypassing, not you.
 Creation is the load-bearing rule.
 `.github/workflows/publish.yml` triggers on `push: tags: ["v*"]`, so any identity that can create a `v*` tag can trigger a publish without rules 19 and 20 having been satisfied first.
 A settings page that looks right is not evidence; the M6 environment check found exactly that failure mode by reading the API back instead of trusting the UI.
@@ -48,6 +52,8 @@ This is configured on PyPI's own project settings page and has no read-only API 
 ### Trademark clearance for the name `amicus`
 
 Trademark clearance for the name `amicus` is resolved, or the maintainer has decided to proceed without it.
+This was decided on 2026-09-08: `docs/adr/0013-proceed-without-trademark-clearance.md` records the decision to publish without clearance, the consequences accepted, and what would reopen it.
+Read that ADR rather than relying on anyone's recollection, and confirm nothing listed under "What would reopen this" has since happened.
 TestPyPI already has the name claimed under this project; pypi.org does not yet have a release.
 
 ### The README describes the released tool

@@ -55,8 +55,12 @@ Trademark registries were **not** checked.
 brand-level, not a blocked name. But `SmockDev/agentpanel` is in this exact
 space, which is the disqualifying find.
 
-**Open item:** "Amicus" has commercial use in legal practice-management
-software. A real trademark search is required before committing to it.
+**Resolved 2026-09-08 by ADR 0013.** "Amicus" has commercial use in legal
+practice-management software, and a real trademark search was called for here
+before committing to the name. That search was not performed; the maintainer
+decided deliberately to publish without clearance. See
+`docs/adr/0013-proceed-without-trademark-clearance.md` for the reasoning, the
+consequences accepted, and what would reopen it.
 
 ### Why `amicus`
 
@@ -139,7 +143,7 @@ also inventing the abstraction compounds two hard problems.
 
 ## Open decisions
 
-- Trademark clearance for `amicus`.
+- ~~Trademark clearance for `amicus`.~~ Decided 2026-09-08: proceed without it (ADR 0013).
 - **Policy divergence.** `claude-in-codex` is deliberately review-only with no
   `delegate`. In a merged server that is either a per-backend capability flag or
   a unified policy — and unifying it *upward* weakens a guarantee that was built
