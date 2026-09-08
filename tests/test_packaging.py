@@ -1,7 +1,8 @@
 """Packaging invariants: version literals agree, classifiers match the floor.
 
-Also covers `amicus.packaging`'s env-var generation: `env_vars` and the migration table are
-generated from the declarations, never typed by hand.
+Also covers `amicus.packaging`: the committed `env_vars` list is asserted EQUAL to the
+declarations. Nothing here writes the manifest -- the file is hand-maintained and this is
+the check that keeps it from drifting.
 """
 
 from __future__ import annotations
@@ -150,7 +151,7 @@ def test_declared_names_are_all_amicus_namespaced():
     assert not any(n.startswith("AMICUS_") for n in packaging.vendor_auth_env_names())
 
 
-def test_mcp_json_env_vars_equal_the_generated_list():
+def test_mcp_json_env_vars_equal_the_declared_list():
     server = _read(".mcp.json")["mcpServers"]["amicus"]
     assert server["env_vars"] == packaging.env_vars_list()
 
