@@ -50,3 +50,12 @@ This matches the M5 capture under `docs/host-captures/claude-code/2.1.263/`.
 
 Three paid calls were spent here, one per backend, all on S1.
 Every other probe on this host was free: the install, the handshake, discovery, S2 (rejected before dispatch, then repaired against a stub backend) and S7 (refused at the host's permission gate before dispatch).
+
+Two earlier S1 attempts on this host are recorded because they made no paid amicus call and spent nothing; `server.log` shows their sessions, so they are disclosed here rather than left unexplained.
+
+- The first hit the harness's turn cap while the agent explored the filesystem with `Bash`, and reached only the free `amicus_backends` before the cap stopped it.
+  The fix was to raise the cap and withhold the built-in file and shell tools, so a cold-start run could not wander.
+- The second was a deliberate harness validation: the same S1 prompt with `amicus_consult` withheld from the allowed tools, run to prove the corrected harness reaches a valid paid call *before* any budget was committed to it.
+  The host refused the call at its permission gate, exactly as intended.
+
+A third earlier session on this host belongs to S7 and is described in the S7 section of `transcript.md`.

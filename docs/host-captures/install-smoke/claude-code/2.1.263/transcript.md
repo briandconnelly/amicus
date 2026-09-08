@@ -22,10 +22,14 @@ No run reached for `amicus_review_changes`, `amicus_delegate` or `amicus_adversa
 The `backend` argument equalled the single enabled backend in all three runs, so no run named a backend `amicus_backends` had reported as not enabled.
 Run 3 also passed `backend_options` `{"access": "toolless", "config_mode": "safe"}`, which is the skill's own hygiene for the Claude backend rather than anything the prompt asked for.
 
+The answers themselves are withheld under rule 18, deliberately and at no cost to the record.
+Every S1 assertion is a call-shape assertion — which tool, in which order, with which `backend`, and whether `ok` was true on the first attempt — and all of them are recorded in the table above for every run.
+
 ## S2 — first repair (free)
 
 `AMICUS_BACKENDS=codex`, with `AMICUS_CODEX_BIN` pointed at the repo's own `tests/support/fake_codex.py` stub so the repaired call could return `ok: true` without spending a backend call.
 The stub is disclosed here because the run's substantive answer is the stub's canned text, not a model's.
+`fake_codex.py` writes the prompt it receives to disk when `FAKE_CODEX_ARGV_FILE` or `FAKE_CODEX_STDIN_FILE` is set; both were left unset for this run, so the prompt stayed on the process's stdin and rule 18 held for the stub as well as for the capture.
 
 The deliberately invalid call carried an unsupported `backend_options` key.
 The server rejected it before dispatch and returned:
@@ -88,6 +92,9 @@ That is correct behaviour and it cost nothing, but it produced no approval promp
 - **Discovery cost**: measured against the live wheel server rather than estimated.
   The serialized `tools/list` response is 92202 bytes for the `all` profile, 92210 for `codex-kimi` and 92202 for `claude`, all 18 tools, against the 93000-byte budget in `tests/test_discovery_cost.py`.
   The ratchet holds live.
+  These live numbers sit about 120 bytes above that file's `MEASURED` values (92082 / 92090 / 92082), and the gap is a measurement difference, not drift.
+  `MEASURED` comes from `manifest.tools_list_bytes` serializing the app's own tool models in process, whereas these numbers re-serialize what a real MCP client received over stdio, after the server's middleware has stamped each input schema with its JSON Schema dialect.
+  Both readings are under the same budget, and the budget is the ceiling the ratchet actually enforces.
   This host does not preload those definitions; it reached the tools through a deferred-tool lookup instead, so the wire size is a smaller tax here than the ratchet's worst case assumes.
 - **Annotation honesty**: the free tools declare `read_only_hint: true` and `open_world_hint: false`, and the paid tools declare `read_only_hint: false` and `open_world_hint: true`.
   That matches what was observed: only the paid tools reach a backend process and a provider.

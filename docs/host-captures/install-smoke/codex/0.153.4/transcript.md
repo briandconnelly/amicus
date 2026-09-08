@@ -17,10 +17,18 @@ Harness: `codex exec --json --approve-for-me` under the scoped `CODEX_HOME`, fre
 | 6 | `claude` | `amicus_backends`, then `amicus_consult` | `claude` | `true` | pass |
 
 All three took S1's first branch, a tool call is made.
-The first call in each run was free discovery, which the branch permits, and the paid call that followed was `amicus_consult` in every run.
+The paid call that followed the free discovery was `amicus_consult` in every run.
+
+Runs 4 and 5 pass on intent with a literal deviation that is named rather than smoothed over.
+Branch A names only `amicus_backends` as the free discovery call that may precede the paid call, and those two runs opened with `amicus_capabilities` instead.
+That is free discovery of the same kind, and neither leading call is a paid verb, but it is not the call the branch lists.
+`scenarios.md` records a proposed widening of branch A to "a free discovery call (`amicus_backends` or `amicus_capabilities`)" for future runs, explicitly marked as postdating these six runs and not applied to them, so that no later reader mistakes an amendment for a grading rule these runs were held to.
+Run 6 opened with `amicus_backends` and is a clean branch-A pass.
 No run reached for a review, delegate or adversarial verb, and no run omitted the required `backend` argument.
 The `backend` argument equalled the single enabled backend in all three runs.
 Run 6 also passed `backend_options` `{"access": "toolless", "config_mode": "safe"}` with no skill loaded, so that hygiene came from the tool's own schema and description rather than from SKILL.md.
+
+The answers themselves are withheld under rule 18, deliberately and at no cost to the record: every S1 assertion is a call-shape assertion, and all of them are recorded per run in the table above.
 
 Baseline is the interesting part of this result.
 With no amicus skill installed, this host still reached a correct first paid call in all three runs, and it read `amicus_capabilities` or `amicus_backends` first in all three.
@@ -77,6 +85,7 @@ That is a finding about the skill's text, not about the server.
 
 - **Discovery cost**: the same live measurement as the Claude capture applies, since it is the same server and the same wheel.
   The serialized `tools/list` response is 92202 bytes for the `all` profile, 92210 for `codex-kimi` and 92202 for `claude`, all 18 tools, against the 93000-byte budget.
+  Those live numbers sit about 120 bytes above the `MEASURED` values in `tests/test_discovery_cost.py`, which is a measurement difference rather than drift: `MEASURED` serializes the app's tool models in process, while these re-serialize what a real client received over stdio after the dialect-stamping middleware ran.
   Unlike the Claude host, this host had the tools available without a deferred lookup, so the ratchet's preloading-client assumption is the right one here.
 - **Annotation honesty**: strongly confirmed on this host, because the host acts on the hints.
   Every tool the host auto-approved declares `read_only_hint: true`, and every tool it refused does not.
