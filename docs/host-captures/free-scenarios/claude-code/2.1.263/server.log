@@ -1,0 +1,23 @@
+2026-09-07 19:25:34,055 INFO amicus: amicus 0.1.0 starting (stdio)
+2026-09-07 19:25:45,465 INFO amicus: amicus 0.1.0: received SIGINT, shutting down
+2026-09-07 19:25:45,467 INFO amicus: amicus 0.1.0: received SIGTERM, shutting down
+2026-09-07 19:25:56,867 INFO amicus: amicus 0.1.0 starting (stdio)
+2026-09-07 19:26:09,047 INFO amicus: amicus 0.1.0: received SIGINT, shutting down
+2026-09-07 19:26:09,049 INFO amicus: amicus 0.1.0: received SIGTERM, shutting down
+2026-09-07 19:26:20,561 INFO amicus: amicus 0.1.0 starting (stdio)
+2026-09-07 19:26:32,360 INFO amicus: amicus 0.1.0: received SIGINT, shutting down
+2026-09-07 19:26:32,361 INFO amicus: amicus 0.1.0: received SIGTERM, shutting down
+2026-09-07 19:26:42,487 INFO amicus: amicus 0.1.0 starting (stdio)
+2026-09-07 19:26:46,377 DEBUG amicus.middleware: tools/call amicus_backends: protocol=2025-11-25 client=claude-code/2.1.263 tasks_negotiated=False
+2026-09-07 19:26:51,147 INFO amicus: amicus 0.1.0: received SIGINT, shutting down
+2026-09-07 19:26:51,148 INFO amicus: amicus 0.1.0: received SIGTERM, shutting down
+2026-09-07 19:27:01,254 INFO amicus: amicus 0.1.0 starting (stdio)
+2026-09-07 19:27:08,977 DEBUG amicus.middleware: tools/call amicus_backends: protocol=2025-11-25 client=claude-code/2.1.263 tasks_negotiated=False
+2026-09-07 19:27:13,012 INFO amicus: amicus 0.1.0: received SIGINT, shutting down
+2026-09-07 19:27:13,013 INFO amicus: amicus 0.1.0: received SIGTERM, shutting down
+2026-09-07 19:27:23,827 INFO amicus: amicus 0.1.0 starting (stdio)
+2026-09-07 19:27:47,509 INFO amicus: amicus 0.1.0: received SIGINT, shutting down
+2026-09-07 19:27:47,512 INFO amicus: amicus 0.1.0: received SIGTERM, shutting down
+2026-09-07 19:28:04,960 INFO amicus: amicus 0.1.0 starting (stdio)
+2026-09-07 19:28:19,198 INFO amicus: amicus 0.1.0: received SIGINT, shutting down
+2026-09-07 19:28:19,199 INFO amicus: amicus 0.1.0: received SIGTERM, shutting down

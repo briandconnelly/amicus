@@ -5,7 +5,18 @@ catalog is a per-session token tax. The budget is a ceiling; the target is the l
 deliberate measurement so a failure message shows the drift. Raising a budget is a
 reviewed decision — say why in the PR body.
 
-Measured 2026-09-07 at schema-6 (18 tools; job-outlives-task claim corrected): see MEASURED.
+What this ratchet does and does not cover, scoped against captured host evidence rather
+than assumed. It bounds the TOKEN COST of discovery. It is not a measure of first-call
+success, and a green run here is no evidence that an agent picks the right tool.
+
+The preloading client this budget is written for is real but is not universal. Codex CLI
+0.153.4 preloads the catalog, so the tax is paid per session there. Claude Code 2.1.263
+does not: it defers MCP tool definitions behind a ToolSearch lookup, so the wire size is a
+smaller tax on that host than the budget assumes
+(docs/host-captures/install-smoke/claude-code/2.1.263/notes.md). The budget stays the
+worst-case ceiling for the clients that do preload.
+
+Measured 2026-09-07 at schema-7 (18 tools; capabilities gained result_format): see MEASURED.
 """
 
 from __future__ import annotations
@@ -14,7 +25,7 @@ import pytest
 
 from amicus import manifest
 
-MEASURED: dict[str, int] = {"all": 92082, "codex-kimi": 92090, "claude": 92082}
+MEASURED: dict[str, int] = {"all": 92507, "codex-kimi": 92515, "claude": 92507}
 BUDGET: dict[str, int] = {p: ((n // 1000) + 1) * 1000 for p, n in MEASURED.items()}
 # ceil(bytes/4): a dependency-free, conservative token proxy (~4.13 bytes per token).
 TOKEN_PROXY_BUDGET: dict[str, int] = {p: -(-b // 4) for p, b in BUDGET.items()}

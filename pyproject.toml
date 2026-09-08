@@ -103,6 +103,7 @@ pythonpath = ["."]
 addopts = "--cov=amicus --cov-report=term-missing --strict-markers --strict-config -m 'not integration'"
 markers = [
     "integration: live tests requiring a backend CLI; opt in with `pytest -m integration --no-cov`",
+    "slow: builds and installs a wheel into a throwaway venv; minutes, not seconds",
 ]
 
 [tool.coverage.run]

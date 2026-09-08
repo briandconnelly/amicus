@@ -37,3 +37,9 @@ def test_main_reports_a_file(tmp_path, capsys):
     assert ccm.main([str(msg)]) == 1
     assert "FAIL" in capsys.readouterr().out
     assert ccm.main([]) == 1
+
+
+def test_skills_scope_is_allowed():
+    from scripts.check_commit_message import ALLOWED_SCOPES
+
+    assert "skills" in ALLOWED_SCOPES

@@ -1,0 +1,6 @@
+2026-09-07 20:13:09,261 INFO amicus: amicus 0.1.0 starting (stdio)
+2026-09-07 20:13:37,432 INFO amicus: amicus 0.1.0: received SIGINT, shutting down
+2026-09-07 20:13:37,433 INFO amicus: amicus 0.1.0: received SIGTERM, shutting down
+2026-09-07 20:13:54,205 INFO amicus: amicus 0.1.0 starting (stdio)
+2026-09-07 20:14:18,979 INFO amicus: amicus 0.1.0: received SIGINT, shutting down
+2026-09-07 20:14:18,981 INFO amicus: amicus 0.1.0: received SIGTERM, shutting down
