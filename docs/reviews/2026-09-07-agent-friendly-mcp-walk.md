@@ -319,6 +319,10 @@ The residual risks this walk leaves standing:
 - **The tasked path was never exercised by a real host.** Neither v1 host declares the tasks extension, so `[7.*]` is reviewed against schemas and in-repo tests only.
 - **No live redaction trace.** S8 verified that the *model* redacted before sending; no captured run traced a server-side redaction of gathered diff or returned output end to end.
 - **Advertised-vs-actual is per host, not per tool.** The captures give one success and one forced error per host; the per-tool obligation rests on the in-repo golden and differential suites.
+- **The plugin seam is proven to LOAD a third-party backend, not to make one usable.**
+`tests/test_wheel_seam.py` shows the `amicus.backends` entry-point group is read from an out-of-tree distribution and that a wrong `api_version` is rejected by reason.
+A loaded third-party id still cannot be enabled (`amicus.config._profile` rejects any `AMICUS_BACKENDS` token outside `BACKEND_IDS`) nor named in a call (`BackendId` is a closed `Literal`).
+Widening either is a surface change and is carried to M7; ADR 0012 "Known gaps" records it.
 - **The committed `.mcp.json` names a git tag that does not exist yet.** Every capture substituted a locally built wheel for that one argument, so tag resolvability is unproven by M6 and belongs to the publish workflow's gate.
 - **F3's second remedy passed one run, with directional support from a non-identical comparison run; F2's is still untested.** The first remedy — an ordering directive in prose — failed three runs, and the fourth run replaced both the remedy and the grader at once.
   The remedy is now a required output SHAPE (a `Checks:` block over four fixed keys, then a labelled `Verdict:` line) rather than an instruction about the order of generated prose, and the grader now reads the model's `RESPONSE` section instead of the whole harness transcript, which had let the harness's own `LOAD` line supply the deciding token.

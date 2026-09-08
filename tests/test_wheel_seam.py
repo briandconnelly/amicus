@@ -1,8 +1,18 @@
-"""A third-party backend, built as a real wheel and installed out of tree, is discoverable.
+"""A third-party backend, built as a real wheel and installed out of tree, is LOADED.
 
-The entry-point group is the plugin seam's whole promise. An in-repo import path cannot
-prove it: a group that scanned nothing would look identical to success. Hence the negative
-control below."""
+What these tests prove, exactly: `BackendRegistry.load` reads the `amicus.backends`
+entry-point group from installed distributions outside this tree, imports the factory,
+validates its `api_version`, and reports the outcome as `available` or as an
+`UnavailableBackend` with a reason. An in-repo import path cannot prove that: a group that
+scanned nothing would look identical to success, hence the negative control below.
+
+What they do NOT prove -- and no test in this repo does -- is that a third-party backend is
+USABLE. Two in-tree gates still close on any id outside `BACKEND_IDS`:
+`amicus.config._profile` rejects an `AMICUS_BACKENDS` token that is not an in-tree backend,
+and `BackendParam` is the closed `Literal["codex", "kimi", "claude"]`, so no tool call can
+name a loaded third-party plugin. Loading is therefore necessary but not sufficient, and
+opening those two gates is a deliberate surface decision carried to M7 (ADR 0012, "Known
+gaps"). Do not read a green run here as end-to-end third-party support."""
 
 from __future__ import annotations
 

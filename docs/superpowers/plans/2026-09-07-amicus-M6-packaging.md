@@ -2,10 +2,10 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make amicus installable and migratable — both host manifests with `env_vars` generated from the declarations, a router skill and per-verb commands, a test-asserted `docs/MIGRATION.md`, a third-party backend proven to load from a real wheel, install smoke captured from both hosts, and the agent-friendly-mcp review walk answered with real cold-start and first-repair probe evidence.
+**Goal:** Make amicus installable and migratable — both host manifests with `env_vars` asserted equal to the declarations, a router skill and per-verb commands, a test-asserted `docs/MIGRATION.md`, a third-party backend proven to load from a real wheel, install smoke captured from both hosts, and the agent-friendly-mcp review walk answered with real cold-start and first-repair probe evidence.
 
 **Architecture:** No new runtime subsystem.
-Everything either generates from an existing declaration (`.mcp.json` `env_vars` and the `MIGRATION.md` env table both derive from `config/envspec.py`, and a test asserts the committed file equals the generated one) or exercises an existing seam from outside for the first time (the `amicus.backends` entry-point group, which `registry.py` has always read but which no out-of-tree distribution has ever populated).
+Everything is either checked against an existing declaration (`.mcp.json` `env_vars` and the `MIGRATION.md` env table are both hand-maintained and a test asserts each committed file equals what `config/envspec.py` declares — validated, not generated; no regeneration command exists) or exercises an existing seam from outside for the first time (the `amicus.backends` entry-point group, which `registry.py` has always read but which no out-of-tree distribution has ever populated).
 The host-facing surface — skill, commands, manifests — is new content, not new code paths.
 The review walk runs last and is expected to produce a fix wave; if that wave changes any tool description, it moves the fingerprint, and the plan budgets for that.
 
@@ -114,7 +114,7 @@ The maintainer approved decisions 1–5 in the planning session (2026-09-07); 6�
 
 | Path | Responsibility |
 | --- | --- |
-| `src/amicus/packaging.py` | Pure functions deriving the `env_vars` list and the migration env table from the declared namespaces. No I/O; the single source both the manifest and the doc are generated from. |
+| `src/amicus/packaging.py` | Pure functions deriving the expected `env_vars` list and migration-table values from the declared namespaces. No I/O and no rendering; it supplies the expected side of the equality checks that keep the hand-maintained manifest and doc from drifting. |
 | `.mcp.json` | The one MCP server definition both host manifests point at. Generated, test-asserted. |
 | `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json` | Claude Code install path. |
 | `.codex-plugin/plugin.json` | Codex install path. |
@@ -200,7 +200,7 @@ The generator reads `LOGIN_CREDENTIAL_ENV_VARS` off each backend's contract modu
 Create `tests/test_packaging.py`:
 
 ```python
-"""env_vars and the migration table are generated from the declarations, never typed by hand."""
+"""env_vars and the migration table are asserted equal to the declarations."""
 
 from __future__ import annotations
 
@@ -280,9 +280,9 @@ Create `src/amicus/packaging.py`:
 ```python
 """Derive packaging artifacts from the env declarations.
 
-`.mcp.json`'s `env_vars` and `docs/MIGRATION.md`'s env table are both generated here so
-neither can drift from `config/envspec.py`. Pure functions, no I/O: the tests compare a
-committed file against what these return."""
+This module renders nothing; it supplies the expected values that `tests/test_packaging.py`
+and `tests/test_migration_doc.py` compare the hand-maintained `.mcp.json` and
+`docs/MIGRATION.md` against, so neither can drift from `config/envspec.py`."""
 
 from __future__ import annotations
 
@@ -396,7 +396,7 @@ def _read(relative: str) -> dict:
     return json.loads((REPO_ROOT / relative).read_text())
 
 
-def test_mcp_json_env_vars_equal_the_generated_list():
+def test_mcp_json_env_vars_equal_the_declared_list():
     server = _read(".mcp.json")["mcpServers"]["amicus"]
     assert server["env_vars"] == packaging.env_vars_list()
 
@@ -938,7 +938,9 @@ git commit -m "docs(packaging): add the migration guide with a test-asserted env
 
 **Interfaces:**
 - Consumes: `amicus.plugin.BackendPlugin`, `PLUGIN_API_VERSION`, `ENTRY_POINT_GROUP = "amicus.backends"`; `amicus.registry` loading.
-- Produces: proof that `registry.py`'s entry-point path — never exercised from outside this repo — actually works for a third party.
+- Produces: proof that `registry.py`'s entry-point path — never exercised from outside this repo — LOADS and validates a third-party distribution's plugin.
+  It does not prove such a backend is usable: `config._profile` rejects any `AMICUS_BACKENDS` token outside `BACKEND_IDS` and `BackendId` is a closed `Literal`, so a loaded third-party id can be neither enabled nor called.
+  That gap is recorded in ADR 0012 and carried to M7.
 
 This is the gate item "FakePlugin as a wheel".
 `tests/support/fakeplugin.py` already registers under a test-only entry point, but that is a same-repo import path; it cannot fail the way a real installed distribution can.
@@ -1386,7 +1388,7 @@ The PR body carries the residuals, the known gaps from Step 5, and the paid-call
 
 **Spec coverage.** M6's scope row maps as: packaging → Tasks 1, 2, 7 and the separate workflow PR; docs → Tasks 3, 4, 6, 10; eval fixtures → Tasks 5, 9; migration doc → Task 6; annotation-friction capture → Task 8 Step 5.
 The gate row maps as: install smoke from both manifests → Task 8; FakePlugin as a wheel → Task 7; agent-friendly-mcp review walk → Task 10.
-The Config section's three requirements — generated `env_vars`, test-asserted `MIGRATION.md`, `${VAR}` placeholder check — are Tasks 1, 6 and Task 2's `test_mcp_json_has_no_unexpanded_placeholders` respectively.
+The Config section's three requirements — declaration-asserted `env_vars`, test-asserted `MIGRATION.md`, `${VAR}` placeholder check — are Tasks 1, 6 and Task 2's `test_mcp_json_has_no_unexpanded_placeholders` respectively.
 
 **Known gaps, stated rather than hidden.**
 The standing cold-start regression gate (`design-workflow.md` Step 9) is not built.

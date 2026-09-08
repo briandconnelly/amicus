@@ -48,4 +48,7 @@ The gate is defined once, in `AGENTS.md` (Rules, item 2); CI runs it on every su
 2. In a fresh session say "Resume amicus at milestone M7 per the execution model".
 3. The agent writes the M7 plan from the spec and executes it.
 
+A third-party backend distribution is loaded and validated through the `amicus.backends` entry-point group (`tests/test_wheel_seam.py`), but it cannot yet be enabled or called: `AMICUS_BACKENDS` and the `backend` parameter both accept only the in-tree ids.
+Widening them is an M7 decision (`docs/adr/0012-m6-packaging-decisions.md`, "Known gaps").
+
 Open items only the maintainer can settle: trademark clearance for the name before any PyPI publish; the pontonier repo-layout question (separate repo vs uv workspace), still undecided as of M6 and now deferred to M7 or later.

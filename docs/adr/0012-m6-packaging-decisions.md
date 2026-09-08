@@ -5,7 +5,7 @@
 ## Context
 
 M6 makes amicus installable and migratable.
-It adds both host manifests with `env_vars` generated from the declarations, a router skill and seven per-verb commands, a test-asserted `docs/MIGRATION.md`, a third-party backend proven to load from a real out-of-tree wheel, install smoke captured from both target hosts, and the agent-friendly-mcp review walk answered with real cold-start and first-repair probe evidence.
+It adds both host manifests with `env_vars` asserted equal to the declarations, a router skill and seven per-verb commands, a test-asserted `docs/MIGRATION.md`, a third-party backend proven to LOAD from a real out-of-tree wheel (loading only — see "Known gaps"), install smoke captured from both target hosts, and the agent-friendly-mcp review walk answered with real cold-start and first-repair probe evidence.
 No new runtime subsystem: everything either generates from an existing declaration or exercises an existing seam from outside for the first time.
 The maintainer approved decisions 1–5 in the 2026-09-07 planning session; 6–10 are the planner's rulings on questions the spec leaves open.
 The maintainer separately authorized a spend of six paid calls — one per enabled backend per host — after a Codex review showed that three could not cover both hosts.
@@ -20,7 +20,7 @@ The maintainer separately authorized a spend of six paid calls — one per enabl
   The tool surface's premise is that the backend is a parameter; the command surface says the same thing and stays fixed-size as backends are added.
 - **Eval fixtures are a scenario file plus a harness protocol, with a subset hand-run.**
   Scenarios that are specified but not executed are marked unrun in `skills/collaborating-with-amicus/tests/scenarios.md`, never quietly counted as passing.
-- **`docs/MIGRATION.md` carries three things per sibling:** the env-var mapping (generated, test-asserted), the tool-name map, and the behavior deltas a migrating user actually hits.
+- **`docs/MIGRATION.md` carries three things per sibling:** the env-var mapping (hand-maintained, asserted equal to the declarations), the tool-name map, and the behavior deltas a migrating user actually hits.
 - **The cold-start and first-repair probes are captured from the real host installs, not simulated.**
   `review-workflow.md:31` permits simulated evidence; the maintainer chose captured.
 - **The cold-start probe and the authorized paid consult are the same event.**
@@ -91,6 +91,14 @@ These are stated rather than hidden, and carried to M7.
   Capture: `docs/host-captures/s6-old-text-new-grader/claude-code/2.1.263/`.
   **Also still outstanding, and carried to M7:** re-run S6 with the tool surface actually pinned to the amicus tools only — which `--allowedTools` alone does not achieve under `bypassPermissions` — so every run is comparable in what the model could do, not merely in what it was told to do.
   It is free too.
+- **The wheel seam proves LOADING, not usability, and the gate item's wording overstated it.**
+The M6 gate item is "FakePlugin as a wheel", and `tests/test_wheel_seam.py` discharges exactly this much: the `amicus.backends` entry-point group is read from a distribution installed outside this tree, its factory is imported, its `api_version` is validated, and a wrong version is rejected by reason rather than silently.
+It does not show a third-party backend can be used, and two in-tree gates say it cannot be.
+`amicus.config._profile` (`src/amicus/config/__init__.py`) drops any `AMICUS_BACKENDS` token that is not in `BACKEND_IDS` with the error "is not an in-tree backend", so a loaded plugin can never be enabled; and `BackendParam` resolves to `BackendId = Literal["codex", "kimi", "claude"]` (`src/amicus/schemas/codes.py`), so no tool call can name it either.
+A third-party wheel therefore loads and then stops.
+**Carried to M7:** deciding whether the enable path and the `backend` parameter should admit ids outside `BACKEND_IDS` at all.
+That is a surface change — it would widen a closed enum on every paid tool and move the fingerprint — so it is a design decision for M7, not a review-response fix, and nothing in M6 depends on it.
+Until then, read `tests/test_wheel_seam.py` as "the seam is wired and validated", never as "a third-party backend works end to end".
 - **The standing cold-start regression gate is NOT built.**
   `design-workflow.md` Step 9 describes a gate that measures cold-start behavior on every change.
   M6 captured the evidence and pinned no baseline against which a future change is measured.
@@ -159,7 +167,10 @@ These are stated rather than hidden, and carried to M7.
 
 ## Consequences
 
-- amicus installs from both host manifests, and a third-party backend distribution loads through the `amicus.backends` entry-point group without living in this tree.
-- A migrating user has a generated, test-asserted env mapping that cannot drift from the declarations, and a tool map for all three siblings.
+- amicus installs from the Claude Code plugin manifest, and its shipped `.mcp.json` command line boots and serves under Codex CLI 0.153.4 — the Codex capture declared that command line in a scoped `CODEX_HOME/config.toml` rather than going through `.codex-plugin/plugin.json`, so Codex's plugin loader itself is still unexercised (`docs/host-captures/install-smoke/codex/0.153.4/notes.md`).
+- A third-party backend distribution loads through the `amicus.backends` entry-point group without living in this tree.
+  Loading is where the proof stops: a loaded third-party id still cannot be enabled or called (see "Known gaps").
+- A migrating user has a test-asserted env mapping that cannot drift from the declarations, and a tool map for all three siblings.
+  It is validated, not generated: `.mcp.json`'s `env_vars` and the `MIGRATION.md` table are edited by hand and `src/amicus/packaging.py` supplies the expected values the tests compare against, so drift fails a test rather than being repaired by a command.
 - The surface identity moved once and deliberately, and a client cached at `amicus/0.1/schema-6` can detect it from `amicus_capabilities` alone.
 - The next milestone inherits two measurement gaps that are recorded rather than closed: no standing cold-start gate, and no proof that the release tag resolves.
