@@ -34,8 +34,9 @@ The rules bind; the context after them explains and points elsewhere.
 19. Release in two PRs: the work lands with the version literals untouched, then a `chore(release):` PR moves them together and rolls `## [Unreleased]` in `CHANGELOG.md` into a dated section.
     The literals are `pyproject.toml`, `src/amicus/__init__.py`, `.claude-plugin/plugin.json`, `.codex-plugin/plugin.json` and the `.mcp.json` tag pin.
     Only the maintainer merges that PR, and only the maintainer pushes the tag.
-    Push the matching tag in the same sitting as the merge: `main` must never be left carrying a `.mcp.json` pin that names a tag which does not exist.
+    Push the matching tag immediately after that merge, before any other work: the interval in which `main` names a tag that does not yet exist cannot be made zero, so closing it is the only task that may follow the merge.
 20. Never push a `v*` tag from a commit whose three live gates — `tests/test_codex_live.py`, `tests/test_kimi_live.py` and `tests/test_claude_live.py`, run under rule 5 — have not all been run and recorded on that exact commit.
+    The record is `.release-evidence/live-gates.json`, naming that commit, each suite and its outcome; a terminal transcript or a recollection is not a record.
 
 ## Context
 
@@ -68,7 +69,8 @@ Merging the release PR immediately before pushing the tag is what closes that wi
 `main` carries exactly that unresolvable pin today, because 0.1.0 has never been tagged; the first release closes it, and rule 19's last clause is what stops it recurring.
 Rule 20 is a local pre-tag gate rather than a CI job: hosted runners have no authenticated `codex`, `kimi` or `claude`, so the evidence is recorded on the maintainer's machine against the exact commit to be tagged.
 That evidence is an honest-mistake guard, not an attestation; it is a local file its author can write by hand.
-`v*` tags are protected against update and deletion by a repository ruleset, because the tag is the plugin's installation source and a moved tag silently changes what users install under a version they already trust.
+`v*` tags must be protected against update and deletion by a repository ruleset, because the tag is the plugin's installation source and a moved tag silently changes what users install under a version they already trust.
+No such ruleset exists yet; creating it is a maintainer prerequisite of the first release, and `docs/RELEASING.md` reads it back rather than assuming it.
 The executable procedure — preconditions, the evidence run, the environment approval pause and the post-tag checks — is `docs/RELEASING.md`.
 
 ### Siblings
