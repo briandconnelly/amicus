@@ -34,7 +34,7 @@ The gate is defined once, in `AGENTS.md` (Rules, item 2); CI runs it on every su
 | The M4 plan (Claude Code) | `docs/superpowers/plans/2026-09-07-amicus-M4-claude.md` |
 | The M5 plan (tasks extension) | `docs/superpowers/plans/2026-09-07-amicus-M5-tasks.md` |
 | The M6 plan (packaging, docs, evals, review walk) | `docs/superpowers/plans/2026-09-07-amicus-M6-packaging.md` |
-| Release automation (`publish.yml`), and the TestPyPI dry run that proved it | `docs/superpowers/plans/2026-09-07-amicus-publish-workflow.md` |
+| Release automation (`publish.yml`); the TestPyPI path is proven, the tagged PyPI path is not | `docs/superpowers/plans/2026-09-07-amicus-publish-workflow.md` |
 | Migrating from `codex-in-claude`, `moonbridge` or `claude-in-codex` | `docs/MIGRATION.md` |
 | The router skill an agent loads to call amicus | `skills/collaborating-with-amicus/` |
 | The agent-friendly-mcp review walk findings | `docs/reviews/2026-09-07-agent-friendly-mcp-walk.md` |

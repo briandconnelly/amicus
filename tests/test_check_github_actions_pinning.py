@@ -233,11 +233,21 @@ def test_this_repository_checkouts_do_not_persist_credentials():
 # --- the publish workflow's production job cannot be reached by a dispatch ----
 
 
-def _job_block(text: str, job: str) -> list[str]:
-    """The stripped lines of one top-level job, by indentation.
+_PUBLISH = _REPO_ROOT / ".github" / "workflows" / "publish.yml"
 
-    Parsed by hand rather than with PyYAML: pyyaml is not a declared dependency of this
-    project and is only transitively present, and the checks around this one read the
+# The one safe condition for the production job. Asserted by equality, not by substring:
+# substring checks pass on a NEGATED condition such as
+# `!(github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))`, which permits
+# exactly the tag-targeted dispatch this invariant exists to block.
+_PYPI_CONDITION = "if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')"
+
+
+def _job_lines(text: str, job: str) -> list[str]:
+    """The lines of one top-level job, INDENTATION PRESERVED.
+
+    Indentation is what distinguishes a job-level key from a step-level one, so it cannot be
+    stripped here. Parsed by hand rather than with PyYAML: pyyaml is not a declared dependency
+    of this project and is only transitively present, and the checks around this one read the
     workflow files as text for the same reason."""
     lines = text.splitlines()
     start = next(i for i, line in enumerate(lines) if line.rstrip() == f"  {job}:")
@@ -245,8 +255,17 @@ def _job_block(text: str, job: str) -> list[str]:
     for nxt in lines[start + 1 :]:
         if nxt.strip() and (len(nxt) - len(nxt.lstrip(" "))) <= 2:
             break
-        block.append(nxt.strip())
+        block.append(nxt)
     return block
+
+
+def _job_level_keys(lines: list[str], key: str) -> list[str]:
+    """Only the job's own `key:` entries, at four spaces; a step's sit deeper."""
+    return [
+        line.strip()
+        for line in lines
+        if line.strip().startswith(f"{key}:") and (len(line) - len(line.lstrip(" "))) == 4
+    ]
 
 
 def test_the_publish_workflow_pypi_job_requires_a_push_event():
@@ -259,13 +278,8 @@ def test_the_publish_workflow_pypi_job_requires_a_push_event():
     is no undo. Review caught it on PR #8 before any tag existed; this test is what stops
     it coming back, because nothing else does — the workflow never runs on a pull request,
     so CI cannot exercise the condition."""
-    text = (_REPO_ROOT / ".github" / "workflows" / "publish.yml").read_text(encoding="utf-8")
-    conditions = [line for line in _job_block(text, "pypi") if line.startswith("if:")]
-    assert len(conditions) == 1, f"expected one `if:` on the pypi job, found {conditions}"
-    condition = conditions[0]
-    assert "github.event_name == 'push'" in condition, condition
-    assert "startsWith(github.ref, 'refs/tags/v')" in condition, condition
-    assert "&&" in condition and "||" not in condition, condition
+    conditions = _job_level_keys(_job_lines(_PUBLISH.read_text(encoding="utf-8"), "pypi"), "if")
+    assert conditions == [_PYPI_CONDITION], conditions
 
 
 def test_the_publish_workflow_checks_the_tag_before_it_uploads():
@@ -274,10 +288,7 @@ def test_the_publish_workflow_checks_the_tag_before_it_uploads():
     This assertion previously lived only in the publish-workflow plan, where it was prose
     that nobody executed and which went stale the moment the condition above changed. It
     belongs here, where it runs."""
-    block = _job_block(
-        text=(_REPO_ROOT / ".github" / "workflows" / "publish.yml").read_text(encoding="utf-8"),
-        job="pypi",
-    )
+    block = [line.strip() for line in _job_lines(_PUBLISH.read_text(encoding="utf-8"), "pypi")]
     gate = next(i for i, line in enumerate(block) if "GITHUB_REF_NAME" in line)
     upload = next(i for i, line in enumerate(block) if "gh-action-pypi-publish" in line)
     assert gate < upload, "the tag/version gate must precede the upload step"
