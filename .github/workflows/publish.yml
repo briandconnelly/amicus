@@ -1,0 +1,97 @@
+name: publish
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Where to publish"
+        required: true
+        default: testpypi
+        type: choice
+        options: [testpypi]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      - run: uv build
+      - run: uv run --with twine twine check dist/*
+      - name: The built wheel's console script must start a real MCP server
+        # `amicus-mcp` has no `--help`: it ignores the flag and starts the stdio server, so a
+        # `--help` step would pass on any binary that exits 0. Probe it as what it is instead —
+        # one JSON-RPC `initialize` over stdin — and assert the server identity that comes back,
+        # which also catches a wheel whose metadata version and runtime version disagree.
+        run: |
+          set -euo pipefail
+          uv venv /tmp/smoke
+          uv pip install --python /tmp/smoke/bin/python dist/*.whl
+          req='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"publish-smoke","version":"0"}}}'
+          # The `sleep` holds stdin open long enough for the reply; EOF then stops the server.
+          { printf '%s\n' "$req"; sleep 5; } \
+            | timeout 120 /tmp/smoke/bin/amicus-mcp >/tmp/smoke-out.jsonl 2>/tmp/smoke-err.txt || true
+          version="$(basename "$(ls dist/*.whl)" | cut -d- -f2)"
+          /tmp/smoke/bin/python - "$version" <<'PY' || { echo "::group::server stderr"; cat /tmp/smoke-err.txt; echo "::endgroup::"; exit 1; }
+          import json, pathlib, sys
+
+          expected = sys.argv[1]
+          lines = [ln for ln in pathlib.Path("/tmp/smoke-out.jsonl").read_text().splitlines() if ln.startswith("{")]
+          assert lines, "amicus-mcp produced no JSON-RPC response on stdout"
+          info = json.loads(lines[0])["result"]["serverInfo"]
+          assert info["name"] == "amicus", f"unexpected server name {info['name']!r}"
+          assert info["version"] == expected, f"server reports {info['version']!r}, wheel is {expected!r}"
+          print(f"ok: amicus-mcp {info['version']} answered initialize")
+          PY
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dist
+          path: dist/
+
+  testpypi:
+    needs: build
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: testpypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+  pypi:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dist
+          path: dist/
+      - name: The tag must equal v + the version in the artifact
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          wheel="$(ls dist/*.whl)"
+          # The wheel filename's second field is the version hatchling built.
+          built="$(basename "$wheel" | cut -d- -f2)"
+          if [ "$tag" != "v${built}" ]; then
+            echo "::error::tag ${tag} does not match built version ${built}; refusing to publish"
+            exit 1
+          fi
+      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
