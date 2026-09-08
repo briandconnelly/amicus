@@ -2,7 +2,9 @@
 
 The record itself is a gitignored local file a maintainer can hand-write, so it proves
 nothing against a determined author. It is an honest-mistake guard: it catches evidence
-taken on the wrong commit, on a dirty tree, from a partial run, or too long ago. Every
+taken on the wrong commit, on a dirty tree, from a partial run, too long ago, or hand-repaired
+from a mix of entries that never ran together (a missing/mismatched `batch_id`) or against
+the wrong suite (a `test_file` that does not match the backend it is filed under). Every
 rejection path below is exercised, because a validator that cannot fail is not a check.
 """
 
@@ -96,21 +98,67 @@ def test_a_future_timestamp_is_rejected():
     assert problems, "a record from the future is a clock or forgery problem, not evidence"
 
 
+def test_a_missing_batch_id_is_rejected():
+    record = _record()
+    del record["batch_id"]
+    problems = evidence.validate(record, head=HEAD, tree_clean=True, now=NOW)
+    assert any("batch_id" in p for p in problems), problems
+
+
+def test_an_empty_batch_id_is_rejected():
+    problems = evidence.validate(_record(batch_id=""), head=HEAD, tree_clean=True, now=NOW)
+    assert any("batch_id" in p for p in problems), problems
+
+
+def test_a_non_string_batch_id_is_rejected():
+    problems = evidence.validate(_record(batch_id=0), head=HEAD, tree_clean=True, now=NOW)
+    assert any("batch_id" in p for p in problems), problems
+
+
+def test_a_backend_entry_with_a_mismatched_batch_id_is_rejected():
+    record = _record()
+    record["backends"]["kimi"]["batch_id"] = "different-batch"
+    problems = evidence.validate(record, head=HEAD, tree_clean=True, now=NOW)
+    assert any("kimi" in p and "batch_id" in p for p in problems), problems
+
+
+def test_a_backend_entry_with_the_wrong_test_file_is_rejected():
+    record = _record()
+    record["backends"]["codex"]["test_file"] = "tests/test_kimi_live.py"
+    problems = evidence.validate(record, head=HEAD, tree_clean=True, now=NOW)
+    assert any("codex" in p and "test_file" in p for p in problems), problems
+
+
+def test_a_codex_entry_duplicated_from_kimis_is_rejected():
+    """The honest-mistake case the module docstring calls out: hand-repairing a record after
+    one gate failed by copying a sibling backend's entry instead of re-running the gate."""
+    record = _record()
+    record["backends"]["codex"] = dict(record["backends"]["kimi"])
+    problems = evidence.validate(record, head=HEAD, tree_clean=True, now=NOW)
+    assert any("codex" in p and "test_file" in p for p in problems), problems
+
+
 # --- main(): hermetic coverage of the all-or-nothing write logic, injected instead of shelling
 # out. No real git repo mutation and no `-m integration` anywhere below.
 
 
-def _passing_gate(backend):
-    return {"test_file": f"tests/test_{backend}_live.py", "exit_status": 0, "cli_version": "x 1.0"}
+def _passing_gate(backend, batch_id):
+    return {
+        "test_file": f"tests/test_{backend}_live.py",
+        "exit_status": 0,
+        "cli_version": "x 1.0",
+        "batch_id": batch_id,
+    }
 
 
 def _failing_gate(failing_backend):
-    def run_gate(backend):
+    def run_gate(backend, batch_id):
         exit_status = 1 if backend == failing_backend else 0
         return {
             "test_file": f"tests/test_{backend}_live.py",
             "exit_status": exit_status,
             "cli_version": "x 1.0",
+            "batch_id": batch_id,
         }
 
     return run_gate
@@ -131,10 +179,9 @@ def test_main_writes_evidence_when_all_three_pass_on_a_clean_tree(tmp_path):
     record = json.loads(evidence_path.read_text())
     assert record["commit"] == HEAD
     assert set(record["backends"]) == set(evidence.BACKENDS)
-    batch_ids = {record["batch_id"]} | {
-        entry.get("batch_id", record["batch_id"]) for entry in record["backends"].values()
-    }
+    batch_ids = {record["batch_id"]} | {entry["batch_id"] for entry in record["backends"].values()}
     assert batch_ids == {record["batch_id"]}, "one batch_id must be shared by every entry"
+    assert evidence.validate(record, head=HEAD, tree_clean=True, now=datetime.now(UTC)) == []
 
 
 def test_main_writes_failure_not_evidence_when_one_backend_fails(tmp_path):
@@ -174,9 +221,9 @@ def test_main_does_not_clobber_a_stale_success_file_on_a_failed_run(tmp_path):
 def test_main_refuses_on_a_dirty_tree_before_running_anything(tmp_path, capsys):
     calls: list[str] = []
 
-    def run_gate(backend):
+    def run_gate(backend, batch_id):
         calls.append(backend)
-        return _passing_gate(backend)
+        return _passing_gate(backend, batch_id)
 
     rc = evidence.main(
         repo_root=tmp_path,

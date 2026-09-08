@@ -29,6 +29,15 @@ Behavior (all-or-nothing):
       intended -- the freshness check in `validate` rejects it on the commit mismatch), and
       exits nonzero.
 
+Record shape:
+    The top-level record carries a `batch_id` (a fresh uuid4 hex minted once per run), and
+    `main` stamps that same `batch_id` into every backend entry under `backends`. `validate`
+    checks that every backend entry's `batch_id` agrees with the record's -- this is what
+    makes "one shared run produced this whole record" a checkable property instead of an
+    assumption. Each backend entry's `test_file` must equal the suite that backend's gate
+    actually runs (`_TEST_FILES[backend]`); a record whose entries were hand-copied from a
+    different backend's run is rejected on this check.
+
 Pure stdlib (no deps): this script must run in any environment without extra setup.
 """
 
@@ -93,7 +102,7 @@ def _cli_version(backend: str) -> str | None:
     return proc.stdout.strip() or None
 
 
-def _run_backend_gate(backend: str) -> dict[str, object]:
+def _run_backend_gate(backend: str, batch_id: str) -> dict[str, object]:
     test_file = _TEST_FILES[backend]
     print(f"[{backend}] running {test_file} (AMICUS_REQUIRE_LIVE=1, -m integration) ...")
     env = dict(os.environ)
@@ -110,6 +119,7 @@ def _run_backend_gate(backend: str) -> dict[str, object]:
         "test_file": test_file,
         "exit_status": proc.returncode,
         "cli_version": _cli_version(backend),
+        "batch_id": batch_id,
     }
 
 
@@ -125,7 +135,7 @@ def main(
     repo_root: Path = REPO_ROOT,
     git_head: Callable[[], str] = _git_head,
     git_dirty_paths: Callable[[], list[str]] = _git_dirty_paths,
-    run_gate: Callable[[str], dict[str, object]] = _run_backend_gate,
+    run_gate: Callable[[str, str], dict[str, object]] = _run_backend_gate,
 ) -> int:
     """Run all three live gates and write EVIDENCE_PATH or FAILURE_PATH under `repo_root`.
 
@@ -147,7 +157,7 @@ def main(
     batch_id = uuid.uuid4().hex
     backends: dict[str, dict[str, object]] = {}
     for backend in BACKENDS:
-        backends[backend] = run_gate(backend)
+        backends[backend] = run_gate(backend, batch_id)
 
     all_passed = all(entry["exit_status"] == 0 for entry in backends.values())
     tree_clean_after = not git_dirty_paths()
@@ -198,6 +208,13 @@ def _check_tree_clean(record: dict, tree_clean: bool) -> list[str]:
     return problems
 
 
+def _check_batch_id(record: dict) -> list[str]:
+    batch_id = record.get("batch_id")
+    if not isinstance(batch_id, str) or not batch_id:
+        return [f"record 'batch_id' must be a non-empty string, got {batch_id!r}"]
+    return []
+
+
 def _check_backends(record: dict) -> list[str]:
     problems: list[str] = []
     backends = record.get("backends")
@@ -205,6 +222,8 @@ def _check_backends(record: dict) -> list[str]:
         if "backends" in record:
             problems.append("record 'backends' is not an object")
         backends = {}
+
+    record_batch_id = record.get("batch_id")
 
     for name in BACKENDS:
         entry = backends.get(name)
@@ -220,6 +239,17 @@ def _check_backends(record: dict) -> list[str]:
         exit_status = entry.get("exit_status")
         if "exit_status" in entry and exit_status != 0:
             problems.append(f"backend '{name}' exit_status is {exit_status!r}, not 0")
+        test_file = entry.get("test_file")
+        if "test_file" in entry and test_file != _TEST_FILES[name]:
+            problems.append(
+                f"backend '{name}' test_file is {test_file!r}, expected {_TEST_FILES[name]!r}"
+            )
+        entry_batch_id = entry.get("batch_id")
+        if "batch_id" in entry and entry_batch_id != record_batch_id:
+            problems.append(
+                f"backend '{name}' batch_id {entry_batch_id!r} does not match "
+                f"record batch_id {record_batch_id!r}"
+            )
     return problems
 
 
@@ -257,7 +287,10 @@ def validate(
 
     Returns a list of human-readable problems; an empty list means the record is usable release
     evidence -- i.e. it shows all three live gates (codex, kimi, claude) PASSED, on this exact
-    commit, on a clean tree, recently enough to still be trustworthy.
+    commit, on a clean tree, recently enough to still be trustworthy, each backend entry
+    naming the suite that backend's gate actually runs (`test_file` matches `_TEST_FILES`),
+    and all three entries sharing the record's own `batch_id` -- proof they came from the
+    same run rather than a hand-repaired mix of entries from different runs.
     """
     if not isinstance(record, dict):
         return ["record is not a JSON object"]
@@ -269,6 +302,7 @@ def validate(
     ]
     problems += _check_commit(record, head)
     problems += _check_tree_clean(record, tree_clean)
+    problems += _check_batch_id(record)
     problems += _check_backends(record)
     problems += _check_recorded_at(record, now, max_age_hours)
     return problems
