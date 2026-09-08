@@ -52,18 +52,32 @@ TestPyPI already has the name claimed under this project; pypi.org does not yet 
 
 ## The release sequence
 
+Rules 19 and 20 together force an unusual shape on this sequence, and a future maintainer should not "simplify" it back.
+Rule 20 requires the live-gate evidence to cover the exact commit being tagged.
+Rule 19 requires the tag push to be the only work that follows the PR C merge, because the interval in which `main` names a tag that does not yet exist cannot be made zero, only closed as fast as possible.
+Those two rules together mean the evidence must be gathered on a commit whose SHA survives the merge unchanged — so the evidence run, the freshness check, and the gate all happen on the PR C branch tip, before the merge, not after it.
+
 1. Merge PR B (the milestone work, version literals untouched).
-2. Open and merge PR C, the `chore(release):` PR described by AGENTS.md rule 19.
+2. Open PR C, the `chore(release):` PR described by AGENTS.md rule 19, and do not merge it yet.
    Roll `## [Unreleased]` in `CHANGELOG.md` into a dated `## [X.Y.Z] - YYYY-MM-DD` section, and leave a fresh empty `## [Unreleased]` above it.
    Change no version literal unless the version itself is changing.
    For 0.1.0 no literal moves: `pyproject.toml`, `src/amicus/__init__.py`, both `plugin.json` files, and `.mcp.json`'s `@v0.1.0` pin already agree, and the tag is what makes that pin resolve.
    Regenerate `uv.lock` with `uv lock` in this same PR, per AGENTS.md rule 19 — `uv.lock` mirrors the version rather than declaring it, and `prek.toml`'s `uv-lock-check` hook runs `uv lock --check` whenever `pyproject.toml` changes, so a release PR that skips this fails its own hook.
-3. Check out the merged commit into a clean tree and confirm `git status --porcelain` is empty.
-4. Run `uv run python scripts/record_live_gate_evidence.py`.
+3. Check out the PR C branch tip (not `main`) into a clean tree and confirm `git status --porcelain` is empty.
+   Record the branch tip's SHA; it is the commit that gets tagged.
+   Run `uv run python scripts/record_live_gate_evidence.py`.
+   The script itself forces `AMICUS_REQUIRE_LIVE=1` into each backend's subprocess environment, so prefixing the command with it is optional; its own usage string documents `AMICUS_REQUIRE_LIVE=1 uv run python scripts/record_live_gate_evidence.py`, and either form runs the same live gates.
    This spends real quota on all three backends and requires the maintainer's authorization in the session where it runs.
-5. Run `AMICUS_RELEASE_CHECK=1 uv run pytest tests/test_release_evidence.py -v --no-cov` and confirm the freshness assertion passes.
-6. Run the gate defined by AGENTS.md rule 2.
-7. Tag that unchanged commit and push the tag.
+   Run `AMICUS_RELEASE_CHECK=1 uv run pytest tests/test_release_evidence.py -v --no-cov` and confirm the freshness assertion passes.
+   Run the gate defined by AGENTS.md rule 2.
+4. Merge PR C so that `main` fast-forwards to that exact branch tip SHA, not so that a new commit is created.
+   None of GitHub's three merge-button strategies do this: a merge commit, a squash commit, and a rebase commit are each a new commit with a new SHA, even when the diff is identical, so `gh pr merge --merge`, `--squash`, and `--rebase` are all disqualified here.
+   Fast-forward `main` locally instead — `git checkout main && git merge --ff-only <pr-branch> && git push origin main` — and confirm `git rev-parse main` equals the SHA recorded in step 3.
+   This requires push access to `main` sufficient to fast-forward it directly; if branch protection on this repository forces every change through the PR-merge API, no strategy offered by that API preserves the SHA, and this step is blocked until that is resolved — do not substitute a squash or rebase merge to route around it, because that silently invalidates the evidence gathered in step 3.
+5. Re-run only `AMICUS_RELEASE_CHECK=1 uv run pytest tests/test_release_evidence.py -v --no-cov`, now against merged `main`.
+   This is free — it spends no backend quota — and it proves the evidence gathered in step 3 still names the commit that is about to be tagged.
+6. Tag the merged commit and push the tag.
+   Nothing else happens between step 4 and step 6.
 
 ## What happens next
 
@@ -72,6 +86,8 @@ The `build` job runs first, then the `pypi` job waits for the `pypi` environment
 Approve that deployment deliberately once you have confirmed the build artifacts look right.
 The upload is irreversible: PyPI does not allow re-uploading a version, even a broken one.
 A pause here is the workflow waiting on you, not a hang.
+The tagged `pypi` job itself has never actually run: its condition is `github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')`, and the only dispatch exercised so far (2026-09-08, TestPyPI) ran against `refs/heads/main`, a branch, so that job was skipped both by the current two-clause condition and by the original one-clause condition it replaced.
+Approving that first real deployment is authorizing untested territory, not a rerun of something already proven.
 
 ## Post-tag completion checks
 
