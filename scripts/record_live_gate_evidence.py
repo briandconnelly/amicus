@@ -42,6 +42,10 @@ import sys
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 EVIDENCE_PATH = Path(".release-evidence/live-gates.json")
@@ -109,30 +113,44 @@ def _run_backend_gate(backend: str) -> dict[str, object]:
     }
 
 
-def _write_json(path: Path, payload: dict[str, object]) -> None:
-    full_path = REPO_ROOT / path
+def _write_json(repo_root: Path, path: Path, payload: dict[str, object]) -> None:
+    full_path = repo_root / path
     full_path.parent.mkdir(parents=True, exist_ok=True)
     full_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(
+    argv: list[str] | None = None,
+    *,
+    repo_root: Path = REPO_ROOT,
+    git_head: Callable[[], str] = _git_head,
+    git_dirty_paths: Callable[[], list[str]] = _git_dirty_paths,
+    run_gate: Callable[[str], dict[str, object]] = _run_backend_gate,
+) -> int:
+    """Run all three live gates and write EVIDENCE_PATH or FAILURE_PATH under `repo_root`.
+
+    `git_head`, `git_dirty_paths` and `run_gate` are injectable seams: tests substitute fakes
+    here (no real git repo, no subprocess, no live backend) to exercise the all-or-nothing
+    write logic, the dirty-tree refusal and the failure-diagnostics path hermetically. The
+    default arguments are what a real release run uses.
+    """
     del argv  # this script takes no arguments
 
-    dirty = _git_dirty_paths()
+    dirty = git_dirty_paths()
     if dirty:
         print("refusing to run: the working tree is dirty:", file=sys.stderr)
         for line in dirty:
             print(f"  {line}", file=sys.stderr)
         return 1
 
-    commit = _git_head()
+    commit = git_head()
     batch_id = uuid.uuid4().hex
     backends: dict[str, dict[str, object]] = {}
     for backend in BACKENDS:
-        backends[backend] = _run_backend_gate(backend)
+        backends[backend] = run_gate(backend)
 
     all_passed = all(entry["exit_status"] == 0 for entry in backends.values())
-    tree_clean_after = not _git_dirty_paths()
+    tree_clean_after = not git_dirty_paths()
 
     record = {
         "batch_id": batch_id,
@@ -143,11 +161,11 @@ def main(argv: list[str] | None = None) -> int:
     }
 
     if all_passed and tree_clean_after:
-        _write_json(EVIDENCE_PATH, record)
+        _write_json(repo_root, EVIDENCE_PATH, record)
         print(f"wrote {EVIDENCE_PATH}: all three live gates passed on {commit}.")
         return 0
 
-    _write_json(FAILURE_PATH, record)
+    _write_json(repo_root, FAILURE_PATH, record)
     if not all_passed:
         failed = [name for name, entry in backends.items() if entry["exit_status"] != 0]
         print(f"one or more live gates failed: {', '.join(failed)}.", file=sys.stderr)

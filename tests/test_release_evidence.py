@@ -96,6 +96,104 @@ def test_a_future_timestamp_is_rejected():
     assert problems, "a record from the future is a clock or forgery problem, not evidence"
 
 
+# --- main(): hermetic coverage of the all-or-nothing write logic, injected instead of shelling
+# out. No real git repo mutation and no `-m integration` anywhere below.
+
+
+def _passing_gate(backend):
+    return {"test_file": f"tests/test_{backend}_live.py", "exit_status": 0, "cli_version": "x 1.0"}
+
+
+def _failing_gate(failing_backend):
+    def run_gate(backend):
+        exit_status = 1 if backend == failing_backend else 0
+        return {
+            "test_file": f"tests/test_{backend}_live.py",
+            "exit_status": exit_status,
+            "cli_version": "x 1.0",
+        }
+
+    return run_gate
+
+
+def test_main_writes_evidence_when_all_three_pass_on_a_clean_tree(tmp_path):
+    rc = evidence.main(
+        repo_root=tmp_path,
+        git_head=lambda: HEAD,
+        git_dirty_paths=list,
+        run_gate=_passing_gate,
+    )
+    assert rc == 0
+    evidence_path = tmp_path / evidence.EVIDENCE_PATH
+    failure_path = tmp_path / evidence.FAILURE_PATH
+    assert evidence_path.exists()
+    assert not failure_path.exists()
+    record = json.loads(evidence_path.read_text())
+    assert record["commit"] == HEAD
+    assert set(record["backends"]) == set(evidence.BACKENDS)
+    batch_ids = {record["batch_id"]} | {
+        entry.get("batch_id", record["batch_id"]) for entry in record["backends"].values()
+    }
+    assert batch_ids == {record["batch_id"]}, "one batch_id must be shared by every entry"
+
+
+def test_main_writes_failure_not_evidence_when_one_backend_fails(tmp_path):
+    rc = evidence.main(
+        repo_root=tmp_path,
+        git_head=lambda: HEAD,
+        git_dirty_paths=list,
+        run_gate=_failing_gate("kimi"),
+    )
+    assert rc == 1
+    assert not (tmp_path / evidence.EVIDENCE_PATH).exists()
+    failure_path = tmp_path / evidence.FAILURE_PATH
+    assert failure_path.exists()
+    record = json.loads(failure_path.read_text())
+    assert record["backends"]["kimi"]["exit_status"] == 1
+    assert record["backends"]["codex"]["exit_status"] == 0
+
+
+def test_main_does_not_clobber_a_stale_success_file_on_a_failed_run(tmp_path):
+    evidence_path = tmp_path / evidence.EVIDENCE_PATH
+    evidence_path.parent.mkdir(parents=True, exist_ok=True)
+    stale_bytes = b'{"commit": "stale-from-an-earlier-run"}\n'
+    evidence_path.write_bytes(stale_bytes)
+
+    rc = evidence.main(
+        repo_root=tmp_path,
+        git_head=lambda: HEAD,
+        git_dirty_paths=list,
+        run_gate=_failing_gate("claude"),
+    )
+
+    assert rc == 1
+    assert evidence_path.read_bytes() == stale_bytes, "a failed run must not touch EVIDENCE_PATH"
+    assert (tmp_path / evidence.FAILURE_PATH).exists()
+
+
+def test_main_refuses_on_a_dirty_tree_before_running_anything(tmp_path, capsys):
+    calls: list[str] = []
+
+    def run_gate(backend):
+        calls.append(backend)
+        return _passing_gate(backend)
+
+    rc = evidence.main(
+        repo_root=tmp_path,
+        git_head=lambda: HEAD,
+        git_dirty_paths=lambda: [" M dirty_file.py", "?? untracked.py"],
+        run_gate=run_gate,
+    )
+
+    assert rc == 1
+    assert calls == [], "no gate should run when the tree starts dirty"
+    assert not (tmp_path / evidence.EVIDENCE_PATH).exists()
+    assert not (tmp_path / evidence.FAILURE_PATH).exists()
+    err = capsys.readouterr().err
+    assert "dirty_file.py" in err
+    assert "untracked.py" in err
+
+
 @pytest.mark.skipif(
     os.environ.get("AMICUS_RELEASE_CHECK") != "1",
     reason="release-only: reads the gitignored evidence file, which CI cannot have",
