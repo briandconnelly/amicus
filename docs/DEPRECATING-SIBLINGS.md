@@ -14,7 +14,9 @@ Every step below points a user at the `amicus` package or its README, so running
 amicus replaces `codex-in-claude`, `moonbridge`, and `claude-in-codex`.
 It does not replace `pontonier`: that repository is the shared backend SDK amicus depends on (`pontonier==0.9.0` in `pyproject.toml`), and it is not deprecated.
 
-All three siblings are live on PyPI today: `codex-in-claude` (latest `0.22.0`), `moonbridge` (latest `0.16.0`), and `claude-in-codex` (latest `0.9.0`), confirmed by `GET https://pypi.org/pypi/<name>/json` returning HTTP 200 for each on 2026-09-08.
+`codex-in-claude` and `claude-in-codex` are published by the maintainer on PyPI under those exact names: `GET https://pypi.org/pypi/codex-in-claude/json` and `GET https://pypi.org/pypi/claude-in-codex/json` both return HTTP 200 with `info.author` "Brian Connelly" and `info.project_urls.Repository` under `github.com/briandconnelly/`, confirmed 2026-09-08.
+`moonbridge` is not published by the maintainer under that name: PyPI's `moonbridge` package (latest `0.16.0`) belongs to an unrelated project, `info.author` "Phaedrus <hello@mistystep.io>" and `info.project_urls.Repository` `https://github.com/misty-step/moonbridge` — a name collision, not the maintainer's package.
+See the `moonbridge` section below for how users actually install `briandconnelly/moonbridge` today.
 
 ### `codex-in-claude`
 
@@ -29,9 +31,10 @@ All three siblings are live on PyPI today: `codex-in-claude` (latest `0.22.0`), 
 ### `moonbridge`
 
 1. Add a deprecation notice to the top of `README.md` (above its own badge and "Why Moonbridge?" section), pointing at `amicus` and at `docs/MIGRATION.md`'s "From `moonbridge`" section.
-2. Decide the PyPI action: `moonbridge`'s classifiers currently declare `Development Status :: 4 - Beta` (`pyproject.toml`, local checkout).
-   The locally checked-out `pyproject.toml` shows version `0.3.0`, but `pypi.org/pypi/moonbridge/json` reports the latest published release as `0.16.0` — the local checkout is behind whatever is on `origin/main`; reconcile that before editing anything, and confirm the current classifier on the actual latest release rather than trusting the local file.
-   Change the classifier to `Development Status :: 7 - Inactive` and publish a final release; do not yank existing releases, because the `.mcp.json` in this repo pins a release tag (`git+https://github.com/briandconnelly/moonbridge.git@v0.3.0`) and the marketplace launches from that pin.
+2. There is no PyPI classifier to change and no release to yank: `briandconnelly/moonbridge` (version `0.3.0` per its own `pyproject.toml`) has never been published to PyPI under the name `moonbridge`, because that distribution name is already held by an unrelated project (`misty-step/moonbridge`, author Phaedrus).
+   Users install it today the way its own README and `.mcp.json` describe: `uvx` launches it directly from a pinned git tag (`git+https://github.com/briandconnelly/moonbridge.git@v0.3.0`), and the Claude Code / Codex plugin integrations add the GitHub repository as a marketplace source (`/plugin marketplace add briandconnelly/moonbridge`) rather than installing a PyPI package.
+   Do not attempt to change classifiers on, or yank, the PyPI package named `moonbridge` — it is not the maintainer's to act on.
+   Worth noting for the maintainer's own judgment (not prescribed here): a user who searches PyPI for "moonbridge" finds the unrelated `misty-step` project, not this one; whether that changes the deprecation approach is a maintainer decision.
 3. Moonbridge has two plugin-marketplace listings, unlike the other two siblings: `.claude-plugin/marketplace.json` for Claude Code and `.agents/plugins/marketplace.json` for Codex.
    Update or archive both, not just one.
 4. Point users at amicus's install instructions and at `docs/MIGRATION.md`'s "From `moonbridge`" section.
