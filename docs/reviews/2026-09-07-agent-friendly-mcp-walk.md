@@ -310,6 +310,10 @@ The residual risks this walk leaves standing:
   S6 was re-run once, free, against the corrected skill text and failed again on the same assertion, so F3 is an open defect with a known-inadequate fix rather than a closed one (`docs/host-captures/s6-rerun/claude-code/2.1.263/`).
   F2's remedy has not been tested at all: S7 needs a real host and a real approval gate, and the paid budget is exhausted.
   Given that the one remedy of this class that COULD be tested failed, F2's should be treated as unproven rather than probable.
+- **The test enforcing this document checks its shape, not its substance.**
+  `tests/test_review_artifact.py` verifies that each finding's five labels are present, not that they carry anything: a finding with five blank values still passes, confirmed by mutation.
+  That hole is left open on purpose and is recorded in ADR 0012, because four other holes in the same file were found and closed during M6 and further mutation-testing was judged out of scope here.
+  Read a green run of that file as "this walk was performed and recorded in the required shape", never as "this walk's judgments were correct".
 - **F1's stronger remediation is deferred.** Naming the superseded servers in `CAPABILITY_SUMMARY` would put the signal on the surface; it costs another fingerprint bump and is recorded in ADR 0012 as an M7 candidate.
 
 ## Remediation summary

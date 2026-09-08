@@ -61,7 +61,13 @@ These are stated rather than hidden, and carried to M7.
   What the tag itself resolves to is therefore not proven by M6; it is the publish workflow's gate.
 - **The review walk is a checklist review, not a behavioral gate.**
   Its findings are pinned only insofar as `tests/test_review_artifact.py` enforces the artifact's shape — every §1–§9 section accounted for, both mandatory probes carrying captured evidence, every finding carrying its five labeled lines.
-  That instrument checks the walk was performed and recorded; it cannot check that the walk was right.
+  That instrument checks the walk was performed and recorded in the required shape; it cannot check that the walk's judgments were correct.
+- **`tests/test_review_artifact.py`'s own guarantees are narrower than they look, and one known hole is left open.**
+  This is the previous gap sharpened, not a second one: the file verifies that a finding's five labels are PRESENT, not that they say anything.
+  A finding whose severity, section, summary, evidence and remediation values are all blank still passes `test_every_finding_carries_all_five_labeled_lines`, confirmed by mutation.
+  The hole is recorded rather than fixed, deliberately: four other holes in this same file were found and closed during M6 — two by tracing the briefed parser before it was committed, two by mutating the walk document afterwards — and unbounded mutation-testing of every remaining assertion was judged past the point of diminishing returns for this milestone.
+  Four holes in one file is also the reason to treat its guarantees as narrow rather than as a proxy for the walk's quality: read a green run as "the artifact has the required shape", never as "the artifact is any good".
+  A future reviewer tightening this file should start by mutating the assertions that were never mutated.
 - **An un-migrated host may still prefer a sibling server.**
   The walk's one Major finding is that a cold start with the maintainer's real MCP fleet loaded reached a rival second-opinion server and never called amicus.
   `docs/MIGRATION.md` now tells a migrating user to remove the siblings; naming the superseded servers inside `CAPABILITY_SUMMARY` would put the signal on the surface itself and is deferred to M7, because it costs another fingerprint bump.
