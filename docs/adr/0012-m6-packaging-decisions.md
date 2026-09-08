@@ -14,7 +14,8 @@ The maintainer separately authorized a spend of six paid calls — one per enabl
 
 - **Packaging goes as far as release automation, unpublished, and the publish workflow is a separate plan.**
   Manifests, wheel and install smoke land in M6.
-  The publish workflow and its TestPyPI dry run are `docs/superpowers/plans/2026-09-07-amicus-publish-workflow.md`, executed after M6 merges, because the execution model's rule 5 (one plan, one draft PR) and rule 6 (`.github/workflows/**` changes are their own reviewed PR) together forbid a milestone plan producing that change.
+  The publish workflow and its TestPyPI dry run were a plan of their own, executed after M6 merged, because the execution model's rule 5 (one plan, one draft PR) and rule 6 (`.github/workflows/**` changes are their own reviewed PR) together forbid a milestone plan producing that change.
+  That plan was removed once executed; it is in git history, and `.github/workflows/publish.yml` with `docs/RELEASING.md` are the authoritative descriptions of what shipped.
   Neither plan publishes to PyPI; the trademark clearance the README names is still open and is maintainer-only.
 - **Commands are per-verb with the backend as an argument** — `/amicus:consult`, not `/amicus:codex:consult`.
   The tool surface's premise is that the backend is a parameter; the command surface says the same thing and stays fixed-size as backends are added.

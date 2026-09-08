@@ -163,7 +163,7 @@ version.
 | Deprecating the sibling projects | `docs/DEPRECATING-SIBLINGS.md` |
 | The router skill an agent loads to call amicus | `skills/collaborating-with-amicus/` |
 | Host captures and CLI evidence | `docs/host-captures/`, `docs/claude-help/`, `docs/kimi-help/` |
-| Milestone plans | `docs/superpowers/plans/` |
+| How past milestones were built | git history — executed plans are removed once merged |
 
 ## License
 
