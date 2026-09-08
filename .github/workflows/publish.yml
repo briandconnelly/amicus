@@ -73,7 +73,11 @@ jobs:
 
   pypi:
     needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
+    # The event check is load-bearing, not redundant with the ref check. A workflow can be
+    # dispatched against any branch OR TAG, and `github.ref` is then the dispatched ref, so a
+    # `workflow_dispatch` aimed at an existing `v*` tag would satisfy the ref check alone and
+    # publish to real PyPI during a run this workflow calls a dry run. PyPI uploads are immutable.
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
