@@ -37,6 +37,7 @@ The gate is defined once, in `AGENTS.md` (Rules, item 2); CI runs it on every su
 | Release automation (`publish.yml`); the TestPyPI path is proven, the tagged PyPI path is not | `docs/superpowers/plans/2026-09-07-amicus-publish-workflow.md` |
 | The release runbook a maintainer follows to ship a tagged version | `docs/RELEASING.md` |
 | Migrating from `codex-in-claude`, `moonbridge` or `claude-in-codex` | `docs/MIGRATION.md` |
+| The maintainer's checklist for deprecating `codex-in-claude`, `moonbridge` and `claude-in-codex` | `docs/DEPRECATING-SIBLINGS.md` |
 | The router skill an agent loads to call amicus | `skills/collaborating-with-amicus/` |
 | The agent-friendly-mcp review walk findings | `docs/reviews/2026-09-07-agent-friendly-mcp-walk.md` |
 | Claude Code CLI evidence captures | `docs/claude-help/` |
