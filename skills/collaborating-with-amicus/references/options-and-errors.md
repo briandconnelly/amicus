@@ -28,7 +28,7 @@ On `ok: false` the envelope carries `error.code` (from a closed catalog), a mess
 | `authenticate` / `install_backend` | The backend is not ready. `amicus_backends` reports the same thing for free. |
 | `poll_job_status` / `list_jobs` | The work exists; find or wait for it rather than starting another. |
 | `start_new_job` | The prior job is unrecoverable; a new one is the correct action. |
-| `reduce_input` | The input exceeded a cap before any spend. |
+| `reduce_input` | Make the next attempt smaller. It is a recovery action, **not** a statement about spend — `budget_exceeded` maps here and may already have spent. Read `error.code`. |
 | `retry_after_delay` | Transient; honor `retry_after_ms` when present. |
 | `inspect_and_retry` / `retry_then_report` | No mechanical fix — look before retrying, and report if it recurs. |
 | `use_new_idempotency_key` | The key is bound to different arguments. |
@@ -61,8 +61,8 @@ If a call was interrupted and you do not know whether it started:
 
 1. `amicus_job_list` (free), narrowed by `backend`, `status`, or `task_id`. A task-augmented call
    maps to its job by `task_id`.
-2. If the job exists, resume it with `amicus_job_status` / `amicus_job_result`. Do not start a
-   replacement.
+2. If the job exists, resume it with `amicus_job_status` / `amicus_job_result` — the recovery
+   rule above is what makes a replacement the wrong move.
 3. Only if no job exists, retry — with the same `idempotency_key` if the original had one.
 
 Prefer `amicus_job_result` over `amicus_job_consume_result` while a workflow is still running.

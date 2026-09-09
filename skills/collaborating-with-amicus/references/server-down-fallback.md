@@ -12,6 +12,9 @@ failure, not a tool returning `ok: false`. A tool that answers is not a server t
 - **Never construct a write-capable or delegate-tier fallback.** Restore the server instead.
 - **Keep every flag in a fallback command.** If the CLI rejects one, stop and report the drift —
   never drop a flag to make the command run.
+- **Never use the direct CLI route when only the supplied prompt may be disclosed.** It reaches
+  the filesystem; the prompt is not the limit of what it sends.
+- **Never carry amicus's parameter names or guarantees onto another server's surface.**
 - **Never retry either route while the transport condition is unchanged.**
 
 ## Why the plugin path is preferred
@@ -27,14 +30,13 @@ answer comes back as prose you must treat as an unverified claim with no envelop
 is connected while amicus is not, it is the better fallback: it keeps redaction, bounded input,
 and structured results, and its own skill states its guarantees.
 
-Use that server's own tools and its own skill. Do not carry amicus's parameter names or this
-skill's guarantees across — the surfaces differ, and a guarantee that holds on one server is not
-evidence about another.
+Use that server's own tools and its own skill. The surfaces differ, and a guarantee that holds on
+one server is not evidence about another — which is what the rule above is protecting.
 
 ## Last resort: the codex CLI directly
 
-`codex` is the one backend of the three whose prompt travels on **stdin**, so a hand-rolled call
-can stay inside AGENTS.md rule 18. Read-only consult only:
+`codex` is the only direct CLI fallback documented here. Its prompt travels on **stdin**, so a
+hand-rolled call can stay inside AGENTS.md rule 18. Read-only consult only:
 
 ```sh
 codex exec \
@@ -52,12 +54,20 @@ codex exec \
 
 Send the prompt on stdin; the trailing `-` is what selects it.
 
-Every flag here is one amicus itself always sends (`src/amicus/backends/codex/contract.py`,
-`ALWAYS_SEND_FLAGS` and `MODEL_RUN_DISABLED_FEATURES`), at codex's strictest config isolation: no
-persisted session, no `$CODEX_HOME/config.toml`, no execpolicy rules, no remote-plugin connectors,
-and an explicit working root instead of the ambient directory. `--disable sleep_tool` is spend
-hygiene rather than a guarantee — it removes a native sleep whose single call can last up to 12
-hours, and no server deadline bounds this route.
+Every flag here is one amicus supports and never gates on `--help` parsing
+(`src/amicus/backends/codex/contract.py`, `ALWAYS_SEND_FLAGS` and `MODEL_RUN_DISABLED_FEATURES`),
+selected here for codex's strictest config isolation: no persisted session, no
+`$CODEX_HOME/config.toml`, no execpolicy rules, no remote-plugin connectors, and an explicit
+working root instead of the ambient directory.
+
+**That is not what an ordinary amicus call sends.** `ALWAYS_SEND_FLAGS` classifies flags as
+guarantee-bearing rather than help-gated; it does not mean every one is emitted every time.
+`--ignore-user-config` and `--ignore-rules` come from `isolation_flags()`, which returns nothing at
+the default `inherit` isolation, and `--skip-git-repo-check` is emitted conditionally. So this
+command is deliberately stricter than the default paid path, not a reproduction of it.
+
+`--disable sleep_tool` is spend hygiene rather than a guarantee — it removes a native sleep whose
+single call can last up to 12 hours, and no server deadline bounds this route.
 
 Set `WORKSPACE` to a directory the user has approved for disclosure. If nothing beyond a sanitized
 stdin prompt may be visible to the backend, do not use this route at all.
@@ -72,10 +82,15 @@ in a file or on the command line. Rule 18 exempts *amicus's own* handshake file 
 carrier surfaced on `amicus_backends` — and that exemption does not extend to a command you
 compose yourself. **There is no rule-18-compliant hand-rolled kimi fallback. Restore the server.**
 
-`claude` does take its prompt on stdin, but its read-only tier is a tool allowlist assembled from
-several guarantee-bearing flags rather than a single sandbox switch, and no verified invocation is
-published here. Do not improvise one: a fallback missing one allowlist flag is a write-capable
-run, not a degraded read-only one.
+`claude` does take its prompt on stdin, so rule 18 is not what stops it. Its read-only tier is a
+tool allowlist assembled from several flags rather than a single sandbox switch, and no verified
+invocation is published here.
+
+Those flags are not interchangeable. `--tools` is the **primary** allowlist and
+`--disallowed-tools` is defense in depth, so losing them is not the same failure: omitting
+`--disallowed-tools` while `--tools Read,Grep,Glob` still stands leaves a read-only run with one
+layer gone, whereas getting `--tools` wrong leaves a write-capable one. Since an improvised command
+gives you no way to know which you built, do not improvise one.
 
 ## What still applies
 

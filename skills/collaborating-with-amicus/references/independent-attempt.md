@@ -15,11 +15,18 @@ the other before that other attempt is finalized.
   job**; hold it in context entirely when it is small enough.
 - **Omit `instructions_append`, or restrict it to neutral output-shape guidance fixed before
   either attempt begins.**
+- **Check the returned output for distinctive content of your draft before comparing.** Matching
+  content is evidence of possible contact, not proof of its absence when nothing matches.
 - **Reclassify the operation as ordinary critique** — and stop claiming independence — when any
   reclassification trigger below holds.
+- **Never alter git state — stash, commit, branch switch, new worktree — solely to manufacture
+  independence.** It requires explicit user authorization plus a check that their state stays
+  recoverable.
 - **Disclose the basis** when the draft was on disk while the job ran.
 - **Count paid calls across the whole workflow, not per backend.**
 - **Never spend a further call to resolve a disagreement you can resolve from evidence.**
+
+Synthesis itself is governed by SKILL.md → Binding rules → Composed workflows.
 
 ## Order of work
 
@@ -73,10 +80,6 @@ Classify the operation as critique — do not claim independence — when any of
 Judge these from your own tool calls and the returned output; they are the only observable
 evidence.
 
-Never stash, commit, switch branches, or create a clean worktree solely to manufacture
-independence. That requires explicit user authorization plus a check that their state stays
-recoverable.
-
 ## Two workers
 
 Running two backends against one problem is an **extension of this pattern, not a free variation
@@ -102,5 +105,4 @@ Agreement is weak evidence: both attempts may inherit the same framing from the 
 and may share blind spots regardless. Spend the synthesis on disagreements, differing assumptions,
 and the experiment that would distinguish them.
 
-Preserve disagreement and missing evidence in what you report. Never average confidence labels or
-tally votes, and never spend another call to break a tie that evidence could settle.
+What you report preserves disagreement and missing evidence, per the root's synthesis rule.

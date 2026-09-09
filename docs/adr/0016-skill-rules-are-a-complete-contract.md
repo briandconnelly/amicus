@@ -55,3 +55,21 @@ The qualified account in ADR 0012 stands as the record; the overstatement is gon
 
 `moonbridge`'s inconsistency is not fixed here.
 AGENTS.md rule 17 forbids editing a sibling checkout, so it is recorded in this ADR and reported to the maintainer rather than repaired from this repository.
+
+## What the review round demonstrated about both decisions
+
+A Codex review of the finished branch returned `verdict: fail` with twenty-two findings, and its two largest classes are the two decisions above failing on their first application.
+
+**The rules-as-contract fix reproduced the original defect one level down.**
+Ten obligations were moved out of the root's prose and into labelled rules, and the newly written references then placed ten obligations of their own outside their `Rules` blocks — the workspace-content prohibition on `instructions_append`, the provider-configuration prohibition, the git-state restriction, the contact check, the complementary-review constraints, and the fallback's disclosure-only exclusion among them.
+Fixing the advertised contract in one file does not make the contract complete; every file an agent is routed to has to be audited the same way, and the check is mechanical enough to run (search for imperative wording outside a `Rules` heading) that there is no excuse for asserting it instead.
+The follow-up pass also showed the opposite failure once a rule is promoted: a rule restated in adjacent prose is two copies that can drift, so the prose keeps the explanation and drops the imperative.
+
+**The verify-before-stating rule failed because the instrument tested a weaker claim than the text made.**
+`server-down-fallback.md` said every flag in its command is one "amicus itself always sends", and the check written to verify it asserted only that those flags appear in `ALWAYS_SEND_FLAGS`.
+That constant is a *classification* — guarantee-bearing rather than help-gated — and not a statement that a flag is emitted on every call: `isolation_flags()` returns nothing at the default `inherit` isolation, and `--skip-git-repo-check` is conditional.
+The check passed, the claim was false, and the passing check was reported as verification.
+A verification instrument must assert the proposition the text actually states; where a claim is stronger than its source supports, the counterexamples belong in the check as their own assertions, which is how they are recorded now.
+
+Three rule conflicts surfaced in the same pass and are worth naming, because each was a rule that read as absolute and was contradicted by another part of the contract: a one-call cap that made the documented two-call workflow impossible, a prohibition on running both call forms that contradicted the timeout repair `claude` itself prescribes, and a prohibition on applying a diff that its own validation step required.
+An obligation stated without its exception is not stricter, it is unfollowable.

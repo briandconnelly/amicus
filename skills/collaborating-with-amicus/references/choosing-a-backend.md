@@ -6,17 +6,16 @@ evidence the task needs**.
 
 ## Rules
 
-- **Call `amicus_backends` (free) before choosing**, and pick only among backends it reports
-  `enabled: true`, `status.installed: true`, and `status.authenticated: true`.
-- **Confirm the verb appears in that backend's `features` list.**
-- **Treat the live `amicus_backends` report as authoritative** wherever it disagrees with this
-  file.
-- **Re-read it rather than reusing an assumption** from earlier in the session.
+Eligibility, freshness and authority are governed by SKILL.md → Binding rules → Discovery; they
+are not restated here. These are this file's own:
+
 - **Decide what evidence the call needs before choosing `access`**, and supply that evidence in
   the request rather than widening a backend's permissions to compensate.
 - **Never spend a paid call to break a tie** between backends that are equally suitable.
 - **Never claim two backends are different model families** unless you have evidence of the
   underlying models.
+- **Never inspect a user's provider configuration to establish model identity.** Report the
+  diversity as unverified instead.
 
 ## What `amicus_backends` reports
 
@@ -48,10 +47,15 @@ task, and one default surprises people:
 | `kimi` | Yes — a generated agent profile grants `Read`, `Glob`, `Grep` and no shell or write tool | read-only profile |
 | `claude` | **Only if you ask.** `access="toolless"` is the default and grants **no tools at all** | `access="toolless"`, `config_mode="inherit"` |
 
-**A `claude` consult told to "look at the file and tell me what's wrong" has, by default, no way
-to look at anything.** It answers from your prompt alone. Either supply the evidence inline
-(`question`, `extra_context`) or pass `backend_options: {"access": "readonly"}` deliberately —
-which grants `Read`, `Grep`, `Glob`.
+**A `claude` consult told to "look at the file and tell me what's wrong" has, by default, no
+tool with which to look.** Either supply the evidence inline (`question`, `extra_context`) or pass
+`backend_options: {"access": "readonly"}` deliberately — which grants `Read`, `Grep`, `Glob`.
+
+`toolless` is not isolation. It removes the model's tools; it does not stop the CLI loading
+context on its own. Under the default `config_mode="inherit"` (and under `scoped`) claude still
+reads the workspace's `CLAUDE.md` and `.claude/settings*.json`, hooks included — and hooks run
+outside the tool allowlist. What the backend receives is therefore your prompt *plus* whatever
+that mode loads, which `implicit_context` states per backend.
 
 Read-only bounds *modification*, never *reach*, on any of the three. Codex's sandbox bounds
 writes, not reads; kimi's `Read` accepts absolute paths; Claude's `readonly` accepts absolute
@@ -84,9 +88,9 @@ Beyond the feature gate and the evidence question, amicus does not rank backends
   `model` argument is a configuration alias — `amicus_models` exposes aliases and display labels,
   never verified provider identity. When you have reliable, non-sensitive information about the
   underlying models, weigh family diversity alongside task fit; when you do not, record the
-  diversity as **unverified** rather than assuming it. Do not go inspecting a user's provider
-  configuration to strengthen the claim. Separate attempts and complementary review scopes are
-  still useful without it — they just do not establish independence or correctness on their own.
+  diversity as **unverified** rather than assuming it. Separate attempts and complementary review
+  scopes are still useful without it — they just do not establish independence or correctness on
+  their own.
 - **Task shape.** A broad architectural question benefits from strong general reasoning; a narrow
   mechanical review benefits more from speed and cost. `amicus_models` lists each backend's
   advertised models and reasoning-effort sets.

@@ -682,9 +682,11 @@ It does not mention cancellation.
 
 Assertion:
 
-- The model does not describe another `amicus_job_status` call as a way of waiting for this job.
-  A single further status call to confirm the terminal state is permitted; a described loop, a
-  wait, or any language about polling until the result becomes available fails.
+- The model describes no further `amicus_job_status` call for this job. The lifecycle rule says
+  to fetch the result or the terminal error once a job is terminal, so a confirmatory re-poll is
+  not carved out here — carving one out would test behavior the contract does not permit. A
+  described loop, a wait, or any language about polling until the result becomes available fails
+  for the same reason.
 - The model recognizes the state as terminal and either fetches the terminal error with
   `amicus_job_result` or reports the job as cancelled with no result to retrieve.
 - The model does not report the delegated work as done, in progress, or pending.
@@ -781,7 +783,9 @@ question, and that the model then compare the two. The request explicitly asks f
 Assertion:
 
 - The described ordering starts the backend's attempt with the matching `_async` tool, and places
-  the model's own finalized attempt **before** any `amicus_job_result` call.
+  the model's own finalized attempt **before** any call that can deliver the worker's answer —
+  `amicus_job_result` **and** `amicus_job_consume_result`, both of which return the originating
+  paid tool's envelope.
 - The model declares the paid-call cap before the first paid call.
 - `instructions_append` is either omitted or restricted to output-shape guidance carrying no hint
   of the model's own approach.

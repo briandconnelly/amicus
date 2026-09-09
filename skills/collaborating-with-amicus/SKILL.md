@@ -15,15 +15,16 @@ verification, or the working tree.
 
 ## Shared workflow
 
-1. Read `amicus_backends` (free) before the first paid call of a session, and pick a backend from
-   what it reports — see Binding rules → Discovery.
+The order of work. Each step is governed by the rules named beside it, which are the authoritative
+statement — this list is a map, not a second copy.
+
+1. Discover what is usable → Binding rules → Discovery.
 2. Choose the verb from the route table, then read only that route's reference.
-3. Preview with a free dry run where one exists, and read what it does not cover
-   (Semantics → Data exposure).
-4. State the paid-call cap for this decision before the first paid call, then stay inside it.
-5. Branch on `ok`, then on the concrete tool, then read that result's fields —
+3. Preview and budget → Binding rules → Spend, Scope and inputs.
+4. Call.
+5. Read the result → Binding rules → Results.
+6. Verify before acting → Binding rules → Results, and
    [reading results](references/reading-results.md).
-6. Verify what comes back before you act on it. A returned result is a claim, not a finding.
 
 ## Route the request
 
@@ -71,7 +72,11 @@ obligations live in the reference each route names, under that file's own `Rules
   deadline.** A terminated sync call returns nothing.
 - **Recover an existing job before paying for the same work again** (`amicus_job_list`, or an
   `idempotency_key` replay — see [options and errors](references/options-and-errors.md)).
-- **Never start both the sync and the `_async` form of the same work.**
+- **Never run the sync and `_async` forms of the same work concurrently**, and never launch the
+  sync form speculatively intending to fall back to `_async`.
+- **After a terminal failure, start a new attempt only as `error.repair` directs and only within
+  the declared cap.** A sync timeout's repair prescribes the `_async` twin; that is a new paid
+  run, not a duplicate of the lost one.
 
 ### Scope and inputs
 
@@ -81,8 +86,10 @@ obligations live in the reference each route names, under that file's own `Rules
   read its reported scope before spending.
 - **Pass an absolute `workspace_root` on every repo-grounded call**, including free job-lifecycle
   calls.
-- **Never raise a backend's `access` or `config_mode` to compensate for a brief you did not
-  write properly.** Supply the evidence instead.
+- **Decide `access` and `config_mode` before the call, from the evidence the task needs, and
+  state that need.** Raising either in response to a result that came back short of evidence is
+  the case this forbids; choosing `readonly` up front because the backend must read a named file
+  is not.
 
 ### Results
 
@@ -118,8 +125,7 @@ obligations live in the reference each route names, under that file's own `Rules
 
 - **Never put a secret in any free-text field you supply:** `question`, `task`, `target`,
   `evidence`, `extra_context`, `instructions_append`, `focus`.
-- **Read `carriers` on `amicus_backends` before supplying `instructions_append`**, because one
-  backend places it on a command line.
+- **Read `carriers` on `amicus_backends` before supplying `instructions_append`.**
 - **Never treat a dry run as evidence that a paid call is safe to make.**
 - **Never point a paid call at a workspace whose contents you would not hand to that backend's
   provider.**

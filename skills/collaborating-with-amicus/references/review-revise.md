@@ -5,15 +5,19 @@ improves the work; it does not certify it.
 
 ## Rules
 
-- **Declare the pattern and a one-call cap before the first paid call.**
+- **Declare the pattern and its cap before the first paid call.** One call is the default; a cap
+  of two is permitted only for work classified high risk before that first call.
 - **Run the relevant local checks before spending**, so the critique is about the artifact rather
   than about a mistake you could have caught for free.
 - **Verify each material finding before acting on it**, and record why any disputed finding was
   declined.
-- **Take a second paid pass only when the work was classified high risk and a two-call cap was
-  declared before call one.**
+- **Take a second paid pass only under a two-call cap declared before call one**, and stop after
+  it.
 - **Hold `instructions_append` identical across passes** whenever the pattern uses it.
 - **Never add a pass because a result was reassuring, inconvenient, or inconclusive.**
+- **Never turn the sequence into an open-ended conversation.** It ends at the declared cap.
+- **Never report which checks ran on the strength of the backend's tier.** Read-only bounds
+  modification, not execution; say what the result itself accounts for.
 
 ## Default pass
 
@@ -35,8 +39,8 @@ Allowed only when the work was explicitly classified high risk *before* the firs
 declared cap was two. Spend it on the revised artifact, verify any new findings, rerun checks, and
 stop.
 
-Do not turn the sequence into an open-ended conversation. A clean critique means only that the
-backend reported no issue under the shared scope and framing.
+A clean critique means only that the backend reported no issue under the shared scope and
+framing.
 
 ## Keeping two passes comparable
 
@@ -55,6 +59,12 @@ while the target-bearing part — the diff scope, or the artifact carried in `qu
 
 ## What a critique is not
 
-A backend's critique is not verification. It ran read-only, it did not run your tests, and its
-`verdict` is a claim under the coverage rules in [reading results](reading-results.md). Closing
-out the work still requires this project's own gate.
+A backend's critique is not verification, and its `verdict` is a claim under the coverage rules
+in [reading results](reading-results.md). Closing out the work still requires this project's own
+gate.
+
+Why the rule above bars reporting *which checks ran* from the tier alone: read-only bounds what a
+backend may modify, not what may execute. `claude` under `inherit` or `scoped` loads workspace
+hooks that run **outside** the tool allowlist (reported on `meta.security_warnings`), and a
+read-only tier constrains writes rather than command execution as such. If it matters whether
+anything ran, the evidence is the result's own account of what it did.
