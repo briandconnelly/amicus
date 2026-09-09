@@ -72,7 +72,8 @@ This is configured on PyPI's own project settings page and has no read-only API 
 Trademark clearance for the name `amicus` is resolved, or the maintainer has decided to proceed without it.
 This was decided on 2026-09-08: `docs/adr/0013-proceed-without-trademark-clearance.md` records the decision to publish without clearance, the consequences accepted, and what would reopen it.
 Read that ADR rather than relying on anyone's recollection, and confirm nothing listed under "What would reopen this" has since happened.
-TestPyPI already has the name claimed under this project; pypi.org does not yet have a release.
+TestPyPI has the name claimed under this project, and pypi.org has carried a release since 0.1.0 was published on 2026-09-09.
+The name is therefore established on both indexes; this precondition is about clearance, not about claiming the name.
 
 ### The README describes the released tool
 
@@ -86,7 +87,9 @@ Second, its "Status and known limits" section must not claim anything the releas
 
 Rules 19 and 20 together shape this sequence, and a future maintainer should not "simplify" it back.
 Rule 20 requires the live-gate evidence to cover the exact commit being tagged.
-Rule 19 requires the tag push to be the only work that follows the PR C merge, because the interval in which `main` names a tag that does not yet exist cannot be made zero, only closed as fast as possible.
+Rule 19 requires the tag push to be the only work that follows the PR C merge, so that `main`'s version literals and the published tag agree without a gap.
+Since ADR 0015 that promptness is no longer about a broken install path: `.mcp.json` pins the newest **already-published** release, so `main` never sends a fresh install to a tag that does not exist.
+The single exception was the first release, which had no earlier tag to name; 0.1.0 was tagged and published on 2026-09-09, which closed that window permanently.
 The tag does not have to point at `main`'s head; it has to point at the commit the evidence covers.
 An ordinary merge commit keeps the PR C branch tip in `main`'s history as one of the merge commit's two parents, so tagging that branch tip is legitimate, and it is exactly the commit the evidence names — no fast-forward or branch-protection change is required to satisfy both rules.
 The tag therefore deliberately points at a commit that is in `main`'s history but is not `main`'s head, and the checks in step 5 below prove the two commits' trees are identical.
@@ -95,7 +98,10 @@ The tag therefore deliberately points at a commit that is in `main`'s history bu
 2. Open PR C, the `chore(release):` PR described by AGENTS.md rule 19, and do not merge it yet.
    Roll `## [Unreleased]` in `CHANGELOG.md` into a dated `## [X.Y.Z] - YYYY-MM-DD` section, and leave a fresh empty `## [Unreleased]` above it.
    Change no version literal unless the version itself is changing.
-   For 0.1.0 no literal moves: `pyproject.toml`, `src/amicus/__init__.py`, both `plugin.json` files, and `.mcp.json`'s `@v0.1.0` pin already agree, and the tag is what makes that pin resolve.
+   The literals are `pyproject.toml`, `src/amicus/__init__.py` and both `plugin.json` files.
+   Do **not** touch `.mcp.json`: per ADR 0015 its pin names an already-published release, so during this PR it correctly trails the version being released by one, and step 7 moves it after the tag exists.
+   0.1.0 was the bootstrap: no literal moved, and its `@v0.1.0` pin named the tag that release itself created, because no earlier release existed.
+   That case is closed and does not recur.
    Regenerate `uv.lock` with `uv lock` in this same PR, per AGENTS.md rule 19 — `uv.lock` mirrors the version rather than declaring it, and `prek.toml`'s `uv-lock-check` hook runs `uv lock --check` whenever `pyproject.toml` changes, so a release PR that skips this fails its own hook.
 3. Check out the PR C branch tip (not `main`) into a clean tree and confirm `git status --porcelain` is empty.
    Record the branch tip's SHA; call it the release commit, and note it well — it is the commit that gets tagged, and it will not be `main`'s head after the next step.
@@ -107,6 +113,18 @@ The tag therefore deliberately points at a commit that is in `main`'s history bu
    Run `AMICUS_RELEASE_CHECK=1 uv run pytest tests/test_release_evidence.py -v --no-cov` and confirm the freshness assertion passes.
    Run `uv run python scripts/check_release_state.py` and confirm it prints `release predicate holds`.
    That is the same tree check the `verify` job will run after the tag is pushed, so a failure here is a failure you would otherwise discover with an immutable tag already in place.
+   Rehearse the real install path against the release commit, which is the check that used to be impossible before the tag existed:
+
+   ```sh
+   printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"rehearsal","version":"0"}}}' \
+     | UV_CACHE_DIR="$(mktemp -d)" uvx --from "git+https://github.com/briandconnelly/amicus.git@<release-sha>" amicus-mcp
+   ```
+
+   Substitute the release commit's SHA for the tag and change nothing else: a commit SHA resolves over the same git transport a tag does, and it exists before the tag does.
+   A clean `UV_CACHE_DIR` is what makes this mean anything — `uvx` reuses a cached tool environment without contacting any index, so a warm cache can answer from a build you already had.
+   Confirm the server answers `initialize` with `serverInfo.name == "amicus"` and the version being released.
+   This proves git transport, a clean-machine build, the console script and the wire handshake before anything irreversible happens.
+   What it does not prove is that the string `vX.Y.Z` resolves, which is the trivial remainder and is covered by the post-tag checks.
    Run the gate defined by AGENTS.md rule 2.
    The 24-hour freshness window this evidence carries (`validate`'s `max_age_hours`) is checked only here, at step 3, and deliberately not by CI afterward: a tag is immutable, so a window applied after tagging could let queue time or a slow deployment approval turn a legitimate tag into one that can never be published.
    The window is therefore yours to honor: merge PR C, the next step, before the day is out — otherwise this step must be repeated.
@@ -136,6 +154,13 @@ The tag therefore deliberately points at a commit that is in `main`'s history bu
    `--cleanup=verbatim` keeps the JSON byte-for-byte; the default cleanup would also parse, but exactness is free here.
    Confirm before pushing that `git cat-file -t vX.Y.Z` prints `tag` (not `commit`, which would mean a lightweight tag) and that `git tag -l --format='%(contents)' vX.Y.Z | python -c 'import json,sys; json.load(sys.stdin)'` exits 0.
    Nothing but step 5's read-only checks happens between step 4 and step 6.
+7. Once the publish has completed and the post-tag checks below have passed, open a small `chore(release):` PR that moves `.mcp.json`'s pin to `vX.Y.Z`.
+
+   This is the pin-move PR that ADR 0015 makes part of every release, and it is deliberately *after* the tag rather than before it: the pin names a release that already exists, so moving it earlier would be the very thing ADR 0015 removes.
+   It touches `.mcp.json` and nothing else, it is not a release under rule 19, and it needs no live-gate evidence — it moves a pointer to a tag that is already published.
+   Until it merges, `main` sends a fresh install to the previous release, which works.
+   That is the intended degradation, so do not treat it as an outage or rush the PR through without its checks.
+   This step did not apply to 0.1.0, whose pin already reads `@v0.1.0` for the bootstrap reason above; 0.2.0 is the first release to perform it.
 
 A maintainer who instead wants the tag to be `main`'s own head has a permitted alternative: a direct fast-forward push of the PR C branch to `main` (`git checkout main && git merge --ff-only <pr-branch> && git push origin main`) achieves that, if this repository's branch protection allows a direct push to `main`.
 This runbook cannot say whether it does: `gh api repos/briandconnelly/amicus/branches/main/protection` returned `403 Resource not accessible by integration` to the token available while writing it, so that setting is unverified here, and this document does not assert it either way.
@@ -171,12 +196,16 @@ They confirm the release actually landed; they are not a pre-tag gate.
 2. Install from the public tag exactly as a user would, using the committed manifest's own source:
 
    ```sh
-   uvx --from git+https://github.com/briandconnelly/amicus.git@vX.Y.Z amicus-mcp
+   printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"post-tag","version":"0"}}}' \
+     | UV_CACHE_DIR="$(mktemp -d)" uvx --from "git+https://github.com/briandconnelly/amicus.git@vX.Y.Z" amicus-mcp
    ```
 
-   Drive it with one JSON-RPC `initialize` request over stdin and assert `serverInfo.name == "amicus"` and the expected version.
-   This is the first and only check that the `.mcp.json` pin actually resolves; it cannot be run before the tag exists.
+   Assert `serverInfo.name == "amicus"` and the expected version in the reply.
+   The fresh `UV_CACHE_DIR` is part of the command, not a note beside it: a warm cache answers without resolving anything, so a copy-pasted command without it can pass while proving nothing.
+   Step 3's rehearsal already proved transport, build and handshake against the release commit's SHA, so what this adds is narrow but real — that the tag *ref* resolves, which is all that separated the rehearsal from the thing itself.
+   This is what step 7's pin-move PR is waiting on: do not move the pin to a tag whose install you have not just run.
 3. Run a negative control: the same command against a version that does not exist must fail.
+   Without it, a warm cache or a silently-substituted binary would make check 2 pass no matter what.
 
 ## Rollback
 

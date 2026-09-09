@@ -162,7 +162,7 @@ def test_mcp_json_invokes_the_console_script():
     assert server["args"][-1] == "amicus-mcp"
 
 
-def test_mcp_json_installs_this_repo_at_this_version_s_tag():
+def test_mcp_json_installs_this_repo_at_a_published_release_tag():
     """The `--from` source was asserted by nothing, and could not have been.
 
     The slow smoke below substitutes any `git+` argument for a locally built wheel
@@ -170,14 +170,32 @@ def test_mcp_json_installs_this_repo_at_this_version_s_tag():
     above checks only `command` and the trailing console-script name. Rewriting the
     `--from` to a wrong owner, a wrong repo AND a wrong tag left the whole file green,
     confirmed by mutation. That is the one field a user installing from the committed
-    manifest actually fetches, so pin it: this repo, and the tag matching the version
-    the package declares, so a release bump that forgets `.mcp.json` fails here."""
+    manifest actually fetches, so pin its shape: this repo, over git, at some `vX.Y.Z`.
+
+    What this does NOT assert is `pin == amicus.__version__`. Per ADR 0015 the pin names
+    an ALREADY-PUBLISHED release, not the version this tree declares, because the
+    manifest a fresh install reads lives on `main` and cannot name a tag that does not
+    exist yet. Between releases the two are equal; from the release PR until the pin-move
+    PR the pin trails by one, and that state is correct rather than a literal left behind.
+    The pin must never LEAD the declared version, though -- that would send users to a
+    release that has not happened, which is the bug ADR 0015 fixes.
+    """
     args = _read(".mcp.json")["mcpServers"]["amicus"]["args"]
     assert "--from" in args, "the manifest must install from an explicit source"
-    source = args[args.index("--from") + 1]
-    expected = f"git+https://github.com/briandconnelly/amicus.git@v{amicus.__version__}"
-    assert source == expected, (
-        f"unexpected --from source {source!r} for version {amicus.__version__}"
+    index = args.index("--from") + 1
+    assert index < len(args), "`--from` must be followed by a source, not end the argv"
+    source = args[index]
+    match = re.fullmatch(
+        r"git\+https://github\.com/briandconnelly/amicus\.git@v(\d+\.\d+\.\d+)", source
+    )
+    assert match, f"unexpected --from source {source!r}"
+
+    def parts(version: str) -> tuple[int, ...]:
+        return tuple(int(piece) for piece in version.split("."))
+
+    assert parts(match.group(1)) <= parts(amicus.__version__), (
+        f".mcp.json pins v{match.group(1)}, which is newer than the declared "
+        f"{amicus.__version__}; the pin names an already-published release and cannot lead it"
     )
 
 
@@ -249,11 +267,16 @@ def _minimal_subprocess_path(command: str) -> str:
 async def test_the_committed_manifest_command_starts_a_real_server(tmp_path):
     """Smoke the manifest's own command line, not an in-process app.
 
-    The committed `--from` names a git tag that does not exist until release, so this
-    substitutes a locally built wheel for that ONE field and asserts every other field —
-    command, console script, arg order — exactly as committed. What stays unproven until
-    release is the tag's resolvability; that is the release workflow's gate, and Task 10's
-    ADR records it as a known limit of the M6 claim.
+    This substitutes a locally built wheel for the ONE `--from` field and asserts every
+    other field — command, console script, arg order — exactly as committed, so it proves
+    the command line's shape offline and in a few seconds, without a network fetch.
+
+    It deliberately does not resolve the pinned source. That is not the same limitation it
+    used to be: under ADR 0015 the pin names an already-published tag, so `check_release_state`
+    can and does prove the tag exists, and `docs/RELEASING.md` step 3 rehearses the real git
+    transport pre-tag by substituting the release commit's SHA — verified to resolve. What
+    remains unproven here is only that a resolvable ref is reachable from THIS test, which is
+    a deliberate trade for a fast, offline, hermetic check.
 
     `PATH` is reduced to an allowlist (see `_minimal_subprocess_path`) so a broken
     substitution cannot pass by silently resolving some OTHER pre-existing `amicus-mcp`

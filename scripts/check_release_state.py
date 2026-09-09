@@ -6,8 +6,23 @@ question, and the difference matters more than the code:
 
 1. **Release-state coherence** (`check_tree`). Every version literal AGENTS.md rule 19 names
    agrees with the version being released, `CHANGELOG.md` has exactly one dated section for
-   that version with `## [Unreleased]` above it, and `uv.lock` is current. These are facts of
-   the tagged tree, so a green result here *proves* them. Nothing self-asserts.
+   that version with `## [Unreleased]` above it, `uv.lock` is current, and `.mcp.json`'s pin
+   names a tag no newer than this release that resolves IN THIS CHECKOUT. These are facts of
+   the tagged tree (and, for the pin, of this checkout), so a green result here *proves* them.
+   Nothing self-asserts.
+
+   "In this checkout" is the exact claim, and it is deliberately not "on the remote". A
+   local-only tag would satisfy this check while being unfetchable by the users the pin exists
+   to serve. That gap is closed by where the check runs rather than by the check itself: the
+   `verify` job checks out from GitHub with `fetch-depth: 0`, so the tags it sees are the
+   remote's. Read a local pass as "my checkout has it", and the CI pass as "GitHub has it".
+
+   `.mcp.json`'s pin is deliberately NOT one of the version literals. Per ADR 0015 it names
+   an ALREADY-PUBLISHED release rather than the one being released, because the
+   manifest a fresh install reads lives on `main` and so cannot name an artifact that does
+   not exist yet. What replaced the old equality is `check_mcp_pin_tag_exists`, which is
+   worth more: the equality was true by construction on any tree a release PR had touched,
+   whereas the tag either exists or it does not.
 
 2. **The live-gate assertion** (`check_tag`). AGENTS.md rule 20's evidence record, carried in
    the annotated tag's own message. A green result here proves only that a well-formed record
@@ -65,7 +80,9 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
 TAG_RE = re.compile(r"^v(?P<version>\d+\.\d+\.\d+)$")
 _INIT_VERSION_RE = re.compile(r'^__version__ = "(?P<version>[^"]+)"$', re.MULTILINE)
-_MCP_SOURCE = "git+https://github.com/briandconnelly/amicus.git@v{version}"
+_MCP_SOURCE_RE = re.compile(
+    r"^git\+https://github\.com/briandconnelly/amicus\.git@v(?P<version>\d+\.\d+\.\d+)$"
+)
 
 # A signature block, if the maintainer signs the tag, follows the message. Cut it off rather
 # than fail to parse: rule 20 does not require a signature, but it must not forbid one either.
@@ -93,13 +110,102 @@ def _json_field(repo_root: Path, relative: str, field: str) -> object:
     return json.loads((repo_root / relative).read_text(encoding="utf-8"))[field]
 
 
+def _parts(version: str) -> tuple[int, ...]:
+    """`"0.10.0"` as `(0, 10, 0)`, so versions compare numerically rather than as strings."""
+    return tuple(int(part) for part in version.split("."))
+
+
+def mcp_pin(repo_root: Path = REPO_ROOT) -> tuple[str | None, list[str]]:
+    """The version `.mcp.json`'s `--from` source pins, and any problem with that source.
+
+    Per ADR 0015 this is NOT a rule-19 version literal: the manifest a fresh install reads
+    lives on `main`, so it names an ALREADY-PUBLISHED release rather than the one
+    being released. What is checkable here is its shape — this repo, over git, at some
+    `vX.Y.Z`. `check_version_literals` bounds the version; `check_mcp_pin_tag_exists`
+    proves the tag is real, where a checkout with tags is available.
+    """
+    server = json.loads((repo_root / ".mcp.json").read_text(encoding="utf-8"))
+    args = server["mcpServers"]["amicus"]["args"]
+    if "--from" not in args:
+        return None, [".mcp.json must install from an explicit `--from` source"]
+    index = args.index("--from") + 1
+    # A manifest ending in a bare `--from`, or carrying a non-string there, is malformed. Report
+    # it as a release-state problem: this script is the release gate, so it must not crash with
+    # an IndexError or TypeError on exactly the input it exists to reject.
+    if index >= len(args):
+        return None, [".mcp.json has a trailing `--from` with no source after it"]
+    source = args[index]
+    if not isinstance(source, str):
+        return None, [f".mcp.json's `--from` source is {source!r}, which is not a string"]
+    match = _MCP_SOURCE_RE.match(source)
+    if match is None:
+        return None, [
+            f".mcp.json installs {source!r}, which is not this repository at a vX.Y.Z tag"
+        ]
+    return match.group("version"), []
+
+
+def check_mcp_pin_tag_exists(
+    *,
+    repo_root: Path = REPO_ROOT,
+    git: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+) -> list[str]:
+    """The tag `.mcp.json` sends users to must actually exist. No exceptions.
+
+    This is the check ADR 0015 gained in exchange for the equality it dropped, and it is worth
+    more: the old `pin == version being released` was true by construction on any tree a
+    release PR had touched, while this one is a fact about the world.
+
+    There is deliberately no bootstrap exception. Two earlier attempts had one and both were
+    unsound. Keying it on `pin == version being released` was too broad: a later release whose
+    pin was mistakenly bumped would satisfy it, skip this check, and restore the very window
+    ADR 0015 removes — and the publish workflow would not catch that either, because by then
+    the tag has been pushed and does exist. Keying it on "this repository has no `v*` tags"
+    was no better, because `git tag -l` sees only locally fetched tags: a `--no-tags` or
+    shallow checkout is indistinguishable from a repository that has never released, and the
+    pre-tag runbook step does not fetch before running this.
+
+    The exception is also moot. 0.1.0 was tagged and published on 2026-09-09, so this
+    repository can never legitimately bootstrap again, and the only way into that branch now
+    would be a checkout too incomplete to trust. Requiring the tag unconditionally turns that
+    case into a loud, actionable failure — fetch your tags — instead of a silent pass.
+
+    A tagless checkout therefore FAILS here rather than passing, which is the intended
+    behaviour and why `publish.yml` sets `fetch-depth: 0`.
+    """
+    pinned, problems = mcp_pin(repo_root)
+    if pinned is None:
+        return problems
+
+    tag = f"v{pinned}"
+    try:
+        proc = git(
+            ["git", "rev-parse", "--verify", "--quiet", f"refs/tags/{tag}"],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError as exc:  # git missing: report it rather than silently skipping the check
+        return [f"could not check whether {tag} exists: {exc}"]
+    if proc.returncode != 0:
+        return [
+            f".mcp.json pins {tag}, which does not exist in this checkout; users installing "
+            f"from this manifest would get an unresolvable ref. If {tag} is a real release, "
+            "this checkout is missing its tags — fetch them and re-run."
+        ]
+    return []
+
+
 def check_version_literals(version: str, *, repo_root: Path = REPO_ROOT) -> list[str]:
-    """Every rule-19 literal must equal `version`.
+    """Every rule-19 literal must equal `version`, and `.mcp.json`'s pin must not exceed it.
 
     `tests/test_packaging.py` already asserts these agree with each other on every PR. This
     checks them against the version actually being released, on the tagged tree, in the
     workflow that publishes — which is the part CI never ran, because `ci.yml` triggers on
     pushes to `main` and on pull requests, never on a tag.
+
+    `.mcp.json` is deliberately not among the literals; see `mcp_pin` and ADR 0015.
     """
     problems: list[str] = []
 
@@ -121,11 +227,13 @@ def check_version_literals(version: str, *, repo_root: Path = REPO_ROOT) -> list
         if found != version:
             problems.append(f"{manifest} declares {found!r}, expected {version!r}")
 
-    args = json.loads((repo_root / ".mcp.json").read_text(encoding="utf-8"))
-    source = args["mcpServers"]["amicus"]["args"]
-    expected = _MCP_SOURCE.format(version=version)
-    if expected not in source:
-        problems.append(f".mcp.json does not install {expected!r}; its args are {source!r}")
+    pinned, pin_problems = mcp_pin(repo_root)
+    problems += pin_problems
+    if pinned is not None and _parts(pinned) > _parts(version):
+        problems.append(
+            f".mcp.json pins v{pinned}, which is newer than the {version} being released; "
+            "the pin names an already-published release (ADR 0015) and so can never lead it"
+        )
 
     return problems
 
@@ -191,12 +299,18 @@ def check_tree(
     *,
     repo_root: Path = REPO_ROOT,
     run: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+    git: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
 ) -> list[str]:
-    """Every release-state fact this tree can prove about `version`."""
+    """Every release-state fact this tree can prove about `version`.
+
+    `run` drives `uv lock --check` and `git` drives the tag lookup; they are separate
+    parameters so a test can stub one without silently satisfying the other.
+    """
     return [
         *check_version_literals(version, repo_root=repo_root),
         *check_changelog(version, repo_root=repo_root),
         *check_lock(repo_root=repo_root, run=run),
+        *check_mcp_pin_tag_exists(repo_root=repo_root, git=git),
     ]
 
 
@@ -278,6 +392,13 @@ def _write_summary(path: Path, *, tag: str | None, version: str, problems: list[
     else:
         lines.append("**Release-state coherence: PASSED.** Every version literal, the changelog")
         lines.append("section and `uv.lock` agree with this tag, on this tree.")
+        lines.append("")
+        lines.append(
+            "**Install manifest: PASSED.** `.mcp.json` pins an already-published release "
+            "tag that resolves in this checkout and does not lead this version, so `main` "
+            "is not sending fresh installs at a tag that does not exist (ADR 0015). This "
+            "checkout is GitHub's, fetched with full tags, so the tag really is on the remote."
+        )
         if tag:
             lines.append("")
             lines.append(
