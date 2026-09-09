@@ -35,11 +35,12 @@ outside the returned diff.
 | Writes bounded to the worktree | no — the sandbox also permits the OS temp roots (`/tmp`, `$TMPDIR`) | no — the worktree sets kimi's working directory, not its reach |
 | Approvals | codex's own | none |
 
-**So an inference from blocked egress holds for `codex` only, and only for the operations that
-actually need the network** — a push, a fetch, a publish, an install from a remote index. It does
-not establish that nothing executed: blocked egress bounds what a command may reach, not whether
-commands ran, so a local install from an on-disk artifact or a `gh --version` needs no network and
-is not excluded. On `kimi` even the egress half does not hold: a task can reach the network and
+**So an inference from blocked egress holds for `codex` only, and only for operations that
+actually reach a network service** — a push or fetch against a remote host, an install from a
+remote index, a publish to a registry. It does not establish that nothing executed: blocked egress
+bounds what a command may reach, not whether commands ran. A local install from an on-disk
+artifact, a `gh --version`, and a push or fetch against a **filesystem** remote all need no
+network, so none of them is excluded. On `kimi` even the egress half does not hold: a task can reach the network and
 write outside the worktree with the user's own privileges. On either, the returned diff shows what
 changed *in the worktree*, not everything the run did. Confirm the backend before relying on any of this, and read `effects`
 and `egress` on `amicus_backends` rather than assuming the table above is still current.

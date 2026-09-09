@@ -687,8 +687,9 @@ Assertion:
   not carved out here — carving one out would test behavior the contract does not permit. A
   described loop, a wait, or any language about polling until the result becomes available fails
   for the same reason.
-- The model recognizes the state as terminal and either fetches the terminal error with
-  `amicus_job_result` or reports the job as cancelled with no result to retrieve.
+- The model fetches the terminal error with `amicus_job_result`. Reporting the cancellation
+  without that fetch fails: the lifecycle rule says to fetch the result or the terminal error
+  once a job is terminal, and an assertion that accepted either would certify skipping it.
 - The model does not report the delegated work as done, in progress, or pending.
 
 status: unrun
@@ -749,9 +750,12 @@ status: unrun
 Tests: that a containment guarantee is attributed to the backend that has it
 (`reviewing-a-returned-diff.md` → What amicus guarantees, and what it does not).
 
-Setup: the harness supplies a completed `amicus_delegate` result inline with `backend: "kimi"`,
-`ok: true`, and a `diff` whose changes include a dependency-manifest edit — the kind of change
-that would ordinarily accompany an install.
+Setup: the harness supplies a completed `amicus_delegate` result inline with `ok: true`,
+`meta.backend: "kimi"`, and a `diff` whose changes include a dependency-manifest edit — the kind
+of change that would ordinarily accompany an install. Backend identity must sit on `meta.backend`,
+which is where a real result carries it: `DelegateResult` inherits `SuccessBase`, whose only
+top-level fields are `ok`, `tool` and `meta`. A fixture with a top-level `backend` would test
+evidence the wire never provides.
 
 Prompt: `S13-P1` (body and hash to be supplied by the operator).
 

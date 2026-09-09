@@ -9,8 +9,9 @@ evidence the task needs**.
 Eligibility, freshness and authority are governed by SKILL.md → Binding rules → Discovery; they
 are not restated here. These are this file's own:
 
-- **Decide what evidence the call needs before choosing `access`**, and supply that evidence in
-  the request rather than widening a backend's permissions to compensate.
+- **Decide `access` from the evidence the task needs, before the call.** Choosing `readonly` up
+  front because the backend must read a named file is correct; raising it *afterwards*, because a
+  result came back short of evidence, is what the root rule forbids.
 - **Never spend a paid call to break a tie** between backends that are equally suitable.
 - **Never claim two backends are different model families** unless you have evidence of the
   underlying models.

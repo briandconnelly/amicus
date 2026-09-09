@@ -14,6 +14,7 @@ failure, not a tool returning `ok: false`. A tool that answers is not a server t
   never drop a flag to make the command run.
 - **Never use the direct CLI route when only the supplied prompt may be disclosed.** It reaches
   the filesystem; the prompt is not the limit of what it sends.
+- **Point `WORKSPACE` only at a directory the user has approved for disclosure.**
 - **Never carry amicus's parameter names or guarantees onto another server's surface.**
 - **Never retry either route while the transport condition is unchanged.**
 
@@ -69,11 +70,14 @@ command is deliberately stricter than the default paid path, not a reproduction 
 `--disable sleep_tool` is spend hygiene rather than a guarantee — it removes a native sleep whose
 single call can last up to 12 hours, and no server deadline bounds this route.
 
-Set `WORKSPACE` to a directory the user has approved for disclosure. If nothing beyond a sanitized
-stdin prompt may be visible to the backend, do not use this route at all.
+The two rules above govern `WORKSPACE` and when this route may be used at all.
 
-**This command has been traced against the contract constants, not executed.** Confirm each flag
-is accepted rather than assuming; a rejection is CLI drift worth reporting, never a flag to drop.
+**Verification status of this command.** Each flag was checked against `codex exec --help` on
+codex-cli 0.153.4 and is accepted there; a negative control confirmed the check can detect an
+absent flag. What that establishes is flag *acceptance* on one version, not that the combination
+behaves as described, and `codex_status` reports 0.153.4 as outside amicus's tested set. The
+command has not been executed end to end. Confirm each flag is still accepted rather than
+assuming; a rejection is CLI drift worth reporting, never a flag to drop.
 
 ## Why there is no kimi or claude fallback here
 

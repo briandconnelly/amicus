@@ -6,14 +6,10 @@ you get the result back.
 
 ## Rules
 
-- **Prefer the `_async` twin whenever you are unsure the work finishes inside the sync deadline.**
-- **Never start both the sync and the `_async` form of the same work.**
-- **Wait at least the returned `poll_after_ms` before each `amicus_job_status` call.**
-- **Poll only while `status == "running"`.** On any terminal status, stop polling and fetch.
-- **Fetch a completed result promptly**; the job store is not long-term storage.
-- **Prefer `amicus_job_result` to `amicus_job_consume_result`** unless deletion is intended.
-- **Recover an existing job before repeating paid work** — `amicus_job_list`, or an
-  `idempotency_key` replay ([options and errors](options-and-errors.md)).
+Every obligation this file depends on is stated in SKILL.md → Binding rules — the `_async`
+preference and job recovery under Spend, and polling, fetching and `amicus_job_result` under Jobs.
+That is their authoritative home; this file adds none of its own, and explains how to carry them
+out.
 
 ## The deadline
 

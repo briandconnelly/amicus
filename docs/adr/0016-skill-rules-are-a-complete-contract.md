@@ -40,7 +40,7 @@ Where backends differ, the skill states the difference per backend rather than c
 
 ## Consequences
 
-The root `SKILL.md` grew a complete rules block and lost the prose obligations, and four references were added — `reading-results.md`, `active-workflows.md`, `options-and-errors.md`, and adapted ports of `independent-attempt.md` and `review-revise.md` — so that route-specific obligations have a labelled home.
+The root `SKILL.md` grew a complete rules block and lost the prose obligations, and five references were added — `reading-results.md`, `active-workflows.md`, `options-and-errors.md`, and adapted ports of `independent-attempt.md` and `review-revise.md` — so that route-specific obligations have a labelled home.
 `server-down-fallback.md` was written rather than ported: the ancestors' fallbacks put prompt text on argv or on disk, which rule 18 does not permit for a command amicus's own skill tells an agent to compose.
 There is consequently no hand-rolled `kimi` fallback, because kimi ignores stdin and every remaining carrier is barred; that gap is stated in the file rather than filled.
 
