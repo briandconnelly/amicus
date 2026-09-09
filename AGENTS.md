@@ -33,10 +33,11 @@ The rules bind; the context after them explains and points elsewhere.
     Prompt text that a test or capture script assembles entirely from its own literals is exempt, including the `build_*_prompt` output committed in `tests/fixtures/*_differentials.json`; it stays verbatim, because a differential must show what changed and a hash cannot.
     No exemption reaches text that was copied, derived or replayed from a prompt anyone sent: that stays bound however it is later stored or relabelled.
 19. Release in two PRs: the work lands with the version literals untouched, then a `chore(release):` PR moves them together and rolls `## [Unreleased]` in `CHANGELOG.md` into a dated section.
-    The literals are `pyproject.toml`, `src/amicus/__init__.py`, `.claude-plugin/plugin.json`, `.codex-plugin/plugin.json` and the `.mcp.json` tag pin.
+    The literals are `pyproject.toml`, `src/amicus/__init__.py`, `.claude-plugin/plugin.json` and `.codex-plugin/plugin.json`.
+    `.mcp.json`'s pin is NOT one of them; rule 24 governs it, and a release must not touch it.
     `uv.lock` mirrors the version rather than declaring it: regenerate it in that same PR with `uv lock`, or the `uv lock --check` hook fails.
     Only the maintainer merges that PR, and only the maintainer pushes the tag.
-    Push the matching tag immediately after that merge, before any other work: the interval in which `main` names a tag that does not yet exist cannot be made zero, so closing it is the only task that may follow the merge.
+    Push the matching tag promptly after that merge, so `main`'s version literals and the published tag do not disagree for longer than necessary.
 20. Never push a `v*` tag unless the three live gates — `tests/test_codex_live.py`, `tests/test_kimi_live.py` and `tests/test_claude_live.py`, run under rule 5 — have all PASSED on that exact commit, with those passing outcomes recorded.
     The record is `.release-evidence/live-gates.json`, written by `scripts/record_live_gate_evidence.py`, naming that commit, each suite and its outcome; a terminal transcript or a recollection is not a record.
     A record showing a failed suite does not satisfy this rule; it is a reason not to tag.
@@ -46,6 +47,9 @@ The rules bind; the context after them explains and points elsewhere.
     Never move a release check into the `pypi` job: GitHub holds every step of an environment job behind that environment's required reviewer, so a check placed there runs only after the approval it exists to inform.
 23. Never describe the rule-20 record, in any document or output, as proof that the live gates ran.
     It is the maintainer's assertion, machine-checked for shape and for naming the tagged commit; the runs happen on the maintainer's machine and the record is written there.
+24. `.mcp.json`'s `--from` pin names a release that is already published, never the one being released, and it may never name a version newer than the one the tree declares.
+    A release PR under rule 19 leaves it untouched; move it to the new tag in its own `chore(release):` PR after that tag is published and its install has been checked.
+    That PR is not a release: it needs no rule-20 evidence, because it moves a pointer to a tag that already exists.
 
 ## Context
 
@@ -72,21 +76,26 @@ The README's "Where things are" table indexes the rest.
 
 ### Releases
 
-Rules 19 and 20 exist because `.mcp.json` pins `git+https://github.com/briandconnelly/amicus.git@v{version}`.
-Until the matching tag exists, a plugin install from `main` fails on an unresolvable ref.
-That window opens at every release and cannot be eliminated, because merging and tagging are separate operations; rule 19's last clause keeps it to the seconds between them rather than removing it.
-`main` carries exactly that unresolvable pin today, because 0.1.0 has never been tagged, and the first release closes this instance of it.
+`.mcp.json` pins `git+https://github.com/briandconnelly/amicus.git@v{version}`, and that pin is what a fresh plugin install actually fetches: users add this repository as a marketplace, so the manifest they read is the one on `main`.
+Rule 24 therefore keeps it naming a release that is already published rather than the one being released.
+A manifest on `main` cannot name an artifact that only exists after `main` has moved, and pinning the version under release meant every release broke a fresh install for the interval between the release merge and the tag push.
+ADR 0015 removes that interval rather than shortening it, and records the two probes that decided the design — a commit SHA resolves where a future tag cannot, and `uvx` reuses a cached tool environment without querying any index, which is why an unpinned source was rejected.
+0.1.0 was the bootstrap, tagged and published on 2026-09-09; it named the tag it created because no earlier release existed, and that case cannot recur.
+`docs/RELEASING.md` step 7 is the pin-move PR rule 24 requires.
 Rule 20 is a local pre-tag gate rather than a CI job: hosted runners have no authenticated `codex`, `kimi` or `claude`, so the evidence is recorded on the maintainer's machine against the exact commit to be tagged.
 That evidence is an honest-mistake guard, not an attestation; it is a local file its author can write by hand.
 Rule 21 covers creation as well as update and deletion because pushing a `v*` tag is by itself what triggers `.github/workflows/publish.yml`: an identity that can create one can publish a release without rules 19 and 20 ever being satisfied, and a moved tag silently changes what users install under a version they already trust.
-No such ruleset exists yet, so rule 21 currently forbids tagging; creating it is a maintainer prerequisite of the first release, and `docs/RELEASING.md` reads it back rather than assuming it.
+That ruleset now exists — `release tags`, active, covering `refs/tags/v*` and restricting creation, update and deletion — and 0.1.0 was tagged under it.
+Its bypass list is the part an agent cannot check: a GitHub App token's ruleset response omits `bypass_actors` entirely rather than returning an empty list, so an agent must not read its absence as "nobody may bypass".
+`docs/RELEASING.md` reads that back with the maintainer's own token rather than assuming it.
 The executable procedure — preconditions, the evidence run, the environment approval pause and the post-tag checks — is `docs/RELEASING.md`.
 
 Rules 20, 22 and 23 are shaped by what a CI job can and cannot establish, which is the subject of ADR 0014 and of issue #25 before it.
 The `verify` job runs `scripts/check_release_state.py` on the tagged commit, and the two halves of that script are worth different amounts.
 Its release-state coherence half **proves** what it reports: every version literal rule 19 names, the dated `CHANGELOG.md` section, and `uv.lock` are all facts of the tagged tree.
 Its live-gate half checks only that the record carried on the tag is well formed, names this commit and asserts three passing suites — never that those suites ran, which is why rule 23 forbids saying otherwise.
-Everything else rule 19 requires is a convention no CI job can prove: two PRs, an ordinary merge commit rather than a squash, the maintainer merging rather than an agent, and the tag pushed before any other work.
+Everything else rule 19 requires is a convention no CI job can prove: two PRs, an ordinary merge commit rather than a squash, the maintainer merging rather than an agent, and the tag pushed promptly after the merge.
+The same is true of rule 24's pin-move PR, except for the one part the tagged tree does prove — that the pin names a tag which resolves and does not lead the release.
 Those are held by the platform controls around the release — rule 21's ruleset and the `pypi` environment's required reviewer — and by whoever runs the procedure, and this repository states that plainly rather than implying the workflow checks it.
 
 ### Siblings
