@@ -38,9 +38,14 @@ The rules bind; the context after them explains and points elsewhere.
     Only the maintainer merges that PR, and only the maintainer pushes the tag.
     Push the matching tag immediately after that merge, before any other work: the interval in which `main` names a tag that does not yet exist cannot be made zero, so closing it is the only task that may follow the merge.
 20. Never push a `v*` tag unless the three live gates — `tests/test_codex_live.py`, `tests/test_kimi_live.py` and `tests/test_claude_live.py`, run under rule 5 — have all PASSED on that exact commit, with those passing outcomes recorded.
-    The record is `.release-evidence/live-gates.json`, naming that commit, each suite and its outcome; a terminal transcript or a recollection is not a record.
+    The record is `.release-evidence/live-gates.json`, written by `scripts/record_live_gate_evidence.py`, naming that commit, each suite and its outcome; a terminal transcript or a recollection is not a record.
     A record showing a failed suite does not satisfy this rule; it is a reason not to tag.
+    Push it as an annotated tag whose message is that record verbatim — `git tag -a vX.Y.Z -F .release-evidence/live-gates.json --cleanup=verbatim <release-sha>` — because `.release-evidence/` is gitignored and the tag is the only carrier that reaches the publish workflow.
 21. Never push a `v*` tag unless a repository ruleset restricts creation, update and deletion of `v*` tags, with no agent identity permitted to bypass it.
+22. Never weaken the `verify` job in `.github/workflows/publish.yml`, and never let the `pypi` job stop depending on it.
+    Never move a release check into the `pypi` job: GitHub holds every step of an environment job behind that environment's required reviewer, so a check placed there runs only after the approval it exists to inform.
+23. Never describe the rule-20 record, in any document or output, as proof that the live gates ran.
+    It is the maintainer's assertion, machine-checked for shape and for naming the tagged commit; the runs happen on the maintainer's machine and the record is written there.
 
 ## Context
 
@@ -76,6 +81,13 @@ That evidence is an honest-mistake guard, not an attestation; it is a local file
 Rule 21 covers creation as well as update and deletion because pushing a `v*` tag is by itself what triggers `.github/workflows/publish.yml`: an identity that can create one can publish a release without rules 19 and 20 ever being satisfied, and a moved tag silently changes what users install under a version they already trust.
 No such ruleset exists yet, so rule 21 currently forbids tagging; creating it is a maintainer prerequisite of the first release, and `docs/RELEASING.md` reads it back rather than assuming it.
 The executable procedure — preconditions, the evidence run, the environment approval pause and the post-tag checks — is `docs/RELEASING.md`.
+
+Rules 20, 22 and 23 are shaped by what a CI job can and cannot establish, which is the subject of ADR 0014 and of issue #25 before it.
+The `verify` job runs `scripts/check_release_state.py` on the tagged commit, and the two halves of that script are worth different amounts.
+Its release-state coherence half **proves** what it reports: every version literal rule 19 names, the dated `CHANGELOG.md` section, and `uv.lock` are all facts of the tagged tree.
+Its live-gate half checks only that the record carried on the tag is well formed, names this commit and asserts three passing suites — never that those suites ran, which is why rule 23 forbids saying otherwise.
+Everything else rule 19 requires is a convention no CI job can prove: two PRs, an ordinary merge commit rather than a squash, the maintainer merging rather than an agent, and the tag pushed before any other work.
+Those are held by the platform controls around the release — rule 21's ruleset and the `pypi` environment's required reviewer — and by whoever runs the procedure, and this repository states that plainly rather than implying the workflow checks it.
 
 ### Siblings
 
