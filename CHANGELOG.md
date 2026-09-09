@@ -12,8 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking (`FINGERPRINT` `schema-9`, `RESULT_FORMAT` 3).** Every consult, review,
   adversarial-review and delegate result gained `findings_diagnostics`: `null` when nothing was
   lost, otherwise a `dropped` count and reasons from a fixed vocabulary
-  (`severity_normalized`, `extra_fields_omitted`, `invalid_entry`, `invalid_container`). A
-  `dropped` of `null` means the count was unknowable, never that nothing was lost.
+  (`severity_normalized`, `extra_fields_omitted`, `invalid_entry`, `invalid_container`). Read the
+  reasons rather than the count: `dropped` counts whole entries, so a `0` beside
+  `extra_fields_omitted` still means content was lost, and a `null` means the count was
+  unknowable, never that nothing was lost.
 - A job result stored under a different `result_format` is now rejected before validation rather
   than after it. It used to pass, because a field added since it was written validates from its
   own default -- and that default would have asserted, on the producing run's behalf, that no

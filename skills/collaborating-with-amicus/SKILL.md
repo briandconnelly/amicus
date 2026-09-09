@@ -211,8 +211,9 @@ adversarial results carry `verdict`, `confidence`, and `review_status`; only del
 `diff` and `diffstat`.
 
 A non-null `findings_diagnostics` means the backend reported something amicus could not carry
-intact. Read it before you act on an empty or short `findings` list, and note that `dropped: null`
-means the count was unknowable rather than zero.
+intact. Read it before you act on an empty or short `findings` list, and read its `reasons` rather
+than its count: `dropped` counts whole entries, so a `0` beside `extra_fields_omitted` still means
+content was lost, and `dropped: null` means the count was unknowable rather than zero.
 Discovery, dry-run, async-start, and job-lifecycle tools each have their own schema.
 
 A result being `ok: true` says the call worked, not that it covered anything —

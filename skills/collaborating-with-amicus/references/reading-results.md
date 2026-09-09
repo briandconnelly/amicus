@@ -61,12 +61,15 @@ lost, and otherwise carries a `dropped` count and reasons from a fixed vocabular
 | Reason | What it means |
 | --- | --- |
 | `severity_normalized` | A severity differed only in case or surrounding space. The finding is intact. |
-| `extra_fields_omitted` | The backend added keys amicus's `Finding` has no home for. The finding is intact; those keys are gone. |
+| `extra_fields_omitted` | The backend added keys amicus's `Finding` has no home for. Every field amicus recognizes survives; whatever those extra keys said does not. |
 | `invalid_entry` | An entry could not be represented at all and was dropped. Its content is not in the result. |
 | `invalid_container` | The `findings` member was not a list. Nothing could be read from it. |
 
-**`dropped: null` is not `dropped: 0`.** `0` says amicus assessed the list and lost nothing;
-`null` says it could not assess the list, so the count is unknowable. Never read `null` as "none".
+**`dropped` counts whole entries, and `dropped: null` is not `dropped: 0`.** `0` says no entry
+was dropped — it is not a promise that nothing was lost, because `extra_fields_omitted` reports
+content that went with keys amicus has no home for, and that is reported at `dropped: 0`. `null`
+says amicus could not assess the list at all, so the count is unknowable. Never read `null` as
+"none": read the reasons, not the count alone.
 
 An `invalid_entry` or `invalid_container` also stops a `pass` from standing: the verdict is
 delivered as `unknown`/`low` with its own sentence in the summary, separate from any coverage

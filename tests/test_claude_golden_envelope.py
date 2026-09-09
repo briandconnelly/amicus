@@ -69,7 +69,8 @@ async def test_golden_through_the_loop(pinned_claude_bin, monkeypatch, tmp_path)
     # and ADR 0010 declines to map one onto the other rather than half-mapping it. What the
     # ADR never decided was that the rest of the finding should go with them: this is a
     # RECORDED real claude response reporting a high-severity bug, and it used to arrive as
-    # an empty findings list (issue #38). The unmappable keys are omitted; the finding stays.
+    # an empty findings list (issue #38). The finding stays and the unmappable keys go with
+    # their content, which is why this is reported rather than passed off as intact.
     assert [(f["title"], f["severity"]) for f in out["findings"]] == [
         ("subtraction instead of addition", "high")
     ]

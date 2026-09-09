@@ -62,10 +62,12 @@ class Finding(BaseModel):
 class FindingsDiagnostics(BaseModel):
     """What amicus could not carry from the backend's own findings list (issue #38).
 
-    Present only when the backend's output deviated from the finding shape. `dropped` is
-    null when the deviation makes the count unknowable (the findings member was not a
-    list at all), which is why null and 0 are different answers: 0 says amicus assessed
-    the list and lost nothing, null says it could not assess it."""
+    Present only when the backend's output deviated from the finding shape. `dropped`
+    counts whole entries that could not be represented, so 0 does not mean nothing was
+    lost: `extra_fields_omitted` reports content dropped from a finding that survived.
+    It is null when the deviation makes the count unknowable (the findings member was not
+    a list at all), which is why null and 0 differ - 0 says amicus assessed the list,
+    null that it could not. Read `reasons`, never the count alone."""
 
     model_config = ConfigDict(extra="forbid")
     dropped: int | None = None

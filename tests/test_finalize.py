@@ -254,8 +254,12 @@ def test_coerce_findings_distinguishes_an_unusable_container_from_an_empty_one()
         assert findings == [], bad
         assert diag is not None and diag.dropped is None, bad
         assert diag.reasons == ["invalid_container"], bad
-    absent, absent_diag = fz.coerce_findings(None)
+    absent, absent_diag = fz.coerce_findings(fz.ABSENT)
     assert absent == [] and absent_diag is None, "an absent findings key is not a container error"
+    null, null_diag = fz.coerce_findings(None)
+    assert null == [], "an explicit null is a present container, not an absent key"
+    assert null_diag is not None and null_diag.dropped is None
+    assert null_diag.reasons == ["invalid_container"]
 
 
 def test_coerce_findings_deduplicates_and_orders_reasons():
@@ -382,3 +386,28 @@ def test_adversarial_review_folds_findings_loss_the_same_way():
     )
     assert (out["verdict"], out["confidence"]) == ("unknown", "low")
     assert out["findings_diagnostics"]["dropped"] == 1
+
+
+def test_an_explicit_null_findings_member_stops_a_pass_verdict():
+    """`s.get("findings")` cannot tell an absent key from an explicit null, so a backend
+    answering `"findings": null` used to look exactly like a backend that said nothing -
+    and a `pass` stood over it. The schema requires an array; null is a deviation."""
+    payload = _structured(verdict="pass", confidence="high", findings=None)
+    out = fz.review_result(
+        ExecResult(answer=json.dumps(payload), structured=payload),
+        Meta(),
+        [],
+        fakeplugin.make_plugin(),
+    )
+    assert (out["verdict"], out["confidence"]) == ("unknown", "low")
+    assert out["findings_diagnostics"] == {"dropped": None, "reasons": ["invalid_container"]}
+
+
+def test_a_backend_that_omits_findings_entirely_is_not_a_container_error():
+    """A bare `{}` already lands on unknown through the enum defaults; it has no findings
+    member to have deviated, so it earns no diagnostics."""
+    out = fz.review_result(
+        ExecResult(answer="{}", structured={}), Meta(), [], fakeplugin.make_plugin()
+    )
+    assert out["findings_diagnostics"] is None
+    assert (out["verdict"], out["confidence"]) == ("unknown", "medium")

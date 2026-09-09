@@ -40,6 +40,18 @@ _PROSE_KEYS = ("summary", "questions", "assumptions", "next_steps")
 _FINDING_PROSE_KEYS = ("title", "evidence", "suggestion")
 _MODEL_FLAG = "--model"
 _FINDING_FIELDS = frozenset(Finding.model_fields)
+
+
+class _Absent:
+    """A findings key that was never there, which `dict.get` cannot distinguish from one
+    the backend set to null. The schema requires an array, so an explicit null is a
+    deviation and says so; an absent key had nothing to deviate from."""
+
+    def __repr__(self) -> str:  # pragma: no cover - debugging aid
+        return "ABSENT"
+
+
+ABSENT = _Absent()
 _SEVERITIES = frozenset(get_args(Severity))
 
 
@@ -111,10 +123,11 @@ def _normalize_severity(item: dict) -> tuple[dict, bool]:
 def coerce_findings(raw: object) -> tuple[list[Finding], FindingsDiagnostics | None]:
     """The backend's findings list, plus what could not be carried from it (issue #38).
 
-    Returns diagnostics of None only when nothing was lost, so a caller can distinguish a
+    Returns diagnostics of None only when nothing deviated, so a caller can distinguish a
     genuinely clean list from one amicus failed to relay. An absent `findings` key is not
-    a deviation; a present one that is not a list is, and its loss is uncountable."""
-    if raw is None:
+    a deviation; a present one that is not a list is - including an explicit null - and
+    its loss is uncountable. Pass ABSENT, not None, for a key that was never there."""
+    if raw is ABSENT:
         return [], None
     if not isinstance(raw, list):
         return [], FindingsDiagnostics(dropped=None, reasons=["invalid_container"])
@@ -176,7 +189,7 @@ def consult_result(result: ExecResult, meta: Meta) -> dict[str, Any]:
     structured = result.structured
     if structured is not None:
         s = cast("dict[str, Any]", _sanitize_structured(structured))
-        findings, diagnostics = coerce_findings(s.get("findings"))
+        findings, diagnostics = coerce_findings(s.get("findings", ABSENT))
         return dump_success(
             ConsultResult(
                 summary=_summary_of(s),
@@ -226,7 +239,7 @@ def _parse_reviewed(
             None,
         )
     s = cast("dict[str, Any]", _sanitize_structured(cast("dict", parsed)))
-    findings, diagnostics = coerce_findings(s.get("findings"))
+    findings, diagnostics = coerce_findings(s.get("findings", ABSENT))
     verdict, confidence, summary = review_mod.apply_coverage(
         _enum(s.get("verdict"), ("pass", "concerns", "fail", "unknown"), "unknown"),
         _enum(s.get("confidence"), ("low", "medium", "high"), "medium"),
