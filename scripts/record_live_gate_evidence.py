@@ -32,9 +32,11 @@ Behavior (all-or-nothing):
 Record shape:
     The top-level record carries a `batch_id` (a fresh uuid4 hex minted once per run), and
     `main` stamps that same `batch_id` into every backend entry under `backends`. `validate`
-    checks that every backend entry's `batch_id` agrees with the record's -- this is what
-    makes "one shared run produced this whole record" a checkable property instead of an
-    assumption. Each backend entry's `test_file` must equal the suite that backend's gate
+    requires every backend entry to CARRY a `batch_id` and to agree with the record's -- this
+    is what makes "one shared run produced this whole record" a checkable property instead of
+    an assumption. Requiring the field is load-bearing, and was missing until issue #25: while
+    `batch_id` was merely checked-if-present, a record that omitted it from all three entries
+    passed. Each backend entry's `test_file` must equal the suite that backend's gate
     actually runs (`_TEST_FILES[backend]`); a record whose entries were hand-copied from a
     different backend's run is rejected on this check.
 
@@ -72,7 +74,7 @@ _BINARY_ENV_VARS = {
 }
 
 _REQUIRED_TOP_LEVEL_FIELDS = ("batch_id", "recorded_at", "commit", "tree_clean", "backends")
-_REQUIRED_BACKEND_FIELDS = ("test_file", "exit_status", "cli_version")
+_REQUIRED_BACKEND_FIELDS = ("test_file", "exit_status", "cli_version", "batch_id")
 
 # The outcome enums a JUnit `<testcase>` can carry as a child element. Anything else is a pass.
 _NOT_PASSED_OUTCOMES = ("failure", "error", "skipped")
@@ -359,6 +361,30 @@ def _check_recorded_at(record: dict, now: datetime, max_age_hours: int) -> list[
     return []
 
 
+def validate_record(record: dict, *, head: str, tree_clean: bool) -> list[str]:
+    """Every check on an evidence record EXCEPT freshness.
+
+    Split out of `validate` so `scripts/check_release_state.py` can reuse it in the publish
+    workflow, where freshness must not be applied: a tag is immutable, so queue time or a slow
+    deployment approval could otherwise turn a legitimate tag into one that can never be
+    published. Freshness belongs to the local pre-tag procedure, where a stale record can
+    still be replaced by re-running the gates.
+    """
+    if not isinstance(record, dict):
+        return ["record is not a JSON object"]
+
+    problems: list[str] = [
+        f"record is missing required field '{field}'"
+        for field in _REQUIRED_TOP_LEVEL_FIELDS
+        if field not in record
+    ]
+    problems += _check_commit(record, head)
+    problems += _check_tree_clean(record, tree_clean)
+    problems += _check_batch_id(record)
+    problems += _check_backends(record)
+    return problems
+
+
 def validate(
     record: dict, *, head: str, tree_clean: bool, now: datetime, max_age_hours: int = 24
 ) -> list[str]:
@@ -375,18 +401,9 @@ def validate(
     and all three entries sharing the record's own `batch_id` -- proof they came from the
     same run rather than a hand-repaired mix of entries from different runs.
     """
+    problems = validate_record(record, head=head, tree_clean=tree_clean)
     if not isinstance(record, dict):
-        return ["record is not a JSON object"]
-
-    problems: list[str] = [
-        f"record is missing required field '{field}'"
-        for field in _REQUIRED_TOP_LEVEL_FIELDS
-        if field not in record
-    ]
-    problems += _check_commit(record, head)
-    problems += _check_tree_clean(record, tree_clean)
-    problems += _check_batch_id(record)
-    problems += _check_backends(record)
+        return problems
     problems += _check_recorded_at(record, now, max_age_hours)
     return problems
 
