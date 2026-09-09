@@ -55,6 +55,34 @@ jobs:
           name: dist
           path: dist/
 
+  verify:
+    # The release predicate, run OUTSIDE any protected environment on purpose. `pypi` carries
+    # `environment: pypi`, and GitHub holds a whole environment job — every step of it —
+    # behind the required reviewer, so a check that lives there runs only AFTER approval and
+    # can tell the reviewer nothing. This job finishes first, and its summary is what the
+    # reviewer reads before approving.
+    needs: build
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # Full history and tags: the check reads the annotated tag OBJECT, not just the ref.
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      - name: The tagged tree and the tag must satisfy the release predicate
+        # See scripts/check_release_state.py for what a pass does and does not prove. In
+        # short: the tree's release-state coherence is proven; the live-gate record carried in
+        # the tag message is a maintainer assertion, machine-checked for shape and for naming
+        # this commit, never proof the three suites ran.
+        run: |
+          set -euo pipefail
+          uv run --no-project --python 3.13 python scripts/check_release_state.py \
+            --tag "${GITHUB_REF_NAME}" \
+            --commit "${GITHUB_SHA}" \
+            --summary "${GITHUB_STEP_SUMMARY}"
+
   testpypi:
     needs: build
     if: github.event_name == 'workflow_dispatch'
@@ -72,7 +100,7 @@ jobs:
           repository-url: https://test.pypi.org/legacy/
 
   pypi:
-    needs: build
+    needs: [build, verify]
     # The event check is load-bearing, not redundant with the ref check. A workflow can be
     # dispatched against any branch OR TAG, and `github.ref` is then the dispatched ref, so a
     # `workflow_dispatch` aimed at an existing `v*` tag would satisfy the ref check alone and

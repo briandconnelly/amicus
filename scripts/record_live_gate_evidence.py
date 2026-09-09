@@ -32,9 +32,11 @@ Behavior (all-or-nothing):
 Record shape:
     The top-level record carries a `batch_id` (a fresh uuid4 hex minted once per run), and
     `main` stamps that same `batch_id` into every backend entry under `backends`. `validate`
-    checks that every backend entry's `batch_id` agrees with the record's -- this is what
-    makes "one shared run produced this whole record" a checkable property instead of an
-    assumption. Each backend entry's `test_file` must equal the suite that backend's gate
+    requires every backend entry to CARRY a `batch_id` and to agree with the record's -- this
+    is what makes "one shared run produced this whole record" a checkable property instead of
+    an assumption. Requiring the field is load-bearing, and was missing until issue #25: while
+    `batch_id` was merely checked-if-present, a record that omitted it from all three entries
+    passed. Each backend entry's `test_file` must equal the suite that backend's gate
     actually runs (`_TEST_FILES[backend]`); a record whose entries were hand-copied from a
     different backend's run is rejected on this check.
 
@@ -72,7 +74,7 @@ _BINARY_ENV_VARS = {
 }
 
 _REQUIRED_TOP_LEVEL_FIELDS = ("batch_id", "recorded_at", "commit", "tree_clean", "backends")
-_REQUIRED_BACKEND_FIELDS = ("test_file", "exit_status", "cli_version")
+_REQUIRED_BACKEND_FIELDS = ("test_file", "exit_status", "cli_version", "batch_id")
 
 # The outcome enums a JUnit `<testcase>` can carry as a child element. Anything else is a pass.
 _NOT_PASSED_OUTCOMES = ("failure", "error", "skipped")
@@ -336,27 +338,67 @@ def _check_backends(record: dict) -> list[str]:
     return problems
 
 
-def _check_recorded_at(record: dict, now: datetime, max_age_hours: int) -> list[str]:
+def _parse_recorded_at(record: dict) -> tuple[datetime | None, list[str]]:
+    """Whether `recorded_at` is a usable timestamp at all, separate from how old it is.
+
+    Split out so `validate_record` can reject a malformed timestamp without applying an age
+    limit: a record carrying `"recorded_at": 123` is broken whoever reads it, while a record
+    carrying a valid but old timestamp is only a problem before the tag exists. Returns the
+    parsed timestamp, or None with the reason it could not be used.
+    """
     recorded_at = record.get("recorded_at")
     if not isinstance(recorded_at, str):
         if "recorded_at" in record:
-            return ["record 'recorded_at' is not a string"]
-        return []
+            return None, [f"record 'recorded_at' is not a string, got {recorded_at!r}"]
+        return None, []
 
     try:
         parsed = datetime.fromisoformat(recorded_at)
     except ValueError:
-        return [f"record 'recorded_at' is not a valid ISO 8601 timestamp: {recorded_at!r}"]
+        return None, [f"record 'recorded_at' is not a valid ISO 8601 timestamp: {recorded_at!r}"]
 
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=UTC)
-    age_seconds = (now - parsed).total_seconds()
+    return parsed, []
+
+
+def _check_age(recorded_at: datetime, now: datetime, max_age_hours: int) -> list[str]:
+    age_seconds = (now - recorded_at).total_seconds()
     if age_seconds < 0:
         return ["record 'recorded_at' is in the future"]
     if age_seconds > max_age_hours * 3600:
         hours = age_seconds / 3600
         return [f"record is too old: recorded {hours:.1f}h ago, max age is {max_age_hours}h"]
     return []
+
+
+def validate_record(record: dict, *, head: str, tree_clean: bool) -> list[str]:
+    """Every check on an evidence record EXCEPT freshness.
+
+    "Except freshness" means the age limit only. A `recorded_at` that is missing, not a
+    string, or not a parseable timestamp is a broken record whoever reads it, and is rejected
+    here too.
+
+    Split out of `validate` so `scripts/check_release_state.py` can reuse it in the publish
+    workflow, where the age limit must not be applied: a tag is immutable, so queue time or a slow
+    deployment approval could otherwise turn a legitimate tag into one that can never be
+    published. Freshness belongs to the local pre-tag procedure, where a stale record can
+    still be replaced by re-running the gates.
+    """
+    if not isinstance(record, dict):
+        return ["record is not a JSON object"]
+
+    problems: list[str] = [
+        f"record is missing required field '{field}'"
+        for field in _REQUIRED_TOP_LEVEL_FIELDS
+        if field not in record
+    ]
+    problems += _check_commit(record, head)
+    problems += _check_tree_clean(record, tree_clean)
+    problems += _check_batch_id(record)
+    problems += _check_backends(record)
+    problems += _parse_recorded_at(record)[1]
+    return problems
 
 
 def validate(
@@ -375,19 +417,13 @@ def validate(
     and all three entries sharing the record's own `batch_id` -- proof they came from the
     same run rather than a hand-repaired mix of entries from different runs.
     """
+    problems = validate_record(record, head=head, tree_clean=tree_clean)
     if not isinstance(record, dict):
-        return ["record is not a JSON object"]
-
-    problems: list[str] = [
-        f"record is missing required field '{field}'"
-        for field in _REQUIRED_TOP_LEVEL_FIELDS
-        if field not in record
-    ]
-    problems += _check_commit(record, head)
-    problems += _check_tree_clean(record, tree_clean)
-    problems += _check_batch_id(record)
-    problems += _check_backends(record)
-    problems += _check_recorded_at(record, now, max_age_hours)
+        return problems
+    recorded_at, shape_problems = _parse_recorded_at(record)
+    # A shape problem is already in `problems` via validate_record; don't report it twice.
+    if recorded_at is not None and not shape_problems:
+        problems += _check_age(recorded_at, now, max_age_hours)
     return problems
 
 

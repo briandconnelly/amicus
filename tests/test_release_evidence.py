@@ -40,6 +40,7 @@ def _record(**overrides):
                 "test_file": f"tests/test_{name}_live.py",
                 "exit_status": 0,
                 "cli_version": f"{name}-cli 1.0.0",
+                "batch_id": "b" * 32,
             }
             for name in evidence.BACKENDS
         },
@@ -50,6 +51,56 @@ def _record(**overrides):
 
 def test_a_complete_fresh_record_is_accepted():
     assert evidence.validate(_record(), head=HEAD, tree_clean=True, now=NOW) == []
+
+
+def test_a_record_whose_entries_omit_batch_id_entirely_is_rejected():
+    """The gap issue #25 found: `batch_id` was checked only when present.
+
+    A record that simply left the field out of all three entries validated clean, so the
+    property the docstring claimed -- one shared run produced this whole record -- was not
+    actually checkable. Omission and disagreement must both be rejected; the test below covers
+    disagreement.
+    """
+    record = _record()
+    for entry in record["backends"].values():
+        del entry["batch_id"]
+    problems = evidence.validate(record, head=HEAD, tree_clean=True, now=NOW)
+    assert [p for p in problems if "batch_id" in p], problems
+
+
+def test_validate_record_accepts_a_stale_record_that_validate_rejects():
+    """The split `validate` relies on: everything but freshness.
+
+    `scripts/check_release_state.py` uses `validate_record` in the publish workflow precisely
+    so an immutable tag cannot age out of publishability between the push and the deployment
+    approval.
+    """
+    stale = _record(recorded_at=(NOW - timedelta(days=400)).isoformat())
+    assert evidence.validate_record(stale, head=HEAD, tree_clean=True) == []
+    assert evidence.validate(stale, head=HEAD, tree_clean=True, now=NOW) != []
+
+
+def test_validate_record_still_rejects_a_failed_suite():
+    """The negative control for the split: dropping freshness dropped nothing else."""
+    record = _record()
+    record["backends"]["codex"]["exit_status"] = 1
+    assert evidence.validate_record(record, head=HEAD, tree_clean=True) != []
+
+
+@pytest.mark.parametrize("bad", [123, None, "not-a-date", "2026-13-45T99:00:00", ""])
+def test_validate_record_rejects_a_malformed_recorded_at(bad):
+    """The "except freshness" promise covers the age limit only, not the shape.
+
+    A `recorded_at` that is not a parseable timestamp is a broken record whoever reads it, and
+    dropping the age check at publish time must not drop that too.
+    """
+    problems = evidence.validate_record(_record(recorded_at=bad), head=HEAD, tree_clean=True)
+    assert [p for p in problems if "recorded_at" in p], problems
+
+
+def test_validate_does_not_report_a_malformed_timestamp_twice():
+    problems = evidence.validate(_record(recorded_at=123), head=HEAD, tree_clean=True, now=NOW)
+    assert len([p for p in problems if "recorded_at" in p]) == 1, problems
 
 
 def test_a_record_for_another_commit_is_rejected():
