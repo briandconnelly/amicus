@@ -84,6 +84,10 @@ _NOT_PASSED_OUTCOMES = ("failure", "error", "skipped")
 # `tests/test_live_gate_report.py` proves it on a report built to be full of prose.
 _REPORT_KEYS = ("total", "not_passed", "counts")
 
+# A version string is one short line. The longest seen in practice is "codex-cli 0.153.4"; the
+# cap is generous against that and still bounds a wrapper that prints something else entirely.
+_VERSION_MAX_CHARS = 120
+
 
 def _git(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(["git", *args], cwd=REPO_ROOT, capture_output=True, text=True, check=True)
@@ -111,7 +115,21 @@ def _cli_version(backend: str) -> str | None:
         return None
     if proc.returncode != 0:
         return None
-    return proc.stdout.strip() or None
+    return _bound_version(proc.stdout)
+
+
+def _bound_version(raw: str) -> str | None:
+    """The first line of `--version` output, length-capped and stripped of control characters.
+
+    The binary is whatever `AMICUS_<BACKEND>_BIN` names, so its stdout is not this repository's
+    to trust: a wrapper script can print anything, and whatever it prints lands in a file under
+    `.release-evidence/`. A version string is one short line; taking only that, and only its
+    printable characters, keeps an unexpected payload out of the record without pretending to
+    know every CLI's exact format.
+    """
+    first_line = raw.strip().splitlines()[0] if raw.strip() else ""
+    printable = "".join(ch for ch in first_line if ch.isprintable())
+    return printable[:_VERSION_MAX_CHARS].strip() or None
 
 
 def _summarize_junit(xml_path: Path) -> dict[str, object] | None:
