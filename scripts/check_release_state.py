@@ -6,8 +6,16 @@ question, and the difference matters more than the code:
 
 1. **Release-state coherence** (`check_tree`). Every version literal AGENTS.md rule 19 names
    agrees with the version being released, `CHANGELOG.md` has exactly one dated section for
-   that version with `## [Unreleased]` above it, and `uv.lock` is current. These are facts of
-   the tagged tree, so a green result here *proves* them. Nothing self-asserts.
+   that version with `## [Unreleased]` above it, `uv.lock` is current, and `.mcp.json`'s pin
+   names a real tag no newer than this release. These are facts of the tagged tree (and, for
+   the pin, of the repository), so a green result here *proves* them. Nothing self-asserts.
+
+   `.mcp.json`'s pin is deliberately NOT one of the version literals. Per ADR 0015 it names
+   the newest ALREADY-PUBLISHED release rather than the one being released, because the
+   manifest a fresh install reads lives on `main` and so cannot name an artifact that does
+   not exist yet. What replaced the old equality is `check_mcp_pin_tag_exists`, which is
+   worth more: the equality was true by construction on any tree a release PR had touched,
+   whereas the tag either exists or it does not.
 
 2. **The live-gate assertion** (`check_tag`). AGENTS.md rule 20's evidence record, carried in
    the annotated tag's own message. A green result here proves only that a well-formed record
@@ -65,7 +73,9 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
 TAG_RE = re.compile(r"^v(?P<version>\d+\.\d+\.\d+)$")
 _INIT_VERSION_RE = re.compile(r'^__version__ = "(?P<version>[^"]+)"$', re.MULTILINE)
-_MCP_SOURCE = "git+https://github.com/briandconnelly/amicus.git@v{version}"
+_MCP_SOURCE_RE = re.compile(
+    r"^git\+https://github\.com/briandconnelly/amicus\.git@v(?P<version>\d+\.\d+\.\d+)$"
+)
 
 # A signature block, if the maintainer signs the tag, follows the message. Cut it off rather
 # than fail to parse: rule 20 does not require a signature, but it must not forbid one either.
@@ -93,13 +103,89 @@ def _json_field(repo_root: Path, relative: str, field: str) -> object:
     return json.loads((repo_root / relative).read_text(encoding="utf-8"))[field]
 
 
+def _parts(version: str) -> tuple[int, ...]:
+    """`"0.10.0"` as `(0, 10, 0)`, so versions compare numerically rather than as strings."""
+    return tuple(int(part) for part in version.split("."))
+
+
+def mcp_pin(repo_root: Path = REPO_ROOT) -> tuple[str | None, list[str]]:
+    """The version `.mcp.json`'s `--from` source pins, and any problem with that source.
+
+    Per ADR 0015 this is NOT a rule-19 version literal: the manifest a fresh install reads
+    lives on `main`, so it names the newest ALREADY-PUBLISHED release rather than the one
+    being released. What is checkable here is its shape — this repo, over git, at some
+    `vX.Y.Z`. `check_version_literals` bounds the version; `check_mcp_pin_tag_exists`
+    proves the tag is real, where a checkout with tags is available.
+    """
+    server = json.loads((repo_root / ".mcp.json").read_text(encoding="utf-8"))
+    args = server["mcpServers"]["amicus"]["args"]
+    if "--from" not in args:
+        return None, [".mcp.json must install from an explicit `--from` source"]
+    source = args[args.index("--from") + 1]
+    match = _MCP_SOURCE_RE.match(source)
+    if match is None:
+        return None, [
+            f".mcp.json installs {source!r}, which is not this repository at a vX.Y.Z tag"
+        ]
+    return match.group("version"), []
+
+
+def check_mcp_pin_tag_exists(
+    version: str,
+    *,
+    tag_pushed: bool,
+    repo_root: Path = REPO_ROOT,
+    git: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+) -> list[str]:
+    """The tag `.mcp.json` sends users to must actually exist.
+
+    This is the check ADR 0015 gained in exchange for the equality it dropped, and it is worth
+    more: the old `pin == version being released` was true by construction on any tree a
+    release PR had touched, while this one is a fact about the world. It needs a checkout with
+    tags, which is why `publish.yml` sets `fetch-depth: 0`; a shallow or tagless checkout
+    reports that rather than passing silently.
+
+    One exception, and only one: the bootstrap. A pin equal to the version being released, on a
+    tree whose tag has not been pushed yet (`tag_pushed` false, i.e. no `--tag`), is the first
+    release naming the tag it is about to create — there is no earlier release for it to name.
+    Once `--tag` is given the tag exists by definition, so the exception cannot be used to skip
+    the check in the publish workflow, which is where it matters.
+    """
+    pinned, problems = mcp_pin(repo_root)
+    if pinned is None:
+        return problems
+
+    if pinned == version and not tag_pushed:
+        return []
+
+    tag = f"v{pinned}"
+    try:
+        proc = git(
+            ["git", "rev-parse", "--verify", "--quiet", f"refs/tags/{tag}"],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError as exc:  # git missing: report it rather than silently skipping the check
+        return [f"could not check whether {tag} exists: {exc}"]
+    if proc.returncode != 0:
+        return [
+            f".mcp.json pins {tag}, which does not exist in this checkout; users installing "
+            "from this manifest would get an unresolvable ref (or the checkout has no tags)"
+        ]
+    return []
+
+
 def check_version_literals(version: str, *, repo_root: Path = REPO_ROOT) -> list[str]:
-    """Every rule-19 literal must equal `version`.
+    """Every rule-19 literal must equal `version`, and `.mcp.json`'s pin must not exceed it.
 
     `tests/test_packaging.py` already asserts these agree with each other on every PR. This
     checks them against the version actually being released, on the tagged tree, in the
     workflow that publishes — which is the part CI never ran, because `ci.yml` triggers on
     pushes to `main` and on pull requests, never on a tag.
+
+    `.mcp.json` is deliberately not among the literals; see `mcp_pin` and ADR 0015.
     """
     problems: list[str] = []
 
@@ -121,11 +207,13 @@ def check_version_literals(version: str, *, repo_root: Path = REPO_ROOT) -> list
         if found != version:
             problems.append(f"{manifest} declares {found!r}, expected {version!r}")
 
-    args = json.loads((repo_root / ".mcp.json").read_text(encoding="utf-8"))
-    source = args["mcpServers"]["amicus"]["args"]
-    expected = _MCP_SOURCE.format(version=version)
-    if expected not in source:
-        problems.append(f".mcp.json does not install {expected!r}; its args are {source!r}")
+    pinned, pin_problems = mcp_pin(repo_root)
+    problems += pin_problems
+    if pinned is not None and _parts(pinned) > _parts(version):
+        problems.append(
+            f".mcp.json pins v{pinned}, which is newer than the {version} being released; "
+            "the pin names an already-published release (ADR 0015) and so can never lead it"
+        )
 
     return problems
 
@@ -189,14 +277,21 @@ def check_lock(
 def check_tree(
     version: str,
     *,
+    tag_pushed: bool = False,
     repo_root: Path = REPO_ROOT,
     run: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+    git: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
 ) -> list[str]:
-    """Every release-state fact this tree can prove about `version`."""
+    """Every release-state fact this tree can prove about `version`.
+
+    `run` drives `uv lock --check` and `git` drives the tag lookup; they are separate
+    parameters so a test can stub one without silently satisfying the other.
+    """
     return [
         *check_version_literals(version, repo_root=repo_root),
         *check_changelog(version, repo_root=repo_root),
         *check_lock(repo_root=repo_root, run=run),
+        *check_mcp_pin_tag_exists(version, tag_pushed=tag_pushed, repo_root=repo_root, git=git),
     ]
 
 
@@ -323,7 +418,7 @@ def main(argv: list[str] | None = None, *, repo_root: Path = REPO_ROOT) -> int:
     if not VERSION_RE.match(version):
         problems.append(f"version {version!r} is not X.Y.Z")
 
-    problems += check_tree(version, repo_root=repo_root)
+    problems += check_tree(version, tag_pushed=bool(args.tag), repo_root=repo_root)
 
     if tag_is_well_formed:
         commit = args.commit or _git("rev-parse", "HEAD", repo_root=repo_root)

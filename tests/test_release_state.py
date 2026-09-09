@@ -128,12 +128,20 @@ def _lock_stale(*args, **kwargs):
     )
 
 
+def _tag_exists(*args, **kwargs):
+    return subprocess.CompletedProcess(args=["git"], returncode=0, stdout="deadbeef\n")
+
+
+def _tag_missing(*args, **kwargs):
+    return subprocess.CompletedProcess(args=["git"], returncode=1, stdout="")
+
+
 # --- positive control ------------------------------------------------------------------
 
 
 def test_the_unmodified_fixture_satisfies_the_tree_predicate(repo):
     """The instrument can report a pass. Every negative control below depends on this."""
-    assert release_state.check_tree(VERSION, repo_root=repo, run=_lock_ok) == []
+    assert release_state.check_tree(VERSION, repo_root=repo, run=_lock_ok, git=_tag_exists) == []
 
 
 # --- version literals ------------------------------------------------------------------
@@ -146,7 +154,6 @@ def test_the_unmodified_fixture_satisfies_the_tree_predicate(repo):
         ("src/amicus/__init__.py", lambda text: text.replace(VERSION, "9.9.9")),
         (".claude-plugin/plugin.json", lambda text: text.replace(VERSION, "9.9.9")),
         (".codex-plugin/plugin.json", lambda text: text.replace(VERSION, "9.9.9")),
-        (".mcp.json", lambda text: text.replace(f"@v{VERSION}", "@v9.9.9")),
     ],
 )
 def test_a_literal_left_behind_is_rejected(repo, path, mutate):
@@ -154,6 +161,123 @@ def test_a_literal_left_behind_is_rejected(repo, path, mutate):
     target.write_text(mutate(target.read_text(encoding="utf-8")), encoding="utf-8")
     problems = release_state.check_version_literals(VERSION, repo_root=repo)
     assert any(path.split("/")[-1] in problem or path in problem for problem in problems), problems
+
+
+# --- the .mcp.json pin (ADR 0015) --------------------------------------------------------
+#
+# The pin is NOT a version literal: it names the newest ALREADY-PUBLISHED release, so it
+# trails the version being released rather than equalling it. What is checked is that it has
+# the right shape, that it never LEADS the release, and that the tag it names is real.
+
+
+def _repin(repo, source):
+    path = repo / ".mcp.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    args = data["mcpServers"]["amicus"]["args"]
+    args[args.index("--from") + 1] = source
+    path.write_text(json.dumps(data) + "\n", encoding="utf-8")
+
+
+def test_a_pin_trailing_the_release_is_accepted(repo):
+    """The steady state after the first release: releasing 1.2.3 with the pin still on 1.2.2.
+
+    This is the case the old `pin == version being released` equality wrongly rejected, and
+    the whole point of ADR 0015.
+    """
+    _repin(repo, "git+https://github.com/briandconnelly/amicus.git@v1.2.2")
+    assert release_state.check_version_literals(VERSION, repo_root=repo) == []
+
+
+def test_a_pin_leading_the_release_is_rejected(repo):
+    """A pin can never name a release that has not happened; that is the bug being fixed."""
+    _repin(repo, "git+https://github.com/briandconnelly/amicus.git@v9.9.9")
+    problems = release_state.check_version_literals(VERSION, repo_root=repo)
+    assert any("9.9.9" in problem for problem in problems), problems
+
+
+def test_pins_compare_numerically_not_as_strings(repo):
+    """`v1.2.10` must read as newer than `v1.2.3`, which string comparison gets backwards."""
+    _repin(repo, "git+https://github.com/briandconnelly/amicus.git@v1.2.10")
+    problems = release_state.check_version_literals(VERSION, repo_root=repo)
+    assert any("1.2.10" in problem for problem in problems), problems
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "amicus",
+        "amicus==1.2.3",
+        "git+https://github.com/someone-else/amicus.git@v1.2.3",
+        "git+https://github.com/briandconnelly/amicus.git@main",
+        "git+https://github.com/briandconnelly/amicus.git",
+    ],
+)
+def test_a_source_that_is_not_this_repo_at_a_version_tag_is_rejected(repo, source):
+    """Mutation-tested shape: a wrong owner, a wrong ref kind or no ref at all must all fail.
+
+    Without this the pin could drift to a mutable ref or another repository and the release
+    predicate would notice nothing, which is exactly how the old check failed silently.
+    """
+    _repin(repo, source)
+    pinned, problems = release_state.mcp_pin(repo)
+    assert pinned is None
+    assert problems
+
+
+def test_a_manifest_with_no_from_argument_is_rejected(repo):
+    path = repo / ".mcp.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["mcpServers"]["amicus"]["args"] = ["amicus-mcp"]
+    path.write_text(json.dumps(data) + "\n", encoding="utf-8")
+    pinned, problems = release_state.mcp_pin(repo)
+    assert pinned is None
+    assert problems
+
+
+def test_a_pin_naming_a_tag_that_does_not_exist_is_rejected(repo):
+    """The check ADR 0015 bought with the equality it sold. `_tag_missing` is the whole point:
+    a manifest sending users to a ref that is not there must not pass."""
+    _repin(repo, "git+https://github.com/briandconnelly/amicus.git@v1.2.2")
+    problems = release_state.check_mcp_pin_tag_exists(
+        VERSION, tag_pushed=False, repo_root=repo, git=_tag_missing
+    )
+    assert any("v1.2.2" in problem for problem in problems), problems
+
+
+def test_the_same_pin_passes_when_the_tag_exists(repo):
+    """The positive control for the test above: the instrument can report a pass."""
+    _repin(repo, "git+https://github.com/briandconnelly/amicus.git@v1.2.2")
+    assert (
+        release_state.check_mcp_pin_tag_exists(
+            VERSION, tag_pushed=False, repo_root=repo, git=_tag_exists
+        )
+        == []
+    )
+
+
+def test_the_bootstrap_release_may_pin_the_tag_it_is_about_to_create(repo):
+    """The first release names the tag it creates: there is no earlier release to name.
+
+    The fixture pins `VERSION` itself, which is the 0.1.0 situation exactly.
+    """
+    assert (
+        release_state.check_mcp_pin_tag_exists(
+            VERSION, tag_pushed=False, repo_root=repo, git=_tag_missing
+        )
+        == []
+    )
+
+
+def test_the_bootstrap_exception_does_not_survive_the_tag_being_pushed(repo):
+    """`--tag` means the tag exists by definition, so the exception must not apply there.
+
+    Without this, the one case that could skip the check would be the publish workflow —
+    the only place the check actually matters.
+    """
+    problems = release_state.check_mcp_pin_tag_exists(
+        VERSION, tag_pushed=True, repo_root=repo, git=_tag_missing
+    )
+    assert any(f"v{VERSION}" in problem for problem in problems), problems
 
 
 def test_an_init_without_a_version_line_is_rejected(repo):
