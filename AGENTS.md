@@ -37,7 +37,7 @@ The rules bind; the context after them explains and points elsewhere.
     `.mcp.json`'s pin is NOT one of them; rule 24 governs it, and a release must not touch it.
     `uv.lock` mirrors the version rather than declaring it: regenerate it in that same PR with `uv lock`, or the `uv lock --check` hook fails.
     Only the maintainer merges that PR, and only the maintainer pushes the tag.
-    Push the matching tag promptly after that merge, so `main`'s version literals and the published tag do not disagree for longer than necessary.
+    Push the matching tag before any other work follows that merge: until it exists, `main` declares a version that has no release.
 20. Never push a `v*` tag unless the three live gates — `tests/test_codex_live.py`, `tests/test_kimi_live.py` and `tests/test_claude_live.py`, run under rule 5 — have all PASSED on that exact commit, with those passing outcomes recorded.
     The record is `.release-evidence/live-gates.json`, written by `scripts/record_live_gate_evidence.py`, naming that commit, each suite and its outcome; a terminal transcript or a recollection is not a record.
     A record showing a failed suite does not satisfy this rule; it is a reason not to tag.
@@ -79,14 +79,15 @@ The README's "Where things are" table indexes the rest.
 `.mcp.json` pins `git+https://github.com/briandconnelly/amicus.git@v{version}`, and that pin is what a fresh plugin install actually fetches: users add this repository as a marketplace, so the manifest they read is the one on `main`.
 Rule 24 therefore keeps it naming a release that is already published rather than the one being released.
 A manifest on `main` cannot name an artifact that only exists after `main` has moved, and pinning the version under release meant every release broke a fresh install for the interval between the release merge and the tag push.
-ADR 0015 removes that interval rather than shortening it, and records the two probes that decided the design — a commit SHA resolves where a future tag cannot, and `uvx` reuses a cached tool environment without querying any index, which is why an unpinned source was rejected.
+Rule 24 removes that interval rather than shortening it.
+Two facts decided the shape, and both were established by probe rather than argued: a commit SHA resolves over the same git transport a tag does, so the install path can be rehearsed before any tag exists; and `uvx` reuses a cached tool environment without querying any index, so the version in the requirement string is what makes an existing user pick up a new release — which is why an unpinned source was rejected rather than adopted.
 0.1.0 was the bootstrap, tagged and published on 2026-09-09; it named the tag it created because no earlier release existed, and that case cannot recur.
-`docs/RELEASING.md` step 7 is the pin-move PR rule 24 requires.
 Rule 20 is a local pre-tag gate rather than a CI job: hosted runners have no authenticated `codex`, `kimi` or `claude`, so the evidence is recorded on the maintainer's machine against the exact commit to be tagged.
 That evidence is an honest-mistake guard, not an attestation; it is a local file its author can write by hand.
 Rule 21 covers creation as well as update and deletion because pushing a `v*` tag is by itself what triggers `.github/workflows/publish.yml`: an identity that can create one can publish a release without rules 19 and 20 ever being satisfied, and a moved tag silently changes what users install under a version they already trust.
 That ruleset now exists — `release tags`, active, covering `refs/tags/v*` and restricting creation, update and deletion — and 0.1.0 was tagged under it.
-Its bypass list is the part an agent cannot check: a GitHub App token's ruleset response omits `bypass_actors` entirely rather than returning an empty list, so an agent must not read its absence as "nobody may bypass".
+Its bypass list is the part an agent here cannot check: the ruleset response seen from this repository's agent token carries no `bypass_actors` key at all.
+GitHub omits that key from responses to requesters without sufficient permission on the ruleset rather than returning an empty list, so its absence is not evidence that nobody may bypass, and must never be reported as though it were.
 `docs/RELEASING.md` reads that back with the maintainer's own token rather than assuming it.
 The executable procedure — preconditions, the evidence run, the environment approval pause and the post-tag checks — is `docs/RELEASING.md`.
 
@@ -95,7 +96,6 @@ The `verify` job runs `scripts/check_release_state.py` on the tagged commit, and
 Its release-state coherence half **proves** what it reports: every version literal rule 19 names, the dated `CHANGELOG.md` section, and `uv.lock` are all facts of the tagged tree.
 Its live-gate half checks only that the record carried on the tag is well formed, names this commit and asserts three passing suites — never that those suites ran, which is why rule 23 forbids saying otherwise.
 Everything else rule 19 requires is a convention no CI job can prove: two PRs, an ordinary merge commit rather than a squash, the maintainer merging rather than an agent, and the tag pushed promptly after the merge.
-The same is true of rule 24's pin-move PR, except for the one part the tagged tree does prove — that the pin names a tag which resolves and does not lead the release.
 Those are held by the platform controls around the release — rule 21's ruleset and the `pypi` environment's required reviewer — and by whoever runs the procedure, and this repository states that plainly rather than implying the workflow checks it.
 
 ### Siblings
