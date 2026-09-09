@@ -150,3 +150,39 @@ def test_a_genuine_stored_success_still_delivers():
         _rec(), _stored_success(), _JOB, "consult", Meta(), "full", None
     )
     assert delivered and out["ok"] is True and out["meta"]["job_id"] == _JOB
+
+
+def test_a_stored_result_from_another_format_is_never_delivered_as_current():
+    """A payload written before a field existed still validates, because the new field
+    has a default - so validation alone cannot catch it and the format must be checked
+    FIRST. Delivering it would answer a question the producing release never asked: a
+    defaulted `findings_diagnostics: null` would assert "nothing was lost" about a run
+    that never measured loss (issue #38)."""
+    env, delivered = delivery.finished_job_envelope(
+        _rec(fmt=RESULT_FORMAT - 1), _stored_success(), _JOB, "consult", Meta(), "full", None
+    )
+    assert not delivered
+    assert env["error"]["code"] == "job_result_incompatible"
+    assert "result_format" in env["error"]["message"]
+
+
+def test_a_stored_result_with_no_recorded_format_is_not_delivered_either():
+    env, delivered = delivery.finished_job_envelope(
+        {"status": "done", "extra": {}, "poll_after_ms": 1500},
+        _stored_success(),
+        _JOB,
+        "consult",
+        Meta(),
+        "full",
+        None,
+    )
+    assert not delivered and env["error"]["code"] == "job_result_incompatible"
+
+
+def test_the_format_gate_covers_a_stored_error_too():
+    """The format stamps the RECORD, not one branch of it."""
+    stored = error_envelope("timeout", "t", Meta(backend="codex"))
+    env, delivered = delivery.finished_job_envelope(
+        _rec(fmt=RESULT_FORMAT - 1), stored, _JOB, "consult", Meta(), "full", None
+    )
+    assert not delivered and env["error"]["code"] == "job_result_incompatible"

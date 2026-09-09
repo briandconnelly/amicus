@@ -35,6 +35,11 @@ CapabilitiesDetail = Literal["summary", "full", "contracts"]
 JobState = Literal["running", "done", "failed", "cancelled", "timeout"]
 ToolStability = Literal["stable", "preview", "experimental"]
 ReviewStatus = Literal["completed", "not_run"]
+# Why a backend finding did not reach the caller intact, in this fixed order. A fixed
+# vocabulary, never the omitted content: backend output can echo caller input (rule 18).
+FindingReason = Literal[
+    "severity_normalized", "extra_fields_omitted", "invalid_entry", "invalid_container"
+]
 
 PAID_TOOLS: tuple[str, ...] = (
     "amicus_consult",
@@ -54,6 +59,19 @@ class Finding(BaseModel):
     suggestion: str | None = None
 
 
+class FindingsDiagnostics(BaseModel):
+    """What amicus could not carry from the backend's own findings list (issue #38).
+
+    Present only when the backend's output deviated from the finding shape. `dropped` is
+    null when the deviation makes the count unknowable (the findings member was not a
+    list at all), which is why null and 0 are different answers: 0 says amicus assessed
+    the list and lost nothing, null says it could not assess it."""
+
+    model_config = ConfigDict(extra="forbid")
+    dropped: int | None = None
+    reasons: list[FindingReason] = Field(default_factory=list)
+
+
 class RawResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
     text: str | None = None
@@ -64,6 +82,7 @@ class RawResponse(BaseModel):
 class _ModelResult(SuccessBase):
     summary: str
     findings: list[Finding] = Field(default_factory=list)
+    findings_diagnostics: FindingsDiagnostics | None = None
     questions: list[str] = Field(default_factory=list)
     assumptions: list[str] = Field(default_factory=list)
     next_steps: list[str] = Field(default_factory=list)

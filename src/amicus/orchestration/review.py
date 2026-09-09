@@ -11,6 +11,7 @@ from amicus.errors import error_envelope
 from amicus.schemas.envelope import ContextSummary, ErrorDetail, InvalidArgument, dump_success
 from amicus.schemas.results import (
     AdversarialReviewResult,
+    FindingsDiagnostics,
     ReviewResult,
     ReviewScope,
     Untracked,
@@ -88,6 +89,38 @@ def apply_coverage(
             f"the model reported no blocking concerns in the reviewed portion. {summary}",
         )
     return verdict, confidence, summary
+
+
+# Reasons that mean content was LOST, as opposed to carried in a reshaped form.
+_REPRESENTATION_LOSS = frozenset({"invalid_entry", "invalid_container"})
+
+
+def apply_findings_loss(
+    verdict: str, confidence: str, summary: str, diagnostics: FindingsDiagnostics | None
+) -> tuple[str, str, str]:
+    """A finding amicus could not carry may not be delivered as silence (issue #38).
+
+    The opposite axis from `apply_coverage`: there the model did not see everything, here
+    it did and amicus could not relay what it said. So this fold runs after that one and
+    speaks for itself rather than joining its reasons. A `fail` or `concerns` stands, with
+    its confidence intact - missing output does not refute a negative the model did
+    reach. Anything else cannot be delivered as clean."""
+    if diagnostics is None or not (_REPRESENTATION_LOSS & set(diagnostics.reasons)):
+        return verdict, confidence, summary
+    if verdict in ("fail", "concerns"):
+        return verdict, confidence, summary
+    lost = (
+        f"{diagnostics.dropped} of the backend's findings could not be fully represented"
+        if diagnostics.dropped
+        else "the backend's findings could not be fully represented"
+    )
+    return (
+        "unknown",
+        "low",
+        f"Overall verdict is unknown because {lost} "
+        f"({', '.join(sorted(_REPRESENTATION_LOSS & set(diagnostics.reasons)))}); this result "
+        f"cannot establish a clean review. {summary}",
+    )
 
 
 def _not_run(spec: RunSpec, meta: Meta, diff: DiffResult) -> dict[str, Any]:

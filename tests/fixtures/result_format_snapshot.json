@@ -1,5 +1,5 @@
 {
-  "result_format": 2,
+  "result_format": 3,
   "schemas": {
     "AdversarialReviewResult": {
       "$defs": {
@@ -97,6 +97,38 @@
             "title"
           ],
           "title": "Finding",
+          "type": "object"
+        },
+        "FindingsDiagnostics": {
+          "additionalProperties": false,
+          "properties": {
+            "dropped": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Dropped"
+            },
+            "reasons": {
+              "items": {
+                "enum": [
+                  "severity_normalized",
+                  "extra_fields_omitted",
+                  "invalid_entry",
+                  "invalid_container"
+                ],
+                "type": "string"
+              },
+              "title": "Reasons",
+              "type": "array"
+            }
+          },
+          "title": "FindingsDiagnostics",
           "type": "object"
         },
         "InstructionsFingerprint": {
@@ -576,6 +608,17 @@
           "title": "Findings",
           "type": "array"
         },
+        "findings_diagnostics": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FindingsDiagnostics"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "meta": {
           "$ref": "#/$defs/Meta"
         },
@@ -745,6 +788,38 @@
             "title"
           ],
           "title": "Finding",
+          "type": "object"
+        },
+        "FindingsDiagnostics": {
+          "additionalProperties": false,
+          "properties": {
+            "dropped": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Dropped"
+            },
+            "reasons": {
+              "items": {
+                "enum": [
+                  "severity_normalized",
+                  "extra_fields_omitted",
+                  "invalid_entry",
+                  "invalid_container"
+                ],
+                "type": "string"
+              },
+              "title": "Reasons",
+              "type": "array"
+            }
+          },
+          "title": "FindingsDiagnostics",
           "type": "object"
         },
         "InstructionsFingerprint": {
@@ -1204,6 +1279,17 @@
           "title": "Findings",
           "type": "array"
         },
+        "findings_diagnostics": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FindingsDiagnostics"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "meta": {
           "$ref": "#/$defs/Meta"
         },
@@ -1352,6 +1438,38 @@
             "title"
           ],
           "title": "Finding",
+          "type": "object"
+        },
+        "FindingsDiagnostics": {
+          "additionalProperties": false,
+          "properties": {
+            "dropped": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Dropped"
+            },
+            "reasons": {
+              "items": {
+                "enum": [
+                  "severity_normalized",
+                  "extra_fields_omitted",
+                  "invalid_entry",
+                  "invalid_container"
+                ],
+                "type": "string"
+              },
+              "title": "Reasons",
+              "type": "array"
+            }
+          },
+          "title": "FindingsDiagnostics",
           "type": "object"
         },
         "InstructionsFingerprint": {
@@ -1833,6 +1951,17 @@
           },
           "title": "Findings",
           "type": "array"
+        },
+        "findings_diagnostics": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FindingsDiagnostics"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "meta": {
           "$ref": "#/$defs/Meta"
@@ -2808,6 +2937,38 @@
           "title": "Finding",
           "type": "object"
         },
+        "FindingsDiagnostics": {
+          "additionalProperties": false,
+          "properties": {
+            "dropped": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Dropped"
+            },
+            "reasons": {
+              "items": {
+                "enum": [
+                  "severity_normalized",
+                  "extra_fields_omitted",
+                  "invalid_entry",
+                  "invalid_container"
+                ],
+                "type": "string"
+              },
+              "title": "Reasons",
+              "type": "array"
+            }
+          },
+          "title": "FindingsDiagnostics",
+          "type": "object"
+        },
         "InstructionsFingerprint": {
           "additionalProperties": false,
           "properties": {
@@ -3285,6 +3446,17 @@
           "title": "Findings",
           "type": "array"
         },
+        "findings_diagnostics": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FindingsDiagnostics"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "meta": {
           "$ref": "#/$defs/Meta"
         },
@@ -3365,6 +3537,7 @@
       "confidence": "medium",
       "context_summary": null,
       "findings": [],
+      "findings_diagnostics": null,
       "meta": {
         "backend": "codex",
         "backend_details": null,
@@ -3406,6 +3579,7 @@
     "consult_success": {
       "assumptions": [],
       "findings": [],
+      "findings_diagnostics": null,
       "meta": {
         "backend": "codex",
         "backend_details": null,
@@ -3447,6 +3621,7 @@
       "diff": null,
       "diffstat": null,
       "findings": [],
+      "findings_diagnostics": null,
       "meta": {
         "backend": "codex",
         "backend_details": null,
@@ -3574,6 +3749,7 @@
       "confidence": "high",
       "context_summary": null,
       "findings": [],
+      "findings_diagnostics": null,
       "meta": {
         "backend": "codex",
         "backend_details": null,
