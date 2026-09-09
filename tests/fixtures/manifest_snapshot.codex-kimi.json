@@ -1375,7 +1375,7 @@
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-7",
+                "default": "amicus/0.1/schema-8",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -2192,7 +2192,7 @@
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-7",
+            "default": "amicus/0.1/schema-8",
             "title": "Fingerprint",
             "type": "string"
           },
@@ -6863,7 +6863,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Free — no model call. Return the originating paid tool's envelope once result_available; branch on `tool`. The record is retained, so a re-read is free. A still-running job is job_running with retry_after_ms. Records expire after AMICUS_JOB_TTL (default 24h) and a per-workspace cap evicts the oldest terminal records; read results promptly.",
+      "description": "Free — no model call. Fetch a job once amicus_job_status reports a terminal status: `done` returns the originating paid tool's stored envelope — check `ok`, then branch on `tool`; `cancelled`, `failed` and `timeout` return that terminal error instead. The record is retained, so a re-read is free. A still-running job is job_running with retry_after_ms. Records expire after AMICUS_JOB_TTL (default 24h) and a per-workspace cap evicts the oldest terminal records; read results promptly.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
