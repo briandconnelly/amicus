@@ -57,7 +57,7 @@ async def test_consult_live(live_codex, tmp_path):
             raise_on_error=False,
         )
     body = res.structured_content
-    assert body["ok"] is True, body.get("error")
+    assert body["ok"] is True, body.get("error", {}).get("code")
     assert body["summary"] and body["meta"]["session_id"] and body["meta"]["job_id"]
     assert body["meta"]["usage"]["input_tokens"] > 0
 
@@ -78,7 +78,7 @@ async def test_review_changes_live(live_codex, tmp_path):
             raise_on_error=False,
         )
     body = res.structured_content
-    assert body["ok"] is True, body.get("error")
+    assert body["ok"] is True, body.get("error", {}).get("code")
     assert body["review_status"] == "completed"
     assert body["verdict"] in ("concerns", "fail", "pass", "unknown")
     assert body["meta"]["context_summary"]["files_changed"] == 1
@@ -99,7 +99,7 @@ async def test_delegate_live(live_codex, tmp_path):
             raise_on_error=False,
         )
     body = res.structured_content
-    assert body["ok"] is True, body.get("error")
+    assert body["ok"] is True, body.get("error", {}).get("code")
     assert body["diff"] and (tmp_path / "m.py").read_text() == before
     listed = subprocess.run(
         ["git", "worktree", "list"], cwd=tmp_path, capture_output=True, text=True, check=True
