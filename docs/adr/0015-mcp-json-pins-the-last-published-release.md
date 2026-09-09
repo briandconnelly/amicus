@@ -1,6 +1,6 @@
 # ADR 0015: `.mcp.json` pins the last published release, not the version being released
 
-**Status:** Accepted (2026-09-09, before the 0.1.0 release)
+**Status:** Accepted (2026-09-09, immediately after the 0.1.0 release)
 
 ## Context
 
@@ -44,36 +44,58 @@ A separate, small `chore(release):` PR moves the pin to the new tag once that ta
 | PyPI publish completes | `@v0.1.0` | yes |
 | pin-move PR merges | `@v0.2.0` | yes |
 
-For 0.1.0 the pin already reads `@v0.1.0` and no literal moves, so the first release is the bootstrap case: it creates the only tag the pin can name, and from the moment `v0.1.0` is pushed `main` satisfies the invariant. The unresolvable window that exists on `main` today is the last one.
+0.1.0 was the bootstrap and has already happened: it was tagged and published on 2026-09-09, its pin reads `@v0.1.0`, and no literal moved.
+It created the only tag its own pin could name, so `main` has satisfied the invariant since that tag was pushed and the window is already closed.
+0.2.0 is therefore the first release to follow the sequence this ADR describes, and the bootstrap branch below can never be taken again in this repository.
 
 `scripts/check_release_state.py` stops asserting that the pin equals the version being released.
-It asserts instead that the pin has the expected shape and names a version less than or equal to the one being released, and — in the publish workflow, where the checkout has full history and tags — that the pinned tag actually exists.
-That second check is worth more than the one it replaces: the old equality was true by construction on any tree a release PR had touched, while "the tag this manifest sends users to exists" is a fact about the world.
+It asserts instead that the pin has the expected shape, that it names a version no newer than the one being released, and that the pinned tag actually exists.
+That last check is worth more than the one it replaces: the old equality was true by construction on any tree a release PR had touched, while "the tag this manifest sends users to exists" is a fact about the world.
+
+The bootstrap is the one exception, and it is identified positively: a repository with **no `v*` tags at all** whose pin names the version being released.
+That is the first release naming the tag it is about to create, and it is unreachable a second time.
+The exception is deliberately not "the pin equals the version being released".
+That was the first attempt, and review found it too broad: on a later release a pin mistakenly bumped to the version being released would satisfy it, skip the check, and restore the very window this ADR removes — while the publish workflow would not catch the mistake either, because by then the tag has been pushed and does exist.
+A failed tag listing is reported rather than read as "no tags", so a broken instrument cannot silently take the bootstrap path.
 
 ## Consequences
 
-- A fresh install is never broken by a release in progress. During the interval between the tag push and the pin-move PR, a new user gets version N-1, which works, instead of a hard failure.
+- A fresh install is never broken by a release in progress.
+  During the interval between the tag push and the pin-move PR, a new user gets version N-1, which works, instead of a hard failure.
 - Existing users still receive updates, because the pin still changes once per release and still busts the `uvx` cache.
-- Releases cost one extra small PR. That PR is not a release under rule 19 and needs no live-gate evidence: it moves a pointer to a tag that already exists and is already published.
-- The install path becomes testable before it is irreversible. `docs/RELEASING.md` gains a pre-tag rehearsal that runs the committed manifest's own command with the release commit's SHA substituted for the tag. What stays unproven until the tag is pushed is only that the string `vX.Y.Z` resolves, which is the trivial part of an install.
-- `main` advertises N-1 for as long as the pin-move PR takes. This is a soft, self-healing degradation, and it is the price of never advertising something that does not exist.
-- ADR 0014 is unaffected. The `verify` job, the evidence carried on the annotated tag, and `pypi` depending on `verify` all stand; this is the `.mcp.json` literal-check update that ADR 0014's "What would reopen this" anticipated.
+- Releases cost one extra small PR.
+  That PR is not a release under rule 19 and needs no live-gate evidence: it moves a pointer to a tag that already exists and is already published.
+- The install path becomes testable before it is irreversible.
+  `docs/RELEASING.md` gains a pre-tag rehearsal that runs the committed manifest's own command with the release commit's SHA substituted for the tag.
+  What stays unproven until the tag is pushed is only that the string `vX.Y.Z` resolves, which is the trivial part of an install.
+- `main` advertises N-1 for as long as the pin-move PR takes.
+  This is a soft, self-healing degradation, and it is the price of never advertising something that does not exist.
+- ADR 0014 is unaffected.
+  The `verify` job, the evidence carried on the annotated tag, and `pypi` depending on `verify` all stand; this is the `.mcp.json` literal-check update that ADR 0014's "What would reopen this" anticipated.
 
 ## Alternatives rejected
 
 - **Keep the pin as the version being released (issue #26's option a).**
-  The window stays, and it stays a hard failure rather than a degradation. Adding only the SHA rehearsal would have answered the testability complaint while leaving the outage in place.
+  The window stays, and it stays a hard failure rather than a degradation.
+  Adding only the SHA rehearsal would have answered the testability complaint while leaving the outage in place.
 - **Pin the PyPI distribution at an exact version, `amicus=={version}`.**
-  The same window wearing different clothes, and wider. `amicus==0.1.0` does not resolve until `publish.yml`'s `pypi` job has uploaded it, and that job waits on the `pypi` environment's required reviewer, so the window becomes however long an approval takes rather than the seconds between a merge and a tag push.
+  The same window wearing different clothes, and wider.
+  `amicus==0.1.0` does not resolve until `publish.yml`'s `pypi` job has uploaded it, and that job waits on the `pypi` environment's required reviewer, so the window becomes however long an approval takes rather than the seconds between a merge and a tag push.
 - **An unpinned distribution, `--from amicus`.**
   This was the recommendation of an adversarial consult, and the probe above is why it was not taken.
-  It does remove the window from the second release onward, but the requirement string then never changes, so a user's `uvx` cache can serve a stale build indefinitely with no signal that a newer one exists. Trading a seconds-long, self-healing outage for a silent permanent one is a bad trade. It would also make PyPI the install channel for the first time; `README.md` documents the git source, not `pip install amicus`.
+  It does remove the window from the second release onward, but the requirement string then never changes, so a user's `uvx` cache can serve a stale build indefinitely with no signal that a newer one exists.
+  Trading a seconds-long, self-healing outage for a silent permanent one is a bad trade.
+  It would also make PyPI the install channel for the first time; `README.md` documents the git source, not `pip install amicus`.
 - **A mutable git ref, `@main`.**
   Removes the outage, but makes the artifact users run mutable and unversioned, and bypasses the release boundary entirely.
 - **Generate the pin at build or publish time.**
-  Does not reach the problem. A fresh marketplace install reads the manifest from `main`; nothing generated on the tag or publish side changes what that file says.
+  Does not reach the problem.
+  A fresh marketplace install reads the manifest from `main`; nothing generated on the tag or publish side changes what that file says.
 
 ## What would reopen this
 
-- PyPI becoming the documented install channel. The pin would then name a distribution rather than a git tag, and the invariant here ("name something already published") would carry over unchanged, but the shape check and `README.md` would both move.
-- Evidence that a plugin host copies `.mcp.json` at install time and never re-reads it. That would change how an update reaches an existing user, which is the mechanism the cache probe above is about. This was not established either way; `docs/RELEASING.md` treats it as unknown rather than assuming it.
+- PyPI becoming the documented install channel.
+  The pin would then name a distribution rather than a git tag, and the invariant here ("name something already published") would carry over unchanged, but the shape check and `README.md` would both move.
+- Evidence that a plugin host copies `.mcp.json` at install time and never re-reads it.
+  That would change how an update reaches an existing user, which is the mechanism the cache probe above is about.
+  This was not established either way; `docs/RELEASING.md` treats it as unknown rather than assuming it.

@@ -88,7 +88,7 @@ Rules 19 and 20 together shape this sequence, and a future maintainer should not
 Rule 20 requires the live-gate evidence to cover the exact commit being tagged.
 Rule 19 requires the tag push to be the only work that follows the PR C merge, so that `main`'s version literals and the published tag agree without a gap.
 Since ADR 0015 that promptness is no longer about a broken install path: `.mcp.json` pins the newest **already-published** release, so `main` never sends a fresh install to a tag that does not exist.
-The single exception is the first release, which has no earlier tag to name — 0.1.0 is that release, and tagging it closes this window permanently.
+The single exception was the first release, which had no earlier tag to name; 0.1.0 was tagged and published on 2026-09-09, which closed that window permanently.
 The tag does not have to point at `main`'s head; it has to point at the commit the evidence covers.
 An ordinary merge commit keeps the PR C branch tip in `main`'s history as one of the merge commit's two parents, so tagging that branch tip is legitimate, and it is exactly the commit the evidence names — no fast-forward or branch-protection change is required to satisfy both rules.
 The tag therefore deliberately points at a commit that is in `main`'s history but is not `main`'s head, and the checks in step 5 below prove the two commits' trees are identical.
@@ -99,7 +99,8 @@ The tag therefore deliberately points at a commit that is in `main`'s history bu
    Change no version literal unless the version itself is changing.
    The literals are `pyproject.toml`, `src/amicus/__init__.py` and both `plugin.json` files.
    Do **not** touch `.mcp.json`: per ADR 0015 its pin names the newest already-published release, so during this PR it correctly trails the version being released by one, and step 7 moves it after the tag exists.
-   For 0.1.0 no literal moves at all — every one of them already reads 0.1.0 — and `.mcp.json`'s `@v0.1.0` pin is the bootstrap case, naming the tag this release is about to create because there is no earlier release to name.
+   0.1.0 was the bootstrap: no literal moved, and its `@v0.1.0` pin named the tag that release itself created, because no earlier release existed.
+   That case is closed and does not recur.
    Regenerate `uv.lock` with `uv lock` in this same PR, per AGENTS.md rule 19 — `uv.lock` mirrors the version rather than declaring it, and `prek.toml`'s `uv-lock-check` hook runs `uv lock --check` whenever `pyproject.toml` changes, so a release PR that skips this fails its own hook.
 3. Check out the PR C branch tip (not `main`) into a clean tree and confirm `git status --porcelain` is empty.
    Record the branch tip's SHA; call it the release commit, and note it well — it is the commit that gets tagged, and it will not be `main`'s head after the next step.
@@ -158,7 +159,7 @@ The tag therefore deliberately points at a commit that is in `main`'s history bu
    It touches `.mcp.json` and nothing else, it is not a release under rule 19, and it needs no live-gate evidence — it moves a pointer to a tag that is already published.
    Until it merges, `main` sends a fresh install to the previous release, which works.
    That is the intended degradation, so do not treat it as an outage or rush the PR through without its checks.
-   For 0.1.0 there is nothing to move: the pin already reads `@v0.1.0`, the bootstrap case, so this step is skipped exactly once in this repository's life.
+   This step did not apply to 0.1.0, whose pin already reads `@v0.1.0` for the bootstrap reason above; 0.2.0 is the first release to perform it.
 
 A maintainer who instead wants the tag to be `main`'s own head has a permitted alternative: a direct fast-forward push of the PR C branch to `main` (`git checkout main && git merge --ff-only <pr-branch> && git push origin main`) achieves that, if this repository's branch protection allows a direct push to `main`.
 This runbook cannot say whether it does: `gh api repos/briandconnelly/amicus/branches/main/protection` returned `403 Resource not accessible by integration` to the token available while writing it, so that setting is unverified here, and this document does not assert it either way.

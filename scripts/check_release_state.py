@@ -133,7 +133,6 @@ def mcp_pin(repo_root: Path = REPO_ROOT) -> tuple[str | None, list[str]]:
 def check_mcp_pin_tag_exists(
     version: str,
     *,
-    tag_pushed: bool,
     repo_root: Path = REPO_ROOT,
     git: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
 ) -> list[str]:
@@ -142,34 +141,50 @@ def check_mcp_pin_tag_exists(
     This is the check ADR 0015 gained in exchange for the equality it dropped, and it is worth
     more: the old `pin == version being released` was true by construction on any tree a
     release PR had touched, while this one is a fact about the world. It needs a checkout with
-    tags, which is why `publish.yml` sets `fetch-depth: 0`; a shallow or tagless checkout
-    reports that rather than passing silently.
+    tags, which is why `publish.yml` sets `fetch-depth: 0`; a tagless checkout is reported
+    rather than passed silently.
 
-    One exception, and only one: the bootstrap. A pin equal to the version being released, on a
-    tree whose tag has not been pushed yet (`tag_pushed` false, i.e. no `--tag`), is the first
-    release naming the tag it is about to create — there is no earlier release for it to name.
-    Once `--tag` is given the tag exists by definition, so the exception cannot be used to skip
-    the check in the publish workflow, which is where it matters.
+    One exception, and only one: the bootstrap, identified POSITIVELY as a repository with no
+    `v*` tags at all whose pin names the version being released. That is the first release
+    naming the tag it is about to create, and there is no earlier release for it to name.
+
+    The exception is deliberately not "the pin equals the version being released", which was
+    the first attempt and was too broad. On a later release, a pin mistakenly bumped to the
+    version being released would satisfy that condition, skip this check, and reintroduce
+    exactly the unresolvable window ADR 0015 exists to remove — and the publish workflow would
+    not catch it either, because by then the tag has been pushed and does exist. Keying on "no
+    releases have ever happened" cannot be reached a second time.
     """
     pinned, problems = mcp_pin(repo_root)
     if pinned is None:
         return problems
 
-    if pinned == version and not tag_pushed:
-        return []
-
-    tag = f"v{pinned}"
     try:
         proc = git(
-            ["git", "rev-parse", "--verify", "--quiet", f"refs/tags/{tag}"],
+            ["git", "tag", "-l", "v*"],
             cwd=repo_root,
             capture_output=True,
             text=True,
             check=False,
         )
     except OSError as exc:  # git missing: report it rather than silently skipping the check
-        return [f"could not check whether {tag} exists: {exc}"]
+        return [f"could not list tags to check the .mcp.json pin: {exc}"]
     if proc.returncode != 0:
+        detail = (proc.stderr or proc.stdout or f"exit {proc.returncode}").strip()
+        return [f"could not list tags to check the .mcp.json pin: {detail}"]
+
+    tags = {line.strip() for line in proc.stdout.splitlines() if line.strip()}
+    tag = f"v{pinned}"
+
+    if not tags:
+        if pinned == version:
+            return []
+        return [
+            f".mcp.json pins {tag}, but this repository has no releases yet and the version "
+            f"being released is {version}; the first release may only pin its own tag"
+        ]
+
+    if tag not in tags:
         return [
             f".mcp.json pins {tag}, which does not exist in this checkout; users installing "
             "from this manifest would get an unresolvable ref (or the checkout has no tags)"
@@ -277,7 +292,6 @@ def check_lock(
 def check_tree(
     version: str,
     *,
-    tag_pushed: bool = False,
     repo_root: Path = REPO_ROOT,
     run: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
     git: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
@@ -291,7 +305,7 @@ def check_tree(
         *check_version_literals(version, repo_root=repo_root),
         *check_changelog(version, repo_root=repo_root),
         *check_lock(repo_root=repo_root, run=run),
-        *check_mcp_pin_tag_exists(version, tag_pushed=tag_pushed, repo_root=repo_root, git=git),
+        *check_mcp_pin_tag_exists(version, repo_root=repo_root, git=git),
     ]
 
 
@@ -418,7 +432,7 @@ def main(argv: list[str] | None = None, *, repo_root: Path = REPO_ROOT) -> int:
     if not VERSION_RE.match(version):
         problems.append(f"version {version!r} is not X.Y.Z")
 
-    problems += check_tree(version, tag_pushed=bool(args.tag), repo_root=repo_root)
+    problems += check_tree(version, repo_root=repo_root)
 
     if tag_is_well_formed:
         commit = args.commit or _git("rev-parse", "HEAD", repo_root=repo_root)
