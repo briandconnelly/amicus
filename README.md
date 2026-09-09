@@ -36,8 +36,8 @@ Start a new session afterwards so the host loads the bundled skill and tools.
 
 ### Any other MCP client
 
-The plugins launch the server from the release tag pinned in [`.mcp.json`](.mcp.json). Point your
-client at the same command:
+The plugins launch the server from the latest published release tag, pinned in
+[`.mcp.json`](.mcp.json). Point your client at the same command:
 
 ```json
 {
