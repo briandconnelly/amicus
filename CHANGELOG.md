@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Both plugin manifests carry `author.url`, and their `longDescription` names
+  `docs/MIGRATION.md` by absolute URL rather than by a repository-root-relative path that
+  does not resolve for a consumer who vendors the manifest without the repository around it.
 - `.mcp.json`'s pin now names an already-published release rather than the version being
   released, so `main` never sends a fresh install to a tag that does not exist yet
   ([ADR 0015](docs/adr/0015-mcp-json-pins-an-already-published-release.md), issue #26).
