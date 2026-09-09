@@ -7,13 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-- A `verify` job in the publish workflow that runs `scripts/check_release_state.py` against the tagged commit and gates the PyPI upload on it, plus the script and its tests (issue #25, ADR 0014). The rule-20 live-gate record now travels as the annotated tag's message, since `.release-evidence/` is gitignored and cannot reach CI.
-
-### Fixed
-
-- `record_live_gate_evidence.validate` accepted a record that omitted `batch_id` from every backend entry, so the "one shared run produced this record" property it documented was not actually checkable. `batch_id` is now a required backend field.
+## [0.1.0] - 2026-09-08
 
 ### Added
 
@@ -24,10 +18,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `task=True` on the four paid synchronous tools behind the `AMICUS_TASKS` flag (M5).
 - Packaging for both hosts: a `.claude-plugin/` manifest, a `.codex-plugin/` manifest, an `amicus-mcp` console script, and the `collaborating-with-amicus` skill (M6).
 - Release automation: a tag- and dispatch-triggered publish workflow with trusted publishing to TestPyPI and PyPI.
+- A release predicate gating that upload: a `verify` job runs `scripts/check_release_state.py` against the tagged commit, and `pypi` depends on it (issue #25, ADR 0014). It proves the tagged tree's release-state coherence — every version literal, the dated changelog section, `uv.lock` — and checks that the live-gate record carried in the annotated tag's message is well formed and names that commit. That record remains the maintainer's assertion, never proof the live gates ran.
+
+### Fixed
+
+- `record_live_gate_evidence.validate` accepted a record that omitted `batch_id` from every backend entry, so the "one shared run produced this record" property it documented was not actually checkable. `batch_id` is now a required backend field.
 
 ### Known limitations
 
 - The tagged publish path to pypi.org has never run. Only the TestPyPI dispatch path has been exercised.
 - Eval scenario S6 in `skills/collaborating-with-amicus/tests/scenarios.md` passed on one run (status: `pass`, validated by that run alone); an M7 follow-up run against the current skill text did not isolate the still-open F3 finding, so F3 remains open. S7 (real-host approval friction) has failed both of its recorded runs (status: `fail`); an M7 zero-spend recheck reached neither a pass nor a fail and is recorded as inconclusive, so it does not move S7's status. See their `status` fields and ADR 0012.
 
-[Unreleased]: https://github.com/briandconnelly/amicus/commits/main
+[Unreleased]: https://github.com/briandconnelly/amicus/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/briandconnelly/amicus/releases/tag/v0.1.0

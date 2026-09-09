@@ -275,29 +275,109 @@ async def test_the_committed_manifest_command_starts_a_real_server(tmp_path):
     assert len(tools) == 18
 
 
+def unreleased_section(text: str) -> tuple[str, bool]:
+    """The `## [Unreleased]` section's body, and whether a dated section follows it.
+
+    The body stops at the next `## ` heading, so a dated section's own `### Added` can
+    never stand in for content the Unreleased stub does not have.
+    """
+    rest = text.split("\n## [Unreleased]\n", 1)[1]
+    next_heading = rest.find("\n## ")
+    if next_heading == -1:
+        return rest, False
+    return rest[:next_heading], True
+
+
+def unreleased_problems(section: str, *, dated_section_follows: bool) -> list[str]:
+    """What is wrong with an Unreleased section, given whether a release follows it."""
+    if not section.strip():
+        if dated_section_follows:
+            return []  # the state `docs/RELEASING.md` step 2 leaves behind
+        return ["the Unreleased section is empty and no release has been cut"]
+    if "\n### " not in section:
+        return ["the Unreleased section has content but no `### ` subsection"]
+    return []
+
+
 def test_changelog_has_an_unreleased_section():
     """PR C rolls `## [Unreleased]` into a dated section, so that heading must exist.
 
     The release procedure in `docs/RELEASING.md` edits this heading by exact text. A
     renamed or missing heading turns that step into a silent no-op, which is how a
-    release ships with an empty changelog entry. AGENTS.md rule 19 keeps the dated
-    `## [0.1.0] - YYYY-MM-DD` heading out of this change (that heading lands in the
-    release PR), so this only checks that the file opens correctly and that the
-    Unreleased section is not an empty stub -- it must already carry at least one
-    `### `-level subsection.
+    release ships with an empty changelog entry. So the heading itself is asserted
+    unconditionally, spelled exactly as step 2 edits it.
 
-    A prior version of this assertion sliced only at the start of the Unreleased
-    heading (`text.split(..., 1)[1]`), so the "rest of the file" it checked included
-    every dated release section below it. Once PR C rolls Unreleased into a dated
-    `## [0.1.0]` section, that section's own `### Added` satisfied `"\n### " in
-    unreleased` even though the Unreleased section above it was left an empty stub --
-    exactly what this test's docstring says must fail. The slice must stop at the next
-    `\n## ` heading so it covers only the Unreleased section itself.
+    Whether that section must carry content depends on where in the release cycle the
+    file is, and the two states are told apart by whether a dated section follows:
+
+    - No dated section below it: no release has been cut, every change since the last
+      one lives here, and an empty stub means someone landed work without a changelog
+      entry. That must fail.
+    - A dated section below it: `docs/RELEASING.md` step 2 has just rolled Unreleased
+      into that section and left "a fresh empty `## [Unreleased]` above it". Empty is
+      then the correct state, and asserting otherwise would fail every release PR --
+      which is what happened when the 0.1.0 release PR first ran this gate.
+
+    The slice must stop at the next `\n## ` heading either way. A prior version sliced
+    to the end of the file, so the dated section's own `### Added` satisfied the
+    non-empty check for an Unreleased stub that was genuinely empty. A later version
+    computed the slice boundary and then never used it, so the whole
+    dated-section-follows branch asserted nothing at all.
+
+    What is NOT asserted, deliberately: that Unreleased is empty when a dated section
+    follows. That is true only in the moment after the rollover. Development resumes
+    immediately afterwards and legitimately fills Unreleased while the dated section
+    sits below it, and the two states are indistinguishable from this file's structure
+    alone. Asserting emptiness there would fail every ordinary PR after a release.
     """
     text = (Path(__file__).resolve().parent.parent / "CHANGELOG.md").read_text()
     assert text.startswith("# Changelog\n"), "the file must open with the Keep a Changelog title"
     assert "\n## [Unreleased]\n" in text, "the rollover target heading is missing"
-    rest = text.split("\n## [Unreleased]\n", 1)[1]
-    next_heading = rest.find("\n## ")
-    unreleased = rest if next_heading == -1 else rest[:next_heading]
-    assert "\n### " in unreleased, "the Unreleased section must contain at least one subsection"
+    section, dated_section_follows = unreleased_section(text)
+    for problem in unreleased_problems(section, dated_section_follows=dated_section_follows):
+        raise AssertionError(problem)
+
+
+_ROLLED_OVER = (
+    "# Changelog\n\n## [Unreleased]\n\n## [0.1.0] - 2026-09-08\n\n### Added\n\n- A thing.\n"
+)
+_IN_DEVELOPMENT = "# Changelog\n\n## [Unreleased]\n\n### Added\n\n- A thing.\n"
+_DEVELOPMENT_AFTER_A_RELEASE = _ROLLED_OVER.replace(
+    "## [Unreleased]\n", "## [Unreleased]\n\n### Fixed\n\n- Later work.\n"
+)
+
+
+def test_the_unreleased_slice_stops_at_the_next_section():
+    """The regression that started this: a dated section's content is not Unreleased's."""
+    section, follows = unreleased_section(_ROLLED_OVER)
+    assert follows is True
+    assert section.strip() == ""
+    assert "### Added" not in section
+
+
+def test_a_freshly_rolled_over_changelog_is_accepted():
+    section, follows = unreleased_section(_ROLLED_OVER)
+    assert unreleased_problems(section, dated_section_follows=follows) == []
+
+
+def test_an_unreleased_section_with_entries_is_accepted_before_and_after_a_release():
+    """Development after a release legitimately fills Unreleased above the dated section."""
+    for text in (_IN_DEVELOPMENT, _DEVELOPMENT_AFTER_A_RELEASE):
+        section, follows = unreleased_section(text)
+        assert unreleased_problems(section, dated_section_follows=follows) == [], text
+
+
+def test_an_empty_unreleased_section_with_no_release_is_rejected():
+    """Work landed with no changelog entry, and no release to have rolled it away."""
+    text = "# Changelog\n\n## [Unreleased]\n\n[x]: http://e.invalid\n"
+    section, follows = unreleased_section(text)
+    assert follows is False
+    assert unreleased_problems(section, dated_section_follows=follows) != []
+
+
+@pytest.mark.parametrize("dated_section_follows", [True, False])
+def test_unreleased_content_without_a_subsection_is_rejected(dated_section_follows):
+    problems = unreleased_problems(
+        "\n- A bare bullet.\n", dated_section_follows=dated_section_follows
+    )
+    assert problems and "subsection" in problems[0]
