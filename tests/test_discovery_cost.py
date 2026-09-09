@@ -27,12 +27,13 @@ nothing was lost, and `dropped: null` means the count was unknowable. An MCP-onl
 has no skill file to read, so a field whose whole purpose is to prevent a misreading has
 to carry that meaning on the wire or it will be misread (issue #38).
 
-The schema-9 -> schema-10 raise (+706 bytes) is the same trade on a smaller field. Adding
+The schema-9 -> schema-10 raise (+1032 bytes) is the same trade on a smaller field. Adding
 `unknown` to the confidence enum costs a dozen bytes; the rest is one description carried
 byte-identically on both review tools, which is the duplication issue #41 is about. It is
-kept because `confidence` is now two things - the backend's own rating, and amicus's floor
-where it cannot stand behind the result - and a caller who reads `unknown` as a low rating
-draws the opposite conclusion from the one the value exists to force (issue #53).
+kept because `confidence` is now two things - the backend's own rating, and the `low` amicus
+substitutes where it also withholds the verdict - and it has two misreadings to prevent, both
+of which invert the value: `unknown` read as a low rating, and a high rating read as evidence
+that coverage was complete (issue #53).
 """
 
 from __future__ import annotations
@@ -41,7 +42,7 @@ import pytest
 
 from amicus import manifest
 
-MEASURED: dict[str, int] = {"all": 98523, "codex-kimi": 98531, "claude": 98523}
+MEASURED: dict[str, int] = {"all": 98849, "codex-kimi": 98857, "claude": 98849}
 BUDGET: dict[str, int] = {p: ((n // 1000) + 1) * 1000 for p, n in MEASURED.items()}
 # ceil(bytes/4): a dependency-free, conservative token proxy (~4.13 bytes per token).
 TOKEN_PROXY_BUDGET: dict[str, int] = {p: -(-b // 4) for p, b in BUDGET.items()}
