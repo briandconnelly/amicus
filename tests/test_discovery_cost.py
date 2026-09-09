@@ -16,8 +16,14 @@ smaller tax on that host than the budget assumes
 (docs/host-captures/install-smoke/claude-code/2.1.263/notes.md). The budget stays the
 worst-case ceiling for the clients that do preload.
 
-Measured 2026-09-09 at schema-8 (18 tools; amicus_job_result names the terminal statuses):
+Measured 2026-09-09 at schema-9 (18 tools; every model result carries findings_diagnostics):
 see MEASURED.
+
+The schema-8 -> schema-9 raise (+1252 bytes) is deliberate. `findings_diagnostics` is a
+nested object on four paid tools' output schemas, and the published schemas inline rather
+than $ref it, so one field is paid for four times. It buys the ability to tell a clean
+review from one whose findings amicus could not carry (issue #38) - a correctness signal
+an agent cannot reconstruct from anything else on the wire.
 """
 
 from __future__ import annotations
@@ -26,7 +32,7 @@ import pytest
 
 from amicus import manifest
 
-MEASURED: dict[str, int] = {"all": 92657, "codex-kimi": 92665, "claude": 92657}
+MEASURED: dict[str, int] = {"all": 93909, "codex-kimi": 93917, "claude": 93909}
 BUDGET: dict[str, int] = {p: ((n // 1000) + 1) * 1000 for p, n in MEASURED.items()}
 # ceil(bytes/4): a dependency-free, conservative token proxy (~4.13 bytes per token).
 TOKEN_PROXY_BUDGET: dict[str, int] = {p: -(-b // 4) for p, b in BUDGET.items()}
