@@ -223,10 +223,13 @@ def _parse_reviewed(
     """Strict about SHAPE, lenient about FIELDS: exit-0 output that is not JSON, or not a
     JSON object, is a hard invalid_json/schema_violation error, never a prose downgrade.
     A JSON object that clears that bar but deviates field-by-field is coerced instead —
-    verdict defaults to unknown and confidence to medium — so a malformed object can
-    never be delivered as a `pass`. This deliberately mirrors codex-in-claude, whose
-    normalize.py says a missing verdict "defaults to unknown, which is honest, so it is
-    intentionally accepted". Returns (error_envelope, None) or (None, model fields)."""
+    each machine enum falls to its own honest floor, so a malformed object can never be
+    delivered as a `pass`. This deliberately mirrors codex-in-claude, whose normalize.py
+    says a missing verdict "defaults to unknown, which is honest, so it is intentionally
+    accepted". Confidence answers to the same principle (issue #53): `low` is the lowest
+    rating a backend can REPORT, so defaulting to it would manufacture a claim; `unknown`
+    declines to make one. The folds downstream may still state `low` on their own basis.
+    Returns (error_envelope, None) or (None, model fields)."""
     apply_exec(meta, result)
     status, parsed = classify_structured(result.answer)
     if status != "ok":
@@ -246,7 +249,7 @@ def _parse_reviewed(
     findings, diagnostics = coerce_findings(s.get("findings", ABSENT))
     verdict, confidence, summary = review_mod.apply_coverage(
         _enum(s.get("verdict"), ("pass", "concerns", "fail", "unknown"), "unknown"),
-        _enum(s.get("confidence"), ("low", "medium", "high"), "medium"),
+        _enum(s.get("confidence"), ("low", "medium", "high"), "unknown"),
         _summary_of(s),
         reasons,
     )

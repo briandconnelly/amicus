@@ -27,7 +27,7 @@ from amicus.schemas.fingerprint import (
 
 Severity = Literal["critical", "high", "medium", "low", "nit"]
 Verdict = Literal["pass", "concerns", "fail", "unknown"]
-Confidence = Literal["low", "medium", "high"]
+Confidence = Literal["low", "medium", "high", "unknown"]
 ReviewScope = Literal["working_tree", "branch", "commit"]
 Untracked = Literal["explicit_only", "include", "exclude"]
 Detail = Literal["summary", "full"]
@@ -81,7 +81,15 @@ _DIAGNOSTICS_DESC = (
     "What the backend reported that amicus could not carry intact; null when nothing "
     "deviated. Read this before acting on an empty or short `findings` list."
 )
-publish.KEPT_DESCRIPTIONS.update({_DROPPED_DESC, _REASONS_DESC, _DIAGNOSTICS_DESC})
+_CONFIDENCE_DESC = (
+    "How sure this review is. Seeded from the backend's own low|medium|high, then floored "
+    "to `low` wherever amicus cannot stand behind the result (partial coverage, findings "
+    "it could not carry), so `low` is not always the backend's word. `unknown` is the "
+    "ABSENCE of a rating - no readable value, no floor applied - never a low one."
+)
+publish.KEPT_DESCRIPTIONS.update(
+    {_DROPPED_DESC, _REASONS_DESC, _DIAGNOSTICS_DESC, _CONFIDENCE_DESC}
+)
 
 
 class FindingsDiagnostics(BaseModel):
@@ -125,7 +133,7 @@ class ConsultResult(_ModelResult):
 class ReviewResult(_ModelResult):
     tool: Literal["amicus_review_changes"] = "amicus_review_changes"
     verdict: Verdict
-    confidence: Confidence
+    confidence: Confidence = Field(description=_CONFIDENCE_DESC)
     review_status: ReviewStatus = "completed"
     context_summary: ContextSummary | None = None
 
@@ -133,7 +141,7 @@ class ReviewResult(_ModelResult):
 class AdversarialReviewResult(_ModelResult):
     tool: Literal["amicus_adversarial_review"] = "amicus_adversarial_review"
     verdict: Verdict
-    confidence: Confidence
+    confidence: Confidence = Field(description=_CONFIDENCE_DESC)
     review_status: ReviewStatus = "completed"
     context_summary: ContextSummary | None = None
 

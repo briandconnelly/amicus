@@ -420,3 +420,99 @@ def test_an_omitted_findings_member_stops_a_pass_verdict():
     )
     assert (out["verdict"], out["confidence"]) == ("unknown", "low")
     assert out["findings_diagnostics"] == {"dropped": None, "reasons": ["missing_findings"]}
+
+
+# --- issue #53: an unreadable confidence may not be invented -----------------------------
+
+_UNREADABLE_CONFIDENCE = {
+    "absent": {},
+    "null": {"confidence": None},
+    "wrong_type": {"confidence": 3},
+    "invalid_string": {"confidence": "very high"},
+}
+
+
+def test_an_unreadable_confidence_is_reported_as_unknown_not_invented():
+    """Issue #53. `low` is the lowest confidence a backend can REPORT, not the absence of
+    a report, so defaulting to it manufactures a claim just as `medium` did - smaller, and
+    in the same direction. `unknown` declines to make one, exactly as `verdict` does."""
+    for label, over in _UNREADABLE_CONFIDENCE.items():
+        payload = _structured(**over)
+        if label == "absent":
+            payload.pop("confidence")
+        out = fz.review_result(
+            ExecResult(answer=json.dumps(payload), structured=payload),
+            Meta(),
+            [],
+            fakeplugin.make_plugin(),
+        )
+        assert out["confidence"] == "unknown", label
+        assert out["findings_diagnostics"] is None, label
+
+
+def test_an_unreadable_confidence_never_disturbs_the_verdict():
+    """Confidence answers how sure the backend was, not what it found. A backend that
+    reported a concrete judgment and said nothing readable about its certainty still
+    reported that judgment - neither softened nor promoted."""
+    for verdict in ("pass", "concerns", "fail", "unknown"):
+        payload = _structured(verdict=verdict)
+        payload.pop("confidence")
+        out = fz.review_result(
+            ExecResult(answer=json.dumps(payload), structured=payload),
+            Meta(),
+            [],
+            fakeplugin.make_plugin(),
+        )
+        assert (out["verdict"], out["confidence"]) == (verdict, "unknown"), verdict
+        assert out["summary"] == "Looks fine", verdict
+
+
+def test_a_reported_low_confidence_is_not_reported_as_unknown():
+    """The control for the test above: `low` still means the backend said `low`. Without
+    this, defaulting the whole enum to `unknown` would pass the honesty test by erasing
+    the distinction it exists to draw."""
+    payload = _structured(confidence="low")
+    out = fz.review_result(
+        ExecResult(answer=json.dumps(payload), structured=payload),
+        Meta(),
+        [],
+        fakeplugin.make_plugin(),
+    )
+    assert (out["verdict"], out["confidence"]) == ("pass", "low")
+
+
+def test_a_fold_still_states_low_over_an_unreadable_confidence():
+    """The folds speak for amicus, not for the backend: partial coverage and lost findings
+    are bases amicus HAS for distrusting the delivered review, so `low` there is its own
+    assessment rather than an invented reading of the backend's. `unknown` survives only
+    where nothing - backend or fold - had anything to say."""
+    payload = _structured(verdict="pass")
+    payload.pop("confidence")
+    partial = fz.review_result(
+        ExecResult(answer=json.dumps(payload), structured=payload),
+        Meta(),
+        ["truncated"],
+        fakeplugin.make_plugin(),
+    )
+    assert (partial["verdict"], partial["confidence"]) == ("unknown", "low")
+    lost = _structured(verdict="pass", findings=["junk"])
+    lost.pop("confidence")
+    out = fz.review_result(
+        ExecResult(answer=json.dumps(lost), structured=lost),
+        Meta(),
+        [],
+        fakeplugin.make_plugin(),
+    )
+    assert (out["verdict"], out["confidence"]) == ("unknown", "low")
+
+
+def test_adversarial_review_declines_to_invent_a_confidence_the_same_way():
+    payload = _structured(verdict="concerns")
+    payload.pop("confidence")
+    out = fz.adversarial_result(
+        ExecResult(answer=json.dumps(payload), structured=payload),
+        Meta(),
+        [],
+        fakeplugin.make_plugin(),
+    )
+    assert (out["verdict"], out["confidence"]) == ("concerns", "unknown")
