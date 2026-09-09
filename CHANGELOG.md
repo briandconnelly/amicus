@@ -16,6 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The skill's async recipe no longer polls terminal jobs forever. `poll_after_ms` is `null` on
   every terminal status and a cancelled job reports `result_available: false`, so the loop is now
   driven by `status == "running"`.
+- The server's own waiting instructions now terminate too. The `job_running` repair, the
+  `follow_up` every `*_async` start returns, and `amicus_job_result`'s description all told an
+  agent to wait for `result_available`, a flag that never flips for a `cancelled`, `failed` or
+  `timeout` job. All three now gate the wait on `status` and name the terminal path, so the
+  machine-readable repair agrees with the lifecycle and with the skill (issue #35).
+- `amicus_job_result`'s description no longer tells callers to branch on `tool` unconditionally.
+  A stored error is delivered as an `ErrorResult`, which carries no `tool`, so `ok` is what to
+  check first.
 - The skill no longer claims a timed-out synchronous call costs the same quota as a completed one.
   Amicus is not told what a terminated call cost; the reason to prefer `_async` is that a sync
   timeout destroys the result.
@@ -41,6 +49,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `FINGERPRINT` moves `amicus/0.1/schema-7` → `amicus/0.1/schema-8` for the `amicus_job_result`
+  description change, with every pin regenerated in a dedicated commit (rule 10). `RESULT_FORMAT`
+  stays `2`: no stored result changed shape.
 - `SKILL.md`'s rule block is now the complete contract: ten obligations that lived in explanatory
   prose moved into labelled rules, and the facts that motivate them moved to an adjacent
   `Semantics` section ([ADR 0016](docs/adr/0016-skill-rules-are-a-complete-contract.md)).
