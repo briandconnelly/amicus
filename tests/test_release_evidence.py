@@ -87,6 +87,22 @@ def test_validate_record_still_rejects_a_failed_suite():
     assert evidence.validate_record(record, head=HEAD, tree_clean=True) != []
 
 
+@pytest.mark.parametrize("bad", [123, None, "not-a-date", "2026-13-45T99:00:00", ""])
+def test_validate_record_rejects_a_malformed_recorded_at(bad):
+    """The "except freshness" promise covers the age limit only, not the shape.
+
+    A `recorded_at` that is not a parseable timestamp is a broken record whoever reads it, and
+    dropping the age check at publish time must not drop that too.
+    """
+    problems = evidence.validate_record(_record(recorded_at=bad), head=HEAD, tree_clean=True)
+    assert [p for p in problems if "recorded_at" in p], problems
+
+
+def test_validate_does_not_report_a_malformed_timestamp_twice():
+    problems = evidence.validate(_record(recorded_at=123), head=HEAD, tree_clean=True, now=NOW)
+    assert len([p for p in problems if "recorded_at" in p]) == 1, problems
+
+
 def test_a_record_for_another_commit_is_rejected():
     problems = evidence.validate(_record(commit="c" * 40), head=HEAD, tree_clean=True, now=NOW)
     assert any("commit" in p for p in problems), problems

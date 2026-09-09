@@ -9,10 +9,17 @@ tested separately here:
   cannot prove the live gates ran. The tests below assert the shape of that check, never that
   it establishes more than it does.
 
-Every rejection path is exercised against a real repository fixture, because a predicate that
-cannot fail would be exactly the false confidence issue #25 was filed about. The positive
-control -- the fixture passing unmodified -- runs first, so a broken fixture cannot make the
-negative controls pass vacuously.
+Every rejection path is exercised, because a predicate that cannot fail would be exactly the
+false confidence issue #25 was filed about. The positive control -- the fixture passing
+unmodified -- runs first, so a broken fixture cannot make the negative controls pass
+vacuously.
+
+Two layers, deliberately. Most checks below call the predicate functions directly against a
+fixture tree, which is where the many rejection paths are cheap to cover. The last section
+drives `main()` against a REAL git repository with real annotated and lightweight tags,
+because that is the only thing that exercises what the workflow actually depends on: `git
+cat-file -t`, peeling the tag to its commit, and reading the message back out. Injected values
+cannot fail those commands.
 """
 
 from __future__ import annotations
@@ -337,3 +344,109 @@ def test_this_repository_s_version_literals_all_agree():
     version = release_state.declared_version(repo_root)
     problems = release_state.check_version_literals(version, repo_root=repo_root)
     assert problems == [], "; ".join(problems)
+
+
+# --- the real git path the workflow depends on -----------------------------------------
+
+
+def _git(repo: Path, *args: str) -> str:
+    return subprocess.run(
+        ["git", "-C", str(repo), *args], capture_output=True, text=True, check=True
+    ).stdout.strip()
+
+
+@pytest.fixture
+def git_repo(repo, monkeypatch):
+    """The fixture tree, as a real git repository with one commit.
+
+    `check_lock` is stubbed out for this layer only: the fixture has no `uv.lock`, and running
+    a real resolver here would test uv rather than the tag handling these tests exist for.
+    The lock check has its own negative controls above, with an injected runner.
+    """
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "config", "user.email", "test@example.invalid")
+    _git(repo, "config", "user.name", "test")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "release commit")
+    monkeypatch.setattr(release_state, "check_lock", lambda **kwargs: [])
+    return repo
+
+
+def _tag_annotated(repo: Path, tag: str, record: dict, ref: str = "HEAD") -> None:
+    message = repo / f".{tag}.json"
+    message.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+    _git(repo, "tag", "-a", tag, "-F", str(message), "--cleanup=verbatim", ref)
+    message.unlink()
+
+
+def test_main_accepts_a_real_annotated_tag_carrying_the_record(git_repo, tmp_path):
+    head = _git(git_repo, "rev-parse", "HEAD")
+    _tag_annotated(git_repo, f"v{VERSION}", _record(commit=head))
+    summary = tmp_path / "summary.md"
+
+    rc = release_state.main(
+        ["--tag", f"v{VERSION}", "--commit", head, "--summary", str(summary)],
+        repo_root=git_repo,
+    )
+
+    assert rc == 0
+    text = summary.read_text(encoding="utf-8")
+    assert "PASSED" in text
+    # The summary must never let a reviewer read the record as proof the suites ran.
+    assert "not an attestation" in text
+
+
+def test_main_rejects_a_real_lightweight_tag(git_repo, capsys):
+    """A lightweight tag has no message, so it can carry no evidence at all."""
+    head = _git(git_repo, "rev-parse", "HEAD")
+    _git(git_repo, "tag", f"v{VERSION}", "HEAD")
+
+    assert release_state.main(["--tag", f"v{VERSION}", "--commit", head], repo_root=git_repo) == 1
+    assert "lightweight tag" in capsys.readouterr().err
+
+
+def test_main_rejects_a_real_tag_whose_message_is_prose(git_repo, capsys):
+    head = _git(git_repo, "rev-parse", "HEAD")
+    _git(git_repo, "tag", "-a", f"v{VERSION}", "-m", f"Release {VERSION}", "HEAD")
+
+    assert release_state.main(["--tag", f"v{VERSION}", "--commit", head], repo_root=git_repo) == 1
+    assert "not the JSON evidence record" in capsys.readouterr().err
+
+
+def test_main_rejects_a_real_tag_left_on_an_earlier_commit(git_repo, capsys):
+    """The PR branch gained a commit after the evidence was taken."""
+    head = _git(git_repo, "rev-parse", "HEAD")
+    _tag_annotated(git_repo, f"v{VERSION}", _record(commit=head))
+    _git(git_repo, "commit", "-q", "--allow-empty", "-m", "a later commit")
+    later = _git(git_repo, "rev-parse", "HEAD")
+
+    assert release_state.main(["--tag", f"v{VERSION}", "--commit", later], repo_root=git_repo) == 1
+    err = capsys.readouterr().err
+    assert "points at" in err, err
+    assert "does not match HEAD" in err, err
+
+
+def test_main_rejects_a_tag_that_does_not_exist(git_repo, capsys):
+    head = _git(git_repo, "rev-parse", "HEAD")
+
+    assert release_state.main(["--tag", "v9.9.9", "--commit", head], repo_root=git_repo) == 1
+    assert "could not read tag" in capsys.readouterr().err
+
+
+def test_main_checks_the_tree_alone_when_no_tag_is_given(git_repo):
+    """The form `docs/RELEASING.md` step 3 runs, before the tag exists."""
+    assert release_state.main([], repo_root=git_repo) == 0
+
+
+def test_a_real_tag_message_survives_git_cleanup_verbatim(git_repo):
+    """The exact tagging command the runbook prescribes must round-trip the JSON.
+
+    `git tag -F` applies a cleanup mode to the message. If it stripped or reflowed anything,
+    the record would not parse back and every release would fail at `verify`.
+    """
+    head = _git(git_repo, "rev-parse", "HEAD")
+    record = _record(commit=head)
+    _tag_annotated(git_repo, f"v{VERSION}", record)
+
+    message = _git(git_repo, "tag", "-l", "--format=%(contents)", f"v{VERSION}")
+    assert json.loads(message) == record
