@@ -110,12 +110,13 @@ def test_review_is_strict_and_folds_coverage():
         "unknown",
         "low",
     ) and "partial" in partial["summary"]
+    # A bare object deviates on every field. verdict and confidence still coerce to their
+    # honest defaults, and the missing findings member then takes confidence the rest of
+    # the way down: a response that said nothing does not get to claim medium certainty.
     defaults = fz.review_result(ExecResult(answer="{}", structured={}), Meta(), [], plugin)
-    assert (defaults["verdict"], defaults["confidence"], defaults["summary"]) == (
-        "unknown",
-        "medium",
-        "(no summary)",
-    )
+    assert (defaults["verdict"], defaults["confidence"]) == ("unknown", "low")
+    assert defaults["summary"].endswith("(no summary)")
+    assert defaults["findings_diagnostics"]["reasons"] == ["missing_findings"]
 
 
 def test_delegate_relativizes_redacts_and_bounds(tmp_path):
@@ -255,7 +256,9 @@ def test_coerce_findings_distinguishes_an_unusable_container_from_an_empty_one()
         assert diag is not None and diag.dropped is None, bad
         assert diag.reasons == ["invalid_container"], bad
     absent, absent_diag = fz.coerce_findings(fz.ABSENT)
-    assert absent == [] and absent_diag is None, "an absent findings key is not a container error"
+    assert absent == []
+    assert absent_diag is not None and absent_diag.dropped is None
+    assert absent_diag.reasons == ["missing_findings"], "absence is its own deviation"
     null, null_diag = fz.coerce_findings(None)
     assert null == [], "an explicit null is a present container, not an absent key"
     assert null_diag is not None and null_diag.dropped is None
@@ -403,11 +406,17 @@ def test_an_explicit_null_findings_member_stops_a_pass_verdict():
     assert out["findings_diagnostics"] == {"dropped": None, "reasons": ["invalid_container"]}
 
 
-def test_a_backend_that_omits_findings_entirely_is_not_a_container_error():
-    """A bare `{}` already lands on unknown through the enum defaults; it has no findings
-    member to have deviated, so it earns no diagnostics."""
+def test_an_omitted_findings_member_stops_a_pass_verdict():
+    """`findings` is REQUIRED by the output schema, so a backend that omits it has not
+    said "no findings" - it has left amicus unable to know. A verdict the backend did
+    supply would otherwise stand over that silence, which is issue #38 by another route.
+    Distinct from `invalid_container`, which is a member that is present and unusable."""
+    payload = {"summary": "ok", "verdict": "pass", "confidence": "high"}
     out = fz.review_result(
-        ExecResult(answer="{}", structured={}), Meta(), [], fakeplugin.make_plugin()
+        ExecResult(answer=json.dumps(payload), structured=payload),
+        Meta(),
+        [],
+        fakeplugin.make_plugin(),
     )
-    assert out["findings_diagnostics"] is None
-    assert (out["verdict"], out["confidence"]) == ("unknown", "medium")
+    assert (out["verdict"], out["confidence"]) == ("unknown", "low")
+    assert out["findings_diagnostics"] == {"dropped": None, "reasons": ["missing_findings"]}

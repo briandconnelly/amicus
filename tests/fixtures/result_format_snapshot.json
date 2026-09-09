@@ -120,7 +120,8 @@
                   "severity_normalized",
                   "extra_fields_omitted",
                   "invalid_entry",
-                  "invalid_container"
+                  "invalid_container",
+                  "missing_findings"
                 ],
                 "type": "string"
               },
@@ -811,7 +812,8 @@
                   "severity_normalized",
                   "extra_fields_omitted",
                   "invalid_entry",
-                  "invalid_container"
+                  "invalid_container",
+                  "missing_findings"
                 ],
                 "type": "string"
               },
@@ -1461,7 +1463,8 @@
                   "severity_normalized",
                   "extra_fields_omitted",
                   "invalid_entry",
-                  "invalid_container"
+                  "invalid_container",
+                  "missing_findings"
                 ],
                 "type": "string"
               },
@@ -2958,7 +2961,8 @@
                   "severity_normalized",
                   "extra_fields_omitted",
                   "invalid_entry",
-                  "invalid_container"
+                  "invalid_container",
+                  "missing_findings"
                 ],
                 "type": "string"
               },

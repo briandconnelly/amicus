@@ -124,11 +124,15 @@ def coerce_findings(raw: object) -> tuple[list[Finding], FindingsDiagnostics | N
     """The backend's findings list, plus what could not be carried from it (issue #38).
 
     Returns diagnostics of None only when nothing deviated, so a caller can distinguish a
-    genuinely clean list from one amicus failed to relay. An absent `findings` key is not
-    a deviation; a present one that is not a list is - including an explicit null - and
-    its loss is uncountable. Pass ABSENT, not None, for a key that was never there."""
+    genuinely clean list from one amicus failed to relay. The findings member is required
+    by the output schema, so an absent one deviates (`missing_findings`) as surely as a
+    present one that is not a list (`invalid_container`, which an explicit null reaches);
+    both leave the count unknowable. Pass ABSENT, not None, for a key never there."""
     if raw is ABSENT:
-        return [], None
+        # The output schema REQUIRES findings, so an omitted member is not the backend
+        # saying "none" -- it is the backend leaving amicus unable to know, and a verdict
+        # it did supply must not stand over that silence.
+        return [], FindingsDiagnostics(dropped=None, reasons=["missing_findings"])
     if not isinstance(raw, list):
         return [], FindingsDiagnostics(dropped=None, reasons=["invalid_container"])
     findings: list[Finding] = []

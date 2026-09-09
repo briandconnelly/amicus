@@ -38,7 +38,11 @@ ReviewStatus = Literal["completed", "not_run"]
 # Why a backend finding did not reach the caller intact, in this fixed order. A fixed
 # vocabulary, never the omitted content: backend output can echo caller input (rule 18).
 FindingReason = Literal[
-    "severity_normalized", "extra_fields_omitted", "invalid_entry", "invalid_container"
+    "severity_normalized",
+    "extra_fields_omitted",
+    "invalid_entry",
+    "invalid_container",
+    "missing_findings",
 ]
 
 PAID_TOOLS: tuple[str, ...] = (
@@ -59,6 +63,27 @@ class Finding(BaseModel):
     suggestion: str | None = None
 
 
+_DROPPED_DESC = (
+    "Whole findings entries that could not be represented. 0 does NOT mean nothing was "
+    "lost: `extra_fields_omitted` reports content dropped from a finding that survived. "
+    "null means the count is unknowable because the findings member could not be read at "
+    "all. Read `reasons`, never this count alone."
+)
+_REASONS_DESC = (
+    "Why findings did not reach you intact. severity_normalized: case/space only, finding "
+    "intact. extra_fields_omitted: unrecognized keys and their content are gone, the rest "
+    "of the finding survives. invalid_entry: an entry was dropped whole. "
+    "invalid_container: the findings member was present but not a list. missing_findings: "
+    "the required findings member was absent. The last three also stop a `pass` verdict "
+    "from standing, which is delivered as unknown/low instead."
+)
+_DIAGNOSTICS_DESC = (
+    "What the backend reported that amicus could not carry intact; null when nothing "
+    "deviated. Read this before acting on an empty or short `findings` list."
+)
+publish.KEPT_DESCRIPTIONS.update({_DROPPED_DESC, _REASONS_DESC, _DIAGNOSTICS_DESC})
+
+
 class FindingsDiagnostics(BaseModel):
     """What amicus could not carry from the backend's own findings list (issue #38).
 
@@ -70,8 +95,8 @@ class FindingsDiagnostics(BaseModel):
     null that it could not. Read `reasons`, never the count alone."""
 
     model_config = ConfigDict(extra="forbid")
-    dropped: int | None = None
-    reasons: list[FindingReason] = Field(default_factory=list)
+    dropped: int | None = Field(default=None, description=_DROPPED_DESC)
+    reasons: list[FindingReason] = Field(default_factory=list, description=_REASONS_DESC)
 
 
 class RawResponse(BaseModel):
@@ -84,7 +109,9 @@ class RawResponse(BaseModel):
 class _ModelResult(SuccessBase):
     summary: str
     findings: list[Finding] = Field(default_factory=list)
-    findings_diagnostics: FindingsDiagnostics | None = None
+    findings_diagnostics: FindingsDiagnostics | None = Field(
+        default=None, description=_DIAGNOSTICS_DESC
+    )
     questions: list[str] = Field(default_factory=list)
     assumptions: list[str] = Field(default_factory=list)
     next_steps: list[str] = Field(default_factory=list)

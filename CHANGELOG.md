@@ -12,7 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking (`FINGERPRINT` `schema-9`, `RESULT_FORMAT` 3).** Every consult, review,
   adversarial-review and delegate result gained `findings_diagnostics`: `null` when nothing was
   lost, otherwise a `dropped` count and reasons from a fixed vocabulary
-  (`severity_normalized`, `extra_fields_omitted`, `invalid_entry`, `invalid_container`). Read the
+  (`severity_normalized`, `extra_fields_omitted`, `invalid_entry`, `invalid_container`,
+  `missing_findings`). Read the
   reasons rather than the count: `dropped` counts whole entries, so a `0` beside
   `extra_fields_omitted` still means content was lost, and a `null` means the count was
   unknowable, never that nothing was lost.

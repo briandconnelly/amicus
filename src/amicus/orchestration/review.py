@@ -92,7 +92,7 @@ def apply_coverage(
 
 
 # Reasons that mean content was LOST, as opposed to carried in a reshaped form.
-_REPRESENTATION_LOSS = frozenset({"invalid_entry", "invalid_container"})
+_REPRESENTATION_LOSS = frozenset({"invalid_entry", "invalid_container", "missing_findings"})
 
 
 def apply_findings_loss(
