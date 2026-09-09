@@ -7,8 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `collaborating-with-amicus` no longer tells an agent that delegate runs have no network egress.
+  That holds for `codex`, whose sandbox amicus pins to `network_access=false`; it is false for
+  `kimi`, which has no sandbox at all. The skill now states containment per backend
+  ([ADR 0016](docs/adr/0016-skill-rules-are-a-complete-contract.md)).
+- The skill's async recipe no longer polls terminal jobs forever. `poll_after_ms` is `null` on
+  every terminal status and a cancelled job reports `result_available: false`, so the loop is now
+  driven by `status == "running"`.
+- The skill no longer claims a timed-out synchronous call costs the same quota as a completed one.
+  Amicus is not told what a terminated call cost; the reason to prefer `_async` is that a sync
+  timeout destroys the result.
+- Result guidance no longer stops at `ok`, `verdict` and `diff`. `review_status: not_run`,
+  `meta.truncated`, `meta.redacted_paths`, `meta.security_warnings` and `meta.compat_warnings`
+  all change what a result means, and `diffstat` is computed before redaction and truncation, so
+  it is not an integrity check on the returned `diff`.
+- Rule 5 no longer requires naming the backend whose annotation caused an approval prompt — an
+  attribution a host does not supply. It now separates the observed prompt from the annotation
+  policy. `effects` is documented as the static per-backend declaration it is, not "call-specific
+  truth".
+
+### Added
+
+- `collaborating-with-amicus` gains `reading-results.md`, `active-workflows.md`,
+  `options-and-errors.md`, `independent-attempt.md`, `review-revise.md` and
+  `server-down-fallback.md`. Backend selection now covers what each backend can actually inspect —
+  `claude` defaults to `access="toolless"` and cannot read the repository unless asked — and git
+  scope, brief preparation, and `idempotency_key` recovery are documented.
+- Six prospective scenarios (S9–S14) covering git scope, terminal-job lifecycle, coverage
+  reporting, backend evidence, delegate containment, and independent-attempt ordering. Schema
+  validity now binds every described call in every scenario.
+
 ### Changed
 
+- `SKILL.md`'s rule block is now the complete contract: ten obligations that lived in explanatory
+  prose moved into labelled rules, and the facts that motivate them moved to an adjacent
+  `Semantics` section ([ADR 0016](docs/adr/0016-skill-rules-are-a-complete-contract.md)).
+- The returned-diff response contract separates the assessment of a proposal
+  (`Verdict: accept | reject | cannot-assess`) from the action taken on the working tree
+  (`Action: applied | not applied`). S6's recorded pass was graded against the superseded contract
+  and is not carried forward as a pass against the new one.
 - `.mcp.json`'s pin now names an already-published release rather than the version being
   released, so `main` never sends a fresh install to a tag that does not exist yet
   ([ADR 0015](docs/adr/0015-mcp-json-pins-an-already-published-release.md), issue #26).
