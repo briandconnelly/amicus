@@ -52,6 +52,30 @@ because a concrete finding stands on its own. So a `concerns` verdict over a tru
 exactly like a `concerns` verdict over a complete one. Read the coverage fields yourself; the
 verdict will not tell you.
 
+## `findings_diagnostics`: what the backend said that amicus could not carry
+
+Coverage is about what the model saw. This is the opposite axis: the model saw everything and
+amicus could not relay all of what it said. `findings_diagnostics` is `null` when nothing was
+lost, and otherwise carries a `dropped` count and reasons from a fixed vocabulary:
+
+| Reason | What it means |
+| --- | --- |
+| `severity_normalized` | A severity differed only in case or surrounding space. The finding is intact. |
+| `extra_fields_omitted` | The backend added keys amicus's `Finding` has no home for. The finding is intact; those keys are gone. |
+| `invalid_entry` | An entry could not be represented at all and was dropped. Its content is not in the result. |
+| `invalid_container` | The `findings` member was not a list. Nothing could be read from it. |
+
+**`dropped: null` is not `dropped: 0`.** `0` says amicus assessed the list and lost nothing;
+`null` says it could not assess the list, so the count is unknowable. Never read `null` as "none".
+
+An `invalid_entry` or `invalid_container` also stops a `pass` from standing: the verdict is
+delivered as `unknown`/`low` with its own sentence in the summary, separate from any coverage
+sentence. A `fail` or `concerns` keeps its verdict **and its confidence** — missing output does not
+refute a negative the model did reach, so read `findings_diagnostics` on those yourself.
+
+The dropped content is not echoed back in any form. For a job whose record still exists, a
+`detail="full"` read returns `raw_response.text`, which is where the backend's own words survive.
+
 ## Meta fields that change a result's meaning
 
 - `meta.truncated` / `meta.truncation_hint` — the payload was cut to a byte cap. On a delegate

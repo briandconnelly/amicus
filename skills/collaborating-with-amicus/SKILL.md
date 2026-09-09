@@ -206,8 +206,13 @@ prompted. That is why attribution needs host evidence rather than inference.
 ### Result fields
 
 Consult, review, delegate, and adversarial-review results share `summary`, `findings`,
-`questions`, `assumptions`, `next_steps`, and `meta`. Only review and adversarial results carry
-`verdict`, `confidence`, and `review_status`; only delegate carries `diff` and `diffstat`.
+`findings_diagnostics`, `questions`, `assumptions`, `next_steps`, and `meta`. Only review and
+adversarial results carry `verdict`, `confidence`, and `review_status`; only delegate carries
+`diff` and `diffstat`.
+
+A non-null `findings_diagnostics` means the backend reported something amicus could not carry
+intact. Read it before you act on an empty or short `findings` list, and note that `dropped: null`
+means the count was unknowable rather than zero.
 Discovery, dry-run, async-start, and job-lifecycle tools each have their own schema.
 
 A result being `ok: true` says the call worked, not that it covered anything —

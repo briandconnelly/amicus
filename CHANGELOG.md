@@ -7,7 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking (`FINGERPRINT` `schema-9`, `RESULT_FORMAT` 3).** Every consult, review,
+  adversarial-review and delegate result gained `findings_diagnostics`: `null` when nothing was
+  lost, otherwise a `dropped` count and reasons from a fixed vocabulary
+  (`severity_normalized`, `extra_fields_omitted`, `invalid_entry`, `invalid_container`). A
+  `dropped` of `null` means the count was unknowable, never that nothing was lost.
+- A job result stored under a different `result_format` is now rejected before validation rather
+  than after it. It used to pass, because a field added since it was written validates from its
+  own default -- and that default would have asserted, on the producing run's behalf, that no
+  finding was lost on a run that never measured loss.
+
 ### Fixed
+
+- Review findings are no longer discarded in silence while the verdict survives (issue #38). A
+  finding that failed validation was dropped with no count and no warning, so a backend could
+  report a real problem and the caller receive an apparently clean review. Only `codex` is held
+  to the output schema natively; `claude` and `kimi` are merely asked for it in the prompt, so an
+  added `category` key or a shouted `"HIGH"` was an ordinary return that cost the whole finding.
+  Findings now survive case-normalization and unknown keys, anything still unrepresentable is
+  counted and named, and a `pass` no longer stands over a loss -- it is delivered as
+  `unknown`/`low`, while a `fail` or `concerns` keeps its verdict and its confidence.
 
 - `collaborating-with-amicus` no longer tells an agent that delegate runs have no network egress.
   That holds for `codex`, whose sandbox amicus pins to `network_access=false`; it is false for
