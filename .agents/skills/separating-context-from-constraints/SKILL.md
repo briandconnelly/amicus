@@ -1,8 +1,12 @@
 ---
-name: separating-context-from-constraints
 description: Use when auditing or reviewing a skill, system prompt, CLAUDE.md/AGENTS.md, MCP tool or resource description, slash-command prompt, or any document an AI agent consumes as instructions, to check that binding rules are separated from background context. Symptoms include rules buried mid-paragraph in narrative prose, hedged statements ("generally", "try to") that leave unclear whether they bind, untestable directives like "be concise", compound rules bundling several obligations, rule sections padded with explanation, and agents that follow a document's flavor text but miss its requirements. Produces findings with two-level severity and semantic-preserving suggested rewrites; does not score documents, analyze conflicts with parent instruction layers, or review general prose quality.
+metadata:
+    github-path: separating-context-from-constraints
+    github-ref: refs/heads/main
+    github-repo: https://github.com/briandconnelly/skills
+    github-tree-sha: 967a99232de22bc967c12a7aefcf272cfe2fb938
+name: separating-context-from-constraints
 ---
-
 # Separating Context from Constraints
 
 Audit agent-consumed instruction documents — skills, system prompts, CLAUDE.md/AGENTS.md, MCP tool and resource descriptions, slash-command prompts — for separation of binding rules from context.
