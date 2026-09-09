@@ -78,6 +78,26 @@ delivered as `unknown`/`low` with its own sentence in the summary, separate from
 sentence. A `fail` or `concerns` keeps its verdict **and its confidence** — missing output does not
 refute a negative the model did reach, so read `findings_diagnostics` on those yourself.
 
+## `confidence`: whose rating it is
+
+`confidence` answers how sure the review is, and two different parties can set it. Usually it is
+the backend's own `low|medium|high`. amicus substitutes `low` in exactly the cases where it also
+withholds the verdict as `unknown`, and there are three: partial coverage, findings it could not
+carry, and `review_status: not_run`, where no backend was called and there is no rating to carry.
+The two move together or not at all — so a `low` beside `verdict: unknown` may be amicus's own,
+and a `low` beside any other verdict is the backend's word.
+
+**A high confidence is not evidence that coverage was complete or findings intact.** A `fail` or
+`concerns` verdict keeps the backend's rating whatever was lost, by design: missing output does
+not refute a negative the model did reach. So `fail`/`high` is exactly what a truncated diff with
+a dropped finding looks like. Read the coverage fields and `findings_diagnostics` yourself.
+
+`unknown` is the fourth value and means something else entirely: the backend supplied nothing
+amicus could read there, and no such lowering applied. **It is the absence of a rating, not a low one.**
+Reading it as low inverts it — amicus declined to invent a rating precisely so that you would not
+infer one. The verdict beside it is untouched: a backend that reported `fail` and said nothing
+readable about its certainty is delivered as `fail`/`unknown`, neither softened nor promoted.
+
 The dropped content is not echoed back in any form. For a job whose record still exists, a
 `detail="full"` read returns `raw_response.text`, which is where the backend's own words survive.
 

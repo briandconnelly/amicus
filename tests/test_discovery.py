@@ -12,7 +12,7 @@ from tests.support import fakeplugin
 
 from amicus import config, server, tools
 from amicus.registry import BackendRegistry, UnavailableBackend
-from amicus.schemas import field_policy
+from amicus.schemas import field_policy, results
 from amicus.schemas.codes import ERROR_CODES
 from amicus.schemas.envelope import Meta
 from amicus.schemas.fingerprint import FINGERPRINT
@@ -285,3 +285,21 @@ async def test_free_tool_payloads_are_json_serializable(name):
     async with Client(_app()) as c:
         res = await c.call_tool(name, {})
     json.dumps(res.structured_content)
+
+
+async def test_the_confidence_enum_and_its_meaning_reach_an_mcp_client():
+    """Issue #53. `unknown` has to be ON the published enum or a closed-schema caller
+    rejects a valid result, and its MEANING has to be published too: an MCP-only caller
+    has no docstring and no skill file, so a `confidence` field that is sometimes the
+    backend's report and sometimes amicus's own assessment is misread by default. A
+    description not registered in publish.KEPT_DESCRIPTIONS is stripped before it ships,
+    which is exactly how the semantic would go missing (issue #38's lesson)."""
+    async with Client(_app()) as c:
+        listed = {t.name: t for t in await c.list_tools()}
+    for name in ("amicus_review_changes", "amicus_adversarial_review"):
+        branches = listed[name].output_schema["anyOf"]
+        success = next(b for b in branches if "confidence" in b.get("properties", {}))
+        field = success["properties"]["confidence"]
+        assert set(field["enum"]) == {"low", "medium", "high", "unknown"}, name
+        assert field["description"] == results._CONFIDENCE_DESC, name
+        assert "unknown" in field["description"], name

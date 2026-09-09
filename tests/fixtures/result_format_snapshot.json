@@ -1,5 +1,5 @@
 {
-  "result_format": 3,
+  "result_format": 4,
   "schemas": {
     "AdversarialReviewResult": {
       "$defs": {
@@ -586,7 +586,8 @@
           "enum": [
             "low",
             "medium",
-            "high"
+            "high",
+            "unknown"
           ],
           "title": "Confidence",
           "type": "string"
@@ -3427,7 +3428,8 @@
           "enum": [
             "low",
             "medium",
-            "high"
+            "high",
+            "unknown"
           ],
           "title": "Confidence",
           "type": "string"

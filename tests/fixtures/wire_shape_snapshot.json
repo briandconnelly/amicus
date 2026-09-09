@@ -875,7 +875,7 @@
       "error": {
         "backend": null,
         "code": "job_result_incompatible",
-        "message": "stored job result was written under a different result format (result_format 4; this release reads 3, producer server_version 0.0.0): stored under another result format",
+        "message": "stored job result was written under a different result format (result_format 5; this release reads 4, producer server_version 0.0.0): stored under another result format",
         "repair": {
           "alternative": "The stored result predates this server version; start a new job.",
           "next_step": "start_new_job"
