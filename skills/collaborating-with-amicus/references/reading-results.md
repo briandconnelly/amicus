@@ -78,6 +78,19 @@ delivered as `unknown`/`low` with its own sentence in the summary, separate from
 sentence. A `fail` or `concerns` keeps its verdict **and its confidence** — missing output does not
 refute a negative the model did reach, so read `findings_diagnostics` on those yourself.
 
+## `confidence`: whose rating it is
+
+`confidence` answers how sure the review is, and two different parties can set it. It starts as
+the backend's own `low|medium|high`. The coverage and findings-loss folds above then floor it to
+`low`, which is amicus's assessment of the delivered review rather than the backend's word — so a
+`low` does not tell you the backend was unsure.
+
+`unknown` is the fourth value and means something else entirely: the backend supplied nothing
+amicus could read there, and no floor applied. **It is the absence of a rating, not a low one.**
+Reading it as low inverts it — amicus declined to invent a rating precisely so that you would not
+infer one. The verdict beside it is untouched: a backend that reported `fail` and said nothing
+readable about its certainty is delivered as `fail`/`unknown`, neither softened nor promoted.
+
 The dropped content is not echoed back in any form. For a job whose record still exists, a
 `detail="full"` read returns `raw_response.text`, which is where the backend's own words survive.
 
