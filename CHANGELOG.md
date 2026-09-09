@@ -35,6 +35,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   attribution a host does not supply. It now separates the observed prompt from the annotation
   policy. `effects` is documented as the static per-backend declaration it is, not "call-specific
   truth".
+- The README's verb matrix no longer reads as a claim about what the models can do. A `no` there is
+  amicus's routing decision: `delegate` is absent on Claude by a review-only policy, and
+  `adversarial_review` is scoped to Claude for v1. The verb's framing, prompt and result shape are
+  amicus's own and backend-neutral, so Codex and Kimi can review adversarially; the README now says
+  so, and points at `consult` and `review_changes` for it while naming what the verb adds over them
+  (issue #23).
 
 ### Added
 

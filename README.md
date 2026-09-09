@@ -102,6 +102,13 @@ Not every backend does everything:
 | `delegate` | yes | yes | no |
 | `adversarial_review` | no | no | yes |
 
+A `no` is amicus's routing decision, not a claim about the model. `delegate` is absent on Claude
+by a deliberate review-only policy. `adversarial_review` is scoped to Claude for v1 — its framing,
+prompt, and result shape are amicus's own and backend-neutral, so nothing about Codex or Kimi
+stops either from reviewing adversarially. Ask them through `consult` or `review_changes` and
+supply the adversarial stance yourself; what the verb adds is that stance fixed, plus its `target`
+and `evidence` carriers.
+
 Asking a backend for something it does not support returns a `feature_unsupported` error naming
 the backend and the feature, rather than failing obscurely.
 
