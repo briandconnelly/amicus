@@ -38,6 +38,7 @@ A reply carrying `fail` and no readable confidence is delivered as `fail`/`unkno
 They speak for amicus rather than for the backend, on a basis amicus has: a diff the model did not fully see, or findings amicus could not relay.
 `low` there is an assessment, not an invented reading of the backend.
 So `unknown` survives only where neither the backend nor a fold had anything to say.
+Both folds lower the rating and withhold the verdict together or not at all, which is what makes the published description checkable: a `low` beside any verdict other than `unknown` is the backend's own word, and a high confidence is never evidence that coverage was complete.
 
 **Therefore the meaning of `confidence` is published, not merely documented.**
 The field is two things at once, and a caller who cannot see which one it is holding will read `unknown` as a low rating — the exact inversion the value exists to prevent.

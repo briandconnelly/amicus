@@ -516,3 +516,29 @@ def test_adversarial_review_declines_to_invent_a_confidence_the_same_way():
         fakeplugin.make_plugin(),
     )
     assert (out["verdict"], out["confidence"]) == ("concerns", "unknown")
+
+
+def test_confidence_is_lowered_only_where_the_verdict_is_withheld():
+    """What the published `confidence` description now promises, pinned. Both folds lower
+    the rating and withhold the verdict together or not at all, so a `low` beside any
+    verdict other than `unknown` is the backend's own word - and a high confidence is
+    never evidence that coverage was complete. A characterization test: it holds today,
+    and the description would be false the moment it stopped holding."""
+    for verdict in ("fail", "concerns"):
+        payload = _structured(verdict=verdict, confidence="high", findings=["junk"])
+        out = fz.review_result(
+            ExecResult(answer=json.dumps(payload), structured=payload),
+            Meta(),
+            ["truncated", "redacted"],
+            fakeplugin.make_plugin(),
+        )
+        assert (out["verdict"], out["confidence"]) == (verdict, "high"), verdict
+        assert out["findings_diagnostics"]["reasons"] == ["invalid_entry"], verdict
+    # An addition amicus reshaped rather than lost never lowers anything on its own.
+    kept = _structured(
+        verdict="pass", confidence="high", findings=[{"title": "t", "category": "sec"}]
+    )
+    out = fz.review_result(
+        ExecResult(answer=json.dumps(kept), structured=kept), Meta(), [], fakeplugin.make_plugin()
+    )
+    assert (out["verdict"], out["confidence"]) == ("pass", "high")

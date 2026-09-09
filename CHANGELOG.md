@@ -12,10 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking (`FINGERPRINT` `schema-10`, `RESULT_FORMAT` 4).** `confidence` on a review or
   adversarial-review result gained a fourth value, `unknown`, and both tools now publish what the
   field means. `unknown` is the ABSENCE of a rating -- the backend supplied none amicus could
-  read, and no coverage or findings-loss floor applied -- never a low one. A `low` may be
-  amicus's own floor rather than the backend's word, so neither value alone tells you what the
-  backend said about its certainty. Backends are still asked for `low|medium|high`; the new value
-  is amicus's, not theirs. A `RESULT_FORMAT` 3 reader's closed enum rejects a stored result
+  read, and the verdict was not withheld either -- never a low one. amicus lowers a rating to
+  `low` only where it also withholds the verdict as `unknown`, so a `low` beside any other
+  verdict is the backend's own word, and a high confidence is never evidence that coverage was
+  complete. Backends are still asked for `low|medium|high`; the new value is amicus's, not
+  theirs. A `RESULT_FORMAT` 3 reader's closed enum rejects a stored result
   carrying it.
 - **Breaking (`FINGERPRINT` `schema-9`, `RESULT_FORMAT` 3).** Every consult, review,
   adversarial-review and delegate result gained `findings_diagnostics`: `null` when nothing was

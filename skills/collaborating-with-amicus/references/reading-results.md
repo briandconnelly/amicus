@@ -81,12 +81,18 @@ refute a negative the model did reach, so read `findings_diagnostics` on those y
 ## `confidence`: whose rating it is
 
 `confidence` answers how sure the review is, and two different parties can set it. It starts as
-the backend's own `low|medium|high`. The coverage and findings-loss folds above then floor it to
-`low`, which is amicus's assessment of the delivered review rather than the backend's word — so a
-`low` does not tell you the backend was unsure.
+the backend's own `low|medium|high`. Where a fold above withholds the verdict as `unknown` —
+partial coverage, or findings amicus could not carry — it lowers the rating to `low` along with
+it. The two move together or not at all, so a `low` beside `verdict: unknown` may be amicus's own
+assessment, and a `low` beside any other verdict is the backend's word.
+
+**A high confidence is not evidence that coverage was complete or findings intact.** A `fail` or
+`concerns` verdict keeps the backend's rating whatever was lost, by design: missing output does
+not refute a negative the model did reach. So `fail`/`high` is exactly what a truncated diff with
+a dropped finding looks like. Read the coverage fields and `findings_diagnostics` yourself.
 
 `unknown` is the fourth value and means something else entirely: the backend supplied nothing
-amicus could read there, and no floor applied. **It is the absence of a rating, not a low one.**
+amicus could read there, and no such lowering applied. **It is the absence of a rating, not a low one.**
 Reading it as low inverts it — amicus declined to invent a rating precisely so that you would not
 infer one. The verdict beside it is untouched: a backend that reported `fail` and said nothing
 readable about its certainty is delivered as `fail`/`unknown`, neither softened nor promoted.

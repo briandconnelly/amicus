@@ -19,23 +19,47 @@ _RESULTS_REF = (_SKILL / "references" / "reading-results.md").read_text(encoding
 _SKILL_MD = (_SKILL / "SKILL.md").read_text(encoding="utf-8")
 
 
-# A member counts as documented when it appears in a code span, either alone (`unknown`) or
-# as one alternative of a compound the skill writes idiomatically (`low|medium|high`). Bare
-# prose does not count: "low" is a substring of "below", "follow" and "allow", so accepting
-# it would make this assertion unable to fail.
-_SPANNED = {
-    token
-    for span in re.findall(r"`([^`]+)`", _RESULTS_REF + _SKILL_MD)
-    for token in span.split("|")
+def _section(heading_contains: str) -> str:
+    """The one `##` section of reading-results.md that owns a field's vocabulary."""
+    sections = _RESULTS_REF.split("\n## ")
+    owning = [s for s in sections if heading_contains in s.split("\n", 1)[0]]
+    assert len(owning) == 1, f"expected exactly one section for {heading_contains!r}"
+    return owning[0]
+
+
+# A member counts as documented when it appears in a code span IN THE SECTION THAT OWNS ITS
+# FIELD, as a whole token of one - alone (`unknown`), in a compound (`low|medium|high`), or
+# beside a field name (`verdict: unknown`). Pooling spans across fields would defeat this:
+# `unknown` belongs to both Verdict and Confidence, so a shared pool would call Confidence's
+# `unknown` documented on the strength of the verdict prose alone - which is exactly the
+# drift this asserts against. Bare prose never counts, because "low" is a substring of
+# "below", "follow" and "allow", and accepting it would make the assertion unable to fail.
+_VOCABULARY = {
+    "Confidence": (Confidence, _section("`confidence`")),
+    "Verdict": (Verdict, _section("Coverage")),
+    "FindingReason": (FindingReason, _section("`findings_diagnostics`")),
 }
 
 
-def test_the_skill_names_every_value_a_result_can_carry():
-    """A member absent here is a value the skill never tells an agent how to read - which
-    is how `unknown` confidence would have shipped as an undocumented fourth state."""
-    for enum, name in ((Confidence, "Confidence"), (Verdict, "Verdict"), (FindingReason, "reason")):
+def _tokens(text: str) -> set[str]:
+    return {
+        token
+        for span in re.findall(r"`([^`]+)`", text)
+        for token in re.split(r"[|:,\s]+", span)
+        if token
+    }
+
+
+def test_the_skill_documents_every_value_beside_the_field_that_carries_it():
+    """A member absent from its own section is a value the skill never tells an agent how
+    to read - which is how `unknown` confidence would have shipped as an undocumented
+    fourth state, indistinguishable from the `unknown` verdict that was already there."""
+    for name, (enum, owner) in _VOCABULARY.items():
+        documented = _tokens(owner)
         for member in get_args(enum):
-            assert member in _SPANNED, f"{name} member {member!r} is undocumented in the skill"
+            assert member in documented, (
+                f"{name} member {member!r} is undocumented in the section that owns it"
+            )
 
 
 def test_an_unknown_confidence_is_documented_as_an_absence_not_a_low_rating():
