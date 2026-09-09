@@ -12,11 +12,24 @@ import re
 from pathlib import Path
 from typing import get_args
 
+from amicus.orchestration import review as review_mod
 from amicus.schemas.results import Confidence, FindingReason, Verdict
 
 _SKILL = Path(__file__).resolve().parents[1] / "skills" / "collaborating-with-amicus"
 _RESULTS_REF = (_SKILL / "references" / "reading-results.md").read_text(encoding="utf-8")
 _SKILL_MD = (_SKILL / "SKILL.md").read_text(encoding="utf-8")
+
+
+def _binding_rules() -> str:
+    """SKILL.md's `## Binding rules` section alone. ADR 0016: an obligation that lives in
+    explanatory prose does not bind, so asserting a rule against the whole file would pass
+    on a document that had demoted it to `## Semantics` - the exact regression to catch."""
+    head, sep, rest = _SKILL_MD.partition("\n## Binding rules\n")
+    assert sep, "SKILL.md has no `## Binding rules` heading"
+    return rest.split("\n## ", 1)[0]
+
+
+_BINDING_RULES = _binding_rules()
 
 
 def _section(heading_contains: str) -> str:
@@ -64,6 +77,43 @@ def test_the_skill_documents_every_value_beside_the_field_that_carries_it():
 
 def test_an_unknown_confidence_is_documented_as_an_absence_not_a_low_rating():
     """The one misreading the value exists to prevent. A rule that merely LISTS `unknown`
-    satisfies the test above while leaving an agent free to treat it as a low rating."""
-    assert 'Never read `confidence: "unknown"` as a low rating.' in _SKILL_MD
+    satisfies the test above while leaving an agent free to treat it as a low rating.
+
+    Asserted against the BINDING RULES slice, not the whole file: a sentence demoted to
+    `## Semantics` still reads as guidance and would satisfy a whole-file search, which is
+    precisely the failure ADR 0016 exists to prevent."""
+    assert 'Never read `confidence: "unknown"` as a low rating.' in _BINDING_RULES
     assert "It is the absence of a rating, not a low one." in _RESULTS_REF
+
+
+def test_the_high_confidence_misreading_is_a_rule_of_its_own():
+    """The second misreading, and it binds separately. Bundled into the `unknown` rule as a
+    trailing clause it would be read as commentary on that rule rather than an obligation
+    about every rating, which is the compound-rule failure `separating-context-from-
+    constraints` names."""
+    assert (
+        "Never read a high `confidence` as evidence that coverage was complete or findings "
+        "intact." in _BINDING_RULES
+    )
+
+
+def test_every_amicus_substituted_low_sits_beside_an_unknown_verdict():
+    """The invariant the published `confidence` description rests on, asserted against the
+    source that has to keep it. Every `low` amicus writes itself - the two folds and both
+    `_not_run` envelopes - is paired with an `unknown` verdict, which is what makes "a
+    `low` beside any other verdict is the backend's word" true rather than merely tidy.
+
+    A fourth site that wrote `low` beside a concrete verdict would silently make the
+    published description a lie, and no other test in this repository would notice: the
+    description is prose, and prose is what the gate cannot read (issue #53, Copilot's
+    review of PR #55 having found `_not_run` as an unnamed third source)."""
+    source = Path(review_mod.__file__).read_text(encoding="utf-8")
+    lines = source.splitlines()
+    lows = [i for i, line in enumerate(lines) if re.search(r'(confidence=)?"low",?$', line.strip())]
+    assert len(lows) == 4, f"expected 4 amicus-written `low` sites in review.py, found {len(lows)}"
+    for i in lows:
+        window = "\n".join(lines[max(0, i - 3) : i + 1])
+        assert '"unknown"' in window, (
+            f"review.py:{i + 1} writes `low` with no `unknown` verdict beside it; the "
+            "published confidence description says every substituted low has one"
+        )

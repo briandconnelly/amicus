@@ -223,10 +223,12 @@ adversarial results carry `verdict`, `confidence`, and `review_status`; only del
 rule for reading it is under [Results](#results), and
 [reading results](references/reading-results.md) has the reason vocabulary.
 
-`confidence` is two things at once. It starts as the backend's own `low|medium|high`, and amicus
-lowers it to `low` where it also withholds the verdict as `unknown` — the two move together or
-not at all. `unknown` confidence is neither: it is the absence of a rating. Both rules for
-reading it are under [Results](#results).
+`confidence` is two things at once. Usually it is the backend's own `low|medium|high`. amicus
+substitutes `low` exactly where it also withholds the verdict as `unknown` — partial coverage,
+findings it could not carry, or a `not_run` review, where no backend was called. The two move
+together or not at all, so a `low` beside any other verdict is the backend's word. `unknown`
+confidence is neither: it is the absence of a rating. Both rules for reading it are under
+[Results](#results).
 Discovery, dry-run, async-start, and job-lifecycle tools each have their own schema.
 
 A result being `ok: true` says the call worked, not that it covered anything —

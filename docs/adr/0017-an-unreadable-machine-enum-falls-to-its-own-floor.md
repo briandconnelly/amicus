@@ -39,6 +39,9 @@ They speak for amicus rather than for the backend, on a basis amicus has: a diff
 `low` there is an assessment, not an invented reading of the backend.
 So `unknown` survives only where neither the backend nor a fold had anything to say.
 Both folds lower the rating and withhold the verdict together or not at all, which is what makes the published description checkable: a `low` beside any verdict other than `unknown` is the backend's own word, and a high confidence is never evidence that coverage was complete.
+`review_status: not_run` turns out to be a third amicus-substituted `low`, and it obeys the same invariant — it too sits beside an `unknown` verdict.
+So the three cases share one rule rather than needing three, and the published description names all three rather than implying a `not_run` result had a backend rating that partial coverage replaced.
+Whether `not_run` should instead carry `unknown` confidence is issue #54; describing today's behaviour honestly does not decide it.
 
 **Therefore the meaning of `confidence` is published, not merely documented.**
 The field is two things at once, and a caller who cannot see which one it is holding will read `unknown` as a low rating — the exact inversion the value exists to prevent.
@@ -54,7 +57,7 @@ It is not attempted here.
 A format-3 reader's closed enum rejects a format-4 record carrying `unknown`.
 That is the intended trade: the alternative was a format-3-valid `medium` amicus had invented, so a reader that refuses the new record is refusing to be misled rather than losing information.
 
-`tools/list` grows 706 bytes, most of it one description carried byte-identically on both review tools — the duplication issue #41 is about.
+`tools/list` grows 1130 bytes, most of it one description carried byte-identically on both review tools — the duplication issue #41 is about.
 It is kept for the reason #38's diagnostics prose was kept: an MCP-only caller has no skill file to fall back on.
 
 A premise worth recording, because it was wrong on the way in.

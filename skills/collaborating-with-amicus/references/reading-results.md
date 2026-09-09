@@ -80,11 +80,12 @@ refute a negative the model did reach, so read `findings_diagnostics` on those y
 
 ## `confidence`: whose rating it is
 
-`confidence` answers how sure the review is, and two different parties can set it. It starts as
-the backend's own `low|medium|high`. Where a fold above withholds the verdict as `unknown` —
-partial coverage, or findings amicus could not carry — it lowers the rating to `low` along with
-it. The two move together or not at all, so a `low` beside `verdict: unknown` may be amicus's own
-assessment, and a `low` beside any other verdict is the backend's word.
+`confidence` answers how sure the review is, and two different parties can set it. Usually it is
+the backend's own `low|medium|high`. amicus substitutes `low` in exactly the cases where it also
+withholds the verdict as `unknown`, and there are three: partial coverage, findings it could not
+carry, and `review_status: not_run`, where no backend was called and there is no rating to carry.
+The two move together or not at all — so a `low` beside `verdict: unknown` may be amicus's own,
+and a `low` beside any other verdict is the backend's word.
 
 **A high confidence is not evidence that coverage was complete or findings intact.** A `fail` or
 `concerns` verdict keeps the backend's rating whatever was lost, by design: missing output does

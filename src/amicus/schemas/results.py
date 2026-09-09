@@ -82,12 +82,13 @@ _DIAGNOSTICS_DESC = (
     "deviated. Read this before acting on an empty or short `findings` list."
 )
 _CONFIDENCE_DESC = (
-    "How sure this review is: the backend's own low|medium|high, except where amicus "
-    "withholds the verdict as `unknown` (partial coverage, or findings it could not carry) "
-    "and lowers this to `low` along with it. Beside any OTHER verdict this is the backend's "
-    "own word - a `fail` or `concerns` keeps its rating whatever was lost, so a high "
-    "confidence is no evidence that coverage was complete. `unknown` here is the ABSENCE of "
-    "a rating - no readable value, and no such lowering - never a low one."
+    "How sure this review is. Usually the backend's own low|medium|high. amicus substitutes "
+    "`low` exactly where it also withholds the verdict as `unknown`: partial coverage, "
+    "findings it could not carry, or `review_status: not_run`, where no backend was called "
+    "at all. So beside any OTHER verdict this is the backend's word - a `fail` or `concerns` "
+    "keeps its rating whatever was lost, and a high one is no evidence that coverage was "
+    "complete. `unknown` is the ABSENCE of a rating - no readable value, and no such "
+    "substitution - never a low one."
 )
 publish.KEPT_DESCRIPTIONS.update(
     {_DROPPED_DESC, _REASONS_DESC, _DIAGNOSTICS_DESC, _CONFIDENCE_DESC}
