@@ -1,0 +1,85 @@
+# Server-down fallback
+
+Use this only after an MCP transport error shows the amicus server is unavailable — a connection
+failure, not a tool returning `ok: false`. A tool that answers is not a server that is down.
+
+## Rules
+
+- **Ask the user to restart or reconnect the amicus MCP server first**, and confirm recovery with
+  free `amicus_backends`.
+- **Prefer a sibling MCP server over a hand-rolled CLI call.**
+- **Never write prompt text to a file or onto a command line in a fallback you construct.**
+- **Never construct a write-capable or delegate-tier fallback.** Restore the server instead.
+- **Keep every flag in a fallback command.** If the CLI rejects one, stop and report the drift —
+  never drop a flag to make the command run.
+- **Never retry either route while the transport condition is unchanged.**
+
+## Why the plugin path is preferred
+
+Going around amicus loses workspace-aware diff gathering, the input byte cap, best-effort
+redaction of gathered diffs and returned output, structured results with `error.repair`, and the
+job record. Everything you gather, bound, and sanitize in a fallback, you do by hand — and the
+answer comes back as prose you must treat as an unverified claim with no envelope.
+
+## First: a sibling server
+
+`codex-in-claude` and `moonbridge` are separate MCP servers wrapping the same two CLIs. If either
+is connected while amicus is not, it is the better fallback: it keeps redaction, bounded input,
+and structured results, and its own skill states its guarantees.
+
+Use that server's own tools and its own skill. Do not carry amicus's parameter names or this
+skill's guarantees across — the surfaces differ, and a guarantee that holds on one server is not
+evidence about another.
+
+## Last resort: the codex CLI directly
+
+`codex` is the one backend of the three whose prompt travels on **stdin**, so a hand-rolled call
+can stay inside AGENTS.md rule 18. Read-only consult only:
+
+```sh
+codex exec \
+  --json \
+  --sandbox read-only \
+  --cd "$WORKSPACE" \
+  --skip-git-repo-check \
+  --ephemeral \
+  --ignore-user-config \
+  --ignore-rules \
+  --disable remote_plugin \
+  --disable sleep_tool \
+  -
+```
+
+Send the prompt on stdin; the trailing `-` is what selects it.
+
+Every flag here is one amicus itself always sends (`src/amicus/backends/codex/contract.py`,
+`ALWAYS_SEND_FLAGS` and `MODEL_RUN_DISABLED_FEATURES`), at codex's strictest config isolation: no
+persisted session, no `$CODEX_HOME/config.toml`, no execpolicy rules, no remote-plugin connectors,
+and an explicit working root instead of the ambient directory. `--disable sleep_tool` is spend
+hygiene rather than a guarantee — it removes a native sleep whose single call can last up to 12
+hours, and no server deadline bounds this route.
+
+Set `WORKSPACE` to a directory the user has approved for disclosure. If nothing beyond a sanitized
+stdin prompt may be visible to the backend, do not use this route at all.
+
+**This command has been traced against the contract constants, not executed.** Confirm each flag
+is accepted rather than assuming; a rejection is CLI drift worth reporting, never a flag to drop.
+
+## Why there is no kimi or claude fallback here
+
+`kimi` ignores stdin and crashes on a long argv, so any hand-rolled kimi call must put the prompt
+in a file or on the command line. Rule 18 exempts *amicus's own* handshake file — a disclosed
+carrier surfaced on `amicus_backends` — and that exemption does not extend to a command you
+compose yourself. **There is no rule-18-compliant hand-rolled kimi fallback. Restore the server.**
+
+`claude` does take its prompt on stdin, but its read-only tier is a tool allowlist assembled from
+several guarantee-bearing flags rather than a single sandbox switch, and no verified invocation is
+published here. Do not improvise one: a fallback missing one allowlist flag is a write-capable
+run, not a degraded read-only one.
+
+## What still applies
+
+Everything in SKILL.md → Semantics → Data exposure. A fallback changes the transport, not the
+exposure: the backend still reads files outside the workspace, still auto-loads `AGENTS.md` and
+discovers skills from outside it, and still sends what it reads to its provider. Redaction does
+not cover what you supply, and none of it covers a route amicus is not on.
