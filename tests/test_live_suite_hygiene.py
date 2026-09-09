@@ -76,7 +76,11 @@ def offenders_in(source: str, label: str = "<source>") -> list[tuple[str, int, s
             assert node.msg is not None  # narrowed by _is_unsafe
             found.append((label, node.lineno, ast.unparse(node.msg)))
         elif isinstance(node, ast.Call) and ast.unparse(node.func) in FAILURE_HELPERS:
-            for arg in node.args:
+            # Keywords as well as positionals: `pytest.fail(reason=...)` is the documented
+            # signature, so it is the likelier form, not an exotic one. A `**kwargs` entry has
+            # `arg=None` and its value is checked the same way.
+            arguments = [*node.args, *(kw.value for kw in node.keywords)]
+            for arg in arguments:
                 if _is_unsafe(arg):
                     found.append((label, node.lineno, ast.unparse(arg)))
     return found
@@ -91,6 +95,9 @@ KNOWN_BYPASSES = {
     "error object": 'assert cond, body.get("error")',
     "trailing comment": 'assert cond, body["meta"]  # a real run really spent',
     "pytest.fail": 'pytest.fail(body["summary"])',
+    "pytest.fail by keyword": 'pytest.fail(reason=body["summary"])',
+    "pytest.fail keyword f-string": "pytest.fail(reason=f\"{body['summary']}\")",
+    "failure helper by **kwargs": 'pytest.fail(**{"reason": body["summary"]})',
     "raise AssertionError": 'raise AssertionError(body["summary"])',
     "tuple message": 'assert cond, (body["summary"], 1)',
 }
