@@ -37,10 +37,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   truth".
 - The README's verb matrix no longer reads as a claim about what the models can do. A `no` there is
   amicus's routing decision: `delegate` is absent on Claude by a review-only policy, and
-  `adversarial_review` is scoped to Claude for v1. The verb's framing, prompt and result shape are
-  amicus's own and backend-neutral, so Codex and Kimi can review adversarially; the README now says
-  so, and points at `consult` and `review_changes` for it while naming what the verb adds over them
-  (issue #23).
+  `adversarial_review` is scoped to Claude for v1. The verb itself is amicus's own — the prompt it
+  builds and the result shape it returns are amicus's for any backend, with Claude contributing a
+  critic stance on top — so Codex and Kimi can review adversarially. The README now says so, points
+  at `consult` and `review_changes` for it, and names what the verb adds over them (issue #23).
 
 ### Added
 
