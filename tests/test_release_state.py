@@ -540,6 +540,11 @@ def test_main_accepts_a_real_annotated_tag_carrying_the_record(git_repo, tmp_pat
     assert "PASSED" in text
     # The summary must never let a reviewer read the record as proof the suites ran.
     assert "not an attestation" in text
+    # It must also REPORT the pin check. The summary is the reviewer's whole decision
+    # surface before approving an irreversible upload, so a check that ran silently is one
+    # they cannot weigh -- under-reporting misleads as surely as over-claiming.
+    assert "Install manifest: PASSED" in text
+    assert ".mcp.json" in text
 
 
 def test_main_rejects_a_real_lightweight_tag(git_repo, capsys):

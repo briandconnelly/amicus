@@ -7,8 +7,15 @@ question, and the difference matters more than the code:
 1. **Release-state coherence** (`check_tree`). Every version literal AGENTS.md rule 19 names
    agrees with the version being released, `CHANGELOG.md` has exactly one dated section for
    that version with `## [Unreleased]` above it, `uv.lock` is current, and `.mcp.json`'s pin
-   names a real tag no newer than this release. These are facts of the tagged tree (and, for
-   the pin, of the repository), so a green result here *proves* them. Nothing self-asserts.
+   names a tag no newer than this release that resolves IN THIS CHECKOUT. These are facts of
+   the tagged tree (and, for the pin, of this checkout), so a green result here *proves* them.
+   Nothing self-asserts.
+
+   "In this checkout" is the exact claim, and it is deliberately not "on the remote". A
+   local-only tag would satisfy this check while being unfetchable by the users the pin exists
+   to serve. That gap is closed by where the check runs rather than by the check itself: the
+   `verify` job checks out from GitHub with `fetch-depth: 0`, so the tags it sees are the
+   remote's. Read a local pass as "my checkout has it", and the CI pass as "GitHub has it".
 
    `.mcp.json`'s pin is deliberately NOT one of the version literals. Per ADR 0015 it names
    an ALREADY-PUBLISHED release rather than the one being released, because the
@@ -385,6 +392,13 @@ def _write_summary(path: Path, *, tag: str | None, version: str, problems: list[
     else:
         lines.append("**Release-state coherence: PASSED.** Every version literal, the changelog")
         lines.append("section and `uv.lock` agree with this tag, on this tree.")
+        lines.append("")
+        lines.append(
+            "**Install manifest: PASSED.** `.mcp.json` pins an already-published release "
+            "tag that resolves in this checkout and does not lead this version, so `main` "
+            "is not sending fresh installs at a tag that does not exist (ADR 0015). This "
+            "checkout is GitHub's, fetched with full tags, so the tag really is on the remote."
+        )
         if tag:
             lines.append("")
             lines.append(
