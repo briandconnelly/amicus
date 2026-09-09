@@ -48,10 +48,12 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
+from xml.etree import ElementTree
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -71,6 +73,20 @@ _BINARY_ENV_VARS = {
 
 _REQUIRED_TOP_LEVEL_FIELDS = ("batch_id", "recorded_at", "commit", "tree_clean", "backends")
 _REQUIRED_BACKEND_FIELDS = ("test_file", "exit_status", "cli_version")
+
+# The outcome enums a JUnit `<testcase>` can carry as a child element. Anything else is a pass.
+_NOT_PASSED_OUTCOMES = ("failure", "error", "skipped")
+
+# The ONLY keys `_summarize_junit` may put in the record, and the reason this is an allowlist
+# rather than a denylist: a JUnit report also carries `message` and `type` attributes, element
+# text (the traceback), and `<system-out>`/`<system-err>` sections, every one of which can hold
+# model prose or an echoed prompt. Reading tag names and integers cannot reach any of them.
+# `tests/test_live_gate_report.py` proves it on a report built to be full of prose.
+_REPORT_KEYS = ("total", "not_passed", "counts")
+
+# A version string is one short line. The longest seen in practice is "codex-cli 0.153.4"; the
+# cap is generous against that and still bounds a wrapper that prints something else entirely.
+_VERSION_MAX_CHARS = 120
 
 
 def _git(*args: str) -> subprocess.CompletedProcess[str]:
@@ -99,7 +115,54 @@ def _cli_version(backend: str) -> str | None:
         return None
     if proc.returncode != 0:
         return None
-    return proc.stdout.strip() or None
+    return _bound_version(proc.stdout)
+
+
+def _bound_version(raw: str) -> str | None:
+    """The first line of `--version` output, length-capped and stripped of control characters.
+
+    The binary is whatever `AMICUS_<BACKEND>_BIN` names, so its stdout is not this repository's
+    to trust: a wrapper script can print anything, and whatever it prints lands in a file under
+    `.release-evidence/`. A version string is one short line; taking only that, and only its
+    printable characters, keeps an unexpected payload out of the record without pretending to
+    know every CLI's exact format.
+    """
+    first_line = raw.strip().splitlines()[0] if raw.strip() else ""
+    printable = "".join(ch for ch in first_line if ch.isprintable())
+    return printable[:_VERSION_MAX_CHARS].strip() or None
+
+
+def _summarize_junit(xml_path: Path) -> dict[str, object] | None:
+    """Reduce a JUnit report to node ids and counts, reading tag names and integers only.
+
+    Never reads an element's text or its `message`/`type` attributes, and never looks at
+    `<system-out>`/`<system-err>`: those carry the traceback and the captured output, which is
+    where a model's prose or an echoed prompt would be. What comes back is which test did not
+    pass and how it did not pass — enough to rerun that one test instead of respending on all
+    three suites, and not enough to leak anything (AGENTS.md rule 18).
+    """
+    try:
+        root = ElementTree.parse(xml_path).getroot()
+    except (OSError, ElementTree.ParseError):
+        return None
+
+    not_passed: list[dict[str, str]] = []
+    counts = dict.fromkeys(_NOT_PASSED_OUTCOMES, 0)
+    total = 0
+    for case in root.iter("testcase"):
+        total += 1
+        outcome = next((child.tag for child in case if child.tag in _NOT_PASSED_OUTCOMES), None)
+        if outcome is None:
+            continue
+        counts[outcome] += 1
+        # `classname` and `name` are pytest's own identifiers, not model output.
+        not_passed.append(
+            {
+                "test": f"{case.get('classname', '')}::{case.get('name', '')}",
+                "outcome": outcome,
+            }
+        )
+    return {"total": total, "counts": counts, "not_passed": not_passed}
 
 
 def _run_backend_gate(backend: str, batch_id: str) -> dict[str, object]:
@@ -107,20 +170,40 @@ def _run_backend_gate(backend: str, batch_id: str) -> dict[str, object]:
     print(f"[{backend}] running {test_file} (AMICUS_REQUIRE_LIVE=1, -m integration) ...")
     env = dict(os.environ)
     env["AMICUS_REQUIRE_LIVE"] = "1"
-    proc = subprocess.run(
-        ["uv", "run", "pytest", "-m", "integration", "--no-cov", test_file],
-        cwd=REPO_ROOT,
-        env=env,
-        check=False,
-    )
+    with tempfile.TemporaryDirectory() as tmp:
+        # The report is read, reduced and discarded with the temp dir; only the reduction is
+        # ever written to `.release-evidence/`.
+        report = Path(tmp) / "junit.xml"
+        proc = subprocess.run(
+            [
+                "uv",
+                "run",
+                "pytest",
+                "-m",
+                "integration",
+                "--no-cov",
+                f"--junitxml={report}",
+                test_file,
+            ],
+            cwd=REPO_ROOT,
+            env=env,
+            check=False,
+        )
+        summary = _summarize_junit(report)
     status = "PASSED" if proc.returncode == 0 else f"FAILED (exit {proc.returncode})"
     print(f"[{backend}] {status}")
-    return {
+    if summary is not None and summary["not_passed"]:
+        for entry in summary["not_passed"]:  # type: ignore[union-attr]
+            print(f"[{backend}]   {entry['outcome']}: {entry['test']}")
+    entry_record: dict[str, object] = {
         "test_file": test_file,
         "exit_status": proc.returncode,
         "cli_version": _cli_version(backend),
         "batch_id": batch_id,
     }
+    if summary is not None:
+        entry_record["report"] = summary
+    return entry_record
 
 
 def _write_json(repo_root: Path, path: Path, payload: dict[str, object]) -> None:

@@ -79,7 +79,8 @@ async def test_consult_in_a_repo_spends_and_reports_it_live(live_claude, tmp_pat
     body = res.structured_content
     assert body["ok"] is True, body.get("error", {}).get("code")
     assert body["summary"] and body["meta"]["session_id"] and body["meta"]["job_id"]
-    assert body["meta"]["usage"]["cost_usd"] > 0, body["meta"]  # a real run really spent
+    cost = body["meta"]["usage"]["cost_usd"]
+    assert cost > 0, cost  # a real run really spent
     assert body["meta"]["backend_details"] == {
         "config_mode": "inherit",
         "access": "toolless",

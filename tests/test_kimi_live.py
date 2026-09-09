@@ -62,7 +62,7 @@ async def test_consult_outside_a_repo_live(live_kimi, tmp_path):
             raise_on_error=False,
         )
     body = res.structured_content
-    assert body["ok"] is True, body.get("error")
+    assert body["ok"] is True, body.get("error", {}).get("code")
     assert body["summary"] and body["meta"]["session_id"] and body["meta"]["job_id"]
     assert body["meta"]["security_warnings"] == [NO_REPO_WARNING]
 
@@ -84,10 +84,14 @@ async def test_read_only_profile_is_enforced_live(live_kimi, tmp_path):
             raise_on_error=False,
         )
     body = res.structured_content
-    assert body["ok"] is True, body.get("error")
+    assert body["ok"] is True, body.get("error", {}).get("code")
     names = {t.strip().lower() for t in re.split(r"[,\s]+", body["summary"]) if t.strip()}
-    assert not names & {"bash", "write", "edit", "shell"}, body["summary"]
-    assert names & {"read", "glob", "grep"}, body["summary"]
+    # `names` is the summary split into tokens, so it carries the model's prose. Only the
+    # intersections with the fixed tool sets below are safe to print on failure.
+    write_tools = names & {"bash", "write", "edit", "shell"}
+    read_tools = names & {"read", "glob", "grep"}
+    assert not write_tools, sorted(write_tools)
+    assert read_tools, len(names)
 
 
 async def test_review_changes_live(live_kimi, tmp_path):
@@ -106,7 +110,7 @@ async def test_review_changes_live(live_kimi, tmp_path):
             raise_on_error=False,
         )
     body = res.structured_content
-    assert body["ok"] is True, body.get("error")
+    assert body["ok"] is True, body.get("error", {}).get("code")
     assert body["review_status"] == "completed"
     assert body["verdict"] in ("concerns", "fail", "pass", "unknown")
     assert body["meta"]["context_summary"]["files_changed"] == 1
@@ -127,7 +131,7 @@ async def test_delegate_live(live_kimi, tmp_path):
             raise_on_error=False,
         )
     body = res.structured_content
-    assert body["ok"] is True, body.get("error")
+    assert body["ok"] is True, body.get("error", {}).get("code")
     assert body["diff"] and (tmp_path / "m.py").read_text() == before
     listed = subprocess.run(
         ["git", "worktree", "list"], cwd=tmp_path, capture_output=True, text=True, check=True
@@ -150,4 +154,6 @@ async def test_unknown_model_alias_is_invalid_model_live(live_kimi, tmp_path):
         )
     body = res.structured_content
     assert body["ok"] is False
-    assert body["error"]["code"] == "invalid_model", body["error"]
+    # The code alone: an error object carries the backend's own message text.
+    code = body["error"]["code"]
+    assert code == "invalid_model", code

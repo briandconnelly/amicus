@@ -23,9 +23,26 @@ Read it back:
 gh api repos/briandconnelly/amicus/rulesets
 ```
 
-Confirm a ruleset targeting `refs/tags/v*` whose rules restrict `creation` as well as `update` and `deletion`, and whose bypass list contains no agent identity — no entry whose `actor_type` is `Integration`.
-Then read the ruleset itself, `gh api repos/briandconnelly/amicus/rulesets/<id>`, and confirm `current_user_can_bypass` is not `never`.
-That field is the one that says whether YOU can push the tag.
+Confirm a ruleset targeting `refs/tags/v*` whose rules restrict `creation` as well as `update` and `deletion`.
+
+The next two checks look alike and are not.
+One is about the ruleset; the other is about whoever ran the command.
+Read them in that order, and note which identity `gh` is authenticated as before you start — `gh auth status` names it.
+
+**Check one, rule 21 itself — identity-independent, but an agent cannot run it.**
+The bypass list must contain no agent identity: no entry whose `actor_type` is `Integration`.
+An App token's response omits the `bypass_actors` key **entirely** rather than returning it, so an agent reading this endpoint cannot see the list at all.
+An absent key is not an empty list, and an agent must not report rule 21 as satisfied from one.
+This check is the maintainer's to run, under their own account.
+
+**Check two, whether you can push the tag — identity-dependent.**
+Read the ruleset itself, `gh api repos/briandconnelly/amicus/rulesets/<id>`, and confirm `current_user_can_bypass` is not `never`.
+That field describes the identity whose token made the request, not the repository.
+Under the App token that agents use it reads `never`, which is the correct and required state for an agent: rule 21 demands exactly that.
+An agent that reads `never` here has learned nothing about the maintainer, and must not report the release blocked — nor "fix" it by adding a bypass actor for the identity it is running as, which would be the `Integration` entry rule 21 forbids.
+Only the maintainer, under their own account, gets a meaningful answer.
+As of 2026-09-09 that answer is `always`, because the bypass list holds `RepositoryRole` 5 (repository admin).
+
 A ruleset with an empty `bypass_actors` list satisfies rule 21 perfectly and blocks the release, because the restriction applies to the repository owner too — this happened on 2026-09-08 and was caught only by reading the ruleset back.
 The fix is to add the repository admin role to the bypass list, never to weaken a rule: rule 21 forbids agent identities from bypassing, not you.
 Creation is the load-bearing rule.
