@@ -38,6 +38,15 @@ SYNC_AWAIT_GRACE_S = 30
 SYNC_PROGRESS_THROTTLE_S = 1.0
 SYNC_PROGRESS_REPORT_TIMEOUT_S = 5.0
 
+# The waiting instruction every async start hands back. Kept beside the repair table's
+# job_running prose (errors.py) and amicus_job_result's description: all three describe
+# one lifecycle, and tests/test_surface_honesty.py holds them to it.
+POLL_FOLLOW_UP = (
+    "Poll amicus_job_status with these arguments while status is running, honoring "
+    "poll_after_ms. On any terminal status, call amicus_job_result for the stored result "
+    "or the terminal error. Recover a lost job_id with amicus_job_list."
+)
+
 # Bound on acquiring the idempotency coordination locks for a keyed start: a peer holding
 # the flock degrades to a retryable idempotency_in_progress instead of hanging a worker.
 IDEM_LOCK_ACQUIRE_TIMEOUT_S = 0.5
@@ -116,11 +125,7 @@ def job_started_handle(
             next_step="poll_job_status",
             tool="amicus_job_status",
             arguments=poll_arguments,
-            alternative=(
-                "Poll amicus_job_status with these arguments, honoring poll_after_ms; read "
-                "the result with amicus_job_result once result_available is true. Recover a "
-                "lost job_id with amicus_job_list."
-            ),
+            alternative=POLL_FOLLOW_UP,
         ),
         meta=meta,
     ).model_dump(mode="json")

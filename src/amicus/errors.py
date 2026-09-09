@@ -112,7 +112,10 @@ _PROSE_OVERRIDES: dict[str, str] = {
         "amicus_capabilities), then retry with an exact URI."
     ),
     "job_not_found": "Call amicus_job_list to recover known job_ids in this workspace.",
-    "job_running": "Poll amicus_job_status until result_available, honoring poll_after_ms.",
+    "job_running": (
+        "Poll amicus_job_status while status is running, honoring poll_after_ms. On any "
+        "terminal status, call amicus_job_result for the stored result or the terminal error."
+    ),
 }
 _TOOL_OVERRIDES: dict[str, str] = {
     "job_not_found": "amicus_job_list",

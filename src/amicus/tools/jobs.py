@@ -134,9 +134,11 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
         title="Fetch a background job's result (free)",
         meta=lifecycle_meta("amicus_job_result"),
         description=(
-            f"{FREE_MARKER} Return the originating paid tool's envelope once result_available; "
-            "branch on `tool`. The record is retained, so a re-read is free. A still-running "
-            f"job is job_running with retry_after_ms. {_RETENTION}"
+            f"{FREE_MARKER} Fetch a job once amicus_job_status reports a terminal status: "
+            "`done` returns the originating paid tool's stored envelope — check `ok`, then "
+            "branch on `tool`; `cancelled`, `failed` and `timeout` return that terminal error "
+            "instead. The record is retained, so a re-read is free. A still-running job is "
+            f"job_running with retry_after_ms. {_RETENTION}"
         ),
     )
     @guard("amicus_job_result", settings)

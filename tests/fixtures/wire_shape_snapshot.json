@@ -608,7 +608,7 @@
       "deadline_seconds": 1800,
       "expires_at": null,
       "follow_up": {
-        "alternative": "Poll amicus_job_status with these arguments, honoring poll_after_ms; read the result with amicus_job_result once result_available is true. Recover a lost job_id with amicus_job_list.",
+        "alternative": "Poll amicus_job_status with these arguments while status is running, honoring poll_after_ms. On any terminal status, call amicus_job_result for the stored result or the terminal error. Recover a lost job_id with amicus_job_list.",
         "arguments": {
           "job_id": "00000000000000000000000000000000",
           "workspace_root": "/repo"
@@ -658,7 +658,7 @@
       "deadline_seconds": 1800,
       "expires_at": "1970-01-02T00:00:00+00:00",
       "follow_up": {
-        "alternative": "Poll amicus_job_status with these arguments, honoring poll_after_ms; read the result with amicus_job_result once result_available is true. Recover a lost job_id with amicus_job_list.",
+        "alternative": "Poll amicus_job_status with these arguments while status is running, honoring poll_after_ms. On any terminal status, call amicus_job_result for the stored result or the terminal error. Recover a lost job_id with amicus_job_list.",
         "arguments": {
           "job_id": "00000000000000000000000000000000",
           "workspace_root": "/repo"
@@ -925,7 +925,7 @@
         "code": "job_running",
         "message": "The job is still running.",
         "repair": {
-          "alternative": "Poll amicus_job_status until result_available, honoring poll_after_ms.",
+          "alternative": "Poll amicus_job_status while status is running, honoring poll_after_ms. On any terminal status, call amicus_job_result for the stored result or the terminal error.",
           "arguments": {
             "job_id": "00000000000000000000000000000000",
             "workspace_root": "/repo"
