@@ -16,8 +16,16 @@ smaller tax on that host than the budget assumes
 (docs/host-captures/install-smoke/claude-code/2.1.263/notes.md). The budget stays the
 worst-case ceiling for the clients that do preload.
 
-Measured 2026-09-09 at schema-8 (18 tools; amicus_job_result names the terminal statuses):
+Measured 2026-09-09 at schema-9 (18 tools; every model result carries findings_diagnostics):
 see MEASURED.
+
+The schema-8 -> schema-9 raise (+5160 bytes) is deliberate, and most of it is prose. The
+`findings_diagnostics` object itself costs ~1250 bytes across four paid tools' output
+schemas, which the published schemas inline rather than $ref. The rest is the semantics
+of the field, kept through _strip_schema_noise on purpose: `dropped: 0` does not mean
+nothing was lost, and `dropped: null` means the count was unknowable. An MCP-only caller
+has no skill file to read, so a field whose whole purpose is to prevent a misreading has
+to carry that meaning on the wire or it will be misread (issue #38).
 """
 
 from __future__ import annotations
@@ -26,7 +34,7 @@ import pytest
 
 from amicus import manifest
 
-MEASURED: dict[str, int] = {"all": 92657, "codex-kimi": 92665, "claude": 92657}
+MEASURED: dict[str, int] = {"all": 97817, "codex-kimi": 97825, "claude": 97817}
 BUDGET: dict[str, int] = {p: ((n // 1000) + 1) * 1000 for p, n in MEASURED.items()}
 # ceil(bytes/4): a dependency-free, conservative token proxy (~4.13 bytes per token).
 TOKEN_PROXY_BUDGET: dict[str, int] = {p: -(-b // 4) for p, b in BUDGET.items()}

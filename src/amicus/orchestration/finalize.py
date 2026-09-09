@@ -6,9 +6,10 @@ the model wrote them so a control-split value degrades rather than being repaire
 from __future__ import annotations
 
 import dataclasses
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, cast, get_args
 
 from pontonier.core import redaction, worktree
+from pydantic import ValidationError
 
 from amicus.errors import error_envelope
 from amicus.orchestration import review as review_mod
@@ -18,8 +19,11 @@ from amicus.schemas.results import (
     ConsultResult,
     DelegateResult,
     Finding,
+    FindingReason,
+    FindingsDiagnostics,
     RawResponse,
     ReviewResult,
+    Severity,
 )
 from amicus.schemas.structured import classify_structured
 
@@ -35,6 +39,20 @@ if TYPE_CHECKING:  # pragma: no cover
 _PROSE_KEYS = ("summary", "questions", "assumptions", "next_steps")
 _FINDING_PROSE_KEYS = ("title", "evidence", "suggestion")
 _MODEL_FLAG = "--model"
+_FINDING_FIELDS = frozenset(Finding.model_fields)
+
+
+class _Absent:
+    """A findings key that was never there, which `dict.get` cannot distinguish from one
+    the backend set to null. The schema requires an array, so an explicit null is a
+    deviation and says so; an absent key had nothing to deviate from."""
+
+    def __repr__(self) -> str:  # pragma: no cover - debugging aid
+        return "ABSENT"
+
+
+ABSENT = _Absent()
+_SEVERITIES = frozenset(get_args(Severity))
 
 
 def stamp_run(meta: Meta, run: CommandRun, dropped_flags: Iterable[str]) -> None:
@@ -88,18 +106,61 @@ def _sanitize_structured(parsed: dict) -> dict:
     return out
 
 
-def coerce_findings(raw: object) -> list[Finding]:
+def _normalize_severity(item: dict) -> tuple[dict, bool]:
+    """Case and surrounding space only. A backend that answers `HIGH` means `high`, and
+    two of three backends are merely ASKED for the schema rather than held to it. Nothing
+    else is touched: a control-split value still degrades rather than being repaired, and
+    a synonym amicus would have to GUESS at (`P1`, `warning`) is not a severity."""
+    value = item.get("severity")
+    if not isinstance(value, str):
+        return item, False
+    normalized = value.strip().lower()
+    if normalized == value or normalized not in _SEVERITIES:
+        return item, False
+    return {**item, "severity": normalized}, True
+
+
+def coerce_findings(raw: object) -> tuple[list[Finding], FindingsDiagnostics | None]:
+    """The backend's findings list, plus what could not be carried from it (issue #38).
+
+    Returns diagnostics of None only when nothing deviated, so a caller can distinguish a
+    genuinely clean list from one amicus failed to relay. The findings member is required
+    by the output schema, so an absent one deviates (`missing_findings`) as surely as a
+    present one that is not a list (`invalid_container`, which an explicit null reaches);
+    both leave the count unknowable. Pass ABSENT, not None, for a key never there."""
+    if raw is ABSENT:
+        # The output schema REQUIRES findings, so an omitted member is not the backend
+        # saying "none" -- it is the backend leaving amicus unable to know, and a verdict
+        # it did supply must not stand over that silence.
+        return [], FindingsDiagnostics(dropped=None, reasons=["missing_findings"])
     if not isinstance(raw, list):
-        return []
+        return [], FindingsDiagnostics(dropped=None, reasons=["invalid_container"])
     findings: list[Finding] = []
+    seen: set[str] = set()
+    dropped = 0
     for item in raw:
         if not isinstance(item, dict):
+            dropped += 1
+            seen.add("invalid_entry")
             continue
+        candidate, normalized = _normalize_severity(item)
+        if normalized:
+            seen.add("severity_normalized")
+        known = {k: v for k, v in candidate.items() if k in _FINDING_FIELDS}
+        if len(known) != len(candidate):
+            # An unknown key (`category`, `cwe`) is an ordinary backend addition; losing
+            # the whole finding over one is the defect. Keep the finding, report the loss.
+            seen.add("extra_fields_omitted")
         try:
-            findings.append(Finding.model_validate(item))
-        except Exception:
-            continue
-    return findings
+            findings.append(Finding.model_validate(known))
+        except ValidationError:
+            dropped += 1
+            seen.add("invalid_entry")
+    if not seen:
+        return findings, None
+    return findings, FindingsDiagnostics(
+        dropped=dropped, reasons=[r for r in get_args(FindingReason) if r in seen]
+    )
 
 
 def _summary_of(structured: dict) -> str:
@@ -132,10 +193,12 @@ def consult_result(result: ExecResult, meta: Meta) -> dict[str, Any]:
     structured = result.structured
     if structured is not None:
         s = cast("dict[str, Any]", _sanitize_structured(structured))
+        findings, diagnostics = coerce_findings(s.get("findings", ABSENT))
         return dump_success(
             ConsultResult(
                 summary=_summary_of(s),
-                findings=coerce_findings(s.get("findings")),
+                findings=findings,
+                findings_diagnostics=diagnostics,
                 questions=_str_list(s.get("questions")),
                 assumptions=_str_list(s.get("assumptions")),
                 next_steps=_str_list(s.get("next_steps")),
@@ -180,11 +243,15 @@ def _parse_reviewed(
             None,
         )
     s = cast("dict[str, Any]", _sanitize_structured(cast("dict", parsed)))
+    findings, diagnostics = coerce_findings(s.get("findings", ABSENT))
     verdict, confidence, summary = review_mod.apply_coverage(
         _enum(s.get("verdict"), ("pass", "concerns", "fail", "unknown"), "unknown"),
         _enum(s.get("confidence"), ("low", "medium", "high"), "medium"),
         _summary_of(s),
         reasons,
+    )
+    verdict, confidence, summary = review_mod.apply_findings_loss(
+        verdict, confidence, summary, diagnostics
     )
     return None, {
         "summary": summary,
@@ -192,7 +259,8 @@ def _parse_reviewed(
         "confidence": confidence,
         "review_status": "completed",
         "context_summary": meta.context_summary,
-        "findings": coerce_findings(s.get("findings")),
+        "findings": findings,
+        "findings_diagnostics": diagnostics,
         "questions": _str_list(s.get("questions")),
         "assumptions": _str_list(s.get("assumptions")),
         "next_steps": _str_list(s.get("next_steps")),

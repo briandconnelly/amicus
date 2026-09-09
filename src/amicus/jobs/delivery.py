@@ -109,11 +109,12 @@ def _unreadable(
     detail: str, rec: dict[str, Any], payload: dict[str, Any], meta: Meta
 ) -> dict[str, Any]:
     fmt = _stored_result_format(rec)
-    if fmt is None or fmt == RESULT_FORMAT:
+    if fmt == RESULT_FORMAT:
         return _corrupt(detail, meta)
     stored_meta = payload.get("meta")
     version = stored_meta.get("server_version") if isinstance(stored_meta, dict) else None
-    provenance = f"result_format {fmt}; this release reads {RESULT_FORMAT}"
+    recorded = f"result_format {fmt}" if fmt is not None else "no recorded result_format"
+    provenance = f"{recorded}; this release reads {RESULT_FORMAT}"
     if isinstance(version, str) and version:
         provenance += f", producer server_version {version}"
     message = (
@@ -157,6 +158,13 @@ def finished_job_envelope(
     meta.job_id = job_id
     state = rec["status"]
     if state == "done" and payload is not None:
+        # BEFORE validation, not after it. A record written under another format can still
+        # satisfy this release's models, because a field added since then validates from
+        # its own default -- and that default would answer, on the producing run's behalf,
+        # a question that run never asked (issue #38). Validation cannot catch that; only
+        # the stamp can.
+        if _stored_result_format(rec) != RESULT_FORMAT:
+            return _unreadable("stored under another result format", rec, payload, meta), False
         stored_meta = payload.get("meta")
         stored_version = (
             stored_meta.get("server_version") if isinstance(stored_meta, dict) else None

@@ -65,7 +65,15 @@ async def test_golden_through_the_loop(pinned_claude_bin, monkeypatch, tmp_path)
     assert meta["usage"]["cached_input_tokens"] == 10
     assert meta["usage"]["cache_creation_input_tokens"] == 5
     assert meta["command_exit_code"] == 0
-    # The sibling's finding shape (risk/recommendation) is not amicus's (evidence/suggestion):
-    # amicus asks its own shape in the schema instruction, so the recorded finding is dropped
-    # rather than half-mapped. Documented in ADR 0010 (not ported).
-    assert out["findings"] == []
+    # The sibling's finding shape (risk/recommendation) is not amicus's (evidence/suggestion),
+    # and ADR 0010 declines to map one onto the other rather than half-mapping it. What the
+    # ADR never decided was that the rest of the finding should go with them: this is a
+    # RECORDED real claude response reporting a high-severity bug, and it used to arrive as
+    # an empty findings list (issue #38). The finding stays and the unmappable keys go with
+    # their content, which is why this is reported rather than passed off as intact.
+    assert [(f["title"], f["severity"]) for f in out["findings"]] == [
+        ("subtraction instead of addition", "high")
+    ]
+    assert out["findings"][0]["evidence"] == "return a - b"
+    assert out["findings"][0]["suggestion"] is None, "risk/recommendation are not half-mapped"
+    assert out["findings_diagnostics"] == {"dropped": 0, "reasons": ["extra_fields_omitted"]}

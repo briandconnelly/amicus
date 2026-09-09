@@ -10,6 +10,7 @@
           "lines_removed": 3
         },
         "findings": [],
+        "findings_diagnostics": null,
         "meta": {
           "backend": "codex",
           "backend_details": {
@@ -68,6 +69,7 @@
       "consult": {
         "assumptions": [],
         "findings": [],
+        "findings_diagnostics": null,
         "meta": {
           "backend": "codex",
           "backend_details": {
@@ -119,6 +121,7 @@
         "diff": null,
         "diffstat": null,
         "findings": [],
+        "findings_diagnostics": null,
         "meta": {
           "backend": "codex",
           "compat_warnings": [],
@@ -153,6 +156,7 @@
           "lines_removed": 3
         },
         "findings": [],
+        "findings_diagnostics": null,
         "meta": {
           "backend": "codex",
           "backend_details": {
@@ -211,6 +215,7 @@
         "confidence": "low",
         "context_summary": null,
         "findings": [],
+        "findings_diagnostics": null,
         "meta": {
           "backend": "codex",
           "backend_details": {
@@ -278,6 +283,7 @@
           "lines_removed": 3
         },
         "findings": [],
+        "findings_diagnostics": null,
         "meta": {
           "backend": "codex",
           "backend_details": {
@@ -336,6 +342,7 @@
       "consult": {
         "assumptions": [],
         "findings": [],
+        "findings_diagnostics": null,
         "meta": {
           "backend": "codex",
           "backend_details": {
@@ -387,6 +394,7 @@
         "diff": null,
         "diffstat": null,
         "findings": [],
+        "findings_diagnostics": null,
         "meta": {
           "backend": "codex",
           "compat_warnings": [],
@@ -421,6 +429,7 @@
           "lines_removed": 3
         },
         "findings": [],
+        "findings_diagnostics": null,
         "meta": {
           "backend": "codex",
           "backend_details": {
@@ -479,6 +488,7 @@
         "confidence": "low",
         "context_summary": null,
         "findings": [],
+        "findings_diagnostics": null,
         "meta": {
           "backend": "codex",
           "backend_details": {
@@ -865,7 +875,7 @@
       "error": {
         "backend": null,
         "code": "job_result_incompatible",
-        "message": "stored job result was written under a different result format (result_format 3; this release reads 2, producer server_version 0.0.0): stored review_changes result did not match its schema: 3 validation errors for ReviewResult\ntool\n  Input should be 'amicus_review_changes' [type=literal_error, input_value='amicus_consult', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.13/v/literal_error\nverdict\n  Field required [type=missing, input_value={'ok': True, 'meta': {'ba",
+        "message": "stored job result was written under a different result format (result_format 4; this release reads 3, producer server_version 0.0.0): stored under another result format",
         "repair": {
           "alternative": "The stored result predates this server version; start a new job.",
           "next_step": "start_new_job"

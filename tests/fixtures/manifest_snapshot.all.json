@@ -148,7 +148,7 @@
     ],
     "protocol_revision": "2026-07-28",
     "resource_error_carrier": "JSON-RPC error; the envelope (machine_code/human_message/backend/temporary/retry_after_ms/repair/resource_uri/request_id) is in error.data. Classify by error.data.machine_code: the numeric is era-bound (-32002 on a 2025-11-25 connection, -32602 on 2026-07-28; -32603 for a read failure on both).",
-    "result_format": 2,
+    "result_format": 3,
     "result_meta_resource": "amicus://result-meta",
     "scope": [
       "Second opinions, git-change reviews, adversarial critiques and delegated diffs from Codex, Kimi or Claude Code, selected per call.",
@@ -1376,7 +1376,7 @@
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-8",
+                "default": "amicus/0.1/schema-9",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -2193,7 +2193,7 @@
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-8",
+            "default": "amicus/0.1/schema-9",
             "title": "Fingerprint",
             "type": "string"
           },
@@ -2811,6 +2811,45 @@
                   "type": "object"
                 },
                 "type": "array"
+              },
+              "findings_diagnostics": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "dropped": {
+                        "anyOf": [
+                          {
+                            "type": "integer"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "Whole findings entries that could not be represented. 0 does NOT mean nothing was lost: `extra_fields_omitted` reports content dropped from a finding that survived. null means the count is unknowable because the findings member could not be read at all. Read `reasons`, never this count alone."
+                      },
+                      "reasons": {
+                        "description": "Why findings did not reach you intact. severity_normalized: case/space only, finding intact. extra_fields_omitted: unrecognized keys and their content are gone, the rest of the finding survives. invalid_entry: an entry was dropped whole. invalid_container: the findings member was present but not a list. missing_findings: the required findings member was absent. The last three also stop a `pass` verdict from standing, which is delivered as unknown/low instead.",
+                        "items": {
+                          "enum": [
+                            "extra_fields_omitted",
+                            "invalid_container",
+                            "invalid_entry",
+                            "missing_findings",
+                            "severity_normalized"
+                          ],
+                          "type": "string"
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "What the backend reported that amicus could not carry intact; null when nothing deviated. Read this before acting on an empty or short `findings` list."
               },
               "meta": {
                 "description": "Result metadata (backend, cwd, model, timeout, usage, job_id, and more); full schema at resource amicus://result-meta",
@@ -4273,6 +4312,45 @@
                 },
                 "type": "array"
               },
+              "findings_diagnostics": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "dropped": {
+                        "anyOf": [
+                          {
+                            "type": "integer"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "Whole findings entries that could not be represented. 0 does NOT mean nothing was lost: `extra_fields_omitted` reports content dropped from a finding that survived. null means the count is unknowable because the findings member could not be read at all. Read `reasons`, never this count alone."
+                      },
+                      "reasons": {
+                        "description": "Why findings did not reach you intact. severity_normalized: case/space only, finding intact. extra_fields_omitted: unrecognized keys and their content are gone, the rest of the finding survives. invalid_entry: an entry was dropped whole. invalid_container: the findings member was present but not a list. missing_findings: the required findings member was absent. The last three also stop a `pass` verdict from standing, which is delivered as unknown/low instead.",
+                        "items": {
+                          "enum": [
+                            "extra_fields_omitted",
+                            "invalid_container",
+                            "invalid_entry",
+                            "missing_findings",
+                            "severity_normalized"
+                          ],
+                          "type": "string"
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "What the backend reported that amicus could not carry intact; null when nothing deviated. Read this before acting on an empty or short `findings` list."
+              },
               "meta": {
                 "description": "Result metadata (backend, cwd, model, timeout, usage, job_id, and more); full schema at resource amicus://result-meta",
                 "type": "object"
@@ -5033,6 +5111,45 @@
                   "type": "object"
                 },
                 "type": "array"
+              },
+              "findings_diagnostics": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "dropped": {
+                        "anyOf": [
+                          {
+                            "type": "integer"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "Whole findings entries that could not be represented. 0 does NOT mean nothing was lost: `extra_fields_omitted` reports content dropped from a finding that survived. null means the count is unknowable because the findings member could not be read at all. Read `reasons`, never this count alone."
+                      },
+                      "reasons": {
+                        "description": "Why findings did not reach you intact. severity_normalized: case/space only, finding intact. extra_fields_omitted: unrecognized keys and their content are gone, the rest of the finding survives. invalid_entry: an entry was dropped whole. invalid_container: the findings member was present but not a list. missing_findings: the required findings member was absent. The last three also stop a `pass` verdict from standing, which is delivered as unknown/low instead.",
+                        "items": {
+                          "enum": [
+                            "extra_fields_omitted",
+                            "invalid_container",
+                            "invalid_entry",
+                            "missing_findings",
+                            "severity_normalized"
+                          ],
+                          "type": "string"
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "What the backend reported that amicus could not carry intact; null when nothing deviated. Read this before acting on an empty or short `findings` list."
               },
               "meta": {
                 "description": "Result metadata (backend, cwd, model, timeout, usage, job_id, and more); full schema at resource amicus://result-meta",
@@ -7728,6 +7845,45 @@
                   "type": "object"
                 },
                 "type": "array"
+              },
+              "findings_diagnostics": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "dropped": {
+                        "anyOf": [
+                          {
+                            "type": "integer"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "Whole findings entries that could not be represented. 0 does NOT mean nothing was lost: `extra_fields_omitted` reports content dropped from a finding that survived. null means the count is unknowable because the findings member could not be read at all. Read `reasons`, never this count alone."
+                      },
+                      "reasons": {
+                        "description": "Why findings did not reach you intact. severity_normalized: case/space only, finding intact. extra_fields_omitted: unrecognized keys and their content are gone, the rest of the finding survives. invalid_entry: an entry was dropped whole. invalid_container: the findings member was present but not a list. missing_findings: the required findings member was absent. The last three also stop a `pass` verdict from standing, which is delivered as unknown/low instead.",
+                        "items": {
+                          "enum": [
+                            "extra_fields_omitted",
+                            "invalid_container",
+                            "invalid_entry",
+                            "missing_findings",
+                            "severity_normalized"
+                          ],
+                          "type": "string"
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "What the backend reported that amicus could not carry intact; null when nothing deviated. Read this before acting on an empty or short `findings` list."
               },
               "meta": {
                 "description": "Result metadata (backend, cwd, model, timeout, usage, job_id, and more); full schema at resource amicus://result-meta",
