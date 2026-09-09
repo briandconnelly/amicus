@@ -18,9 +18,6 @@ your session.
 
 ## Install
 
-> **amicus is not published yet.** These instructions work from its first tagged release onward.
-> Until then, install from source with the development steps at the bottom of this page.
-
 ### Claude Code
 
 ```text
@@ -133,10 +130,11 @@ the new ones.
 
 ## Status and known limits
 
-Pre-release. The server's wire contract is exercised by the test suite and by host captures against
-Claude Code and Codex, but:
+0.1.0 is the first release. The server's wire contract is exercised by the test suite and by host
+captures against Claude Code and Codex, but:
 
-- amicus has never been published to PyPI, and the tagged publish path has not been run.
+- 0.1.0 is the first release published from a tag, so the tagged publish path runs for the first
+  time with it.
 - Two router-skill evaluation scenarios are unresolved — S6 (diff-safety wording) and S7 (approval
   friction) — recorded in [`docs/adr/0012-m6-packaging-decisions.md`](docs/adr/0012-m6-packaging-decisions.md).
   Neither is a defect in the server's wire contract.

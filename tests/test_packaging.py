@@ -280,24 +280,28 @@ def test_changelog_has_an_unreleased_section():
 
     The release procedure in `docs/RELEASING.md` edits this heading by exact text. A
     renamed or missing heading turns that step into a silent no-op, which is how a
-    release ships with an empty changelog entry. AGENTS.md rule 19 keeps the dated
-    `## [0.1.0] - YYYY-MM-DD` heading out of this change (that heading lands in the
-    release PR), so this only checks that the file opens correctly and that the
-    Unreleased section is not an empty stub -- it must already carry at least one
-    `### `-level subsection.
+    release ships with an empty changelog entry. So the heading itself is asserted
+    unconditionally, spelled exactly as step 2 edits it.
 
-    A prior version of this assertion sliced only at the start of the Unreleased
-    heading (`text.split(..., 1)[1]`), so the "rest of the file" it checked included
-    every dated release section below it. Once PR C rolls Unreleased into a dated
-    `## [0.1.0]` section, that section's own `### Added` satisfied `"\n### " in
-    unreleased` even though the Unreleased section above it was left an empty stub --
-    exactly what this test's docstring says must fail. The slice must stop at the next
-    `\n## ` heading so it covers only the Unreleased section itself.
+    Whether that section must carry content depends on where in the release cycle the
+    file is, and the two states are told apart by whether a dated section follows:
+
+    - No dated section below it: no release has been cut, every change since the last
+      one lives here, and an empty stub means someone landed work without a changelog
+      entry. That must fail.
+    - A dated section below it: `docs/RELEASING.md` step 2 has just rolled Unreleased
+      into that section and left "a fresh empty `## [Unreleased]` above it". Empty is
+      then the correct state, and asserting otherwise would fail every release PR --
+      which is what happened when the 0.1.0 release PR first ran this gate.
+
+    The slice must stop at the next `\n## ` heading either way. A prior version sliced
+    to the end of the file, so the dated section's own `### Added` satisfied the
+    non-empty check for an Unreleased stub that was genuinely empty.
     """
     text = (Path(__file__).resolve().parent.parent / "CHANGELOG.md").read_text()
     assert text.startswith("# Changelog\n"), "the file must open with the Keep a Changelog title"
     assert "\n## [Unreleased]\n" in text, "the rollover target heading is missing"
     rest = text.split("\n## [Unreleased]\n", 1)[1]
     next_heading = rest.find("\n## ")
-    unreleased = rest if next_heading == -1 else rest[:next_heading]
-    assert "\n### " in unreleased, "the Unreleased section must contain at least one subsection"
+    if next_heading == -1:
+        assert "\n### " in rest, "the Unreleased section must contain at least one subsection"
