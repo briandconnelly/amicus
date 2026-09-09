@@ -11,7 +11,7 @@ question, and the difference matters more than the code:
    the pin, of the repository), so a green result here *proves* them. Nothing self-asserts.
 
    `.mcp.json`'s pin is deliberately NOT one of the version literals. Per ADR 0015 it names
-   the newest ALREADY-PUBLISHED release rather than the one being released, because the
+   an ALREADY-PUBLISHED release rather than the one being released, because the
    manifest a fresh install reads lives on `main` and so cannot name an artifact that does
    not exist yet. What replaced the old equality is `check_mcp_pin_tag_exists`, which is
    worth more: the equality was true by construction on any tree a release PR had touched,
@@ -112,7 +112,7 @@ def mcp_pin(repo_root: Path = REPO_ROOT) -> tuple[str | None, list[str]]:
     """The version `.mcp.json`'s `--from` source pins, and any problem with that source.
 
     Per ADR 0015 this is NOT a rule-19 version literal: the manifest a fresh install reads
-    lives on `main`, so it names the newest ALREADY-PUBLISHED release rather than the one
+    lives on `main`, so it names an ALREADY-PUBLISHED release rather than the one
     being released. What is checkable here is its shape — this repo, over git, at some
     `vX.Y.Z`. `check_version_literals` bounds the version; `check_mcp_pin_tag_exists`
     proves the tag is real, where a checkout with tags is available.
@@ -121,7 +121,15 @@ def mcp_pin(repo_root: Path = REPO_ROOT) -> tuple[str | None, list[str]]:
     args = server["mcpServers"]["amicus"]["args"]
     if "--from" not in args:
         return None, [".mcp.json must install from an explicit `--from` source"]
-    source = args[args.index("--from") + 1]
+    index = args.index("--from") + 1
+    # A manifest ending in a bare `--from`, or carrying a non-string there, is malformed. Report
+    # it as a release-state problem: this script is the release gate, so it must not crash with
+    # an IndexError or TypeError on exactly the input it exists to reject.
+    if index >= len(args):
+        return None, [".mcp.json has a trailing `--from` with no source after it"]
+    source = args[index]
+    if not isinstance(source, str):
+        return None, [f".mcp.json's `--from` source is {source!r}, which is not a string"]
     match = _MCP_SOURCE_RE.match(source)
     if match is None:
         return None, [
@@ -131,63 +139,53 @@ def mcp_pin(repo_root: Path = REPO_ROOT) -> tuple[str | None, list[str]]:
 
 
 def check_mcp_pin_tag_exists(
-    version: str,
     *,
     repo_root: Path = REPO_ROOT,
     git: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
 ) -> list[str]:
-    """The tag `.mcp.json` sends users to must actually exist.
+    """The tag `.mcp.json` sends users to must actually exist. No exceptions.
 
     This is the check ADR 0015 gained in exchange for the equality it dropped, and it is worth
     more: the old `pin == version being released` was true by construction on any tree a
-    release PR had touched, while this one is a fact about the world. It needs a checkout with
-    tags, which is why `publish.yml` sets `fetch-depth: 0`; a tagless checkout is reported
-    rather than passed silently.
+    release PR had touched, while this one is a fact about the world.
 
-    One exception, and only one: the bootstrap, identified POSITIVELY as a repository with no
-    `v*` tags at all whose pin names the version being released. That is the first release
-    naming the tag it is about to create, and there is no earlier release for it to name.
+    There is deliberately no bootstrap exception. Two earlier attempts had one and both were
+    unsound. Keying it on `pin == version being released` was too broad: a later release whose
+    pin was mistakenly bumped would satisfy it, skip this check, and restore the very window
+    ADR 0015 removes — and the publish workflow would not catch that either, because by then
+    the tag has been pushed and does exist. Keying it on "this repository has no `v*` tags"
+    was no better, because `git tag -l` sees only locally fetched tags: a `--no-tags` or
+    shallow checkout is indistinguishable from a repository that has never released, and the
+    pre-tag runbook step does not fetch before running this.
 
-    The exception is deliberately not "the pin equals the version being released", which was
-    the first attempt and was too broad. On a later release, a pin mistakenly bumped to the
-    version being released would satisfy that condition, skip this check, and reintroduce
-    exactly the unresolvable window ADR 0015 exists to remove — and the publish workflow would
-    not catch it either, because by then the tag has been pushed and does exist. Keying on "no
-    releases have ever happened" cannot be reached a second time.
+    The exception is also moot. 0.1.0 was tagged and published on 2026-09-09, so this
+    repository can never legitimately bootstrap again, and the only way into that branch now
+    would be a checkout too incomplete to trust. Requiring the tag unconditionally turns that
+    case into a loud, actionable failure — fetch your tags — instead of a silent pass.
+
+    A tagless checkout therefore FAILS here rather than passing, which is the intended
+    behaviour and why `publish.yml` sets `fetch-depth: 0`.
     """
     pinned, problems = mcp_pin(repo_root)
     if pinned is None:
         return problems
 
+    tag = f"v{pinned}"
     try:
         proc = git(
-            ["git", "tag", "-l", "v*"],
+            ["git", "rev-parse", "--verify", "--quiet", f"refs/tags/{tag}"],
             cwd=repo_root,
             capture_output=True,
             text=True,
             check=False,
         )
     except OSError as exc:  # git missing: report it rather than silently skipping the check
-        return [f"could not list tags to check the .mcp.json pin: {exc}"]
+        return [f"could not check whether {tag} exists: {exc}"]
     if proc.returncode != 0:
-        detail = (proc.stderr or proc.stdout or f"exit {proc.returncode}").strip()
-        return [f"could not list tags to check the .mcp.json pin: {detail}"]
-
-    tags = {line.strip() for line in proc.stdout.splitlines() if line.strip()}
-    tag = f"v{pinned}"
-
-    if not tags:
-        if pinned == version:
-            return []
-        return [
-            f".mcp.json pins {tag}, but this repository has no releases yet and the version "
-            f"being released is {version}; the first release may only pin its own tag"
-        ]
-
-    if tag not in tags:
         return [
             f".mcp.json pins {tag}, which does not exist in this checkout; users installing "
-            "from this manifest would get an unresolvable ref (or the checkout has no tags)"
+            f"from this manifest would get an unresolvable ref. If {tag} is a real release, "
+            "this checkout is missing its tags — fetch them and re-run."
         ]
     return []
 
@@ -305,7 +303,7 @@ def check_tree(
         *check_version_literals(version, repo_root=repo_root),
         *check_changelog(version, repo_root=repo_root),
         *check_lock(repo_root=repo_root, run=run),
-        *check_mcp_pin_tag_exists(version, repo_root=repo_root, git=git),
+        *check_mcp_pin_tag_exists(repo_root=repo_root, git=git),
     ]
 
 

@@ -128,29 +128,14 @@ def _lock_stale(*args, **kwargs):
     )
 
 
-def _tags(*names):
-    """Stub `git tag -l v*` returning exactly `names`. No tags at all means no release yet."""
-
-    def run(*args, **kwargs):
-        return subprocess.CompletedProcess(
-            args=["git", "tag", "-l", "v*"], returncode=0, stdout="".join(f"{n}\n" for n in names)
-        )
-
-    return run
+def _tag_exists(*args, **kwargs):
+    """`git rev-parse --verify refs/tags/<tag>` finding the tag."""
+    return subprocess.CompletedProcess(args=["git"], returncode=0, stdout="deadbeef\n")
 
 
-def _tags_unavailable(*args, **kwargs):
-    """git present but the listing failed -- must be reported, never read as "no tags"."""
-    return subprocess.CompletedProcess(
-        args=["git", "tag", "-l", "v*"],
-        returncode=128,
-        stdout="",
-        stderr="fatal: not a git repository\n",
-    )
-
-
-_tag_exists = _tags(f"v{VERSION}")
-_tag_missing = _tags("v0.0.1")
+def _tag_missing(*args, **kwargs):
+    """`git rev-parse --verify --quiet` on a ref that is not present: non-zero, no output."""
+    return subprocess.CompletedProcess(args=["git"], returncode=1, stdout="")
 
 
 # --- positive control ------------------------------------------------------------------
@@ -182,7 +167,7 @@ def test_a_literal_left_behind_is_rejected(repo, path, mutate):
 
 # --- the .mcp.json pin (ADR 0015) --------------------------------------------------------
 #
-# The pin is NOT a version literal: it names the newest ALREADY-PUBLISHED release, so it
+# The pin is NOT a version literal: it names an ALREADY-PUBLISHED release, so it
 # trails the version being released rather than equalling it. What is checked is that it has
 # the right shape, that it never LEADS the release, and that the tag it names is real.
 
@@ -241,6 +226,32 @@ def test_a_source_that_is_not_this_repo_at_a_version_tag_is_rejected(repo, sourc
     assert problems
 
 
+def test_a_trailing_from_with_no_source_is_reported_not_crashed_on(repo):
+    """A malformed manifest must fail through the checker's diagnostics, not an IndexError.
+
+    This script IS the release gate, so crashing on the input it exists to reject would turn
+    a rejection into a traceback in the publish workflow.
+    """
+    path = repo / ".mcp.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["mcpServers"]["amicus"]["args"] = ["uvx", "--from"]
+    path.write_text(json.dumps(data) + "\n", encoding="utf-8")
+    pinned, problems = release_state.mcp_pin(repo)
+    assert pinned is None
+    assert any("trailing `--from`" in problem for problem in problems), problems
+
+
+def test_a_non_string_from_source_is_reported_not_crashed_on(repo):
+    """Same for a non-string source, which would otherwise raise TypeError in the regex."""
+    path = repo / ".mcp.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["mcpServers"]["amicus"]["args"] = ["uvx", "--from", {"oops": True}, "amicus-mcp"]
+    path.write_text(json.dumps(data) + "\n", encoding="utf-8")
+    pinned, problems = release_state.mcp_pin(repo)
+    assert pinned is None
+    assert any("not a string" in problem for problem in problems), problems
+
+
 def test_a_manifest_with_no_from_argument_is_rejected(repo):
     path = repo / ".mcp.json"
     data = json.loads(path.read_text(encoding="utf-8"))
@@ -255,63 +266,40 @@ def test_a_pin_naming_a_tag_that_does_not_exist_is_rejected(repo):
     """The check ADR 0015 bought with the equality it sold. `_tag_missing` is the whole point:
     a manifest sending users to a ref that is not there must not pass."""
     _repin(repo, "git+https://github.com/briandconnelly/amicus.git@v1.2.2")
-    problems = release_state.check_mcp_pin_tag_exists(VERSION, repo_root=repo, git=_tag_missing)
+    problems = release_state.check_mcp_pin_tag_exists(repo_root=repo, git=_tag_missing)
     assert any("v1.2.2" in problem for problem in problems), problems
 
 
 def test_the_same_pin_passes_when_the_tag_exists(repo):
     """The positive control for the test above: the instrument can report a pass."""
     _repin(repo, "git+https://github.com/briandconnelly/amicus.git@v1.2.2")
-    assert (
-        release_state.check_mcp_pin_tag_exists(
-            VERSION, repo_root=repo, git=_tags("v1.2.2", f"v{VERSION}")
-        )
-        == []
-    )
+    assert release_state.check_mcp_pin_tag_exists(repo_root=repo, git=_tag_exists) == []
 
 
-def test_the_bootstrap_release_may_pin_the_tag_it_is_about_to_create(repo):
-    """The first release names the tag it creates: there is no earlier release to name.
+def test_a_tagless_checkout_fails_rather_than_being_treated_as_a_first_release(repo):
+    """There is NO bootstrap exception, deliberately -- see the checker's docstring.
 
-    Bootstrap is identified POSITIVELY -- the repository has no `v*` tags at all -- rather
-    than by the pin equalling the version, which is a condition a later release can also
-    satisfy by mistake. The fixture pins `VERSION` itself, which is the 0.1.0 situation.
+    `git tag -l` sees only locally fetched tags, so "no tags" cannot distinguish a repository
+    that has never released from a `--no-tags` or shallow checkout. An exception keyed on it
+    would let a later release with a mistakenly bumped pin pass on an incomplete checkout.
+    0.1.0 is published, so a genuine bootstrap can never recur here anyway, and the failure
+    message says what to do about it.
     """
-    assert release_state.check_mcp_pin_tag_exists(VERSION, repo_root=repo, git=_tags()) == []
+    problems = release_state.check_mcp_pin_tag_exists(repo_root=repo, git=_tag_missing)
+    assert any(f"v{VERSION}" in problem for problem in problems), problems
+    assert any("fetch them and re-run" in problem for problem in problems), problems
 
 
 def test_a_later_release_pinned_to_its_own_unpushed_tag_is_rejected(repo):
-    """The defect Copilot found, and the reason bootstrap is keyed on "no releases yet".
+    """The defect Copilot found in round 1, kept as a permanent control.
 
-    Releasing 1.2.3 with the pin mistakenly bumped to v1.2.3 before that tag exists is
-    exactly the unresolvable window ADR 0015 removes. Under the earlier `pinned == version`
-    exception this passed here AND passed in the publish workflow -- where the tag has since
-    been pushed and so does exist -- meaning nothing caught it. Earlier releases exist, so
-    the bootstrap exception must not apply.
+    Releasing 1.2.3 with the pin mistakenly bumped to v1.2.3 before that tag exists is exactly
+    the unresolvable window ADR 0015 removes. Under the original `pinned == version` exception
+    this passed here AND in the publish workflow -- where the tag has since been pushed and so
+    does exist -- meaning nothing caught it.
     """
-    problems = release_state.check_mcp_pin_tag_exists(
-        VERSION, repo_root=repo, git=_tags("v1.2.1", "v1.2.2")
-    )
+    problems = release_state.check_mcp_pin_tag_exists(repo_root=repo, git=_tag_missing)
     assert any(f"v{VERSION}" in problem for problem in problems), problems
-
-
-def test_the_first_release_may_not_pin_a_tag_other_than_its_own(repo):
-    """A tagless repository is the bootstrap, but only for the tag it is about to create."""
-    _repin(repo, "git+https://github.com/briandconnelly/amicus.git@v1.2.2")
-    problems = release_state.check_mcp_pin_tag_exists(VERSION, repo_root=repo, git=_tags())
-    assert any("no releases yet" in problem for problem in problems), problems
-
-
-def test_a_failed_tag_listing_is_reported_rather_than_read_as_no_tags(repo):
-    """A broken instrument and a tagless repository must not look identical.
-
-    If a failed `git tag -l` were read as "no tags", every release would silently take the
-    bootstrap path -- the check would stop being able to fail.
-    """
-    problems = release_state.check_mcp_pin_tag_exists(
-        VERSION, repo_root=repo, git=_tags_unavailable
-    )
-    assert any("could not list tags" in problem for problem in problems), problems
 
 
 def test_an_init_without_a_version_line_is_rejected(repo):
@@ -592,8 +580,26 @@ def test_main_rejects_a_tag_that_does_not_exist(git_repo, capsys):
 
 
 def test_main_checks_the_tree_alone_when_no_tag_is_given(git_repo):
-    """The form `docs/RELEASING.md` step 3 runs, before the tag exists."""
+    """The form `docs/RELEASING.md` step 3 runs, before the release's own tag exists.
+
+    Against REAL git, not a stub: the pin names the previous release (v1.2.2, created here),
+    which is the state ADR 0015 defines while 1.2.3 is being released. `git rev-parse` has to
+    actually find that tag for this to pass.
+    """
+    _git(git_repo, "tag", "-a", "v1.2.2", "-m", "previous release")
+    _repin(git_repo, "git+https://github.com/briandconnelly/amicus.git@v1.2.2")
     assert release_state.main([], repo_root=git_repo) == 0
+
+
+def test_main_rejects_a_pin_whose_tag_is_absent_from_a_real_repository(git_repo, capsys):
+    """The negative control for the test above, also against real git.
+
+    The fixture pins v1.2.3, which no tag names, so the checker must refuse -- proving the
+    pass above came from finding v1.2.2 and not from the check being inert. The REASON is
+    asserted, not just the exit code, so an unrelated failure cannot satisfy this.
+    """
+    assert release_state.main([], repo_root=git_repo) == 1
+    assert "v1.2.3, which does not exist in this checkout" in capsys.readouterr().err
 
 
 def test_a_real_tag_message_survives_git_cleanup_verbatim(git_repo):

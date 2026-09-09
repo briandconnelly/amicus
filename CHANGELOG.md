@@ -9,9 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- `.mcp.json`'s pin now names the newest already-published release rather than the version being
+- `.mcp.json`'s pin now names an already-published release rather than the version being
   released, so `main` never sends a fresh install to a tag that does not exist yet
-  ([ADR 0015](docs/adr/0015-mcp-json-pins-the-last-published-release.md), issue #26).
+  ([ADR 0015](docs/adr/0015-mcp-json-pins-an-already-published-release.md), issue #26).
   The pin is no longer a release version literal; a small `chore(release):` PR moves it after the
   tag is pushed.
 - `scripts/check_release_state.py` replaces its `pin == version being released` equality — which was

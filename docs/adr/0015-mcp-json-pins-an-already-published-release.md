@@ -1,4 +1,4 @@
-# ADR 0015: `.mcp.json` pins the last published release, not the version being released
+# ADR 0015: `.mcp.json` pins an already-published release, not the version being released
 
 **Status:** Accepted (2026-09-09, immediately after the 0.1.0 release)
 
@@ -29,7 +29,9 @@ When a user updates their marketplace clone and the pin changes from `@v0.1.0` t
 
 ## Decision
 
-`.mcp.json` pins the newest release that has **already been published**, and a release never moves it.
+`.mcp.json` pins a release that has **already been published**, and a release never moves it.
+It is advanced to the new tag after that tag is published, so between the publish and the pin-move PR it deliberately names the previous release rather than the newest one.
+"Already published" is the invariant; "newest" is not, and the table below shows exactly where the two differ.
 
 The pin stops being a rule-19 version literal.
 A `chore(release):` PR moves `pyproject.toml`, `src/amicus/__init__.py` and both `plugin.json` files as before, and leaves `.mcp.json` alone.
@@ -46,17 +48,18 @@ A separate, small `chore(release):` PR moves the pin to the new tag once that ta
 
 0.1.0 was the bootstrap and has already happened: it was tagged and published on 2026-09-09, its pin reads `@v0.1.0`, and no literal moved.
 It created the only tag its own pin could name, so `main` has satisfied the invariant since that tag was pushed and the window is already closed.
-0.2.0 is therefore the first release to follow the sequence this ADR describes, and the bootstrap branch below can never be taken again in this repository.
+0.2.0 is therefore the first release to follow the sequence this ADR describes.
 
 `scripts/check_release_state.py` stops asserting that the pin equals the version being released.
 It asserts instead that the pin has the expected shape, that it names a version no newer than the one being released, and that the pinned tag actually exists.
 That last check is worth more than the one it replaces: the old equality was true by construction on any tree a release PR had touched, while "the tag this manifest sends users to exists" is a fact about the world.
 
-The bootstrap is the one exception, and it is identified positively: a repository with **no `v*` tags at all** whose pin names the version being released.
-That is the first release naming the tag it is about to create, and it is unreachable a second time.
-The exception is deliberately not "the pin equals the version being released".
-That was the first attempt, and review found it too broad: on a later release a pin mistakenly bumped to the version being released would satisfy it, skip the check, and restore the very window this ADR removes — while the publish workflow would not catch the mistake either, because by then the tag has been pushed and does exist.
-A failed tag listing is reported rather than read as "no tags", so a broken instrument cannot silently take the bootstrap path.
+There is **no bootstrap exception**, deliberately.
+Two were drafted and review rejected both.
+Keying one on "the pin equals the version being released" was too broad: on a later release a pin mistakenly bumped to that version would satisfy it, skip the check, and restore the very window this ADR removes — and the publish workflow would not catch it either, because by then the tag has been pushed and does exist, so nothing would.
+Keying one on "this repository has no `v*` tags" was no better, because `git tag -l` sees only locally fetched tags: a `--no-tags` or shallow checkout is indistinguishable from a repository that has never released, and the pre-tag runbook step does not fetch before running the check.
+The exception is moot in any case, because 0.1.0 is published and this repository can never legitimately bootstrap again.
+Requiring the tag unconditionally turns an incomplete checkout into a loud, actionable failure — fetch your tags — instead of a silent pass.
 
 ## Consequences
 

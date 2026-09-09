@@ -72,7 +72,8 @@ This is configured on PyPI's own project settings page and has no read-only API 
 Trademark clearance for the name `amicus` is resolved, or the maintainer has decided to proceed without it.
 This was decided on 2026-09-08: `docs/adr/0013-proceed-without-trademark-clearance.md` records the decision to publish without clearance, the consequences accepted, and what would reopen it.
 Read that ADR rather than relying on anyone's recollection, and confirm nothing listed under "What would reopen this" has since happened.
-TestPyPI already has the name claimed under this project; pypi.org does not yet have a release.
+TestPyPI has the name claimed under this project, and pypi.org has carried a release since 0.1.0 was published on 2026-09-09.
+The name is therefore established on both indexes; this precondition is about clearance, not about claiming the name.
 
 ### The README describes the released tool
 
@@ -98,7 +99,7 @@ The tag therefore deliberately points at a commit that is in `main`'s history bu
    Roll `## [Unreleased]` in `CHANGELOG.md` into a dated `## [X.Y.Z] - YYYY-MM-DD` section, and leave a fresh empty `## [Unreleased]` above it.
    Change no version literal unless the version itself is changing.
    The literals are `pyproject.toml`, `src/amicus/__init__.py` and both `plugin.json` files.
-   Do **not** touch `.mcp.json`: per ADR 0015 its pin names the newest already-published release, so during this PR it correctly trails the version being released by one, and step 7 moves it after the tag exists.
+   Do **not** touch `.mcp.json`: per ADR 0015 its pin names an already-published release, so during this PR it correctly trails the version being released by one, and step 7 moves it after the tag exists.
    0.1.0 was the bootstrap: no literal moved, and its `@v0.1.0` pin named the tag that release itself created, because no earlier release existed.
    That case is closed and does not recur.
    Regenerate `uv.lock` with `uv lock` in this same PR, per AGENTS.md rule 19 — `uv.lock` mirrors the version rather than declaring it, and `prek.toml`'s `uv-lock-check` hook runs `uv lock --check` whenever `pyproject.toml` changes, so a release PR that skips this fails its own hook.
@@ -195,11 +196,12 @@ They confirm the release actually landed; they are not a pre-tag gate.
 2. Install from the public tag exactly as a user would, using the committed manifest's own source:
 
    ```sh
-   uvx --from git+https://github.com/briandconnelly/amicus.git@vX.Y.Z amicus-mcp
+   printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"post-tag","version":"0"}}}' \
+     | UV_CACHE_DIR="$(mktemp -d)" uvx --from "git+https://github.com/briandconnelly/amicus.git@vX.Y.Z" amicus-mcp
    ```
 
-   Drive it with one JSON-RPC `initialize` request over stdin and assert `serverInfo.name == "amicus"` and the expected version.
-   Use a fresh `UV_CACHE_DIR` here too, for the reason step 3 gives: a warm cache can answer without resolving anything.
+   Assert `serverInfo.name == "amicus"` and the expected version in the reply.
+   The fresh `UV_CACHE_DIR` is part of the command, not a note beside it: a warm cache answers without resolving anything, so a copy-pasted command without it can pass while proving nothing.
    Step 3's rehearsal already proved transport, build and handshake against the release commit's SHA, so what this adds is narrow but real — that the tag *ref* resolves, which is all that separated the rehearsal from the thing itself.
    This is what step 7's pin-move PR is waiting on: do not move the pin to a tag whose install you have not just run.
 3. Run a negative control: the same command against a version that does not exist must fail.

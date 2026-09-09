@@ -173,7 +173,7 @@ def test_mcp_json_installs_this_repo_at_a_published_release_tag():
     manifest actually fetches, so pin its shape: this repo, over git, at some `vX.Y.Z`.
 
     What this does NOT assert is `pin == amicus.__version__`. Per ADR 0015 the pin names
-    the newest ALREADY-PUBLISHED release, not the version this tree declares, because the
+    an ALREADY-PUBLISHED release, not the version this tree declares, because the
     manifest a fresh install reads lives on `main` and cannot name a tag that does not
     exist yet. Between releases the two are equal; from the release PR until the pin-move
     PR the pin trails by one, and that state is correct rather than a literal left behind.
@@ -182,7 +182,9 @@ def test_mcp_json_installs_this_repo_at_a_published_release_tag():
     """
     args = _read(".mcp.json")["mcpServers"]["amicus"]["args"]
     assert "--from" in args, "the manifest must install from an explicit source"
-    source = args[args.index("--from") + 1]
+    index = args.index("--from") + 1
+    assert index < len(args), "`--from` must be followed by a source, not end the argv"
+    source = args[index]
     match = re.fullmatch(
         r"git\+https://github\.com/briandconnelly/amicus\.git@v(\d+\.\d+\.\d+)", source
     )
