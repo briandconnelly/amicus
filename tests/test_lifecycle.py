@@ -549,7 +549,7 @@ async def test_keyed_start_runs_off_the_event_loop(tmp_path, monkeypatch):
     assert seen["kw"]["write_spec"] == spec.public()
     assert seen["kw"]["stdin_text"] == spec.inputs_json()
     assert seen["kw"]["extra"] == {
-        "result_format": 3,
+        "result_format": 4,
         "backend": "fake",
         "tool": "amicus_consult_async",
     }

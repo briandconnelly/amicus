@@ -146,7 +146,7 @@
     ],
     "protocol_revision": "2026-07-28",
     "resource_error_carrier": "JSON-RPC error; the envelope (machine_code/human_message/backend/temporary/retry_after_ms/repair/resource_uri/request_id) is in error.data. Classify by error.data.machine_code: the numeric is era-bound (-32002 on a 2025-11-25 connection, -32602 on 2026-07-28; -32603 for a read failure on both).",
-    "result_format": 3,
+    "result_format": 4,
     "result_meta_resource": "amicus://result-meta",
     "scope": [
       "Second opinions, git-change reviews, adversarial critiques and delegated diffs from Codex, Kimi or Claude Code, selected per call.",
@@ -918,7 +918,7 @@
           "stability": "alpha"
         },
         "dev.bconnelly.amicus/triage": {
-          "size_bytes": 11114
+          "size_bytes": 11115
         }
       },
       "mimeType": "application/schema+json",
@@ -1374,7 +1374,7 @@
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-9",
+                "default": "amicus/0.1/schema-10",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -1935,7 +1935,7 @@
           "stability": "alpha"
         },
         "dev.bconnelly.amicus/triage": {
-          "size_bytes": 11114
+          "size_bytes": 11115
         }
       },
       "description": "The full ErrorResult schema; tool outputSchemas carry only an opaque error branch.",
@@ -1965,7 +1965,7 @@
           "stability": "alpha"
         },
         "dev.bconnelly.amicus/triage": {
-          "size_bytes": 5249
+          "size_bytes": 5250
         }
       },
       "description": "The full Meta schema every success envelope's opaque `meta` points at.",
@@ -1982,7 +1982,7 @@
           "stability": "alpha"
         },
         "dev.bconnelly.amicus/triage": {
-          "size_bytes": 5249
+          "size_bytes": 5250
         }
       },
       "mimeType": "application/schema+json",
@@ -2191,7 +2191,7 @@
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-9",
+            "default": "amicus/0.1/schema-10",
             "title": "Fingerprint",
             "type": "string"
           },
@@ -2716,10 +2716,12 @@
                 "type": "array"
               },
               "confidence": {
+                "description": "How sure this review is. Seeded from the backend's own low|medium|high, then floored to `low` wherever amicus cannot stand behind the result (partial coverage, findings it could not carry), so `low` is not always the backend's word. `unknown` is the ABSENCE of a rating - no readable value, no floor applied - never a low one.",
                 "enum": [
                   "high",
                   "low",
-                  "medium"
+                  "medium",
+                  "unknown"
                 ],
                 "type": "string"
               },
@@ -7750,10 +7752,12 @@
                 "type": "array"
               },
               "confidence": {
+                "description": "How sure this review is. Seeded from the backend's own low|medium|high, then floored to `low` wherever amicus cannot stand behind the result (partial coverage, findings it could not carry), so `low` is not always the backend's word. `unknown` is the ABSENCE of a rating - no readable value, no floor applied - never a low one.",
                 "enum": [
                   "high",
                   "low",
-                  "medium"
+                  "medium",
+                  "unknown"
                 ],
                 "type": "string"
               },
