@@ -5,37 +5,63 @@ from the current branch's tracked state (`HEAD` plus replayable uncommitted trac
 untracked files are never copied) and return the resulting `diff`. Delegation is available for
 `codex` and `kimi` in v1; Claude stays review-only.
 
-## The diff is never applied
+## Rules
 
-amicus does not touch your working tree. The `diff` field in the result is a proposal, not a
-change that already happened. Never run `git apply`, patch, or otherwise merge it into your tree
-before you have reviewed it.
+- **Never apply a returned diff before working through the four checks below.**
+- **Answer in the response contract**, with every fixed key present, in order.
+- **Report a check you could not perform as `not run`, with a reason.** Never drop a key.
+- **Read the run's containment facts for the backend that produced the diff** before concluding
+  what could not have happened inside it.
+- **Validate a diff in a disposable worktree, never in the working tree**, before applying it.
+- **State the assessment and the action separately.** They are different facts.
+
+## What amicus guarantees, and what it does not
+
+amicus does not touch your working tree: the `diff` is a proposal, and amicus never applies it.
+
+That is a statement about **patch application**, not about **process containment**. It does not
+follow that the run changed nothing anywhere. What the run itself could do depends entirely on the
+backend, and the delegate tool description discloses that writes may land in temporary roots
+outside the returned diff.
+
+| | `codex` | `kimi` |
+| --- | --- | --- |
+| OS sandbox | yes — codex's `workspace-write` | **none** |
+| Network egress during the run | **blocked** — amicus pins `sandbox_workspace_write.network_access=false` | **not blocked** |
+| Writes bounded to the worktree | no — the sandbox also permits the OS temp roots (`/tmp`, `$TMPDIR`) | no — the worktree sets kimi's working directory, not its reach |
+| Approvals | codex's own | none |
+
+**So the inference "a delegate run cannot have installed anything, pushed, run `gh`, or
+published" holds for `codex` only.** On `kimi` a task can reach the network and write outside the
+worktree with the user's own privileges; the returned diff shows what changed *in the worktree*,
+not everything the run did. Confirm the backend before relying on any of this, and read `effects`
+and `egress` on `amicus_backends` rather than assuming the table above is still current.
 
 ## What to check before applying
 
 Work through these four before you say anything about applying. Each has a fixed key, given in
 bold after its number; the response contract below is written in those keys.
 
-1. `fidelity` — **Does it do what the task asked, and nothing more?** Read the diff against
-   the original task text. Delegate runs have no network egress — an install, a remote git
-   operation, `gh`, or a publish step cannot have happened inside the run, so a diff that
-   references one is suspicious.
-2. `scope` — **Does it touch files outside the intended scope?** A delegate task should be
-   self-contained; a diff that edits unrelated files is a sign the task was under-specified or
-   the model over-reached.
-3. `checks-run` — **Does it compile / pass checks?** The delegate result is an unverified
-   claim like any other amicus result — `summary` and `findings` describe what the backend did,
-   not proof that it works. Apply the diff to a disposable branch or worktree and run this
-   project's actual checks before merging it into real work.
-4. `consistency` — **Is the diff internally consistent?** Check `diffstat` against the diff
-   itself for a sanity check on scope before reading line by line.
+1. `fidelity` — **Does it do what the task asked, and nothing more?** Read the diff against the
+   original task text. On `codex`, a diff that references an install, a remote git operation,
+   `gh`, or a publish step is suspicious, because the run had no network. On `kimi` that same
+   reference is not anomalous — which is a reason to scope kimi delegate tasks more tightly, not
+   a reason to trust the diff more.
+2. `scope` — **Does it touch files outside the intended scope?** A diff that edits unrelated
+   files is a sign the task was under-specified or the model over-reached.
+3. `checks-run` — **Does it compile / pass checks?** The delegate result is an unverified claim
+   like any other: `summary` and `findings` describe what the backend says it did, not proof that
+   it works. Apply the diff to a **disposable** branch or worktree and run the checks the change
+   actually touches before merging it into real work.
+4. `consistency` — **Is the diff internally consistent?** Read the hunk headers against the hunk
+   bodies. **Do not use `diffstat` as the integrity check**: `diffstat` is computed from the raw
+   diff *before* redaction and truncation are applied to the `diff` field, so the two legitimately
+   disagree whenever `meta.redacted_paths` is non-empty or `meta.truncated` is true. Check those
+   two fields first; only a disagreement they do not explain is a real inconsistency.
 
 ## Response contract
 
-Answer in exactly this shape. Earlier guidance here asked for the checks "first" and the verdict
-"after"; three graded runs showed that a directive about the ORDER of generated prose does not
-move generation order. This replaces it with a required output SHAPE, so the verdict has a
-labelled place to come after rather than a rule to obey.
+Answer in exactly this shape.
 
 ```
 Checks:
@@ -44,18 +70,39 @@ Checks:
 - checks-run: <what you found, or "not run" and why>
 - consistency: <what you found>
 
-Verdict: applied | not applied — <one sentence>
+Verdict: accept | reject | cannot-assess — <one sentence>
+Action: applied | not applied — <one sentence>
 ```
 
 Fixed vocabulary, and the whole of it: `fidelity`, `scope`, `checks-run`, `consistency`, in that
 order, one line each. A check you could not perform is reported under its own key as `not run`
-with a reason; it is never dropped. The words "apply", "applied", "not applied", "done" and any
-other statement of the outcome belong after the `Verdict:` label and nowhere before the `Checks:`
-label — including in any preamble. Prose may follow the `Verdict:` line freely.
+with a reason; it is never dropped.
+
+`Verdict:` reports your **assessment of the proposal** — whether the diff is correct and in scope.
+`Action:` reports **what you did to the working tree**. They are independent: `accept` /
+`not applied` is a normal outcome when the user has not asked you to apply it yet, and
+`cannot-assess` / `not applied` is the honest result when you could not obtain the evidence.
+Never report `Action: applied` for a diff whose `Verdict:` is `reject` or `cannot-assess`.
+
+The words "apply", "applied", "not applied", "accept", "reject" and "done" belong on the labelled
+`Verdict:` and `Action:` lines and nowhere before the `Checks:` label — including in any preamble.
+Prose may follow the `Action:` line freely.
 
 ## Applying it
 
-Once you've reviewed the diff and are satisfied it is correct and in scope, apply it yourself
-(e.g. `git apply`, or hand it to your own patch-application tooling) to your actual working tree.
-amicus's job is done at "returned diff" — it does not offer an apply step, by design, so that a bad
-or unwanted diff never touches your tree without a human or agent decision in between.
+Once the diff is reviewed and you are satisfied it is correct and in scope, apply it yourself
+(e.g. `git apply`, or your own patch-application tooling). amicus's job is done at "returned
+diff" — it does not offer an apply step, by design, so that a bad or unwanted diff never touches
+your tree without a decision in between.
+
+## Handing a returned diff to a second backend
+
+A diff produced by one backend can be reviewed by another. Pass it inline to `amicus_consult`, or
+apply it in a disposable worktree and run `amicus_review_changes` there against that worktree's
+`workspace_root`.
+
+Record which artifact the second backend actually saw — the raw diff text, or a worktree with the
+diff applied. They support different conclusions: a backend given only the diff text cannot check
+whether the result builds, and a backend given the worktree cannot see what the diff did *not*
+touch unless you scope the review to it. State which one you used when you report the outcome,
+and count both calls against the workflow's declared cap.
