@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking (`FINGERPRINT` `schema-10`, `RESULT_FORMAT` 4).** `confidence` on a review or
+  adversarial-review result gained a fourth value, `unknown`, and both tools now publish what the
+  field means. `unknown` is the ABSENCE of a rating -- the backend supplied none amicus could
+  read, and no coverage or findings-loss floor applied -- never a low one. A `low` may be
+  amicus's own floor rather than the backend's word, so neither value alone tells you what the
+  backend said about its certainty. Backends are still asked for `low|medium|high`; the new value
+  is amicus's, not theirs. A `RESULT_FORMAT` 3 reader's closed enum rejects a stored result
+  carrying it.
 - **Breaking (`FINGERPRINT` `schema-9`, `RESULT_FORMAT` 3).** Every consult, review,
   adversarial-review and delegate result gained `findings_diagnostics`: `null` when nothing was
   lost, otherwise a `dropped` count and reasons from a fixed vocabulary
@@ -24,6 +32,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- An unreadable `confidence` no longer defaults UPWARD to `medium` (issue #53). A backend that
+  returned nothing amicus could read about its own certainty was delivered as moderately
+  confident, with nothing in the envelope to say the value had been invented -- the same
+  direction of dishonesty as issue #38, on a different field. It now falls to `unknown`. `low`
+  was not the fix: it is the lowest rating a backend can REPORT, so defaulting to it would
+  manufacture a claim too. The verdict beside it is untouched, so a backend that reported `fail`
+  and said nothing readable about its certainty is delivered as `fail`/`unknown`.
 - Review findings are no longer discarded in silence while the verdict survives (issue #38). A
   finding that failed validation was dropped with no count and no warning, so a backend could
   report a real problem and the caller receive an apparently clean review. Only `codex` is held
