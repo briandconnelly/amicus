@@ -23,13 +23,31 @@ Read it back:
 gh api repos/briandconnelly/amicus/rulesets
 ```
 
-Confirm a ruleset targeting `refs/tags/v*` whose rules restrict `creation` as well as `update` and `deletion`, and whose bypass list contains no agent identity — no entry whose `actor_type` is `Integration`.
-Then read the ruleset itself, `gh api repos/briandconnelly/amicus/rulesets/<id>`, and confirm `current_user_can_bypass` is not `never`.
-That field is the one that says whether YOU can push the tag.
+Confirm a ruleset targeting `refs/tags/v*` whose rules restrict `creation` as well as `update` and `deletion`.
+
+The next two checks look alike and are not.
+One is about the ruleset; the other is about whoever ran the command.
+Read them in that order, and note which identity `gh` is authenticated as before you start — `gh auth status` names it.
+
+**Check one, rule 21 itself — identity-independent, but an agent cannot run it.**
+The bypass list must contain no agent identity: no entry whose `actor_type` is `Integration`.
+An App token's response omits the `bypass_actors` key **entirely** rather than returning it, so an agent reading this endpoint cannot see the list at all.
+An absent key is not an empty list, and an agent must not report rule 21 as satisfied from one.
+This check is the maintainer's to run, under their own account.
+
+**Check two, whether you can push the tag — identity-dependent.**
+Read the ruleset itself, `gh api repos/briandconnelly/amicus/rulesets/<id>`, and confirm `current_user_can_bypass` is not `never`.
+That field describes the identity whose token made the request, not the repository.
+Under the App token that agents use it reads `never`, which is the correct and required state for an agent: rule 21 demands exactly that.
+An agent that reads `never` here has learned nothing about the maintainer, and must not report the release blocked — nor "fix" it by adding a bypass actor for the identity it is running as, which would be the `Integration` entry rule 21 forbids.
+Only the maintainer, under their own account, gets a meaningful answer.
+As of 2026-09-09 that answer is `always`, because the bypass list holds `RepositoryRole` 5 (repository admin).
+
 A ruleset with an empty `bypass_actors` list satisfies rule 21 perfectly and blocks the release, because the restriction applies to the repository owner too — this happened on 2026-09-08 and was caught only by reading the ruleset back.
 The fix is to add the repository admin role to the bypass list, never to weaken a rule: rule 21 forbids agent identities from bypassing, not you.
 Creation is the load-bearing rule.
-`.github/workflows/publish.yml` triggers on `push: tags: ["v*"]`, so any identity that can create a `v*` tag can trigger a publish without rules 19 and 20 having been satisfied first.
+`.github/workflows/publish.yml` triggers on `push: tags: ["v*"]`, so any identity that can create a `v*` tag can start a publish run.
+Since ADR 0014 the `verify` job stands between that run and the upload, and refuses a tag that does not carry a conforming rule-20 record — but `verify` reads a record the tag's own author wrote, so the ruleset remains the control that decides who may author one.
 A settings page that looks right is not evidence; the M6 environment check found exactly that failure mode by reading the API back instead of trusting the UI.
 
 ### The `pypi` environment requires a reviewer and is scoped to `v*` tags
@@ -87,9 +105,11 @@ The tag therefore deliberately points at a commit that is in `main`'s history bu
    The script itself forces `AMICUS_REQUIRE_LIVE=1` into each backend's subprocess environment, so prefixing the command with it is optional; its own usage string documents `AMICUS_REQUIRE_LIVE=1 uv run python scripts/record_live_gate_evidence.py`, and either form runs the same live gates.
    This spends real quota on all three backends and requires the maintainer's authorization in the session where it runs.
    Run `AMICUS_RELEASE_CHECK=1 uv run pytest tests/test_release_evidence.py -v --no-cov` and confirm the freshness assertion passes.
+   Run `uv run python scripts/check_release_state.py` and confirm it prints `release predicate holds`.
+   That is the same tree check the `verify` job will run after the tag is pushed, so a failure here is a failure you would otherwise discover with an immutable tag already in place.
    Run the gate defined by AGENTS.md rule 2.
-   The 24-hour freshness window this evidence carries (`validate`'s `max_age_hours`) is checked only here, at step 3, and nothing re-checks it afterward: if PR C then sits in review overnight, the tag could be pushed on evidence the mechanism itself would now reject.
-   Merge PR C, the next step, before the day is out — otherwise this step must be repeated.
+   The 24-hour freshness window this evidence carries (`validate`'s `max_age_hours`) is checked only here, at step 3, and deliberately not by CI afterward: a tag is immutable, so a window applied after tagging could let queue time or a slow deployment approval turn a legitimate tag into one that can never be published.
+   The window is therefore yours to honor: merge PR C, the next step, before the day is out — otherwise this step must be repeated.
 4. Merge PR C with an ordinary merge commit: `gh pr merge --merge`.
    This is the strategy this repository already uses for its PRs, including #7 through #10.
    Squash and rebase are forbidden here, not merely discouraged: both create a new commit and drop the release commit from `main`'s history entirely, which would destroy the subject the evidence names, leaving no commit in `main`'s history for the tag to legitimately point at.
@@ -105,7 +125,16 @@ The tag therefore deliberately points at a commit that is in `main`'s history bu
    If it instead succeeds but prints a different SHA, the merge was an ordinary merge commit but of a branch tip the recorded evidence does not cover — the PR C branch gained a commit after step 3 was run — and the release must stop for that reason instead; do not diagnose this case as a squash or rebase.
    Run `git diff --stat <release-sha> origin/main`.
    It must print nothing, which is what proves the tree the tag will point at and the tree `main` now holds are identical; any output means something else merged in between, and the release must stop.
-6. Push the tag pointing at the release commit, not at `main`'s head: `git tag vX.Y.Z <release-sha>`, then push it.
+6. Push the tag pointing at the release commit, not at `main`'s head, as an **annotated** tag whose message is the evidence record verbatim:
+
+   ```sh
+   git tag -a vX.Y.Z -F .release-evidence/live-gates.json --cleanup=verbatim <release-sha>
+   git push origin vX.Y.Z
+   ```
+
+   AGENTS.md rule 20 requires this form, and the `verify` job refuses a lightweight tag: `.release-evidence/` is gitignored, so the tag message is the only carrier that reaches CI.
+   `--cleanup=verbatim` keeps the JSON byte-for-byte; the default cleanup would also parse, but exactness is free here.
+   Confirm before pushing that `git cat-file -t vX.Y.Z` prints `tag` (not `commit`, which would mean a lightweight tag) and that `git tag -l --format='%(contents)' vX.Y.Z | python -c 'import json,sys; json.load(sys.stdin)'` exits 0.
    Nothing but step 5's read-only checks happens between step 4 and step 6.
 
 A maintainer who instead wants the tag to be `main`'s own head has a permitted alternative: a direct fast-forward push of the PR C branch to `main` (`git checkout main && git merge --ff-only <pr-branch> && git push origin main`) achieves that, if this repository's branch protection allows a direct push to `main`.
@@ -115,7 +144,12 @@ Treat the ordinary-merge-commit path above as the default; use the fast-forward 
 ## What happens next
 
 Pushing the tag starts `.github/workflows/publish.yml`.
-The `build` job runs first, then the `pypi` job waits for the `pypi` environment's required reviewer.
+The `build` job runs first, then `verify`, and only then does the `pypi` job wait for the `pypi` environment's required reviewer.
+`verify` runs `scripts/check_release_state.py` against the tagged commit and writes its result to the run summary, so read that summary before approving — it is there for exactly this moment, and it is why the check does not live in the `pypi` job, whose every step would run only after your approval.
+Read what the summary claims precisely.
+Release-state coherence is proven: the version literals, the dated changelog section and `uv.lock` really do agree on the tagged tree.
+The live-gate line is not proof the three suites ran; it reports that the record you wrote is well formed and names this commit.
+You are the only evidence that the runs happened, which is what AGENTS.md rule 23 is about.
 Approve that deployment deliberately once you have confirmed the build artifacts look right.
 The upload is irreversible: PyPI does not allow re-uploading a version, even a broken one.
 A pause here is the workflow waiting on you, not a hang.
