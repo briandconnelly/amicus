@@ -27,8 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   capabilities are now asserted against a real `amicus-mcp` subprocess. `RESULT_FORMAT`
   stays `4`. `surface_digest` moves only because `instructions` gained a clause naming it
   as the catalog re-read check: revert that clause and the digest returns to its previous
-  value, because the digest covers the catalog records and `instructions` and not the
-  capability blocks or the cache envelope. Supersedes ADR 0006's cache-hint clause; see
+  value, because the digest covers the catalog records as the server holds them (before
+  response middleware) plus `instructions`, and not the capability blocks or the cache
+  envelope. The cache hints are inert for both captured hosts, which negotiate the
+  handshake era; the `listChanged` flip is not, and is visible to exactly those clients. Supersedes ADR 0006's cache-hint clause; see
   ADR 0018. (#45)
 - **Breaking (`FINGERPRINT` `schema-12`).** The published stability tier is now inside the
   closed set an agent can filter on. Nine of the 18 tools -- the ones absent from the per-tool

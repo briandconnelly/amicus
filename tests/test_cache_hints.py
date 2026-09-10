@@ -20,7 +20,12 @@ import pytest
 from fastmcp import Client
 from fastmcp.client.transports import StdioTransport
 from mcp_types.methods import CACHEABLE_METHODS
-from tests.conftest import NEVER_SPAWN_CLAUDE, NEVER_SPAWN_CODEX, NEVER_SPAWN_KIMI
+from tests.conftest import (
+    ENV_PREFIXES,
+    NEVER_SPAWN_CLAUDE,
+    NEVER_SPAWN_CODEX,
+    NEVER_SPAWN_KIMI,
+)
 
 from amicus import config, server
 from amicus.registry import BackendRegistry
@@ -36,15 +41,35 @@ _ENVELOPE_FIELDS = ("resultType", "ttlMs", "cacheScope")
 
 
 def _server_env() -> dict[str, str]:
-    """A minimal environment for the spawned server: no `AMICUS_*` from the developer's
-    shell, and the conftest guard's unusable backend binaries carried across the process
-    boundary (the autouse fixtures monkeypatch this process, not a child's)."""
-    env = {k: v for k, v in os.environ.items() if not k.startswith("AMICUS_")}
+    """A minimal environment for the spawned server, matching what `clean_env` gives an
+    in-process test: every prefix in `ENV_PREFIXES` stripped, then the guard's unusable
+    backend binaries restored (the autouse fixtures monkeypatch THIS process, not a child).
+
+    `AMICUS_` alone is not enough. `CODEX_IN_CLAUDE_LOG_FILE` and `MOONBRIDGE_LOG_FILE` are
+    accepted legacy aliases for `AMICUS_LOG_FILE` (`config/__init__.py`), and `obs.configure`
+    opens that path — so a developer with one exported had these tests writing to their own
+    log file. Measured before the fix: the subprocess created it.
+    """
+    env = {k: v for k, v in os.environ.items() if not k.startswith(ENV_PREFIXES)}
     return env | {
         "AMICUS_CODEX_BIN": NEVER_SPAWN_CODEX,
         "AMICUS_KIMI_BIN": NEVER_SPAWN_KIMI,
         "AMICUS_CLAUDE_BIN": NEVER_SPAWN_CLAUDE,
     }
+
+
+def test_the_spawned_server_env_is_as_clean_as_clean_env(monkeypatch):
+    """The subprocess environment strips what `clean_env` strips.
+
+    Positive control on the instrument: a legacy alias is exported first, so a filter that
+    only handled `AMICUS_` would leave it visible here.
+    """
+    monkeypatch.setenv("CODEX_IN_CLAUDE_LOG_FILE", "/nonexistent/amicus-test-leak.log")
+    monkeypatch.setenv("AMICUS_ALLOW_CWD_WORKSPACE", "1")
+    env = _server_env()
+    assert "CODEX_IN_CLAUDE_LOG_FILE" not in env
+    assert "AMICUS_ALLOW_CWD_WORKSPACE" not in env
+    assert env["AMICUS_CODEX_BIN"] == NEVER_SPAWN_CODEX
 
 
 def _stdio() -> StdioTransport:

@@ -15,7 +15,7 @@ Issue #45 asked for the revisit, on the grounds that the catalog is provably sta
 
 Both halves of ADR 0006's reason are still true and the exit condition is still unmet.
 FastMCP 4.0.3's `cache_ttl` constructor argument is uniform by construction: `build_cache_hints` returns `dict.fromkeys(get_args(CacheableMethod), hint)`.
-FastMCP offers no per-resource hint, and it is not close to offering one.
+FastMCP offers no per-resource hint.
 
 What changed is a fact neither the ADR nor the issue had.
 The SDK layer beneath FastMCP takes the hint map **per method** — `Server.cache_hints` is a `dict[CacheableMethod, CacheHint]`, read by `mcp.server.runner.Server._serialize` — and the volatility ADR 0006 was protecting is confined to exactly one method.
@@ -27,10 +27,12 @@ Two premises in issue #45 were wrong, and are recorded because the fix would hav
 `amicus://capabilities` is not the volatile resource the issue and ADR 0006's successor reasoning might suggest.
 `capabilities_payload` takes `registry` and `config_errors` and uses neither (both carry an explicit `noqa: ARG001`); it reports `enabled_backends` from settings, which is fixed per process.
 The genuinely mutable reads are the two templates, which report install state, auth state and a fetched model catalog.
-A `resources/read` exclusion aimed at `amicus://capabilities` would have protected the wrong payload and cached the live ones.
+The mistaken diagnosis would not have changed the remedy, because hints are chosen per method: excluding `resources/read` protects the template reads whatever motivated the exclusion.
+It would have changed the remedy considered — a per-URI override zeroing `amicus://capabilities` alone, which was on the table, would have left the two live reads cached.
 
 `surface_digest` is a catalog comparison token, not a revalidation token for this contract.
-It covers the tool, resource and template records plus the instructions text — and nothing else.
+It covers the tool, resource and template records **as the server holds them** plus the instructions text — and nothing else.
+`surface_records` dumps with `run_middleware=False`, so a response middleware that alters what the client actually receives moves nothing in the digest: `InputSchemaDialectMiddleware` stamps `inputSchema.$schema` onto every tool on the way out, and that field is absent from the hashed record.
 It does not cover the `initialize` or `server/discover` capabilities, nor the cache envelope, so nothing this record decides would have moved it (see Consequences for the measurement, and for the one edit that did).
 A caller re-reading it learns that the catalog is unchanged, which is what it is for; it is not evidence that the wider contract is unchanged, and this repository should not describe it as one.
 
@@ -75,11 +77,17 @@ Regenerating the fixture alone would have restored agreement today and lost it a
 `RESULT_FORMAT` does not move — no stored job-result shape changes.
 
 `surface_digest` moves, and only because of the `instructions` edit.
-Measured on this tree: revert that one clause and the digest returns to `30df43ec…` (`all` and `claude`) and `02bdc127…` (`codex-kimi`), the values pinned before this change, while the cache hints and the `listChanged` flags stay exactly as this ADR sets them.
+Measured on this tree, and reproducible: build each profile's app, assign `app.instructions` the exact text from that profile's snapshot on `main` (`git show main:tests/fixtures/manifest_snapshot.<profile>.json`, key `discover.instructions`), and recompute `surface.surface_digest`.
+It returns `30df43ec…` for `all` and `claude` and `02bdc127…` for `codex-kimi` — the values `main` pins — while the cache hints and the `listChanged` flags stay exactly as this ADR sets them.
+Substituting a hand-retyped approximation of the old text does not reproduce it, which is why the procedure names the committed snapshot as the source.
 That is the concrete demonstration of what the digest covers: `instructions` is inside it and the capability blocks and cache envelope are not, so a caller watching `surface_digest` alone would have seen nothing of the change this record is actually about.
 
-The change is inert against every host observed to date: honoring requires a modern-era client that passes `cache=`, and neither captured host negotiates the modern era — `docs/host-captures/claude-code/2.1.263/connection.log` records `protocol=2025-11-25` and `docs/host-captures/codex/0.153.4/connection.log` records `protocol=2025-06-18`.
-It is an honest advertisement now and a saving whenever a client starts honoring it, not a measured improvement to any host today.
+The **cache hints** are inert against every host observed to date: honoring them is modern-era and client opt-in (in the python-sdk client, by passing `cache=`; other hosts opt in their own way), and neither captured host negotiates the modern era — `docs/host-captures/claude-code/2.1.263/connection.log` records `protocol=2025-11-25` and `docs/host-captures/codex/0.153.4/connection.log` records `protocol=2025-06-18`.
+They are an honest advertisement now and a saving whenever a client starts honoring them, not a measured improvement to any host today.
+
+The `listChanged` change is NOT inert for those hosts, and should not be described as though it were.
+Both captured hosts negotiate the handshake era, which is exactly the path whose `tools.listChanged` flips from `true` to `false`.
+That is the point of the change — they were being told to expect a notification amicus cannot send — but it is a visible capability change to every legacy client, not an advertisement nobody reads.
 
 ADR 0006's exit condition is retired rather than met.
 The lesson is worth keeping: it named a specific upstream feature ("per-resource hints") as the trigger for a revisit, when the decision actually rested on a granularity requirement that a coarser mechanism turned out to satisfy.
