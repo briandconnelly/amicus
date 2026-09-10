@@ -7,7 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.2.0] - 2026-09-09
+## [0.2.0] - 2026-09-10
+
+Across this release the discovery surface moves `amicus/0.1/schema-7` -- what 0.1.0 shipped -- to
+`amicus/0.1/schema-13`, and stored job results move `RESULT_FORMAT` 2 to 4. The entries below are
+per-change rather than net, so they also name intermediate states that no release ever shipped:
+`schema-8` through `schema-12`, and `RESULT_FORMAT` 3.
 
 ### Changed
 
@@ -74,8 +79,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   own default -- and that default would have asserted, on the producing run's behalf, that no
   finding was lost on a run that never measured loss.
 - `FINGERPRINT` moves `amicus/0.1/schema-7` → `amicus/0.1/schema-8` for the `amicus_job_result`
-  description change, with every pin regenerated in a dedicated commit (rule 10). `RESULT_FORMAT`
-  stays `2`: no stored result changed shape.
+  description change, with every pin regenerated in a dedicated commit (rule 10).
+  `RESULT_FORMAT` did not move for it: no stored result changed shape.
 - `SKILL.md`'s rule block is now the complete contract: ten obligations that lived in explanatory
   prose moved into labelled rules, and the facts that motivate them moved to an adjacent
   `Semantics` section ([ADR 0016](docs/adr/0016-skill-rules-are-a-complete-contract.md)).
