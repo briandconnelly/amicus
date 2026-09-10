@@ -36,24 +36,6 @@ JOB_TOOLS: tuple[str, ...] = (
     "amicus_job_list",
 )
 TOOL_ORDER: tuple[str, ...] = ACTIVE_TOOLS + FREE_TOOLS + JOB_TOOLS
-
-# The tools that declare no workspace_root. Every inputSchema is additionalProperties:
-# false, so passing one to these fails as invalid_arguments — which is why the sessionless
-# prerequisite below names them instead of saying "every call" (issue #40). The manifest
-# test binds this tuple to the live schemas, so it cannot drift from them silently.
-WORKSPACELESS_TOOLS: tuple[str, ...] = (
-    "amicus_backends",
-    "amicus_models",
-    "amicus_capabilities",
-)
-_WORKSPACELESS_PROSE = ", ".join(WORKSPACELESS_TOOLS[:-1]) + f" and {WORKSPACELESS_TOOLS[-1]}"
-
-# Stated once and rendered on every surface that states it: the server instructions
-# (initialize_response) and amicus_capabilities.prerequisites (capabilities_payload).
-WORKSPACE_PREREQUISITE: str = (
-    "Pass workspace_root from a sessionless (2026-07-28) client on every call that declares "
-    f"the parameter, and on no other: {_WORKSPACELESS_PROSE} declare none and reject one."
-)
 PAIRS: tuple[tuple[str, str], ...] = (
     ("amicus_consult", "amicus_consult_async"),
     ("amicus_review_changes", "amicus_review_changes_async"),

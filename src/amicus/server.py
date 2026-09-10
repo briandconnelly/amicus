@@ -22,7 +22,7 @@ from amicus.middleware import (
     ValidationEnvelopeMiddleware,
 )
 from amicus.registry import BackendRegistry
-from amicus.schemas.params import MAX_TIMEOUT_SECONDS
+from amicus.schemas.params import MAX_TIMEOUT_SECONDS, WORKSPACE_PREREQUISITE
 from amicus.tools import resources
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -67,7 +67,7 @@ CAPABILITY_SUMMARY = (
     "Kimi in v1). "
     "Prefer the matching _async twin for work that can exceed the synchronous deadline; a "
     "sync call past its deadline is terminated and its partial work lost. "
-    f"{tools.WORKSPACE_PREREQUISITE} The server never falls back to its own cwd unless the "
+    f"{WORKSPACE_PREREQUISITE} The server never falls back to its own cwd unless the "
     "operator opts in. "
     "On a tool failure the tool result itself is the error (isError: true) with the error "
     "envelope in structuredContent; content[0].text mirrors it. Branch on error.code, "

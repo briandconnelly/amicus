@@ -110,6 +110,29 @@ class ParamContract:
     full: str
 
 
+# The tools that declare no workspace_root. Every inputSchema is additionalProperties:
+# false, so passing one to these fails as invalid_arguments — which is why the sessionless
+# prerequisite below names them instead of saying "every call" (issue #40). The manifest
+# test binds this tuple to the live schemas, so it cannot drift from them silently.
+WORKSPACELESS_TOOLS: tuple[str, ...] = (
+    "amicus_backends",
+    "amicus_models",
+    "amicus_capabilities",
+)
+_WORKSPACELESS_PROSE = ", ".join(WORKSPACELESS_TOOLS[:-1]) + f" and {WORKSPACELESS_TOOLS[-1]}"
+
+# The scope every statement of the rule shares, so none of them can widen it alone: the
+# published prerequisite, and the invalid_workspace_root repair in orchestration/workspace.
+WORKSPACE_SCOPE: str = "on every call that declares the parameter"
+
+# Stated once and rendered on every surface that states it: the server instructions
+# (initialize_response) and amicus_capabilities.prerequisites (capabilities_payload).
+WORKSPACE_PREREQUISITE: str = (
+    f"Pass workspace_root from a sessionless (2026-07-28) client {WORKSPACE_SCOPE}, and on "
+    f"no other: {_WORKSPACELESS_PROSE} declare none and reject one."
+)
+
+
 PARAMETER_CONTRACTS: dict[str, ParamContract] = {
     "workspace_root": ParamContract(
         name="workspace_root",

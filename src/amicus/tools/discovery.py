@@ -13,6 +13,7 @@ from amicus.schemas.codes import BACKEND_IDS, ERROR_CODES
 from amicus.schemas.envelope import ERROR_ENVELOPE_SCHEMA, RESULT_META_SCHEMA, Meta
 from amicus.schemas.options import OPTION_ALLOWED_VALUES
 from amicus.schemas.params import (
+    WORKSPACE_PREREQUISITE,
     BackendParam,
     CapabilitiesDetailParam,
     IncludeSchemasParam,
@@ -39,13 +40,7 @@ from amicus.schemas.results import (
     ToolCapability,
     UnavailableEntry,
 )
-from amicus.tools import (
-    ACTIVE_TOOLS,
-    FREE_TOOLS,
-    JOB_TOOLS,
-    TOOL_ORDER,
-    WORKSPACE_PREREQUISITE,
-)
+from amicus.tools import ACTIVE_TOOLS, FREE_TOOLS, JOB_TOOLS, TOOL_ORDER
 from amicus.tools._guard import guard
 from amicus.tools._meta import (
     SERVER_STABILITY,

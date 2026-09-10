@@ -10,7 +10,7 @@ from fastmcp import Client
 
 from amicus import manifest
 from amicus.schemas.fingerprint import FINGERPRINT_COVERS, FINGERPRINT_COVERS_DESC
-from amicus.tools import WORKSPACE_PREREQUISITE, WORKSPACELESS_TOOLS
+from amicus.schemas.params import WORKSPACE_PREREQUISITE, WORKSPACELESS_TOOLS
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -194,6 +194,16 @@ async def test_tools_list_bytes_is_positive():
     assert await manifest.tools_list_bytes(manifest.app_for_profile("all")) > 10_000
 
 
+def _minimal_args(schema: dict) -> dict:
+    """One accepted value for each required property, from the schema itself."""
+    args = {}
+    for field in schema.get("required", ()):
+        prop = schema["properties"][field]
+        enum = prop.get("enum")
+        args[field] = enum[0] if enum else "x"
+    return args
+
+
 async def test_the_workspace_prerequisite_is_bound_to_the_schemas(tmp_path):
     """Issue #40: both published surfaces told a sessionless client to pass
     workspace_root on EVERY call, while three tools declare none and reject one
@@ -212,10 +222,23 @@ async def test_the_workspace_prerequisite_is_bound_to_the_schemas(tmp_path):
     assert exempt and takes, "schema probe found nothing to distinguish; the claims are vacuous"
     assert set(WORKSPACELESS_TOOLS) == exempt
 
+    schemas = {t["name"]: t["inputSchema"] for t in m["tools"]}
     async with Client(app) as c:
         for name in sorted(exempt):
-            res = await c.call_tool(name, {"workspace_root": str(tmp_path)}, raise_on_error=False)
-            assert res.is_error, f"{name} accepted workspace_root; the exemption is stale"
+            # Every other required argument supplied, so the ONLY thing left to reject is
+            # workspace_root: a bare call to amicus_models errors on its missing `backend`
+            # and would pass this probe even if unknown arguments started being accepted.
+            args = _minimal_args(schemas[name]) | {"workspace_root": str(tmp_path)}
+            res = await c.call_tool(name, args, raise_on_error=False)
+            err = (res.structured_content or {}).get("error", {})
+            assert err.get("code") == "invalid_arguments", (name, err)
+            assert err.get("details", {}).get("field") == "workspace_root", (name, err)
+        # Positive control on the same instrument: a tool that DOES declare the parameter
+        # accepts it, so the assertions above report the exemption, not a broken probe.
+        control = await c.call_tool(
+            "amicus_job_list", {"workspace_root": str(tmp_path)}, raise_on_error=False
+        )
+        assert not control.is_error, control.structured_content
 
     # Named by token, not substring: a future amicus_models_v2 that takes a workspace
     # must not satisfy the exemption by containing amicus_models.
