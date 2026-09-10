@@ -138,11 +138,12 @@ the new ones.
 
 ## Status and known limits
 
-0.1.0 is the first release. The server's wire contract is exercised by the test suite and by host
-captures against Claude Code and Codex, but:
+0.2.0 is the current release, and it is a breaking one: the discovery surface moved from
+`amicus/0.1/schema-7` to `amicus/0.1/schema-13` and stored job results from `RESULT_FORMAT` 2 to
+`4`. [`CHANGELOG.md`](CHANGELOG.md) says what moved and what a cached client should re-read. The
+server's wire contract is exercised by the test suite and by host captures against Claude Code and
+Codex, but:
 
-- 0.1.0 is the first release published from a tag, so the tagged publish path runs for the first
-  time with it.
 - Two router-skill evaluation scenarios are unresolved — S6 (diff-safety wording) and S7 (approval
   friction) — recorded in [`docs/adr/0012-m6-packaging-decisions.md`](docs/adr/0012-m6-packaging-decisions.md).
   Neither is a defect in the server's wire contract.

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-09
+
 ### Changed
 
 - **Breaking (`FINGERPRINT` `schema-13`).** The discovery catalog now advertises a real
@@ -71,6 +73,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   than after it. It used to pass, because a field added since it was written validates from its
   own default -- and that default would have asserted, on the producing run's behalf, that no
   finding was lost on a run that never measured loss.
+- `FINGERPRINT` moves `amicus/0.1/schema-7` → `amicus/0.1/schema-8` for the `amicus_job_result`
+  description change, with every pin regenerated in a dedicated commit (rule 10). `RESULT_FORMAT`
+  stays `2`: no stored result changed shape.
+- `SKILL.md`'s rule block is now the complete contract: ten obligations that lived in explanatory
+  prose moved into labelled rules, and the facts that motivate them moved to an adjacent
+  `Semantics` section ([ADR 0016](docs/adr/0016-skill-rules-are-a-complete-contract.md)).
+- The returned-diff response contract separates the assessment of a proposal
+  (`Verdict: accept | reject | cannot-assess`) from the action taken on the working tree
+  (`Action: applied | not applied`). S6's recorded pass was graded against the superseded contract
+  and is not carried forward as a pass against the new one.
+- Both plugin manifests carry `author.url`, and their `longDescription` names
+  `docs/MIGRATION.md` by absolute URL rather than by a repository-root-relative path that
+  does not resolve for a consumer who vendors the manifest without the repository around it.
+- `.mcp.json`'s pin now names an already-published release rather than the version being
+  released, so `main` never sends a fresh install to a tag that does not exist yet
+  ([ADR 0015](docs/adr/0015-mcp-json-pins-an-already-published-release.md), issue #26).
+  The pin is no longer a release version literal; a small `chore(release):` PR moves it after the
+  tag is pushed.
+- `scripts/check_release_state.py` replaces its `pin == version being released` equality — which was
+  true by construction on any tree a release PR had touched — with a shape check, a check that the
+  pin never leads the release, and a check that the pinned tag actually exists.
+- `docs/RELEASING.md` gains a pre-tag install rehearsal that runs the committed manifest's own
+  command against the release commit's SHA, so git transport, a clean-machine build and the wire
+  handshake are all exercised before anything irreversible happens.
+- The README's status section describes 0.2.0 rather than 0.1.0, and names the surface and
+  stored-result moves a client upgrading across this release has to account for.
 
 ### Fixed
 
@@ -166,33 +194,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reporting, backend evidence, delegate containment, and independent-attempt ordering. Schema
   validity now binds every described call in every scenario.
 
-### Changed
-
-- `FINGERPRINT` moves `amicus/0.1/schema-7` → `amicus/0.1/schema-8` for the `amicus_job_result`
-  description change, with every pin regenerated in a dedicated commit (rule 10). `RESULT_FORMAT`
-  stays `2`: no stored result changed shape.
-- `SKILL.md`'s rule block is now the complete contract: ten obligations that lived in explanatory
-  prose moved into labelled rules, and the facts that motivate them moved to an adjacent
-  `Semantics` section ([ADR 0016](docs/adr/0016-skill-rules-are-a-complete-contract.md)).
-- The returned-diff response contract separates the assessment of a proposal
-  (`Verdict: accept | reject | cannot-assess`) from the action taken on the working tree
-  (`Action: applied | not applied`). S6's recorded pass was graded against the superseded contract
-  and is not carried forward as a pass against the new one.
-- Both plugin manifests carry `author.url`, and their `longDescription` names
-  `docs/MIGRATION.md` by absolute URL rather than by a repository-root-relative path that
-  does not resolve for a consumer who vendors the manifest without the repository around it.
-- `.mcp.json`'s pin now names an already-published release rather than the version being
-  released, so `main` never sends a fresh install to a tag that does not exist yet
-  ([ADR 0015](docs/adr/0015-mcp-json-pins-an-already-published-release.md), issue #26).
-  The pin is no longer a release version literal; a small `chore(release):` PR moves it after the
-  tag is pushed.
-- `scripts/check_release_state.py` replaces its `pin == version being released` equality — which was
-  true by construction on any tree a release PR had touched — with a shape check, a check that the
-  pin never leads the release, and a check that the pinned tag actually exists.
-- `docs/RELEASING.md` gains a pre-tag install rehearsal that runs the committed manifest's own
-  command against the release commit's SHA, so git transport, a clean-machine build and the wire
-  handshake are all exercised before anything irreversible happens.
-
 ## [0.1.0] - 2026-09-08
 
 ### Added
@@ -215,5 +216,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The tagged publish path to pypi.org has never run. Only the TestPyPI dispatch path has been exercised.
 - Eval scenario S6 in `skills/collaborating-with-amicus/tests/scenarios.md` passed on one run (status: `pass`, validated by that run alone); an M7 follow-up run against the current skill text did not isolate the still-open F3 finding, so F3 remains open. S7 (real-host approval friction) has failed both of its recorded runs (status: `fail`); an M7 zero-spend recheck reached neither a pass nor a fail and is recorded as inconclusive, so it does not move S7's status. See their `status` fields and ADR 0012.
 
-[Unreleased]: https://github.com/briandconnelly/amicus/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/briandconnelly/amicus/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/briandconnelly/amicus/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/briandconnelly/amicus/releases/tag/v0.1.0
