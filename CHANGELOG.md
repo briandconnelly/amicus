@@ -33,6 +33,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Exception text no longer reaches the diagnostic log, on any path (issue #39). AGENTS.md rule 18
+  forbids writing a prompt input to a log, and an exception raised inside a backend adapter can
+  embed the text that provoked it. Two carriers did exactly that: the unexpected-exception guard
+  logged with `.exception()`, whose rendered traceback carries the original exception's `str()`,
+  and its own message interpolated `exc_summary(exc)` -- which masks secrets and control
+  characters, not prompt inputs, so it was never the safe form the guard's comment claimed. Every
+  handler `amicus.obs` installs now renders under one policy: exception types and source
+  locations, never message text, notes, or source lines. The policy lives at the handler rather
+  than the call site because `pontonier`'s own runtime logs exceptions through these handlers too.
+  It is not a claim that no prompt input can ever be logged -- a call site that interpolates a
+  prompt field itself still would -- only that the exception-text family is closed.
+
 - An unreadable `confidence` no longer defaults UPWARD to `medium` (issue #53). A backend that
   returned nothing amicus could read about its own certainty was delivered as moderately
   confident, with nothing in the envelope to say the value had been invented -- the same

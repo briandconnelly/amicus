@@ -429,11 +429,14 @@ async def run_sync(
                 await asyncio.shield(asyncio.to_thread(store.cancel, spec.cwd, job_id))
             raise
         except OSError as exc:
+            # The type, not `exc_summary(exc)`: rule 18 keeps exception text out of the
+            # log, and `exc_summary` masks secrets rather than prompt inputs. The path
+            # this failed on is already named by `job_id`.
             obs.get_logger(__name__).warning(
                 "task map write failed for task %s -> job %s: %s",
                 task_id,
                 job_id,
-                redaction.exc_summary(exc),
+                type(exc).__name__,
             )
     envelope = await await_job_result(
         store, spec.cwd, job_id, spec.kind, meta, detail, timeout, ctx, plugin
