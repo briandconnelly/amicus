@@ -14,13 +14,24 @@ where output is produced rather than at each call site, because the call sites i
 ``pontonier``'s own — `runtime.py` logs ``("stdout capture failed: %s", exc,
 exc_info=True)`` through these handlers, and this package does not own that line.
 
+Closing it takes more than suppressing tracebacks, because ``logging`` will render an
+exception through several shapes that never look like one: as the message itself
+(``log.error(exc)``), as an argument (``log.error("%s", exc)``), inside a mapping, or
+inside a container whose ``repr`` renders each element's. So the policy is stated over
+VALUES rather than over exceptions: an exception renders as its type, a ``_RENDERABLE``
+scalar renders as itself, and anything else renders as its own type name. That is why the
+rule is enforceable at all — it does not depend on recognizing every wrapper an exception
+might arrive in.
+
 What the policy is NOT: a guarantee that no prompt input can ever be logged. A call site
 that interpolates a prompt field itself (``log.error("failed: %s", question)``) still
 would, and nothing here would catch it — the formatter sees a string and cannot know where
 it came from. Rule 18 binds the author for that case; ``tests/test_log_redaction.py``
 asserts the one mechanical part of it that can be checked (no ``exc_summary`` in a logging
-call). What IS structurally closed is the exception-text family, which is what carried
-prompt inputs into the log unnoticed (issue #39)."""
+call). Nor does it establish PROVENANCE: the type and frame filters below check shape and
+whether a file exists, not where a name came from, and each says so where it is defined.
+What IS structurally closed is the exception-text family, which is what carried prompt
+inputs into the log unnoticed (issue #39)."""
 
 from __future__ import annotations
 
@@ -30,11 +41,12 @@ import logging
 import re
 import sys
 import traceback
+from collections import deque
+from collections.abc import Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:  # pragma: no cover
-    from collections.abc import Mapping
     from types import TracebackType
 
     from amicus.config import Settings
@@ -44,17 +56,29 @@ LIBRARY_LOGGER_NAME = "pontonier"
 _LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
 _configured = False
 
-# Bounds on a rendered chain. A traceback is diagnostic, not an audit trail, and an
-# unbounded walk over attacker-shaped `__cause__` links is a denial-of-service surface on
-# the error path. The `seen` set below already terminates a cycle; these cap the honest
-# but enormous case (deep recursion, a wide ExceptionGroup) as well.
+# Bounds on a rendered chain. These cap OUTPUT and retained memory, and they are checked
+# before every append, so `_MAX_LINES` is a hard ceiling rather than a target. What they
+# do NOT bound is the walk itself: reaching a traceback's innermost frame — the raise
+# site, the frame worth having — means visiting every frame above it, so `_frame_locations`
+# is O(depth) in time while holding only `_MAX_FRAMES` of them. Depth is bounded in turn by
+# the interpreter's own recursion limit, and 5,000 frames render in ~3ms. The `seen` set
+# terminates a `__cause__`/`__context__` cycle; `_MAX_CHAIN` caps an acyclic but long one.
 _MAX_CHAIN = 5
 _MAX_FRAMES = 20
 _MAX_GROUP_CHILDREN = 10
 _MAX_LINES = 200
 
+# Values that may be rendered into a message as themselves. Everything else is replaced by
+# its type, because an arbitrary object's `__str__`/`__repr__` can reach an exception it
+# holds (a list of exceptions renders each one's message) and no scrub can chase that
+# through types this module has never seen. Both `amicus` and `pontonier` log only these.
+_RENDERABLE = (str, int, float, bool, type(None))
+
 # Stands in for any location or type name the policy declines to render.
 _UNKNOWN = "<unknown>"
+
+# Stands in for a whole message the policy left uninterpolatable.
+_UNRENDERABLE = "<message not rendered>"
 
 # A name the runtime read out of loaded code: a module path, a qualname (which carries
 # `<locals>` for a class defined in a function), or a code object's name. Anything outside
@@ -72,8 +96,16 @@ def _safe_name(name: str | None) -> str | None:
     return None
 
 
-def _type_name(exc: BaseException) -> str:
-    """The exception's type, qualified when it is not a builtin. Never its instance."""
+def safe_type_name(exc: BaseException) -> str:
+    """The exception's type, qualified when it is not a builtin. Never its instance.
+
+    Public so a call site that names an exception type in its own message uses the same
+    filter the formatter would (`amicus.tools._guard`).
+
+    The filter is on SHAPE, not provenance: `__qualname__` and `__module__` are ordinary
+    writable attributes, so a class built at run time whose name happens to look like an
+    identifier is rendered like any other. That is the residual assumption — that a type
+    name comes from loaded code — and it is stated rather than claimed away."""
     cls = type(exc)
     qualname = getattr(cls, "__qualname__", None) or getattr(cls, "__name__", None)
     module = getattr(cls, "__module__", None)
@@ -86,54 +118,73 @@ def _type_name(exc: BaseException) -> str:
     return f"{prefix}.{safe}" if prefix else safe
 
 
-def _location(frame: traceback.FrameSummary) -> str:
-    """A frame's position, or ``<unknown>`` when its file is not one on disk.
+def _location(filename: str, lineno: int | None, name: str | None) -> str:
+    """A frame's position, or ``<unknown>`` when it cannot be shown safely.
 
-    A frame's filename and function name are chosen by whoever compiled the code. For code
-    imported from a file, that is the repository or an installed dependency, and echoing it
-    is safe. For code compiled at run time the filename is whatever string the compiler was
-    handed (`exec(compile(src, name, ...))`), so it is not source text and gets replaced.
-    The source LINE is never rendered for either: `StackSummary.extract` is called with
-    `lookup_lines=False` so it is not even read off disk."""
-    filename = frame.filename or ""
-    name = _safe_name(frame.name)
+    Two filters, and neither establishes provenance — they are stated as what they are.
+    The filename must resolve to a file that exists on disk, which rejects the run-time
+    compiler's free-form filename (`exec(compile(src, "<anything>", ...))`) but does not
+    prove the code was READ from that file. The function name must have the shape of a
+    name from loaded code, which rejects arbitrary text but accepts an identifier-shaped
+    name a generated code object was given. The residual assumption is that a frame's
+    filename and function name come from code on disk rather than from caller input; no
+    path in this repository builds a code object from a prompt.
+
+    The source LINE is never rendered, and never read: `_frame_locations` walks raw frames
+    instead of building a `StackSummary`, so `linecache` is not consulted at all."""
+    safe = _safe_name(name)
     try:
-        path = Path(filename)
+        path = Path(filename or "")
         on_disk = path.is_absolute() and path.is_file()
     except (OSError, ValueError):  # a filename the OS will not even accept as a path
         on_disk = False
-    if not on_disk or name is None:
+    if not on_disk or safe is None:
         return _UNKNOWN
-    return f"{filename}:{frame.lineno} in {name}"
+    return f"{filename}:{lineno} in {safe}"
 
 
 def _frame_locations(tb: TracebackType | None) -> list[str]:
+    """The innermost `_MAX_FRAMES` locations of ``tb``, nearest the raise site last."""
     if tb is None:
         return []
     try:
-        frames = traceback.StackSummary.extract(
-            traceback.walk_tb(tb), lookup_lines=False, capture_locals=False
-        )
+        # A bounded deque rather than a list: a deep traceback is walked (there is no way
+        # to reach its innermost frame otherwise) but only the tail is ever retained.
+        kept: deque[tuple[str, int, str]] = deque(maxlen=_MAX_FRAMES)
+        for frame, lineno in traceback.walk_tb(tb):
+            code = frame.f_code
+            kept.append((code.co_filename, lineno, code.co_name))
     except Exception:
         return [_UNKNOWN]
-    return [_location(frame) for frame in frames[-_MAX_FRAMES:]]
+    return [_location(filename, lineno, name) for filename, lineno, name in kept]
 
 
 def _render_exception(
     exc: BaseException, lines: list[str], seen: set[int], indent: str, depth: int
 ) -> None:
-    """Append the type-and-location rendering of ``exc`` and its chain to ``lines``."""
+    """Append the type-and-location rendering of ``exc`` and its chain to ``lines``.
+
+    Every append is guarded by the `_MAX_LINES` ceiling, so the cap holds across the
+    recursion into an `ExceptionGroup`'s children as well as along a `__cause__` chain."""
     current: BaseException | None = exc
     while current is not None:
-        if len(lines) >= _MAX_LINES or depth >= _MAX_CHAIN or id(current) in seen:
+        if len(lines) >= _MAX_LINES:
+            return
+        if depth >= _MAX_CHAIN or id(current) in seen:
             lines.append(f"{indent}... truncated")
             return
         seen.add(id(current))
-        lines.append(f"{indent}{_type_name(current)}")
-        lines.extend(f"{indent}  at {loc}" for loc in _frame_locations(current.__traceback__))
+        lines.append(f"{indent}{safe_type_name(current)}")
+        for location in _frame_locations(current.__traceback__):
+            if len(lines) >= _MAX_LINES:
+                return
+            lines.append(f"{indent}  at {location}")
         children = getattr(current, "exceptions", None)
         if isinstance(current, BaseExceptionGroup) and children:
-            for child in list(children)[:_MAX_GROUP_CHILDREN]:
+            # `.exceptions` is a tuple, so this slices without copying the whole group.
+            for child in children[:_MAX_GROUP_CHILDREN]:
+                if len(lines) >= _MAX_LINES:
+                    return
                 _render_exception(child, lines, seen, indent + "  ", depth + 1)
         # `__cause__` (an explicit `raise ... from ...`) wins; an implicit `__context__` is
         # rendered only when the raiser did not suppress it, mirroring the stdlib's own rule.
@@ -142,26 +193,47 @@ def _render_exception(
             following = current.__context__
         if following is None:
             return
+        if len(lines) >= _MAX_LINES:
+            return
         lines.append(f"{indent}caused by:")
         current, depth = following, depth + 1
+
+
+def _safe_value(value: object) -> object:
+    """One value, rendered under the policy.
+
+    An exception becomes its type. A `_RENDERABLE` scalar passes through. Everything else
+    becomes its own type name in angle brackets, because interpolating it would call its
+    `__str__`/`__repr__` — and a container's repr renders each element's, which is how a
+    plain `logger.error("%s", [exc])` would otherwise print the exception's message."""
+    if isinstance(value, BaseException):
+        return safe_type_name(value)
+    if isinstance(value, _RENDERABLE):
+        return value
+    cls_name = _safe_name(getattr(type(value), "__name__", None))
+    return f"<{cls_name or 'unknown'}>"
 
 
 def _safe_args(
     args: tuple[object, ...] | Mapping[str, object] | None,
 ) -> tuple[object, ...] | Mapping[str, object] | None:
-    """Replace every exception passed as a message argument with its type name.
+    """Every message argument, rendered under the policy.
 
-    `pontonier.core.runtime` logs `("stdout capture failed: %s", exc, exc_info=True)`, so
-    the `%s` would render `str(exc)` into the message itself, where suppressing the
-    traceback does not reach it."""
-    if isinstance(args, dict):
-        return {
-            key: _type_name(value) if isinstance(value, BaseException) else value
-            for key, value in args.items()
-        }
+    `Mapping` rather than `dict`: `logging` accepts any mapping as a single argument for
+    `%(name)s` interpolation, and a `UserDict` is not a `dict`."""
+    if args is None:
+        return None
+    if isinstance(args, Mapping):
+        return {key: _safe_value(value) for key, value in args.items()}
     if isinstance(args, tuple):
-        return tuple(_type_name(a) if isinstance(a, BaseException) else a for a in args)
-    return args
+        return tuple(_safe_value(arg) for arg in args)
+    return (_safe_value(args),)
+
+
+def _safe_msg(msg: object) -> object:
+    """The message itself, which `logging` does not require to be a string: `.error(exc)`
+    stores the exception as `record.msg`, and `getMessage` renders it with `str()`."""
+    return msg if isinstance(msg, str) else _safe_value(msg)
 
 
 class PolicyFormatter(logging.Formatter):
@@ -178,11 +250,20 @@ class PolicyFormatter(logging.Formatter):
         # A record is shared by every handler on the logger; mutating it here would leak
         # this formatter's edits into whatever formats it next.
         scrubbed = copy.copy(record)
+        scrubbed.msg = _safe_msg(record.msg)
         scrubbed.args = _safe_args(record.args)
         scrubbed.exc_info = None
         scrubbed.exc_text = None
         scrubbed.stack_info = None
-        text = super().format(scrubbed)
+        try:
+            text = super().format(scrubbed)
+        except Exception:
+            # `"%d" % "<list>"` raises. Falling through to `handleError` would drop the
+            # record entirely and hand the raw message to the stdlib's own stderr dump, so
+            # keep the line and lose only its body.
+            scrubbed.msg = _UNRENDERABLE
+            scrubbed.args = None
+            text = super().format(scrubbed)
         exc_info = record.exc_info
         if exc_info and isinstance(exc_info, tuple) and isinstance(exc_info[1], BaseException):
             lines: list[str] = []

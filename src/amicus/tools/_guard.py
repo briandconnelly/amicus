@@ -60,9 +60,11 @@ def guard(
                 # masks secrets and control characters, not prompt text. `exc_info` is
                 # still passed, and `obs.PolicyFormatter` renders it as exception types
                 # and source locations with no message text — the frames are the reason
-                # to log this at all.
+                # to log this at all. The type goes through `safe_type_name` rather than
+                # `type(exc).__name__` so a call site that names a type itself applies the
+                # same filter the formatter would.
                 obs.get_logger(__name__).exception(
-                    "%s failed unexpectedly: %s", tool_name, type(exc).__name__
+                    "%s failed unexpectedly: %s", tool_name, obs.safe_type_name(exc)
                 )
                 return as_tool_result(
                     error_envelope(

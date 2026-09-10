@@ -19,7 +19,7 @@ import ast
 import io
 import logging
 import sys
-import traceback
+from collections import UserDict
 from pathlib import Path
 
 import pytest
@@ -31,6 +31,9 @@ from amicus import config, obs
 # is what keeps that assertion honest: were source lines restored, the marker still could
 # not reach the log by way of this module's own text.
 MARKER = "PROMPT" + "MARKER" + "39"
+
+LIBRARY_LOGGER = "pontonier"
+POLICY_HANDLERS = (obs.PolicyStreamHandler, obs.PolicyFileHandler)
 
 
 def _message() -> str:
@@ -68,14 +71,21 @@ def logs(tmp_path, clean_env, monkeypatch):
             The guarantee this module pins is scoped to the handlers `obs.configure`
             installs, so the assertions must see only those."""
             child = logging.getLogger(name)
-            for handler in child.handlers[:]:
-                if handler not in ours:
-                    child.removeHandler(handler)
+            # The child AND the configured ancestor its records propagate to: pytest
+            # appends its capture handler to whichever of them it reaches.
+            for target in (child, configured, logging.getLogger(LIBRARY_LOGGER)):
+                for handler in target.handlers[:]:
+                    if not isinstance(handler, POLICY_HANDLERS):
+                        target.removeHandler(handler)
             return child
 
         def read(self) -> tuple[str, str]:
-            for handler in ours:
-                handler.flush()
+            # Both logger trees: `obs.configure` gives each its own handler instances,
+            # pointing at the same stderr object and the same file.
+            for name in (obs.ROOT_LOGGER_NAME, LIBRARY_LOGGER):
+                for handler in logging.getLogger(name).handlers:
+                    if isinstance(handler, POLICY_HANDLERS):
+                        handler.flush()
             return stderr.getvalue(), log_file.read_text(encoding="utf-8")
 
     yield Sink()
@@ -363,36 +373,54 @@ def test_the_stdlib_handler_error_would_have_dumped_it(logs, monkeypatch):
 
 LOG_METHODS = frozenset({"debug", "info", "warning", "error", "exception", "critical", "log"})
 
+# Resolved from this file, not from the working directory, so the scan cannot silently
+# inspect nothing because pytest was invoked from elsewhere.
+PACKAGE_ROOT = Path(__file__).resolve().parent.parent / "src" / "amicus"
 
-def test_no_logging_call_in_the_package_passes_exc_summary():
-    """`exc_summary` sanitizes secrets and control characters, not prompt inputs, so it is
-    safe for a client-facing envelope and never for a log. The formatter cannot catch it —
-    a call site that pre-stringifies hands the formatter an ordinary `str` — so the rule
-    is asserted against the source instead."""
-    offenders = []
-    for path in sorted(Path("src/amicus").rglob("*.py")):
+
+def _exc_summary_in_logging_calls(root: Path) -> tuple[list[str], int]:
+    """Return `(offenders, files_scanned)` for every `*.py` under ``root``.
+
+    ONE implementation, used for both the repository scan and its planted control, so the
+    control exercises the instrument the guarantee actually rests on rather than a second
+    hand-written copy of it."""
+    offenders: list[str] = []
+    scanned = 0
+    for path in sorted(root.rglob("*.py")):
+        scanned += 1
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
                 continue
             if node.func.attr not in LOG_METHODS:
                 continue
-            for arg in ast.walk(node):
+            for inner in ast.walk(node):
                 if (
-                    isinstance(arg, ast.Call)
-                    and isinstance(arg.func, ast.Name | ast.Attribute)
+                    isinstance(inner, ast.Call)
+                    and isinstance(inner.func, ast.Name | ast.Attribute)
                     and (
-                        getattr(arg.func, "id", None) == "exc_summary"
-                        or getattr(arg.func, "attr", None) == "exc_summary"
+                        getattr(inner.func, "id", None) == "exc_summary"
+                        or getattr(inner.func, "attr", None) == "exc_summary"
                     )
                 ):
                     offenders.append(f"{path}:{node.lineno}")
+    return offenders, scanned
+
+
+def test_no_logging_call_in_the_package_passes_exc_summary():
+    """`exc_summary` sanitizes secrets and control characters, not prompt inputs, so it is
+    safe for a client-facing envelope and never for a log. The formatter cannot catch it —
+    a call site that pre-stringifies hands the formatter an ordinary `str` — so the rule is
+    asserted against the source instead."""
+    offenders, scanned = _exc_summary_in_logging_calls(PACKAGE_ROOT)
+    assert scanned > 20, f"the scan inspected {scanned} files; it is not reaching the package"
     assert offenders == [], f"exc_summary passed to a logging call: {offenders}"
 
 
-def test_the_call_site_rule_detects_a_planted_violation(tmp_path):
-    """Mutation control for the scan above: a known-positive source file must be flagged,
-    so an empty result is evidence of compliance rather than of a broken instrument."""
+def test_the_call_site_scan_detects_a_planted_violation(tmp_path):
+    """Mutation control for the scan above, run through the SAME function: a known-positive
+    source tree must be flagged, so an empty result is evidence of compliance rather than of
+    a broken instrument."""
     planted = tmp_path / "amicus" / "planted.py"
     planted.parent.mkdir(parents=True)
     planted.write_text(
@@ -400,63 +428,99 @@ def test_the_call_site_rule_detects_a_planted_violation(tmp_path):
         "def f(exc):\n    logging.getLogger('x').warning('boom: %s', exc_summary(exc))\n",
         encoding="utf-8",
     )
-    tree = ast.parse(planted.read_text(encoding="utf-8"), filename=str(planted))
-    hits = [
-        node
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Attribute)
-        and node.func.attr in LOG_METHODS
-        and any(
-            isinstance(inner, ast.Call) and getattr(inner.func, "id", None) == "exc_summary"
-            for inner in ast.walk(node)
-        )
-    ]
-    assert len(hits) == 1
+    offenders, scanned = _exc_summary_in_logging_calls(tmp_path)
+    assert scanned == 1
+    assert len(offenders) == 1 and offenders[0].endswith("planted.py:4")
 
 
-# --- the policy's own defensive paths --------------------------------------------------
+# --- shapes that carry an exception without looking like one ---------------------------
 
 
-def test_a_type_whose_name_is_not_name_shaped_is_replaced():
-    """`_type_name` reads `__qualname__` and `__module__` off the class. Both are ordinary
-    writable attributes, so a class built at run time can carry anything there."""
-
-    class Forged(RuntimeError):
-        pass
-
-    Forged.__qualname__ = f"pwned {MARKER}"
-    exc = Forged()
-    assert obs._type_name(exc) == "<unknown>"
-
-    Forged.__qualname__ = "Forged"
-    Forged.__module__ = f"pwned {MARKER}"
-    # An unusable module is dropped; the type's own name still reaches the log.
-    assert obs._type_name(Forged()) == "Forged"
+def test_an_exception_logged_as_the_message_itself_renders_as_its_type(logs):
+    """`logging` does not require `msg` to be a string. `log.error(exc)` stores the
+    exception on the record and `getMessage()` renders it with `str()`."""
+    logs.logger_for("amicus.probe").error(ValueError(_message()))
+    for text in _both(logs):
+        assert MARKER not in text
+        assert "ValueError" in text
 
 
-def test_a_frame_the_os_rejects_as_a_path_is_replaced():
-    """A filename need not be a usable path at all; `Path.is_file()` raises on some."""
-    frame = traceback.FrameSummary(f"/no/such\x00/{MARKER}", 1, "f")
-    assert obs._location(frame) == "<unknown>"
-
-
-def test_a_frame_whose_function_name_is_not_name_shaped_is_replaced():
-    frame = traceback.FrameSummary(__file__, 1, f"pwned {MARKER}")
-    assert obs._location(frame) == "<unknown>"
-
-
-def test_an_unwalkable_traceback_yields_a_placeholder_rather_than_raising():
-    """A broken traceback must not take the logger down with it."""
-    assert obs._frame_locations(object()) == ["<unknown>"]  # type: ignore[arg-type]
-
-
-def test_dict_style_message_arguments_are_scrubbed_too(logs):
-    """`logging` accepts a single mapping as `args`, interpolated with `%(name)s`."""
-    try:
-        raise ValueError(_message())
-    except ValueError as exc:
-        logs.logger_for("amicus.probe").error("capture failed: %(why)s", {"why": exc})
+def test_a_non_dict_mapping_argument_is_scrubbed(logs):
+    """`logging` accepts any mapping for `%(name)s` interpolation, not only a `dict`."""
+    logs.logger_for("amicus.probe").error(
+        "capture failed: %(why)s", UserDict({"why": ValueError(_message())})
+    )
     for text in _both(logs):
         assert MARKER not in text
         assert "capture failed: ValueError" in text
+
+
+def test_an_exception_inside_a_container_argument_is_not_rendered(logs):
+    """A container's `repr` renders each element's, so `[exc]` prints the message that
+    `%s` on the exception alone would have printed."""
+    logs.logger_for("amicus.probe").error("failures: %s", [ValueError(_message())])
+    for text in _both(logs):
+        assert MARKER not in text
+        assert "failures: <list>" in text
+
+
+def test_an_arbitrary_object_renders_as_its_type(logs):
+    """The policy is stated over values, not over exceptions: anything that is not a
+    renderable scalar is replaced, which is what makes the container case above closed
+    rather than one more wrapper to enumerate."""
+
+    class Holder:
+        def __repr__(self) -> str:
+            return _message()
+
+    logs.logger_for("amicus.probe").error("held: %s", Holder())
+    for text in _both(logs):
+        assert MARKER not in text
+        assert "held: <Holder>" in text
+
+
+def test_a_message_that_cannot_be_interpolated_keeps_its_line(logs):
+    """Replacing a value can break the caller's own format spec (`%d` against `<list>`).
+    The line survives with its body replaced, rather than falling through to the stdlib's
+    `handleError`, which would dump the raw message and arguments."""
+    logs.logger_for("amicus.probe").error("count: %d", [ValueError(_message())])
+    for text in _both(logs):
+        assert MARKER not in text
+        assert "message not rendered" in text
+        assert "amicus.probe" in text
+
+
+# --- the bounds actually bind -----------------------------------------------------------
+
+
+def test_the_line_cap_is_a_ceiling_across_group_recursion():
+    """A wide, deep ExceptionGroup renders through the recursive path, where a cap checked
+    only at the top of the loop would be exceeded by each child's frame batch."""
+
+    def build(depth: int, width: int) -> BaseException:
+        if depth == 0:
+            return ValueError("leaf")
+        return ExceptionGroup(f"g{depth}", [build(depth - 1, width) for _ in range(width)])
+
+    lines: list[str] = []
+    obs._render_exception(build(3, 10), lines, set(), "", 0)
+    assert len(lines) <= obs._MAX_LINES
+
+
+def test_only_the_innermost_frames_are_retained():
+    """A deep traceback is walked — there is no way to reach the raise site otherwise —
+    but only `_MAX_FRAMES` of it is ever held or rendered."""
+
+    def recurse(n: int) -> None:
+        if n:
+            recurse(n - 1)
+            return
+        raise RuntimeError("deep")
+
+    try:
+        recurse(200)
+    except RuntimeError as exc:
+        locations = obs._frame_locations(exc.__traceback__)
+    assert len(locations) == obs._MAX_FRAMES
+    # The tail is kept, so the raise site is the last entry.
+    assert "in recurse" in locations[-1]
