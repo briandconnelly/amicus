@@ -160,7 +160,9 @@ The tag therefore deliberately points at a commit that is in `main`'s history bu
 7. Once the publish has completed and the post-tag checks below have passed, open a small `chore(release):` PR that moves `.mcp.json`'s pin to `vX.Y.Z`.
 
    This is the pin-move PR that ADR 0015 makes part of every release, and it is deliberately *after* the tag rather than before it: the pin names a release that already exists, so moving it earlier would be the very thing ADR 0015 removes.
-   It touches `.mcp.json` and nothing else, it is not a release under rule 19, and it needs no live-gate evidence — it moves a pointer to a tag that is already published.
+   It is not a release under rule 19, and it needs no live-gate evidence — it moves a pointer to a tag that is already published.
+   The pin lives in **two** places, and both move in this PR: `.mcp.json`'s `--from` source, and the mirrored example under README's "Any other MCP client".
+   `tests/test_packaging.py::test_readme_example_mirrors_the_mcp_json_pin` binds them, so moving only one fails the gate rather than shipping a README that advertises the previous release.
    Until it merges, `main` sends a fresh install to the previous release, which works.
    That is the intended degradation, so do not treat it as an outage or rush the PR through without its checks.
    This step did not apply to 0.1.0, whose pin already reads `@v0.1.0` for the bootstrap reason above; 0.2.0 is the first release to perform it.

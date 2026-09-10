@@ -199,6 +199,33 @@ def test_mcp_json_installs_this_repo_at_a_published_release_tag():
     )
 
 
+def test_readme_example_mirrors_the_mcp_json_pin():
+    """README's "Any other MCP client" example is the same pin, and must move with it.
+
+    The example exists to tell a user with some other client to run what the manifest runs,
+    so a stale one advertises the PREVIOUS release under a heading that promises parity.
+    Nothing bound the two: `docs/RELEASING.md` step 7 said the pin-move PR touches
+    `.mcp.json` "and nothing else", and moving only that file left this file green -- which
+    is how README kept `@v0.1.0` while the manifest moved on. Binding them here makes the
+    runbook's claim checkable instead of a convention someone has to remember.
+
+    This asserts the two agree, never what version they name: the pin trails the declared
+    version between a release PR and its pin-move PR, and
+    `test_mcp_json_installs_this_repo_at_a_published_release_tag` is what bounds it.
+    """
+    args = _read(".mcp.json")["mcpServers"]["amicus"]["args"]
+    source = args[args.index("--from") + 1]
+    readme = (REPO_ROOT / "README.md").read_text()
+    pins = set(
+        re.findall(r"git\+https://github\.com/briandconnelly/amicus\.git@v\d+\.\d+\.\d+", readme)
+    )
+    assert pins, "README no longer shows the install source; drop this test or update it"
+    assert pins == {source}, (
+        f"README pins {sorted(pins)} but .mcp.json pins {source!r}; the pin-move PR must "
+        "move both (docs/RELEASING.md step 7)"
+    )
+
+
 def test_mcp_json_has_no_unexpanded_placeholders():
     """The ${VAR} check the spec keeps: env_vars is a passthrough list, not a value map."""
     raw = (REPO_ROOT / ".mcp.json").read_text()
