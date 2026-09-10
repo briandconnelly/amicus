@@ -7,7 +7,6 @@ import functools
 from typing import TYPE_CHECKING, Any
 
 from fastmcp.tools import ToolResult
-from pontonier.core.redaction import exc_summary
 
 from amicus import obs
 from amicus.errors import error_envelope
@@ -53,11 +52,19 @@ def guard(
             try:
                 return as_tool_result(await fn(*args, **kwargs))
             except Exception as exc:
-                # Full detail (exc_summary) goes to the log only; the client-facing
-                # message names the exception type but never echoes its text, which may
-                # carry caller-supplied content that failed to redact cleanly.
+                # Neither side gets the exception's text. The client-facing message names
+                # the type because the text may carry caller-supplied content that failed
+                # to redact cleanly; the LOG withholds it for a stricter reason — that
+                # content may be an INPUT_FIELDS prompt input, which AGENTS.md rule 18
+                # forbids writing to a log. `exc_summary` is not the safe form here: it
+                # masks secrets and control characters, not prompt text. `exc_info` is
+                # still passed, and `obs.PolicyFormatter` renders it as exception types
+                # and source locations with no message text — the frames are the reason
+                # to log this at all. The type goes through `safe_type_name` rather than
+                # `type(exc).__name__` so a call site that names a type itself applies the
+                # same filter the formatter would.
                 obs.get_logger(__name__).exception(
-                    "%s failed unexpectedly: %s", tool_name, exc_summary(exc)
+                    "%s failed unexpectedly: %s", tool_name, obs.safe_type_name(exc)
                 )
                 return as_tool_result(
                     error_envelope(

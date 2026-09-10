@@ -209,7 +209,10 @@ def main() -> None:
     try:
         app.run()
     except (KeyboardInterrupt, EOFError, BrokenPipeError) as exc:
-        log.info("amicus %s: clean shutdown (%s)", __version__, type(exc).__name__)
+        # `obs.safe_type_name`, not `type(exc).__name__`: these three are builtins here, but
+        # the rule is uniform so it stays enforceable by the source scan in
+        # `tests/test_log_redaction.py` rather than by remembering which sites are safe.
+        log.info("amicus %s: clean shutdown (%s)", __version__, obs.safe_type_name(exc))
     except SystemExit:
         raise
     except Exception as exc:
