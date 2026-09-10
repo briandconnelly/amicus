@@ -95,9 +95,12 @@ async def test_every_published_stability_tier_is_in_the_closed_set():
 
 
 async def test_an_illegal_server_tier_would_reach_every_lifecycle_record(monkeypatch):
-    """Mutation control for the collector above: one bad server-wide tier has to surface
-    on all 24 records, which is what #43 shipped. It also pins the single-sourcing --
-    a module that had bound its own copy of the constant would stay behind here."""
+    """Mutation control for the collector above: one bad server-wide tier has to surface on
+    all 24 records, because every record now inherits it. That all-inherit invariant is what
+    this pins, not the historical state: `alpha` reached 15 of these 24 (nine tools, four
+    resources, two templates) plus `amicus_capabilities.stability`, because the other nine
+    tools carried an explicit `experimental` override (#43). It also pins the single-sourcing
+    -- a module that had bound its own copy of the constant would stay behind here."""
     monkeypatch.setattr(_meta, "SERVER_STABILITY", "alpha")
     tiers = await _lifecycle_stability_tiers(_app())
     assert len(tiers) == 24 and set(tiers.values()) == {"alpha"}

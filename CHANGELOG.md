@@ -10,8 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Breaking (`FINGERPRINT` `schema-12`).** The published stability tier is now inside the
-  closed set an agent can filter on. Every tool, static resource and resource template carried
-  `alpha` in its lifecycle `_meta`, and `amicus_capabilities.stability` reported it too --
+  closed set an agent can filter on. Nine of the 18 tools -- the ones absent from the per-tool
+  override table -- carried `alpha` in their lifecycle `_meta`, as did all four static resources
+  and both resource templates, and `amicus_capabilities.stability` reported it too:
   a value outside both `[9.stability-tiers]`'s `stable | preview | experimental` and amicus's
   own `ToolStability` literal, so a caller filtering on the tier could not interpret it. The
   server-wide tier is now `experimental`, the honest one for a 0.1.x surface and already the
