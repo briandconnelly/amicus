@@ -191,3 +191,38 @@ def test_render_returns_canonical_json():
 
 async def test_tools_list_bytes_is_positive():
     assert await manifest.tools_list_bytes(manifest.app_for_profile("all")) > 10_000
+
+
+def _workspace_claim(text: str) -> str:
+    """The sentences of `text` that state the workspace_root prerequisite."""
+    return " ".join(s for s in text.split(". ") if "workspace_root" in s)
+
+
+async def test_the_workspace_prerequisite_names_the_tools_that_take_no_workspace(tmp_path):
+    """Issue #40: both published surfaces told a sessionless client to pass
+    workspace_root on EVERY call, while three tools declare none and reject one
+    (every inputSchema is additionalProperties: false). Wherever the prerequisite
+    is stated, the exempt tools must be named, and no workspace-bearing tool may be."""
+    app = manifest.app_for_profile("all")
+    m = await manifest.build_manifest(app)
+    takes = {t["name"] for t in m["tools"] if "workspace_root" in t["inputSchema"]["properties"]}
+    exempt = {t["name"] for t in m["tools"]} - takes
+    assert exempt and takes, (
+        "schema probe found nothing to distinguish; the claims below are vacuous"
+    )
+
+    async with Client(app) as c:
+        for name in sorted(exempt):
+            res = await c.call_tool(name, {"workspace_root": str(tmp_path)}, raise_on_error=False)
+            assert res.is_error, f"{name} accepted workspace_root; the exemption is stale"
+
+    claims = {
+        "instructions": _workspace_claim(m["initialize"]["instructions"]),
+        "prerequisites": " ".join(
+            p for p in m["capabilities"]["prerequisites"] if "workspace_root" in p
+        ),
+    }
+    for where, claim in claims.items():
+        assert claim, where
+        assert {n for n in exempt if n in claim} == exempt, where
+        assert not [n for n in takes if n in claim], where

@@ -503,7 +503,9 @@ async def capabilities_payload(
         ],
         prerequisites=[
             "At least one backend CLI installed and authenticated (amicus_backends reports which).",
-            "workspace_root on every call from a sessionless (2026-07-28) client.",
+            "workspace_root on every call whose schema declares it from a sessionless "
+            "(2026-07-28) client; amicus_backends, amicus_models and amicus_capabilities "
+            "take no workspace_root and reject one.",
         ],
         deprecation_policy=(
             "A deprecated tool, parameter or code stays discoverable for two minor releases "
