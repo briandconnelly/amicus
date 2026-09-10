@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from fastmcp import Client
 
-from amicus import manifest
+from amicus import manifest, server
 from amicus.schemas.fingerprint import FINGERPRINT_COVERS, FINGERPRINT_COVERS_DESC
 from amicus.schemas.params import WORKSPACE_PREREQUISITE, WORKSPACELESS_TOOLS
 
@@ -16,9 +16,9 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 # sha256 of each profile's canonical manifest JSON; regenerate per the failure message.
 EXPECTED_MANIFEST_HASH: dict[str, str] = {
-    "all": "cfa06c72ea19ab9cc429f9f3c7035524482be1f079b493233c40cb41eb62b836",
-    "codex-kimi": "2d1ad084dd5053f771bc57e9dadb3767724db5d380097e996d34d852b5111635",
-    "claude": "5748946343e25e254164dfe692a3083d5e738d5a4771e3e7732d2b5612f5a257",
+    "all": "731f207bc66f2fd34010a8d0d8d5efdb8fa79d3585d1fd3759b923650c2a29ef",
+    "codex-kimi": "6a4c86d9ca38af3e709252f901fb2379210446fdaeb0a8de1c48216385917207",
+    "claude": "4c0a9596cb68964dd69a8c5fe2444e37234bab43ae2234e27e350d7eec557c43",
 }
 
 _CACHING_SPEC_LIST_METHODS = (
@@ -128,19 +128,28 @@ async def test_initialize_and_discover_are_captured_without_versions():
     assert "version" not in m["initialize"]["serverInfo"]
     assert m["discover"]["supportedVersions"] == ["2026-07-28"]
     assert "version" not in m["discover"]["_meta"]["io.modelcontextprotocol/serverInfo"]
-    assert m["initialize"]["capabilities"] != m["discover"]["capabilities"]
+    # Equal since ADR 0018: the two eras derive `listChanged` from different inputs and
+    # `_filter_capabilities` forces both to the honest `false`. Transport parity against the
+    # real stdio wire is asserted in `tests/test_cache_hints.py`, which is where the
+    # in-memory manifest could otherwise pin a value no client receives.
+    assert m["initialize"]["capabilities"] == m["discover"]["capabilities"]
 
 
-async def test_modern_result_envelopes_are_pinned_at_the_sdk_default():
-    """ttlMs/cacheScope are deliberately left at the SDK default (ADR 0006); the manifest
-    pins the emitted values so a framework change is reviewed, not silent."""
+async def test_modern_result_envelopes_are_pinned_at_the_declared_cache_policy():
+    """The list methods carry the catalog TTL and `resources/read` carries none (ADR 0018);
+    the manifest pins the emitted values so a framework change is reviewed, not silent."""
     m = await manifest.build_manifest(manifest.app_for_profile("all"))
     env = m["modern_result_envelopes"]
     assert set(env) == set(_CACHING_SPEC_LIST_METHODS) | {"resources/read", "tools/call"}
+    cached = {
+        "resultType": "complete",
+        "ttlMs": server.CATALOG_CACHE_TTL_MS,
+        "cacheScope": server.CATALOG_CACHE_SCOPE,
+    }
     for method in _CACHING_SPEC_LIST_METHODS:
-        assert env[method] == {"resultType": "complete", "ttlMs": 0, "cacheScope": "private"}, (
-            method
-        )
+        assert method in server.CACHED_CATALOG_METHODS, method
+        assert env[method] == cached, method
+    assert "resources/read" in server.UNCACHED_CACHEABLE_METHODS
     assert set(env["resources/read"]) == set(manifest.STATIC_RESOURCE_URIS)
     for uri, fields in env["resources/read"].items():
         assert fields == {"resultType": "complete", "ttlMs": 0, "cacheScope": "private"}, uri

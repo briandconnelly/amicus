@@ -10,6 +10,7 @@ from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
 from fastmcp import FastMCP
+from mcp.server.caching import CacheHint
 
 from amicus import SERVER_NAME, __version__, config, obs, tools
 from amicus.appstate import AppState
@@ -32,6 +33,36 @@ if TYPE_CHECKING:  # pragma: no cover
     from amicus.config import Settings
 
 UI_EXTENSION_ID = "io.modelcontextprotocol/ui"
+
+# SEP-2549 freshness hint for the discovery catalog (ADR 0018). The tool, resource and
+# template records are fixed for the life of the process, so `ttlMs: 0` — the SDK's default
+# when a server sets no hint — spent a ~99 KB `tools/list` re-walk on every re-read for
+# nothing. 300s is a policy choice, not a measured optimum: long enough to cover a burst of
+# list calls in one turn, short enough that a host which deliberately persists its cache
+# (`CacheConfig.target_id` plus a durable store; the default in-memory store's arm id is a
+# fresh uuid4 per client) self-heals within five minutes of a restart under a different
+# AMICUS_BACKENDS.
+CATALOG_CACHE_TTL_MS = 300_000
+# `private`, never `public`: the catalog varies with AMICUS_BACKENDS via `annotations_for`.
+# That is not the same as `private` preventing configuration drift — scope separates
+# authorization contexts, not launch configurations of one server.
+CATALOG_CACHE_SCOPE = "private"
+
+# The cacheable methods that carry the hint. Written out rather than derived from the SDK's
+# CACHEABLE_METHODS so a method the SDK makes cacheable later defaults to NO hint;
+# `tests/test_cache_hints.py` fails on that drift and forces the choice to be made here.
+CACHED_CATALOG_METHODS: tuple[str, ...] = (
+    "server/discover",
+    "tools/list",
+    "resources/list",
+    "resources/templates/list",
+    "prompts/list",
+)
+# `resources/read` is cacheable and deliberately unhinted. The SDK picks a hint per METHOD
+# while the client keys its cache per URI, so every resource read would share one window —
+# and `amicus://backends/{backend}` and `amicus://models/{backend}` report live install,
+# auth and model-catalog state that changes with no restart and no notification.
+UNCACHED_CACHEABLE_METHODS: frozenset[str] = frozenset({"resources/read"})
 
 
 def tasks_redelivery_seconds(settings: Settings) -> int:
@@ -83,8 +114,11 @@ CAPABILITY_SUMMARY = (
     "result), amicus_job_list(task_id=...) recovers it while retained, and the "
     "amicus_job_* tools are the fallback for every host without the tasks extension. "
     "Job handles expire after AMICUS_JOB_TTL (default 24h); read results promptly. "
-    "Use amicus_capabilities for the full inventory, fingerprint, surface_digest, and "
-    "error catalog; amicus_models(backend) for model slugs; amicus_dry_run and "
+    "Use amicus_capabilities for the full inventory, fingerprint, surface_digest and "
+    "error catalog; re-read surface_digest rather than re-walking the catalog, but read "
+    "fingerprint too: the digest covers the tool, resource and template records as the "
+    "server holds them (before response middleware) plus this text, and nothing wider. "
+    "amicus_models(backend) for model slugs; amicus_dry_run and "
     "amicus_delegate_dry_run to preview a call without spending. "
     "Background: every paid tool has an _async twin polled via amicus_job_status/result/"
     "consume_result/cancel/list; a sync call also records its run as a job (meta.job_id) "
@@ -105,8 +139,19 @@ def state_of(app: FastMCP) -> AppState:
 
 
 def _filter_capabilities(original: Callable[..., Any]) -> Callable[..., Any]:
-    """Null the prompts capability (no prompts are registered) and drop the UI extension
-    (no Apps implementation), leaving any other extension untouched."""
+    """Null the prompts capability (no prompts are registered), drop the UI extension (no
+    Apps implementation) leaving any other extension untouched, and report
+    `listChanged: false` for tools and resources.
+
+    The SDK derives `listChanged` per era: at 2026-07-28 from whether
+    `subscriptions/listen` is served (amicus does not serve it, so `false`), and at
+    handshake era from the `NotificationOptions` the transport passes — where FastMCP's
+    stdio path hardcodes `tools_changed=True`. amicus has no
+    `notifications/tools/list_changed` emission site and never gains or loses a tool after
+    startup, so the handshake `true` promised a notification that cannot arrive. Forcing
+    `false` makes both eras agree and costs a handshake client nothing it was ever sent
+    (ADR 0018).
+    """
 
     def get_capabilities(*args: Any, **kwargs: Any) -> Any:
         caps = original(*args, **kwargs)
@@ -116,9 +161,29 @@ def _filter_capabilities(original: Callable[..., Any]) -> Callable[..., Any]:
             if isinstance(extensions, dict)
             else None
         )
-        return caps.model_copy(update={"prompts": None, "extensions": filtered or None})
+        update: dict[str, Any] = {"prompts": None, "extensions": filtered or None}
+        for field in ("tools", "resources"):
+            capability = getattr(caps, field, None)
+            if capability is not None:
+                update[field] = capability.model_copy(update={"list_changed": False})
+        return caps.model_copy(update=update)
 
     return get_capabilities
+
+
+def _install_cache_hints(app: FastMCP) -> None:
+    """Advertise `CATALOG_CACHE_TTL_MS` on the catalog methods and on no other.
+
+    FastMCP's own `cache_ttl` constructor argument is uniform by construction — one hint
+    for every cacheable method, `resources/read` included — so the hint map is written onto
+    the low-level server directly, which is where the SDK reads it
+    (`mcp.server.runner.Server._serialize`). A method left out of the map emits no hint at
+    all, which is the SDK default: `ttlMs: 0`.
+    """
+    app._mcp_server.cache_hints = dict.fromkeys(
+        CACHED_CATALOG_METHODS,
+        CacheHint(ttl_ms=CATALOG_CACHE_TTL_MS, scope=CATALOG_CACHE_SCOPE),
+    )
 
 
 def create_app(
@@ -133,6 +198,7 @@ def create_app(
     app._amicus_state = state  # ty: ignore[unresolved-attribute]
     lowlevel = app._mcp_server
     lowlevel.get_capabilities = _filter_capabilities(lowlevel.get_capabilities)  # ty: ignore[invalid-assignment]
+    _install_cache_hints(app)
     app.add_middleware(ConnectionLogMiddleware())
     app.add_middleware(InputSchemaDialectMiddleware())
     app.add_middleware(SemanticErrorMiddleware())

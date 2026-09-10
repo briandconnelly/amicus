@@ -9,6 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking (`FINGERPRINT` `schema-13`).** The discovery catalog now advertises a real
+  SEP-2549 freshness window instead of the SDK's `ttlMs: 0`. `server/discover`,
+  `tools/list`, `resources/list`, `resources/templates/list` and `prompts/list` carry
+  `ttlMs: 300000`, `cacheScope: private`; those records are fixed for the life of the
+  process, so a modern client that opts into caching no longer re-walks 99,053 bytes of
+  `tools/list` to learn nothing changed. `resources/read` deliberately carries no hint and
+  stays at `ttlMs: 0`: the SDK chooses a hint per method while the client keys its cache
+  per URI, and `amicus://backends/{backend}` and `amicus://models/{backend}` report live
+  install, auth and model-catalog state. `tools.listChanged` and `resources.listChanged`
+  now report `false` on the handshake era too, matching the modern era and matching
+  amicus, which has no `notifications/*/list_changed` emission site -- the handshake `true`
+  came from FastMCP's hardcoded `NotificationOptions` and promised a notification that
+  could not arrive. The committed manifest also pinned
+  `initialize.capabilities.resources.listChanged: true`, a value the shipped stdio
+  transport never sent, because it is built over the in-memory transport; both eras'
+  capabilities are now asserted against a real `amicus-mcp` subprocess. `RESULT_FORMAT`
+  stays `4`. `surface_digest` moves only because `instructions` gained a clause naming it
+  as the catalog re-read check: revert that clause and the digest returns to its previous
+  value, because the digest covers the catalog records as the server holds them (before
+  response middleware) plus `instructions`, and not the capability blocks or the cache
+  envelope. The cache hints are inert for both captured hosts, which negotiate the
+  handshake era; the `listChanged` flip is not, and is visible to exactly those clients. Supersedes ADR 0006's cache-hint clause; see
+  ADR 0018. (#45)
 - **Breaking (`FINGERPRINT` `schema-12`).** The published stability tier is now inside the
   closed set an agent can filter on. Nine of the 18 tools -- the ones absent from the per-tool
   override table -- carried `alpha` in their lifecycle `_meta`, as did all four static resources
