@@ -22,7 +22,8 @@ from fastmcp.client.transports import StdioTransport
 from mcp_types.methods import CACHEABLE_METHODS
 from tests.conftest import NEVER_SPAWN_CLAUDE, NEVER_SPAWN_CODEX, NEVER_SPAWN_KIMI
 
-from amicus import server
+from amicus import config, server
+from amicus.registry import BackendRegistry
 from amicus.tools.resources import STATIC_RESOURCE_URIS
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -141,6 +142,27 @@ async def test_both_eras_report_list_changed_false(mode):
     assert caps["tools"]["listChanged"] is False
     assert caps["resources"]["listChanged"] is False
     assert caps["resources"]["subscribe"] is False
+
+
+@pytest.mark.parametrize("env", [{}, {"AMICUS_TASKS": "1"}], ids=["default", "tasks"])
+def test_forcing_list_changed_false_is_not_hiding_a_served_subscription(env):
+    """The override is honest only while amicus serves no `subscriptions/listen`.
+
+    At 2026-07-28 the SDK derives `listChanged` and `resources.subscribe` from whether that
+    method is served, so the day amicus serves it the modern flags become genuinely true
+    and `_filter_capabilities` would be suppressing a real capability. Asserted with the
+    tasks extension on as well, because that is the one configuration that adds request
+    handlers after `create_app` has built the surface.
+    """
+    app = server.create_app(config.settings(env), BackendRegistry({}, {}))
+    handlers = app._mcp_server._request_handlers
+    # Positive control: a bare `not in` against a renamed or empty map would pass for the
+    # wrong reason, and this is the assertion's whole instrument.
+    assert "tools/list" in handlers, "the request-handler map is not what this test reads"
+    assert "subscriptions/listen" not in handlers, (
+        "amicus now serves subscriptions/listen: revisit ADR 0018's listChanged decision "
+        "instead of continuing to force the flag false"
+    )
 
 
 async def test_the_manifest_pins_the_capabilities_the_shipped_transport_sends():
