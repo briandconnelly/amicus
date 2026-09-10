@@ -80,6 +80,12 @@ def test_every_cacheable_method_is_hinted_or_deliberately_not():
 
 
 def test_the_installed_hint_map_matches_the_declared_split():
+    # The literal, not the constant. Every other assertion in this file reads
+    # `server.CATALOG_CACHE_TTL_MS`, so changing the constant alone moves them all with it
+    # and only the manifest fixture objects. ADR 0018 chose this number; a deliberate
+    # change edits it here too, where the reason is readable.
+    assert server.CATALOG_CACHE_TTL_MS == 300_000
+    assert server.CATALOG_CACHE_SCOPE == "private"
     app = server.create_app()
     hints = app._mcp_server.cache_hints
     assert set(hints) == set(server.CACHED_CATALOG_METHODS)
