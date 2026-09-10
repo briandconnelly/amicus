@@ -105,13 +105,16 @@ def test_every_cacheable_method_is_hinted_or_deliberately_not():
     )
 
 
-def test_the_installed_hint_map_matches_the_declared_split():
+def test_the_installed_hint_map_matches_the_declared_split(clean_env):
     # The literal, not the constant. Every other assertion in this file reads
     # `server.CATALOG_CACHE_TTL_MS`, so changing the constant alone moves them all with it
     # and only the manifest fixture objects. ADR 0018 chose this number; a deliberate
     # change edits it here too, where the reason is readable.
     assert server.CATALOG_CACHE_TTL_MS == 300_000
     assert server.CATALOG_CACHE_SCOPE == "private"
+    # `clean_env` before a bare `create_app()`, per `tests/test_server.py`: the hint map
+    # does not depend on which backends load, but the developer's own AMICUS_BACKENDS
+    # should not decide whether this test reaches the assertion at all.
     app = server.create_app()
     hints = app._mcp_server.cache_hints
     assert set(hints) == set(server.CACHED_CATALOG_METHODS)
