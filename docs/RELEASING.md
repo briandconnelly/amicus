@@ -97,6 +97,9 @@ The tag therefore deliberately points at a commit that is in `main`'s history bu
 1. Merge PR B (the milestone work, version literals untouched).
 2. Open PR C, the `chore(release):` PR described by AGENTS.md rule 19, and do not merge it yet.
    Roll `## [Unreleased]` in `CHANGELOG.md` into a dated `## [X.Y.Z] - YYYY-MM-DD` section, and leave a fresh empty `## [Unreleased]` above it.
+   That date is **UTC** (`date -u +%F`), not the local date of whoever prepares the PR.
+   The two disagree for part of every day in this maintainer's timezone, and the tag, the publish run and the PyPI record are all stamped in UTC, so a local date makes the changelog disagree with every other artifact of the same release.
+   0.1.0 predates this convention and is dated `2026-09-08`, its local date; it was tagged on 2026-09-09 UTC, and that section is left as it shipped rather than rewritten.
    Change no version literal unless the version itself is changing.
    The literals are `pyproject.toml`, `src/amicus/__init__.py` and both `plugin.json` files.
    Do **not** touch `.mcp.json`: per ADR 0015 its pin names an already-published release, so during this PR it correctly trails the version being released by one, and step 7 moves it after the tag exists.

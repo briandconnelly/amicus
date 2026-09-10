@@ -1,6 +1,6 @@
 [project]
 name = "amicus"
-version = "0.1.0"
+version = "0.2.0"
 description = "One MCP server for every second-opinion model: consult, review, and delegate with the backend as a parameter"
 readme = "README.md"
 requires-python = ">=3.11"
