@@ -265,8 +265,9 @@ async def test_guard_turns_an_unexpected_exception_into_internal_error(monkeypat
 
 async def test_lifecycle_meta_on_every_paid_tool():
     by_name = await _tools(_app())
+    # Both inherit the server-wide tier: the per-tool override table is empty (#43).
     assert by_name["amicus_consult"].meta["dev.bconnelly.amicus/lifecycle"] == {
-        "stability": "alpha"
+        "stability": "experimental"
     }
     assert by_name["amicus_consult_async"].meta["dev.bconnelly.amicus/lifecycle"] == {
         "stability": "experimental"

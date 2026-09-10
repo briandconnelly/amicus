@@ -8,13 +8,30 @@ from amicus.schemas.fingerprint import LIFECYCLE_META_KEY
 from amicus.tools import _meta
 
 
-def test_tool_stability_falls_back_to_server_stability():
+def test_the_override_table_is_empty_and_every_tool_inherits_the_server_tier():
+    assert _meta.TOOL_STABILITY == {}
+    assert _meta.SERVER_STABILITY == "experimental"
+    for name in ("amicus_consult", "amicus_job_status", "amicus_delegate_async"):
+        assert _meta.tool_stability(name) == "experimental"
+
+
+def test_an_override_still_wins_over_the_server_tier(monkeypatch):
+    """The seam the empty table leaves behind: it fills again when the server reaches a
+    more mature tier than an individual tool."""
+    monkeypatch.setattr(_meta, "SERVER_STABILITY", "stable")
+    monkeypatch.setitem(_meta.TOOL_STABILITY, "amicus_job_status", "experimental")
     assert _meta.tool_stability("amicus_job_status") == "experimental"
-    assert _meta.tool_stability("amicus_consult") == _meta.SERVER_STABILITY
+    assert _meta.tool_stability("amicus_consult") == "stable"
 
 
 def test_lifecycle_meta_carries_the_stability_tier():
-    assert _meta.lifecycle_meta("amicus_consult") == {LIFECYCLE_META_KEY: {"stability": "alpha"}}
+    assert _meta.lifecycle_meta("amicus_consult") == {
+        LIFECYCLE_META_KEY: {"stability": "experimental"}
+    }
+
+
+def test_server_lifecycle_meta_carries_the_server_wide_tier():
+    assert _meta.server_lifecycle_meta() == {LIFECYCLE_META_KEY: {"stability": "experimental"}}
 
 
 def test_effects_for_is_destructive_when_any_enabled_backend_is():

@@ -11,10 +11,10 @@ from mcp_types import ResourceTemplateReference
 from amicus import middleware
 from amicus.schemas.codes import BACKEND_IDS
 from amicus.schemas.envelope import ERROR_ENVELOPE_SCHEMA, RESULT_META_SCHEMA
-from amicus.schemas.fingerprint import LIFECYCLE_META_KEY, TRIAGE_META_KEY
+from amicus.schemas.fingerprint import TRIAGE_META_KEY
 from amicus.schemas.params import PARAMS_RESOURCE_URI, params_resource_body
 from amicus.tools import discovery
-from amicus.tools._meta import SERVER_STABILITY
+from amicus.tools._meta import server_lifecycle_meta
 
 if TYPE_CHECKING:  # pragma: no cover
     from fastmcp import FastMCP
@@ -41,7 +41,7 @@ def _meta(payload: dict[str, Any] | None = None, *, volatile: bool = False) -> d
     }
     if volatile:
         triage["volatile"] = True
-    return {LIFECYCLE_META_KEY: {"stability": SERVER_STABILITY}, TRIAGE_META_KEY: triage}
+    return {**server_lifecycle_meta(), TRIAGE_META_KEY: triage}
 
 
 def complete_backend(ref: Any, argument: Any, context: Any) -> list[str] | None:  # noqa: ARG001

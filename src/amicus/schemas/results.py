@@ -376,7 +376,7 @@ class CapabilitiesResult(BaseModel):
     protocol_revision: str = PROTOCOL_REVISION
     result_format: int = Field(default=RESULT_FORMAT, description=RESULT_FORMAT_DESC)
     transport: str
-    stability: str
+    stability: ToolStability
     enabled_backends: list[BackendRef]
     active_tools: list[str]
     free_tools: list[str]

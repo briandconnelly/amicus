@@ -16,8 +16,9 @@ smaller tax on that host than the budget assumes
 (docs/host-captures/install-smoke/claude-code/2.1.263/notes.md). The budget stays the
 worst-case ceiling for the clients that do preload.
 
-Measured 2026-09-09 at schema-10 (18 tools; every model result carries
-findings_diagnostics, and both review tools publish what `confidence` means): see MEASURED.
+Measured 2026-09-09 at schema-12 (18 tools; every model result carries
+findings_diagnostics, both review tools publish what `confidence` means, and the published
+stability tier is inside the closed set): see MEASURED.
 
 The schema-8 -> schema-9 raise (+5160 bytes) is deliberate, and most of it is prose. The
 `findings_diagnostics` object itself costs ~1250 bytes across four paid tools' output
@@ -34,6 +35,13 @@ kept because `confidence` is now two things - the backend's own rating, and the 
 substitutes where it also withholds the verdict - and it has two misreadings to prevent, both
 of which invert the value: `unknown` read as a low rating, and a high rating read as evidence
 that coverage was complete (issue #53).
+
+The schema-11 -> schema-12 raise (+106 bytes) buys interpretability, not prose. 63 of it is
+the tier name itself: nine tools carried `alpha`, seven bytes shorter than the `experimental`
+that replaced it, and a tier outside the closed set is one an agent cannot filter on at all
+(issue #43). The other 43 are `amicus_capabilities`'s output schema, which now publishes
+`stability` as the three-value enum instead of a bare string, so a caller reads the legal set
+off the schema rather than inferring it from one observed value.
 """
 
 from __future__ import annotations
@@ -42,7 +50,7 @@ import pytest
 
 from amicus import manifest
 
-MEASURED: dict[str, int] = {"all": 98947, "codex-kimi": 98955, "claude": 98947}
+MEASURED: dict[str, int] = {"all": 99053, "codex-kimi": 99061, "claude": 99053}
 BUDGET: dict[str, int] = {p: ((n // 1000) + 1) * 1000 for p, n in MEASURED.items()}
 # ceil(bytes/4): a dependency-free, conservative token proxy (~4.13 bytes per token).
 TOKEN_PROXY_BUDGET: dict[str, int] = {p: -(-b // 4) for p, b in BUDGET.items()}

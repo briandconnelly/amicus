@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking (`FINGERPRINT` `schema-12`).** The published stability tier is now inside the
+  closed set an agent can filter on. Nine of the 18 tools -- the ones absent from the per-tool
+  override table -- carried `alpha` in their lifecycle `_meta`, as did all four static resources
+  and both resource templates, and `amicus_capabilities.stability` reported it too:
+  a value outside both `[9.stability-tiers]`'s `stable | preview | experimental` and amicus's
+  own `ToolStability` literal, so a caller filtering on the tier could not interpret it. The
+  server-wide tier is now `experimental`, the honest one for a 0.1.x surface and already the
+  tier the four `_async` and five `amicus_job_*` tools declared; their per-tool overrides are
+  gone, and `amicus_capabilities.tool_details[].stability` is `null` for all 18 tools, which
+  means what it always meant -- inherit the top-level tier. `stability` is also published as
+  the three-value enum rather than a bare string, so an illegal tier now fails assembly
+  instead of reaching a caller. `RESULT_FORMAT` stays `4`: no stored result carries a tier.
+  tools/list grows 106 bytes and the discovery-cost ratchet is raised deliberately
+  (`tests/test_discovery_cost.py` says what the bytes buy).
 - `FINGERPRINT` moves `amicus/0.1/schema-10` → `amicus/0.1/schema-11` for the scoped
   `workspace_root` prerequisite, which changes `initialize_response` and `capabilities_payload`,
   with every pin regenerated in a dedicated commit (rule 10). `RESULT_FORMAT` stays `4`: no stored

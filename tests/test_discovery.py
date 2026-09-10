@@ -15,9 +15,9 @@ from amicus.registry import BackendRegistry, UnavailableBackend
 from amicus.schemas import field_policy, results
 from amicus.schemas.codes import ERROR_CODES
 from amicus.schemas.envelope import Meta
-from amicus.schemas.fingerprint import FINGERPRINT
+from amicus.schemas.fingerprint import FINGERPRINT, LIFECYCLE_META_KEY
 from amicus.schemas.results import CapabilitiesDetail
-from amicus.tools import _resolve
+from amicus.tools import _meta, _resolve
 
 
 def _app(env=None, registry=None):
@@ -55,8 +55,65 @@ async def test_free_and_job_tool_markers_and_annotations():
     cancel = by_name["amicus_job_cancel"].annotations
     assert consume.read_only_hint is False and consume.idempotent_hint is False
     assert cancel.read_only_hint is False and cancel.idempotent_hint is True
-    for name in tools.JOB_TOOLS:
-        assert by_name[name].meta["dev.bconnelly.amicus/lifecycle"]["stability"] == "experimental"
+
+
+async def _lifecycle_stability_tiers(app) -> dict[str, str]:
+    """Every stability value the discovery records carry in `_meta`, keyed by where it
+    appears: 18 tools, 4 static resources, 2 templates. One collector covers all three
+    surfaces, so none of them can drift on its own. These blocks are plain dicts with no
+    model behind them, so nothing rejects an illegal tier at runtime -- the declared type
+    of `SERVER_STABILITY` and this collector are what hold them."""
+    tiers: dict[str, str] = {}
+    async with Client(app) as c:
+        for tool in await c.list_tools():
+            assert LIFECYCLE_META_KEY in (tool.meta or {}), tool.name
+            tiers[f"tools/list:{tool.name}"] = tool.meta[LIFECYCLE_META_KEY]["stability"]
+        for res in await c.list_resources():
+            assert LIFECYCLE_META_KEY in (res.meta or {}), res.uri
+            tiers[f"resources/list:{res.uri}"] = res.meta[LIFECYCLE_META_KEY]["stability"]
+        for tpl in await c.list_resource_templates():
+            assert LIFECYCLE_META_KEY in (tpl.meta or {}), tpl.uri_template
+            tiers[f"templates/list:{tpl.uri_template}"] = tpl.meta[LIFECYCLE_META_KEY]["stability"]
+    return tiers
+
+
+async def test_every_published_stability_tier_is_in_the_closed_set():
+    """[9.stability-tiers] closes the set so an agent can filter on the tier directly;
+    the server published `alpha`, outside it and outside its own literal, until #43."""
+    tiers = await _lifecycle_stability_tiers(_app())
+    assert len(tiers) == 24, sorted(tiers)
+    async with Client(_app()) as c:
+        caps = (await c.call_tool("amicus_capabilities", {"detail": "full"})).structured_content
+    tiers["capabilities:stability"] = caps["stability"]
+    for entry in caps["tool_details"]:
+        if entry["stability"] is not None:
+            tiers[f"capabilities:tool_details:{entry['name']}"] = entry["stability"]
+    # 25, not 26+: every tool_details override is null today, because the per-tool table
+    # is empty and each tool inherits the server-wide tier.
+    assert len(tiers) == 25, sorted(tiers)
+    assert {v for v in tiers.values() if v not in set(get_args(results.ToolStability))} == set()
+
+
+async def test_an_illegal_server_tier_would_reach_every_lifecycle_record(monkeypatch):
+    """Mutation control for the collector above: one bad server-wide tier has to surface on
+    all 24 records, because every record now inherits it. That all-inherit invariant is what
+    this pins, not the historical state: `alpha` reached 15 of these 24 (nine tools, four
+    resources, two templates) plus `amicus_capabilities.stability`, because the other nine
+    tools carried an explicit `experimental` override (#43). It also pins the single-sourcing
+    -- a module that had bound its own copy of the constant would stay behind here."""
+    monkeypatch.setattr(_meta, "SERVER_STABILITY", "alpha")
+    tiers = await _lifecycle_stability_tiers(_app())
+    assert len(tiers) == 24 and set(tiers.values()) == {"alpha"}
+
+
+async def test_capabilities_refuses_to_publish_a_tier_outside_the_closed_set(monkeypatch):
+    """The other half: `CapabilitiesResult.stability` is typed to the closed set, so an
+    illegal tier fails assembly instead of reaching a caller as an uninterpretable value.
+    The passing call in the closed-set test above is this probe's positive control."""
+    monkeypatch.setattr(_meta, "SERVER_STABILITY", "alpha")
+    async with Client(_app()) as c:
+        res = await c.call_tool("amicus_capabilities", {}, raise_on_error=False)
+    assert res.structured_content["error"]["code"] == "internal_error"
 
 
 async def test_advertised_control_char_patterns_are_complete():
