@@ -260,8 +260,13 @@ defaults, `plugin.repair_overrides` win per code, backend-local codes are preser
   behaviour captured. Job reads `readOnlyHint: true` under the observable-scope reading.
   ADR 0001.
 - `_meta["dev.bconnelly.amicus/lifecycle"]` on every tool and resource.
-- Fingerprint = static `amicus/0.1/schema-N` + `surface_digest` (sha256 of the built
-  manifest). ADR 0006.
+- Fingerprint = static `amicus/0.1/schema-N` + `surface_digest` (sha256 of the tool,
+  resource and template records plus `instructions` — not the built manifest, whose
+  stronger hash is pinned only in tests). ADR 0006.
+- SEP-2549 cache hints: the four list methods and `server/discover` carry
+  `ttlMs: 300000`/`cacheScope: private`; `resources/read` carries none, because the
+  `backends`/`models` templates report live state. Both eras report
+  `listChanged: false`. ADR 0018.
 - `CAPABILITY_SUMMARY` is rules-then-context, serves as `instructions` and
   `amicus://capabilities`: does/does-not, spec target, error carriers, task `completed`
   is a delivery statement, when a task may be returned, `amicus_job_*` fallback and
