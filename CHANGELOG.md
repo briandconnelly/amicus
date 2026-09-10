@@ -38,7 +38,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   embed the text that provoked it. Two carriers did exactly that: the unexpected-exception guard
   logged with `.exception()`, whose rendered traceback carries the original exception's `str()`,
   and its own message interpolated `exc_summary(exc)` -- which masks secrets and control
-  characters, not prompt inputs, so it was never the safe form the guard's comment claimed. Every
+  characters, not prompt inputs, so it was never the safe form the guard's comment claimed. A
+  third call site, the task-map write warning in `amicus.jobs.lifecycle`, interpolated
+  `exc_summary` the same way; its `OSError` carries a path rather than a prompt, so it was a
+  latent instance of the pattern rather than a demonstrated leak, and it is gone too. Every
   handler `amicus.obs` installs now renders under one policy: exception types and source
   locations, never message text, notes, or source lines. The policy lives at the handler rather
   than the call site because `pontonier`'s own runtime logs exceptions through these handlers too.

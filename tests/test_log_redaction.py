@@ -89,10 +89,14 @@ def logs(tmp_path, clean_env, monkeypatch):
             return stderr.getvalue(), log_file.read_text(encoding="utf-8")
 
     yield Sink()
-    logger = configured
-    for handler in logger.handlers[:]:
-        logger.removeHandler(handler)
-        handler.close()
+    # BOTH trees: `obs.configure` gives `pontonier` its own handler instances, and leaving
+    # them attached leaves an open file handle on `tmp_path` and points any later
+    # `pontonier` record at a `StringIO` belonging to a finished test.
+    for name in (obs.ROOT_LOGGER_NAME, LIBRARY_LOGGER):
+        target = logging.getLogger(name)
+        for handler in target.handlers[:]:
+            target.removeHandler(handler)
+            handler.close()
     obs._configured = False
 
 
@@ -378,6 +382,21 @@ LOG_METHODS = frozenset({"debug", "info", "warning", "error", "exception", "crit
 PACKAGE_ROOT = Path(__file__).resolve().parent.parent / "src" / "amicus"
 
 
+def _pre_stringified_type_name(node: ast.AST) -> bool:
+    """`type(exc).__name__` — a class name read directly rather than through the filter.
+
+    `__name__` is writable, so a forged one can carry a newline and forge a whole log
+    line. `obs.safe_type_name` rejects that shape; a bare read hands the formatter an
+    ordinary string, which the value policy passes through untouched."""
+    return (
+        isinstance(node, ast.Attribute)
+        and node.attr == "__name__"
+        and isinstance(node.value, ast.Call)
+        and isinstance(node.value.func, ast.Name)
+        and node.value.func.id == "type"
+    )
+
+
 def _exc_summary_in_logging_calls(root: Path) -> tuple[list[str], int]:
     """Return `(offenders, files_scanned)` for every `*.py` under ``root``.
 
@@ -395,7 +414,7 @@ def _exc_summary_in_logging_calls(root: Path) -> tuple[list[str], int]:
             if node.func.attr not in LOG_METHODS:
                 continue
             for inner in ast.walk(node):
-                if (
+                if _pre_stringified_type_name(inner) or (
                     isinstance(inner, ast.Call)
                     and isinstance(inner.func, ast.Name | ast.Attribute)
                     and (
@@ -407,14 +426,14 @@ def _exc_summary_in_logging_calls(root: Path) -> tuple[list[str], int]:
     return offenders, scanned
 
 
-def test_no_logging_call_in_the_package_passes_exc_summary():
-    """`exc_summary` sanitizes secrets and control characters, not prompt inputs, so it is
-    safe for a client-facing envelope and never for a log. The formatter cannot catch it —
-    a call site that pre-stringifies hands the formatter an ordinary `str` — so the rule is
-    asserted against the source instead."""
+def test_no_logging_call_in_the_package_renders_an_exception_itself():
+    """Two call-site shapes the formatter cannot catch, because both hand it an ordinary
+    `str`, which the value policy passes through: `exc_summary(exc)`, which sanitizes
+    secrets and control characters but not prompt inputs, and `type(exc).__name__`, which
+    skips the shape filter. Both are asserted against the source instead."""
     offenders, scanned = _exc_summary_in_logging_calls(PACKAGE_ROOT)
     assert scanned > 20, f"the scan inspected {scanned} files; it is not reaching the package"
-    assert offenders == [], f"exc_summary passed to a logging call: {offenders}"
+    assert offenders == [], f"a logging call renders an exception itself: {offenders}"
 
 
 def test_the_call_site_scan_detects_a_planted_violation(tmp_path):
@@ -425,12 +444,13 @@ def test_the_call_site_scan_detects_a_planted_violation(tmp_path):
     planted.parent.mkdir(parents=True)
     planted.write_text(
         "import logging\nfrom pontonier.core.redaction import exc_summary\n"
-        "def f(exc):\n    logging.getLogger('x').warning('boom: %s', exc_summary(exc))\n",
+        "def f(exc):\n    logging.getLogger('x').warning('boom: %s', exc_summary(exc))\n"
+        "def g(exc):\n    logging.getLogger('x').warning('boom: %s', type(exc).__name__)\n",
         encoding="utf-8",
     )
     offenders, scanned = _exc_summary_in_logging_calls(tmp_path)
     assert scanned == 1
-    assert len(offenders) == 1 and offenders[0].endswith("planted.py:4")
+    assert [o.rsplit(":", 1)[1] for o in offenders] == ["4", "6"]
 
 
 # --- shapes that carry an exception without looking like one ---------------------------
@@ -524,3 +544,36 @@ def test_only_the_innermost_frames_are_retained():
     assert len(locations) == obs._MAX_FRAMES
     # The tail is kept, so the raise site is the last entry.
     assert "in recurse" in locations[-1]
+
+
+def test_a_forged_type_name_cannot_forge_a_log_line(logs):
+    """`__name__` and `__qualname__` are writable. A name carrying a newline would, read
+    directly, arrive as an ordinary string and append a whole fabricated record."""
+
+    class Forged(RuntimeError):
+        pass
+
+    Forged.__name__ = f"RuntimeError\n2026-01-01 00:00:00 ERROR amicus: {MARKER}"
+    Forged.__qualname__ = Forged.__name__
+    assert obs.safe_type_name(Forged()) == "<unknown>"
+
+    try:
+        raise Forged()
+    except Forged:
+        logs.logger_for("amicus.probe").exception("boom")
+    for text in _both(logs):
+        assert MARKER not in text
+        assert "<unknown>" in text
+
+
+def test_the_unfiltered_read_would_have_forged_it(logs):
+    """Mutation control: the same forged name read the way the call sites used to read it
+    lands in both handlers, newline and all."""
+
+    class Forged(RuntimeError):
+        pass
+
+    Forged.__name__ = f"RuntimeError\n2026-01-01 00:00:00 ERROR amicus: {MARKER}"
+    logs.logger_for("amicus.probe").error("failed: %s", type(Forged()).__name__)
+    for text in _both(logs):
+        assert MARKER in text, "control did not reproduce the forgery; the test proves nothing"
