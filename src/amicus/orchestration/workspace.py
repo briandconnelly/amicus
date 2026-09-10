@@ -15,6 +15,8 @@ from urllib.parse import unquote, urlparse
 
 from pontonier.core import workspace as _pw
 
+from amicus.schemas.params import WORKSPACE_SCOPE
+
 if TYPE_CHECKING:  # pragma: no cover
     from amicus.schemas.envelope import RootsSource
 
@@ -27,9 +29,11 @@ class WorkspaceResolution:
     error_detail: str | None = None
 
 
+# The scope clause is the shared one (schemas.params), so this repair cannot widen the
+# rule back to "every call" on its own (issue #40).
 _NO_WORKSPACE = (
     "no workspace_root was given and the client advertised no file roots; pass "
-    "workspace_root (an absolute directory) on every call from a sessionless client"
+    f"workspace_root (an absolute directory) {WORKSPACE_SCOPE}"
 )
 
 

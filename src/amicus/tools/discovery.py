@@ -13,6 +13,7 @@ from amicus.schemas.codes import BACKEND_IDS, ERROR_CODES
 from amicus.schemas.envelope import ERROR_ENVELOPE_SCHEMA, RESULT_META_SCHEMA, Meta
 from amicus.schemas.options import OPTION_ALLOWED_VALUES
 from amicus.schemas.params import (
+    WORKSPACE_PREREQUISITE,
     BackendParam,
     CapabilitiesDetailParam,
     IncludeSchemasParam,
@@ -503,7 +504,7 @@ async def capabilities_payload(
         ],
         prerequisites=[
             "At least one backend CLI installed and authenticated (amicus_backends reports which).",
-            "workspace_root on every call from a sessionless (2026-07-28) client.",
+            WORKSPACE_PREREQUISITE,
         ],
         deprecation_policy=(
             "A deprecated tool, parameter or code stays discoverable for two minor releases "

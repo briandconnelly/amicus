@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from mcp.types import ClientCapabilities, Implementation, InitializeRequestParams
 
 from amicus.orchestration import workspace as ws
+from amicus.schemas.params import WORKSPACE_SCOPE
 
 
 def test_explicit_root_wins_and_is_checked_against_roots(tmp_path):
@@ -35,6 +36,10 @@ def test_roots_then_refusal_then_opt_in_cwd(tmp_path):
     assert refused.error_code == "invalid_workspace_root" and (
         "workspace_root" in (refused.error_detail or "")
     )
+    # The repair carries the SHARED scope clause, so it cannot widen the rule back to
+    # "every call" on its own and send the caller into a tool that rejects the parameter
+    # (issue #40). What is pinned is that it renders from the one source, not its prose.
+    assert WORKSPACE_SCOPE in (refused.error_detail or "")
     allowed = ws.resolve(None, [], allow_cwd=True, server_cwd=str(tmp_path))
     assert (allowed.path, allowed.source) == (str(tmp_path.resolve()), "cwd")
     assert ws.workspace_warning_for("cwd", "/x") and (

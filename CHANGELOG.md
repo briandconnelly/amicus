@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `FINGERPRINT` moves `amicus/0.1/schema-10` → `amicus/0.1/schema-11` for the scoped
+  `workspace_root` prerequisite, which changes `initialize_response` and `capabilities_payload`,
+  with every pin regenerated in a dedicated commit (rule 10). `RESULT_FORMAT` stays `4`: no stored
+  result changed shape, and no `inputSchema` changed, so the discovery-cost ratchet does not move.
 - **Breaking (`FINGERPRINT` `schema-10`, `RESULT_FORMAT` 4).** `confidence` on a review or
   adversarial-review result gained a fourth value, `unknown`, and both tools now publish what the
   field means. `unknown` is the ABSENCE of a rating -- the backend supplied none amicus could
@@ -32,6 +36,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   finding was lost on a run that never measured loss.
 
 ### Fixed
+
+- The published prerequisite no longer sends a sessionless client's first call into an
+  `invalid_arguments` error (issue #40). Both the server `instructions` and
+  `amicus_capabilities.prerequisites` told a sessionless (2026-07-28) client to pass
+  `workspace_root` on EVERY call, and the same `instructions` name `amicus_backends` as the call
+  to make before the first paid one. `amicus_backends`, `amicus_models` and `amicus_capabilities`
+  declare no `workspace_root`, and every `inputSchema` is `additionalProperties: false`, so an
+  agent that followed the prerequisite failed at exactly the call the instructions told it to make
+  first. The prerequisite was correct for the other fifteen tools, so it is scoped to the calls
+  that declare the parameter, and both surfaces now render one shared sentence built from
+  `WORKSPACELESS_TOOLS` rather than each stating the rule in its own words; the
+  `invalid_workspace_root` repair carried the same "every call" wording and is scoped with it. A
+  manifest test binds that tuple to the live schemas, probes that each named tool really does
+  reject `workspace_root`, and requires every surface stating the prerequisite to carry the shared
+  sentence and no other workspace_root claim. What is machine-checked is the tool set and the
+  single source, not the prose: one sentence is what a reviewer has to read, and it can no longer
+  disagree with the schemas or with itself.
 
 - Exception text no longer reaches the diagnostic log, on any path (issue #39). AGENTS.md rule 18
   forbids writing a prompt input to a log, and an exception raised inside a backend adapter can
