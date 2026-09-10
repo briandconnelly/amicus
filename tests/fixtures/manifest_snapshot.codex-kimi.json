@@ -153,7 +153,7 @@
       "Second opinions, git-change reviews, adversarial critiques and delegated diffs from Codex, Kimi or Claude Code, selected per call.",
       "Durable background jobs for every paid verb, plus the tasks extension when enabled."
     ],
-    "stability": "alpha",
+    "stability": "experimental",
     "tasks": {
       "enabled": false,
       "extension": "io.modelcontextprotocol/tasks",
@@ -262,7 +262,7 @@
           "question"
         ],
         "returns": "job_id, poll_after_ms, expires_at, follow_up; result via amicus_job_result.",
-        "stability": "experimental",
+        "stability": null,
         "use_when": "The same consult when it may exceed the sync deadline; returns a job handle."
       },
       {
@@ -393,7 +393,7 @@
           "backend"
         ],
         "returns": "a job handle; result via amicus_job_result.",
-        "stability": "experimental",
+        "stability": null,
         "use_when": "A multi-file or whole-branch review that may exceed the sync deadline."
       },
       {
@@ -497,7 +497,7 @@
           "task"
         ],
         "returns": "a job handle; result via amicus_job_result.",
-        "stability": "experimental",
+        "stability": null,
         "use_when": "A substantial delegate that may exceed the sync deadline."
       },
       {
@@ -623,7 +623,7 @@
           "target"
         ],
         "returns": "a job handle; result via amicus_job_result.",
-        "stability": "experimental",
+        "stability": null,
         "use_when": "The same critique when it may exceed the sync deadline."
       },
       {
@@ -775,7 +775,7 @@
           "job_id"
         ],
         "returns": "status, result_available, result_ok, poll_after_ms.",
-        "stability": "experimental",
+        "stability": null,
         "use_when": "Poll a job without fetching its result."
       },
       {
@@ -804,7 +804,7 @@
           "job_id"
         ],
         "returns": "the originating tool's envelope.",
-        "stability": "experimental",
+        "stability": null,
         "use_when": "Fetch a finished job's envelope."
       },
       {
@@ -833,7 +833,7 @@
           "job_id"
         ],
         "returns": "the originating tool's envelope.",
-        "stability": "experimental",
+        "stability": null,
         "use_when": "Fetch a finished job's envelope and delete the record."
       },
       {
@@ -856,7 +856,7 @@
           "job_id"
         ],
         "returns": "the job's status after cancellation.",
-        "stability": "experimental",
+        "stability": null,
         "use_when": "Stop a running job."
       },
       {
@@ -880,7 +880,7 @@
         "name": "amicus_job_list",
         "required_params": [],
         "returns": "job summaries, truncated flag.",
-        "stability": "experimental",
+        "stability": null,
         "use_when": "Recover job_ids, including the job behind a task_id."
       }
     ],
@@ -916,7 +916,7 @@
     {
       "_meta": {
         "dev.bconnelly.amicus/lifecycle": {
-          "stability": "alpha"
+          "stability": "experimental"
         },
         "dev.bconnelly.amicus/triage": {
           "size_bytes": 11115
@@ -1375,7 +1375,7 @@
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-11",
+                "default": "amicus/0.1/schema-12",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -1839,7 +1839,7 @@
     {
       "_meta": {
         "dev.bconnelly.amicus/lifecycle": {
-          "stability": "alpha"
+          "stability": "experimental"
         },
         "dev.bconnelly.amicus/triage": {
           "size_bytes": 4812
@@ -1883,7 +1883,7 @@
     {
       "_meta": {
         "dev.bconnelly.amicus/lifecycle": {
-          "stability": "alpha"
+          "stability": "experimental"
         },
         "dev.bconnelly.amicus/triage": {
           "size_bytes": 0,
@@ -1899,7 +1899,7 @@
     {
       "_meta": {
         "dev.bconnelly.amicus/lifecycle": {
-          "stability": "alpha"
+          "stability": "experimental"
         },
         "dev.bconnelly.amicus/triage": {
           "size_bytes": 0,
@@ -1917,7 +1917,7 @@
     {
       "_meta": {
         "dev.bconnelly.amicus/lifecycle": {
-          "stability": "alpha"
+          "stability": "experimental"
         },
         "dev.bconnelly.amicus/triage": {
           "size_bytes": 0,
@@ -1933,7 +1933,7 @@
     {
       "_meta": {
         "dev.bconnelly.amicus/lifecycle": {
-          "stability": "alpha"
+          "stability": "experimental"
         },
         "dev.bconnelly.amicus/triage": {
           "size_bytes": 11115
@@ -1948,7 +1948,7 @@
     {
       "_meta": {
         "dev.bconnelly.amicus/lifecycle": {
-          "stability": "alpha"
+          "stability": "experimental"
         },
         "dev.bconnelly.amicus/triage": {
           "size_bytes": 4812
@@ -1963,7 +1963,7 @@
     {
       "_meta": {
         "dev.bconnelly.amicus/lifecycle": {
-          "stability": "alpha"
+          "stability": "experimental"
         },
         "dev.bconnelly.amicus/triage": {
           "size_bytes": 5250
@@ -1980,7 +1980,7 @@
     {
       "_meta": {
         "dev.bconnelly.amicus/lifecycle": {
-          "stability": "alpha"
+          "stability": "experimental"
         },
         "dev.bconnelly.amicus/triage": {
           "size_bytes": 5250
@@ -2192,7 +2192,7 @@
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-11",
+            "default": "amicus/0.1/schema-12",
             "title": "Fingerprint",
             "type": "string"
           },
@@ -2419,7 +2419,7 @@
     {
       "_meta": {
         "dev.bconnelly.amicus/lifecycle": {
-          "stability": "alpha"
+          "stability": "experimental"
         }
       },
       "annotations": {
@@ -3439,7 +3439,7 @@
     {
       "_meta": {
         "dev.bconnelly.amicus/lifecycle": {
-          "stability": "alpha"
+          "stability": "experimental"
         }
       },
       "annotations": {
@@ -3756,7 +3756,7 @@
     {
       "_meta": {
         "dev.bconnelly.amicus/lifecycle": {
-          "stability": "alpha"
+          "stability": "experimental"
         }
       },
       "annotations": {
@@ -3929,6 +3929,11 @@
                 ]
               },
               "stability": {
+                "enum": [
+                  "experimental",
+                  "preview",
+                  "stable"
+                ],
                 "type": "string"
               },
               "surface_digest": {
@@ -4034,7 +4039,7 @@
     {
       "_meta": {
         "dev.bconnelly.amicus/lifecycle": {
-          "stability": "alpha"
+          "stability": "experimental"
         }
       },
       "annotations": {
@@ -4838,7 +4843,7 @@
     {
       "_meta": {
         "dev.bconnelly.amicus/lifecycle": {
-          "stability": "alpha"
+          "stability": "experimental"
         }
       },
       "annotations": {
@@ -5615,7 +5620,7 @@
     {
       "_meta": {
         "dev.bconnelly.amicus/lifecycle": {
-          "stability": "alpha"
+          "stability": "experimental"
         }
       },
       "annotations": {
@@ -5926,7 +5931,7 @@
     {
       "_meta": {
         "dev.bconnelly.amicus/lifecycle": {
-          "stability": "alpha"
+          "stability": "experimental"
         }
       },
       "annotations": {
@@ -7295,7 +7300,7 @@
     {
       "_meta": {
         "dev.bconnelly.amicus/lifecycle": {
-          "stability": "alpha"
+          "stability": "experimental"
         }
       },
       "annotations": {
@@ -7467,7 +7472,7 @@
     {
       "_meta": {
         "dev.bconnelly.amicus/lifecycle": {
-          "stability": "alpha"
+          "stability": "experimental"
         }
       },
       "annotations": {
