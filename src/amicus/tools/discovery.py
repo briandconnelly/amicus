@@ -39,7 +39,13 @@ from amicus.schemas.results import (
     ToolCapability,
     UnavailableEntry,
 )
-from amicus.tools import ACTIVE_TOOLS, FREE_TOOLS, JOB_TOOLS, TOOL_ORDER
+from amicus.tools import (
+    ACTIVE_TOOLS,
+    FREE_TOOLS,
+    JOB_TOOLS,
+    TOOL_ORDER,
+    WORKSPACE_PREREQUISITE,
+)
 from amicus.tools._guard import guard
 from amicus.tools._meta import (
     SERVER_STABILITY,
@@ -503,9 +509,7 @@ async def capabilities_payload(
         ],
         prerequisites=[
             "At least one backend CLI installed and authenticated (amicus_backends reports which).",
-            "workspace_root on every call whose schema declares it from a sessionless "
-            "(2026-07-28) client; amicus_backends, amicus_models and amicus_capabilities "
-            "take no workspace_root and reject one.",
+            WORKSPACE_PREREQUISITE,
         ],
         deprecation_policy=(
             "A deprecated tool, parameter or code stays discoverable for two minor releases "

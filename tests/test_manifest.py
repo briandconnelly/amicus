@@ -10,6 +10,7 @@ from fastmcp import Client
 
 from amicus import manifest
 from amicus.schemas.fingerprint import FINGERPRINT_COVERS, FINGERPRINT_COVERS_DESC
+from amicus.tools import WORKSPACE_PREREQUISITE, WORKSPACELESS_TOOLS
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -193,36 +194,41 @@ async def test_tools_list_bytes_is_positive():
     assert await manifest.tools_list_bytes(manifest.app_for_profile("all")) > 10_000
 
 
-def _workspace_claim(text: str) -> str:
-    """The sentences of `text` that state the workspace_root prerequisite."""
-    return " ".join(s for s in text.split(". ") if "workspace_root" in s)
-
-
-async def test_the_workspace_prerequisite_names_the_tools_that_take_no_workspace(tmp_path):
+async def test_the_workspace_prerequisite_is_bound_to_the_schemas(tmp_path):
     """Issue #40: both published surfaces told a sessionless client to pass
     workspace_root on EVERY call, while three tools declare none and reject one
-    (every inputSchema is additionalProperties: false). Wherever the prerequisite
-    is stated, the exempt tools must be named, and no workspace-bearing tool may be."""
+    (every inputSchema is additionalProperties: false), so the agent that followed
+    the prerequisite failed its first call.
+
+    What this pins is the tool set, not the prose: WORKSPACELESS_TOOLS must be
+    exactly the tools whose schema omits the parameter, each must really reject
+    one, and every surface stating the prerequisite must carry the single shared
+    sentence rendered from that tuple. One sentence is then the only thing a
+    reviewer has to read, and it cannot disagree with the schemas or with itself."""
     app = manifest.app_for_profile("all")
     m = await manifest.build_manifest(app)
     takes = {t["name"] for t in m["tools"] if "workspace_root" in t["inputSchema"]["properties"]}
     exempt = {t["name"] for t in m["tools"]} - takes
-    assert exempt and takes, (
-        "schema probe found nothing to distinguish; the claims below are vacuous"
-    )
+    assert exempt and takes, "schema probe found nothing to distinguish; the claims are vacuous"
+    assert set(WORKSPACELESS_TOOLS) == exempt
 
     async with Client(app) as c:
         for name in sorted(exempt):
             res = await c.call_tool(name, {"workspace_root": str(tmp_path)}, raise_on_error=False)
             assert res.is_error, f"{name} accepted workspace_root; the exemption is stale"
 
-    claims = {
-        "instructions": _workspace_claim(m["initialize"]["instructions"]),
-        "prerequisites": " ".join(
-            p for p in m["capabilities"]["prerequisites"] if "workspace_root" in p
-        ),
+    # Named by token, not substring: a future amicus_models_v2 that takes a workspace
+    # must not satisfy the exemption by containing amicus_models.
+    named = set(re.findall(r"amicus_[a-z_]+", WORKSPACE_PREREQUISITE))
+    assert named == exempt
+
+    surfaces = {
+        "instructions": m["initialize"]["instructions"],
+        "prerequisites": " ".join(m["capabilities"]["prerequisites"]),
     }
-    for where, claim in claims.items():
-        assert claim, where
-        assert {n for n in exempt if n in claim} == exempt, where
-        assert not [n for n in takes if n in claim], where
+    stated = WORKSPACE_PREREQUISITE.rstrip(".")
+    for where, text in surfaces.items():
+        assert WORKSPACE_PREREQUISITE in text, where
+        # and nowhere else on that surface, so no second sentence can contradict it.
+        stray = [s.rstrip(".") for s in text.split(". ") if "workspace_root" in s]
+        assert stray == [stated], (where, stray)

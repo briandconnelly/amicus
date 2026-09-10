@@ -29,8 +29,8 @@ class WorkspaceResolution:
 
 _NO_WORKSPACE = (
     "no workspace_root was given and the client advertised no file roots; pass "
-    "workspace_root (an absolute directory) from a sessionless client on every call whose "
-    "schema declares it"
+    "workspace_root (an absolute directory) from a sessionless client on every call that "
+    "declares the parameter"
 )
 
 

@@ -45,11 +45,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   declare no `workspace_root`, and every `inputSchema` is `additionalProperties: false`, so an
   agent that followed the prerequisite failed at exactly the call the instructions told it to make
   first. The prerequisite was correct for the other fifteen tools, so it is scoped to the calls
-  whose schema declares the parameter and the three exceptions are named on both surfaces; the
+  that declare the parameter, and both surfaces now render one shared sentence built from
+  `WORKSPACELESS_TOOLS` rather than each stating the rule in its own words; the
   `invalid_workspace_root` repair carried the same "every call" wording and is scoped with it. A
-  manifest test now derives the exempt set from the live schemas, probes that each exempt tool
-  really does reject `workspace_root`, and requires every surface stating the prerequisite to name
-  them, so the claim cannot drift from the schemas again.
+  manifest test binds that tuple to the live schemas, probes that each named tool really does
+  reject `workspace_root`, and requires every surface stating the prerequisite to carry the shared
+  sentence and no other workspace_root claim. What is machine-checked is the tool set and the
+  single source, not the prose: one sentence is what a reviewer has to read, and it can no longer
+  disagree with the schemas or with itself.
 
 - Exception text no longer reaches the diagnostic log, on any path (issue #39). AGENTS.md rule 18
   forbids writing a prompt input to a log, and an exception raised inside a backend adapter can
