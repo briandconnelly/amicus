@@ -79,7 +79,7 @@ def test_generalize_rewrites_only_the_four_minted_codes():
 
 
 def test_fingerprint_constants():
-    assert fingerprint.FINGERPRINT == "amicus/0.1/schema-10"
+    assert fingerprint.FINGERPRINT == "amicus/0.1/schema-11"
     assert fingerprint.RESULT_FORMAT == 4
     assert fingerprint.JSON_SCHEMA_DIALECT == "https://json-schema.org/draft/2020-12/schema"
     assert fingerprint.LIFECYCLE_META_KEY == "dev.bconnelly.amicus/lifecycle"
