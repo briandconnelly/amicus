@@ -21,4 +21,5 @@ The manifest pins the emitted values so a framework change is reviewed, not sile
 ## Consequences
 
 - `surface_digest` and `fingerprint` are excluded from the manifest capture (self-referential), as are release-variable versions.
-- Revisit the TTL when fastmcp offers per-resource hints. (Retired rather than met, by ADR 0018: per-METHOD hints proved sufficient.)
+- Revisit the TTL when fastmcp offers per-resource hints.
+  Retired rather than met, by ADR 0018: per-METHOD hints proved sufficient.
