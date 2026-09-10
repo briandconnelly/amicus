@@ -43,12 +43,12 @@ from amicus.schemas.results import (
 from amicus.tools import ACTIVE_TOOLS, FREE_TOOLS, JOB_TOOLS, TOOL_ORDER
 from amicus.tools._guard import guard
 from amicus.tools._meta import (
-    SERVER_STABILITY,
     TOOL_STABILITY,
     annotations_for,
     base_meta,
     effects_for,
     lifecycle_meta,
+    server_stability,
 )
 from amicus.tools._resolve import FREE_MARKER
 
@@ -459,7 +459,7 @@ async def capabilities_payload(
         ToolCapability(
             name=name,
             cost=TOOL_DETAILS[name]["cost"],
-            stability=TOOL_STABILITY.get(name),  # ty: ignore[invalid-argument-type]
+            stability=TOOL_STABILITY.get(name),
             backends=TOOL_DETAILS[name]["backends"],
             use_when=TOOL_DETAILS[name]["use_when"],
             required_params=_params_for(name)[0],
@@ -483,7 +483,7 @@ async def capabilities_payload(
         version=__version__,
         surface_digest=await surface.surface_digest(app),
         transport="stdio",
-        stability=SERVER_STABILITY,
+        stability=server_stability(),
         enabled_backends=list(settings.enabled_backends),
         active_tools=list(ACTIVE_TOOLS),
         free_tools=list(FREE_TOOLS),

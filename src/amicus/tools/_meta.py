@@ -14,20 +14,17 @@ from amicus.schemas.fingerprint import LIFECYCLE_META_KEY
 
 if TYPE_CHECKING:  # pragma: no cover
     from amicus.config import Settings
+    from amicus.schemas.results import ToolStability
 
-SERVER_STABILITY = "alpha"
-# Tools more experimental than the server-wide tier; anything absent inherits it.
-TOOL_STABILITY: dict[str, str] = {
-    "amicus_consult_async": "experimental",
-    "amicus_review_changes_async": "experimental",
-    "amicus_adversarial_review_async": "experimental",
-    "amicus_delegate_async": "experimental",
-    "amicus_job_status": "experimental",
-    "amicus_job_result": "experimental",
-    "amicus_job_consume_result": "experimental",
-    "amicus_job_cancel": "experimental",
-    "amicus_job_list": "experimental",
-}
+# The server-wide tier, published on every tool, resource and template. Typed as
+# ToolStability so the checker rejects a value outside the closed set [9.stability-tiers]
+# closes on; it was a bare `str` holding "alpha", which no agent could interpret (#43).
+SERVER_STABILITY: ToolStability = "experimental"
+# Per-tool tiers that differ from the server-wide one; anything absent inherits it.
+# Empty while the server sits at the least mature tier the closed set offers: nothing can
+# be more experimental than `experimental`, so every tool inherits. It fills again when
+# the server reaches `preview` or `stable` and individual tools lag behind it.
+TOOL_STABILITY: dict[str, ToolStability] = {}
 # An enabled id the in-tree table does not know (a third-party plugin) is annotated for
 # the worst case until its plugin declares otherwise.
 _UNKNOWN_EFFECTS = AnnotationEffects(paid_calls_destructive=True, job_reads_read_only=True)
@@ -35,7 +32,7 @@ _UNKNOWN_EFFECTS = AnnotationEffects(paid_calls_destructive=True, job_reads_read
 AnnotationKind = Literal["active", "free", "job_read", "job_consume", "job_cancel"]
 
 
-def tool_stability(name: str) -> str:
+def tool_stability(name: str) -> ToolStability:
     return TOOL_STABILITY.get(name, SERVER_STABILITY)
 
 
@@ -43,6 +40,20 @@ def lifecycle_meta(name: str) -> dict[str, Any]:
     """The `<reverse-dns>/lifecycle` _meta block ([9.tier-metadata]); the deprecation
     marker is absent, which is the not-deprecated signal."""
     return {LIFECYCLE_META_KEY: {"stability": tool_stability(name)}}
+
+
+def server_stability() -> ToolStability:
+    """The server-wide tier. Read it through this rather than importing the constant: a
+    `from ... import SERVER_STABILITY` binds a copy at the importer's import time, and
+    then one module can publish a stale tier while the others move (see the mutation
+    control in tests/test_discovery.py, which is what caught that)."""
+    return SERVER_STABILITY
+
+
+def server_lifecycle_meta() -> dict[str, Any]:
+    """The lifecycle block for a resource or template, which carries the server-wide
+    tier; `lifecycle_meta` is the per-tool form."""
+    return {LIFECYCLE_META_KEY: {"stability": server_stability()}}
 
 
 def effects_for(settings: Settings) -> AnnotationEffects:
