@@ -236,8 +236,8 @@ PARAMETER_CONTRACTS: dict[str, ParamContract] = {
             "config_mode — claude: inherit|scoped|safe|bare (how much of the user's Claude "
             "config the run inherits). Claude adversarial_review defaults to safe (bare when "
             "AMICUS_CLAUDE_CONFIG_MODE=bare); other verbs use the configured default. Explicit "
-            "config_mode overrides are honored. Discovery reports a null default when verbs "
-            "differ. access — claude: toolless|readonly. max_budget_usd "
+            "config_mode overrides are honored. Discovery reports default_by_verb when verbs "
+            "differ, with default null. access — claude: toolless|readonly. max_budget_usd "
             "— claude: per-call best-effort spend cap in USD, 0.01–5.00. Unset keys "  # noqa: RUF001
             "take the backend's defaults; amicus_dry_run echoes review_changes values."
         ),

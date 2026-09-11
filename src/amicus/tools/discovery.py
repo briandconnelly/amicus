@@ -353,22 +353,25 @@ def _status_of(plugin: BackendPlugin) -> BackendStatus:
 
 
 def _options_for(backend_id: str, plugin: BackendPlugin | None) -> list[BackendOptionInfo]:
-    defaults: dict[str, Any] = {}
+    defaults: dict[str, dict[str, Any]] = {}
     if plugin:
         for option in plugin.options:
-            if option.name in defaults and defaults[option.name] != option.default:
-                defaults[option.name] = None  # No single default across the supported verbs.
-            else:
-                defaults[option.name] = option.default
+            defaults.setdefault(option.name, {}).update(
+                {verb: option.default for verb in sorted(option.applies_to)}
+            )
     out: list[BackendOptionInfo] = []
     for name, per_backend in OPTION_ALLOWED_VALUES.items():
         if backend_id in per_backend:
             allowed = per_backend[backend_id]
+            by_verb = defaults.get(name, {})
+            common = next(iter(by_verb.values()), None)
+            varies = any(value != common for value in by_verb.values())
             out.append(
                 BackendOptionInfo(
                     name=name,
                     allowed_values=list(allowed) if allowed else None,
-                    default=defaults.get(name),
+                    default=None if varies else common,
+                    default_by_verb=by_verb if varies else None,
                 )
             )
     return out

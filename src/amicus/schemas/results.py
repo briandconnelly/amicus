@@ -266,7 +266,14 @@ class BackendOptionInfo(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str
     allowed_values: list[str] | None = None
-    default: str | float | None = None
+    default: str | float | None = Field(
+        default=None,
+        description="Common default across verbs; null if absent or defaults vary by verb.",
+    )
+    default_by_verb: dict[str, str | float | None] | None = Field(
+        default=None,
+        description="Resolved defaults keyed by verb when they differ; null for a common default.",
+    )
 
 
 class BackendEntry(BaseModel):

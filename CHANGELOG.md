@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Default Claude adversarial reviews to `safe` config isolation (preserving a configured
   `bare` API-key mode) and reinforce their JSON-only and available-tool contract (#64).
   Explicit per-call modes remain supported; consult and review-changes defaults are unchanged.
-  Discovery reports no single config-mode default when defaults vary by verb.
+  Discovery exposes `default_by_verb` when defaults vary by verb, with no single common default.
 
 ## [0.2.0] - 2026-09-10
 

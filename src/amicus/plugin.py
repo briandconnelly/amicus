@@ -32,7 +32,9 @@ ENTRY_POINT_GROUP = "amicus.backends"
 class OptionSpec:
     """One backend option: its `backend_options` key, the RunRequest field it maps to,
     the verbs it applies to, and the backend's default. The SCHEMA lives in
-    amicus.schemas.options; this carries defaults and applicability only (ADR 0002)."""
+    amicus.schemas.options; this carries defaults and applicability only (ADR 0002).
+    Repeated names must have disjoint applies_to sets and the same maps_to field.
+    Consumers resolving a call must filter by verb before indexing by name."""
 
     name: str
     maps_to: str

@@ -341,6 +341,58 @@ async def test_hook_warning_reaches_meta(app, tmp_path, repo):
     assert "--safe-mode" in _runs(tmp_path)[1]["argv"]
 
 
+@pytest.mark.parametrize("configured", ["inherit", "scoped", "safe", "bare"])
+async def test_configured_defaults_discovery_and_tool_execution(
+    app, tmp_path, monkeypatch, configured
+):
+    monkeypatch.setenv("AMICUS_CLAUDE_CONFIG_MODE", configured)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    settings = config.settings()
+    configured_app = server.create_app(settings, BackendRegistry.load(("claude",), entry_points=()))
+    (tmp_path / ".claude").mkdir()
+    (tmp_path / ".claude" / "settings.json").write_text('{"hooks": {"PreToolUse": []}}')
+    expected_critic = "bare" if configured == "bare" else "safe"
+    async with Client(configured_app) as c:
+        catalog = (await c.call_tool("amicus_backends", {"backend": "claude"})).structured_content
+        consult = (
+            await c.call_tool(
+                "amicus_consult",
+                {"backend": "claude", "question": "why?", "workspace_root": str(tmp_path)},
+            )
+        ).structured_content
+        monkeypatch.setenv("FAKE_CLAUDE_ANSWER", STRUCTURED_CRITIQUE)
+        critic = (
+            await c.call_tool(
+                "amicus_adversarial_review",
+                {
+                    "backend": "claude",
+                    "target": "Ship without retries.",
+                    "workspace_root": str(tmp_path),
+                },
+            )
+        ).structured_content
+    option = next(o for o in catalog["backends"][0]["options"] if o["name"] == "config_mode")
+    if configured == expected_critic:
+        assert option["default"] == configured
+        assert option["default_by_verb"] is None
+    else:
+        assert option["default"] is None
+        assert option["default_by_verb"] == {
+            "consult": configured,
+            "review_changes": configured,
+            "adversarial_review": expected_critic,
+        }
+    assert consult["ok"] and critic["ok"]
+    assert consult["meta"]["backend_details"]["config_mode"] == configured
+    assert critic["meta"]["backend_details"]["config_mode"] == expected_critic
+    assert bool(consult["meta"]["security_warnings"]) == (configured in ("inherit", "scoped"))
+    assert critic["meta"]["security_warnings"] == []
+    for run, mode in zip(_runs(tmp_path), (configured, expected_critic), strict=True):
+        assert ("--safe-mode" in run["argv"]) == (mode == "safe")
+        assert ("--bare" in run["argv"]) == (mode == "bare")
+        assert ("--setting-sources" in run["argv"]) == (mode == "scoped")
+
+
 async def test_bare_without_a_key_is_refused_pre_spend(app, tmp_path):
     async with Client(app) as c:
         res = await c.call_tool(

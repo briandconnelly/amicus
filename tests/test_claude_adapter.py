@@ -33,7 +33,8 @@ async def test_adversarial_config_resolution(pinned_claude_bin, monkeypatch, con
     defaults = {o.name: o.default for o in plugin.options if "adversarial_review" in o.applies_to}
     assert defaults["config_mode"] == expected_default
     expected = explicit or expected_default
-    async with backend.prepare(_req(kind="adversarial_review", config_mode=explicit)) as prepared:
+    request = _req(kind="adversarial_review", config_mode=explicit, schema={"type": "object"})
+    async with backend.prepare(request) as prepared:
         assert ("--safe-mode" in prepared.argv) == (expected == "safe")
         assert ("--bare" in prepared.argv) == (expected == "bare")
         assert ("--setting-sources" in prepared.argv) == (expected == "scoped")
@@ -41,6 +42,14 @@ async def test_adversarial_config_resolution(pinned_claude_bin, monkeypatch, con
         system = prepared.argv[prepared.argv.index("--append-system-prompt") + 1]
         assert adversarial.OUTPUT_GUARDRAILS in system
         assert "why?" not in system
+
+
+async def test_adversarial_without_schema_omits_schema_guardrails(pinned_claude_bin):
+    _, backend = cf.make_backend()
+    async with backend.prepare(_req(kind="adversarial_review")) as prepared:
+        system = prepared.argv[prepared.argv.index("--append-system-prompt") + 1]
+        assert system == adversarial.CRITIC_GUARDRAILS
+        assert prepared.stdin_text == "why?"
 
 
 def test_backend_is_conformant(pinned_claude_bin):

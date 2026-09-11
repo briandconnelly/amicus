@@ -30,7 +30,9 @@ ENV = EnvNamespace(
         ),
         EnvVar(
             f"{PREFIX}CONFIG_MODE",
-            "Default backend_options.config_mode: inherit | scoped | safe | bare.",
+            "Default backend_options.config_mode: inherit | scoped | safe | bare. "
+            "Adversarial reviews default to safe even when inherit/scoped is configured, "
+            "or bare when bare is configured. Explicit per-call config_mode overrides apply.",
             contract.DEFAULT_CONFIG_MODE,
             (f"{_LEGACY}CLAUDE_CONFIG",),
         ),

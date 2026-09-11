@@ -72,3 +72,12 @@ def test_plugin_factory_reads_the_process_env_by_default(pinned_claude_bin, monk
 def test_all_three_in_tree_plugins_load_together_with_the_guards_in_place():
     reg = registry.BackendRegistry.load(("codex", "kimi", "claude"), entry_points=())
     assert set(reg.ids) == {"codex", "kimi", "claude"} and reg.unavailable == {}
+    for backend_id in reg.ids:
+        plugin = reg.get(backend_id)
+        assert plugin is not None
+        seen: dict[str, set[str]] = {}
+        fields: dict[str, str] = {}
+        for option in plugin.options:
+            assert not seen.setdefault(option.name, set()) & option.applies_to
+            seen[option.name].update(option.applies_to)
+            assert fields.setdefault(option.name, option.maps_to) == option.maps_to

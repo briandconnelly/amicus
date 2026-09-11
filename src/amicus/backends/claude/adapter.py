@@ -180,7 +180,7 @@ class ClaudeBackend:
             access=self._access(request),
             system_prompt=(
                 adversarial.CRITIC_GUARDRAILS + adversarial.OUTPUT_GUARDRAILS
-                if request.kind == "adversarial_review"
+                if request.kind == "adversarial_review" and request.schema is not None
                 else adversarial.CRITIC_GUARDRAILS
             ),
             max_budget_usd=self._budget(request),
