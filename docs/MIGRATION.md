@@ -127,6 +127,14 @@ Most amicus tools take `backend` as a required parameter (no default); pick `"co
 
 ## Behavior deltas
 
+Claude adversarial reviews (sync and async) now default to `config_mode="safe"`, isolating them from inherited Claude instructions that can displace the JSON critique contract (#64).
+When `AMICUS_CLAUDE_CONFIG_MODE=bare`, the default remains `bare` so API-key-only installations keep their authentication path.
+Consult and review-changes calls still use the configured default, and an explicit `backend_options.config_mode` overrides the default on every verb.
+`amicus_backends` reports a null config-mode default when the verbs differ; each call's `meta.backend_details.config_mode` reports its resolved mode.
+`amicus_dry_run` previews review-changes defaults, not adversarial-review defaults.
+If an explicitly inherited configuration produces `invalid_json`, change `backend_options.config_mode` to `safe` before making another paid call.
+An invalid JSON response alone does not establish config displacement, so the error is not automatically reclassified as a permanent configuration failure.
+
 These are the differences a user migrating from a single-model server actually hits; they are deliberate, not bugs.
 
 **Approval friction follows the worst enabled backend (ADR 0001).**

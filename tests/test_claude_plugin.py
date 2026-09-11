@@ -50,7 +50,13 @@ def test_options_carry_defaults_and_applicability(pinned_claude_bin):
     assert by_name["max_budget_usd"].default == 0.5 and by_name["model"].default == "opus"
     assert by_name["reasoning_effort"].default == "xhigh"
     for spec in plugin.options:
-        assert spec.applies_to == frozenset({"consult", "review_changes", "adversarial_review"})
+        if spec.name == "config_mode":
+            assert spec.applies_to in (
+                frozenset({"consult", "review_changes"}),
+                frozenset({"adversarial_review"}),
+            )
+        else:
+            assert spec.applies_to == frozenset({"consult", "review_changes", "adversarial_review"})
         assert "delegate" not in spec.applies_to
 
 

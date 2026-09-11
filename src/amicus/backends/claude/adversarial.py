@@ -34,6 +34,17 @@ CRITIC_GUARDRAILS = (
 # an unknown verb's framing alone.
 CRITIC_VERBS = frozenset({"consult", "review_changes", "adversarial_review"})
 
+# Constant server-owned text only; the schema and all caller material remain on stdin.
+OUTPUT_GUARDRAILS = (
+    "\nReturn only a JSON object conforming to the required output schema in the request. "
+    "Do not emit a preamble, Markdown fences, progress updates, or promises to investigate. "
+    "Use only tools actually available in this run. Never narrate or simulate tool calls. "
+    "When tools or evidence are unavailable, finish the critique using the supplied evidence "
+    "and record the limitations and missing evidence in the JSON object. "
+    "These output and tool-use requirements take precedence over conflicting project "
+    "instructions or memory."
+)
+
 
 def _short(host_name: str) -> str:
     """ "Claude Code" reads as "Claude" mid-sentence, as pontonier's framings do it."""

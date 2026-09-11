@@ -24,6 +24,25 @@ def _outcome(stdout="", stderr="", exit_code=0, timed_out=False) -> RunOutcome:
     return RunOutcome(run=CommandRun(stdout, stderr, exit_code, 12, timed_out))
 
 
+@pytest.mark.parametrize("configured", ["inherit", "scoped", "safe", "bare"])
+@pytest.mark.parametrize("explicit", [None, "inherit", "scoped", "safe", "bare"])
+async def test_adversarial_config_resolution(pinned_claude_bin, monkeypatch, configured, explicit):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    plugin, backend = cf.make_backend({"AMICUS_CLAUDE_CONFIG_MODE": configured})
+    expected_default = "bare" if configured == "bare" else "safe"
+    defaults = {o.name: o.default for o in plugin.options if "adversarial_review" in o.applies_to}
+    assert defaults["config_mode"] == expected_default
+    expected = explicit or expected_default
+    async with backend.prepare(_req(kind="adversarial_review", config_mode=explicit)) as prepared:
+        assert ("--safe-mode" in prepared.argv) == (expected == "safe")
+        assert ("--bare" in prepared.argv) == (expected == "bare")
+        assert ("--setting-sources" in prepared.argv) == (expected == "scoped")
+        assert ("ANTHROPIC_API_KEY" in prepared.env) == (expected == "bare")
+        system = prepared.argv[prepared.argv.index("--append-system-prompt") + 1]
+        assert adversarial.OUTPUT_GUARDRAILS in system
+        assert "why?" not in system
+
+
 def test_backend_is_conformant(pinned_claude_bin):
     plugin, backend = cf.make_backend()
     assert isinstance(backend, AgentBackend) and isinstance(backend, OutcomeInspector)

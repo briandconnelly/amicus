@@ -353,7 +353,13 @@ def _status_of(plugin: BackendPlugin) -> BackendStatus:
 
 
 def _options_for(backend_id: str, plugin: BackendPlugin | None) -> list[BackendOptionInfo]:
-    defaults = {o.name: o.default for o in plugin.options} if plugin else {}
+    defaults: dict[str, Any] = {}
+    if plugin:
+        for option in plugin.options:
+            if option.name in defaults and defaults[option.name] != option.default:
+                defaults[option.name] = None  # No single default across the supported verbs.
+            else:
+                defaults[option.name] = option.default
     out: list[BackendOptionInfo] = []
     for name, per_backend in OPTION_ALLOWED_VALUES.items():
         if backend_id in per_backend:

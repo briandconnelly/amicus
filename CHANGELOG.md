@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Default Claude adversarial reviews to `safe` config isolation (preserving a configured
+  `bare` API-key mode) and reinforce their JSON-only and available-tool contract (#64).
+  Explicit per-call modes remain supported; consult and review-changes defaults are unchanged.
+  Discovery reports no single config-mode default when defaults vary by verb.
+
 ## [0.2.0] - 2026-09-10
 
 Across this release the discovery surface moves `amicus/0.1/schema-7` -- what 0.1.0 shipped -- to
