@@ -1374,7 +1374,7 @@
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-14",
+                "default": "amicus/0.1/schema-15",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -1841,7 +1841,7 @@
           "stability": "experimental"
         },
         "dev.bconnelly.amicus/triage": {
-          "size_bytes": 5037
+          "size_bytes": 5057
         }
       },
       "mimeType": "application/json",
@@ -1849,7 +1849,7 @@
         "description": "Full semantics for parameters whose tools/list description is a compressed summary. Each entry's `summary` ships inline; `full` is the authoritative contract.",
         "params": {
           "backend_options": {
-            "full": "isolation — codex: inherit|ignore-config|ignore-rules (drop $CODEX_HOME config, then also execpolicy rules); kimi: inherit|ignore-skills. config_mode — claude: inherit|scoped|safe|bare (how much of the user's Claude config the run inherits). Claude adversarial_review defaults to safe (bare when AMICUS_CLAUDE_CONFIG_MODE=bare); other verbs use the configured default. Explicit config_mode overrides are honored. Discovery reports a null default when verbs differ. access — claude: toolless|readonly. max_budget_usd — claude: per-call best-effort spend cap in USD, 0.01–5.00. Unset keys take the backend's defaults; amicus_dry_run echoes review_changes values.",
+            "full": "isolation — codex: inherit|ignore-config|ignore-rules (drop $CODEX_HOME config, then also execpolicy rules); kimi: inherit|ignore-skills. config_mode — claude: inherit|scoped|safe|bare (how much of the user's Claude config the run inherits). Claude adversarial_review defaults to safe (bare when AMICUS_CLAUDE_CONFIG_MODE=bare); other verbs use the configured default. Explicit config_mode overrides are honored. Discovery reports default_by_verb when verbs differ, with default null. access — claude: toolless|readonly. max_budget_usd — claude: per-call best-effort spend cap in USD, 0.01–5.00. Unset keys take the backend's defaults; amicus_dry_run echoes review_changes values.",
             "summary": "Backend-specific knobs as one closed object: isolation (codex, kimi), config_mode and access and max_budget_usd (claude). A key or value the selected backend does not accept fails pre-spend as invalid_arguments naming backend_options.<key>. Per-backend values: amicus://params."
           },
           "extra_context": {
@@ -1950,7 +1950,7 @@
           "stability": "experimental"
         },
         "dev.bconnelly.amicus/triage": {
-          "size_bytes": 5037
+          "size_bytes": 5057
         }
       },
       "description": "Full semantics for parameters whose inline description is a compressed summary.",
@@ -2191,7 +2191,7 @@
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-14",
+            "default": "amicus/0.1/schema-15",
             "title": "Fingerprint",
             "type": "string"
           },
@@ -3571,6 +3571,29 @@
                               },
                               {
                                 "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "default_by_verb": {
+                            "anyOf": [
+                              {
+                                "additionalProperties": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "type": "object"
                               },
                               {
                                 "type": "null"
