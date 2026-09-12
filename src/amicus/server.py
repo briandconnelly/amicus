@@ -14,6 +14,7 @@ from mcp.server.caching import CacheHint
 
 from amicus import SERVER_NAME, __version__, config, obs, tools
 from amicus.appstate import AppState
+from amicus.compaction import NullDefaultStrip
 from amicus.jobs.lifecycle import SYNC_AWAIT_GRACE_S
 from amicus.middleware import (
     ConnectionLogMiddleware,
@@ -199,6 +200,7 @@ def create_app(
     lowlevel = app._mcp_server
     lowlevel.get_capabilities = _filter_capabilities(lowlevel.get_capabilities)  # ty: ignore[invalid-assignment]
     _install_cache_hints(app)
+    app.add_transform(NullDefaultStrip())
     app.add_middleware(ConnectionLogMiddleware())
     app.add_middleware(InputSchemaDialectMiddleware())
     app.add_middleware(SemanticErrorMiddleware())
