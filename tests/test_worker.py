@@ -57,22 +57,24 @@ def test_worker_runs_the_loop_with_the_streamed_inputs(tmp_path, monkeypatch):
     assert "question" not in json.loads((jd / "spec.json").read_text())
 
 
-def test_worker_crash_writes_a_redacted_internal_error(tmp_path, monkeypatch):
+def test_worker_crash_keeps_exception_text_out_of_the_stored_result(tmp_path, monkeypatch):
     _use_fake_plugin(monkeypatch)
+    marker = "PROMPTMARKER56"
 
-    async def boom(*a, **k):
-        raise RuntimeError("kaboom token=sk-" + "c" * 32)
+    async def boom(spec, *a, **k):
+        raise RuntimeError(f"backend rejected {spec.question}")
 
     monkeypatch.setattr(_worker, "run_request", boom)
     jd = _job(tmp_path)
-    assert _worker.main([str(jd)], stdin_text="{}") == 0
-    out = json.loads((jd / "result.json").read_text())
+    assert _worker.main([str(jd)], stdin_text=json.dumps({"question": marker})) == 0
+    stored = (jd / "result.json").read_text()
+    out = json.loads(stored)
     assert (
         out["ok"] is False
         and out["error"]["code"] == "internal_error"
-        and "kaboom" in out["error"]["message"]
+        and out["error"]["message"] == "background worker crashed: RuntimeError"
     )
-    assert "sk-" + "c" * 32 not in json.dumps(out) and out["meta"]["backend"] == "fake"
+    assert marker not in stored and out["meta"]["backend"] == "fake"
 
 
 def test_worker_reports_an_unavailable_backend(tmp_path, monkeypatch):
@@ -105,7 +107,7 @@ def test_worker_refuses_undecodable_stdin(tmp_path, monkeypatch):
     assert _worker.main([str(jd)], stdin_text="not json") == 0
     out = json.loads((jd / "result.json").read_text())
     assert out["ok"] is False and out["error"]["code"] == "internal_error"
-    assert "stdin" in out["error"]["message"]
+    assert out["error"]["message"] == "background worker crashed: ValueError"
     assert "not json" not in out["error"]["message"]
     assert not plugin_calls and not run_calls
 
@@ -124,7 +126,7 @@ def test_worker_refuses_a_non_object_stdin_payload(tmp_path, monkeypatch):
     assert _worker.main([str(jd)], stdin_text="[]") == 0
     out = json.loads((jd / "result.json").read_text())
     assert out["ok"] is False and out["error"]["code"] == "internal_error"
-    assert "stdin" in out["error"]["message"]
+    assert out["error"]["message"] == "background worker crashed: ValueError"
     assert not plugin_calls and not run_calls
 
 

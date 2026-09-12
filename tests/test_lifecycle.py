@@ -124,7 +124,12 @@ async def test_full_detail_keeps_raw_text(tmp_path, monkeypatch):
 
 async def test_spawn_failure_is_an_internal_error_with_no_record(tmp_path, monkeypatch):
     store = lifecycle.job_store(_settings(tmp_path))
-    monkeypatch.setattr(lifecycle, "worker_cmd", lambda jd: ["/nonexistent-binary-xyz"])
+    marker = "PROMPTMARKER56"
+
+    def fail_start(*args, **kwargs):
+        raise OSError(f"cannot spawn for {marker}")
+
+    monkeypatch.setattr(store, "start", fail_start)
     spec = _spec(str(tmp_path))
     out = await lifecycle.run_sync(
         store,
@@ -138,8 +143,9 @@ async def test_spawn_failure_is_an_internal_error_with_no_record(tmp_path, monke
     assert (
         out["ok"] is False
         and out["error"]["code"] == "internal_error"
-        and "start background job" in out["error"]["message"]
+        and out["error"]["message"] == "failed to start background job: OSError"
     )
+    assert marker not in json.dumps(out)
     assert store.list_jobs(str(tmp_path)) == []
 
 

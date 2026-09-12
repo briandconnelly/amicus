@@ -13,7 +13,6 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from pontonier.core import redaction
 from pontonier.core.jobs import JobStore
 
 from amicus import obs
@@ -134,7 +133,7 @@ def job_started_handle(
 def _spawn_failure(exc: Exception, meta: Meta, plugin: BackendPlugin) -> dict[str, Any]:
     return error_envelope(
         "internal_error",
-        f"failed to start background job: {redaction.exc_summary(exc)}"[:300],
+        f"failed to start background job: {obs.safe_type_name(exc)}",
         meta,
         plugin=plugin,
         repair_alternative="Check the job state-dir permissions (AMICUS_STATE_DIR) and retry.",
