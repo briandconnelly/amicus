@@ -1374,7 +1374,7 @@
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-16",
+                "default": "amicus/0.1/schema-17",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -1841,7 +1841,7 @@
           "stability": "experimental"
         },
         "dev.bconnelly.amicus/triage": {
-          "size_bytes": 5057
+          "size_bytes": 5216
         }
       },
       "mimeType": "application/json",
@@ -1849,28 +1849,28 @@
         "description": "Full semantics for parameters whose tools/list description is a compressed summary. Each entry's `summary` ships inline; `full` is the authoritative contract.",
         "params": {
           "backend_options": {
-            "full": "isolation — codex: inherit|ignore-config|ignore-rules (drop $CODEX_HOME config, then also execpolicy rules); kimi: inherit|ignore-skills. config_mode — claude: inherit|scoped|safe|bare (how much of the user's Claude config the run inherits). Claude adversarial_review defaults to safe (bare when AMICUS_CLAUDE_CONFIG_MODE=bare); other verbs use the configured default. Explicit config_mode overrides are honored. Discovery reports default_by_verb when verbs differ, with default null. access — claude: toolless|readonly. max_budget_usd — claude: per-call best-effort spend cap in USD, 0.01–5.00. Unset keys take the backend's defaults; amicus_dry_run echoes review_changes values.",
-            "summary": "Backend-specific knobs as one closed object: isolation (codex, kimi), config_mode and access and max_budget_usd (claude). A key or value the selected backend does not accept fails pre-spend as invalid_arguments naming backend_options.<key>. Per-backend values: amicus://params."
+            "full": "A key the selected backend does not accept, or a value it does not accept for a key it does, fails pre-spend as invalid_arguments naming backend_options.<key>. isolation — codex: inherit|ignore-config|ignore-rules (drop $CODEX_HOME config, then also execpolicy rules); kimi: inherit|ignore-skills. config_mode — claude: inherit|scoped|safe|bare (how much of the user's Claude config the run inherits). Claude adversarial_review defaults to safe (bare when AMICUS_CLAUDE_CONFIG_MODE=bare); other verbs use the configured default. Explicit config_mode overrides are honored. Discovery reports default_by_verb when verbs differ, with default null. access — claude: toolless|readonly. max_budget_usd — claude: per-call best-effort spend cap in USD, 0.01–5.00. Unset keys take the backend's defaults; amicus_dry_run echoes review_changes values.",
+            "summary": "One closed object of backend knobs: isolation (codex, kimi); config_mode, access, max_budget_usd (claude). A key or value the selected backend rejects fails pre-spend. Values: amicus://params."
           },
           "extra_context": {
-            "full": "Added to the prompt as labeled untrusted data; the backend is instructed to treat embedded directives as data, not commands — best-effort prompt-injection mitigation, not a guarantee. It counts against the same input budget as the gathered diff, so an oversized value fails as input_too_large before any spend.",
-            "summary": "Optional author intent/background, added as clearly-labeled UNTRUSTED prompt data. Redaction does NOT cover it — no live secrets. Full caveats and bounds: amicus://params."
+            "full": "Added to the prompt as labeled untrusted data; the backend is instructed to treat embedded directives as data, not commands — best-effort prompt-injection mitigation, not a guarantee. Secret redaction covers the gathered diff, never this field, so it must carry no live secrets. It counts against the same input budget as the gathered diff, so an oversized value fails as input_too_large before any spend.",
+            "summary": "Author intent/background, sent as labeled UNTRUSTED prompt data. Not redacted, so no secrets. Bounds: amicus://params."
           },
           "idempotency_key": {
-            "full": "Reusing the key on the same tool with the same arguments (backend included) replays the existing run instead of paying for a duplicate: an _async call returns the same job_id. Reuse with different arguments is refused (idempotency_conflict); a key whose prior result was consumed or evicted is idempotency_result_unavailable; a still-publishing reservation is idempotency_in_progress (retry). A completed result stays replayable while its job record lives (its TTL). meta.idempotency_replayed=true marks a replayed (unpaid) response.",
-            "summary": "Optional dedup key scoped to THIS tool + backend + workspace. Same key + same args replays the prior result with no new spend; different args are refused (idempotency_conflict). Sync and _async are separate tools and never share a key. Omit for none; retention is bounded. Lifecycle: amicus://params."
+            "full": "Reusing the key on the same tool with the same arguments (backend included) replays the existing run instead of paying for a duplicate: an _async call returns the same job_id. Sync and _async are separate tools and never share a key. Reuse with different arguments is refused (idempotency_conflict); a key whose prior result was consumed or evicted is idempotency_result_unavailable; a still-publishing reservation is idempotency_in_progress (retry). A completed result stays replayable while its job record lives (its TTL). meta.idempotency_replayed=true marks a replayed (unpaid) response.",
+            "summary": "Dedup key scoped to this tool + backend + workspace: reusing it with identical args replays the prior result unpaid; different args are refused. Lifecycle: amicus://params."
           },
           "instructions_append": {
-            "full": "Normalized once (stripped; blank means omitted); refused pre-spend as invalid_arguments when over 4096 bytes, when it carries a NUL, another C0 control (tab/LF/CR excepted), DEL, or a lone surrogate, or when it contains one of the server's framing marker lines. The backend is instructed not to let it determine a verdict; compliance is behavioral, not mechanical, and non-compliance may be silent. Each backend's carrier (argv or handshake file) is disclosed on amicus_backends. Never put secrets here; result envelopes report only a fingerprint of the text.",
-            "summary": "Optional caller stance/focus text appended BEHIND this server's always-leading framing (codex: developer_instructions on argv; claude and kimi: a leading section of the stdin/handshake prompt). UNTRUSTED, grants no tools, best-effort compliance; may ride the backend command line. Max 4096 bytes. Full contract: amicus://params."
+            "full": "Appended BEHIND this server's always-leading framing (codex: developer_instructions on argv; claude and kimi: a leading section of the stdin/handshake prompt). Normalized once (stripped; blank means omitted); refused pre-spend as invalid_arguments when over 4096 bytes, when it carries a NUL, another C0 control (tab/LF/CR excepted), DEL, or a lone surrogate, or when it contains one of the server's framing marker lines. It grants no tools. The backend is instructed not to let it determine a verdict; compliance is behavioral, not mechanical, and non-compliance may be silent. Each backend's carrier (argv or handshake file) is disclosed on amicus_backends. Never put secrets here; result envelopes report only a fingerprint of the text.",
+            "summary": "Caller stance text behind the server's own framing. UNTRUSTED, grants no tools, best-effort compliance. No secrets: a backend may carry it on argv. Max 4096 bytes. Contract: amicus://params."
           },
           "reasoning_effort": {
-            "full": "A backend-rejected value fails as invalid_reasoning_effort (repair steers to amicus_models). Backends whose CLI silently ignores a bad effort (kimi) are validated pre-spend from the catalog. Control characters, surrogates, and values over 128 chars are rejected at the MCP boundary as invalid_arguments.",
-            "summary": "Override the backend's reasoning effort for this call; omit for the backend's own resolution. An open per-model string the backend validates (commonly minimal|low|medium|high|xhigh); amicus_models lists each model's advertised set (advisory). Rejection and bounds detail: amicus://params."
+            "full": "Omitted, the backend resolves its own default. The value is validated by the backend, and amicus_models's per-model set is advisory. A backend-rejected value fails as invalid_reasoning_effort (repair steers to amicus_models). Backends whose CLI silently ignores a bad effort (kimi) are validated pre-spend from the catalog. Control characters, surrogates, and values over 128 chars are rejected at the MCP boundary as invalid_arguments.",
+            "summary": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists each model's set); omit for the backend default. Bounds: amicus://params."
           },
           "workspace_root": {
-            "full": "Resolution precedence: explicit workspace_root → the client's handshake-era file roots (first root; an explicit value must lie inside one of them or the call fails as workspace_outside_roots) → invalid_workspace_root. The server's own cwd is used only when AMICUS_ALLOW_CWD_WORKSPACE=1, and then meta.workspace_warning discloses the resolved path. On an active call the workspace selects where the backend works, not what it can read: every backend CLI can read files outside it, up to everything the OS user can read.",
-            "summary": "Absolute path of the repository the call targets. Sessionless (2026-07-28) clients must pass it; handshake-era clients may rely on their advertised file roots. The server never falls back to its own cwd unless the operator opts in. Resolution rules: amicus://params."
+            "full": "Resolution precedence: explicit workspace_root → the client's handshake-era file roots (first root; an explicit value must lie inside one of them or the call fails as workspace_outside_roots) → invalid_workspace_root. A sessionless client has no roots, so it must pass workspace_root; a handshake-era client may rely on its advertised roots. The server never falls back to its own cwd unless the operator opts in: it is used only when AMICUS_ALLOW_CWD_WORKSPACE=1, and then meta.workspace_warning discloses the resolved path. On an active call the workspace selects where the backend works, not what it can read: every backend CLI can read files outside it, up to everything the OS user can read.",
+            "summary": "Absolute path of the repository the call targets; a sessionless (2026-07-28) client must pass it. Resolution rules: amicus://params."
           }
         }
       },
@@ -1950,7 +1950,7 @@
           "stability": "experimental"
         },
         "dev.bconnelly.amicus/triage": {
-          "size_bytes": 5057
+          "size_bytes": 5216
         }
       },
       "description": "Full semantics for parameters whose inline description is a compressed summary.",
@@ -2191,7 +2191,7 @@
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-16",
+            "default": "amicus/0.1/schema-17",
             "title": "Fingerprint",
             "type": "string"
           },
@@ -2460,7 +2460,6 @@
                         "type": "null"
                       }
                     ],
-                    "default": null,
                     "description": "claude only: toolless|readonly. Omit for the server default."
                   },
                   "config_mode": {
@@ -2478,7 +2477,6 @@
                         "type": "null"
                       }
                     ],
-                    "default": null,
                     "description": "claude only: inherit|scoped|safe|bare. Omit for the server default."
                   },
                   "isolation": {
@@ -2496,7 +2494,6 @@
                         "type": "null"
                       }
                     ],
-                    "default": null,
                     "description": "codex: inherit|ignore-config|ignore-rules; kimi: inherit|ignore-skills. Omit for the backend default (inherit)."
                   },
                   "max_budget_usd": {
@@ -2510,7 +2507,6 @@
                         "type": "null"
                       }
                     ],
-                    "default": null,
                     "description": "claude only: per-call best-effort spend cap in USD, 0.01–5.00. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
                   }
                 },
@@ -2520,8 +2516,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Backend-specific knobs as one closed object: isolation (codex, kimi), config_mode and access and max_budget_usd (claude). A key or value the selected backend does not accept fails pre-spend as invalid_arguments naming backend_options.<key>. Per-backend values: amicus://params."
+            "description": "One closed object of backend knobs: isolation (codex, kimi); config_mode, access, max_budget_usd (claude). A key or value the selected backend rejects fails pre-spend. Values: amicus://params."
           },
           "base": {
             "anyOf": [
@@ -2534,7 +2529,6 @@
                 "type": "null"
               }
             ],
-            "default": null,
             "description": "Base ref for scope=branch; omit for the upstream. Control characters rejected."
           },
           "commit": {
@@ -2548,7 +2542,6 @@
                 "type": "null"
               }
             ],
-            "default": null,
             "description": "Commit ref for scope=commit. Control characters rejected."
           },
           "detail": {
@@ -2569,7 +2562,6 @@
                 "type": "null"
               }
             ],
-            "default": null,
             "description": "Supporting evidence for the target. Omit for none."
           },
           "extra_context": {
@@ -2581,8 +2573,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Optional author intent/background, added as clearly-labeled UNTRUSTED prompt data. Redaction does NOT cover it — no live secrets. Full caveats and bounds: amicus://params."
+            "description": "Author intent/background, sent as labeled UNTRUSTED prompt data. Not redacted, so no secrets. Bounds: amicus://params."
           },
           "focus": {
             "anyOf": [
@@ -2594,7 +2585,6 @@
                 "type": "null"
               }
             ],
-            "default": null,
             "description": "Narrow the review to one concern (e.g. 'locking'). UNTRUSTED caller text; a focused pass is never a full review."
           },
           "model": {
@@ -2608,8 +2598,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Backend model slug; omit for the backend's default. amicus_models lists valid slugs (advisory). Control characters are rejected, not stripped."
+            "description": "Backend model slug; omit for the backend's default. amicus_models lists valid slugs (advisory). Control characters rejected."
           },
           "paths": {
             "anyOf": [
@@ -2623,7 +2612,6 @@
                 "type": "null"
               }
             ],
-            "default": null,
             "description": "Restrict the diff to these repo-relative paths. Omit for all."
           },
           "reasoning_effort": {
@@ -2637,8 +2625,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Override the backend's reasoning effort for this call; omit for the backend's own resolution. An open per-model string the backend validates (commonly minimal|low|medium|high|xhigh); amicus_models lists each model's advertised set (advisory). Rejection and bounds detail: amicus://params."
+            "description": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists each model's set); omit for the backend default. Bounds: amicus://params."
           },
           "scope": {
             "anyOf": [
@@ -2654,7 +2641,6 @@
                 "type": "null"
               }
             ],
-            "default": null,
             "description": "Optionally attach a git diff to the critique: working_tree | branch | commit."
           },
           "target": {
@@ -2670,7 +2656,6 @@
                 "type": "null"
               }
             ],
-            "default": null,
             "description": "Deadline in seconds, clamped to 10-600; omit for the server default (AMICUS_TIMEOUT_SECONDS). A sync call past its deadline is terminated and its partial work lost; prefer the _async twin."
           },
           "untracked": {
@@ -2692,8 +2677,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Absolute path of the repository the call targets. Sessionless (2026-07-28) clients must pass it; handshake-era clients may rely on their advertised file roots. The server never falls back to its own cwd unless the operator opts in. Resolution rules: amicus://params."
+            "description": "Absolute path of the repository the call targets; a sessionless (2026-07-28) client must pass it. Resolution rules: amicus://params."
           }
         },
         "required": [
@@ -2949,7 +2933,7 @@
                 "description": "What the backend reported that amicus could not carry intact; null when nothing deviated. Read this before acting on an empty or short `findings` list."
               },
               "meta": {
-                "description": "Result metadata (backend, cwd, model, timeout, usage, job_id, and more); full schema at resource amicus://result-meta",
+                "description": "Result metadata; schema at amicus://result-meta",
                 "type": "object"
               },
               "next_steps": {
@@ -3047,7 +3031,7 @@
           {
             "properties": {
               "error": {
-                "description": "Populated error envelope; full schema at resource amicus://error-envelope",
+                "description": "Error envelope; schema at amicus://error-envelope",
                 "type": "object"
               },
               "meta": {
@@ -3067,7 +3051,7 @@
         ],
         "properties": {
           "ok": {
-            "description": "true = success result, false = error result",
+            "description": "true on success, false on error",
             "type": "boolean"
           }
         },
@@ -3123,7 +3107,6 @@
                         "type": "null"
                       }
                     ],
-                    "default": null,
                     "description": "claude only: toolless|readonly. Omit for the server default."
                   },
                   "config_mode": {
@@ -3141,7 +3124,6 @@
                         "type": "null"
                       }
                     ],
-                    "default": null,
                     "description": "claude only: inherit|scoped|safe|bare. Omit for the server default."
                   },
                   "isolation": {
@@ -3159,7 +3141,6 @@
                         "type": "null"
                       }
                     ],
-                    "default": null,
                     "description": "codex: inherit|ignore-config|ignore-rules; kimi: inherit|ignore-skills. Omit for the backend default (inherit)."
                   },
                   "max_budget_usd": {
@@ -3173,7 +3154,6 @@
                         "type": "null"
                       }
                     ],
-                    "default": null,
                     "description": "claude only: per-call best-effort spend cap in USD, 0.01–5.00. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
                   }
                 },
@@ -3183,8 +3163,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Backend-specific knobs as one closed object: isolation (codex, kimi), config_mode and access and max_budget_usd (claude). A key or value the selected backend does not accept fails pre-spend as invalid_arguments naming backend_options.<key>. Per-backend values: amicus://params."
+            "description": "One closed object of backend knobs: isolation (codex, kimi); config_mode, access, max_budget_usd (claude). A key or value the selected backend rejects fails pre-spend. Values: amicus://params."
           },
           "base": {
             "anyOf": [
@@ -3197,7 +3176,6 @@
                 "type": "null"
               }
             ],
-            "default": null,
             "description": "Base ref for scope=branch; omit for the upstream. Control characters rejected."
           },
           "commit": {
@@ -3211,7 +3189,6 @@
                 "type": "null"
               }
             ],
-            "default": null,
             "description": "Commit ref for scope=commit. Control characters rejected."
           },
           "evidence": {
@@ -3223,7 +3200,6 @@
                 "type": "null"
               }
             ],
-            "default": null,
             "description": "Supporting evidence for the target. Omit for none."
           },
           "extra_context": {
@@ -3235,8 +3211,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Optional author intent/background, added as clearly-labeled UNTRUSTED prompt data. Redaction does NOT cover it — no live secrets. Full caveats and bounds: amicus://params."
+            "description": "Author intent/background, sent as labeled UNTRUSTED prompt data. Not redacted, so no secrets. Bounds: amicus://params."
           },
           "focus": {
             "anyOf": [
@@ -3248,7 +3223,6 @@
                 "type": "null"
               }
             ],
-            "default": null,
             "description": "Narrow the review to one concern (e.g. 'locking'). UNTRUSTED caller text; a focused pass is never a full review."
           },
           "idempotency_key": {
@@ -3261,8 +3235,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Optional dedup key scoped to THIS tool + backend + workspace. Same key + same args replays the prior result with no new spend; different args are refused (idempotency_conflict). Sync and _async are separate tools and never share a key. Omit for none; retention is bounded. Lifecycle: amicus://params."
+            "description": "Dedup key scoped to this tool + backend + workspace: reusing it with identical args replays the prior result unpaid; different args are refused. Lifecycle: amicus://params."
           },
           "model": {
             "anyOf": [
@@ -3275,8 +3248,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Backend model slug; omit for the backend's default. amicus_models lists valid slugs (advisory). Control characters are rejected, not stripped."
+            "description": "Backend model slug; omit for the backend's default. amicus_models lists valid slugs (advisory). Control characters rejected."
           },
           "paths": {
             "anyOf": [
@@ -3290,7 +3262,6 @@
                 "type": "null"
               }
             ],
-            "default": null,
             "description": "Restrict the diff to these repo-relative paths. Omit for all."
           },
           "reasoning_effort": {
@@ -3304,8 +3275,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Override the backend's reasoning effort for this call; omit for the backend's own resolution. An open per-model string the backend validates (commonly minimal|low|medium|high|xhigh); amicus_models lists each model's advertised set (advisory). Rejection and bounds detail: amicus://params."
+            "description": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists each model's set); omit for the backend default. Bounds: amicus://params."
           },
           "scope": {
             "anyOf": [
@@ -3321,7 +3291,6 @@
                 "type": "null"
               }
             ],
-            "default": null,
             "description": "Optionally attach a git diff to the critique: working_tree | branch | commit."
           },
           "target": {
@@ -3347,8 +3316,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Absolute path of the repository the call targets. Sessionless (2026-07-28) clients must pass it; handshake-era clients may rely on their advertised file roots. The server never falls back to its own cwd unless the operator opts in. Resolution rules: amicus://params."
+            "description": "Absolute path of the repository the call targets; a sessionless (2026-07-28) client must pass it. Resolution rules: amicus://params."
           }
         },
         "required": [
@@ -3396,52 +3364,22 @@
                     ]
                   },
                   "arguments": {
-                    "anyOf": [
-                      {
-                        "additionalProperties": true,
-                        "type": "object"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
+                    "additionalProperties": true,
+                    "type": "object"
                   },
                   "next_step": {
-                    "enum": [
-                      "authenticate",
-                      "correct_arguments",
-                      "correct_config",
-                      "init_git_repo",
-                      "inspect_and_retry",
-                      "install_backend",
-                      "install_git",
-                      "list_jobs",
-                      "list_resources",
-                      "poll_job_status",
-                      "reduce_input",
-                      "retry_after_delay",
-                      "retry_then_report",
-                      "start_new_job",
-                      "update_plugin",
-                      "use_allowed_value",
-                      "use_new_idempotency_key",
-                      "use_workspace_in_roots"
-                    ],
+                    "const": "poll_job_status",
                     "type": "string"
                   },
                   "tool": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
+                    "const": "amicus_job_status",
+                    "type": "string"
                   }
                 },
                 "required": [
-                  "next_step"
+                  "arguments",
+                  "next_step",
+                  "tool"
                 ],
                 "type": "object"
               },
@@ -3452,7 +3390,7 @@
                 "type": "string"
               },
               "meta": {
-                "description": "Result metadata (backend, cwd, model, timeout, usage, job_id, and more); full schema at resource amicus://result-meta",
+                "description": "Result metadata; schema at amicus://result-meta",
                 "type": "object"
               },
               "ok": {
@@ -3502,7 +3440,7 @@
           {
             "properties": {
               "error": {
-                "description": "Populated error envelope; full schema at resource amicus://error-envelope",
+                "description": "Error envelope; schema at amicus://error-envelope",
                 "type": "object"
               },
               "meta": {
@@ -3522,7 +3460,7 @@
         ],
         "properties": {
           "ok": {
-            "description": "true = success result, false = error result",
+            "description": "true on success, false on error",
             "type": "boolean"
           }
         },
@@ -3562,7 +3500,6 @@
                 "type": "null"
               }
             ],
-            "default": null,
             "description": "Restrict to one backend: codex | kimi | claude. Omit for all."
           }
         },
@@ -3842,7 +3779,7 @@
           {
             "properties": {
               "error": {
-                "description": "Populated error envelope; full schema at resource amicus://error-envelope",
+                "description": "Error envelope; schema at amicus://error-envelope",
                 "type": "object"
               },
               "meta": {
@@ -3862,7 +3799,7 @@
         ],
         "properties": {
           "ok": {
-            "description": "true = success result, false = error result",
+            "description": "true on success, false on error",
             "type": "boolean"
           }
         },
@@ -3916,7 +3853,6 @@
                 "type": "null"
               }
             ],
-            "default": null,
             "description": "Embed these documents in `schemas`: error-envelope, result-meta, capabilities-result, parameter-contracts. A resource-blind fallback."
           }
         },
@@ -4125,7 +4061,7 @@
           {
             "properties": {
               "error": {
-                "description": "Populated error envelope; full schema at resource amicus://error-envelope",
+                "description": "Error envelope; schema at amicus://error-envelope",
                 "type": "object"
               },
               "meta": {
@@ -4145,7 +4081,7 @@
         ],
         "properties": {
           "ok": {
-            "description": "true = success result, false = error result",
+            "description": "true on success, false on error",
             "type": "boolean"
           }
         },
@@ -4201,7 +4137,6 @@
                         "type": "null"
                       }
                     ],
-                    "default": null,
                     "description": "claude only: toolless|readonly. Omit for the server default."
                   },
                   "config_mode": {
@@ -4219,7 +4154,6 @@
                         "type": "null"
                       }
                     ],
-                    "default": null,
                     "description": "claude only: inherit|scoped|safe|bare. Omit for the server default."
                   },
                   "isolation": {
@@ -4237,7 +4171,6 @@
                         "type": "null"
                       }
                     ],
-                    "default": null,
                     "description": "codex: inherit|ignore-config|ignore-rules; kimi: inherit|ignore-skills. Omit for the backend default (inherit)."
                   },
                   "max_budget_usd": {
@@ -4251,7 +4184,6 @@
                         "type": "null"
                       }
                     ],
-                    "default": null,
                     "description": "claude only: per-call best-effort spend cap in USD, 0.01–5.00. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
                   }
                 },
@@ -4261,8 +4193,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Backend-specific knobs as one closed object: isolation (codex, kimi), config_mode and access and max_budget_usd (claude). A key or value the selected backend does not accept fails pre-spend as invalid_arguments naming backend_options.<key>. Per-backend values: amicus://params."
+            "description": "One closed object of backend knobs: isolation (codex, kimi); config_mode, access, max_budget_usd (claude). A key or value the selected backend rejects fails pre-spend. Values: amicus://params."
           },
           "detail": {
             "default": "summary",
@@ -4282,8 +4213,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Optional author intent/background, added as clearly-labeled UNTRUSTED prompt data. Redaction does NOT cover it — no live secrets. Full caveats and bounds: amicus://params."
+            "description": "Author intent/background, sent as labeled UNTRUSTED prompt data. Not redacted, so no secrets. Bounds: amicus://params."
           },
           "instructions_append": {
             "anyOf": [
@@ -4294,8 +4224,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Optional caller stance/focus text appended BEHIND this server's always-leading framing (codex: developer_instructions on argv; claude and kimi: a leading section of the stdin/handshake prompt). UNTRUSTED, grants no tools, best-effort compliance; may ride the backend command line. Max 4096 bytes. Full contract: amicus://params."
+            "description": "Caller stance text behind the server's own framing. UNTRUSTED, grants no tools, best-effort compliance. No secrets: a backend may carry it on argv. Max 4096 bytes. Contract: amicus://params."
           },
           "model": {
             "anyOf": [
@@ -4308,8 +4237,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Backend model slug; omit for the backend's default. amicus_models lists valid slugs (advisory). Control characters are rejected, not stripped."
+            "description": "Backend model slug; omit for the backend's default. amicus_models lists valid slugs (advisory). Control characters rejected."
           },
           "question": {
             "description": "The question or ad-hoc diff to consult on. Must not be blank.",
@@ -4326,8 +4254,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Override the backend's reasoning effort for this call; omit for the backend's own resolution. An open per-model string the backend validates (commonly minimal|low|medium|high|xhigh); amicus_models lists each model's advertised set (advisory). Rejection and bounds detail: amicus://params."
+            "description": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists each model's set); omit for the backend default. Bounds: amicus://params."
           },
           "timeout_seconds": {
             "anyOf": [
@@ -4338,7 +4265,6 @@
                 "type": "null"
               }
             ],
-            "default": null,
             "description": "Deadline in seconds, clamped to 10-600; omit for the server default (AMICUS_TIMEOUT_SECONDS). A sync call past its deadline is terminated and its partial work lost; prefer the _async twin."
           },
           "workspace_root": {
@@ -4350,8 +4276,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Absolute path of the repository the call targets. Sessionless (2026-07-28) clients must pass it; handshake-era clients may rely on their advertised file roots. The server never falls back to its own cwd unless the operator opts in. Resolution rules: amicus://params."
+            "description": "Absolute path of the repository the call targets; a sessionless (2026-07-28) client must pass it. Resolution rules: amicus://params."
           }
         },
         "required": [
@@ -4478,7 +4403,7 @@
                 "description": "What the backend reported that amicus could not carry intact; null when nothing deviated. Read this before acting on an empty or short `findings` list."
               },
               "meta": {
-                "description": "Result metadata (backend, cwd, model, timeout, usage, job_id, and more); full schema at resource amicus://result-meta",
+                "description": "Result metadata; schema at amicus://result-meta",
                 "type": "object"
               },
               "next_steps": {
@@ -4557,7 +4482,7 @@
           {
             "properties": {
               "error": {
-                "description": "Populated error envelope; full schema at resource amicus://error-envelope",
+                "description": "Error envelope; schema at amicus://error-envelope",
                 "type": "object"
               },
               "meta": {
@@ -4577,7 +4502,7 @@
         ],
         "properties": {
           "ok": {
-            "description": "true = success result, false = error result",
+            "description": "true on success, false on error",
             "type": "boolean"
           }
         },
@@ -4633,7 +4558,6 @@
                         "type": "null"
                       }
                     ],
-                    "default": null,
                     "description": "claude only: toolless|readonly. Omit for the server default."
                   },
                   "config_mode": {
@@ -4651,7 +4575,6 @@
                         "type": "null"
                       }
                     ],
-                    "default": null,
                     "description": "claude only: inherit|scoped|safe|bare. Omit for the server default."
                   },
                   "isolation": {
@@ -4669,7 +4592,6 @@
                         "type": "null"
                       }
                     ],
-                    "default": null,
                     "description": "codex: inherit|ignore-config|ignore-rules; kimi: inherit|ignore-skills. Omit for the backend default (inherit)."
                   },
                   "max_budget_usd": {
@@ -4683,7 +4605,6 @@
                         "type": "null"
                       }
                     ],
-                    "default": null,
                     "description": "claude only: per-call best-effort spend cap in USD, 0.01–5.00. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
                   }
                 },
@@ -4693,8 +4614,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Backend-specific knobs as one closed object: isolation (codex, kimi), config_mode and access and max_budget_usd (claude). A key or value the selected backend does not accept fails pre-spend as invalid_arguments naming backend_options.<key>. Per-backend values: amicus://params."
+            "description": "One closed object of backend knobs: isolation (codex, kimi); config_mode, access, max_budget_usd (claude). A key or value the selected backend rejects fails pre-spend. Values: amicus://params."
           },
           "extra_context": {
             "anyOf": [
@@ -4705,8 +4625,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Optional author intent/background, added as clearly-labeled UNTRUSTED prompt data. Redaction does NOT cover it — no live secrets. Full caveats and bounds: amicus://params."
+            "description": "Author intent/background, sent as labeled UNTRUSTED prompt data. Not redacted, so no secrets. Bounds: amicus://params."
           },
           "idempotency_key": {
             "anyOf": [
@@ -4718,8 +4637,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Optional dedup key scoped to THIS tool + backend + workspace. Same key + same args replays the prior result with no new spend; different args are refused (idempotency_conflict). Sync and _async are separate tools and never share a key. Omit for none; retention is bounded. Lifecycle: amicus://params."
+            "description": "Dedup key scoped to this tool + backend + workspace: reusing it with identical args replays the prior result unpaid; different args are refused. Lifecycle: amicus://params."
           },
           "instructions_append": {
             "anyOf": [
@@ -4730,8 +4648,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Optional caller stance/focus text appended BEHIND this server's always-leading framing (codex: developer_instructions on argv; claude and kimi: a leading section of the stdin/handshake prompt). UNTRUSTED, grants no tools, best-effort compliance; may ride the backend command line. Max 4096 bytes. Full contract: amicus://params."
+            "description": "Caller stance text behind the server's own framing. UNTRUSTED, grants no tools, best-effort compliance. No secrets: a backend may carry it on argv. Max 4096 bytes. Contract: amicus://params."
           },
           "model": {
             "anyOf": [
@@ -4744,8 +4661,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Backend model slug; omit for the backend's default. amicus_models lists valid slugs (advisory). Control characters are rejected, not stripped."
+            "description": "Backend model slug; omit for the backend's default. amicus_models lists valid slugs (advisory). Control characters rejected."
           },
           "question": {
             "description": "The question or ad-hoc diff to consult on. Must not be blank.",
@@ -4762,8 +4678,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Override the backend's reasoning effort for this call; omit for the backend's own resolution. An open per-model string the backend validates (commonly minimal|low|medium|high|xhigh); amicus_models lists each model's advertised set (advisory). Rejection and bounds detail: amicus://params."
+            "description": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists each model's set); omit for the backend default. Bounds: amicus://params."
           },
           "workspace_root": {
             "anyOf": [
@@ -4774,8 +4689,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Absolute path of the repository the call targets. Sessionless (2026-07-28) clients must pass it; handshake-era clients may rely on their advertised file roots. The server never falls back to its own cwd unless the operator opts in. Resolution rules: amicus://params."
+            "description": "Absolute path of the repository the call targets; a sessionless (2026-07-28) client must pass it. Resolution rules: amicus://params."
           }
         },
         "required": [
@@ -4823,52 +4737,22 @@
                     ]
                   },
                   "arguments": {
-                    "anyOf": [
-                      {
-                        "additionalProperties": true,
-                        "type": "object"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
+                    "additionalProperties": true,
+                    "type": "object"
                   },
                   "next_step": {
-                    "enum": [
-                      "authenticate",
-                      "correct_arguments",
-                      "correct_config",
-                      "init_git_repo",
-                      "inspect_and_retry",
-                      "install_backend",
-                      "install_git",
-                      "list_jobs",
-                      "list_resources",
-                      "poll_job_status",
-                      "reduce_input",
-                      "retry_after_delay",
-                      "retry_then_report",
-                      "start_new_job",
-                      "update_plugin",
-                      "use_allowed_value",
-                      "use_new_idempotency_key",
-                      "use_workspace_in_roots"
-                    ],
+                    "const": "poll_job_status",
                     "type": "string"
                   },
                   "tool": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
+                    "const": "amicus_job_status",
+                    "type": "string"
                   }
                 },
                 "required": [
-                  "next_step"
+                  "arguments",
+                  "next_step",
+                  "tool"
                 ],
                 "type": "object"
               },
@@ -4879,7 +4763,7 @@
                 "type": "string"
               },
               "meta": {
-                "description": "Result metadata (backend, cwd, model, timeout, usage, job_id, and more); full schema at resource amicus://result-meta",
+                "description": "Result metadata; schema at amicus://result-meta",
                 "type": "object"
               },
               "ok": {
@@ -4929,7 +4813,7 @@
           {
             "properties": {
               "error": {
-                "description": "Populated error envelope; full schema at resource amicus://error-envelope",
+                "description": "Error envelope; schema at amicus://error-envelope",
                 "type": "object"
               },
               "meta": {
@@ -4949,7 +4833,7 @@
         ],
         "properties": {
           "ok": {
-            "description": "true = success result, false = error result",
+            "description": "true on success, false on error",
             "type": "boolean"
           }
         },
@@ -5005,7 +4889,6 @@
                         "type": "null"
                       }
                     ],
-                    "default": null,
                     "description": "claude only: toolless|readonly. Omit for the server default."
                   },
                   "config_mode": {
@@ -5023,7 +4906,6 @@
                         "type": "null"
                       }
                     ],
-                    "default": null,
                     "description": "claude only: inherit|scoped|safe|bare. Omit for the server default."
                   },
                   "isolation": {
@@ -5041,7 +4923,6 @@
                         "type": "null"
                       }
                     ],
-                    "default": null,
                     "description": "codex: inherit|ignore-config|ignore-rules; kimi: inherit|ignore-skills. Omit for the backend default (inherit)."
                   },
                   "max_budget_usd": {
@@ -5055,7 +4936,6 @@
                         "type": "null"
                       }
                     ],
-                    "default": null,
                     "description": "claude only: per-call best-effort spend cap in USD, 0.01–5.00. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
                   }
                 },
@@ -5065,8 +4945,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Backend-specific knobs as one closed object: isolation (codex, kimi), config_mode and access and max_budget_usd (claude). A key or value the selected backend does not accept fails pre-spend as invalid_arguments naming backend_options.<key>. Per-backend values: amicus://params."
+            "description": "One closed object of backend knobs: isolation (codex, kimi); config_mode, access, max_budget_usd (claude). A key or value the selected backend rejects fails pre-spend. Values: amicus://params."
           },
           "detail": {
             "default": "summary",
@@ -5088,8 +4967,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Backend model slug; omit for the backend's default. amicus_models lists valid slugs (advisory). Control characters are rejected, not stripped."
+            "description": "Backend model slug; omit for the backend's default. amicus_models lists valid slugs (advisory). Control characters rejected."
           },
           "reasoning_effort": {
             "anyOf": [
@@ -5102,8 +4980,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Override the backend's reasoning effort for this call; omit for the backend's own resolution. An open per-model string the backend validates (commonly minimal|low|medium|high|xhigh); amicus_models lists each model's advertised set (advisory). Rejection and bounds detail: amicus://params."
+            "description": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists each model's set); omit for the backend default. Bounds: amicus://params."
           },
           "task": {
             "description": "The coding task to implement in a throwaway worktree; the diff is returned, never applied. Must not be blank.",
@@ -5118,7 +4995,6 @@
                 "type": "null"
               }
             ],
-            "default": null,
             "description": "Deadline in seconds, clamped to 10-600; omit for the server default (AMICUS_TIMEOUT_SECONDS). A sync call past its deadline is terminated and its partial work lost; prefer the _async twin."
           },
           "workspace_root": {
@@ -5130,8 +5006,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Absolute path of the repository the call targets. Sessionless (2026-07-28) clients must pass it; handshake-era clients may rely on their advertised file roots. The server never falls back to its own cwd unless the operator opts in. Resolution rules: amicus://params."
+            "description": "Absolute path of the repository the call targets; a sessionless (2026-07-28) client must pass it. Resolution rules: amicus://params."
           }
         },
         "required": [
@@ -5278,7 +5153,7 @@
                 "description": "What the backend reported that amicus could not carry intact; null when nothing deviated. Read this before acting on an empty or short `findings` list."
               },
               "meta": {
-                "description": "Result metadata (backend, cwd, model, timeout, usage, job_id, and more); full schema at resource amicus://result-meta",
+                "description": "Result metadata; schema at amicus://result-meta",
                 "type": "object"
               },
               "next_steps": {
@@ -5358,7 +5233,7 @@
           {
             "properties": {
               "error": {
-                "description": "Populated error envelope; full schema at resource amicus://error-envelope",
+                "description": "Error envelope; schema at amicus://error-envelope",
                 "type": "object"
               },
               "meta": {
@@ -5378,7 +5253,7 @@
         ],
         "properties": {
           "ok": {
-            "description": "true = success result, false = error result",
+            "description": "true on success, false on error",
             "type": "boolean"
           }
         },
@@ -5434,7 +5309,6 @@
                         "type": "null"
                       }
                     ],
-                    "default": null,
                     "description": "claude only: toolless|readonly. Omit for the server default."
                   },
                   "config_mode": {
@@ -5452,7 +5326,6 @@
                         "type": "null"
                       }
                     ],
-                    "default": null,
                     "description": "claude only: inherit|scoped|safe|bare. Omit for the server default."
                   },
                   "isolation": {
@@ -5470,7 +5343,6 @@
                         "type": "null"
                       }
                     ],
-                    "default": null,
                     "description": "codex: inherit|ignore-config|ignore-rules; kimi: inherit|ignore-skills. Omit for the backend default (inherit)."
                   },
                   "max_budget_usd": {
@@ -5484,7 +5356,6 @@
                         "type": "null"
                       }
                     ],
-                    "default": null,
                     "description": "claude only: per-call best-effort spend cap in USD, 0.01–5.00. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
                   }
                 },
@@ -5494,8 +5365,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Backend-specific knobs as one closed object: isolation (codex, kimi), config_mode and access and max_budget_usd (claude). A key or value the selected backend does not accept fails pre-spend as invalid_arguments naming backend_options.<key>. Per-backend values: amicus://params."
+            "description": "One closed object of backend knobs: isolation (codex, kimi); config_mode, access, max_budget_usd (claude). A key or value the selected backend rejects fails pre-spend. Values: amicus://params."
           },
           "idempotency_key": {
             "anyOf": [
@@ -5507,8 +5377,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Optional dedup key scoped to THIS tool + backend + workspace. Same key + same args replays the prior result with no new spend; different args are refused (idempotency_conflict). Sync and _async are separate tools and never share a key. Omit for none; retention is bounded. Lifecycle: amicus://params."
+            "description": "Dedup key scoped to this tool + backend + workspace: reusing it with identical args replays the prior result unpaid; different args are refused. Lifecycle: amicus://params."
           },
           "model": {
             "anyOf": [
@@ -5521,8 +5390,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Backend model slug; omit for the backend's default. amicus_models lists valid slugs (advisory). Control characters are rejected, not stripped."
+            "description": "Backend model slug; omit for the backend's default. amicus_models lists valid slugs (advisory). Control characters rejected."
           },
           "reasoning_effort": {
             "anyOf": [
@@ -5535,8 +5403,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Override the backend's reasoning effort for this call; omit for the backend's own resolution. An open per-model string the backend validates (commonly minimal|low|medium|high|xhigh); amicus_models lists each model's advertised set (advisory). Rejection and bounds detail: amicus://params."
+            "description": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists each model's set); omit for the backend default. Bounds: amicus://params."
           },
           "task": {
             "description": "The coding task to implement in a throwaway worktree; the diff is returned, never applied. Must not be blank.",
@@ -5551,8 +5418,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Absolute path of the repository the call targets. Sessionless (2026-07-28) clients must pass it; handshake-era clients may rely on their advertised file roots. The server never falls back to its own cwd unless the operator opts in. Resolution rules: amicus://params."
+            "description": "Absolute path of the repository the call targets; a sessionless (2026-07-28) client must pass it. Resolution rules: amicus://params."
           }
         },
         "required": [
@@ -5600,52 +5466,22 @@
                     ]
                   },
                   "arguments": {
-                    "anyOf": [
-                      {
-                        "additionalProperties": true,
-                        "type": "object"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
+                    "additionalProperties": true,
+                    "type": "object"
                   },
                   "next_step": {
-                    "enum": [
-                      "authenticate",
-                      "correct_arguments",
-                      "correct_config",
-                      "init_git_repo",
-                      "inspect_and_retry",
-                      "install_backend",
-                      "install_git",
-                      "list_jobs",
-                      "list_resources",
-                      "poll_job_status",
-                      "reduce_input",
-                      "retry_after_delay",
-                      "retry_then_report",
-                      "start_new_job",
-                      "update_plugin",
-                      "use_allowed_value",
-                      "use_new_idempotency_key",
-                      "use_workspace_in_roots"
-                    ],
+                    "const": "poll_job_status",
                     "type": "string"
                   },
                   "tool": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
+                    "const": "amicus_job_status",
+                    "type": "string"
                   }
                 },
                 "required": [
-                  "next_step"
+                  "arguments",
+                  "next_step",
+                  "tool"
                 ],
                 "type": "object"
               },
@@ -5656,7 +5492,7 @@
                 "type": "string"
               },
               "meta": {
-                "description": "Result metadata (backend, cwd, model, timeout, usage, job_id, and more); full schema at resource amicus://result-meta",
+                "description": "Result metadata; schema at amicus://result-meta",
                 "type": "object"
               },
               "ok": {
@@ -5706,7 +5542,7 @@
           {
             "properties": {
               "error": {
-                "description": "Populated error envelope; full schema at resource amicus://error-envelope",
+                "description": "Error envelope; schema at amicus://error-envelope",
                 "type": "object"
               },
               "meta": {
@@ -5726,7 +5562,7 @@
         ],
         "properties": {
           "ok": {
-            "description": "true = success result, false = error result",
+            "description": "true on success, false on error",
             "type": "boolean"
           }
         },
@@ -5780,7 +5616,6 @@
                         "type": "null"
                       }
                     ],
-                    "default": null,
                     "description": "claude only: toolless|readonly. Omit for the server default."
                   },
                   "config_mode": {
@@ -5798,7 +5633,6 @@
                         "type": "null"
                       }
                     ],
-                    "default": null,
                     "description": "claude only: inherit|scoped|safe|bare. Omit for the server default."
                   },
                   "isolation": {
@@ -5816,7 +5650,6 @@
                         "type": "null"
                       }
                     ],
-                    "default": null,
                     "description": "codex: inherit|ignore-config|ignore-rules; kimi: inherit|ignore-skills. Omit for the backend default (inherit)."
                   },
                   "max_budget_usd": {
@@ -5830,7 +5663,6 @@
                         "type": "null"
                       }
                     ],
-                    "default": null,
                     "description": "claude only: per-call best-effort spend cap in USD, 0.01–5.00. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
                   }
                 },
@@ -5840,8 +5672,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Backend-specific knobs as one closed object: isolation (codex, kimi), config_mode and access and max_budget_usd (claude). A key or value the selected backend does not accept fails pre-spend as invalid_arguments naming backend_options.<key>. Per-backend values: amicus://params."
+            "description": "One closed object of backend knobs: isolation (codex, kimi); config_mode, access, max_budget_usd (claude). A key or value the selected backend rejects fails pre-spend. Values: amicus://params."
           },
           "model": {
             "anyOf": [
@@ -5854,8 +5685,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Backend model slug; omit for the backend's default. amicus_models lists valid slugs (advisory). Control characters are rejected, not stripped."
+            "description": "Backend model slug; omit for the backend's default. amicus_models lists valid slugs (advisory). Control characters rejected."
           },
           "reasoning_effort": {
             "anyOf": [
@@ -5868,8 +5698,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Override the backend's reasoning effort for this call; omit for the backend's own resolution. An open per-model string the backend validates (commonly minimal|low|medium|high|xhigh); amicus_models lists each model's advertised set (advisory). Rejection and bounds detail: amicus://params."
+            "description": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists each model's set); omit for the backend default. Bounds: amicus://params."
           },
           "task": {
             "description": "The coding task to implement in a throwaway worktree; the diff is returned, never applied. Must not be blank.",
@@ -5884,8 +5713,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Absolute path of the repository the call targets. Sessionless (2026-07-28) clients must pass it; handshake-era clients may rely on their advertised file roots. The server never falls back to its own cwd unless the operator opts in. Resolution rules: amicus://params."
+            "description": "Absolute path of the repository the call targets; a sessionless (2026-07-28) client must pass it. Resolution rules: amicus://params."
           }
         },
         "required": [
@@ -5911,7 +5739,7 @@
                 "type": "object"
               },
               "meta": {
-                "description": "Result metadata (backend, cwd, model, timeout, usage, job_id, and more); full schema at resource amicus://result-meta",
+                "description": "Result metadata; schema at amicus://result-meta",
                 "type": "object"
               },
               "model": {
@@ -6017,7 +5845,7 @@
           {
             "properties": {
               "error": {
-                "description": "Populated error envelope; full schema at resource amicus://error-envelope",
+                "description": "Error envelope; schema at amicus://error-envelope",
                 "type": "object"
               },
               "meta": {
@@ -6037,7 +5865,7 @@
         ],
         "properties": {
           "ok": {
-            "description": "true = success result, false = error result",
+            "description": "true on success, false on error",
             "type": "boolean"
           }
         },
@@ -6091,7 +5919,6 @@
                         "type": "null"
                       }
                     ],
-                    "default": null,
                     "description": "claude only: toolless|readonly. Omit for the server default."
                   },
                   "config_mode": {
@@ -6109,7 +5936,6 @@
                         "type": "null"
                       }
                     ],
-                    "default": null,
                     "description": "claude only: inherit|scoped|safe|bare. Omit for the server default."
                   },
                   "isolation": {
@@ -6127,7 +5953,6 @@
                         "type": "null"
                       }
                     ],
-                    "default": null,
                     "description": "codex: inherit|ignore-config|ignore-rules; kimi: inherit|ignore-skills. Omit for the backend default (inherit)."
                   },
                   "max_budget_usd": {
@@ -6141,7 +5966,6 @@
                         "type": "null"
                       }
                     ],
-                    "default": null,
                     "description": "claude only: per-call best-effort spend cap in USD, 0.01–5.00. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
                   }
                 },
@@ -6151,8 +5975,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Backend-specific knobs as one closed object: isolation (codex, kimi), config_mode and access and max_budget_usd (claude). A key or value the selected backend does not accept fails pre-spend as invalid_arguments naming backend_options.<key>. Per-backend values: amicus://params."
+            "description": "One closed object of backend knobs: isolation (codex, kimi); config_mode, access, max_budget_usd (claude). A key or value the selected backend rejects fails pre-spend. Values: amicus://params."
           },
           "base": {
             "anyOf": [
@@ -6165,7 +5988,6 @@
                 "type": "null"
               }
             ],
-            "default": null,
             "description": "Base ref for scope=branch; omit for the upstream. Control characters rejected."
           },
           "commit": {
@@ -6179,7 +6001,6 @@
                 "type": "null"
               }
             ],
-            "default": null,
             "description": "Commit ref for scope=commit. Control characters rejected."
           },
           "extra_context": {
@@ -6191,8 +6012,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Optional author intent/background, added as clearly-labeled UNTRUSTED prompt data. Redaction does NOT cover it — no live secrets. Full caveats and bounds: amicus://params."
+            "description": "Author intent/background, sent as labeled UNTRUSTED prompt data. Not redacted, so no secrets. Bounds: amicus://params."
           },
           "focus": {
             "anyOf": [
@@ -6204,7 +6024,6 @@
                 "type": "null"
               }
             ],
-            "default": null,
             "description": "Narrow the review to one concern (e.g. 'locking'). UNTRUSTED caller text; a focused pass is never a full review."
           },
           "instructions_append": {
@@ -6216,8 +6035,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Optional caller stance/focus text appended BEHIND this server's always-leading framing (codex: developer_instructions on argv; claude and kimi: a leading section of the stdin/handshake prompt). UNTRUSTED, grants no tools, best-effort compliance; may ride the backend command line. Max 4096 bytes. Full contract: amicus://params."
+            "description": "Caller stance text behind the server's own framing. UNTRUSTED, grants no tools, best-effort compliance. No secrets: a backend may carry it on argv. Max 4096 bytes. Contract: amicus://params."
           },
           "model": {
             "anyOf": [
@@ -6230,8 +6048,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Backend model slug; omit for the backend's default. amicus_models lists valid slugs (advisory). Control characters are rejected, not stripped."
+            "description": "Backend model slug; omit for the backend's default. amicus_models lists valid slugs (advisory). Control characters rejected."
           },
           "paths": {
             "anyOf": [
@@ -6245,7 +6062,6 @@
                 "type": "null"
               }
             ],
-            "default": null,
             "description": "Restrict the diff to these repo-relative paths. Omit for all."
           },
           "reasoning_effort": {
@@ -6259,8 +6075,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Override the backend's reasoning effort for this call; omit for the backend's own resolution. An open per-model string the backend validates (commonly minimal|low|medium|high|xhigh); amicus_models lists each model's advertised set (advisory). Rejection and bounds detail: amicus://params."
+            "description": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists each model's set); omit for the backend default. Bounds: amicus://params."
           },
           "scope": {
             "default": "working_tree",
@@ -6291,8 +6106,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Absolute path of the repository the call targets. Sessionless (2026-07-28) clients must pass it; handshake-era clients may rely on their advertised file roots. The server never falls back to its own cwd unless the operator opts in. Resolution rules: amicus://params."
+            "description": "Absolute path of the repository the call targets; a sessionless (2026-07-28) client must pass it. Resolution rules: amicus://params."
           }
         },
         "required": [
@@ -6460,7 +6274,7 @@
                 "type": "integer"
               },
               "meta": {
-                "description": "Result metadata (backend, cwd, model, timeout, usage, job_id, and more); full schema at resource amicus://result-meta",
+                "description": "Result metadata; schema at amicus://result-meta",
                 "type": "object"
               },
               "model": {
@@ -6577,7 +6391,7 @@
           {
             "properties": {
               "error": {
-                "description": "Populated error envelope; full schema at resource amicus://error-envelope",
+                "description": "Error envelope; schema at amicus://error-envelope",
                 "type": "object"
               },
               "meta": {
@@ -6597,7 +6411,7 @@
         ],
         "properties": {
           "ok": {
-            "description": "true = success result, false = error result",
+            "description": "true on success, false on error",
             "type": "boolean"
           }
         },
@@ -6640,8 +6454,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Absolute path of the repository the call targets. Sessionless (2026-07-28) clients must pass it; handshake-era clients may rely on their advertised file roots. The server never falls back to its own cwd unless the operator opts in. Resolution rules: amicus://params."
+            "description": "Absolute path of the repository the call targets; a sessionless (2026-07-28) client must pass it. Resolution rules: amicus://params."
           }
         },
         "required": [
@@ -6687,7 +6500,7 @@
                 "type": "string"
               },
               "meta": {
-                "description": "Result metadata (backend, cwd, model, timeout, usage, job_id, and more); full schema at resource amicus://result-meta",
+                "description": "Result metadata; schema at amicus://result-meta",
                 "type": "object"
               },
               "ok": {
@@ -6792,7 +6605,7 @@
           {
             "properties": {
               "error": {
-                "description": "Populated error envelope; full schema at resource amicus://error-envelope",
+                "description": "Error envelope; schema at amicus://error-envelope",
                 "type": "object"
               },
               "meta": {
@@ -6812,7 +6625,7 @@
         ],
         "properties": {
           "ok": {
-            "description": "true = success result, false = error result",
+            "description": "true on success, false on error",
             "type": "boolean"
           }
         },
@@ -6864,8 +6677,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Absolute path of the repository the call targets. Sessionless (2026-07-28) clients must pass it; handshake-era clients may rely on their advertised file roots. The server never falls back to its own cwd unless the operator opts in. Resolution rules: amicus://params."
+            "description": "Absolute path of the repository the call targets; a sessionless (2026-07-28) client must pass it. Resolution rules: amicus://params."
           }
         },
         "required": [
@@ -6901,7 +6713,7 @@
           {
             "properties": {
               "error": {
-                "description": "Populated error envelope; full schema at resource amicus://error-envelope",
+                "description": "Error envelope; schema at amicus://error-envelope",
                 "type": "object"
               },
               "meta": {
@@ -6961,7 +6773,6 @@
                 "type": "null"
               }
             ],
-            "default": null,
             "description": "Restrict to one backend: codex | kimi | claude. Omit for all."
           },
           "limit": {
@@ -6975,7 +6786,6 @@
                 "type": "null"
               }
             ],
-            "default": null,
             "description": "Return at most this many newest jobs (1-1000); omit for all."
           },
           "status": {
@@ -6994,7 +6804,6 @@
                 "type": "null"
               }
             ],
-            "default": null,
             "description": "Only jobs in this state; omit for all."
           },
           "task_id": {
@@ -7008,7 +6817,6 @@
                 "type": "null"
               }
             ],
-            "default": null,
             "description": "Filter to the job behind this tasks-extension task id."
           },
           "workspace_root": {
@@ -7020,8 +6828,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Absolute path of the repository the call targets. Sessionless (2026-07-28) clients must pass it; handshake-era clients may rely on their advertised file roots. The server never falls back to its own cwd unless the operator opts in. Resolution rules: amicus://params."
+            "description": "Absolute path of the repository the call targets; a sessionless (2026-07-28) client must pass it. Resolution rules: amicus://params."
           }
         },
         "type": "object"
@@ -7114,7 +6921,7 @@
                 "type": "array"
               },
               "meta": {
-                "description": "Result metadata (backend, cwd, model, timeout, usage, job_id, and more); full schema at resource amicus://result-meta",
+                "description": "Result metadata; schema at amicus://result-meta",
                 "type": "object"
               },
               "ok": {
@@ -7182,7 +6989,7 @@
           {
             "properties": {
               "error": {
-                "description": "Populated error envelope; full schema at resource amicus://error-envelope",
+                "description": "Error envelope; schema at amicus://error-envelope",
                 "type": "object"
               },
               "meta": {
@@ -7202,7 +7009,7 @@
         ],
         "properties": {
           "ok": {
-            "description": "true = success result, false = error result",
+            "description": "true on success, false on error",
             "type": "boolean"
           }
         },
@@ -7252,8 +7059,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Absolute path of the repository the call targets. Sessionless (2026-07-28) clients must pass it; handshake-era clients may rely on their advertised file roots. The server never falls back to its own cwd unless the operator opts in. Resolution rules: amicus://params."
+            "description": "Absolute path of the repository the call targets; a sessionless (2026-07-28) client must pass it. Resolution rules: amicus://params."
           }
         },
         "required": [
@@ -7289,7 +7095,7 @@
           {
             "properties": {
               "error": {
-                "description": "Populated error envelope; full schema at resource amicus://error-envelope",
+                "description": "Error envelope; schema at amicus://error-envelope",
                 "type": "object"
               },
               "meta": {
@@ -7350,8 +7156,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Absolute path of the repository the call targets. Sessionless (2026-07-28) clients must pass it; handshake-era clients may rely on their advertised file roots. The server never falls back to its own cwd unless the operator opts in. Resolution rules: amicus://params."
+            "description": "Absolute path of the repository the call targets; a sessionless (2026-07-28) client must pass it. Resolution rules: amicus://params."
           }
         },
         "required": [
@@ -7397,7 +7202,7 @@
                 "type": "string"
               },
               "meta": {
-                "description": "Result metadata (backend, cwd, model, timeout, usage, job_id, and more); full schema at resource amicus://result-meta",
+                "description": "Result metadata; schema at amicus://result-meta",
                 "type": "object"
               },
               "ok": {
@@ -7502,7 +7307,7 @@
           {
             "properties": {
               "error": {
-                "description": "Populated error envelope; full schema at resource amicus://error-envelope",
+                "description": "Error envelope; schema at amicus://error-envelope",
                 "type": "object"
               },
               "meta": {
@@ -7522,7 +7327,7 @@
         ],
         "properties": {
           "ok": {
-            "description": "true = success result, false = error result",
+            "description": "true on success, false on error",
             "type": "boolean"
           }
         },
@@ -7674,7 +7479,7 @@
           {
             "properties": {
               "error": {
-                "description": "Populated error envelope; full schema at resource amicus://error-envelope",
+                "description": "Error envelope; schema at amicus://error-envelope",
                 "type": "object"
               },
               "meta": {
@@ -7694,7 +7499,7 @@
         ],
         "properties": {
           "ok": {
-            "description": "true = success result, false = error result",
+            "description": "true on success, false on error",
             "type": "boolean"
           }
         },
@@ -7750,7 +7555,6 @@
                         "type": "null"
                       }
                     ],
-                    "default": null,
                     "description": "claude only: toolless|readonly. Omit for the server default."
                   },
                   "config_mode": {
@@ -7768,7 +7572,6 @@
                         "type": "null"
                       }
                     ],
-                    "default": null,
                     "description": "claude only: inherit|scoped|safe|bare. Omit for the server default."
                   },
                   "isolation": {
@@ -7786,7 +7589,6 @@
                         "type": "null"
                       }
                     ],
-                    "default": null,
                     "description": "codex: inherit|ignore-config|ignore-rules; kimi: inherit|ignore-skills. Omit for the backend default (inherit)."
                   },
                   "max_budget_usd": {
@@ -7800,7 +7602,6 @@
                         "type": "null"
                       }
                     ],
-                    "default": null,
                     "description": "claude only: per-call best-effort spend cap in USD, 0.01–5.00. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
                   }
                 },
@@ -7810,8 +7611,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Backend-specific knobs as one closed object: isolation (codex, kimi), config_mode and access and max_budget_usd (claude). A key or value the selected backend does not accept fails pre-spend as invalid_arguments naming backend_options.<key>. Per-backend values: amicus://params."
+            "description": "One closed object of backend knobs: isolation (codex, kimi); config_mode, access, max_budget_usd (claude). A key or value the selected backend rejects fails pre-spend. Values: amicus://params."
           },
           "base": {
             "anyOf": [
@@ -7824,7 +7624,6 @@
                 "type": "null"
               }
             ],
-            "default": null,
             "description": "Base ref for scope=branch; omit for the upstream. Control characters rejected."
           },
           "commit": {
@@ -7838,7 +7637,6 @@
                 "type": "null"
               }
             ],
-            "default": null,
             "description": "Commit ref for scope=commit. Control characters rejected."
           },
           "detail": {
@@ -7859,8 +7657,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Optional author intent/background, added as clearly-labeled UNTRUSTED prompt data. Redaction does NOT cover it — no live secrets. Full caveats and bounds: amicus://params."
+            "description": "Author intent/background, sent as labeled UNTRUSTED prompt data. Not redacted, so no secrets. Bounds: amicus://params."
           },
           "focus": {
             "anyOf": [
@@ -7872,7 +7669,6 @@
                 "type": "null"
               }
             ],
-            "default": null,
             "description": "Narrow the review to one concern (e.g. 'locking'). UNTRUSTED caller text; a focused pass is never a full review."
           },
           "instructions_append": {
@@ -7884,8 +7680,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Optional caller stance/focus text appended BEHIND this server's always-leading framing (codex: developer_instructions on argv; claude and kimi: a leading section of the stdin/handshake prompt). UNTRUSTED, grants no tools, best-effort compliance; may ride the backend command line. Max 4096 bytes. Full contract: amicus://params."
+            "description": "Caller stance text behind the server's own framing. UNTRUSTED, grants no tools, best-effort compliance. No secrets: a backend may carry it on argv. Max 4096 bytes. Contract: amicus://params."
           },
           "model": {
             "anyOf": [
@@ -7898,8 +7693,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Backend model slug; omit for the backend's default. amicus_models lists valid slugs (advisory). Control characters are rejected, not stripped."
+            "description": "Backend model slug; omit for the backend's default. amicus_models lists valid slugs (advisory). Control characters rejected."
           },
           "paths": {
             "anyOf": [
@@ -7913,7 +7707,6 @@
                 "type": "null"
               }
             ],
-            "default": null,
             "description": "Restrict the diff to these repo-relative paths. Omit for all."
           },
           "reasoning_effort": {
@@ -7927,8 +7720,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Override the backend's reasoning effort for this call; omit for the backend's own resolution. An open per-model string the backend validates (commonly minimal|low|medium|high|xhigh); amicus_models lists each model's advertised set (advisory). Rejection and bounds detail: amicus://params."
+            "description": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists each model's set); omit for the backend default. Bounds: amicus://params."
           },
           "scope": {
             "default": "working_tree",
@@ -7949,7 +7741,6 @@
                 "type": "null"
               }
             ],
-            "default": null,
             "description": "Deadline in seconds, clamped to 10-600; omit for the server default (AMICUS_TIMEOUT_SECONDS). A sync call past its deadline is terminated and its partial work lost; prefer the _async twin."
           },
           "untracked": {
@@ -7971,8 +7762,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Absolute path of the repository the call targets. Sessionless (2026-07-28) clients must pass it; handshake-era clients may rely on their advertised file roots. The server never falls back to its own cwd unless the operator opts in. Resolution rules: amicus://params."
+            "description": "Absolute path of the repository the call targets; a sessionless (2026-07-28) client must pass it. Resolution rules: amicus://params."
           }
         },
         "required": [
@@ -8227,7 +8017,7 @@
                 "description": "What the backend reported that amicus could not carry intact; null when nothing deviated. Read this before acting on an empty or short `findings` list."
               },
               "meta": {
-                "description": "Result metadata (backend, cwd, model, timeout, usage, job_id, and more); full schema at resource amicus://result-meta",
+                "description": "Result metadata; schema at amicus://result-meta",
                 "type": "object"
               },
               "next_steps": {
@@ -8325,7 +8115,7 @@
           {
             "properties": {
               "error": {
-                "description": "Populated error envelope; full schema at resource amicus://error-envelope",
+                "description": "Error envelope; schema at amicus://error-envelope",
                 "type": "object"
               },
               "meta": {
@@ -8345,7 +8135,7 @@
         ],
         "properties": {
           "ok": {
-            "description": "true = success result, false = error result",
+            "description": "true on success, false on error",
             "type": "boolean"
           }
         },
@@ -8401,7 +8191,6 @@
                         "type": "null"
                       }
                     ],
-                    "default": null,
                     "description": "claude only: toolless|readonly. Omit for the server default."
                   },
                   "config_mode": {
@@ -8419,7 +8208,6 @@
                         "type": "null"
                       }
                     ],
-                    "default": null,
                     "description": "claude only: inherit|scoped|safe|bare. Omit for the server default."
                   },
                   "isolation": {
@@ -8437,7 +8225,6 @@
                         "type": "null"
                       }
                     ],
-                    "default": null,
                     "description": "codex: inherit|ignore-config|ignore-rules; kimi: inherit|ignore-skills. Omit for the backend default (inherit)."
                   },
                   "max_budget_usd": {
@@ -8451,7 +8238,6 @@
                         "type": "null"
                       }
                     ],
-                    "default": null,
                     "description": "claude only: per-call best-effort spend cap in USD, 0.01–5.00. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
                   }
                 },
@@ -8461,8 +8247,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Backend-specific knobs as one closed object: isolation (codex, kimi), config_mode and access and max_budget_usd (claude). A key or value the selected backend does not accept fails pre-spend as invalid_arguments naming backend_options.<key>. Per-backend values: amicus://params."
+            "description": "One closed object of backend knobs: isolation (codex, kimi); config_mode, access, max_budget_usd (claude). A key or value the selected backend rejects fails pre-spend. Values: amicus://params."
           },
           "base": {
             "anyOf": [
@@ -8475,7 +8260,6 @@
                 "type": "null"
               }
             ],
-            "default": null,
             "description": "Base ref for scope=branch; omit for the upstream. Control characters rejected."
           },
           "commit": {
@@ -8489,7 +8273,6 @@
                 "type": "null"
               }
             ],
-            "default": null,
             "description": "Commit ref for scope=commit. Control characters rejected."
           },
           "extra_context": {
@@ -8501,8 +8284,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Optional author intent/background, added as clearly-labeled UNTRUSTED prompt data. Redaction does NOT cover it — no live secrets. Full caveats and bounds: amicus://params."
+            "description": "Author intent/background, sent as labeled UNTRUSTED prompt data. Not redacted, so no secrets. Bounds: amicus://params."
           },
           "focus": {
             "anyOf": [
@@ -8514,7 +8296,6 @@
                 "type": "null"
               }
             ],
-            "default": null,
             "description": "Narrow the review to one concern (e.g. 'locking'). UNTRUSTED caller text; a focused pass is never a full review."
           },
           "idempotency_key": {
@@ -8527,8 +8308,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Optional dedup key scoped to THIS tool + backend + workspace. Same key + same args replays the prior result with no new spend; different args are refused (idempotency_conflict). Sync and _async are separate tools and never share a key. Omit for none; retention is bounded. Lifecycle: amicus://params."
+            "description": "Dedup key scoped to this tool + backend + workspace: reusing it with identical args replays the prior result unpaid; different args are refused. Lifecycle: amicus://params."
           },
           "instructions_append": {
             "anyOf": [
@@ -8539,8 +8319,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Optional caller stance/focus text appended BEHIND this server's always-leading framing (codex: developer_instructions on argv; claude and kimi: a leading section of the stdin/handshake prompt). UNTRUSTED, grants no tools, best-effort compliance; may ride the backend command line. Max 4096 bytes. Full contract: amicus://params."
+            "description": "Caller stance text behind the server's own framing. UNTRUSTED, grants no tools, best-effort compliance. No secrets: a backend may carry it on argv. Max 4096 bytes. Contract: amicus://params."
           },
           "model": {
             "anyOf": [
@@ -8553,8 +8332,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Backend model slug; omit for the backend's default. amicus_models lists valid slugs (advisory). Control characters are rejected, not stripped."
+            "description": "Backend model slug; omit for the backend's default. amicus_models lists valid slugs (advisory). Control characters rejected."
           },
           "paths": {
             "anyOf": [
@@ -8568,7 +8346,6 @@
                 "type": "null"
               }
             ],
-            "default": null,
             "description": "Restrict the diff to these repo-relative paths. Omit for all."
           },
           "reasoning_effort": {
@@ -8582,8 +8359,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Override the backend's reasoning effort for this call; omit for the backend's own resolution. An open per-model string the backend validates (commonly minimal|low|medium|high|xhigh); amicus_models lists each model's advertised set (advisory). Rejection and bounds detail: amicus://params."
+            "description": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists each model's set); omit for the backend default. Bounds: amicus://params."
           },
           "scope": {
             "default": "working_tree",
@@ -8614,8 +8390,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
-            "description": "Absolute path of the repository the call targets. Sessionless (2026-07-28) clients must pass it; handshake-era clients may rely on their advertised file roots. The server never falls back to its own cwd unless the operator opts in. Resolution rules: amicus://params."
+            "description": "Absolute path of the repository the call targets; a sessionless (2026-07-28) client must pass it. Resolution rules: amicus://params."
           }
         },
         "required": [
@@ -8662,52 +8437,22 @@
                     ]
                   },
                   "arguments": {
-                    "anyOf": [
-                      {
-                        "additionalProperties": true,
-                        "type": "object"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
+                    "additionalProperties": true,
+                    "type": "object"
                   },
                   "next_step": {
-                    "enum": [
-                      "authenticate",
-                      "correct_arguments",
-                      "correct_config",
-                      "init_git_repo",
-                      "inspect_and_retry",
-                      "install_backend",
-                      "install_git",
-                      "list_jobs",
-                      "list_resources",
-                      "poll_job_status",
-                      "reduce_input",
-                      "retry_after_delay",
-                      "retry_then_report",
-                      "start_new_job",
-                      "update_plugin",
-                      "use_allowed_value",
-                      "use_new_idempotency_key",
-                      "use_workspace_in_roots"
-                    ],
+                    "const": "poll_job_status",
                     "type": "string"
                   },
                   "tool": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
+                    "const": "amicus_job_status",
+                    "type": "string"
                   }
                 },
                 "required": [
-                  "next_step"
+                  "arguments",
+                  "next_step",
+                  "tool"
                 ],
                 "type": "object"
               },
@@ -8718,7 +8463,7 @@
                 "type": "string"
               },
               "meta": {
-                "description": "Result metadata (backend, cwd, model, timeout, usage, job_id, and more); full schema at resource amicus://result-meta",
+                "description": "Result metadata; schema at amicus://result-meta",
                 "type": "object"
               },
               "ok": {
@@ -8768,7 +8513,7 @@
           {
             "properties": {
               "error": {
-                "description": "Populated error envelope; full schema at resource amicus://error-envelope",
+                "description": "Error envelope; schema at amicus://error-envelope",
                 "type": "object"
               },
               "meta": {
@@ -8788,7 +8533,7 @@
         ],
         "properties": {
           "ok": {
-            "description": "true = success result, false = error result",
+            "description": "true on success, false on error",
             "type": "boolean"
           }
         },

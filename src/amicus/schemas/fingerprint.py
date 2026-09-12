@@ -4,7 +4,7 @@ from __future__ import annotations
 
 # Bump on any externally observable change to a category below; the committed manifest
 # snapshot (tests/test_manifest.py) fails on drift and its message says to bump this.
-FINGERPRINT = "amicus/0.1/schema-16"
+FINGERPRINT = "amicus/0.1/schema-17"
 
 # Persisted result-format version stamped into job records (M2); moves only when a
 # stored result.json shape an older reader's closed schema could reject changes.
