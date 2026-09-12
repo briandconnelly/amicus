@@ -17,9 +17,9 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from pontonier.core import redaction
 from pontonier.core.jobs import ActivityRecorder
 
+from amicus import obs
 from amicus.errors import error_envelope
 from amicus.orchestration.run import run_request
 from amicus.registry import BackendRegistry
@@ -149,7 +149,7 @@ def main(argv: list[str] | None = None, stdin_text: str | None = None) -> int:
     except Exception as exc:
         payload = error_envelope(
             "internal_error",
-            f"background worker crashed: {redaction.exc_summary(exc)}"[:300],
+            f"background worker crashed: {obs.safe_type_name(exc)}",
             meta_for(spec) if spec is not None else Meta(),
             plugin=plugin,
         )

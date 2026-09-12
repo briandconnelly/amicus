@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Keep exception text out of stored background-job crash results and returned spawn-failure
+  envelopes, since backend exceptions can contain prompt inputs (#56).
 - Default Claude adversarial reviews to `safe` config isolation (preserving a configured
   `bare` API-key mode) and reinforce their JSON-only and available-tool contract (#64).
   Explicit per-call modes remain supported; consult and review-changes defaults are unchanged.
