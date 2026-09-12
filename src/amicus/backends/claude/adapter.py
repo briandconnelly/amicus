@@ -15,6 +15,7 @@ from pontonier.core import worktree
 from amicus.backends.claude import adversarial, cli, contract, normalize
 from amicus.backends.claude import config as claude_config
 from amicus.backends.claude.binary import BinaryNotFoundError
+from amicus.backends.claude.options import adversarial_config_mode
 from amicus.schemas import instructions
 from amicus.schemas.structured import schema_instruction
 
@@ -41,7 +42,11 @@ class ClaudeBackend:
 
     # --- resolution the adapter, the classifier and the status probe must agree on ----------
     def _config_mode(self, request: RunRequest) -> str:
-        return request.config_mode or self._config.config_mode
+        if request.config_mode is not None:
+            return request.config_mode
+        if request.kind == "adversarial_review":
+            return adversarial_config_mode(self._config)
+        return self._config.config_mode
 
     def _access(self, request: RunRequest) -> str:
         return request.access or self._config.access
@@ -173,7 +178,11 @@ class ClaudeBackend:
             claude_bin=resolved_bin,
             config_mode=mode,
             access=self._access(request),
-            system_prompt=adversarial.CRITIC_GUARDRAILS,
+            system_prompt=(
+                adversarial.CRITIC_GUARDRAILS + adversarial.OUTPUT_GUARDRAILS
+                if request.kind == "adversarial_review" and request.schema is not None
+                else adversarial.CRITIC_GUARDRAILS
+            ),
             max_budget_usd=self._budget(request),
             effort=self._effort(request),
             model=self._model(request),

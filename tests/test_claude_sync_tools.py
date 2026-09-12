@@ -5,6 +5,7 @@ stdin, never on argv."""
 
 from __future__ import annotations
 
+import asyncio
 import json
 import subprocess
 
@@ -178,6 +179,47 @@ async def test_review_and_adversarial_end_to_end(app, tmp_path, repo, monkeypatc
     assert "independent critique of TestHost's work" in prompt
     argvs = [r["argv"] for r in _runs(tmp_path)]
     assert len(argvs) == 3 and all("Ship without retries." not in " ".join(a) for a in argvs)
+    assert "--safe-mode" not in argvs[0]
+    for argv, body in zip(argvs[1:], (cb, pb), strict=True):
+        assert "--safe-mode" in argv
+        assert body["meta"]["backend_details"]["config_mode"] == "safe"
+        assert adversarial.OUTPUT_GUARDRAILS in argv[argv.index("--append-system-prompt") + 1]
+
+
+@pytest.mark.parametrize("explicit", [None, "inherit", "bare"])
+async def test_adversarial_async_mode_survives_job_handoff(app, tmp_path, monkeypatch, explicit):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setenv("FAKE_CLAUDE_ANSWER", STRUCTURED_CRITIQUE)
+    options = {} if explicit is None else {"config_mode": explicit}
+    expected = explicit or "safe"
+    async with Client(app) as c:
+        body = (
+            await c.call_tool(
+                "amicus_adversarial_review_async",
+                {
+                    "backend": "claude",
+                    "target": "Ship without retries.",
+                    "workspace_root": str(tmp_path),
+                    "backend_options": options,
+                },
+            )
+        ).structured_content
+    assert body["ok"] is True
+    assert body["meta"]["backend_details"]["config_mode"] == expected
+    store = lifecycle.job_store(server.state_of(app).settings)
+    async with asyncio.timeout(15):
+        while True:
+            record = store.status(str(tmp_path), body["job_id"])
+            assert record is not None
+            if record["status"] != "running":
+                break
+            await asyncio.sleep(0.02)
+    _, result = store.result_payload(str(tmp_path), body["job_id"])
+    assert result["ok"] is True
+    assert result["meta"]["backend_details"]["config_mode"] == expected
+    [run] = _runs(tmp_path)
+    assert ("--safe-mode" in run["argv"]) == (expected == "safe")
+    assert ("--bare" in run["argv"]) == (expected == "bare")
 
 
 async def test_adversarial_with_an_empty_scope_is_not_run_without_spawning(app, tmp_path, repo):
@@ -299,6 +341,58 @@ async def test_hook_warning_reaches_meta(app, tmp_path, repo):
     assert "--safe-mode" in _runs(tmp_path)[1]["argv"]
 
 
+@pytest.mark.parametrize("configured", ["inherit", "scoped", "safe", "bare"])
+async def test_configured_defaults_discovery_and_tool_execution(
+    app, tmp_path, monkeypatch, configured
+):
+    monkeypatch.setenv("AMICUS_CLAUDE_CONFIG_MODE", configured)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    settings = config.settings()
+    configured_app = server.create_app(settings, BackendRegistry.load(("claude",), entry_points=()))
+    (tmp_path / ".claude").mkdir()
+    (tmp_path / ".claude" / "settings.json").write_text('{"hooks": {"PreToolUse": []}}')
+    expected_critic = "bare" if configured == "bare" else "safe"
+    async with Client(configured_app) as c:
+        catalog = (await c.call_tool("amicus_backends", {"backend": "claude"})).structured_content
+        consult = (
+            await c.call_tool(
+                "amicus_consult",
+                {"backend": "claude", "question": "why?", "workspace_root": str(tmp_path)},
+            )
+        ).structured_content
+        monkeypatch.setenv("FAKE_CLAUDE_ANSWER", STRUCTURED_CRITIQUE)
+        critic = (
+            await c.call_tool(
+                "amicus_adversarial_review",
+                {
+                    "backend": "claude",
+                    "target": "Ship without retries.",
+                    "workspace_root": str(tmp_path),
+                },
+            )
+        ).structured_content
+    option = next(o for o in catalog["backends"][0]["options"] if o["name"] == "config_mode")
+    if configured == expected_critic:
+        assert option["default"] == configured
+        assert option["default_by_verb"] is None
+    else:
+        assert option["default"] is None
+        assert option["default_by_verb"] == {
+            "consult": configured,
+            "review_changes": configured,
+            "adversarial_review": expected_critic,
+        }
+    assert consult["ok"] and critic["ok"]
+    assert consult["meta"]["backend_details"]["config_mode"] == configured
+    assert critic["meta"]["backend_details"]["config_mode"] == expected_critic
+    assert bool(consult["meta"]["security_warnings"]) == (configured in ("inherit", "scoped"))
+    assert critic["meta"]["security_warnings"] == []
+    for run, mode in zip(_runs(tmp_path), (configured, expected_critic), strict=True):
+        assert ("--safe-mode" in run["argv"]) == (mode == "safe")
+        assert ("--bare" in run["argv"]) == (mode == "bare")
+        assert ("--setting-sources" in run["argv"]) == (mode == "scoped")
+
+
 async def test_bare_without_a_key_is_refused_pre_spend(app, tmp_path):
     async with Client(app) as c:
         res = await c.call_tool(
@@ -388,7 +482,7 @@ async def test_discovery_reads_the_fake(app, monkeypatch):
     assert entry["effects"]["paid_calls_destructive"] is True
     by_name = {o["name"]: o for o in entry["options"]}
     assert by_name["config_mode"]["allowed_values"] == ["inherit", "scoped", "safe", "bare"]
-    assert by_name["config_mode"]["default"] == "inherit"
+    assert by_name["config_mode"]["default"] is None  # The default varies by verb.
     assert by_name["max_budget_usd"]["default"] == 1.0
     assert "stdin" in entry["carriers"] and "Anthropic" in entry["egress"]
     assert models["source"] == "static" and models["models"][0]["slug"] == "opus"
@@ -427,6 +521,7 @@ async def test_dry_run_previews_the_review_without_spawning(app, tmp_path, repo)
     body = res.structured_content
     assert body["ok"] is True
     assert body["would_call_model"] is True
+    assert body["meta"]["backend_details"]["config_mode"] == "inherit"
     assert body["prompt_bytes"] > 0
     assert body["prompt_bytes"] >= len(adversarial.critic_stance("TestHost").encode("utf-8"))
     assert _runs(tmp_path) == []
