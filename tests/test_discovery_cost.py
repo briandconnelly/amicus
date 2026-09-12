@@ -44,8 +44,8 @@ that replaced it, and a tier outside the closed set is one an agent cannot filte
 `stability` as the three-value enum instead of a bare string, so a caller reads the legal set
 off the schema rather than inferring it from one observed value.
 
-The schema-15 -> schema-16 raise (+6556 bytes over the last MEASURED, 151 of which predates
-it on main) is the `coverage` object, on exactly the three tools that return it: +2063 each
+The schema-15 -> schema-16 raise (+6560 bytes over the last MEASURED, 151 of which predates
+it on main) is the `coverage` object, on exactly the three tools that return it: +2065 each
 for amicus_review_changes and amicus_adversarial_review, and +2279 for amicus_dry_run, which
 also gained `focus` and `max_input_bytes`. About 2660 bytes is structure - the object, its
 RedactionSummary and their constraints, inlined per tool - and about 3750 is prose, after
@@ -61,7 +61,7 @@ import pytest
 
 from amicus import manifest
 
-MEASURED: dict[str, int] = {"all": 105609, "codex-kimi": 105617, "claude": 105609}
+MEASURED: dict[str, int] = {"all": 105613, "codex-kimi": 105621, "claude": 105613}
 BUDGET: dict[str, int] = {p: ((n // 1000) + 1) * 1000 for p, n in MEASURED.items()}
 # ceil(bytes/4): a dependency-free, conservative token proxy (~4.13 bytes per token).
 TOKEN_PROXY_BUDGET: dict[str, int] = {p: -(-b // 4) for p, b in BUDGET.items()}

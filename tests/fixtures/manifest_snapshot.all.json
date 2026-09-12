@@ -2751,7 +2751,7 @@
               },
               "coverage": {
                 "additionalProperties": false,
-                "description": "How complete this review was. `partial` when any omission_reasons entry applies. `complete` means nothing in scope was left out of what amicus assembled; it does not mean every line was examined, or on a not_run result that anything was. A `pass` over partial coverage is delivered as unknown/low; a `fail` or `concerns` is not, so check this on those too.",
+                "description": "How complete this review was. `partial` when any omission_reasons entry applies. `complete` means amicus detected no omission; it is not proof that nothing was missed, that every line was examined, or on a not_run result that anything was. A `pass` over partial coverage is delivered as unknown/low; a `fail` or `concerns` is not, so check this on those too.",
                 "properties": {
                   "omission_reasons": {
                     "description": "Why it was not complete, in fixed order. untracked_omitted: untracked files in scope were not sent. tree_changed_during_gather: the tree changed while amicus read it (best-effort; its absence proves nothing). truncated: the diff was cut at the byte cap. redacted: secrets were withheld or masked (see redaction). focused: `focus` narrowed the review; nothing was withheld.",
@@ -8029,7 +8029,7 @@
               },
               "coverage": {
                 "additionalProperties": false,
-                "description": "How complete this review was. `partial` when any omission_reasons entry applies. `complete` means nothing in scope was left out of what amicus assembled; it does not mean every line was examined, or on a not_run result that anything was. A `pass` over partial coverage is delivered as unknown/low; a `fail` or `concerns` is not, so check this on those too.",
+                "description": "How complete this review was. `partial` when any omission_reasons entry applies. `complete` means amicus detected no omission; it is not proof that nothing was missed, that every line was examined, or on a not_run result that anything was. A `pass` over partial coverage is delivered as unknown/low; a `fail` or `concerns` is not, so check this on those too.",
                 "properties": {
                   "omission_reasons": {
                     "description": "Why it was not complete, in fixed order. untracked_omitted: untracked files in scope were not sent. tree_changed_during_gather: the tree changed while amicus read it (best-effort; its absence proves nothing). truncated: the diff was cut at the byte cap. redacted: secrets were withheld or masked (see redaction). focused: `focus` narrowed the review; nothing was withheld.",
