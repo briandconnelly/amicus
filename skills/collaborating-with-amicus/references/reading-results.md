@@ -54,9 +54,10 @@ fixed order from a fixed vocabulary. The reasons do not all mean that something 
 | `redacted` | Secret redaction hid content. `coverage.redaction` separates files whose changes were withheld whole (`withheld_paths`) from files sent with values masked (`masked_paths`). It can be null beside `redacted` when the redaction fell only in content the byte cap cut; `meta.redacted_paths` names every redacted file either way. |
 | `focused` | The call passed `focus`. Nothing was withheld, but the backend was not asked for a full review. |
 
-`complete` means none of these applied: nothing in scope was left out of what amicus assembled.
-It does not mean the backend examined every line, and on a `not_run` result nothing was reviewed
-at all, whatever `coverage` says.
+`complete` means amicus detected none of these. It is not proof that nothing was missed —
+`tree_changed_during_gather` cannot see a file that was already modified being edited again while
+amicus read it — nor that the backend examined every line, and on a `not_run` result nothing was
+reviewed at all, whatever `coverage` says.
 
 `amicus_dry_run` returns the `coverage` the paid review would report for the same arguments, from
 the same gather and the same `focus`, so an omitted untracked file shows up before you spend. It
@@ -71,8 +72,9 @@ tell you.
 
 ## `findings_diagnostics`: what the backend said that amicus could not carry
 
-Coverage is about what the model saw. This is the opposite axis: the model saw everything and
-amicus could not relay all of what it said. `findings_diagnostics` is `null` when nothing was
+Coverage is about how complete the review was: what amicus left out or narrowed before the backend
+ran. This is the opposite axis: the backend ran over what it was given, and amicus could not relay
+all of what it said. `findings_diagnostics` is `null` when nothing was
 lost, and otherwise carries a `dropped` count and reasons from a fixed vocabulary:
 
 | Reason | What it means |

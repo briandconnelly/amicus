@@ -131,8 +131,8 @@ class RawResponse(BaseModel):
 # that does not.
 _COVERAGE_DESC = (
     "How complete this review was. `partial` when any omission_reasons entry applies. "
-    "`complete` means nothing in scope was left out of what amicus assembled; it does not "
-    "mean every line was examined, or on a not_run result that anything was. A `pass` over "
+    "`complete` means amicus detected no omission; it is not proof that nothing was missed, "
+    "that every line was examined, or on a not_run result that anything was. A `pass` over "
     "partial coverage is delivered as unknown/low; a `fail` or `concerns` is not, so check "
     "this on those too."
 )

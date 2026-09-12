@@ -44,12 +44,12 @@ Delivery validates a stored result strictly and otherwise trusts whatever valida
 **Coverage is not only what the backend was shown, and the published text says so reason by reason.**
 `focused` withholds nothing; it records that the backend was not asked for a full review.
 `tree_changed_during_gather` is a best-effort consistency caveat, so its absence is not proof the tree held still.
-`complete` means that nothing in scope was left out of what amicus assembled, not that the backend examined every line.
+`complete` means amicus detected no omission, not that nothing was missed: `tree_changed_during_gather` cannot see an already-modified file edited again while amicus read it, and `complete` never means the backend examined every line.
 Describing coverage generically as "what the model saw" would have been false for two of the five reasons, and that misreading is the one this record exists to prevent.
 
 ## Declined
 
-`redacted_paths_count` on the dry run: the count is `len(meta.redacted_paths)`, and `coverage.redaction` splits those files by what happened to them.
+`redacted_paths_count` on the dry run: the count is `len(meta.redacted_paths)`, while `coverage.redaction` splits only the redactions that remain in the retained diff, so it can be null after truncation when that count is not.
 A top-level `deadline_advisory` on the dry run: it is not a coverage fact, it is already carried in `warnings`, and the delegate dry run would need the same change to stay consistent.
 Issue #65 listed both as absent; neither was lost by accident, and `docs/MIGRATION.md` says what replaces each.
 
