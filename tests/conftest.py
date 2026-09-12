@@ -11,13 +11,16 @@ import fastmcp
 import pytest
 from pontonier.core.runtime import CommandRun
 
+from amicus import config
+
 # Run the suite with fastmcp's camelCase compatibility bridge OFF so any camelCase read
 # that sneaks in fails today as a hard AttributeError instead of on the next major.
 fastmcp.settings.mcp_camelcase_compat = False
 
 # The env prefixes this server reads: its own, and the three legacy prefixes the shim
-# consults. Stripped so tests see built-in defaults.
-ENV_PREFIXES = ("AMICUS_", "CODEX_IN_CLAUDE_", "MOONBRIDGE_", "CLAUDE_IN_CODEX_")
+# consults. Stripped so tests see built-in defaults. One definition, the server's own, so
+# a namespace added there is stripped here without anyone remembering to.
+ENV_PREFIXES = config.ENV_PREFIXES
 
 NEVER_SPAWN_CODEX = "/nonexistent/amicus-test-codex"
 NEVER_SPAWN_KIMI = "/nonexistent/amicus-test-kimi"
@@ -87,6 +90,25 @@ def clean_env(monkeypatch):
     monkeypatch.setenv("AMICUS_KIMI_BIN", NEVER_SPAWN_KIMI)
     monkeypatch.setenv("AMICUS_CLAUDE_BIN", NEVER_SPAWN_CLAUDE)
     return monkeypatch
+
+
+def spawned_server_env() -> dict[str, str]:
+    """A minimal environment for a spawned `amicus.server` subprocess, matching what
+    `clean_env` gives an in-process test: every prefix in `ENV_PREFIXES` stripped, then the
+    guard's unusable backend binaries restored (the autouse fixtures monkeypatch THIS
+    process, not a child).
+
+    `AMICUS_` alone is not enough. `CODEX_IN_CLAUDE_LOG_FILE` and `MOONBRIDGE_LOG_FILE` are
+    accepted legacy aliases for `AMICUS_LOG_FILE` (`config/__init__.py`), and `obs.configure`
+    opens that path — so a developer with one exported had these tests writing to their own
+    log file. Measured before the fix: the subprocess created it.
+    """
+    env = {k: v for k, v in os.environ.items() if not k.startswith(ENV_PREFIXES)}
+    return env | {
+        "AMICUS_CODEX_BIN": NEVER_SPAWN_CODEX,
+        "AMICUS_KIMI_BIN": NEVER_SPAWN_KIMI,
+        "AMICUS_CLAUDE_BIN": NEVER_SPAWN_CLAUDE,
+    }
 
 
 def make_run(

@@ -129,6 +129,26 @@ def test_coverage_rejects_an_internally_inconsistent_disclosure():
             r.RedactionSummary(**bad)
 
 
+def test_job_started_follow_up_is_narrowed_to_the_one_action_it_carries():
+    """Every async start hands back "poll amicus_job_status"; the schema says only that,
+    instead of inlining the whole RepairStep enum on four tools (#41). `Repair` itself,
+    which the error envelope uses, still spans the enum."""
+    schema = r.JOB_STARTED_SCHEMA
+    assert schema["anyOf"][0]["properties"]["follow_up"] == {"$ref": "#/$defs/JobFollowUp"}
+    props = schema["$defs"]["JobFollowUp"]["properties"]
+    assert props["next_step"]["const"] == "poll_job_status"
+    assert props["tool"]["const"] == "amicus_job_status"
+    assert "enum" not in props["next_step"]
+    # Required on the wire, not defaulted: the advertised handle must not admit a
+    # follow_up with no action or tool.
+    assert {"next_step", "tool", "arguments"} <= set(schema["$defs"]["JobFollowUp"]["required"])
+    with pytest.raises(ValueError):
+        r.JobFollowUp(arguments={})  # ty: ignore[missing-argument]
+    with pytest.raises(ValueError):
+        r.JobFollowUp(next_step="retry_after_delay", tool="amicus_job_status", arguments={})  # ty: ignore[invalid-argument-type]
+    assert Repair(next_step="retry_after_delay").next_step == "retry_after_delay"
+
+
 def test_job_result_schema_is_an_opaque_union_over_the_paid_tools():
     branch = r.JOB_RESULT_SCHEMA["anyOf"][0]
     assert set(branch["properties"]["tool"]["enum"]) == set(r.PAID_TOOLS)
@@ -170,7 +190,11 @@ def test_success_payloads_validate_against_their_schemas():
                 deadline_seconds=1800,
                 poll_after_ms=1000,
                 expires_at=None,
-                follow_up=Repair(next_step="poll_job_status", tool="amicus_job_status"),
+                follow_up=r.JobFollowUp(
+                    next_step="poll_job_status",
+                    tool="amicus_job_status",
+                    arguments={"job_id": "a" * 32},
+                ),
                 meta=meta,
             ),
         ),

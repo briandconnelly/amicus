@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import json
 import re
+import sys
+import time
+import types
 from pathlib import Path
 
 import pytest
 from fastmcp import Client
+from tests.conftest import ENV_PREFIXES, spawned_server_env
 
 from amicus import manifest, server
 from amicus.schemas.fingerprint import FINGERPRINT_COVERS, FINGERPRINT_COVERS_DESC
@@ -16,9 +21,9 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 # sha256 of each profile's canonical manifest JSON; regenerate per the failure message.
 EXPECTED_MANIFEST_HASH: dict[str, str] = {
-    "all": "c6e6edc6ed9cf3ac73f09fabbb4fdc3253702dd8e9d3693388e81c6d0f9a4b0d",
-    "codex-kimi": "e5cfbda435f9ad76571d944f9de10f1b8bfa5c28f492002e60f54e0a2e334954",
-    "claude": "156f6d5664e32f272886397199e5bb983cbaf256ee54ffd305fac4e5ff32ec71",
+    "all": "6dbb3ee699a124f2ce0ac72f9ed8197734bb3f55d6d8a7f730c69e6c444e5ce4",
+    "codex-kimi": "84f580b5c807e835c648cda15e75a5c62a9cf251b6818fae8ecb36b2db4d242d",
+    "claude": "8d04ad68c948a6d96d6ad977c62b35b52f5213671b6ff1b60ea4ced8458ec2af",
 }
 
 _CACHING_SPEC_LIST_METHODS = (
@@ -199,8 +204,120 @@ def test_render_returns_canonical_json():
     assert out.startswith("{") and out.endswith("\n")
 
 
-async def test_tools_list_bytes_is_positive():
-    assert await manifest.tools_list_bytes(manifest.app_for_profile("all")) > 10_000
+def test_result_body_is_the_exact_line_text_or_an_error():
+    line = '{"jsonrpc":"2.0","id":2,"result":{"b":1,"a":[1, 2],"é":"\\u00e9"}}\n'
+    assert manifest._result_body(line, 2) == '{"b":1,"a":[1, 2],"é":"\\u00e9"}'
+    with pytest.raises(ValueError, match="id 3"):
+        manifest._result_body(line, 3)  # another request's response
+    with pytest.raises(ValueError, match="id 2"):
+        manifest._result_body("", 2)  # the server died: EOF
+    with pytest.raises(ValueError, match="id 2"):
+        manifest._result_body('{"jsonrpc":"2.0","id":2,"error":{"code":-32600}}\n', 2)
+
+
+def test_measurement_env_strips_every_namespace_the_server_reads(monkeypatch):
+    """The CLI's default subprocess environment: `AMICUS_` and each legacy alias namespace
+    are stripped, so the profile decides the configuration and an exported legacy
+    `*_LOG_FILE` is not opened by the measurement. Positive control: the unrelated
+    variable survives, so an over-eager filter would fail here too."""
+    monkeypatch.setenv("CODEX_IN_CLAUDE_LOG_FILE", "/nonexistent/amicus-test-leak.log")
+    monkeypatch.setenv("MOONBRIDGE_LOG_FILE", "/nonexistent/amicus-test-leak.log")
+    monkeypatch.setenv("CLAUDE_IN_CODEX_TIMEOUT_SECONDS", "1")
+    monkeypatch.setenv("AMICUS_ALLOW_CWD_WORKSPACE", "1")
+    monkeypatch.setenv("AMICUS_TEST_UNRELATED_KEEP", "yes")
+    monkeypatch.setenv("UNRELATED_KEEP", "yes")
+    env = manifest.measurement_env()
+    assert not any(k.startswith(ENV_PREFIXES) for k in env), sorted(
+        k for k in env if k.startswith(ENV_PREFIXES)
+    )
+    assert env["UNRELATED_KEEP"] == "yes"
+    assert manifest.config.ENV_PREFIXES == ENV_PREFIXES
+
+
+async def test_tools_list_wire_is_the_handshake_era_stdio_body():
+    """The instrument is a real stdio subprocess, read at the era both captured hosts
+    negotiate, and its text is the catalog: every tool record equals the in-memory
+    manifest's (canonicalized both sides), so a byte or token count over it is a count
+    of what those hosts receive (issue #41)."""
+    text = manifest.tools_list_wire("all", env=spawned_server_env())
+    body = json.loads(text)
+    # Handshake era: the plain result. No cache envelope, no serverInfo `_meta`.
+    assert set(body) == {"tools"}, sorted(body)
+    assert ": " not in text[:200] and ", " not in text[:200], "not compact"
+    wire_tools = {t["name"]: manifest._canonicalize(t) for t in body["tools"]}
+    in_memory = await manifest.build_manifest(manifest.app_for_profile("all"))
+    assert wire_tools == {t["name"]: t for t in in_memory["tools"]}
+    assert manifest.tools_list_bytes("all", env=spawned_server_env()) == len(text.encode("utf-8"))
+
+
+async def test_tools_list_bytes_discriminates_one_byte_per_active_tool():
+    """Control: the instrument can see a change, and sees exactly its size. The claude
+    and codex-kimi profiles differ only in `destructiveHint` on the active tools (`true`
+    against `false`: one byte each), so the two counts differ by the active-tool count."""
+    env = spawned_server_env()
+    active = (await manifest.build_manifest(manifest.app_for_profile("all")))["capabilities"][
+        "active_tools"
+    ]
+    assert len(active) == 8
+    difference = manifest.tools_list_bytes("codex-kimi", env=env) - manifest.tools_list_bytes(
+        "claude", env=env
+    )
+    assert difference == len(active)
+
+
+def test_tools_list_wire_bounds_a_stalled_server(monkeypatch):
+    """A child that starts but never answers must not hang the CLI or the gate: each
+    response read has a deadline, the error names the phase, and the child is gone."""
+    monkeypatch.setattr(
+        manifest, "_SERVER_ARGV", (sys.executable, "-c", "import time; time.sleep(60)")
+    )
+    started = time.monotonic()
+    with pytest.raises(TimeoutError, match=r"no initialize response within 0\.5s"):
+        manifest.tools_list_wire("all", env=spawned_server_env(), timeout=0.5)
+    assert time.monotonic() - started < 15
+
+
+def test_tokens_without_measure_is_refused():
+    """`--tokens` qualifies the measurement; alone it would render the manifest and exit 0,
+    which would look like a measurement that produced no counts."""
+    with pytest.raises(SystemExit) as excinfo:
+        manifest.main(["--tokens"])
+    assert excinfo.value.code == 2
+
+
+class _FakeEncoding:
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+    def encode(self, text: str) -> list[int]:
+        # Deterministic and encoding-dependent, so the test can tell the two apart.
+        n = len(text) // (2 if self.name == "o200k_base" else 3)
+        return list(range(n))
+
+
+def test_token_counts_uses_each_reference_encoding(monkeypatch):
+    """The plumbing, with tiktoken faked: the real encodings need the network on first
+    use, which the gate must never depend on. `--tokens` output is recorded by hand."""
+    fake = types.SimpleNamespace(get_encoding=_FakeEncoding)
+    monkeypatch.setitem(sys.modules, "tiktoken", fake)
+    text = "x" * 60
+    assert manifest.token_counts(text) == {"o200k_base": 30, "cl100k_base": 20}
+    assert list(manifest.token_counts(text)) == list(manifest.TOKEN_ENCODINGS)
+
+
+def test_token_counts_refuses_rather_than_omits(monkeypatch):
+    """No partial or silent result: a missing tiktoken, or an encoding that cannot be
+    loaded, is a non-zero exit that names the remedy."""
+    monkeypatch.setitem(sys.modules, "tiktoken", None)  # makes `import tiktoken` fail
+    with pytest.raises(SystemExit, match="uv sync --group measure"):
+        manifest.token_counts("x")
+
+    def refuse(name: str) -> _FakeEncoding:
+        raise OSError("offline")
+
+    monkeypatch.setitem(sys.modules, "tiktoken", types.SimpleNamespace(get_encoding=refuse))
+    with pytest.raises(SystemExit, match=r"o200k_base.*OSError.*TIKTOKEN_CACHE_DIR"):
+        manifest.token_counts("x")
 
 
 def _minimal_args(schema: dict) -> dict:

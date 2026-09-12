@@ -58,6 +58,12 @@ dev = [
     "ruff>=0.15.15",
     "ty>=0.0.1a7",
 ]
+# Reference-encoding token counts for `python -m amicus.manifest --measure --tokens`
+# (issue #41). Not in `dev`: tiktoken fetches encoding data over the network on first
+# use, and the discovery-cost ratchet stays on bytes so CI never depends on that.
+measure = [
+    "tiktoken>=0.9",
+]
 
 [tool.ruff]
 line-length = 100

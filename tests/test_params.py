@@ -130,6 +130,37 @@ def test_parameter_contracts_have_summary_and_full_and_point_at_the_resource():
     assert set(body["params"]) == set(p.PARAMETER_CONTRACTS)
 
 
+# The inline copy of a contract is paid once per tool that declares the parameter (up
+# to fifteen times per tools/list), so it is a one-line summary plus the pointer; the
+# rest lives at amicus://params (issue #41). The ceiling is a ratchet, not a target.
+SUMMARY_CEILING_BYTES = 200
+
+# What an agent needs at SELECTION time, before it has read amicus://params: a safety or
+# applicability fact that must stay inline whether or not the full text also carries it,
+# because dropping it from the summary drops it from the wire. Pinned as substrings so a
+# rewording that keeps the fact passes and one that loses it fails.
+SELECTION_TIME_FACTS: dict[str, tuple[str, ...]] = {
+    "workspace_root": ("sessionless", "must pass"),
+    "idempotency_key": ("reusing", "different arg"),
+    "extra_context": ("UNTRUSTED", "secrets"),
+    "instructions_append": ("UNTRUSTED", "grants no tools", "secrets", "4096"),
+    "reasoning_effort": ("amicus_models",),
+    "backend_options": ("key or value", "pre-spend"),
+}
+
+
+@pytest.mark.parametrize("name", sorted(SELECTION_TIME_FACTS))
+def test_parameter_summary_is_one_line_and_keeps_its_selection_time_facts(name):
+    summary = p.PARAMETER_CONTRACTS[name].summary
+    assert len(summary.encode("utf-8")) <= SUMMARY_CEILING_BYTES, (name, len(summary))
+    for fact in SELECTION_TIME_FACTS[name]:
+        assert fact.lower() in summary.lower(), (name, fact)
+
+
+def test_selection_time_facts_cover_every_contract():
+    assert set(SELECTION_TIME_FACTS) == set(p.PARAMETER_CONTRACTS)
+
+
 def test_timeout_bounds_and_pattern():
     assert (p.MIN_TIMEOUT_SECONDS, p.MAX_TIMEOUT_SECONDS) == (10, 600)
     assert p.CONTROL_CHAR_FREE_PATTERN == r"^[^\x00-\x1F\x7F-\x9F]*$"

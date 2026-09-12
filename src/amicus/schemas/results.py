@@ -11,7 +11,6 @@ from amicus.schemas.codes import ErrorCode  # noqa: TC001 - pydantic needs this 
 from amicus.schemas.envelope import (
     BackendRef,
     ContextSummary,
-    Repair,
     SuccessBase,
     Workspace,
     server_version_field,
@@ -273,6 +272,20 @@ class DelegateResult(_ModelResult):
 # --- jobs -----------------------------------------------------------------------------
 
 
+class JobFollowUp(BaseModel):
+    """The one follow-up an async start ever hands back: poll the job. The same shape as
+    `Repair`, narrowed to that one action, so the four async tools' output schemas do not
+    each inline the whole RepairStep enum for a field that has a single value (#41)."""
+
+    model_config = ConfigDict(extra="forbid")
+    # No defaults: a default would drop the field from the schema's `required`, and the
+    # advertised handle would then admit a follow_up with no action or tool.
+    next_step: Literal["poll_job_status"]
+    tool: Literal["amicus_job_status"]
+    arguments: dict[str, Any]
+    alternative: str | None = None
+
+
 class JobStarted(SuccessBase):
     job_id: str
     backend: BackendRef
@@ -283,7 +296,7 @@ class JobStarted(SuccessBase):
     poll_after_ms: int
     expires_at: str | None
     task_id: str | None = None
-    follow_up: Repair
+    follow_up: JobFollowUp
 
 
 class JobStatus(SuccessBase):

@@ -16,7 +16,9 @@ from pydantic import BaseModel, TypeAdapter
 
 from amicus.schemas.fingerprint import JSON_SCHEMA_DIALECT
 
-ERROR_POINTER_DESC = "Populated error envelope; full schema at resource amicus://error-envelope"
+# Pointer descriptions ride every tool's outputSchema (the error branch on all eighteen,
+# meta on every success branch), so they are one clause plus the resource (issue #41).
+ERROR_POINTER_DESC = "Error envelope; schema at amicus://error-envelope"
 OPAQUE_ERROR_BRANCH: dict[str, Any] = {
     "type": "object",
     "required": ["ok", "error", "meta"],
@@ -26,19 +28,17 @@ OPAQUE_ERROR_BRANCH: dict[str, Any] = {
         "meta": {"type": "object"},
     },
 }
-RESULT_META_POINTER_DESC = (
-    "Result metadata (backend, cwd, model, timeout, usage, job_id, and more); full "
-    "schema at resource amicus://result-meta"
-)
+RESULT_META_POINTER_DESC = "Result metadata; schema at amicus://result-meta"
 OPAQUE_META: dict[str, Any] = {"type": "object", "description": RESULT_META_POINTER_DESC}
 _META_REF = {"$ref": "#/$defs/Meta"}
+OK_DESC = "true on success, false on error"
 
 # Descriptions that survive _strip_schema_noise. Other modules add their pointer and
 # semantic descriptions here at import time, before building their schemas.
 KEPT_DESCRIPTIONS: set[str] = {
     ERROR_POINTER_DESC,
     RESULT_META_POINTER_DESC,
-    "true = success result, false = error result",
+    OK_DESC,
 }
 
 _SUBSCHEMA_MAPS = frozenset(
@@ -142,10 +142,7 @@ def published_schema(
         "$schema": JSON_SCHEMA_DIALECT,
         "type": "object",
         "properties": {
-            "ok": {
-                "type": "boolean",
-                "description": "true = success result, false = error result",
-            },
+            "ok": {"type": "boolean", "description": OK_DESC},
         },
         "required": ["ok"],
         "anyOf": [*branches, OPAQUE_ERROR_BRANCH],
