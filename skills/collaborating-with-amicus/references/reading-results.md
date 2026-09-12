@@ -42,20 +42,39 @@ envelope is still `ok: true` with a `summary`. Treating that as a clean review i
 easiest way to report a passing review of nothing. When it happens, read the summary: it names
 how many untracked files were detected and omitted, and the remedy.
 
-When a review *did* run but saw only part of the intended changes, amicus records why in fixed
-vocabulary: `untracked_omitted`, `tree_changed_during_gather`, `truncated`, `redacted`.
+When a review was not complete, the result's `coverage` object says so in fields you can branch
+on: `coverage.status` is `complete` or `partial`, and `coverage.omission_reasons` names why, in a
+fixed order from a fixed vocabulary. The reasons do not all mean that something was withheld:
 
-**The degradation is one-directional, and this matters.** A model `pass` over partly reviewed
-code is delivered as `verdict: unknown`, `confidence: low`, with the coverage reasons named in the
-summary. A `concerns` or `fail` verdict is **passed through unchanged** — it is not degraded,
-because a concrete finding stands on its own. So a `concerns` verdict over a truncated diff looks
-exactly like a `concerns` verdict over a complete one. Read the coverage fields yourself; the
-verdict will not tell you.
+| Reason | What it means |
+| --- | --- |
+| `untracked_omitted` | Untracked files in scope were not sent. `untracked_files_detected`, `untracked_files_included` and `untracked_files_omitted` count them; all three are null outside `scope="working_tree"`. |
+| `tree_changed_during_gather` | The working tree changed while amicus read it, so the diff may not be one consistent snapshot. Detection is best-effort: its absence is not proof the tree held still. |
+| `truncated` | The gathered diff hit the byte cap and was cut. |
+| `redacted` | Secret redaction hid content. `coverage.redaction` separates files whose changes were withheld whole (`withheld_paths`) from files sent with values masked (`masked_paths`). It can be null beside `redacted` when the redaction fell only in content the byte cap cut; `meta.redacted_paths` names every redacted file either way. |
+| `focused` | The call passed `focus`. Nothing was withheld, but the backend was not asked for a full review. |
+
+`complete` means amicus detected none of these. It is not proof that nothing was missed —
+`tree_changed_during_gather` cannot see a file that was already modified being edited again while
+amicus read it — nor that the backend examined every line, and on a `not_run` result nothing was
+reviewed at all, whatever `coverage` says.
+
+`amicus_dry_run` returns the `coverage` the paid review would report for the same arguments, from
+the same gather and the same `focus`, so an omitted untracked file shows up before you spend. It
+is a preview: the tree can change before you call.
+
+**The degradation is one-directional, and this matters.** A model `pass` over partial coverage is
+delivered as `verdict: unknown`, `confidence: low`, with the reasons also named in the summary. A
+`concerns` or `fail` verdict is **passed through unchanged** — it is not degraded, because a
+concrete finding stands on its own. So a `concerns` verdict over a truncated diff looks exactly
+like a `concerns` verdict over a complete one. Read `coverage` yourself; the verdict will not
+tell you.
 
 ## `findings_diagnostics`: what the backend said that amicus could not carry
 
-Coverage is about what the model saw. This is the opposite axis: the model saw everything and
-amicus could not relay all of what it said. `findings_diagnostics` is `null` when nothing was
+Coverage is about how complete the review was: what amicus left out or narrowed before the backend
+ran. This is the opposite axis: the backend ran over what it was given, and amicus could not relay
+all of what it said. `findings_diagnostics` is `null` when nothing was
 lost, and otherwise carries a `dropped` count and reasons from a fixed vocabulary:
 
 | Reason | What it means |

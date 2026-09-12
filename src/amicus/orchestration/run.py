@@ -23,10 +23,12 @@ if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Callable
 
     from pontonier.backend.protocol import PreparedRun
+    from pontonier.core.gitdiff import DiffResult
 
     from amicus.plugin import BackendPlugin
     from amicus.request import RunSpec
     from amicus.schemas.envelope import Meta
+    from amicus.schemas.results import Coverage
 
 MAX_ARTIFACT_BYTES = 1_000_000
 
@@ -74,11 +76,11 @@ def _site_error(exc: SiteError, meta: Any, plugin: BackendPlugin) -> dict[str, A
 
 def _compose(
     spec: RunSpec, meta: Meta, plugin: BackendPlugin
-) -> tuple[str, dict[str, Any] | None, list[str]] | dict[str, Any]:
-    """Gather (when the kind attaches a diff) and frame. Returns (prompt, schema, coverage
-    reasons), or a ready envelope when gathering ended the run before any spend."""
-    reasons: list[str] = []
-    gathered_text: str | None = None
+) -> tuple[str, dict[str, Any] | None, Coverage] | dict[str, Any]:
+    """Gather (when the kind attaches a diff) and frame. Returns (prompt, schema, coverage),
+    or a ready envelope when gathering ended the run before any spend. Only the review
+    kinds read the coverage; consult and delegate get an unused `complete` one."""
+    diff: DiffResult | None = None
     attaches_diff = spec.kind == "review_changes" or (
         spec.kind == "adversarial_review" and spec.scope is not None
     )
@@ -86,12 +88,15 @@ def _compose(
         gathered = review.gather(spec, meta, plugin)
         if isinstance(gathered, dict):
             return gathered
-        reasons = review.coverage_reasons(spec.scope or "working_tree", gathered)
-        gathered_text = gathered.text
-    if spec.kind in ("review_changes", "adversarial_review") and spec.focus and spec.focus.strip():
-        # A focused pass is never a full review (per the `focus` parameter contract): fold it
-        # into apply_coverage so a model `pass` is downgraded with a caveat.
-        reasons.append("focused")
+        diff = gathered
+    gathered_text = diff.text if diff is not None else None
+    # A focused pass is never a full review (per the `focus` parameter contract), so the
+    # coverage records it and apply_coverage downgrades a model `pass` over it.
+    coverage = review.build_coverage(
+        spec.scope or "working_tree",
+        diff,
+        focused=spec.kind in ("review_changes", "adversarial_review") and review.is_focused(spec),
+    )
     scope_label = prompts.review_label(spec.scope or "working_tree", spec.base, spec.commit)
     schema: dict[str, Any] | None
     if spec.kind == "review_changes":
@@ -122,7 +127,7 @@ def _compose(
     else:
         prompt = prompts.delegate_prompt(spec.host_name, spec.task or "", plugin=plugin)
         schema = None
-    return prompt, schema, reasons
+    return prompt, schema, coverage
 
 
 async def run_request(
@@ -136,7 +141,7 @@ async def run_request(
     composed = _compose(spec, meta, plugin)
     if isinstance(composed, dict):
         return composed
-    prompt, schema, reasons = composed
+    prompt, schema, coverage = composed
 
     try:
         with select_site(spec, plugin, on_worktree_parent) as site:
@@ -206,9 +211,9 @@ async def run_request(
         return _site_error(exc, meta, plugin)
 
     if spec.kind == "review_changes":
-        return finalize.review_result(result, meta, reasons, plugin)
+        return finalize.review_result(result, meta, coverage, plugin)
     if spec.kind == "adversarial_review":
-        return finalize.adversarial_result(result, meta, reasons, plugin)
+        return finalize.adversarial_result(result, meta, coverage, plugin)
     if spec.kind == "consult":
         return finalize.consult_result(result, meta)
     return finalize.delegate_result(

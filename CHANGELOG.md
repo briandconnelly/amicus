@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking (`FINGERPRINT` `schema-16`, `RESULT_FORMAT` 5).** Review and adversarial-review
+  results, and `amicus_dry_run`, now carry a top-level `coverage` object (#65): `status`,
+  untracked-file counts, `omission_reasons` and a `redaction` breakdown, in the siblings' shape
+  plus amicus's own `focused` reason. An omitted untracked file, a tree that changed during the
+  gather, or a focused pass used to reach a caller only as prose in `summary`, and the free
+  preview reported none of it. `amicus_dry_run` also accepts `focus` and reports
+  `max_input_bytes`, so it previews the coverage the paid call will report. A stored job result
+  written under `RESULT_FORMAT` 4 is now returned as `job_result_incompatible`. ADR 0019
+  supersedes ADR 0007's coverage clause.
+
 ### Fixed
 
 - Keep exception text out of stored background-job crash results and returned spawn-failure

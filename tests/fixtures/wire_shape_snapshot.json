@@ -9,6 +9,14 @@
           "lines_added": 2,
           "lines_removed": 3
         },
+        "coverage": {
+          "omission_reasons": [],
+          "redaction": null,
+          "status": "complete",
+          "untracked_files_detected": 0,
+          "untracked_files_included": 0,
+          "untracked_files_omitted": 0
+        },
         "findings": [],
         "findings_diagnostics": null,
         "meta": {
@@ -155,6 +163,14 @@
           "lines_added": 2,
           "lines_removed": 3
         },
+        "coverage": {
+          "omission_reasons": [],
+          "redaction": null,
+          "status": "complete",
+          "untracked_files_detected": 0,
+          "untracked_files_included": 0,
+          "untracked_files_omitted": 0
+        },
         "findings": [],
         "findings_diagnostics": null,
         "meta": {
@@ -214,6 +230,17 @@
         "assumptions": [],
         "confidence": "low",
         "context_summary": null,
+        "coverage": {
+          "omission_reasons": [
+            "truncated",
+            "redacted"
+          ],
+          "redaction": null,
+          "status": "partial",
+          "untracked_files_detected": null,
+          "untracked_files_included": null,
+          "untracked_files_omitted": null
+        },
         "findings": [],
         "findings_diagnostics": null,
         "meta": {
@@ -282,6 +309,14 @@
           "lines_added": 2,
           "lines_removed": 3
         },
+        "coverage": {
+          "omission_reasons": [],
+          "redaction": null,
+          "status": "complete",
+          "untracked_files_detected": 0,
+          "untracked_files_included": 0,
+          "untracked_files_omitted": 0
+        },
         "findings": [],
         "findings_diagnostics": null,
         "meta": {
@@ -428,6 +463,14 @@
           "lines_added": 2,
           "lines_removed": 3
         },
+        "coverage": {
+          "omission_reasons": [],
+          "redaction": null,
+          "status": "complete",
+          "untracked_files_detected": 0,
+          "untracked_files_included": 0,
+          "untracked_files_omitted": 0
+        },
         "findings": [],
         "findings_diagnostics": null,
         "meta": {
@@ -487,6 +530,17 @@
         "assumptions": [],
         "confidence": "low",
         "context_summary": null,
+        "coverage": {
+          "omission_reasons": [
+            "truncated",
+            "redacted"
+          ],
+          "redaction": null,
+          "status": "partial",
+          "untracked_files_detected": null,
+          "untracked_files_included": null,
+          "untracked_files_omitted": null
+        },
         "findings": [],
         "findings_diagnostics": null,
         "meta": {
@@ -875,7 +929,7 @@
       "error": {
         "backend": null,
         "code": "job_result_incompatible",
-        "message": "stored job result was written under a different result format (result_format 5; this release reads 4, producer server_version 0.0.0): stored under another result format",
+        "message": "stored job result was written under a different result format (result_format 6; this release reads 5, producer server_version 0.0.0): stored under another result format",
         "repair": {
           "alternative": "The stored result predates this server version; start a new job.",
           "next_step": "start_new_job"

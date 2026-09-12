@@ -148,7 +148,7 @@
     ],
     "protocol_revision": "2026-07-28",
     "resource_error_carrier": "JSON-RPC error; the envelope (machine_code/human_message/backend/temporary/retry_after_ms/repair/resource_uri/request_id) is in error.data. Classify by error.data.machine_code: the numeric is era-bound (-32002 on a 2025-11-25 connection, -32602 on 2026-07-28; -32603 for a read failure on both).",
-    "result_format": 4,
+    "result_format": 5,
     "result_meta_resource": "amicus://result-meta",
     "scope": [
       "Second opinions, git-change reviews, adversarial critiques and delegated diffs from Codex, Kimi or Claude Code, selected per call.",
@@ -328,7 +328,7 @@
         "required_params": [
           "backend"
         ],
-        "returns": "verdict, confidence, findings, review_status, context_summary and meta.",
+        "returns": "verdict, confidence, findings, review_status, coverage, context_summary and meta.",
         "stability": null,
         "use_when": "A structured review of changes that live in git."
       },
@@ -559,7 +559,7 @@
           "backend",
           "target"
         ],
-        "returns": "verdict, confidence, findings and meta.",
+        "returns": "verdict, confidence, findings, review_status, coverage and meta.",
         "stability": null,
         "use_when": "A fixed critic attacking a plan, claim or decision before you commit to it."
       },
@@ -661,7 +661,7 @@
         "required_params": [
           "backend"
         ],
-        "returns": "would_call_model, scope, prompt_bytes, context_summary, resolved backend_options.",
+        "returns": "would_call_model, scope, prompt_bytes, coverage, max_input_bytes, context_summary, resolved backend_options.",
         "stability": null,
         "use_when": "Preview a review's scope, size and resolved options before spending."
       },
@@ -1376,7 +1376,7 @@
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-15",
+                "default": "amicus/0.1/schema-16",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -2193,7 +2193,7 @@
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-15",
+            "default": "amicus/0.1/schema-16",
             "title": "Fingerprint",
             "type": "string"
           },
@@ -2749,6 +2749,103 @@
                   }
                 ]
               },
+              "coverage": {
+                "additionalProperties": false,
+                "description": "How complete this review was. `partial` when any omission_reasons entry applies. `complete` means amicus detected no omission; it is not proof that nothing was missed, that every line was examined, or on a not_run result that anything was. A `pass` over partial coverage is delivered as unknown/low; a `fail` or `concerns` is not, so check this on those too.",
+                "properties": {
+                  "omission_reasons": {
+                    "description": "Why it was not complete, in fixed order. untracked_omitted: untracked files in scope were not sent. tree_changed_during_gather: the tree changed while amicus read it (best-effort; its absence proves nothing). truncated: the diff was cut at the byte cap. redacted: secrets were withheld or masked (see redaction). focused: `focus` narrowed the review; nothing was withheld.",
+                    "items": {
+                      "enum": [
+                        "focused",
+                        "redacted",
+                        "tree_changed_during_gather",
+                        "truncated",
+                        "untracked_omitted"
+                      ],
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "redaction": {
+                    "anyOf": [
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "inline_masks": {
+                            "minimum": 0,
+                            "type": "integer"
+                          },
+                          "masked_paths": {
+                            "description": "Sent with secret-looking values masked.",
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          "withheld_paths": {
+                            "description": "Changes withheld whole (secret-looking path); the backend did not see them.",
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "The `redacted` reason by file. Can be null beside it when the redaction fell only in content the byte cap cut; meta.redacted_paths lists every redacted file."
+                  },
+                  "status": {
+                    "enum": [
+                      "complete",
+                      "partial"
+                    ],
+                    "type": "string"
+                  },
+                  "untracked_files_detected": {
+                    "anyOf": [
+                      {
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Untracked files in the review's paths: detected = included (sent) + omitted. All three are null outside scope=working_tree."
+                  },
+                  "untracked_files_included": {
+                    "anyOf": [
+                      {
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "untracked_files_omitted": {
+                    "anyOf": [
+                      {
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "status"
+                ],
+                "type": "object"
+              },
               "findings": {
                 "items": {
                   "additionalProperties": false,
@@ -2942,6 +3039,7 @@
             },
             "required": [
               "confidence",
+              "coverage",
               "meta",
               "summary",
               "verdict"
@@ -5962,7 +6060,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Free — no model call. Preview an amicus_review_changes call: the diff scope, its byte size and summary, the resolved model, effort and backend_options, and whether the paid call would run the model at all. A dry run reports metadata about the input amicus would assemble; it does not invoke the backend, and it neither enumerates nor bounds the files the model itself reads during the paid call.",
+      "description": "Free — no model call. Preview an amicus_review_changes call: the diff scope, its byte size and summary, the `coverage` the paid call would report (what it would leave out, and why), the byte cap, the resolved model, effort and backend_options, and whether the paid call would run the model at all. A dry run reports metadata about the input amicus would assemble; it does not invoke the backend, and it neither enumerates nor bounds the files the model itself reads during the paid call.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
@@ -6097,6 +6195,19 @@
             ],
             "default": null,
             "description": "Optional author intent/background, added as clearly-labeled UNTRUSTED prompt data. Redaction does NOT cover it — no live secrets. Full caveats and bounds: amicus://params."
+          },
+          "focus": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Narrow the review to one concern (e.g. 'locking'). UNTRUSTED caller text; a focused pass is never a full review."
           },
           "instructions_append": {
             "anyOf": [
@@ -6249,6 +6360,107 @@
                   }
                 ]
               },
+              "coverage": {
+                "additionalProperties": false,
+                "description": "The coverage the paid review would report for these arguments; the tree can still change before you spend.",
+                "properties": {
+                  "omission_reasons": {
+                    "description": "Why it was not complete, in fixed order. untracked_omitted: untracked files in scope were not sent. tree_changed_during_gather: the tree changed while amicus read it (best-effort; its absence proves nothing). truncated: the diff was cut at the byte cap. redacted: secrets were withheld or masked (see redaction). focused: `focus` narrowed the review; nothing was withheld.",
+                    "items": {
+                      "enum": [
+                        "focused",
+                        "redacted",
+                        "tree_changed_during_gather",
+                        "truncated",
+                        "untracked_omitted"
+                      ],
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "redaction": {
+                    "anyOf": [
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "inline_masks": {
+                            "minimum": 0,
+                            "type": "integer"
+                          },
+                          "masked_paths": {
+                            "description": "Sent with secret-looking values masked.",
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          "withheld_paths": {
+                            "description": "Changes withheld whole (secret-looking path); the backend did not see them.",
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "The `redacted` reason by file. Can be null beside it when the redaction fell only in content the byte cap cut; meta.redacted_paths lists every redacted file."
+                  },
+                  "status": {
+                    "enum": [
+                      "complete",
+                      "partial"
+                    ],
+                    "type": "string"
+                  },
+                  "untracked_files_detected": {
+                    "anyOf": [
+                      {
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Untracked files in the review's paths: detected = included (sent) + omitted. All three are null outside scope=working_tree."
+                  },
+                  "untracked_files_included": {
+                    "anyOf": [
+                      {
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "untracked_files_omitted": {
+                    "anyOf": [
+                      {
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "status"
+                ],
+                "type": "object"
+              },
+              "max_input_bytes": {
+                "description": "The paid call's byte cap: the diff is cut beyond it (`truncated`), caller text rejected.",
+                "type": "integer"
+              },
               "meta": {
                 "description": "Result metadata (backend, cwd, model, timeout, usage, job_id, and more); full schema at resource amicus://result-meta",
                 "type": "object"
@@ -6354,6 +6566,8 @@
             },
             "required": [
               "backend",
+              "coverage",
+              "max_input_bytes",
               "meta",
               "prompt_bytes",
               "scope",
@@ -7813,6 +8027,103 @@
                   }
                 ]
               },
+              "coverage": {
+                "additionalProperties": false,
+                "description": "How complete this review was. `partial` when any omission_reasons entry applies. `complete` means amicus detected no omission; it is not proof that nothing was missed, that every line was examined, or on a not_run result that anything was. A `pass` over partial coverage is delivered as unknown/low; a `fail` or `concerns` is not, so check this on those too.",
+                "properties": {
+                  "omission_reasons": {
+                    "description": "Why it was not complete, in fixed order. untracked_omitted: untracked files in scope were not sent. tree_changed_during_gather: the tree changed while amicus read it (best-effort; its absence proves nothing). truncated: the diff was cut at the byte cap. redacted: secrets were withheld or masked (see redaction). focused: `focus` narrowed the review; nothing was withheld.",
+                    "items": {
+                      "enum": [
+                        "focused",
+                        "redacted",
+                        "tree_changed_during_gather",
+                        "truncated",
+                        "untracked_omitted"
+                      ],
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "redaction": {
+                    "anyOf": [
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "inline_masks": {
+                            "minimum": 0,
+                            "type": "integer"
+                          },
+                          "masked_paths": {
+                            "description": "Sent with secret-looking values masked.",
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          "withheld_paths": {
+                            "description": "Changes withheld whole (secret-looking path); the backend did not see them.",
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "The `redacted` reason by file. Can be null beside it when the redaction fell only in content the byte cap cut; meta.redacted_paths lists every redacted file."
+                  },
+                  "status": {
+                    "enum": [
+                      "complete",
+                      "partial"
+                    ],
+                    "type": "string"
+                  },
+                  "untracked_files_detected": {
+                    "anyOf": [
+                      {
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Untracked files in the review's paths: detected = included (sent) + omitted. All three are null outside scope=working_tree."
+                  },
+                  "untracked_files_included": {
+                    "anyOf": [
+                      {
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "untracked_files_omitted": {
+                    "anyOf": [
+                      {
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "status"
+                ],
+                "type": "object"
+              },
               "findings": {
                 "items": {
                   "additionalProperties": false,
@@ -8006,6 +8317,7 @@
             },
             "required": [
               "confidence",
+              "coverage",
               "meta",
               "summary",
               "verdict"

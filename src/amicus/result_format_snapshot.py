@@ -14,6 +14,7 @@ from amicus.schemas.fingerprint import FINGERPRINT, RESULT_FORMAT
 from amicus.schemas.results import (
     AdversarialReviewResult,
     ConsultResult,
+    Coverage,
     DelegateResult,
     ReviewResult,
 )
@@ -72,6 +73,12 @@ def build_snapshot() -> dict[str, Any]:
                 verdict="pass",
                 confidence="high",
                 review_status="completed",
+                coverage=Coverage(
+                    status="complete",
+                    untracked_files_detected=0,
+                    untracked_files_included=0,
+                    untracked_files_omitted=0,
+                ),
                 meta=_meta(instructions_append=InstructionsFingerprint(sha256="a" * 64, bytes=5)),
             )
         ),
@@ -81,6 +88,7 @@ def build_snapshot() -> dict[str, Any]:
                 verdict="concerns",
                 confidence="medium",
                 review_status="completed",
+                coverage=Coverage(status="partial", omission_reasons=["focused"]),
                 meta=_meta(),
             )
         ),

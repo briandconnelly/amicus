@@ -136,7 +136,9 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
         "cost": "active",
         "backends": list(BACKEND_IDS),
         "use_when": "A structured review of changes that live in git.",
-        "returns": "verdict, confidence, findings, review_status, context_summary and meta.",
+        "returns": (
+            "verdict, confidence, findings, review_status, coverage, context_summary and meta."
+        ),
         "error_codes": _COMMON_PAID_CODES + _REVIEW_CODES_EMITTED + _SYNC_LIFECYCLE_CODES,
     },
     "amicus_review_changes_async": {
@@ -179,7 +181,7 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
         "cost": "active",
         "backends": ["claude"],
         "use_when": "A fixed critic attacking a plan, claim or decision before you commit to it.",
-        "returns": "verdict, confidence, findings and meta.",
+        "returns": "verdict, confidence, findings, review_status, coverage and meta.",
         "error_codes": _COMMON_PAID_CODES + _REVIEW_CODES,
     },
     "amicus_adversarial_review_async": {
@@ -194,7 +196,8 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
         "backends": list(BACKEND_IDS),
         "use_when": "Preview a review's scope, size and resolved options before spending.",
         "returns": (
-            "would_call_model, scope, prompt_bytes, context_summary, resolved backend_options."
+            "would_call_model, scope, prompt_bytes, coverage, max_input_bytes, "
+            "context_summary, resolved backend_options."
         ),
         "error_codes": [
             "backend_unavailable",

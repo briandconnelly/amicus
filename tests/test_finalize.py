@@ -12,6 +12,10 @@ from tests.support import fakeplugin
 
 from amicus.orchestration import finalize as fz
 from amicus.schemas.envelope import Meta
+from amicus.schemas.results import Coverage
+
+_COMPLETE = Coverage(status="complete")
+_TRUNCATED = Coverage(status="partial", omission_reasons=["truncated"])
 
 
 def _structured(**over):
@@ -80,22 +84,22 @@ def test_consult_structured_and_prose_and_sanitization():
 
 def test_review_is_strict_and_folds_coverage():
     plugin = fakeplugin.make_plugin()
-    out = fz.review_result(ExecResult(answer="prose"), Meta(), [], plugin)
+    out = fz.review_result(ExecResult(answer="prose"), Meta(), _COMPLETE, plugin)
     assert (
         out["ok"] is False
         and out["error"]["code"] == "invalid_json"
         and "prose" in out["error"]["message"]
     )
-    out = fz.review_result(ExecResult(answer="[1]"), Meta(), [], plugin)
+    out = fz.review_result(ExecResult(answer="[1]"), Meta(), _COMPLETE, plugin)
     assert out["error"]["code"] == "schema_violation"
     secret = "sk-" + "d" * 32
-    out = fz.review_result(ExecResult(answer=f"prose token={secret}"), Meta(), [], plugin)
+    out = fz.review_result(ExecResult(answer=f"prose token={secret}"), Meta(), _COMPLETE, plugin)
     assert secret not in str(out)
-    out = fz.review_result(ExecResult(answer="z" * 5000), Meta(), [], plugin)
+    out = fz.review_result(ExecResult(answer="z" * 5000), Meta(), _COMPLETE, plugin)
     assert out["error"]["message"].count("z") <= 300
     payload = _structured()
     ok = fz.review_result(
-        ExecResult(answer=json.dumps(payload), structured=payload), Meta(), [], plugin
+        ExecResult(answer=json.dumps(payload), structured=payload), Meta(), _COMPLETE, plugin
     )
     assert ok["ok"] is True and (ok["verdict"], ok["confidence"], ok["review_status"]) == (
         "pass",
@@ -104,16 +108,19 @@ def test_review_is_strict_and_folds_coverage():
     )
     assert ok["findings"][0]["title"] == "t" and ok["tool"] == "amicus_review_changes"
     partial = fz.review_result(
-        ExecResult(answer=json.dumps(payload), structured=payload), Meta(), ["truncated"], plugin
+        ExecResult(answer=json.dumps(payload), structured=payload), Meta(), _TRUNCATED, plugin
     )
     assert (partial["verdict"], partial["confidence"]) == (
         "unknown",
         "low",
     ) and "partial" in partial["summary"]
+    # The fold and the disclosure read one object, so the reason it acted on is on the wire.
+    assert ok["coverage"]["status"] == "complete"
+    assert partial["coverage"]["omission_reasons"] == ["truncated"]
     # A bare object deviates on every field. verdict and confidence still coerce to their
     # honest defaults, and the missing findings member then takes confidence the rest of
     # the way down: a response that said nothing does not get to claim medium certainty.
-    defaults = fz.review_result(ExecResult(answer="{}", structured={}), Meta(), [], plugin)
+    defaults = fz.review_result(ExecResult(answer="{}", structured={}), Meta(), _COMPLETE, plugin)
     assert (defaults["verdict"], defaults["confidence"]) == ("unknown", "low")
     assert defaults["summary"].endswith("(no summary)")
     assert defaults["findings_diagnostics"]["reasons"] == ["missing_findings"]
@@ -292,7 +299,7 @@ def test_a_clean_result_carries_no_diagnostics_at_all():
     review = fz.review_result(
         ExecResult(answer=json.dumps(payload), structured=payload),
         Meta(),
-        [],
+        _COMPLETE,
         fakeplugin.make_plugin(),
     )
     assert out["findings_diagnostics"] is None and review["findings_diagnostics"] is None
@@ -305,7 +312,7 @@ def test_a_lost_finding_stops_a_pass_verdict_from_standing():
     out = fz.review_result(
         ExecResult(answer=json.dumps(payload), structured=payload),
         Meta(),
-        [],
+        _COMPLETE,
         fakeplugin.make_plugin(),
     )
     assert (out["verdict"], out["confidence"]) == ("unknown", "low")
@@ -322,7 +329,7 @@ def test_a_lost_finding_never_softens_a_negative_verdict():
         out = fz.review_result(
             ExecResult(answer=json.dumps(payload), structured=payload),
             Meta(),
-            [],
+            _COMPLETE,
             fakeplugin.make_plugin(),
         )
         assert (out["verdict"], out["confidence"]) == (verdict, "high"), verdict
@@ -335,7 +342,7 @@ def test_an_unusable_findings_container_stops_a_pass_verdict():
     out = fz.review_result(
         ExecResult(answer=json.dumps(payload), structured=payload),
         Meta(),
-        [],
+        _COMPLETE,
         fakeplugin.make_plugin(),
     )
     assert (out["verdict"], out["confidence"]) == ("unknown", "low")
@@ -353,7 +360,7 @@ def test_a_surviving_finding_does_not_disturb_the_verdict():
     out = fz.review_result(
         ExecResult(answer=json.dumps(payload), structured=payload),
         Meta(),
-        [],
+        _COMPLETE,
         fakeplugin.make_plugin(),
     )
     assert (out["verdict"], out["confidence"], out["summary"]) == ("pass", "high", "Looks fine")
@@ -365,13 +372,13 @@ def test_a_surviving_finding_does_not_disturb_the_verdict():
 
 
 def test_partial_coverage_and_a_lost_finding_are_reported_as_separate_causes():
-    """They are opposite axes - the model did not see everything, versus amicus could not
-    relay what it said - so neither sentence may stand in for the other."""
+    """They are opposite axes - the review was not complete, versus amicus could not relay
+    what the backend said - so neither sentence may stand in for the other."""
     payload = _structured(verdict="pass", findings=["junk"])
     out = fz.review_result(
         ExecResult(answer=json.dumps(payload), structured=payload),
         Meta(),
-        ["truncated"],
+        _TRUNCATED,
         fakeplugin.make_plugin(),
     )
     assert (out["verdict"], out["confidence"]) == ("unknown", "low")
@@ -384,7 +391,7 @@ def test_adversarial_review_folds_findings_loss_the_same_way():
     out = fz.adversarial_result(
         ExecResult(answer=json.dumps(payload), structured=payload),
         Meta(),
-        [],
+        _COMPLETE,
         fakeplugin.make_plugin(),
     )
     assert (out["verdict"], out["confidence"]) == ("unknown", "low")
@@ -399,7 +406,7 @@ def test_an_explicit_null_findings_member_stops_a_pass_verdict():
     out = fz.review_result(
         ExecResult(answer=json.dumps(payload), structured=payload),
         Meta(),
-        [],
+        _COMPLETE,
         fakeplugin.make_plugin(),
     )
     assert (out["verdict"], out["confidence"]) == ("unknown", "low")
@@ -415,7 +422,7 @@ def test_an_omitted_findings_member_stops_a_pass_verdict():
     out = fz.review_result(
         ExecResult(answer=json.dumps(payload), structured=payload),
         Meta(),
-        [],
+        _COMPLETE,
         fakeplugin.make_plugin(),
     )
     assert (out["verdict"], out["confidence"]) == ("unknown", "low")
@@ -443,7 +450,7 @@ def test_an_unreadable_confidence_is_reported_as_unknown_not_invented():
         out = fz.review_result(
             ExecResult(answer=json.dumps(payload), structured=payload),
             Meta(),
-            [],
+            _COMPLETE,
             fakeplugin.make_plugin(),
         )
         assert out["confidence"] == "unknown", label
@@ -460,7 +467,7 @@ def test_an_unreadable_confidence_never_disturbs_the_verdict():
         out = fz.review_result(
             ExecResult(answer=json.dumps(payload), structured=payload),
             Meta(),
-            [],
+            _COMPLETE,
             fakeplugin.make_plugin(),
         )
         assert (out["verdict"], out["confidence"]) == (verdict, "unknown"), verdict
@@ -475,7 +482,7 @@ def test_a_reported_low_confidence_is_not_reported_as_unknown():
     out = fz.review_result(
         ExecResult(answer=json.dumps(payload), structured=payload),
         Meta(),
-        [],
+        _COMPLETE,
         fakeplugin.make_plugin(),
     )
     assert (out["verdict"], out["confidence"]) == ("pass", "low")
@@ -491,7 +498,7 @@ def test_a_fold_still_states_low_over_an_unreadable_confidence():
     partial = fz.review_result(
         ExecResult(answer=json.dumps(payload), structured=payload),
         Meta(),
-        ["truncated"],
+        _TRUNCATED,
         fakeplugin.make_plugin(),
     )
     assert (partial["verdict"], partial["confidence"]) == ("unknown", "low")
@@ -500,7 +507,7 @@ def test_a_fold_still_states_low_over_an_unreadable_confidence():
     out = fz.review_result(
         ExecResult(answer=json.dumps(lost), structured=lost),
         Meta(),
-        [],
+        _COMPLETE,
         fakeplugin.make_plugin(),
     )
     assert (out["verdict"], out["confidence"]) == ("unknown", "low")
@@ -512,7 +519,7 @@ def test_adversarial_review_declines_to_invent_a_confidence_the_same_way():
     out = fz.adversarial_result(
         ExecResult(answer=json.dumps(payload), structured=payload),
         Meta(),
-        [],
+        _COMPLETE,
         fakeplugin.make_plugin(),
     )
     assert (out["verdict"], out["confidence"]) == ("concerns", "unknown")
@@ -529,7 +536,7 @@ def test_confidence_is_lowered_only_where_the_verdict_is_withheld():
         out = fz.review_result(
             ExecResult(answer=json.dumps(payload), structured=payload),
             Meta(),
-            ["truncated", "redacted"],
+            Coverage(status="partial", omission_reasons=["truncated", "redacted"]),
             fakeplugin.make_plugin(),
         )
         assert (out["verdict"], out["confidence"]) == (verdict, "high"), verdict
@@ -539,6 +546,9 @@ def test_confidence_is_lowered_only_where_the_verdict_is_withheld():
         verdict="pass", confidence="high", findings=[{"title": "t", "category": "sec"}]
     )
     out = fz.review_result(
-        ExecResult(answer=json.dumps(kept), structured=kept), Meta(), [], fakeplugin.make_plugin()
+        ExecResult(answer=json.dumps(kept), structured=kept),
+        Meta(),
+        _COMPLETE,
+        fakeplugin.make_plugin(),
     )
     assert (out["verdict"], out["confidence"]) == ("pass", "high")

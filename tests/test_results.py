@@ -50,8 +50,83 @@ def test_paid_tool_discriminators():
     )
     assert r.ConsultResult(summary="s", meta=Meta()).tool == "amicus_consult"
     assert r.DelegateResult(summary="s", diff=None, meta=Meta()).tool == "amicus_delegate"
-    review = r.ReviewResult(summary="s", verdict="pass", confidence="high", meta=Meta())
+    review = r.ReviewResult(
+        summary="s",
+        verdict="pass",
+        confidence="high",
+        coverage=r.Coverage(status="complete"),
+        meta=Meta(),
+    )
     assert review.review_status == "completed"
+
+
+def test_coverage_rejects_an_internally_inconsistent_disclosure():
+    """#65: no construction path may publish a `complete` that omitted something, or counts
+    that do not add up, because a client branches on these fields."""
+    everything = r.Coverage(
+        status="partial",
+        untracked_files_detected=3,
+        untracked_files_included=1,
+        untracked_files_omitted=2,
+        omission_reasons=[
+            "untracked_omitted",
+            "tree_changed_during_gather",
+            "truncated",
+            "redacted",
+            "focused",
+        ],
+        redaction=r.RedactionSummary(
+            withheld_paths=[".env"], masked_paths=["a.py"], inline_masks=2
+        ),
+    )
+    assert everything.redaction is not None and everything.untracked_files_omitted == 2
+    counts = {"untracked_files_detected": 0, "untracked_files_included": 0}
+    for bad in (
+        {"status": "complete", "omission_reasons": ["truncated"]},
+        {"status": "partial"},
+        {"status": "partial", "omission_reasons": ["not_a_reason"]},
+        {"status": "partial", "omission_reasons": ["truncated", "truncated"]},
+        {"status": "partial", "omission_reasons": ["redacted", "truncated"]},
+        {"status": "complete", "untracked_files_detected": 1},
+        {
+            "status": "partial",
+            "untracked_files_detected": 2,
+            "untracked_files_included": 0,
+            "untracked_files_omitted": 1,
+            "omission_reasons": ["untracked_omitted"],
+        },
+        {
+            "status": "complete",
+            "untracked_files_detected": 0,
+            "untracked_files_included": 1,
+            "untracked_files_omitted": -1,
+        },
+        {
+            **counts,
+            "status": "partial",
+            "untracked_files_omitted": 0,
+            "omission_reasons": ["untracked_omitted"],
+        },
+        {
+            "status": "complete",
+            "untracked_files_detected": 1,
+            "untracked_files_included": 0,
+            "untracked_files_omitted": 1,
+        },
+        {"status": "partial", "omission_reasons": ["untracked_omitted"]},
+        {"status": "partial", "omission_reasons": ["tree_changed_during_gather"]},
+        {"status": "complete", "redaction": {"withheld_paths": [".env"]}},
+    ):
+        with pytest.raises(ValueError):
+            r.Coverage(**bad)
+    for bad in (
+        {},
+        {"withheld_paths": ["a.py"], "masked_paths": ["a.py"], "inline_masks": 1},
+        {"masked_paths": ["a.py"], "inline_masks": 0},
+        {"withheld_paths": [".env"], "inline_masks": 1},
+    ):
+        with pytest.raises(ValueError):
+            r.RedactionSummary(**bad)
 
 
 def test_job_result_schema_is_an_opaque_union_over_the_paid_tools():
@@ -66,11 +141,23 @@ def test_success_payloads_validate_against_their_schemas():
         (r.CONSULT_RESULT_SCHEMA, r.ConsultResult(summary="s", meta=meta)),
         (
             r.REVIEW_RESULT_SCHEMA,
-            r.ReviewResult(summary="s", verdict="concerns", confidence="low", meta=meta),
+            r.ReviewResult(
+                summary="s",
+                verdict="concerns",
+                confidence="low",
+                coverage=r.Coverage(status="complete"),
+                meta=meta,
+            ),
         ),
         (
             r.ADVERSARIAL_RESULT_SCHEMA,
-            r.AdversarialReviewResult(summary="s", verdict="fail", confidence="high", meta=meta),
+            r.AdversarialReviewResult(
+                summary="s",
+                verdict="fail",
+                confidence="high",
+                coverage=r.Coverage(status="complete"),
+                meta=meta,
+            ),
         ),
         (r.DELEGATE_RESULT_SCHEMA, r.DelegateResult(summary="s", diff="d", meta=meta)),
         (
@@ -88,7 +175,13 @@ def test_success_payloads_validate_against_their_schemas():
             ),
         ),
     ]
-    adv = r.AdversarialReviewResult(summary="s", verdict="fail", confidence="high", meta=meta)
+    adv = r.AdversarialReviewResult(
+        summary="s",
+        verdict="fail",
+        confidence="high",
+        coverage=r.Coverage(status="complete"),
+        meta=meta,
+    )
     assert adv.review_status == "completed" and adv.context_summary is None
     not_run = r.AdversarialReviewResult(
         summary="s",
@@ -96,6 +189,7 @@ def test_success_payloads_validate_against_their_schemas():
         confidence="low",
         review_status="not_run",
         context_summary=ContextSummary(files_changed=0),
+        coverage=r.Coverage(status="complete"),
         meta=meta,
     )
     assert not_run.review_status == "not_run"

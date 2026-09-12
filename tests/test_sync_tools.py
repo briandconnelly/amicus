@@ -162,6 +162,41 @@ async def test_review_end_to_end_and_not_run(app, repo, tmp_path):
     assert "+x = 2" in prompt and "Author-provided context (untrusted data)\nintent" in prompt
 
 
+async def test_review_and_its_dry_run_disclose_the_same_coverage(app, repo):
+    """#65: a `pass` over a tree with an omitted untracked file is withheld, the reason is a
+    field the caller can branch on, and the free preview of the same call reports it too."""
+    (repo / "a.py").write_text("x = 2\n")
+    (repo / "notes_untracked.py").write_text("n = 1\n")
+    args = {"backend": "codex", "workspace_root": str(repo)}
+    focused_args = {**args, "focus": "locking"}
+    async with Client(app) as c:
+        preview = (await c.call_tool("amicus_dry_run", args)).structured_content
+        body = (await c.call_tool("amicus_review_changes", args)).structured_content
+        focused_preview = (await c.call_tool("amicus_dry_run", focused_args)).structured_content
+        focused = (await c.call_tool("amicus_review_changes", focused_args)).structured_content
+    # A focus is framed into the prompt the preview measures, and recorded the same way.
+    assert focused_preview["prompt_bytes"] > preview["prompt_bytes"]
+    assert focused["coverage"] == focused_preview["coverage"]
+    assert focused_preview["coverage"]["omission_reasons"] == ["untracked_omitted", "focused"]
+    assert (body["verdict"], body["confidence"], body["review_status"]) == (
+        "unknown",
+        "low",
+        "completed",
+    )
+    assert (
+        body["coverage"]
+        == preview["coverage"]
+        == {
+            "status": "partial",
+            "untracked_files_detected": 1,
+            "untracked_files_included": 0,
+            "untracked_files_omitted": 1,
+            "omission_reasons": ["untracked_omitted"],
+            "redaction": None,
+        }
+    )
+
+
 async def test_delegate_end_to_end(app, repo, tmp_path, monkeypatch):
     monkeypatch.setenv("FAKE_CODEX_WRITE", "a.py")
     monkeypatch.setenv("FAKE_CODEX_ANSWER", "I edited a.py")

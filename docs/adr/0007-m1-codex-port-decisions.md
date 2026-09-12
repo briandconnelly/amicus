@@ -1,6 +1,7 @@
 # ADR 0007: What the M1 Codex port kept, changed, and dropped
 
-**Status:** Accepted (2026-09-05, M1)
+**Status:** Accepted (2026-09-05, M1).
+Its coverage clause is superseded by [ADR 0019](0019-review-results-disclose-coverage-as-a-field.md) (2026-09-12); the other decisions stand.
 
 ## Context
 

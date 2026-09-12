@@ -27,6 +27,7 @@ from amicus.schemas.fingerprint import FINGERPRINT, RESULT_FORMAT
 from amicus.schemas.results import (
     AdversarialReviewResult,
     ConsultResult,
+    Coverage,
     DelegateResult,
     JobListResult,
     RawResponse,
@@ -77,6 +78,12 @@ def _stored_envelopes() -> dict[str, dict[str, Any]]:
                 confidence="high",
                 review_status="completed",
                 context_summary=ContextSummary(files_changed=1, lines_added=2, lines_removed=3),
+                coverage=Coverage(
+                    status="complete",
+                    untracked_files_detected=0,
+                    untracked_files_included=0,
+                    untracked_files_omitted=0,
+                ),
                 raw_response=_raw(),
                 meta=_populated(
                     context_summary=ContextSummary(files_changed=1, lines_added=2, lines_removed=3)
@@ -90,6 +97,12 @@ def _stored_envelopes() -> dict[str, dict[str, Any]]:
                 confidence="medium",
                 review_status="completed",
                 context_summary=ContextSummary(files_changed=1, lines_added=2, lines_removed=3),
+                coverage=Coverage(
+                    status="complete",
+                    untracked_files_detected=0,
+                    untracked_files_included=0,
+                    untracked_files_omitted=0,
+                ),
                 raw_response=_raw(),
                 meta=_populated(
                     context_summary=ContextSummary(files_changed=1, lines_added=2, lines_removed=3),
@@ -109,6 +122,7 @@ def _stored_envelopes() -> dict[str, dict[str, Any]]:
                 verdict="unknown",
                 confidence="low",
                 review_status="completed",
+                coverage=Coverage(status="partial", omission_reasons=["truncated", "redacted"]),
                 raw_response=_raw(),
                 meta=_populated(
                     workspace_source="cwd",
