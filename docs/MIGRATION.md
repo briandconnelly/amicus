@@ -127,6 +127,12 @@ Most amicus tools take `backend` as a required parameter (no default); pick `"co
 
 ## Behavior deltas
 
+Review results and `amicus_dry_run` carry a top-level `coverage` object, in the shape `codex_review_changes` returns (#65).
+Its `status`, untracked counts, `omission_reasons` and `redaction` read as they do there, and it adds one reason of amicus's own: `focused`, for a call that passed `focus`.
+Adversarial reviews carry it too, with null untracked counts when no scope was attached.
+`amicus_dry_run` now accepts `focus` and reports `coverage` and `max_input_bytes`, so a preview reports the same omissions the paid call will.
+It still has no `redacted_paths_count` or top-level `deadline_advisory`: count `meta.redacted_paths` instead, and read the advisory from `warnings`.
+
 Claude adversarial reviews (sync and async) now default to `config_mode="safe"`, isolating them from inherited Claude instructions that can displace the JSON critique contract (#64).
 When `AMICUS_CLAUDE_CONFIG_MODE=bare`, the default remains `bare` so API-key-only installations keep their authentication path.
 Consult and review-changes calls still use the configured default, and an explicit `backend_options.config_mode` overrides the default on every verb.
