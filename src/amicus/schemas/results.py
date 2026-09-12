@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any, Literal, get_args
 
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 
 from amicus.schemas import publish
 from amicus.schemas.codes import ErrorCode  # noqa: TC001 - pydantic needs this at runtime
@@ -43,6 +43,15 @@ FindingReason = Literal[
     "invalid_entry",
     "invalid_container",
     "missing_findings",
+]
+CoverageStatus = Literal["complete", "partial"]
+# Why the model did not see everything in scope, in this fixed order (review.build_coverage).
+CoverageReason = Literal[
+    "untracked_omitted",
+    "tree_changed_during_gather",
+    "truncated",
+    "redacted",
+    "focused",
 ]
 
 PAID_TOOLS: tuple[str, ...] = (
@@ -117,6 +126,108 @@ class RawResponse(BaseModel):
     model: str | None = None
 
 
+# Inlined into three tools' output schemas each, so every byte here is paid three times in
+# tools/list (tests/test_discovery_cost.py). Each sentence guards a misreading; add none
+# that does not.
+_COVERAGE_DESC = (
+    "How complete this review was. `partial` when any omission_reasons entry applies. "
+    "`complete` means nothing in scope was left out of what amicus assembled; it does not "
+    "mean every line was examined, or on a not_run result that anything was. A `pass` over "
+    "partial coverage is delivered as unknown/low; a `fail` or `concerns` is not, so check "
+    "this on those too."
+)
+_OMISSION_REASONS_DESC = (
+    "Why it was not complete, in fixed order. untracked_omitted: untracked files in scope "
+    "were not sent. tree_changed_during_gather: the tree changed while amicus read it "
+    "(best-effort; its absence proves nothing). truncated: the diff was cut at the byte cap. "
+    "redacted: secrets were withheld or masked (see redaction). focused: `focus` narrowed "
+    "the review; nothing was withheld."
+)
+_UNTRACKED_DESC = (
+    "Untracked files in the review's paths: detected = included (sent) + omitted. All three "
+    "are null outside scope=working_tree."
+)
+_REDACTION_DESC = (
+    "The `redacted` reason by file. Can be null beside it when the redaction fell only in "
+    "content the byte cap cut; meta.redacted_paths lists every redacted file."
+)
+_WITHHELD_DESC = "Changes withheld whole (secret-looking path); the backend did not see them."
+_MASKED_DESC = "Sent with secret-looking values masked."
+publish.KEPT_DESCRIPTIONS.update(
+    {
+        _COVERAGE_DESC,
+        _OMISSION_REASONS_DESC,
+        _UNTRACKED_DESC,
+        _REDACTION_DESC,
+        _WITHHELD_DESC,
+        _MASKED_DESC,
+    }
+)
+
+
+class RedactionSummary(BaseModel):
+    """The `redacted` reason broken down (codex-in-claude #433): a withheld file's changes
+    never reached the backend, a masked file's did with values replaced."""
+
+    model_config = ConfigDict(extra="forbid")
+    withheld_paths: list[str] = Field(default_factory=list, description=_WITHHELD_DESC)
+    masked_paths: list[str] = Field(default_factory=list, description=_MASKED_DESC)
+    inline_masks: int = Field(default=0, ge=0)
+
+    @model_validator(mode="after")
+    def _check_invariants(self) -> RedactionSummary:
+        if not (self.withheld_paths or self.masked_paths):
+            raise ValueError("redaction must name at least one withheld or masked path")
+        if set(self.withheld_paths) & set(self.masked_paths):
+            raise ValueError("withheld_paths and masked_paths must be disjoint")
+        if self.masked_paths and self.inline_masks < len(self.masked_paths):
+            raise ValueError("inline_masks must be >= len(masked_paths)")
+        if not self.masked_paths and self.inline_masks:
+            raise ValueError("inline_masks must be 0 when masked_paths is empty")
+        return self
+
+
+class Coverage(BaseModel):
+    """How complete a review was (issue #65; codex-in-claude's `Coverage` plus amicus's
+    `focused`). Not only "what the backend was shown": `focused` withholds nothing, and
+    `tree_changed_during_gather` is a consistency caveat. The invariants below make every
+    field agree with every other, because a client branches on them without reading
+    `summary`, and delivery trusts whatever validates."""
+
+    model_config = ConfigDict(extra="forbid")
+    status: CoverageStatus
+    untracked_files_detected: int | None = Field(default=None, ge=0, description=_UNTRACKED_DESC)
+    untracked_files_included: int | None = Field(default=None, ge=0)
+    untracked_files_omitted: int | None = Field(default=None, ge=0)
+    omission_reasons: list[CoverageReason] = Field(
+        default_factory=list, description=_OMISSION_REASONS_DESC
+    )
+    redaction: RedactionSummary | None = Field(default=None, description=_REDACTION_DESC)
+
+    @model_validator(mode="after")
+    def _check_invariants(self) -> Coverage:
+        reasons = self.omission_reasons
+        if (self.status == "partial") != bool(reasons):
+            raise ValueError("coverage.status must be 'partial' iff omission_reasons is non-empty")
+        if reasons != [r for r in get_args(CoverageReason) if r in reasons]:
+            raise ValueError("omission_reasons must be unique and in their fixed order")
+        detected = self.untracked_files_detected
+        included = self.untracked_files_included
+        omitted = self.untracked_files_omitted
+        if detected is None or included is None or omitted is None:
+            if (detected, included, omitted) != (None, None, None):
+                raise ValueError("the untracked counts must be all set or all null")
+            if "tree_changed_during_gather" in reasons:
+                raise ValueError("tree_changed_during_gather needs the working_tree counts")
+        elif detected != included + omitted:
+            raise ValueError("untracked_files_detected must equal included + omitted")
+        if ("untracked_omitted" in reasons) != bool(omitted):
+            raise ValueError("untracked_omitted is listed exactly when files were omitted")
+        if self.redaction is not None and "redacted" not in reasons:
+            raise ValueError("coverage.redaction requires 'redacted' in omission_reasons")
+        return self
+
+
 class _ModelResult(SuccessBase):
     summary: str
     findings: list[Finding] = Field(default_factory=list)
@@ -139,6 +250,7 @@ class ReviewResult(_ModelResult):
     confidence: Confidence = Field(description=_CONFIDENCE_DESC)
     review_status: ReviewStatus = "completed"
     context_summary: ContextSummary | None = None
+    coverage: Coverage = Field(description=_COVERAGE_DESC)
 
 
 class AdversarialReviewResult(_ModelResult):
@@ -147,6 +259,7 @@ class AdversarialReviewResult(_ModelResult):
     confidence: Confidence = Field(description=_CONFIDENCE_DESC)
     review_status: ReviewStatus = "completed"
     context_summary: ContextSummary | None = None
+    coverage: Coverage = Field(description=_COVERAGE_DESC)
 
 
 class DelegateResult(_ModelResult):
@@ -209,6 +322,15 @@ class JobListResult(SuccessBase):
 
 # --- previews -------------------------------------------------------------------------
 
+_DRY_RUN_COVERAGE_DESC = (
+    "The coverage the paid review would report for these arguments; the tree can still "
+    "change before you spend."
+)
+_MAX_INPUT_BYTES_DESC = (
+    "The paid call's byte cap: the diff is cut beyond it (`truncated`), caller text rejected."
+)
+publish.KEPT_DESCRIPTIONS.update({_DRY_RUN_COVERAGE_DESC, _MAX_INPUT_BYTES_DESC})
+
 
 class DryRunResult(SuccessBase):
     tool: Literal["amicus_dry_run"] = "amicus_dry_run"
@@ -219,6 +341,8 @@ class DryRunResult(SuccessBase):
     commit: str | None = None
     paths: list[str] | None = None
     prompt_bytes: int
+    coverage: Coverage = Field(description=_DRY_RUN_COVERAGE_DESC)
+    max_input_bytes: int = Field(description=_MAX_INPUT_BYTES_DESC)
     context_summary: ContextSummary | None = None
     model: str | None = None
     reasoning_effort: str | None = None

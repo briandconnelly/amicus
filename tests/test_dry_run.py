@@ -102,6 +102,61 @@ async def test_dry_run_fails_where_the_review_would(app, tmp_path, repo):
     }
 
 
+async def test_dry_run_discloses_what_the_paid_review_would_omit(app, repo):
+    """#65: the free preview says, machine-readably, that an untracked file would be skipped,
+    both when the tracked change would still be reviewed and when nothing else would be."""
+    (repo / "notes_untracked.py").write_text("n = 1\n")
+    omitted = {
+        "status": "partial",
+        "untracked_files_detected": 1,
+        "untracked_files_included": 0,
+        "untracked_files_omitted": 1,
+        "omission_reasons": ["untracked_omitted"],
+        "redaction": None,
+    }
+    async with Client(app) as c:
+        schema = await _schema(c, "amicus_dry_run")
+        untracked_only = (
+            await c.call_tool("amicus_dry_run", {"backend": "codex", "workspace_root": str(repo)})
+        ).structured_content
+        (repo / "a.py").write_text("x = 2\n")
+        with_tracked = (
+            await c.call_tool("amicus_dry_run", {"backend": "codex", "workspace_root": str(repo)})
+        ).structured_content
+        included = (
+            await c.call_tool(
+                "amicus_dry_run",
+                {"backend": "codex", "workspace_root": str(repo), "untracked": "include"},
+            )
+        ).structured_content
+    for body in (untracked_only, with_tracked, included):
+        Draft202012Validator(schema).validate(body)
+    assert untracked_only["would_call_model"] is False and untracked_only["coverage"] == omitted
+    assert with_tracked["would_call_model"] is True and with_tracked["coverage"] == omitted
+    assert included["coverage"] == {
+        "status": "complete",
+        "untracked_files_detected": 1,
+        "untracked_files_included": 1,
+        "untracked_files_omitted": 0,
+        "omission_reasons": [],
+        "redaction": None,
+    }
+
+
+async def test_dry_run_reports_the_input_cap_the_paid_call_enforces(tmp_path, repo, monkeypatch):
+    monkeypatch.setenv("AMICUS_STATE_DIR", str(tmp_path / "state"))
+    monkeypatch.setenv("AMICUS_MAX_INPUT_BYTES", "123457")
+    settings = config.settings()
+    capped = server.create_app(
+        settings, BackendRegistry.load(settings.enabled_backends, entry_points=())
+    )
+    async with Client(capped) as c:
+        body = (
+            await c.call_tool("amicus_dry_run", {"backend": "codex", "workspace_root": str(repo)})
+        ).structured_content
+    assert body["max_input_bytes"] == 123457
+
+
 async def test_delegate_dry_run(app, repo, tmp_path):
     head = subprocess.run(
         ["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True

@@ -1,5 +1,5 @@
-"""Review-kind gathering (zero spend) and the coverage fold (ported from codex-in-claude
-`orchestration.py`; the Coverage object itself is not part of the amicus surface)."""
+"""Review-kind gathering (zero spend), the coverage disclosure, and the fold that reads it
+(ported from codex-in-claude `orchestration.py`; issue #65 restored the disclosure)."""
 
 from __future__ import annotations
 
@@ -11,7 +11,10 @@ from amicus.errors import error_envelope
 from amicus.schemas.envelope import ContextSummary, ErrorDetail, InvalidArgument, dump_success
 from amicus.schemas.results import (
     AdversarialReviewResult,
+    Coverage,
+    CoverageReason,
     FindingsDiagnostics,
+    RedactionSummary,
     ReviewResult,
     ReviewScope,
     Untracked,
@@ -60,27 +63,64 @@ def gitdiff_error(exc: Exception, meta: Meta, plugin: BackendPlugin) -> dict[str
     )
 
 
-def coverage_reasons(scope: str, diff: DiffResult) -> list[str]:
-    """Why the model did not see everything in scope, in a fixed order."""
-    reasons: list[str] = []
-    if scope == "working_tree":
-        omitted = max(0, (diff.untracked_detected or 0) - diff.untracked_included)
-        if omitted > 0:
-            reasons.append("untracked_omitted")
-        if diff.tree_changed_during_gather:
-            reasons.append("tree_changed_during_gather")
-    if diff.truncated:
-        reasons.append("truncated")
-    if diff.redacted_paths or diff.withheld_paths or diff.masked_paths or diff.inline_masks:
-        reasons.append("redacted")
-    return reasons
+def is_focused(spec: RunSpec) -> bool:
+    return bool(spec.focus and spec.focus.strip())
+
+
+def build_coverage(scope: str | None, diff: DiffResult | None, *, focused: bool) -> Coverage:
+    """What the model was shown, from the gathered diff and the call's focus (issue #65).
+
+    The one source for both the disclosure and apply_coverage's fold, so the two cannot
+    disagree. `diff` is None only for a critique with no attached scope: nothing was
+    gathered to omit, so only a focus can make it partial. The untracked counts are null
+    outside working_tree, where untracked files are out of scope, and gather_diff reports
+    `included <= detected` by construction (one enumeration, or none included)."""
+    reasons: list[CoverageReason] = []
+    detected: int | None = None
+    included: int | None = None
+    omitted: int | None = None
+    redaction: RedactionSummary | None = None
+    if diff is not None:
+        if scope == "working_tree":
+            detected = diff.untracked_detected or 0
+            included = diff.untracked_included
+            omitted = detected - included
+            if omitted > 0:
+                reasons.append("untracked_omitted")
+            if diff.tree_changed_during_gather:
+                reasons.append("tree_changed_during_gather")
+        if diff.truncated:
+            reasons.append("truncated")
+        # The reason fires on any redaction signal, but the breakdown only from the split
+        # fields: redaction that fell wholly past the byte cap leaves them empty while
+        # redacted_paths still names the file, and no breakdown is invented for it.
+        split = bool(diff.withheld_paths or diff.masked_paths or diff.inline_masks)
+        if diff.redacted_paths or split:
+            reasons.append("redacted")
+        if split:
+            redaction = RedactionSummary(
+                withheld_paths=list(diff.withheld_paths),
+                masked_paths=list(diff.masked_paths),
+                inline_masks=diff.inline_masks,
+            )
+    if focused:
+        reasons.append("focused")
+    return Coverage(
+        status="partial" if reasons else "complete",
+        untracked_files_detected=detected,
+        untracked_files_included=included,
+        untracked_files_omitted=omitted,
+        omission_reasons=reasons,
+        redaction=redaction,
+    )
 
 
 def apply_coverage(
-    verdict: str, confidence: str, summary: str, reasons: list[str]
+    verdict: str, confidence: str, summary: str, coverage: Coverage
 ) -> tuple[str, str, str]:
     """A model `pass` over partly reviewed code is delivered as unknown/low with a caveat;
     a concrete fail/concerns stands."""
+    reasons = coverage.omission_reasons
     if reasons and verdict == "pass":
         return (
             "unknown",
@@ -124,7 +164,8 @@ def apply_findings_loss(
 
 
 def _not_run(spec: RunSpec, meta: Meta, diff: DiffResult) -> dict[str, Any]:
-    omitted = max(0, (diff.untracked_detected or 0) - diff.untracked_included)
+    coverage = build_coverage(spec.scope, diff, focused=is_focused(spec))
+    omitted = coverage.untracked_files_omitted or 0
     remedy = (
         'Re-run with untracked="include" to review them.'
         if spec.untracked == "exclude"
@@ -159,6 +200,7 @@ def _not_run(spec: RunSpec, meta: Meta, diff: DiffResult) -> dict[str, Any]:
                 confidence="low",
                 review_status="not_run",
                 context_summary=meta.context_summary,
+                coverage=coverage,
                 meta=meta,
             )
         )
@@ -169,6 +211,7 @@ def _not_run(spec: RunSpec, meta: Meta, diff: DiffResult) -> dict[str, Any]:
             confidence="low",
             review_status="not_run",
             context_summary=meta.context_summary,
+            coverage=coverage,
             meta=meta,
         )
     )

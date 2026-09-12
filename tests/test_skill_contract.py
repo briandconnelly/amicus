@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import get_args
 
 from amicus.orchestration import review as review_mod
-from amicus.schemas.results import Confidence, FindingReason, Verdict
+from amicus.schemas.results import Confidence, CoverageReason, FindingReason, Verdict
 
 _SKILL = Path(__file__).resolve().parents[1] / "skills" / "collaborating-with-amicus"
 _RESULTS_REF = (_SKILL / "references" / "reading-results.md").read_text(encoding="utf-8")
@@ -50,6 +50,7 @@ def _section(heading_contains: str) -> str:
 _VOCABULARY = {
     "Confidence": (Confidence, _section("`confidence`")),
     "Verdict": (Verdict, _section("Coverage")),
+    "CoverageReason": (CoverageReason, _section("Coverage")),
     "FindingReason": (FindingReason, _section("`findings_diagnostics`")),
 }
 
@@ -84,6 +85,12 @@ def test_an_unknown_confidence_is_documented_as_an_absence_not_a_low_rating():
     precisely the failure ADR 0016 exists to prevent."""
     assert 'Never read `confidence: "unknown"` as a low rating.' in _BINDING_RULES
     assert "It is the absence of a rating, not a low one." in _RESULTS_REF
+
+
+def test_the_coverage_field_is_named_in_the_binding_rules():
+    """#65: `coverage` is the machine-readable disclosure. Under ADR 0016 a signal named only
+    in reading-results.md does not bind, so the rules block must name it itself."""
+    assert "`coverage`" in _BINDING_RULES
 
 
 def test_the_high_confidence_misreading_is_a_rule_of_its_own():

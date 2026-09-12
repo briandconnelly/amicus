@@ -35,6 +35,7 @@ if TYPE_CHECKING:  # pragma: no cover
 
     from amicus.plugin import BackendPlugin
     from amicus.schemas.envelope import Meta
+    from amicus.schemas.results import Coverage
 
 _PROSE_KEYS = ("summary", "questions", "assumptions", "next_steps")
 _FINDING_PROSE_KEYS = ("title", "evidence", "suggestion")
@@ -218,7 +219,7 @@ def consult_result(result: ExecResult, meta: Meta) -> dict[str, Any]:
 
 
 def _parse_reviewed(
-    result: ExecResult, meta: Meta, reasons: list[str], plugin: BackendPlugin, noun: str
+    result: ExecResult, meta: Meta, coverage: Coverage, plugin: BackendPlugin, noun: str
 ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
     """Strict about SHAPE, lenient about FIELDS: exit-0 output that is not JSON, or not a
     JSON object, is a hard invalid_json/schema_violation error, never a prose downgrade.
@@ -251,7 +252,7 @@ def _parse_reviewed(
         _enum(s.get("verdict"), ("pass", "concerns", "fail", "unknown"), "unknown"),
         _enum(s.get("confidence"), ("low", "medium", "high"), "unknown"),
         _summary_of(s),
-        reasons,
+        coverage,
     )
     verdict, confidence, summary = review_mod.apply_findings_loss(
         verdict, confidence, summary, diagnostics
@@ -262,6 +263,7 @@ def _parse_reviewed(
         "confidence": confidence,
         "review_status": "completed",
         "context_summary": meta.context_summary,
+        "coverage": coverage,
         "findings": findings,
         "findings_diagnostics": diagnostics,
         "questions": _str_list(s.get("questions")),
@@ -273,20 +275,20 @@ def _parse_reviewed(
 
 
 def review_result(
-    result: ExecResult, meta: Meta, reasons: list[str], plugin: BackendPlugin
+    result: ExecResult, meta: Meta, coverage: Coverage, plugin: BackendPlugin
 ) -> dict[str, Any]:
-    error, fields = _parse_reviewed(result, meta, reasons, plugin, "review")
+    error, fields = _parse_reviewed(result, meta, coverage, plugin, "review")
     if error is not None:
         return error
     return dump_success(ReviewResult(**cast("dict[str, Any]", fields)))
 
 
 def adversarial_result(
-    result: ExecResult, meta: Meta, reasons: list[str], plugin: BackendPlugin
+    result: ExecResult, meta: Meta, coverage: Coverage, plugin: BackendPlugin
 ) -> dict[str, Any]:
     """The critique's envelope: the review shape (verdict, confidence, findings), the same
     strict/lenient rule, and the same coverage fold for an attached diff or a focus."""
-    error, fields = _parse_reviewed(result, meta, reasons, plugin, "critique")
+    error, fields = _parse_reviewed(result, meta, coverage, plugin, "critique")
     if error is not None:
         return error
     return dump_success(AdversarialReviewResult(**cast("dict[str, Any]", fields)))

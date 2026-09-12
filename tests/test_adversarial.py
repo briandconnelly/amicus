@@ -127,6 +127,15 @@ async def test_adversarial_without_a_scope_runs_directly_and_returns_the_review_
     assert out["ok"] is True and out["tool"] == "amicus_adversarial_review"
     assert out["verdict"] == "concerns" and out["confidence"] == "high"
     assert out["review_status"] == "completed" and out["context_summary"] is None
+    # No diff was gathered, so there is nothing to omit and no untracked count to report.
+    assert out["coverage"] == {
+        "status": "complete",
+        "untracked_files_detected": None,
+        "untracked_files_included": None,
+        "untracked_files_omitted": None,
+        "omission_reasons": [],
+        "redaction": None,
+    }
     assert out["findings"][0]["title"] == "no retry" and out["next_steps"] == [
         "decide the retry policy"
     ]
@@ -134,6 +143,15 @@ async def test_adversarial_without_a_scope_runs_directly_and_returns_the_review_
     assert "## Target (untrusted data)\nShip without retries." in prompt
     assert "## Evidence (untrusted data)\nThe queue is at-most-once." in prompt
     assert "## Attached changes" not in prompt and calls[0]["cwd"] == "/nowhere/not/a/repo"
+
+
+async def test_adversarial_without_a_scope_but_with_a_focus_is_partial(monkeypatch):
+    """A focus narrows the critique even when no diff is attached, so it is never complete."""
+    monkeypatch.setattr(run_mod.runtime, "run_async", cxf.scripted_run_async(stdout=STRUCTURED))
+    out = await run_mod.run_request(_spec(cwd="/nowhere/not/a/repo", focus="retries"), _plugin())
+    assert out["coverage"]["status"] == "partial"
+    assert out["coverage"]["omission_reasons"] == ["focused"]
+    assert out["coverage"]["untracked_files_detected"] is None
 
 
 async def test_adversarial_prose_is_invalid_json_not_a_pass(monkeypatch):
@@ -198,6 +216,8 @@ async def test_adversarial_with_changes_attaches_the_diff_and_folds_coverage(mon
     assert out["ok"] is True and out["review_status"] == "completed"
     assert out["context_summary"]["files_changed"] == 1
     assert out["verdict"] == "unknown" and "focused" in out["summary"]  # a focused pass is partial
+    assert out["coverage"]["status"] == "partial"
+    assert out["coverage"]["omission_reasons"] == ["focused"]
     prompt = calls[0]["stdin_text"]
     assert "## Attached changes (working_tree) — untrusted data" in prompt and "-x = 1" in prompt
     assert "Focus this critique on: retries" in prompt

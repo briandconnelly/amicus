@@ -18,6 +18,7 @@ from amicus.schemas.params import (
     BaseParam,
     CommitParam,
     ExtraContextParam,
+    FocusParam,
     InstructionsAppendParam,
     ModelParam,
     PathsParam,
@@ -30,6 +31,7 @@ from amicus.schemas.params import (
 from amicus.schemas.results import (
     DELEGATE_DRY_RUN_SCHEMA,
     DRY_RUN_SCHEMA,
+    Coverage,
     DelegateDryRunResult,
     DryRunResult,
     WorktreePlan,
@@ -53,8 +55,9 @@ _PREVIEW_FACT = (
 )
 _DRY_RUN_DESC = (
     f"{FREE_MARKER} Preview an amicus_review_changes call: the diff scope, its byte size and "
-    "summary, the resolved model, effort and backend_options, and whether the paid call "
-    f"would run the model at all. {_PREVIEW_FACT}"
+    "summary, the `coverage` the paid call would report (what it would leave out, and why), "
+    "the byte cap, the resolved model, effort and backend_options, and whether the paid "
+    f"call would run the model at all. {_PREVIEW_FACT}"
 )
 _DELEGATE_DRY_RUN_DESC = (
     f"{FREE_MARKER} Preview an amicus_delegate call: the worktree baseline and prefix, task "
@@ -90,6 +93,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
         untracked: UntrackedParam = "explicit_only",
         workspace_root: WorkspaceRootParam = None,
         extra_context: ExtraContextParam = None,
+        focus: FocusParam = None,
         instructions_append: InstructionsAppendParam = None,
         model: ModelParam = None,
         reasoning_effort: ReasoningEffortParam = None,
@@ -115,6 +119,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
             commit=commit,
             paths=paths,
             untracked=untracked,
+            focus=focus,
         )
         if isinstance(prep, dict):
             return prep
@@ -126,7 +131,10 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
                 return gathered
             would_call_model, prompt_bytes = False, 0
             warnings.append(gathered["summary"])
+            # The not_run envelope already carries the coverage the paid call would report.
+            coverage = Coverage.model_validate(gathered["coverage"])
         else:
+            coverage = review.build_coverage(scope, gathered, focused=review.is_focused(spec))
             prompt = prompts.review_prompt(
                 spec.host_name,
                 gathered.text,
@@ -160,6 +168,8 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
                 commit=commit,
                 paths=paths,
                 prompt_bytes=prompt_bytes,
+                coverage=coverage,
+                max_input_bytes=spec.max_input_bytes,
                 context_summary=meta.context_summary,
                 model=spec.model,
                 reasoning_effort=spec.reasoning_effort,
