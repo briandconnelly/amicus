@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking (`FINGERPRINT` `schema-17`).** `tools/list` is 10,474 bytes smaller (105,485 to
+  95,011 on the `all` profile as the stdio transport writes it for a handshake-era client, the
+  era both captured hosts negotiate; 26,046 to 23,800 o200k_base tokens), with no tool,
+  parameter, accepted input value, runtime behaviour or error changed (#41); the one output
+  contract that narrows is named below. Each tool's schema is self-contained on the wire, so
+  the six shared parameter contracts (`workspace_root`, `reasoning_effort`, `backend_options`,
+  `instructions_append`, `extra_context`, `idempotency_key`) were repeated up to fifteen times
+  per catalog; their inline descriptions are now a one-line summary plus the `amicus://params`
+  pointer, and the elaboration lives in that resource's `full` text, which was already the
+  authoritative contract. The `default: null` pydantic stamps on every optional parameter is
+  stripped at list time (a FastMCP transform, so `surface_digest` and the wire agree);
+  non-null defaults such as `detail: "summary"` stay. The error-envelope and result-meta
+  pointer descriptions on every `outputSchema` are one clause each, and the four `_async`
+  tools' `follow_up` is published as the one action it ever carries (`poll_job_status` via
+  `amicus_job_status`) instead of the whole repair-step enum. The discovery-cost ratchet now
+  measures the result body of a real `amicus.server` subprocess, taken off the response line
+  byte for byte, and `python -m amicus.manifest --measure --tokens` (`uv sync --group
+  measure`) reports reference-encoding token counts of that text in place of the byte/4
+  proxy. `RESULT_FORMAT` stays 5:
+  no stored result shape moved.
 - **Breaking (`FINGERPRINT` `schema-16`, `RESULT_FORMAT` 5).** Review and adversarial-review
   results, and `amicus_dry_run`, now carry a top-level `coverage` object (#65): `status`,
   untracked-file counts, `omission_reasons` and a `redaction` breakdown, in the siblings' shape
