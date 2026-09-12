@@ -45,7 +45,9 @@ FindingReason = Literal[
     "missing_findings",
 ]
 CoverageStatus = Literal["complete", "partial"]
-# Why the model did not see everything in scope, in this fixed order (review.build_coverage).
+# Why a review was not complete, in this fixed order (review.build_coverage). Not every
+# reason withholds input: `focused` narrows the ask, `tree_changed_during_gather` is a
+# consistency caveat (ADR 0019).
 CoverageReason = Literal[
     "untracked_omitted",
     "tree_changed_during_gather",

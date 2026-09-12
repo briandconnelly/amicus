@@ -68,7 +68,7 @@ def is_focused(spec: RunSpec) -> bool:
 
 
 def build_coverage(scope: str | None, diff: DiffResult | None, *, focused: bool) -> Coverage:
-    """What the model was shown, from the gathered diff and the call's focus (issue #65).
+    """How complete the review was, from the gathered diff and the call's focus (issue #65).
 
     The one source for both the disclosure and apply_coverage's fold, so the two cannot
     disagree. `diff` is None only for a critique with no attached scope: nothing was
@@ -140,9 +140,10 @@ def apply_findings_loss(
 ) -> tuple[str, str, str]:
     """A finding amicus could not carry may not be delivered as silence (issue #38).
 
-    The opposite axis from `apply_coverage`: there the model did not see everything, here
-    it did and amicus could not relay what it said. So this fold runs after that one and
-    speaks for itself rather than joining its reasons. A `fail` or `concerns` stands, with
+    The opposite axis from `apply_coverage`: there the review was not complete, here the
+    backend ran over what it was given and amicus could not relay what it said. So this
+    fold runs after that one and speaks for itself rather than joining its reasons. A
+    `fail` or `concerns` stands, with
     its confidence intact - missing output does not refute a negative the model did
     reach. Anything else cannot be delivered as clean."""
     if diagnostics is None or not (_REPRESENTATION_LOSS & set(diagnostics.reasons)):

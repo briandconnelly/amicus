@@ -372,8 +372,8 @@ def test_a_surviving_finding_does_not_disturb_the_verdict():
 
 
 def test_partial_coverage_and_a_lost_finding_are_reported_as_separate_causes():
-    """They are opposite axes - the model did not see everything, versus amicus could not
-    relay what it said - so neither sentence may stand in for the other."""
+    """They are opposite axes - the review was not complete, versus amicus could not relay
+    what the backend said - so neither sentence may stand in for the other."""
     payload = _structured(verdict="pass", findings=["junk"])
     out = fz.review_result(
         ExecResult(answer=json.dumps(payload), structured=payload),
