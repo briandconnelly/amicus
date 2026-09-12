@@ -11,7 +11,6 @@ client has ever received (issue #45).
 from __future__ import annotations
 
 import json
-import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -20,12 +19,7 @@ import pytest
 from fastmcp import Client
 from fastmcp.client.transports import StdioTransport
 from mcp_types.methods import CACHEABLE_METHODS
-from tests.conftest import (
-    ENV_PREFIXES,
-    NEVER_SPAWN_CLAUDE,
-    NEVER_SPAWN_CODEX,
-    NEVER_SPAWN_KIMI,
-)
+from tests.conftest import NEVER_SPAWN_CODEX, spawned_server_env
 
 from amicus import config, server
 from amicus.registry import BackendRegistry
@@ -41,21 +35,9 @@ _ENVELOPE_FIELDS = ("resultType", "ttlMs", "cacheScope")
 
 
 def _server_env() -> dict[str, str]:
-    """A minimal environment for the spawned server, matching what `clean_env` gives an
-    in-process test: every prefix in `ENV_PREFIXES` stripped, then the guard's unusable
-    backend binaries restored (the autouse fixtures monkeypatch THIS process, not a child).
-
-    `AMICUS_` alone is not enough. `CODEX_IN_CLAUDE_LOG_FILE` and `MOONBRIDGE_LOG_FILE` are
-    accepted legacy aliases for `AMICUS_LOG_FILE` (`config/__init__.py`), and `obs.configure`
-    opens that path — so a developer with one exported had these tests writing to their own
-    log file. Measured before the fix: the subprocess created it.
-    """
-    env = {k: v for k, v in os.environ.items() if not k.startswith(ENV_PREFIXES)}
-    return env | {
-        "AMICUS_CODEX_BIN": NEVER_SPAWN_CODEX,
-        "AMICUS_KIMI_BIN": NEVER_SPAWN_KIMI,
-        "AMICUS_CLAUDE_BIN": NEVER_SPAWN_CLAUDE,
-    }
+    """`conftest.spawned_server_env`, which this file's tests were written against and
+    which the discovery-cost instrument's tests now share."""
+    return spawned_server_env()
 
 
 def test_the_spawned_server_env_is_as_clean_as_clean_env(monkeypatch):

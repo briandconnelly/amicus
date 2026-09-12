@@ -28,6 +28,9 @@ VALID_LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
 _TRUE = frozenset({"1", "true", "yes", "on"})
 
 _ALL_LEGACY = ("CODEX_IN_CLAUDE_", "MOONBRIDGE_", "CLAUDE_IN_CODEX_")
+# Every environment namespace this server reads: its own and the legacy aliases. Anything
+# that wants to give a spawned server a clean configuration strips exactly these.
+ENV_PREFIXES: tuple[str, ...] = ("AMICUS_", *_ALL_LEGACY)
 
 
 def _legacy(suffix: str, *prefixes: str) -> tuple[str, ...]:
