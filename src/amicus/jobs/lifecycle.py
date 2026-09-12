@@ -19,9 +19,8 @@ from amicus import obs
 from amicus.errors import error_envelope
 from amicus.jobs.delivery import finished_job_envelope
 from amicus.orchestration.isolation import WORKTREE_PREFIX
-from amicus.schemas.envelope import Repair
 from amicus.schemas.fingerprint import RESULT_FORMAT
-from amicus.schemas.results import JobStarted
+from amicus.schemas.results import JobFollowUp, JobStarted
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Callable
@@ -120,7 +119,7 @@ def job_started_handle(
         poll_after_ms=poll_after_ms,
         expires_at=expires_at,
         task_id=task_id,
-        follow_up=Repair(
+        follow_up=JobFollowUp(
             next_step="poll_job_status",
             tool="amicus_job_status",
             arguments=poll_arguments,

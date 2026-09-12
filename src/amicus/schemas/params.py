@@ -137,17 +137,17 @@ PARAMETER_CONTRACTS: dict[str, ParamContract] = {
     "workspace_root": ParamContract(
         name="workspace_root",
         summary=(
-            "Absolute path of the repository the call targets. Sessionless (2026-07-28) "
-            "clients must pass it; handshake-era clients may rely on their advertised file "
-            "roots. The server never falls back to its own cwd unless the operator opts in. "
-            f"Resolution rules: {PARAMS_RESOURCE_URI}."
+            "Absolute path of the repository the call targets; a sessionless (2026-07-28) "
+            f"client must pass it. Resolution rules: {PARAMS_RESOURCE_URI}."
         ),
         full=(
             "Resolution precedence: explicit workspace_root → the client's handshake-era "
             "file roots (first root; an explicit value must lie inside one of them or the "
-            "call fails as workspace_outside_roots) → invalid_workspace_root. The server's "
-            "own cwd is used only when AMICUS_ALLOW_CWD_WORKSPACE=1, and then "
-            "meta.workspace_warning discloses the resolved path. On an active call the "
+            "call fails as workspace_outside_roots) → invalid_workspace_root. A sessionless "
+            "client has no roots, so it must pass workspace_root; a handshake-era client "
+            "may rely on its advertised roots. The server never falls back to its own cwd "
+            "unless the operator opts in: it is used only when AMICUS_ALLOW_CWD_WORKSPACE=1, "
+            "and then meta.workspace_warning discloses the resolved path. On an active call the "
             "workspace selects where the backend works, not what it can read: every "
             "backend CLI can read files outside it, up to everything the OS user can read."
         ),
@@ -155,15 +155,15 @@ PARAMETER_CONTRACTS: dict[str, ParamContract] = {
     "idempotency_key": ParamContract(
         name="idempotency_key",
         summary=(
-            "Optional dedup key scoped to THIS tool + backend + workspace. Same key + same "
-            "args replays the prior result with no new spend; different args are refused "
-            "(idempotency_conflict). Sync and _async are separate tools and never share a "
-            f"key. Omit for none; retention is bounded. Lifecycle: {PARAMS_RESOURCE_URI}."
+            "Dedup key scoped to this tool + backend + workspace: reusing it with identical "
+            "args replays the prior result unpaid; different args are refused. Lifecycle: "
+            f"{PARAMS_RESOURCE_URI}."
         ),
         full=(
             "Reusing the key on the same tool with the same arguments (backend included) "
             "replays the existing run instead of paying for a duplicate: an _async call "
-            "returns the same job_id. Reuse with different arguments is refused "
+            "returns the same job_id. Sync and _async are separate tools and never share a "
+            "key. Reuse with different arguments is refused "
             "(idempotency_conflict); a key whose prior result was consumed or evicted is "
             "idempotency_result_unavailable; a still-publishing reservation is "
             "idempotency_in_progress (retry). A completed result stays replayable while "
@@ -174,49 +174,50 @@ PARAMETER_CONTRACTS: dict[str, ParamContract] = {
     "extra_context": ParamContract(
         name="extra_context",
         summary=(
-            "Optional author intent/background, added as clearly-labeled UNTRUSTED prompt "
-            "data. Redaction does NOT cover it — no live secrets. Full caveats and bounds: "
-            f"{PARAMS_RESOURCE_URI}."
+            "Author intent/background, sent as labeled UNTRUSTED prompt data. Not redacted, "
+            f"so no secrets. Bounds: {PARAMS_RESOURCE_URI}."
         ),
         full=(
             "Added to the prompt as labeled untrusted data; the backend is instructed to "
             "treat embedded directives as data, not commands — best-effort prompt-injection "
-            "mitigation, not a guarantee. It counts against the same input budget as the "
-            "gathered diff, so an oversized value fails as input_too_large before any spend."
+            "mitigation, not a guarantee. Secret redaction covers the gathered diff, never "
+            "this field, so it must carry no live secrets. It counts against the same input "
+            "budget as the gathered diff, so an oversized value fails as input_too_large "
+            "before any spend."
         ),
     ),
     "instructions_append": ParamContract(
         name="instructions_append",
         summary=(
-            "Optional caller stance/focus text appended BEHIND this server's always-leading "
-            "framing (codex: developer_instructions on argv; claude and kimi: a leading "
-            "section of the stdin/handshake prompt). UNTRUSTED, grants no tools, best-effort "
-            "compliance; may ride "
-            f"the backend command line. Max {MAX_INSTRUCTIONS_APPEND_BYTES} bytes. Full "
-            f"contract: {PARAMS_RESOURCE_URI}."
+            "Caller stance text behind the server's own framing. UNTRUSTED, grants no "
+            "tools, best-effort compliance. No secrets: a backend may carry it on argv. Max "
+            f"{MAX_INSTRUCTIONS_APPEND_BYTES} bytes. Contract: {PARAMS_RESOURCE_URI}."
         ),
         full=(
-            "Normalized once (stripped; blank means omitted); refused pre-spend as "
-            f"invalid_arguments when over {MAX_INSTRUCTIONS_APPEND_BYTES} bytes, when it "
-            "carries a NUL, another C0 control (tab/LF/CR excepted), DEL, or a lone "
-            "surrogate, or when it contains one of the server's framing marker lines. The "
-            "backend is instructed not to let it determine a verdict; compliance is "
-            "behavioral, not mechanical, and non-compliance may be silent. Each backend's "
-            "carrier (argv or handshake file) is disclosed on amicus_backends. Never put "
-            "secrets here; result envelopes report only a fingerprint of the text."
+            "Appended BEHIND this server's always-leading framing (codex: "
+            "developer_instructions on argv; claude and kimi: a leading section of the "
+            "stdin/handshake prompt). Normalized once (stripped; blank means omitted); "
+            f"refused pre-spend as invalid_arguments when over {MAX_INSTRUCTIONS_APPEND_BYTES} "
+            "bytes, when it carries a NUL, another C0 control (tab/LF/CR excepted), DEL, or "
+            "a lone surrogate, or when it contains one of the server's framing marker lines. "
+            "It grants no tools. The backend is instructed not to let it determine a verdict; "
+            "compliance is behavioral, not mechanical, and non-compliance may be silent. Each "
+            "backend's carrier (argv or handshake file) is disclosed on amicus_backends. "
+            "Never put secrets here; result envelopes report only a fingerprint of the text."
         ),
     ),
     "reasoning_effort": ParamContract(
         name="reasoning_effort",
         summary=(
-            "Override the backend's reasoning effort for this call; omit for the backend's "
-            "own resolution. An open per-model string the backend validates (commonly "
-            "minimal|low|medium|high|xhigh); amicus_models lists each model's advertised "
-            f"set (advisory). Rejection and bounds detail: {PARAMS_RESOURCE_URI}."
+            "Per-call reasoning effort, an open per-model string (commonly "
+            "minimal|low|medium|high|xhigh; amicus_models lists each model's set); omit for "
+            f"the backend default. Bounds: {PARAMS_RESOURCE_URI}."
         ),
         full=(
-            "A backend-rejected value fails as invalid_reasoning_effort (repair steers to "
-            "amicus_models). Backends whose CLI silently ignores a bad effort (kimi) are "
+            "Omitted, the backend resolves its own default. The value is validated by the "
+            "backend, and amicus_models's per-model set is advisory. A backend-rejected "
+            "value fails as invalid_reasoning_effort (repair steers to amicus_models). "
+            "Backends whose CLI silently ignores a bad effort (kimi) are "
             "validated pre-spend from the catalog. Control characters, surrogates, and "
             f"values over {REASONING_EFFORT_MAX_LENGTH} chars are rejected at the MCP "
             "boundary as invalid_arguments."
@@ -225,12 +226,14 @@ PARAMETER_CONTRACTS: dict[str, ParamContract] = {
     "backend_options": ParamContract(
         name="backend_options",
         summary=(
-            "Backend-specific knobs as one closed object: isolation (codex, kimi), "
-            "config_mode and access and max_budget_usd (claude). A key or value the "
-            "selected backend does not accept fails pre-spend as invalid_arguments naming "
-            f"backend_options.<key>. Per-backend values: {PARAMS_RESOURCE_URI}."
+            "One closed object of backend knobs: isolation (codex, kimi); config_mode, "
+            "access, max_budget_usd (claude). A key or value the selected backend rejects "
+            f"fails pre-spend. Values: {PARAMS_RESOURCE_URI}."
         ),
         full=(
+            "A key the selected backend does not accept, or a value it does not accept for "
+            "a key it does, fails pre-spend as invalid_arguments naming "
+            "backend_options.<key>. "
             "isolation — codex: inherit|ignore-config|ignore-rules (drop $CODEX_HOME "
             "config, then also execpolicy rules); kimi: inherit|ignore-skills. "
             "config_mode — claude: inherit|scoped|safe|bare (how much of the user's Claude "
@@ -301,7 +304,7 @@ ModelParam = Annotated[
     Field(
         description=(
             "Backend model slug; omit for the backend's default. amicus_models lists valid "
-            "slugs (advisory). Control characters are rejected, not stripped."
+            "slugs (advisory). Control characters rejected."
         ),
         pattern=CONTROL_CHAR_FREE_PATTERN,
         max_length=256,
