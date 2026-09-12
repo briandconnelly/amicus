@@ -16,9 +16,10 @@ smaller tax on that host than the budget assumes
 (docs/host-captures/install-smoke/claude-code/2.1.263/notes.md). The budget stays the
 worst-case ceiling for the clients that do preload.
 
-Measured 2026-09-09 at schema-12 (18 tools; every model result carries
-findings_diagnostics, both review tools publish what `confidence` means, and the published
-stability tier is inside the closed set): see MEASURED.
+Measured 2026-09-12 at schema-16 (18 tools; every model result carries
+findings_diagnostics, both review tools publish what `confidence` means, the published
+stability tier is inside the closed set, and both review tools and the dry run carry
+`coverage`): see MEASURED.
 
 The schema-8 -> schema-9 raise (+5160 bytes) is deliberate, and most of it is prose. The
 `findings_diagnostics` object itself costs ~1250 bytes across four paid tools' output
@@ -42,6 +43,16 @@ that replaced it, and a tier outside the closed set is one an agent cannot filte
 (issue #43). The other 43 are `amicus_capabilities`'s output schema, which now publishes
 `stability` as the three-value enum instead of a bare string, so a caller reads the legal set
 off the schema rather than inferring it from one observed value.
+
+The schema-15 -> schema-16 raise (+6556 bytes over the last MEASURED, 151 of which predates
+it on main) is the `coverage` object, on exactly the three tools that return it: +2063 each
+for amicus_review_changes and amicus_adversarial_review, and +2279 for amicus_dry_run, which
+also gained `focus` and `max_input_bytes`. About 2660 bytes is structure - the object, its
+RedactionSummary and their constraints, inlined per tool - and about 3750 is prose, after
+compaction had already removed 3806 bytes. What remains guards specific misreadings: that
+`complete` means every line was examined, that `focused` or `tree_changed_during_gather`
+withheld something, that the tree-change signal's absence proves the tree held still, and
+that a null `redaction` beside `redacted` means nothing was redacted (issue #65).
 """
 
 from __future__ import annotations
@@ -50,7 +61,7 @@ import pytest
 
 from amicus import manifest
 
-MEASURED: dict[str, int] = {"all": 99053, "codex-kimi": 99061, "claude": 99053}
+MEASURED: dict[str, int] = {"all": 105609, "codex-kimi": 105617, "claude": 105609}
 BUDGET: dict[str, int] = {p: ((n // 1000) + 1) * 1000 for p, n in MEASURED.items()}
 # ceil(bytes/4): a dependency-free, conservative token proxy (~4.13 bytes per token).
 TOKEN_PROXY_BUDGET: dict[str, int] = {p: -(-b // 4) for p, b in BUDGET.items()}

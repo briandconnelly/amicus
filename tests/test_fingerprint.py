@@ -8,9 +8,9 @@ from amicus import manifest, surface
 from amicus.schemas.fingerprint import FINGERPRINT
 
 EXPECTED_SURFACE_DIGEST: dict[str, str] = {
-    "all": "614c6813d8c2226dc1b8f9f694ccaff12329101ab2e829c14a8a4f55c14986fb",
-    "codex-kimi": "08a487dd88683473ba019d7667b69823f0b7f8404b5ca790a61173ded85a97a4",
-    "claude": "614c6813d8c2226dc1b8f9f694ccaff12329101ab2e829c14a8a4f55c14986fb",
+    "all": "275f42ea301084a93c64674e9be7e431b9d803a6705d48e46fa2a618ebaf29b1",
+    "codex-kimi": "fc8502bdd2d41cf9fa9fca7b0a057a036da2de1a98fd7f78b95c87ff127ad80e",
+    "claude": "275f42ea301084a93c64674e9be7e431b9d803a6705d48e46fa2a618ebaf29b1",
 }
 
 

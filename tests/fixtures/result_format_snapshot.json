@@ -1,5 +1,5 @@
 {
-  "result_format": 4,
+  "result_format": 5,
   "schemas": {
     "AdversarialReviewResult": {
       "$defs": {
@@ -23,6 +23,88 @@
             }
           },
           "title": "ContextSummary",
+          "type": "object"
+        },
+        "Coverage": {
+          "additionalProperties": false,
+          "properties": {
+            "omission_reasons": {
+              "items": {
+                "enum": [
+                  "untracked_omitted",
+                  "tree_changed_during_gather",
+                  "truncated",
+                  "redacted",
+                  "focused"
+                ],
+                "type": "string"
+              },
+              "title": "Omission Reasons",
+              "type": "array"
+            },
+            "redaction": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RedactionSummary"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "status": {
+              "enum": [
+                "complete",
+                "partial"
+              ],
+              "title": "Status",
+              "type": "string"
+            },
+            "untracked_files_detected": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Untracked Files Detected"
+            },
+            "untracked_files_included": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Untracked Files Included"
+            },
+            "untracked_files_omitted": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Untracked Files Omitted"
+            }
+          },
+          "required": [
+            "status"
+          ],
+          "title": "Coverage",
           "type": "object"
         },
         "Finding": {
@@ -493,6 +575,33 @@
           "title": "RawResponse",
           "type": "object"
         },
+        "RedactionSummary": {
+          "additionalProperties": false,
+          "properties": {
+            "inline_masks": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Inline Masks",
+              "type": "integer"
+            },
+            "masked_paths": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Masked Paths",
+              "type": "array"
+            },
+            "withheld_paths": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Withheld Paths",
+              "type": "array"
+            }
+          },
+          "title": "RedactionSummary",
+          "type": "object"
+        },
         "Usage": {
           "additionalProperties": false,
           "properties": {
@@ -603,6 +712,9 @@
           ],
           "default": null
         },
+        "coverage": {
+          "$ref": "#/$defs/Coverage"
+        },
         "findings": {
           "items": {
             "$ref": "#/$defs/Finding"
@@ -689,7 +801,8 @@
         "meta",
         "summary",
         "verdict",
-        "confidence"
+        "confidence",
+        "coverage"
       ],
       "title": "AdversarialReviewResult",
       "type": "object"
@@ -2867,6 +2980,88 @@
           "title": "ContextSummary",
           "type": "object"
         },
+        "Coverage": {
+          "additionalProperties": false,
+          "properties": {
+            "omission_reasons": {
+              "items": {
+                "enum": [
+                  "untracked_omitted",
+                  "tree_changed_during_gather",
+                  "truncated",
+                  "redacted",
+                  "focused"
+                ],
+                "type": "string"
+              },
+              "title": "Omission Reasons",
+              "type": "array"
+            },
+            "redaction": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RedactionSummary"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "status": {
+              "enum": [
+                "complete",
+                "partial"
+              ],
+              "title": "Status",
+              "type": "string"
+            },
+            "untracked_files_detected": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Untracked Files Detected"
+            },
+            "untracked_files_included": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Untracked Files Included"
+            },
+            "untracked_files_omitted": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Untracked Files Omitted"
+            }
+          },
+          "required": [
+            "status"
+          ],
+          "title": "Coverage",
+          "type": "object"
+        },
         "Finding": {
           "additionalProperties": false,
           "properties": {
@@ -3335,6 +3530,33 @@
           "title": "RawResponse",
           "type": "object"
         },
+        "RedactionSummary": {
+          "additionalProperties": false,
+          "properties": {
+            "inline_masks": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Inline Masks",
+              "type": "integer"
+            },
+            "masked_paths": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Masked Paths",
+              "type": "array"
+            },
+            "withheld_paths": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Withheld Paths",
+              "type": "array"
+            }
+          },
+          "title": "RedactionSummary",
+          "type": "object"
+        },
         "Usage": {
           "additionalProperties": false,
           "properties": {
@@ -3445,6 +3667,9 @@
           ],
           "default": null
         },
+        "coverage": {
+          "$ref": "#/$defs/Coverage"
+        },
         "findings": {
           "items": {
             "$ref": "#/$defs/Finding"
@@ -3531,7 +3756,8 @@
         "meta",
         "summary",
         "verdict",
-        "confidence"
+        "confidence",
+        "coverage"
       ],
       "title": "ReviewResult",
       "type": "object"
@@ -3542,6 +3768,16 @@
       "assumptions": [],
       "confidence": "medium",
       "context_summary": null,
+      "coverage": {
+        "omission_reasons": [
+          "focused"
+        ],
+        "redaction": null,
+        "status": "partial",
+        "untracked_files_detected": null,
+        "untracked_files_included": null,
+        "untracked_files_omitted": null
+      },
       "findings": [],
       "findings_diagnostics": null,
       "meta": {
@@ -3754,6 +3990,14 @@
       "assumptions": [],
       "confidence": "high",
       "context_summary": null,
+      "coverage": {
+        "omission_reasons": [],
+        "redaction": null,
+        "status": "complete",
+        "untracked_files_detected": 0,
+        "untracked_files_included": 0,
+        "untracked_files_omitted": 0
+      },
       "findings": [],
       "findings_diagnostics": null,
       "meta": {
