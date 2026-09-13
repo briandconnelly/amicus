@@ -160,7 +160,7 @@ def invalid_arguments_envelope(
     `corrected_arguments` finds the correction unique."""
     for err in errors:
         loc = err.get("loc") or ()
-        is_extra = err.get("type") in ("unexpected_keyword_argument", "extra_forbidden")
+        is_extra = err.get("type") in _EXTRA_TYPES
         if not is_extra and not (loc and str(loc[0]) in param_names):
             return None
     total = len(errors)
@@ -185,7 +185,7 @@ def invalid_arguments_envelope(
     message = f"{tool_name}: {total} invalid argument(s){shown}: {safe_field} — {first.reason}"
     types = {err.get("type") for err in errors}
     hints: list[str] = []
-    if types & {"unexpected_keyword_argument", "extra_forbidden"}:
+    if types & _EXTRA_TYPES:
         hints.append("remove the unknown argument(s)")
     if types & _MISSING_TYPES:
         hints.append("provide the required argument(s)")
