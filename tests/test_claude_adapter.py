@@ -246,14 +246,7 @@ def test_inspector_flags_zero_exit_failures_only(pinned_claude_bin):
     non_object = backend.inspect_outcome(_outcome("[1, 2]"), req)
     assert non_object is not None and non_object.code == "invalid_json"
     budget = backend.inspect_outcome(
-        _outcome(
-            cf.envelope(
-                "Budget stop threshold reached.",
-                subtype="error_max_budget_usd",
-                is_error=True,
-                total_cost_usd=0.004,
-            )
-        ),
+        _outcome(cf.budget_stop_envelope(total_cost_usd=0.004)),
         req,
     )
     assert budget is not None and budget.code == "budget_exceeded" and budget.usage is not None

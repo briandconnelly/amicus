@@ -52,6 +52,21 @@ def envelope(
     return json.dumps(body)
 
 
+def budget_stop_envelope(**extra) -> str:
+    """The envelope claude prints when it stops at `--max-budget-usd` (claude 2.1.270): the
+    `error_max_budget_usd` subtype and an `errors` list, and no `result` at all (#73). amicus
+    never reads `errors`; its text here avoids the word "budget" so only the subtype can match."""
+    body: dict = {
+        "type": "result",
+        "subtype": "error_max_budget_usd",
+        "is_error": True,
+        "errors": ["stopped"],
+        "session_id": "sess-1",
+    }
+    body.update(extra)
+    return json.dumps(body)
+
+
 def make_backend(environ: dict | None = None, flags: FlagSupport = ALL_FLAGS):
     """(plugin, backend) with the help probe pinned and the binary pinned to /CLAUDE."""
     env = {"AMICUS_CLAUDE_BIN": "/CLAUDE", **(environ or {})}

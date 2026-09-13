@@ -150,7 +150,13 @@ _AUTHISH_PATTERNS = (
     re.compile(r"\b(auth|authentication|authorization|unauthorized|unauthenticated)\b", re.I),
     re.compile(r"\blogin\b", re.I),
 )
-_BUDGET_PATTERNS = (re.compile(r"\bbudget\b", re.I),)
+_BUDGET_PATTERNS = (
+    re.compile(r"\bbudget\b", re.I),
+    # The subtype a budget stop carries, which arrives with no `result` text (claude 2.1.270).
+    # `\bbudget\b` cannot match inside it: `_` is a word character, so no boundary falls
+    # before "budget" (#73).
+    re.compile(r"\berror_max_budget_usd\b", re.I),
+)
 _PERMISSION_PATTERNS = (
     re.compile(r"\bpermission\b", re.I),
     re.compile(r"\baccess denied\b", re.I),
