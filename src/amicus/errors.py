@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any
 from pontonier.conventions.envelope import BackendErrorVocabulary, RepairRule, repair_rules
 from pydantic import ValidationError
 
-from amicus.schemas.codes import ERROR_CODES, generalize_code
+from amicus.schemas.codes import BACKEND_IDS, ERROR_CODES, generalize_code
 from amicus.schemas.envelope import (
     ErrorDetail,
     ErrorInfo,
@@ -136,7 +136,11 @@ NO_CORRECTIVE_CALL: frozenset[str] = frozenset(
 def lookup_arguments(tool: str | None, backend: str | None) -> dict[str, Any] | None:
     """The complete call for a repair routed to a lookup tool (issue #42): amicus_models
     requires `backend`, amicus_backends takes it as an optional filter. None for any other
-    tool, or for amicus_models with no backend to name."""
+    tool, or for amicus_models with no backend to name. A third-party plugin's id is a valid
+    error.backend but not a value either tool's closed `backend` enum accepts, so it is never
+    named: amicus_backends falls back to its unfiltered call."""
+    if backend not in BACKEND_IDS:
+        backend = None
     if tool == "amicus_backends":
         return {"backend": backend} if backend else {}
     if tool == "amicus_models" and backend:
@@ -297,6 +301,8 @@ def render_failure(plugin: BackendPlugin, failure: ClassifiedFailure, meta: Meta
             arguments=lookup_arguments(rule.tool, plugin.backend_id),
             alternative=rule.alternative,
         )
+    if code in NO_CORRECTIVE_CALL:
+        repair = None
     if failure.usage is not None:
         meta = meta.model_copy(update={"usage": Usage(**dataclasses.asdict(failure.usage))})
     info = ErrorInfo(

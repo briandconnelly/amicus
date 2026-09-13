@@ -115,6 +115,34 @@ def test_render_failure_completes_a_lookup_repair():
         assert (repair["tool"], repair["arguments"]) == ("amicus_models", {"backend": "codex"})
 
 
+def test_lookup_repairs_never_name_a_backend_the_lookup_rejects():
+    # Codex review of #42: a third-party plugin id is a valid error.backend but not a value
+    # the lookup tools' closed `backend` enum accepts, so completing with it would mint a
+    # call its own tool rejects. amicus_backends falls back to the unfiltered call.
+    plugin = fakeplugin.make_plugin()
+    unavailable = errors.render_failure(
+        plugin, ClassifiedFailure(code="backend_unavailable", detail="no"), Meta()
+    )["error"]["repair"]
+    assert (unavailable["tool"], unavailable["arguments"]) == ("amicus_backends", {})
+    Draft202012Validator(_input_schema("amicus_backends")).validate(unavailable["arguments"])
+    model = errors.render_failure(
+        plugin, ClassifiedFailure(code="invalid_model", detail="no"), Meta()
+    )["error"]["repair"]
+    assert model["tool"] == "amicus_models" and "arguments" not in model
+
+
+def test_render_failure_keeps_workspace_codes_repair_free():
+    # Codex review of #42: the omission is the code's, whichever path renders it.
+    plugin = fakeplugin.make_plugin("codex")
+    hint = RepairHint(next_step="correct_arguments", tool="amicus_consult", alternative="x")
+    for code in sorted(errors.NO_CORRECTIVE_CALL):
+        for failure in (
+            ClassifiedFailure(code=code, detail="no"),
+            ClassifiedFailure(code=code, detail="no", repair=hint),
+        ):
+            assert "repair" not in errors.render_failure(plugin, failure, Meta())["error"]
+
+
 def test_make_error_repair_tool_three_states():
     keep = errors.make_error("job_not_found", "m")
     assert keep.repair is not None and keep.repair.tool == "amicus_job_list"
