@@ -72,7 +72,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   type and frames rather than its own text: FastMCP's rich handlers and `mcp`'s fall-through to
   `logging.lastResort` are gone. Both stay at WARNING or above whatever `AMICUS_LOG_LEVEL` says,
   because the `mcp` stdio runner logs a whole inbound frame at DEBUG, and neither is written to
-  `AMICUS_LOG_FILE`. FastMCP's INFO lines no longer reach stderr. This does not make every
+  `AMICUS_LOG_FILE`. FastMCP's INFO log lines no longer reach stderr; its startup banner, which it
+  prints rather than logs, still does, once, before any request arrives. This does not make every
   dependency record safe: a message either library preformats with an f-string is still written
   as it stands.
 

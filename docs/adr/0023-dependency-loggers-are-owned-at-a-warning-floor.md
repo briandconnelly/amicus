@@ -46,7 +46,8 @@ Routing them to disk would copy records that today reach only stderr, so the fil
 
 ## Consequences
 
-FastMCP's INFO lines no longer reach stderr.
+FastMCP's INFO log lines no longer reach stderr.
+Its startup banner is printed to stderr rather than logged, so it still appears, once, before any request arrives.
 The takeover does not make every dependency record safe: a message either library preformats with an f-string is still written as it stands, because the value policy cannot tell where a string came from.
 The one such record known to carry prompt text is the one rewritten above.
 Loggers outside `amicus`, `pontonier`, `fastmcp` and `mcp` still fall through to `logging.lastResort`.
