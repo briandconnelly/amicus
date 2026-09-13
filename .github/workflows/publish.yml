@@ -22,7 +22,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
       - run: uv build
       - run: uv run --with twine twine check dist/*
       - name: The built wheel's console script must start a real MCP server
@@ -70,7 +70,7 @@ jobs:
           persist-credentials: false
           # Full history and tags: the check reads the annotated tag OBJECT, not just the ref.
           fetch-depth: 0
-      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
       - name: The tagged tree and the tag must satisfy the release predicate
         # See scripts/check_release_state.py for what a pass does and does not prove. In
         # short: the tree's release-state coherence is proven; the live-gate record carried in
