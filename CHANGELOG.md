@@ -59,6 +59,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- FastMCP logged every rejected `tools/call` to the server's stderr with pydantic's error
+  list, and each error's `input` is the rejected value itself, against AGENTS.md rule 18 (#79).
+  For a missing required argument that `input` is the whole argument dict, so a valid prompt
+  field sent beside the omission was written verbatim, and a key the client chose reached the
+  log through `loc`. amicus now rewrites the record on `fastmcp.server.server` before any
+  handler sees it, keeping the tool name and each error's type and top-level declared field
+  (`Invalid arguments for tool amicus_consult: 1 error(s): missing_argument at question`). It
+  recognises the record by its shape as well as its text, and any other record from that logger
+  it has not audited keeps its level and loses its message. `obs.configure` also takes over the
+  `fastmcp` and `mcp` loggers for stderr, so an exception either library logs renders as its
+  type and frames rather than its own text: FastMCP's rich handlers and `mcp`'s fall-through to
+  `logging.lastResort` are gone. Both stay at WARNING or above whatever `AMICUS_LOG_LEVEL` says,
+  because the `mcp` stdio runner logs a whole inbound frame at DEBUG, and neither is written to
+  `AMICUS_LOG_FILE`. FastMCP's INFO log lines no longer reach stderr; its startup banner, which it
+  prints rather than logs, still does, once, before any request arrives. This does not make every
+  dependency record safe: a message either library preformats with an f-string is still written
+  as it stands.
+
 - The claude contract declared `effort_silently_ignored_upstream=False`, but claude 2.1.270 warns
   on an unknown `--effort`, ignores it and runs at its default effort (#76). Callers were never
   exposed: the adapter already refuses any effort outside its fixed list before spending. The flag

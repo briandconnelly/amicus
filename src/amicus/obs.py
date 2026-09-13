@@ -53,6 +53,10 @@ if TYPE_CHECKING:  # pragma: no cover
 
 ROOT_LOGGER_NAME = "amicus"
 LIBRARY_LOGGER_NAME = "pontonier"
+# Third-party loggers whose records reach this process's stderr (issue #79). See
+# `_own_dependency_loggers`.
+DEPENDENCY_LOGGER_NAMES = ("fastmcp", "mcp")
+FASTMCP_SERVER_LOGGER_NAME = "fastmcp.server.server"
 _LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
 _configured = False
 
@@ -236,6 +240,133 @@ def _safe_msg(msg: object) -> object:
     return msg if isinstance(msg, str) else _safe_value(msg)
 
 
+# Issue #79. FastMCP logs a rejected `tools/call` on `fastmcp.server.server` as
+# ("Invalid arguments for tool %r: %s", name, detail), where `detail` is pydantic's error
+# list and each error's `input` is the rejected value itself. For a missing required
+# argument that `input` is the whole argument dict, so a valid prompt field sent beside the
+# omission would be logged verbatim.
+_EXTRA_ARGUMENT_TYPES = frozenset({"unexpected_keyword_argument", "extra_forbidden"})
+_MAX_ARGUMENT_ERRORS = 10
+_DETAIL_WITHHELD = "<detail withheld>"
+# pydantic's own error types are lowercase snake_case. A `PydanticCustomError` may carry any
+# string at all as its type, so anything outside this shape is not echoed.
+_ERROR_TYPE = re.compile(r"[a-z][a-z0-9_]{0,63}")
+# The shape of a declared parameter or tool name.
+_IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]{0,63}")
+
+
+def _identifier(value: object) -> str:
+    """``value`` when it is a plain ``str`` with an identifier's shape, else ``<unknown>``.
+
+    ``type(...) is str`` rather than ``isinstance``: a ``str`` subclass can override the
+    ``__format__`` that interpolation calls."""
+    if type(value) is str and _IDENTIFIER.fullmatch(value):
+        return value
+    return _UNKNOWN
+
+
+def _argument_error(err: object) -> str:
+    """One pydantic error as ``type at field``."""
+    if not isinstance(err, Mapping):
+        return f"{_UNKNOWN} at {_UNKNOWN}"
+    raw_type = err.get("type")
+    error_type = raw_type if type(raw_type) is str and _ERROR_TYPE.fullmatch(raw_type) else None
+    field = _UNKNOWN
+    loc = err.get("loc")
+    if (
+        error_type is not None
+        and error_type not in _EXTRA_ARGUMENT_TYPES
+        and type(loc) in (tuple, list)
+        and loc
+    ):
+        field = _identifier(loc[0])
+    return f"{error_type or _UNKNOWN} at {field}"
+
+
+def summarize_argument_errors(detail: object) -> str:
+    """pydantic's argument errors as ``N error(s): type at field, ...``, never a value the
+    caller sent.
+
+    Two things of each error survive: its ``type``, and the top-level component of its
+    ``loc`` when the type says that component names a declared parameter. ``input`` is the
+    rejected value, ``ctx`` can carry it, and ``msg`` can echo it through a validator's own
+    text, so none of the three is read. The ``loc`` is withheld for an extra-key error,
+    where it IS the key the client sent, and every component below the top level is
+    dropped, because inside an open-keyed mapping a component can be a client's key under
+    any error type. Anything that is not a list of error mappings is withheld whole:
+    FastMCP's other branch logs ``str(e)``, which embeds pydantic's own rendering, input
+    values included."""
+    if type(detail) is not list or not detail:
+        return _DETAIL_WITHHELD
+    shown = ", ".join(_argument_error(err) for err in detail[:_MAX_ARGUMENT_ERRORS])
+    more = ", ..." if len(detail) > _MAX_ARGUMENT_ERRORS else ""
+    return f"{len(detail)} error(s): {shown}{more}"
+
+
+_INVALID_ARGUMENTS = "Invalid arguments for tool %s: %s"
+_RECORD_WITHHELD = "<unaudited fastmcp.server.server record withheld>"
+# The f-string records `fastmcp.server.server` writes around a failed call. A tool or prompt
+# record is written only after the name was looked up, so an identifier-shaped name in it is
+# a declared one and is kept. A resource URI is the client's own text, so it never is.
+_NAMED_FAILURE = re.compile(
+    r"(?:Error calling tool|Error rendering prompt) '[A-Za-z_][A-Za-z0-9_]{0,63}'"
+)
+_RESOURCE_FAILURE = "Error reading resource "
+
+
+def _is_argument_record(record: logging.LogRecord) -> bool:
+    """FastMCP's argument-validation record, recognised by its text OR by its shape.
+
+    The shape test is what keeps a reworded template in a later 4.0.x release from passing
+    through: a two-argument record whose second argument is a list of error mappings is
+    rewritten whatever its message says."""
+    args = record.args
+    if type(args) is not tuple or len(args) != 2:
+        return False
+    msg = record.msg
+    if type(msg) is str and msg.startswith("Invalid arguments for tool"):
+        return True
+    detail = args[1]
+    return type(detail) is list and bool(detail) and all(isinstance(e, Mapping) for e in detail)
+
+
+def _rewrite_fastmcp_server_record(record: logging.LogRecord) -> None:
+    if _is_argument_record(record):
+        assert type(record.args) is tuple  # narrowed by `_is_argument_record`
+        name, detail = record.args
+        record.msg = _INVALID_ARGUMENTS
+        record.args = (_identifier(name), summarize_argument_errors(detail))
+        return
+    msg = record.msg
+    if type(msg) is str and not record.args:
+        if _NAMED_FAILURE.fullmatch(msg):
+            return
+        if msg.startswith(_RESOURCE_FAILURE):
+            record.msg = f"{_RESOURCE_FAILURE}{_UNKNOWN}"
+            return
+    # Anything this module has not audited keeps its level, logger name and exception (which
+    # the formatter renders as type and frames) and loses its message.
+    record.msg = _RECORD_WITHHELD
+    record.args = None
+
+
+class FastMCPServerRecordFilter(logging.Filter):
+    """Rewrites every record `fastmcp.server.server` emits before any handler sees it.
+
+    A LOGGER filter, installed on the logger the record starts on, rather than a handler
+    filter: it runs once, ahead of every handler the record reaches — amicus's, any FastMCP
+    reinstalls, or pytest's — and it is not removed when a handler is replaced. It never
+    drops a record and never raises: a record it cannot rewrite is withheld."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            _rewrite_fastmcp_server_record(record)
+        except Exception:
+            record.msg = _RECORD_WITHHELD
+            record.args = None
+        return True
+
+
 class PolicyFormatter(logging.Formatter):
     """Renders a record under the module's exception-text policy.
 
@@ -292,8 +423,63 @@ class PolicyFileHandler(logging.FileHandler):
         _report_handler_error()
 
 
+def _remove_handlers(target: logging.Logger) -> None:
+    """Detach every handler on ``target``, closing only the ones this module installed.
+
+    A handler another library attached, FastMCP's rich handlers or pytest's capture handler,
+    is not amicus's to close: detaching it is enough to stop it writing here, and closing it
+    would leave its owner holding a dead handler."""
+    for handler in target.handlers[:]:
+        target.removeHandler(handler)
+        if isinstance(handler, PolicyStreamHandler | PolicyFileHandler):
+            with contextlib.suppress(Exception):
+                handler.close()
+
+
+def _own_dependency_loggers(formatter: logging.Formatter, level: int) -> None:
+    """Route `fastmcp` and `mcp` to stderr through the policy formatter, never below WARNING.
+
+    Left alone, neither goes through the policy. `import fastmcp` installs FastMCP's own
+    rich handlers on `fastmcp`, and `mcp` has none, so its WARNING records fall through to
+    `logging.lastResort`; both render an exception's own text, which the policy withholds.
+    Taking the handlers over closes that exception-text route for both libraries.
+
+    What it does NOT do is make every dependency record safe. The policy passes a message
+    string through unchanged, and both libraries build some messages with f-strings, so a
+    value interpolated into one of those is written as it stands. Three limits follow from
+    that. The floor is never below WARNING, whatever `AMICUS_LOG_LEVEL` says, because the
+    `mcp` stdio runner logs a whole inbound frame at DEBUG. The floor is on each handler as
+    well as each logger, because a logger filter can lower a record's level after the logger
+    admitted it: FastMCP clamps `fastmcp.server.context.to_client`, which carries the text of
+    every message a tool sends its client, to DEBUG. Neither logger is attached to
+    `AMICUS_LOG_FILE`, so no record that today reaches only stderr is copied to disk. And
+    the one record known to carry prompt text, FastMCP's argument-validation warning, is
+    rewritten at its source by `FastMCPServerRecordFilter`.
+
+    `fastmcp.settings.log_enabled` is switched off afterwards because it is the only switch
+    FastMCP's `configure_logging` honours: that function removes every handler on
+    `fastmcp` and installs its own, and `run(log_level=...)` reaches it through
+    `temporary_log_level`."""
+    import fastmcp  # noqa: PLC0415 - only the server process configures logging
+
+    for name in DEPENDENCY_LOGGER_NAMES:
+        target = logging.getLogger(name)
+        target.setLevel(level)
+        target.propagate = False
+        _remove_handlers(target)
+        handler = PolicyStreamHandler(sys.stderr)
+        handler.setLevel(level)
+        handler.setFormatter(formatter)
+        target.addHandler(handler)
+    fastmcp.settings.log_enabled = False
+    server = logging.getLogger(FASTMCP_SERVER_LOGGER_NAME)
+    if not any(isinstance(f, FastMCPServerRecordFilter) for f in server.filters):
+        server.addFilter(FastMCPServerRecordFilter())
+
+
 def configure(settings: Settings, *, force: bool = False) -> logging.Logger:
-    """Configure the amicus and pontonier loggers once (idempotent unless ``force``)."""
+    """Configure the amicus and pontonier loggers, and take over the fastmcp and mcp ones for
+    stderr (issue #79), once (idempotent unless ``force``)."""
     global _configured  # noqa: PLW0603
     logger = logging.getLogger(ROOT_LOGGER_NAME)
     if _configured and not force:
@@ -303,10 +489,7 @@ def configure(settings: Settings, *, force: bool = False) -> logging.Logger:
         target = logging.getLogger(name)
         target.setLevel(settings.log_level)
         target.propagate = False
-        for handler in target.handlers[:]:
-            target.removeHandler(handler)
-            with contextlib.suppress(Exception):
-                handler.close()
+        _remove_handlers(target)
         stderr_handler = PolicyStreamHandler(sys.stderr)
         stderr_handler.setFormatter(formatter)
         target.addHandler(stderr_handler)
@@ -319,6 +502,8 @@ def configure(settings: Settings, *, force: bool = False) -> logging.Logger:
                 target.warning(
                     "could not open AMICUS_LOG_FILE %r; logging to stderr only", settings.log_file
                 )
+    level = max(logging.getLevelNamesMapping()[settings.log_level], logging.WARNING)
+    _own_dependency_loggers(formatter, level)
     _configured = True
     return logger
 
