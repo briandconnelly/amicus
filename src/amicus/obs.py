@@ -424,10 +424,16 @@ class PolicyFileHandler(logging.FileHandler):
 
 
 def _remove_handlers(target: logging.Logger) -> None:
+    """Detach every handler on ``target``, closing only the ones this module installed.
+
+    A handler another library attached, FastMCP's rich handlers or pytest's capture handler,
+    is not amicus's to close: detaching it is enough to stop it writing here, and closing it
+    would leave its owner holding a dead handler."""
     for handler in target.handlers[:]:
         target.removeHandler(handler)
-        with contextlib.suppress(Exception):
-            handler.close()
+        if isinstance(handler, PolicyStreamHandler | PolicyFileHandler):
+            with contextlib.suppress(Exception):
+                handler.close()
 
 
 def _own_dependency_loggers(formatter: logging.Formatter, level: int) -> None:

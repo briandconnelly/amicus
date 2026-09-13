@@ -27,7 +27,7 @@ from typing import Any
 import fastmcp
 import pytest
 from fastmcp.utilities.logging import configure_logging, temporary_log_level
-from tests.conftest import spawned_server_env
+from tests.conftest import restored_dependency_logging, spawned_server_env
 
 from amicus import config, obs
 
@@ -377,6 +377,36 @@ def test_fastmcp_cannot_reinstall_its_own_handlers(configured):
     with temporary_log_level("DEBUG"):
         assert [type(h) for h in _ours("fastmcp")] == [obs.PolicyStreamHandler]
     assert [type(h) for h in _ours("fastmcp")] == [obs.PolicyStreamHandler]
+
+
+def test_after_a_restore_an_unforced_configure_takes_over_again(clean_env, monkeypatch):
+    # The conftest restore once put FastMCP's handlers back but left `obs._configured` set,
+    # so a later `obs.configure()` without `force` returned early over FastMCP's raw logging;
+    # the handlers it put back had also been closed by `obs._remove_handlers`.
+    monkeypatch.setattr(sys, "stderr", io.StringIO())
+    try:
+        with restored_dependency_logging():
+            obs.configure(config.settings({}), force=True)
+        assert obs._configured is False
+        assert fastmcp.settings.log_enabled is True
+        restored = _ours("fastmcp")
+        assert restored
+        assert all(type(h).__name__ == "RichHandler" for h in restored)
+        assert not any(getattr(h, "_closed", False) for h in restored)
+
+        obs.configure(config.settings({}))
+        for name in obs.DEPENDENCY_LOGGER_NAMES:
+            assert [type(h) for h in _ours(name)] == [obs.PolicyStreamHandler], name
+            assert logging.getLogger(name).level == logging.WARNING
+        server = logging.getLogger(obs.FASTMCP_SERVER_LOGGER_NAME)
+        assert sum(isinstance(f, obs.FastMCPServerRecordFilter) for f in server.filters) == 1
+        assert fastmcp.settings.log_enabled is False
+    finally:
+        for name in (obs.ROOT_LOGGER_NAME, obs.LIBRARY_LOGGER_NAME):
+            target = logging.getLogger(name)
+            for handler in target.handlers[:]:
+                target.removeHandler(handler)
+                handler.close()
 
 
 def test_an_mcp_exception_renders_as_its_type_not_its_text(configured):
