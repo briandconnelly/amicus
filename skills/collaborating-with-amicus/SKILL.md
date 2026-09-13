@@ -176,16 +176,16 @@ OpenAI-compatible provider its `config.toml` names. All three are in
 
 ### Deadlines and spend
 
-A synchronous call runs to a bounded deadline (`timeout_seconds`, default 300s). Past it the call
-is terminated: you receive nothing, and the work the backend already did is gone. An `_async` call
+An unkeyed synchronous call runs to a bounded deadline (`timeout_seconds`, default 300s). Past it
+the call is terminated: you receive nothing, and the work the backend already did is gone. An `_async` call
 returns a job handle immediately and runs against a longer job deadline
 (`AMICUS_JOB_MAX_SECONDS`, default 1800s). Starting an async job commits the spend immediately,
 whether or not you ever poll.
 
-The exception is a sync call made with an `idempotency_key`. Its run is not terminated at the
-deadline: the call returns `timeout` with a repair that polls `amicus_job_status` for the job,
-and repeating the same keyed call reattaches to it without new spend (see
-[options and errors](references/options-and-errors.md)).
+The exception is a sync call made with an `idempotency_key`. Its run gets the job deadline, and
+`timeout_seconds` only bounds the wait: at that bound the call returns `timeout` with a repair
+that polls `amicus_job_status` for the job, which keeps going, and repeating the same keyed call
+reattaches to it without new spend (see [options and errors](references/options-and-errors.md)).
 
 What a terminated sync call costs at the provider is not something amicus reports, so this skill
 does not claim it equals a completed call's cost. The reason to prefer `_async` is that a sync

@@ -13,9 +13,9 @@ out.
 
 ## The deadline
 
-A synchronous call runs to a bounded deadline (`timeout_seconds`, default 300s). If the backend
-has not finished by then the call is terminated and you receive nothing — the work it had already
-done is unrecoverable. An `_async` call returns a job handle immediately and the backend keeps
+An unkeyed synchronous call runs to a bounded deadline (`timeout_seconds`, default 300s). If the
+backend has not finished by then the call is terminated and you receive nothing — the work it had
+already done is unrecoverable. An `_async` call returns a job handle immediately and the backend keeps
 running against a separate, longer job deadline (`AMICUS_JOB_MAX_SECONDS`, default 1800s).
 Starting the job commits the spend right away, even if you never poll.
 
@@ -27,12 +27,14 @@ Prefer `_async` for:
 
 What a terminated sync call costs at the provider is not reported to amicus, so nothing here
 claims it equals a completed call's cost. The reason to prefer `_async` under uncertainty is that
-a sync timeout destroys the result you paid for.
+an unkeyed sync timeout destroys the result you paid for.
 
-A sync call made with an `idempotency_key` is the exception: at the deadline its run keeps going,
-the call returns `timeout` with a `poll_job_status` repair for that job, and repeating the same
-keyed call reattaches to the run without new spend. Do not answer that timeout by starting the
-`_async` twin or dropping the key; both are a second paid run.
+A sync call made with an `idempotency_key` is the exception. Its run gets the job deadline
+(`AMICUS_JOB_MAX_SECONDS`), as an `_async` run does, and `timeout_seconds` only bounds the wait:
+at that bound the call returns `timeout` with a `poll_job_status` repair for the job, which keeps
+going, and repeating the same keyed call reattaches to it without new spend. Starting the `_async`
+twin or dropping the key there is a second paid run; the Spend rules in SKILL.md say what to do
+with that repair.
 
 ## What `_async` returns
 

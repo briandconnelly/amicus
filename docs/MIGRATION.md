@@ -144,7 +144,9 @@ An invalid JSON response alone does not establish config displacement, so the er
 
 `idempotency_key` is accepted on the sync tools as well as the `_async` twins, as on both siblings (#66; before this it was async-only, and this guide did not say so).
 A keyed sync call behaves as the siblings' did: a duplicate awaits the existing run and returns its result marked `meta.idempotency_replayed`, a transient keyed outcome is waited on for about a second before it is surfaced, and a keyed wait that times out or is cancelled leaves the run going and points at `amicus_job_status`.
-One thing is new, because neither sibling had the tasks extension: a keyed task's job survives `tasks/cancel`, while an unkeyed task's is cancelled with it (ADR 0020).
+Two things are new (ADR 0020).
+A keyed sync run gets the job deadline (`AMICUS_JOB_MAX_SECONDS`), as an `_async` run does, and `timeout_seconds` bounds only how long the call waits; on the siblings the worker kept the caller's timeout, so their "the run continues" claim held only for a worker slower to finalize than the grace window.
+And because neither sibling had the tasks extension: a keyed task's job survives `tasks/cancel`, while an unkeyed task's is cancelled with it.
 An empty key is rejected pre-spend on every paid tool, as it was on the siblings.
 
 These are the differences a user migrating from a single-model server actually hits; they are deliberate, not bugs.

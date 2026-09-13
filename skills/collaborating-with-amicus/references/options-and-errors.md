@@ -45,13 +45,15 @@ workspace**.
   returns the same `job_id`, a sync call awaits that run and returns its result.
   `meta.idempotency_replayed: true` marks a replayed response.
 - Same key, different arguments → refused as `idempotency_conflict`. On a sync tool
-  `timeout_seconds` counts as an argument; `detail` does not.
+  `timeout_seconds` only bounds the wait and `detail` only shapes delivery; neither counts.
 - A key whose result was consumed or evicted → `idempotency_result_unavailable`.
 - A reservation still publishing → `idempotency_in_progress` (retry; a sync call waits about a
   second for it first).
 - A completed result stays replayable while its job record lives (its TTL).
-- A keyed sync wait that hits its deadline or is cancelled leaves the run going: the `timeout`
-  repair polls `amicus_job_status` for that job, and repeating the same keyed call reattaches.
+- A keyed sync run gets the job deadline (`AMICUS_JOB_MAX_SECONDS`), as an `_async` run does. A
+  keyed wait that hits its `timeout_seconds` bound or is cancelled leaves the run going: the
+  `timeout` repair polls `amicus_job_status` for that job, and repeating the same keyed call
+  reattaches.
   Under the tasks extension a keyed task's job survives `tasks/cancel`; an unkeyed one's is
   cancelled with it.
 - An empty key is refused pre-spend.
