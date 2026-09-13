@@ -164,9 +164,10 @@ async def test_consume_keeps_a_record_it_could_not_deliver(app, store, tmp_path,
 
 
 async def test_consume_reports_a_record_already_gone_as_missing(app, store, tmp_path, monkeypatch):
-    """MISSING is a record something else removed first (a racing consume, or expiry): it is
-    gone, as consume promises, but this call did not delete it, so the outcome says missing
-    rather than removed. Delivery still happens (#44)."""
+    """MISSING is a record the store dropped before this call's discard (a racing consume,
+    or expiry): a repeat call returns job_not_found, as consume promises, but this call did
+    not delete it, so the outcome says missing rather than removed. Delivery still
+    happens (#44)."""
     real_discard = JobStore.discard
 
     def raced(self, cwd, job_id):
@@ -420,3 +421,48 @@ async def test_two_tasks_on_one_job_report_the_first_task_on_every_surface(
     assert [j["task_id"] for j in listed["jobs"]] == ["task-first"]
     assert [(j["job_id"], j["task_id"]) for j in by_second["jobs"]] == [(job, "task-first")]
     assert status["task_id"] == "task-first" and result["meta"]["task_id"] == "task-first"
+
+
+async def test_missing_after_a_failed_expiry_cleanup_still_answers_job_not_found(
+    app, store, tmp_path, monkeypatch
+):
+    """Codex's review of #44: a record that expires between the read and the discard is
+    cleaned up inside the discard, and that cleanup ignores its own failure, so the discard
+    says MISSING while files remain. The repeat-call promise still holds, because an expired
+    record is dropped on every read, which is why `missing` claims only that the store no
+    longer serves the record, never that its files are gone."""
+    ws = {"workspace_root": str(tmp_path)}
+    async with Client(app) as c:
+        job_id = await _start(c, tmp_path)
+        await _wait_done(store, tmp_path, job_id)
+        target = store._job_dir(str(tmp_path), job_id)
+        expired = [False]
+        refused: list[Path] = []
+        real_discard = JobStore.discard
+        real_rmdir = Path.rmdir
+
+        def expire_then_discard(self, cwd, jid):
+            expired[0] = True
+            return real_discard(self, cwd, jid)
+
+        def refuse_the_job_dir(self):
+            if self == target:
+                refused.append(self)
+                raise OSError("rmdir refused")
+            return real_rmdir(self)
+
+        monkeypatch.setattr(JobStore, "_expired", lambda self, meta: expired[0])
+        monkeypatch.setattr(JobStore, "discard", expire_then_discard)
+        monkeypatch.setattr(Path, "rmdir", refuse_the_job_dir)
+        consumed = (
+            await c.call_tool("amicus_job_consume_result", {"job_id": job_id, **ws})
+        ).structured_content
+        assert refused, "control: the expiry cleanup ran and failed"
+        assert consumed["ok"] is True and consumed["summary"] == "Looks fine"
+        assert consumed["meta"]["consume"] == {"discard_outcome": "missing"}
+        assert target.exists(), "files a failed cleanup left remain"
+        again = await c.call_tool(
+            "amicus_job_consume_result", {"job_id": job_id, **ws}, raise_on_error=False
+        )
+        assert again.structured_content["error"]["code"] == "job_not_found"
+        assert target.exists(), "a read reports not-found without the files being gone"

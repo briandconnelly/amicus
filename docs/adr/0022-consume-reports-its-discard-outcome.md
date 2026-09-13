@@ -25,6 +25,10 @@ Its values are pontonier's `DiscardOutcome` verbatim (`removed`, `missing`, `not
 The first design was a `record_deleted` boolean.
 Codex held that it would credit a `missing` record's absence to this call, and overstate what `delete_failed` proves, since that outcome also covers a deletion that could not be verified.
 Only `removed` and `missing` support the repeat-call `job_not_found` promise, and the description now says so.
+`missing` means the store no longer serves the record, not that its files are gone.
+Codex's review of the branch found that a record expiring between the read and the discard is cleaned up inside the discard, and that cleanup ignores its own failure before the discard reports `MISSING`.
+A repeat call still returns `job_not_found`, because an expired record is dropped on every read, so the promise holds while physical deletion does not.
+The `missing` description and the follow-up's `job_not_found` branch say "no longer serves", and a test pins that path.
 
 **A record that may remain gets a `follow_up` that inspects it.**
 For `not_done` and `delete_failed`, `follow_up` is `{next_step: "inspect_and_retry", tool: "amicus_job_status", arguments: {job_id, workspace_root}}`, with `workspace_root` only when the caller supplied it.
@@ -48,4 +52,5 @@ Excluding the field only in `dump_success` was rejected on Codex's advice, since
 - A future delivery-only `Meta` field should follow the same pattern: excluded from every dump, set on the delivered dictionary, and scrubbed from a stored copy.
 - Pontonier's `_rmtree` comment says a partial failure leaves the record fully readable.
   It does not once `result.json` has been unlinked, and the leftover record then reports the job as `failed`.
-  That is pontonier's to fix, since rule 17 forbids editing the sibling here, so the prose in this ADR and on the wire describes the behavior as it is.
+  Expired-record cleanup in `_read_live_job` likewise returns "no record" after a failed `_rmtree`, which is how `missing` can leave files behind.
+  Both are pontonier's to fix, since rule 17 forbids editing the sibling here, so the prose in this ADR and on the wire describes the behavior as it is.

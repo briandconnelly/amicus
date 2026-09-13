@@ -148,7 +148,8 @@ def _validate_success(
 _RECORD_GONE = frozenset({"removed", "missing"})
 CONSUME_FOLLOW_UP = (
     "The record may remain. amicus_job_status on this job shows what is left: job_not_found "
-    "means it is gone; done means a retried consume can delete it; any other status means "
+    "means the store no longer serves it; done means a retried consume can delete it; any "
+    "other status means "
     "the result is no longer readable and the record stays until a later job call finds it "
     "expired."
 )

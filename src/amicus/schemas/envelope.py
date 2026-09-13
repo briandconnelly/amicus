@@ -75,10 +75,11 @@ class InstructionsFingerprint(BaseModel):
 DiscardOutcome = Literal["removed", "missing", "not_done", "delete_failed"]
 
 _DISCARD_OUTCOME_DESC = (
-    "What deleting the record did. removed: this call deleted it. missing: it was already "
-    "gone. After either, a repeat call returns job_not_found. not_done: it was no longer a "
-    "finished result, so nothing was deleted. delete_failed: deletion failed or could not "
-    "be verified, so the record may remain."
+    "What deleting the record did. removed: this call deleted it. missing: the store had "
+    "already dropped it (consumed, expired or evicted); files a failed cleanup left may "
+    "remain. After either, a repeat call returns job_not_found. not_done: it was no longer "
+    "a finished result, so nothing was deleted. delete_failed: deletion failed or could "
+    "not be verified, so the record may remain."
 )
 _CONSUME_DESC = (
     "Set only by amicus_job_consume_result, on the envelope it delivers: what deleting "
