@@ -29,6 +29,11 @@ What a terminated sync call costs at the provider is not reported to amicus, so 
 claims it equals a completed call's cost. The reason to prefer `_async` under uncertainty is that
 a sync timeout destroys the result you paid for.
 
+A sync call made with an `idempotency_key` is the exception: at the deadline its run keeps going,
+the call returns `timeout` with a `poll_job_status` repair for that job, and repeating the same
+keyed call reattaches to the run without new spend. Do not answer that timeout by starting the
+`_async` twin or dropping the key; both are a second paid run.
+
 ## What `_async` returns
 
 A job handle: `job_id`, `poll_after_ms`, `expires_at`, and a `follow_up` pointer. It is not the

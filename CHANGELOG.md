@@ -9,6 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking (`FINGERPRINT` `schema-18`).** `amicus_consult`, `amicus_review_changes`,
+  `amicus_adversarial_review` and `amicus_delegate` accept `idempotency_key`, as both siblings'
+  sync tools do (#66); it was async-only, and `docs/MIGRATION.md` never said so. A keyed sync
+  call awaits the run the key names (its own, or another caller's for the same key and
+  arguments) and delivers its result marked `meta.idempotency_replayed: true`, so a retried
+  sync call cannot pay twice. A keyed waiter does not own the job: its local timeout returns
+  `timeout` with a `poll_job_status` repair naming `amicus_job_status` for that job instead of
+  cancelling it, its cancellation leaves the run going, and under the tasks extension a keyed
+  task's job survives `tasks/cancel` (an unkeyed task's is still cancelled with it). Sync and
+  `_async` stay separate identities. An empty key is now rejected pre-spend on every paid tool
+  (`minLength: 1`, the siblings' bound), which tightens the `_async` contract by that one
+  value. The sync tools' error catalogs name the three dedup codes, and the server
+  instructions, `timeout_seconds` and task-support text qualify their categorical "terminated"
+  and "cancelling a task cancels its job" with the keyed exception. ADR 0020 supersedes ADR
+  0008's unkeyed-sync clause. `RESULT_FORMAT` stays 5.
+
+### Fixed
+
+- A job named by several tasks reported one task on `amicus_job_status` and `amicus_job_result`
+  and another on `amicus_job_list`; every surface now reports the task that created it, and a
+  list filtered by any associated task still finds the job (#66).
+
 - **Breaking (`FINGERPRINT` `schema-17`).** `tools/list` is 10,474 bytes smaller (105,485 to
   95,011 on the `all` profile as the stdio transport writes it for a handshake-era client, the
   era both captured hosts negotiate; 26,046 to 23,800 o200k_base tokens), with no tool,

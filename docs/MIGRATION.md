@@ -142,6 +142,11 @@ This also applies when the operator explicitly configures `inherit` or `scoped`;
 If an explicitly inherited configuration produces `invalid_json` or `schema_violation`, change `backend_options.config_mode` to `safe` before making another paid call.
 An invalid JSON response alone does not establish config displacement, so the error is not automatically reclassified as a permanent configuration failure.
 
+`idempotency_key` is accepted on the sync tools as well as the `_async` twins, as on both siblings (#66; before this it was async-only, and this guide did not say so).
+A keyed sync call behaves as the siblings' did: a duplicate awaits the existing run and returns its result marked `meta.idempotency_replayed`, a transient keyed outcome is waited on for about a second before it is surfaced, and a keyed wait that times out or is cancelled leaves the run going and points at `amicus_job_status`.
+One thing is new, because neither sibling had the tasks extension: a keyed task's job survives `tasks/cancel`, while an unkeyed task's is cancelled with it (ADR 0020).
+An empty key is rejected pre-spend on every paid tool, as it was on the siblings.
+
 These are the differences a user migrating from a single-model server actually hits; they are deliberate, not bugs.
 
 **Approval friction follows the worst enabled backend (ADR 0001).**

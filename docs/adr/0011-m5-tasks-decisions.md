@@ -13,6 +13,7 @@ The maintainer approved decisions 1–3 in the M5 planning session.
 
 - The host captures are produced by the agent non-interactively (`claude -p`, `codex exec`) against the worktree's server with `AMICUS_TASKS=1`, asking for the free `amicus_backends`; one host-model turn each, zero backend spend; recorded under `docs/host-captures/<host>/<version>/` and checked by `tests/test_host_captures.py`.
 - ADR 0004's keyed-task cancel clause is amended: a tasked call is always unkeyed, so `tasks/cancel` always cancels the job, and the `job_id` is recovered through `amicus_job_list(task_id=...)`.
+  Amended again by [ADR 0020](0020-idempotency-keys-on-the-sync-tools.md) (2026-09-12): the sync tools now take a key, so an unkeyed tasked call's job is cancelled with its task and a keyed one's survives, which restores ADR 0004's original clause.
 - One surface bump (`amicus/0.1/schema-4` → `schema-5`): the capability summary and `amicus_capabilities.tasks.fallback` say what a task delivers, when a task is returned, the 15-minute result window and the job that outlives it; the dead `not_implemented` code leaves the catalog.
   `RESULT_FORMAT` stays 2.
 - The `isError` carrier is the `guard` wrapper: `tools._guard.as_tool_result` returns `ToolResult(structured_content=envelope, is_error=True)` for every `ok: false` envelope on both delivery paths; the wire shape equals FastMCP's own dict conversion (pinned by a parity test); `SemanticErrorMiddleware` stays as a foreground safety net.
