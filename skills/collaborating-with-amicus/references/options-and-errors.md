@@ -18,7 +18,10 @@ Optional parameters, duplicate-spend protection, and what to do with an error en
 ## The error envelope
 
 On `ok: false` the envelope carries `error.code` (from a closed catalog), a message, optional
-`error.details`, optional `invalid_arguments[]`, and `error.repair`.
+`error.details`, optional `invalid_arguments[]`, and `error.repair` wherever some call can make the
+correction. When `repair.arguments` is present it is that complete call. It is left out rather than
+repeat a value that could be a secret or a prompt, and `error.repair` is left out entirely when only
+you hold the value the fix needs (a `workspace_root`): fix what `error.details` names.
 
 `repair.next_step` is symbolic and closed. The ones you will meet most:
 

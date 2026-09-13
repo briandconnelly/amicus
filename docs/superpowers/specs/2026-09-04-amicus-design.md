@@ -250,7 +250,7 @@ defaults, `plugin.repair_overrides` win per code, backend-local codes are preser
 → `backend_*`, and machine fields the backend computed travel on the widened
 `ClassifiedFailure` (M-1). Resource failures carry the same envelope in JSON-RPC
 `error.data` with `machine_code`/`human_message`. Backend-specific meta lives under
-`meta.backend_details`. ADR 0005.
+`meta.backend_details`. ADR 0005; what a repair carries, ADR 0021.
 
 ### Annotations, lifecycle metadata, capability summary, workspace
 
