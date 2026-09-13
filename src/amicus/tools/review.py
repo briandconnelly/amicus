@@ -99,6 +99,7 @@ def register_review_changes(
         reasoning_effort: ReasoningEffortParam = None,
         timeout_seconds: TimeoutSecondsParam = None,
         detail: DetailParam = "summary",
+        idempotency_key: IdempotencyKeyParam = None,
         backend_options: BackendOptionsParam = None,
     ) -> dict[str, Any]:
         """Review changes from git with the selected backend."""
@@ -134,6 +135,7 @@ def register_review_changes(
             detail=detail,
             ctx=ctx,
             task_map=lookup.task_map(settings),
+            idempotency_key=idempotency_key,
         )
 
     @app.tool(
@@ -229,6 +231,7 @@ def register_adversarial(
         reasoning_effort: ReasoningEffortParam = None,
         timeout_seconds: TimeoutSecondsParam = None,
         detail: DetailParam = "summary",
+        idempotency_key: IdempotencyKeyParam = None,
         backend_options: BackendOptionsParam = None,
     ) -> dict[str, Any]:
         """Attack a target with a fixed adversarial critic on the selected backend."""
@@ -270,6 +273,7 @@ def register_adversarial(
             detail=detail,
             ctx=ctx,
             task_map=lookup.task_map(settings),
+            idempotency_key=idempotency_key,
         )
 
     @app.tool(

@@ -50,6 +50,24 @@ POLL_FOLLOW_UP = (
 IDEM_LOCK_ACQUIRE_TIMEOUT_S = 0.5
 IDEM_IN_PROGRESS_RETRY_MS = 250
 IDEM_IO_ERROR_RETRY_MS = 1000
+# A keyed SYNC start waits this long, re-asking at the poll interval, for a transient keyed
+# outcome (a concurrent reservation still publishing, a flaky read) to resolve before
+# surfacing it; publication is normally sub-second, so a momentary blip self-heals into a
+# clean replay instead of bouncing the caller (#66; the _async twin never waits).
+IDEM_SYNC_INPROGRESS_WAIT_S = 1.0
+IDEM_SYNC_INPROGRESS_POLL_S = 0.05
+# The alternative on a keyed sync wait that hit its local deadline. The run was NOT
+# cancelled: another idempotent caller may be awaiting it, and sync and _async are
+# different dedup identities, so the static timeout repair's "use the async variant"
+# would start a SECOND paid run while this one completes unobserved.
+KEYED_TIMEOUT_ALTERNATIVE = (
+    "This keyed run continues in the background to its own deadline. Poll amicus_job_status "
+    "with the arguments above while status is running, honoring poll_after_ms; on any "
+    "terminal status call amicus_job_result. Do not switch to the async twin or drop the "
+    "idempotency_key: either starts a new paid run under a different dedup identity. "
+    "Repeating this exact keyed call reattaches to the same run without new spend (it may "
+    "hit the same local wait deadline)."
+)
 _IDEM_MESSAGES: dict[str, str] = {
     "idempotency_conflict": (
         "idempotency_key already used with different effective arguments (backend, model, "
@@ -318,20 +336,37 @@ async def await_job_result(
     timeout: int,
     ctx: Any,
     plugin: BackendPlugin,
+    *,
+    keyed: bool = False,
+    vanished: Callable[[], dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Await this handler's own detached job. Explicit cancellation cancels the job so
     spend stops; a transport drop leaves the record recoverable. Throttled progress rides
-    ctx.report_progress when the caller gave a progress token (a no-op otherwise)."""
+    ctx.report_progress when the caller gave a progress token (a no-op otherwise).
+
+    When ``keyed`` (this call carried an idempotency_key) the job is a durable shared run:
+    neither the local grace deadline nor this waiter's own cancellation cancels it, because
+    another idempotent caller may be awaiting the same job. It runs to its own deadline and
+    stays recoverable by job_id; only amicus_job_cancel stops it (#66, ADR 0020).
+
+    ``vanished`` builds the envelope for a record that is gone before its result was read.
+    For a job this call spawned that is an internal_error (the default); for a REPLAYED job
+    it is a race with consumption or eviction, which is idempotency_result_unavailable, the
+    same code start_async gives an already-evicted key."""
     deadline = time.monotonic() + timeout + SYNC_AWAIT_GRACE_S
     last_progress_at = 0.0
     last_events = -1
+
+    def _vanished(what: str) -> dict[str, Any]:
+        if vanished is not None:
+            return vanished()
+        return error_envelope("internal_error", what, meta, plugin=plugin)
+
     try:
         while True:
             rec = await asyncio.to_thread(store.status, cwd, job_id)
             if rec is None:
-                return error_envelope(
-                    "internal_error", "job record disappeared while awaiting", meta, plugin=plugin
-                )
+                return _vanished("job record disappeared while awaiting")
             if rec["status"] != "running":
                 break
             events = rec.get("events_seen", 0)
@@ -354,6 +389,8 @@ async def await_job_result(
                         timeout=SYNC_PROGRESS_REPORT_TIMEOUT_S,
                     )
             if time.monotonic() > deadline:
+                if keyed:
+                    return _keyed_timeout(rec, cwd, job_id, timeout, meta, plugin)
                 await asyncio.to_thread(store.cancel, cwd, job_id)
                 return error_envelope(
                     "timeout",
@@ -363,16 +400,85 @@ async def await_job_result(
                 )
             await asyncio.sleep(SYNC_POLL_INTERVAL_S)
     except asyncio.CancelledError:
-        with contextlib.suppress(Exception):
-            await asyncio.shield(asyncio.to_thread(store.cancel, cwd, job_id))
+        if not keyed:
+            with contextlib.suppress(Exception):
+                await asyncio.shield(asyncio.to_thread(store.cancel, cwd, job_id))
         raise
     rec2, payload = await asyncio.to_thread(store.result_payload, cwd, job_id)
     if rec2 is None:
-        return error_envelope(
-            "internal_error", "job record expired before its result was read", meta, plugin=plugin
-        )
+        return _vanished("job record expired before its result was read")
     envelope, _delivered = finished_job_envelope(rec2, payload, job_id, kind, meta, detail, cwd)
     return envelope
+
+
+def _keyed_timeout(
+    rec: dict[str, Any], cwd: str, job_id: str, timeout: int, meta: Meta, plugin: BackendPlugin
+) -> dict[str, Any]:
+    """The `timeout` envelope for a keyed wait whose run was left going: it keeps the code
+    but steers to amicus_job_status for THIS job (as job_running does), echoing the record's
+    grown poll_after_ms so the backoff matches the status tool's own hint."""
+    poll_arguments: dict[str, Any] = {"job_id": job_id, "workspace_root": cwd}
+    return error_envelope(
+        "timeout",
+        f"the run exceeded {timeout}s and the grace window; the keyed job continues in the "
+        "background; fetch it via amicus_job_result.",
+        meta,
+        plugin=plugin,
+        repair_next_step="poll_job_status",
+        repair_tool="amicus_job_status",
+        repair_arguments=poll_arguments,
+        retry_after_ms=rec.get("poll_after_ms"),
+        repair_alternative=KEYED_TIMEOUT_ALTERNATIVE,
+    )
+
+
+async def _start_keyed_sync(
+    store: JobStore, spec: RunSpec, meta: Meta, plugin: BackendPlugin, *, key: str
+) -> tuple[dict[str, Any], bool]:
+    """Reserve (tool, key) for a sync waiter: ``({"job_id": ...}, replayed)`` names the
+    job to await (a new run, or the EXISTING run for this key+args), else an error
+    envelope. A transient outcome is re-asked for up to IDEM_SYNC_INPROGRESS_WAIT_S before
+    it is surfaced. meta.job_id is set as soon as the job is known, so a keyed timeout or
+    terminal-error envelope built from this meta names the durable job to recover."""
+    wait_deadline = time.monotonic() + IDEM_SYNC_INPROGRESS_WAIT_S
+    while True:
+        try:
+            outcome = await asyncio.to_thread(
+                store.start_idempotent,
+                worker_cmd,
+                spec.cwd,
+                kind=spec.kind,
+                tool=spec.tool,
+                key=key,
+                arg_hash=spec.arg_hash(),
+                extra=_extra(spec),
+                write_spec=spec.public(),
+                stdin_text=spec.inputs_json(),
+                lock_timeout=IDEM_LOCK_ACQUIRE_TIMEOUT_S,
+            )
+        except OSError as exc:
+            return _spawn_failure(exc, meta, plugin), False
+        result_kind = outcome["kind"]
+        if result_kind in ("created", "replay"):
+            job_id = outcome["job_id"]
+            if result_kind == "replay":
+                snap = await asyncio.to_thread(store.status, spec.cwd, job_id)
+                if snap is None:
+                    return idem_error(
+                        "idempotency_result_unavailable", meta, plugin, tool=spec.tool
+                    ), False
+            meta.job_id = job_id
+            return {"job_id": job_id}, result_kind == "replay"
+        if result_kind in ("conflict", "unavailable"):
+            code, retry = _IDEM_TERMINAL[result_kind]
+            return idem_error(code, meta, plugin, tool=spec.tool, retry_after_ms=retry), False
+        # in_progress, io_error, or an outcome this release does not know: transient.
+        if time.monotonic() >= wait_deadline:
+            if result_kind == "io_error":
+                return _idem_io_error(meta, plugin, tool=spec.tool), False
+            code, retry = _IDEM_TERMINAL.get(result_kind, _IDEM_UNKNOWN_OUTCOME)
+            return idem_error(code, meta, plugin, tool=spec.tool, retry_after_ms=retry), False
+        await asyncio.sleep(IDEM_SYNC_INPROGRESS_POLL_S)
 
 
 def current_task_id() -> str | None:
@@ -404,12 +510,24 @@ async def run_sync(
     detail: str,
     ctx: Any,
     task_map: TaskJobMap | None = None,
+    idempotency_key: str | None = None,
 ) -> dict[str, Any]:
     """The synchronous paid-tool tail: start the detached job and await it. Under a
     task-augmented call the task id is recorded against the job as soon as the job exists,
     so amicus_job_list(task_id=...) recovers it after a cancel or after the task's result
-    window lapses, and it rides meta.task_id on whatever envelope is returned."""
-    handle = await start_job(store, spec, meta, plugin, deadline=timeout)
+    window lapses, and it rides meta.task_id on whatever envelope is returned.
+
+    Keyed (#66, ADR 0020): a first reservation awaits its own new job; a duplicate awaits
+    the EXISTING job and stamps meta.idempotency_replayed on whatever it delivers; conflict
+    and unavailable are their envelopes. A keyed wait never cancels the shared job, on
+    timeout or on this waiter's cancellation, so a tasked keyed call's job survives
+    tasks/cancel and is recovered through amicus_job_list(task_id=...) or by replaying
+    the key."""
+    keyed = idempotency_key is not None
+    if keyed:
+        handle, replayed = await _start_keyed_sync(store, spec, meta, plugin, key=idempotency_key)
+    else:
+        handle, replayed = await start_job(store, spec, meta, plugin, deadline=timeout), False
     task_id = current_task_id()
     if handle.get("ok") is False:
         return _with_task_id(handle, task_id)
@@ -422,9 +540,11 @@ async def run_sync(
             # being entered would otherwise propagate straight out of run_sync, past
             # await_job_result's own cancel-on-CancelledError handler, and orphan the
             # already-spawned job. Shield the cleanup (mirrors await_job_result) and
-            # re-raise so the caller still sees the cancellation.
-            with contextlib.suppress(Exception):
-                await asyncio.shield(asyncio.to_thread(store.cancel, spec.cwd, job_id))
+            # re-raise so the caller still sees the cancellation. A keyed job is shared
+            # and is left running, exactly as await_job_result leaves it.
+            if not keyed:
+                with contextlib.suppress(Exception):
+                    await asyncio.shield(asyncio.to_thread(store.cancel, spec.cwd, job_id))
             raise
         except OSError as exc:
             # The type, not `exc_summary(exc)`: rule 18 keeps exception text out of the
@@ -440,6 +560,22 @@ async def run_sync(
                 obs.safe_type_name(exc),
             )
     envelope = await await_job_result(
-        store, spec.cwd, job_id, spec.kind, meta, detail, timeout, ctx, plugin
+        store,
+        spec.cwd,
+        job_id,
+        spec.kind,
+        meta,
+        detail,
+        timeout,
+        ctx,
+        plugin,
+        keyed=keyed,
+        vanished=(
+            (lambda: idem_error("idempotency_result_unavailable", meta, plugin, tool=spec.tool))
+            if replayed
+            else None
+        ),
     )
+    if replayed:
+        envelope = mark_replayed(envelope)
     return _with_task_id(envelope, task_id)

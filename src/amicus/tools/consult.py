@@ -71,6 +71,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
         reasoning_effort: ReasoningEffortParam = None,
         timeout_seconds: TimeoutSecondsParam = None,
         detail: DetailParam = "summary",
+        idempotency_key: IdempotencyKeyParam = None,
         backend_options: BackendOptionsParam = None,
     ) -> dict[str, Any]:
         """Consult the selected backend for a read-only second opinion."""
@@ -104,6 +105,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
             detail=detail,
             ctx=ctx,
             task_map=lookup.task_map(settings),
+            idempotency_key=idempotency_key,
         )
 
     @app.tool(

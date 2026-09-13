@@ -761,3 +761,337 @@ async def test_cancellation_during_task_map_record_still_cancels_the_job(tmp_pat
         assert time.monotonic() < deadline
         await asyncio.sleep(0.05)
     assert store.status(str(tmp_path), job_id)["status"] == "cancelled"
+
+
+# --- keyed sync (issue #66) ----------------------------------------------------------------
+
+
+async def _run_keyed(store, spec, key, **kw):
+    return await lifecycle.run_sync(
+        store,
+        spec,
+        meta_for(spec),
+        fakeplugin.make_plugin(),
+        timeout=kw.pop("timeout", 10),
+        detail="summary",
+        ctx=None,
+        idempotency_key=key,
+        **kw,
+    )
+
+
+async def test_keyed_run_sync_creates_then_replays_the_stored_result(tmp_path, monkeypatch):
+    store = lifecycle.job_store(_settings(tmp_path))
+    monkeypatch.setattr(lifecycle, "SYNC_POLL_INTERVAL_S", 0.01)
+    monkeypatch.setattr(lifecycle, "worker_cmd", _fake_worker_cmd(_success(str(tmp_path))))
+    spec = _spec(str(tmp_path))
+    first = await _run_keyed(store, spec, "s1")
+    assert first["ok"] is True and first["summary"] == "Looks fine"
+    assert "idempotency_replayed" not in first["meta"]  # a delivered result is slimmed
+    again = await _run_keyed(store, spec, "s1")
+    assert again["ok"] is True and again["summary"] == "Looks fine"
+    assert again["meta"]["idempotency_replayed"] is True
+    assert again["meta"]["job_id"] == first["meta"]["job_id"]
+    assert len(store.list_jobs(str(tmp_path))) == 1
+    spec_on_disk = json.loads(
+        (store._job_dir(str(tmp_path), first["meta"]["job_id"]) / "spec.json").read_text()
+    )
+    assert "why?" not in json.dumps(spec_on_disk)
+
+
+async def test_keyed_run_sync_with_different_inputs_is_a_conflict(tmp_path, monkeypatch):
+    store = lifecycle.job_store(_settings(tmp_path))
+    monkeypatch.setattr(lifecycle, "SYNC_POLL_INTERVAL_S", 0.01)
+    monkeypatch.setattr(lifecycle, "worker_cmd", _fake_worker_cmd(_success(str(tmp_path))))
+    spec = _spec(str(tmp_path))
+    assert (await _run_keyed(store, spec, "s2"))["ok"] is True
+    other = await _run_keyed(store, _spec(str(tmp_path), question="why not?"), "s2")
+    assert other["ok"] is False and other["error"]["code"] == "idempotency_conflict"
+    assert other["error"]["repair"]["next_step"] == "use_new_idempotency_key"
+    assert other["error"]["repair"]["tool"] == "amicus_consult"
+    assert len(store.list_jobs(str(tmp_path))) == 1
+
+
+async def test_keyed_run_sync_after_the_record_is_gone_is_unavailable(tmp_path, monkeypatch):
+    store = lifecycle.job_store(_settings(tmp_path))
+    monkeypatch.setattr(lifecycle, "SYNC_POLL_INTERVAL_S", 0.01)
+    monkeypatch.setattr(lifecycle, "worker_cmd", _fake_worker_cmd(_success(str(tmp_path))))
+    spec = _spec(str(tmp_path))
+    first = await _run_keyed(store, spec, "s3")
+    assert store.discard(str(tmp_path), first["meta"]["job_id"]) is pjobs.DiscardOutcome.REMOVED
+    gone = await _run_keyed(store, spec, "s3")
+    assert gone["ok"] is False and gone["error"]["code"] == "idempotency_result_unavailable"
+    assert gone["error"]["repair"]["next_step"] == "use_new_idempotency_key"
+
+
+@pytest.mark.parametrize(
+    ("outcome", "code", "retry"),
+    [
+        ({"kind": "in_progress"}, "idempotency_in_progress", 250),
+        ({"kind": "io_error"}, "internal_error", 1000),
+        ({"kind": "something_new"}, "idempotency_in_progress", 250),
+    ],
+)
+async def test_keyed_run_sync_surfaces_a_persistent_transient_outcome(
+    tmp_path, monkeypatch, outcome, code, retry
+):
+    """A sync waiter waits briefly for a transient keyed outcome to resolve, then surfaces
+    it as the same retryable envelope the _async twin returns at once."""
+    store = lifecycle.job_store(_settings(tmp_path))
+    monkeypatch.setattr(lifecycle, "IDEM_SYNC_INPROGRESS_WAIT_S", 0.1)
+    monkeypatch.setattr(lifecycle, "IDEM_SYNC_INPROGRESS_POLL_S", 0.01)
+    calls: list[int] = []
+
+    def transient(*a, **kw):
+        calls.append(1)
+        return outcome
+
+    monkeypatch.setattr(store, "start_idempotent", transient)
+    out = await _run_keyed(store, _spec(str(tmp_path)), "s4")
+    assert out["ok"] is False and out["error"]["code"] == code
+    assert out["error"]["temporary"] is True and out["error"]["retry_after_ms"] == retry
+    assert out["error"]["repair"]["tool"] == "amicus_consult"
+    assert "idempotency_key" in out["error"]["repair"]["alternative"]
+    assert len(calls) > 1  # it did wait and re-ask, not bounce on the first answer
+
+
+async def test_keyed_run_sync_transient_outcome_that_resolves_is_awaited(tmp_path, monkeypatch):
+    store = lifecycle.job_store(_settings(tmp_path))
+    monkeypatch.setattr(lifecycle, "SYNC_POLL_INTERVAL_S", 0.01)
+    monkeypatch.setattr(lifecycle, "IDEM_SYNC_INPROGRESS_POLL_S", 0.01)
+    monkeypatch.setattr(lifecycle, "worker_cmd", _fake_worker_cmd(_success(str(tmp_path))))
+    real = store.start_idempotent
+    answers = iter([{"kind": "in_progress"}, {"kind": "io_error"}])
+
+    def flaky(*a, **kw):
+        try:
+            return next(answers)
+        except StopIteration:
+            return real(*a, **kw)
+
+    monkeypatch.setattr(store, "start_idempotent", flaky)
+    out = await _run_keyed(store, _spec(str(tmp_path)), "s5")
+    assert out["ok"] is True and out["summary"] == "Looks fine"
+    assert len(store.list_jobs(str(tmp_path))) == 1
+
+
+async def test_keyed_run_sync_replay_whose_record_vanished_is_unavailable(tmp_path, monkeypatch):
+    store = lifecycle.job_store(_settings(tmp_path))
+    monkeypatch.setattr(
+        store, "start_idempotent", lambda *a, **kw: {"kind": "replay", "job_id": "0" * 32}
+    )
+    out = await _run_keyed(store, _spec(str(tmp_path)), "s6")
+    assert out["ok"] is False and out["error"]["code"] == "idempotency_result_unavailable"
+
+
+async def test_keyed_run_sync_spawn_failure_is_an_internal_error(tmp_path, monkeypatch):
+    store = lifecycle.job_store(_settings(tmp_path))
+    monkeypatch.setattr(lifecycle, "worker_cmd", lambda jd: ["/nonexistent-binary-xyz"])
+    out = await _run_keyed(store, _spec(str(tmp_path)), "s7")
+    assert out["ok"] is False and out["error"]["code"] == "internal_error"
+    assert "failed to start background job" in out["error"]["message"]
+    assert store.list_jobs(str(tmp_path)) == []
+
+
+async def test_keyed_run_sync_reserves_off_the_event_loop_with_the_sync_tool_identity(
+    tmp_path, monkeypatch
+):
+    store = lifecycle.job_store(_settings(tmp_path))
+    seen: dict = {}
+
+    def blocking(cmd_factory, cwd, **kw):
+        seen["thread"] = threading.current_thread().name
+        seen["kw"] = kw
+        return {"kind": "conflict"}
+
+    monkeypatch.setattr(store, "start_idempotent", blocking)
+    spec = _spec(str(tmp_path))
+    await _run_keyed(store, spec, "s8")
+    assert seen["thread"] != threading.main_thread().name
+    assert seen["kw"]["key"] == "s8" and seen["kw"]["tool"] == "amicus_consult"
+    assert seen["kw"]["arg_hash"] == spec.arg_hash() and seen["kw"]["kind"] == "consult"
+    assert seen["kw"]["lock_timeout"] == lifecycle.IDEM_LOCK_ACQUIRE_TIMEOUT_S
+    assert seen["kw"]["write_spec"] == spec.public()
+    assert seen["kw"]["stdin_text"] == spec.inputs_json()
+    assert seen["kw"]["extra"]["tool"] == "amicus_consult"
+
+
+async def test_keyed_await_timeout_leaves_the_shared_job_running(tmp_path, monkeypatch):
+    """A keyed sync waiter that exhausts its local grace must NOT cancel the job: another
+    idempotent caller may be awaiting the same run. The envelope keeps code `timeout` but
+    steers to amicus_job_status for THIS job, because switching to the async twin or
+    dropping the key would start a second paid run under a different dedup identity."""
+    store = lifecycle.job_store(_settings(tmp_path))
+    monkeypatch.setattr(lifecycle, "SYNC_AWAIT_GRACE_S", 0.05)
+    monkeypatch.setattr(lifecycle, "SYNC_POLL_INTERVAL_S", 0.01)
+    monkeypatch.setattr(lifecycle, "worker_cmd", _sleeping_worker_cmd())
+    spec = _spec(str(tmp_path), timeout_seconds=1)
+    out = await _run_keyed(store, spec, "s9", timeout=1)
+    job_id = out["meta"]["job_id"]
+    try:
+        assert out["ok"] is False and out["error"]["code"] == "timeout"
+        assert "continues" in out["error"]["message"] and "cancelled" not in out["error"]["message"]
+        repair = out["error"]["repair"]
+        assert repair["next_step"] == "poll_job_status" and repair["tool"] == "amicus_job_status"
+        assert repair["arguments"] == {"job_id": job_id, "workspace_root": str(tmp_path)}
+        assert "async" in repair["alternative"] and "idempotency_key" in repair["alternative"]
+        assert out["error"]["retry_after_ms"] is not None
+        assert store.status(str(tmp_path), job_id)["status"] == "running"
+    finally:
+        store.cancel(str(tmp_path), job_id)
+
+
+async def test_unkeyed_await_timeout_still_cancels(tmp_path, monkeypatch):
+    """The control for the test above: the same wait, unkeyed, cancels and says so."""
+    store = lifecycle.job_store(_settings(tmp_path))
+    monkeypatch.setattr(lifecycle, "SYNC_AWAIT_GRACE_S", 0.05)
+    monkeypatch.setattr(lifecycle, "SYNC_POLL_INTERVAL_S", 0.01)
+    monkeypatch.setattr(lifecycle, "worker_cmd", _sleeping_worker_cmd())
+    spec = _spec(str(tmp_path), timeout_seconds=1)
+    out = await _run_keyed(store, spec, None, timeout=1)
+    assert out["error"]["code"] == "timeout" and "cancelled" in out["error"]["message"]
+    assert out["error"]["repair"]["next_step"] != "poll_job_status"
+    assert store.status(str(tmp_path), out["meta"]["job_id"])["status"] == "cancelled"
+
+
+async def test_keyed_cancellation_leaves_the_job_running(tmp_path, monkeypatch):
+    store = lifecycle.job_store(_settings(tmp_path))
+    monkeypatch.setattr(lifecycle, "SYNC_POLL_INTERVAL_S", 0.01)
+    job_id, _ = store.start(
+        _sleeping_worker_cmd(), str(tmp_path), kind="consult", extra={"result_format": 1}
+    )
+    try:
+        task = asyncio.create_task(
+            lifecycle.await_job_result(
+                store,
+                str(tmp_path),
+                job_id,
+                "consult",
+                Meta(),
+                "summary",
+                60,
+                None,
+                fakeplugin.make_plugin(),
+                keyed=True,
+            )
+        )
+        await asyncio.sleep(0.05)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        await asyncio.sleep(0.05)
+        assert store.status(str(tmp_path), job_id)["status"] == "running"
+    finally:
+        store.cancel(str(tmp_path), job_id)
+
+
+async def test_keyed_cancellation_during_task_map_record_leaves_the_job_running(
+    tmp_path, monkeypatch
+):
+    """The keyed twin of test_cancellation_during_task_map_record_still_cancels_the_job: a
+    tasked KEYED call's job survives tasks/cancel and stays recoverable (ADR 0020)."""
+    store = lifecycle.job_store(_settings(tmp_path))
+    monkeypatch.setattr(lifecycle, "worker_cmd", _sleeping_worker_cmd())
+    monkeypatch.setattr(lifecycle, "current_task_id", lambda: "task-keyed")
+    entered = threading.Event()
+    release = threading.Event()
+    recorded: list[tuple[str, str]] = []
+
+    class _BlockingMap:
+        def record(self, task_id, job_id):
+            recorded.append((task_id, job_id))
+            entered.set()
+            release.wait(5)
+
+    spec = _spec(str(tmp_path))
+    task = asyncio.create_task(_run_keyed(store, spec, "s10", task_map=_BlockingMap()))
+    deadline = time.monotonic() + 5
+    while not entered.is_set():
+        assert time.monotonic() < deadline
+        await asyncio.sleep(0.01)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    release.set()
+    jobs = store.list_jobs(str(tmp_path))
+    assert len(jobs) == 1
+    job_id = jobs[0]["job_id"]
+    try:
+        await asyncio.sleep(0.1)
+        assert store.status(str(tmp_path), job_id)["status"] == "running"
+        assert recorded == [("task-keyed", job_id)]
+    finally:
+        store.cancel(str(tmp_path), job_id)
+
+
+async def test_keyed_run_sync_records_the_task_id_on_a_replay_too(tmp_path, monkeypatch):
+    """A second tasked waiter replaying the key is a new task naming the same job; the
+    map records it so amicus_job_list(task_id=...) recovers the job from either task."""
+    store = lifecycle.job_store(_settings(tmp_path))
+    monkeypatch.setattr(lifecycle, "SYNC_POLL_INTERVAL_S", 0.01)
+    monkeypatch.setattr(lifecycle, "worker_cmd", _fake_worker_cmd(_success(str(tmp_path))))
+    task_map = TaskJobMap(tmp_path / "tasks.json")
+    spec = _spec(str(tmp_path))
+    monkeypatch.setattr(lifecycle, "current_task_id", lambda: "task-1")
+    first = await _run_keyed(store, spec, "s11", task_map=task_map)
+    monkeypatch.setattr(lifecycle, "current_task_id", lambda: "task-2")
+    again = await _run_keyed(store, spec, "s11", task_map=task_map)
+    job_id = first["meta"]["job_id"]
+    assert again["meta"]["idempotency_replayed"] is True and again["meta"]["task_id"] == "task-2"
+    assert task_map.entries() == {"task-1": job_id, "task-2": job_id}
+
+
+@pytest.mark.parametrize("lose_at", ["status", "result_payload"])
+async def test_replayed_job_whose_record_vanishes_is_unavailable_not_internal(
+    tmp_path, monkeypatch, lose_at
+):
+    """A replay accepted by the index can still race consumption or eviction while it is
+    awaited. That is the same fact start_async reports for an already-evicted key, so it
+    carries the same code, not a generic internal_error."""
+    store = lifecycle.job_store(_settings(tmp_path))
+    monkeypatch.setattr(lifecycle, "SYNC_POLL_INTERVAL_S", 0.01)
+    monkeypatch.setattr(lifecycle, "worker_cmd", _fake_worker_cmd(_success(str(tmp_path))))
+    spec = _spec(str(tmp_path))
+    first = await _run_keyed(store, spec, "s12")
+    job_id = first["meta"]["job_id"]
+    monkeypatch.setattr(
+        store, "start_idempotent", lambda *a, **kw: {"kind": "replay", "job_id": job_id}
+    )
+    if lose_at == "status":
+        # The replay's own status read (the snapshot) still sees the record; the awaited
+        # read that follows does not.
+        real_status = store.status
+        reads: list[int] = []
+
+        def racing_status(cwd, jid):
+            reads.append(1)
+            return real_status(cwd, jid) if len(reads) == 1 else None
+
+        monkeypatch.setattr(store, "status", racing_status)
+    else:
+        monkeypatch.setattr(store, "result_payload", lambda cwd, jid: (None, None))
+    out = await _run_keyed(store, spec, "s12")
+    assert out["ok"] is False and out["error"]["code"] == "idempotency_result_unavailable"
+    assert out["error"]["repair"]["next_step"] == "use_new_idempotency_key"
+    assert out["error"]["repair"]["tool"] == "amicus_consult"
+
+
+async def test_created_keyed_job_whose_record_vanishes_stays_an_internal_error(
+    tmp_path, monkeypatch
+):
+    """The control: a job THIS call spawned that vanishes is a lifecycle fault, not a
+    dedup outcome."""
+    store = lifecycle.job_store(_settings(tmp_path))
+    monkeypatch.setattr(lifecycle, "SYNC_POLL_INTERVAL_S", 0.01)
+    monkeypatch.setattr(lifecycle, "worker_cmd", _fake_worker_cmd(_success(str(tmp_path))))
+    real_start_idempotent = store.start_idempotent
+
+    def create_then_lose(*a, **kw):
+        outcome = real_start_idempotent(*a, **kw)
+        monkeypatch.setattr(store, "status", lambda cwd, jid: None)
+        return outcome
+
+    monkeypatch.setattr(store, "start_idempotent", create_then_lose)
+    out = await _run_keyed(store, _spec(str(tmp_path)), "s13")
+    assert out["ok"] is False and out["error"]["code"] == "internal_error"
+    assert "disappeared" in out["error"]["message"]
