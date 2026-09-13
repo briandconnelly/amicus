@@ -201,6 +201,18 @@ _OFFENDING_VALUE_POLICY = (
     "allowed_values. Machine identifiers this server minted (job_id) are refused, never "
     "echoed, when they carry a control character."
 )
+_REPAIR_POLICY = (
+    "repair.arguments, when present, is a complete call: a lookup or poll repair carries "
+    "the failing call's backend, a job_id this server minted, or the workspace_root of a "
+    "call that already resolved it; an invalid_arguments repair whose every rejected "
+    "argument is an unknown key carries the call as sent minus those keys, but only when "
+    "every remaining value is null, a bool, a number or a member of the parameter's "
+    "published enum. Any other string could be a secret or a prompt input, so it "
+    "suppresses the arguments. That call corrects the failures this envelope reports; a "
+    "later check can still reject it with a repair of its own. repair is omitted where no "
+    "call can make the correction: invalid_workspace_root and workspace_outside_roots "
+    "name the field in details instead."
+)
 
 
 def _harden_error_envelope_schema(schema: dict[str, Any]) -> dict[str, Any]:
@@ -209,7 +221,7 @@ def _harden_error_envelope_schema(schema: dict[str, Any]) -> dict[str, Any]:
     s["description"] = (
         "The full error envelope every ok:false tool result carries in structuredContent; "
         "resource-read failures carry error (with code/message renamed machine_code/"
-        f"human_message) in JSON-RPC error.data. {_OFFENDING_VALUE_POLICY}"
+        f"human_message) in JSON-RPC error.data. {_OFFENDING_VALUE_POLICY} {_REPAIR_POLICY}"
     )
     required = s.setdefault("required", [])
     if "ok" not in required:
