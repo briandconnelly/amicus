@@ -9,6 +9,7 @@ import subprocess
 import pytest
 from pontonier.conventions.preflight import FlagSupport
 from pontonier.core.runtime import BINARY_NOT_FOUND, TIMED_OUT, CommandRun
+from tests.support import claudefixtures as cf
 
 from amicus.backends.claude import cli, contract
 
@@ -246,6 +247,16 @@ def test_api_key_repair_names_the_placeholder_when_the_host_did_not_expand_it(mo
 def test_classify_failure_routes_a_failure_envelope_on_any_exit_code():
     run = _run(stdout=_envelope("Budget stop threshold reached."), exit_code=1)
     assert cli.classify_failure(run, config_mode="inherit", sanitize=None).code == "budget_exceeded"
+
+
+def test_classify_failure_reads_a_budget_stop_by_its_subtype_alone():
+    """A real budget stop carries no `result` text, only the subtype (#73); it classified as
+    nonzero_exit while the budget pattern was word-bounded."""
+    run = _run(stdout=cf.budget_stop_envelope(total_cost_usd=1.66), exit_code=1)
+    failure = cli.classify_failure(run, config_mode="inherit", sanitize=None)
+    assert failure.code == "budget_exceeded"
+    assert failure.details == {"field": "backend_options.max_budget_usd"}
+    assert failure.usage is not None and failure.usage.cost_usd == 1.66
 
 
 @pytest.mark.parametrize(
