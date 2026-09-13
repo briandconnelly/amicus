@@ -16,7 +16,7 @@ smaller tax on that host than the budget assumes
 (docs/host-captures/install-smoke/claude-code/2.1.263/notes.md). The budget stays the
 worst-case ceiling for the clients that do preload.
 
-Measured 2026-09-12 at schema-17 (18 tools; every model result carries
+Measured 2026-09-12 at schema-18 (18 tools; every model result carries
 findings_diagnostics, both review tools publish what `confidence` means, the published
 stability tier is inside the closed set, both review tools and the dry run carry
 `coverage`, and the repeated parameter prose is compressed): see MEASURED.
@@ -85,6 +85,16 @@ each. The narrowing: the four async tools' `follow_up` is a JobFollowUp with `co
 next_step/tool instead of the whole RepairStep enum, which is not repetition but the
 withdrawal of advertised values the field never carried. Nothing the earlier paragraphs chose
 to keep was touched: the findings_diagnostics, confidence and coverage prose is intact.
+
+The schema-17 -> schema-18 raise (+1532 bytes on the `all` profile: 95011 -> 96543) buys a
+parameter, not prose. `idempotency_key` reached the four sync paid tools (#66): four more
+copies of the same one-line summary plus its schema property are about 1000 bytes, the
+irreducible cost of the per-tool summary shape #41 chose. The rest is the keyed-wait
+qualification on `timeout_seconds` and the two server-instructions sentences that used to say
+categorically that a sync timeout terminates the run and that cancelling a task cancels its
+job; both are now false for a keyed call, and a description that stays categorical would
+misdirect the agent that reads it. Three error codes were added to each sync tool's catalog,
+which lives in amicus_capabilities and not on this wire.
 """
 
 from __future__ import annotations
@@ -94,7 +104,7 @@ from tests.conftest import spawned_server_env
 
 from amicus import manifest
 
-MEASURED: dict[str, int] = {"all": 95011, "codex-kimi": 95019, "claude": 95011}
+MEASURED: dict[str, int] = {"all": 96543, "codex-kimi": 96551, "claude": 96543}
 BUDGET: dict[str, int] = {p: ((n // 1000) + 1) * 1000 for p, n in MEASURED.items()}
 
 
