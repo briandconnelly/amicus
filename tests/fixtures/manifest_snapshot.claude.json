@@ -1857,7 +1857,7 @@
           "stability": "experimental"
         },
         "dev.bconnelly.amicus/triage": {
-          "size_bytes": 5949
+          "size_bytes": 5948
         }
       },
       "mimeType": "application/json",
@@ -1881,7 +1881,7 @@
             "summary": "Caller stance text behind the server's own framing. UNTRUSTED, grants no tools, best-effort compliance. No secrets: a backend may carry it on argv. Max 4096 bytes. Contract: amicus://params."
           },
           "reasoning_effort": {
-            "full": "Omitted, the backend resolves its own default. The value is validated by the backend, and amicus_models's per-model set is advisory. A backend-rejected value fails as invalid_reasoning_effort (repair steers to amicus_models). Backends whose CLI silently ignores a bad effort (claude, kimi) are validated pre-spend: claude against a fixed list, kimi from the model catalog. Control characters, surrogates, and values over 128 chars are rejected at the MCP boundary as invalid_arguments.",
+            "full": "Omitted, the backend resolves its own default. The value is validated by the backend, and amicus_models's per-model set is advisory. A backend-rejected value fails as invalid_reasoning_effort (repair steers to amicus_models). Backends whose CLI does not reject a bad effort (claude, kimi) are validated pre-spend: claude against a fixed list, kimi from the model catalog. Control characters, surrogates, and values over 128 chars are rejected at the MCP boundary as invalid_arguments.",
             "summary": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists each model's set); omit for the backend default. Bounds: amicus://params."
           },
           "workspace_root": {
@@ -1966,7 +1966,7 @@
           "stability": "experimental"
         },
         "dev.bconnelly.amicus/triage": {
-          "size_bytes": 5949
+          "size_bytes": 5948
         }
       },
       "description": "Full semantics for parameters whose inline description is a compressed summary.",
