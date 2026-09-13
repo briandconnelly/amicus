@@ -20,7 +20,6 @@ from pydantic import ValidationError
 
 from amicus import obs
 from amicus.errors import make_error, serialize_error, serialize_error_info
-from amicus.request import INPUT_FIELDS
 from amicus.schemas.envelope import ErrorResult, InvalidArgument, Meta
 from amicus.schemas.fingerprint import JSON_SCHEMA_DIALECT
 
@@ -94,11 +93,38 @@ def _enum_for_property(prop: Any, *, element: bool = False) -> list[str] | None:
     return None
 
 
-def corrected_arguments(errors: list[Any], arguments: object) -> dict[str, Any] | None:
+def _object_properties(prop: Any) -> dict[str, Any] | None:
+    if not isinstance(prop, dict):
+        return None
+    for branch in [prop, *(b for b in prop.get("anyOf", []) if isinstance(b, dict))]:
+        props = branch.get("properties")
+        if isinstance(props, dict):
+            return props
+    return None
+
+
+def _echoable(value: object, prop: Any) -> bool:
+    """A value whose own domain proves it safe to repeat ([6.offending-value]): null, a
+    bool, a number, a member of the parameter's published enum, or an object of those. Any
+    other string can be a mispasted secret, or a prompt input (rule 18)."""
+    if value is None or isinstance(value, (bool, int, float)):
+        return True
+    if isinstance(value, str):
+        return value in (_enum_for_property(prop) or ())
+    if isinstance(value, dict):
+        nested = _object_properties(prop) or {}
+        return all(_echoable(v, nested.get(k)) for k, v in value.items())
+    return False
+
+
+def corrected_arguments(
+    errors: list[Any], arguments: object, property_schemas: dict[str, Any]
+) -> dict[str, Any] | None:
     """The corrected call's arguments when dropping the unknown keys is the ONLY correction
     ([6.repair-intent], issue #42): every error is an unknown key the caller actually sent,
-    and no surviving argument is a prompt input. Rule 18 never echoes one, and a call
-    without it is not the caller's call. None whenever the correction is not unique."""
+    and every surviving value is `_echoable`. A free-form survivor (a prompt input, a path,
+    an idempotency_key) can be neither repeated nor dropped without changing the call, so
+    it suppresses the arguments. None whenever the correction is not unique."""
     if not isinstance(arguments, dict) or not errors:
         return None
     fixed = copy.deepcopy(arguments)
@@ -114,7 +140,7 @@ def corrected_arguments(errors: list[Any], arguments: object) -> dict[str, Any] 
         if not isinstance(parent, dict) or loc[-1] not in parent:
             return None
         del parent[loc[-1]]
-    if any(name in INPUT_FIELDS for name in fixed):
+    if not all(_echoable(v, property_schemas.get(k)) for k, v in fixed.items()):
         return None
     return fixed
 
@@ -177,7 +203,7 @@ def invalid_arguments_envelope(
                 "invalid_arguments",
                 message[:300],
                 repair_tool=tool_name,
-                repair_arguments=corrected_arguments(errors, arguments),
+                repair_arguments=corrected_arguments(errors, arguments, property_schemas),
                 repair_alternative=alternative,
                 invalid_arguments=items,
             ),

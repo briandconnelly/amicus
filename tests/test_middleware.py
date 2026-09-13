@@ -144,6 +144,18 @@ async def test_a_surviving_prompt_input_suppresses_the_arguments():
     assert "PROMPT-TEXT-42" not in repr(res.structured_content)
 
 
+async def test_a_surviving_free_form_value_suppresses_the_arguments():
+    # [6.offending-value]: only a value whose domain proves it safe (an enum member, a bool,
+    # a number) is echoed; a free-form string can be a mispasted secret, prompt or not.
+    async with Client(_scratch_app()) as c:
+        res = await c.call_tool(
+            "probe", {"mode": "ok", "paths": ["SECRET-PATH-42"], "extra": 1}, raise_on_error=False
+        )
+    err = res.structured_content["error"]
+    assert err["repair"]["tool"] == "probe" and "arguments" not in err["repair"]
+    assert "SECRET-PATH-42" not in repr(res.structured_content)
+
+
 def test_an_unknown_only_call_repairs_to_empty_arguments():
     out = middleware.invalid_arguments_envelope(
         "probe",
