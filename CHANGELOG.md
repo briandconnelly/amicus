@@ -29,6 +29,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A claude budget stop returned `nonzero_exit` instead of `budget_exceeded`, so a caller got
+  a generic error rather than the repair that names `backend_options.max_budget_usd` (#73).
+  Claude reports the stop as `subtype: "error_max_budget_usd"` with no `result` text, and the
+  word-bounded budget pattern could not match inside the subtype.
+
 - A job named by several tasks reported one task on `amicus_job_status` and `amicus_job_result`
   and another on `amicus_job_list`; every surface now reports the first task that named it, and
   a list filtered by any associated task still finds the job (#66).
