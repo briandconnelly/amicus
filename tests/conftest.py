@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import shutil
 import stat
@@ -11,7 +12,7 @@ import fastmcp
 import pytest
 from pontonier.core.runtime import CommandRun
 
-from amicus import config
+from amicus import config, obs
 
 # Run the suite with fastmcp's camelCase compatibility bridge OFF so any camelCase read
 # that sneaks in fails today as a hard AttributeError instead of on the next major.
@@ -78,6 +79,45 @@ def _never_spawn_real_claude(monkeypatch):
     claude run and probe short-circuit. Tests that want a run point the override at the
     `fake_claude` fixture; the live suite (tests/test_claude_live.py) deletes it."""
     monkeypatch.setenv("AMICUS_CLAUDE_BIN", NEVER_SPAWN_CLAUDE)
+
+
+# Loggers `obs.configure` changes besides its own (issue #79).
+_DEPENDENCY_LOGGER_STATE = ("fastmcp", "mcp", obs.FASTMCP_SERVER_LOGGER_NAME)
+
+
+def _is_pytest_handler(handler: logging.Handler) -> bool:
+    return type(handler).__module__.startswith("_pytest")
+
+
+@pytest.fixture(autouse=True)
+def _restore_dependency_logging():
+    """`obs.configure` takes over the `fastmcp` and `mcp` loggers, filters
+    `fastmcp.server.server` and switches FastMCP's own logging configuration off (issue #79).
+    Put all of it back after every test, so a test that configures logging cannot leave a
+    later test's FastMCP records going to a finished test's captured stderr.
+
+    pytest's own capture handlers are left alone in both directions: pytest adds and removes
+    them per test phase, so one saved during setup is already gone by teardown, and putting
+    it back would leave a stale capture handler attached for the rest of the session."""
+    saved = []
+    for name in _DEPENDENCY_LOGGER_STATE:
+        target = logging.getLogger(name)
+        handlers = [h for h in target.handlers if not _is_pytest_handler(h)]
+        saved.append((target, target.level, target.propagate, handlers, target.filters[:]))
+    log_enabled = fastmcp.settings.log_enabled
+    yield
+    fastmcp.settings.log_enabled = log_enabled
+    for target, level, propagate, handlers, filters in saved:
+        for handler in target.handlers[:]:
+            if handler not in handlers and not _is_pytest_handler(handler):
+                target.removeHandler(handler)
+                handler.close()
+        for handler in handlers:
+            if handler not in target.handlers:
+                target.addHandler(handler)
+        target.setLevel(level)
+        target.propagate = propagate
+        target.filters[:] = filters
 
 
 @pytest.fixture
