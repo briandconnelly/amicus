@@ -47,6 +47,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   published on the error-envelope schema. `RESULT_FORMAT` stays 5, because `repair.arguments` was
   already in the stored schema.
 
+- **Breaking (`FINGERPRINT` `schema-21`).** `amicus_job_consume_result` reports what deleting the
+  record did, in `meta.consume` (#44, ADR 0022). It always delivered the stored envelope, but
+  reported plain success even when the deletion failed, while its description promised that a
+  repeat call returns `job_not_found`. `meta.consume.discard_outcome` is `removed`, `missing`,
+  `not_done` or `delete_failed`; only the first two keep that promise, and the other two carry a
+  `follow_up` that calls `amicus_job_status` on the job. A real failed delete can leave a record
+  that reads as `failed`, so the follow-up promises neither redelivery nor deletion at expiry. The
+  field is delivery-only: it is never stored, and `amicus_job_result` never sets it.
+  `RESULT_FORMAT` stays 5.
+
 ### Fixed
 
 - The claude contract declared `effort_silently_ignored_upstream=False`, but claude 2.1.270 warns
