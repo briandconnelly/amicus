@@ -95,8 +95,8 @@ obligations live in the reference each route names, under that file's own `Rules
 
 ### Results
 
-- **Branch on `ok` first.** On `ok: false`, read `error.code` and `error.repair`; never infer
-  recovery from prose or retry an unchanged call.
+- **Branch on `ok` first.** On `ok: false`, read `error.code` and, when the envelope carries one,
+  `error.repair`; never infer recovery from prose or retry an unchanged call.
 - **Branch on the concrete tool before reading any success field.**
 - **Check `review_status`, `coverage`, `findings_diagnostics`, `meta.truncated`,
   `meta.security_warnings`, `meta.compat_warnings`, and `meta.redacted_paths` before drawing a

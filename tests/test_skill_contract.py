@@ -20,6 +20,7 @@ _SKILL = Path(__file__).resolve().parents[1] / "skills" / "collaborating-with-am
 _RESULTS_REF = (_SKILL / "references" / "reading-results.md").read_text(encoding="utf-8")
 _SKILL_MD = (_SKILL / "SKILL.md").read_text(encoding="utf-8")
 _OPTIONS_REF = (_SKILL / "references" / "options-and-errors.md").read_text(encoding="utf-8")
+_OPTIONS_RULES = _OPTIONS_REF.partition("\n## Rules\n")[2].split("\n## ", 1)[0]
 
 
 def _binding_rules() -> str:
@@ -134,3 +135,15 @@ def test_the_skill_names_every_code_that_carries_no_repair():
     section = _OPTIONS_REF.partition("\n## The error envelope\n")[2].split("\n## ", 1)[0]
     assert section, "options-and-errors.md has no `## The error envelope` section"
     assert set(errors.NO_CORRECTIVE_CALL) <= set(re.findall(r"`([a-z_]+)`", section))
+
+
+def test_no_rule_reads_a_repair_the_envelope_may_not_carry():
+    # Codex's second review of #42: two codes carry no error.repair, so a rule that reads or
+    # follows one unconditionally strands the agent on exactly those codes.
+    assert _OPTIONS_RULES, "options-and-errors.md has no `## Rules` section"
+    unconditional = re.compile(
+        r"read `error\.code` and `error\.repair`|\*\*Follow `repair\.next_step`\*\*", re.IGNORECASE
+    )
+    for rules in (_BINDING_RULES, _OPTIONS_RULES):
+        assert not unconditional.search(rules)
+    assert "With no `error.repair`, fix what `error.details` names" in _OPTIONS_RULES

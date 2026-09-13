@@ -5,10 +5,12 @@ Optional parameters, duplicate-spend protection, and what to do with an error en
 
 ## Rules
 
-- **Read `error.code` and `error.repair`; never infer a fix from the message prose.**
+- **Read `error.code` and, when present, `error.repair`; never infer a fix from the message
+  prose.**
 - **Never retry a call whose failing condition has not changed.**
-- **Follow `repair.next_step`**, and use `repair.tool` / `repair.arguments` when they are present
-  rather than composing a retry yourself.
+- **Follow `repair.next_step` when a repair is present**, and use `repair.tool` /
+  `repair.arguments` when they are present rather than composing a retry yourself.
+- **With no `error.repair`, fix what `error.details` names before retrying.**
 - **Use `invalid_arguments[].allowed_values` to pick a corrected value** rather than guessing one.
 - **Reuse the same `idempotency_key` when retrying the same logical request** after an
   ambiguous failure, with identical arguments, on the same tool.
