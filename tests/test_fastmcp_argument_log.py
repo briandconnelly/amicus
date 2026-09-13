@@ -30,12 +30,16 @@ from fastmcp.utilities.logging import configure_logging, temporary_log_level
 from tests.conftest import restored_dependency_logging, spawned_server_env
 
 from amicus import config, obs
+from amicus.manifest import _read_line
 
 # Assembled from fragments so the literal never appears on a source line a traceback could
 # render.
 MARKER = "PROMPT" + "MARKER" + "79"
 
 _HANDSHAKE_ERA = "2025-11-25"
+# Each response read has this deadline: a child that starts but never answers must fail
+# the test rather than hang the gate.
+_RESPONSE_TIMEOUT = 30.0
 POLICY_HANDLERS = (obs.PolicyStreamHandler, obs.PolicyFileHandler)
 WITHHELD_RECORD = "<unaudited fastmcp.server.server record withheld>"
 
@@ -67,7 +71,10 @@ def _is_pytest_handler(handler: logging.Handler) -> bool:
 
 
 def _serve(calls: tuple[tuple[str, str, dict[str, Any]], ...], env: dict[str, str]):
-    """Run one real stdio server session, send every call, and return (responses, stderr)."""
+    """Run one real stdio server session, send every call, and return (responses, stderr).
+
+    Each response must arrive within `_RESPONSE_TIMEOUT` seconds, or TimeoutError names
+    the call that stalled and the child is killed."""
     with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as err:
         proc = subprocess.Popen(
             (sys.executable, "-m", "amicus.server"),
@@ -99,10 +106,10 @@ def _serve(calls: tuple[tuple[str, str, dict[str, Any]], ...], env: dict[str, st
                     },
                 }
             )
-            stdout.readline()
+            _read_line(stdout, _RESPONSE_TIMEOUT, "initialize")
             send({"jsonrpc": "2.0", "method": "notifications/initialized"})
             responses = []
-            for request_id, (_, tool, arguments) in enumerate(calls, start=1):
+            for request_id, (label, tool, arguments) in enumerate(calls, start=1):
                 send(
                     {
                         "jsonrpc": "2.0",
@@ -111,7 +118,8 @@ def _serve(calls: tuple[tuple[str, str, dict[str, Any]], ...], env: dict[str, st
                         "params": {"name": tool, "arguments": arguments},
                     }
                 )
-                responses.append(json.loads(stdout.readline()))
+                line = _read_line(stdout, _RESPONSE_TIMEOUT, f"tools/call ({label})")
+                responses.append(json.loads(line))
             stdin.close()
             proc.wait(timeout=30)
         finally:
