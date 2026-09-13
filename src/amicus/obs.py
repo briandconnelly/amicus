@@ -472,7 +472,8 @@ def _own_dependency_loggers(formatter: logging.Formatter, level: int) -> None:
 
 
 def configure(settings: Settings, *, force: bool = False) -> logging.Logger:
-    """Configure the amicus and pontonier loggers once (idempotent unless ``force``)."""
+    """Configure the amicus and pontonier loggers, and take over the fastmcp and mcp ones for
+    stderr (issue #79), once (idempotent unless ``force``)."""
     global _configured  # noqa: PLW0603
     logger = logging.getLogger(ROOT_LOGGER_NAME)
     if _configured and not force:
