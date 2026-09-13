@@ -57,8 +57,9 @@ obligations live in the reference each route names, under that file's own `Rules
   what makes the remaining discovery rules checkable.
 - **Pass only a backend reported `enabled: true`, `status.installed: true`, and
   `status.authenticated: true`.** `enabled` alone is not eligibility.
-- **Confirm the backend's `features` list contains the verb you are about to call**, rather than
-  assuming a verb is supported everywhere.
+- **Confirm the backend's `features` list names `delegate` or `adversarial_review` before calling
+  that verb.** Those are the only gated verbs; `consult` and `review_changes` run on every
+  backend and never appear in `features`, whose other members are capabilities, not verbs.
 - **Treat the running deployment's `amicus_backends` report as authoritative** wherever it
   disagrees with this skill or any reference in it.
 - **Re-read `amicus_backends` rather than reusing an earlier session's assumption** about what is
@@ -68,8 +69,9 @@ obligations live in the reference each route names, under that file's own `Rules
 
 - **Never call a paid tool to find out whether a backend is available.**
 - **State the paid-call cap for the decision before the first paid call, then stay within it.**
-- **Use the matching `_async` tool when you are unsure the work will finish inside the sync
-  deadline.** A terminated sync call returns nothing.
+- **Use the matching `_async` tool, or the sync tool with an `idempotency_key`, when you are
+  unsure the work will finish inside the sync deadline.** A terminated unkeyed sync call returns
+  nothing; a keyed one leaves the run going and can be repeated to reattach to it.
 - **Recover an existing job before paying for the same work again** (`amicus_job_list`, or an
   `idempotency_key` replay — see [options and errors](references/options-and-errors.md)).
 - **Never run the sync and `_async` forms of the same work concurrently**, and never launch the
@@ -181,7 +183,10 @@ An unkeyed synchronous call runs to a bounded deadline (`timeout_seconds`, defau
 the call is terminated: you receive nothing, and the work the backend already did is gone. An `_async` call
 returns a job handle immediately and runs against a longer job deadline
 (`AMICUS_JOB_MAX_SECONDS`, default 1800s). Starting an async job commits the spend immediately,
-whether or not you ever poll.
+whether or not you ever poll. The sync default leaves a review little margin: a review of a few
+hundred lines has been reported to take two to four minutes on `codex` (issue #84), so raise
+`timeout_seconds` or use a form that keeps the result — see
+[sync vs async](references/sync-vs-async.md).
 
 The exception is a sync call made with an `idempotency_key`. Its run gets the job deadline, and
 `timeout_seconds` only bounds the wait: at that bound the call returns `timeout` with a repair
@@ -198,7 +203,8 @@ Every paid call — sync or async — is recorded as a job (`meta.job_id`). A sy
 result directly; an async call returns a handle, and the result is fetched later.
 
 `amicus_job_status` reports `status`, `result_available`, and `result_ok` — three different facts.
-`poll_after_ms` is returned only while `status` is `running`; on any terminal status it is `null`,
+`poll_after_ms` is returned only while `status` is `running`, and grows with elapsed time only to
+a ceiling ([sync vs async](references/sync-vs-async.md) → Polling); on any terminal status it is `null`,
 which is why a loop that waits for `result_available` alone never ends for a cancelled or failed
 job. Records expire (`AMICUS_JOB_TTL`, default 24h) and a per-workspace cap evicts the oldest
 terminal ones. [sync vs async](references/sync-vs-async.md) has the lifecycle and recovery.
