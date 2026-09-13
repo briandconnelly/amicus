@@ -23,7 +23,7 @@ def test_contract_is_derived_from_the_constants_and_self_consistent():
     assert c.always_send_flags == contract.ALWAYS_SEND_FLAGS
     assert c.help_gated_flags == tuple(sorted(contract.HELP_GATED_FLAGS))
     assert c.isolation_policy is IsolationPolicy.TOOL_ALLOWLIST and not c.needs_orphan_sweep
-    assert not c.effort_silently_ignored_upstream and c.effort_validation == "enumerated"
+    assert c.effort_silently_ignored_upstream and c.effort_validation == "enumerated"
     assert c.structured_output == "prompt_append" and c.model_catalog.strategy == "static"
     assert c.supported_features == {"adversarial_review", "usage_accounting"}
     assert "delegate" not in c.supported_features
