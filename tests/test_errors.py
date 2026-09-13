@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import pytest
+from jsonschema import Draft202012Validator
 from pontonier.backend.protocol import ClassifiedFailure, RepairHint
 from pontonier.backend.protocol import Usage as PUsage
 from pontonier.conventions.envelope import RepairRule
@@ -62,6 +66,53 @@ def test_make_error_derives_repair_and_temporary_from_the_table():
     assert info.temporary is False and info.retry_after_ms is None
     info = errors.make_error("invalid_scope", "bad", temporary=True, retry_after_ms=5)
     assert info.retry_after_ms == 5
+
+
+def test_workspace_codes_carry_no_repair():
+    # Issue #42: no call can mint the caller's intended absolute directory, so the envelope
+    # names the field (details, candidate_roots) and omits repair rather than ship prose.
+    for code in ("invalid_workspace_root", "workspace_outside_roots"):
+        assert errors.make_error(code, "m").repair is None
+        payload = errors.error_envelope(code, "m", Meta())
+        assert "repair" not in payload["error"]
+
+
+def _input_schema(tool: str) -> dict:
+    fixture = Path(__file__).parent / "fixtures" / "manifest_snapshot.all.json"
+    record = next(t for t in json.loads(fixture.read_text())["tools"] if t["name"] == tool)
+    return record.get("inputSchema") or record["input_schema"]
+
+
+@pytest.mark.parametrize(
+    ("code", "backend", "tool", "arguments"),
+    [
+        ("invalid_model", "codex", "amicus_models", {"backend": "codex"}),
+        ("invalid_reasoning_effort", "kimi", "amicus_models", {"backend": "kimi"}),
+        ("backend_unavailable", "claude", "amicus_backends", {"backend": "claude"}),
+        ("api_key_missing", "claude", "amicus_backends", {"backend": "claude"}),
+        ("backend_unavailable", None, "amicus_backends", {}),
+    ],
+)
+def test_lookup_repairs_carry_a_complete_call(code, backend, tool, arguments):
+    # Issue #42: a repair routed to a lookup names the call that makes it, not only the
+    # tool; amicus_models requires backend, so a tool-only repair there is not callable.
+    info = errors.make_error(code, "m", backend=backend)
+    assert info.repair is not None
+    assert (info.repair.tool, info.repair.arguments) == (tool, arguments)
+    Draft202012Validator(_input_schema(tool)).validate(arguments)
+
+
+def test_render_failure_completes_a_lookup_repair():
+    plugin = fakeplugin.make_plugin("codex")
+    from_table = ClassifiedFailure(code="invalid_model", detail="no")
+    hinted = ClassifiedFailure(
+        code="invalid_model",
+        detail="no",
+        repair=RepairHint(next_step="use_allowed_value", tool="amicus_models", alternative="x"),
+    )
+    for failure in (from_table, hinted):
+        repair = errors.render_failure(plugin, failure, Meta())["error"]["repair"]
+        assert (repair["tool"], repair["arguments"]) == ("amicus_models", {"backend": "codex"})
 
 
 def test_make_error_repair_tool_three_states():

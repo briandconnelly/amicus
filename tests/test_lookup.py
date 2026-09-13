@@ -65,6 +65,12 @@ async def test_resolve_job_workspace_explicit_roots_and_errors(tmp_path):
     assert err["error"]["code"] == "invalid_workspace_root"
 
 
+async def test_job_workspace_errors_carry_no_repair(tmp_path):
+    for root in (None, "relative/path"):
+        *_, err = await lookup.resolve_job_workspace(_settings(tmp_path), None, root)
+        assert err["error"]["code"] == "invalid_workspace_root" and "repair" not in err["error"]
+
+
 async def test_resolve_job_workspace_falls_back_to_cwd_only_when_allowed(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     settings = _settings(tmp_path, AMICUS_ALLOW_CWD_WORKSPACE="1")
@@ -87,7 +93,9 @@ def test_job_meta_and_not_found(tmp_path):
     assert env["error"]["repair"]["tool"] == "amicus_job_list"
     assert env["error"]["repair"]["arguments"] == {"workspace_root": "/repo"}
     assert env["error"]["details"]["field"] == "job_id"
-    assert "arguments" not in lookup.job_not_found("b" * 32, meta, None)["error"]["repair"]
+    # Resolved from roots, the workspace needs no argument: amicus_job_list({}) resolves the
+    # same one, so the lookup call is complete rather than tool-only (issue #42).
+    assert lookup.job_not_found("b" * 32, meta, None)["error"]["repair"]["arguments"] == {}
 
 
 def test_status_and_summary_models_carry_backend_task_and_detail(tmp_path):
