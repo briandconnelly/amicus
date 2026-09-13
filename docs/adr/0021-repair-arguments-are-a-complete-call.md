@@ -12,6 +12,7 @@ The checklist's `[6.repair-object]` makes `tool` and `arguments` one callable ca
 `[6.repair-intent]` keeps every still-valid, non-sensitive original argument, and `[6.offending-value]` makes safety a property of the value rather than of the parameter.
 A Codex consult on this issue (2026-09-13) rejected two parts of the first design, and both corrections are recorded below.
 Codex's review of the branch then found two gaps, a third-party backend id and the `render_failure` path, which the Decision also covers.
+Copilot's review found a third: an `amicus_models` repair for such a backend still named a tool it could not call.
 
 ## Decision
 
@@ -24,9 +25,10 @@ Any other string suppresses the arguments, because it can be a mispasted secret 
 The first design denylisted `INPUT_FIELDS` instead; Codex showed that `idempotency_key`, paths and model slugs are just as free-form, and the published `details.value` policy already declines to echo caller strings.
 
 **A lookup repair carries the call that makes it.**
-`amicus_models` repairs name the failing call's `backend`, which that tool requires, and `amicus_backends` repairs name it as the filter (`errors.lookup_arguments`).
+`amicus_models` repairs name the failing call's `backend`, which that tool requires, and `amicus_backends` repairs name it as the filter (`errors.complete_lookup`).
 `job_not_found` repairs to `amicus_job_list({})` when the workspace came from the client's roots, since that call resolves the same workspace.
 A third-party plugin's id is a valid `error.backend` but outside both tools' closed `backend` enum, so it is never named, and `amicus_backends` falls back to its unfiltered call.
+Without a backend it accepts, `amicus_models` cannot be called at all, so that repair names no tool and stays a symbolic next step.
 
 **`invalid_workspace_root` and `workspace_outside_roots` carry no repair.**
 Only the caller holds the intended absolute directory, so no call can make the correction; `details.field` and `candidate_roots` name what to fix (`errors.NO_CORRECTIVE_CALL`).

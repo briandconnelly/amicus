@@ -240,7 +240,8 @@ same coroutine; the job store persists `task_id → job_id` at task creation,
 ### Error envelope and codes
 
 Adopt codex-in-claude's `ErrorInfo` (`code`, `message`, `temporary`, `retry_after_ms`
-always present, single `repair {next_step, tool, arguments, alternative}`,
+always present, single `repair {next_step, tool, arguments, alternative}` (absent on
+the two workspace codes, ADR 0021),
 `details{field|fields, reason, allowed_values}`, `invalid_arguments[]`, `request_id`)
 plus `backend: str | null`. `details.value` only for known-safe values, policy
 disclosed on `amicus://error-envelope`. Rendering is backend-aware
