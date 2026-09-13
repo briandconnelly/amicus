@@ -13,6 +13,7 @@ The checklist's `[6.repair-object]` makes `tool` and `arguments` one callable ca
 A Codex consult on this issue (2026-09-13) rejected two parts of the first design, and both corrections are recorded below.
 Codex's review of the branch then found two gaps, a third-party backend id and the `render_failure` path, which the Decision also covers.
 Copilot's review found a third: an `amicus_models` repair for such a backend still named a tool it could not call.
+A second Codex review found that explicit `RepairHint` arguments bypassed that guard, and that the skill still read `error.repair` unconditionally.
 
 ## Decision
 
@@ -29,6 +30,7 @@ The first design denylisted `INPUT_FIELDS` instead; Codex showed that `idempoten
 `job_not_found` repairs to `amicus_job_list({})` when the workspace came from the client's roots, since that call resolves the same workspace.
 A third-party plugin's id is a valid `error.backend` but outside both tools' closed `backend` enum, so it is never named, and `amicus_backends` falls back to its unfiltered call.
 Without a backend it accepts, `amicus_models` cannot be called at all, so that repair names no tool and stays a symbolic next step.
+The guard applies to a plugin's own `RepairHint` arguments as well as to completed calls, so an explicit lookup call is kept only in a shape its tool accepts.
 
 **`invalid_workspace_root` and `workspace_outside_roots` carry no repair.**
 Only the caller holds the intended absolute directory, so no call can make the correction; `details.field` and `candidate_roots` name what to fix (`errors.NO_CORRECTIVE_CALL`).
