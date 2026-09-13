@@ -92,6 +92,25 @@ def test_delivered_meta_validates_against_the_published_contract_and_the_validat
     assert not validator.is_valid(meta)
 
 
+def test_consumed_meta_validates_and_its_follow_up_must_be_a_callable_call():
+    """The consumed section is validated too, and the follow-up's arguments are closed: an
+    uncallable `{}` or a stray key must fail the published contract (#44, PR #83 review)."""
+    validator = Draft202012Validator(RESULT_META_SCHEMA)
+    snap = wss.build_snapshot()
+    base = snap["delivered"]["summary"]["consult"]["meta"]
+    for outcome, consume in snap["consumed"].items():
+        errors = [e.message for e in validator.iter_errors({**base, "consume": consume})]
+        assert errors == [], outcome
+    follow_up = snap["consumed"]["delete_failed"]["follow_up"]
+    assert follow_up["arguments"] == {"job_id": "0" * 32, "workspace_root": "/repo"}
+    for arguments in ({}, {"workspace_root": "/repo"}, {"job_id": "0" * 32, "stray": 1}):
+        consume = {
+            "discard_outcome": "delete_failed",
+            "follow_up": {**follow_up, "arguments": arguments},
+        }
+        assert not validator.is_valid({**base, "consume": consume}), arguments
+
+
 def test_snapshot_is_sensitive_to_key_loss():
     snap = wss.build_snapshot()
     mutated = json.loads(json.dumps(snap))

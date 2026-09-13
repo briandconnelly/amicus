@@ -159,6 +159,12 @@ def test_result_meta_schema_publishes_the_delivery_only_consume_field():
     assert outcome["enum"] == ["removed", "missing", "not_done", "delete_failed"]
     follow_up = s["$defs"]["ConsumeFollowUp"]["properties"]
     assert follow_up["tool"]["const"] == "amicus_job_status"
+    # The arguments are the call the follow-up names, not an open object that admits `{}`.
+    assert follow_up["arguments"]["$ref"].endswith("/ConsumeFollowUpArguments")
+    arguments = s["$defs"]["ConsumeFollowUpArguments"]
+    assert arguments["required"] == ["job_id"]
+    assert arguments["additionalProperties"] is False
+    assert set(arguments["properties"]) == {"job_id", "workspace_root"}
 
 
 def test_dump_success_retains_nulls():

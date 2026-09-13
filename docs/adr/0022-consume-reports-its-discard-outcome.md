@@ -32,6 +32,7 @@ The `missing` description and the follow-up's `job_not_found` branch say "no lon
 
 **A record that may remain gets a `follow_up` that inspects it.**
 For `not_done` and `delete_failed`, `follow_up` is `{next_step: "inspect_and_retry", tool: "amicus_job_status", arguments: {job_id, workspace_root}}`, with `workspace_root` only when the caller supplied it.
+Its `arguments` are a closed object that requires `job_id`, so the published schema admits only a call `amicus_job_status` accepts.
 It is the `Repair` shape narrowed to that one action, as `JobFollowUp` narrows it for an async start.
 The first design pointed at `amicus_job_list`; Codex preferred the tool that addresses this job, since `amicus_job_list` is the surface for recovering a lost id.
 `next_step` stays in pontonier's vocabulary, as ADR 0005 requires, and echoing `job_id` and a caller's `workspace_root` follows the `job_running` and `job_not_found` repairs.

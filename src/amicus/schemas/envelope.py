@@ -87,14 +87,25 @@ _CONSUME_DESC = (
 )
 
 
+class ConsumeFollowUpArguments(BaseModel):
+    """The amicus_job_status call a consume follow-up names, closed to that call's shape so
+    the published schema admits only a callable one. `workspace_root` is omitted, never
+    null, when the caller did not supply one."""
+
+    model_config = ConfigDict(extra="forbid")
+    job_id: str
+    workspace_root: str | None = None
+
+
 class ConsumeFollowUp(BaseModel):
     """The one follow-up a consume hands back: inspect the record it may have left. The
-    same shape as `Repair`, narrowed to that one action, as `JobFollowUp` is (#44)."""
+    same shape as `Repair`, narrowed to that one action as `JobFollowUp` is, and its
+    `arguments` narrowed to the call that action names (#44)."""
 
     model_config = ConfigDict(extra="forbid")
     next_step: Literal["inspect_and_retry"]
     tool: Literal["amicus_job_status"]
-    arguments: dict[str, Any]
+    arguments: ConsumeFollowUpArguments
     alternative: str | None = None
 
 
