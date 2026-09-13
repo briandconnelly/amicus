@@ -133,17 +133,27 @@ NO_CORRECTIVE_CALL: frozenset[str] = frozenset(
 )
 
 
+_LOOKUP_TOOLS = frozenset({"amicus_backends", "amicus_models"})
+
+
 def complete_lookup(
     tool: str | None, arguments: dict[str, Any] | None, backend: str | None
 ) -> tuple[str | None, dict[str, Any] | None]:
     """The (tool, arguments) of a repair routed to a lookup tool (issue #42). amicus_models
-    requires `backend` and amicus_backends takes it as an optional filter. A third-party
-    plugin's id is a valid error.backend but outside both tools' closed `backend` enum, so
-    it is never named: amicus_backends falls back to its unfiltered call, and amicus_models,
-    which cannot be called at all without one, is dropped so the repair stays a symbolic
-    next step. Explicit arguments, and every other tool, pass through unchanged."""
-    if arguments is not None or tool not in ("amicus_backends", "amicus_models"):
+    requires `backend` and amicus_backends takes it as an optional filter; each accepts only
+    a backend from its closed enum and no other key. An explicit call (a caller's, or a
+    plugin's own RepairHint) is kept when it has that shape; a malformed one is completed
+    from the failing call instead. A third-party plugin's id is a valid error.backend but
+    outside both enums, so it is never named: amicus_backends falls back to its unfiltered
+    call, and amicus_models, which cannot be called at all without one, is dropped so the
+    repair stays a symbolic next step. Every other tool passes through unchanged."""
+    if tool not in _LOOKUP_TOOLS:
         return tool, arguments
+    if arguments is not None:
+        named = arguments.get("backend")
+        accepted = set(arguments) <= {"backend"} and (named is None or named in BACKEND_IDS)
+        if accepted and (tool == "amicus_backends" or named is not None):
+            return tool, dict(arguments)
     if backend not in BACKEND_IDS:
         backend = None
     if tool == "amicus_backends":

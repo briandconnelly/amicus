@@ -136,6 +136,30 @@ def test_lookup_repairs_never_name_a_backend_the_lookup_rejects():
     assert bare is not None and (bare.tool, bare.arguments) == (None, None)
 
 
+@pytest.mark.parametrize(
+    ("tool", "hinted", "expected"),
+    [
+        ("amicus_models", {"backend": "kimi"}, ("amicus_models", {"backend": "kimi"})),
+        ("amicus_models", {}, (None, None)),
+        ("amicus_models", {"backend": "fake"}, (None, None)),
+        ("amicus_models", {"backend": "kimi", "x": 1}, (None, None)),
+        ("amicus_backends", {"backend": "kimi"}, ("amicus_backends", {"backend": "kimi"})),
+        ("amicus_backends", {}, ("amicus_backends", {})),
+        ("amicus_backends", {"backend": "fake"}, ("amicus_backends", {})),
+        ("amicus_backends", {"x": 1}, ("amicus_backends", {})),
+    ],
+)
+def test_an_explicit_lookup_call_is_kept_only_in_a_shape_its_tool_accepts(tool, hinted, expected):
+    # Codex's second review of #42: a plugin's own RepairHint arguments reach the envelope
+    # too, so the closed-backend guard applies to them, not only to completed calls.
+    hint = RepairHint(next_step="use_allowed_value", tool=tool, arguments=hinted, alternative="x")
+    failure = ClassifiedFailure(code="invalid_model", detail="no", repair=hint)
+    repair = errors.render_failure(fakeplugin.make_plugin(), failure, Meta())["error"]["repair"]
+    assert (repair.get("tool"), repair.get("arguments")) == expected
+    if expected[0] is not None:
+        Draft202012Validator(_input_schema(expected[0])).validate(expected[1])
+
+
 def test_render_failure_keeps_workspace_codes_repair_free():
     # Codex review of #42: the omission is the code's, whichever path renders it.
     plugin = fakeplugin.make_plugin("codex")
