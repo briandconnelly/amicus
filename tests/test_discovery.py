@@ -17,7 +17,7 @@ from amicus.schemas.codes import ERROR_CODES
 from amicus.schemas.envelope import Meta
 from amicus.schemas.fingerprint import FINGERPRINT, LIFECYCLE_META_KEY
 from amicus.schemas.results import CapabilitiesDetail
-from amicus.tools import _meta, _resolve
+from amicus.tools import _meta, _resolve, discovery
 
 
 def _app(env=None, registry=None):
@@ -360,3 +360,13 @@ async def test_the_confidence_enum_and_its_meaning_reach_an_mcp_client():
         assert set(field["enum"]) == {"low", "medium", "high", "unknown"}, name
         assert field["description"] == results._CONFIDENCE_DESC, name
         assert "unknown" in field["description"], name
+
+
+def test_sync_paid_tools_advertise_the_idempotency_codes():
+    """Issue #66: a keyed sync call can end in any of the three dedup codes, so each sync
+    tool's catalog names them, exactly as its _async twin's does."""
+    for sync_name, async_name in tools.PAIRS:
+        sync_codes = set(discovery.TOOL_DETAILS[sync_name]["error_codes"])
+        async_codes = set(discovery.TOOL_DETAILS[async_name]["error_codes"])
+        assert set(discovery._IDEMPOTENCY_CODES) <= sync_codes, sync_name
+        assert set(discovery._IDEMPOTENCY_CODES) <= async_codes, async_name

@@ -50,7 +50,9 @@ def test_matrix_matches_the_spec_table():
 
 def test_sync_and_async_splits():
     assert {"timeout_seconds", "detail"} == p.SYNC_ONLY_PARAMS
-    assert {"idempotency_key"} == p.ASYNC_ONLY_PARAMS
+    # Every parameter the matrix grants a verb is on both members of its pair except the
+    # two sync-only wait controls; idempotency_key left this set in #66 (ADR 0020).
+    assert frozenset() == p.ASYNC_ONLY_PARAMS
     assert p.expected_params("amicus_consult") == {
         "backend",
         "question",
@@ -61,6 +63,7 @@ def test_sync_and_async_splits():
         "reasoning_effort",
         "timeout_seconds",
         "detail",
+        "idempotency_key",
         "backend_options",
     }
     assert p.expected_params("amicus_consult_async") == {

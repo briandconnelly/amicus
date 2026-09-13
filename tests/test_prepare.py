@@ -260,3 +260,6 @@ async def test_background_prepare_uses_the_job_deadline_unclamped():
     )
     assert not isinstance(prep, dict)
     assert prep.spec.timeout_seconds == 1500 and prep.meta.timeout_seconds == 1500
+    # The caller's timeout is still carried, clamped, as the wait bound a keyed sync call
+    # uses (#66); an unkeyed sync call's spec.timeout_seconds equals it.
+    assert prep.wait_seconds == 10

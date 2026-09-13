@@ -123,7 +123,7 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
             "pasted inline."
         ),
         "returns": "summary, findings, questions, next_steps, raw_response (detail=full) and meta.",
-        "error_codes": _COMMON_PAID_CODES + _SYNC_LIFECYCLE_CODES,
+        "error_codes": _COMMON_PAID_CODES + _SYNC_LIFECYCLE_CODES + _IDEMPOTENCY_CODES,
     },
     "amicus_consult_async": {
         "cost": "active",
@@ -139,7 +139,9 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
         "returns": (
             "verdict, confidence, findings, review_status, coverage, context_summary and meta."
         ),
-        "error_codes": _COMMON_PAID_CODES + _REVIEW_CODES_EMITTED + _SYNC_LIFECYCLE_CODES,
+        "error_codes": (
+            _COMMON_PAID_CODES + _REVIEW_CODES_EMITTED + _SYNC_LIFECYCLE_CODES + _IDEMPOTENCY_CODES
+        ),
     },
     "amicus_review_changes_async": {
         "cost": "active",
@@ -162,6 +164,7 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
             "git_unavailable",
             "worktree_error",
             *_SYNC_LIFECYCLE_CODES,
+            *_IDEMPOTENCY_CODES,
         ],
     },
     "amicus_delegate_async": {
@@ -182,7 +185,7 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
         "backends": ["claude"],
         "use_when": "A fixed critic attacking a plan, claim or decision before you commit to it.",
         "returns": "verdict, confidence, findings, review_status, coverage and meta.",
-        "error_codes": _COMMON_PAID_CODES + _REVIEW_CODES,
+        "error_codes": _COMMON_PAID_CODES + _REVIEW_CODES + _IDEMPOTENCY_CODES,
     },
     "amicus_adversarial_review_async": {
         "cost": "active",
@@ -558,8 +561,9 @@ async def capabilities_payload(
                 "after completion; the job behind it is retained separately for AMICUS_JOB_TTL "
                 "(default 24h, operator-configurable down to 60s, so it can expire before or "
                 "after the task result), amicus_job_list(task_id=...) recovers it while "
-                "retained, cancelling the task cancels the job, and every host can use the "
-                "amicus_job_* tools instead."
+                "retained, cancelling the task cancels the job unless the call carried an "
+                "idempotency_key (a keyed job is shared and survives; replay the key or use "
+                "amicus_job_list), and every host can use the amicus_job_* tools instead."
             ),
         ),
         meta_fields=list(Meta.model_fields),

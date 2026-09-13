@@ -1,6 +1,7 @@
 # ADR 0008: The M2 jobs surface — identity, outcomes, filters, foreign records
 
-**Status:** Accepted (2026-09-06, M2)
+**Status:** Accepted (2026-09-06, M2).
+Its unkeyed-sync clause is superseded by [ADR 0020](0020-idempotency-keys-on-the-sync-tools.md) (2026-09-12); the other decisions stand.
 
 ## Context
 
@@ -14,7 +15,8 @@ The maintainer settled the open choices on 2026-09-06.
   A key reused with a different prompt is `idempotency_conflict`; a reconnect with different roots replays.
 - Keyed outcomes: `created` returns a running handle; `replay` returns the existing job's real handle with `meta.idempotency_replayed`; `conflict` and `unavailable` repair with `use_new_idempotency_key` naming the twin; `in_progress` and a transient `io_error` are temporary with `retry_after_ms` (250 and 1000 ms).
   An `_async` caller never blocks on `in_progress`.
-- The sync tools stay unkeyed (ADR 0007, deviation 8); the sibling's keyed-await path is not ported.
+- The sync tools stay unkeyed; the sibling's keyed-await path is not ported.
+  Superseded by [ADR 0020](0020-idempotency-keys-on-the-sync-tools.md) (2026-09-12), which also notes that the "ADR 0007, deviation 8" this clause cited does not exist: the restriction was M2 sequencing.
 - A twin's run timeout is `AMICUS_JOB_MAX_SECONDS` (default 1800 s), unclamped; the handle's `deadline_seconds` and `meta.timeout_seconds` report it.
 - `amicus_job_list(task_id=...)` is a filter: no match is an empty list.
   The task map lives at `<AMICUS_STATE_DIR>/tasks.json`.

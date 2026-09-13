@@ -50,7 +50,10 @@ REQUIRED_BY_VERB: dict[str, frozenset[str]] = {
     "delegate": frozenset({"backend", "task"}),
 }
 SYNC_ONLY_PARAMS = frozenset({"timeout_seconds", "detail"})
-ASYNC_ONLY_PARAMS = frozenset({"idempotency_key"})
+# Empty since #66 (ADR 0020): idempotency_key was async-only, which dropped the dedup both
+# siblings offer on the tools a client-side retry actually duplicates. Kept as the named
+# half of the split so the pair-parity test and expected_params() read the same way.
+ASYNC_ONLY_PARAMS: frozenset[str] = frozenset()
 
 TOOL_VERB: dict[str, tuple[str, bool]] = {
     "amicus_consult": ("consult", False),
@@ -160,15 +163,24 @@ PARAMETER_CONTRACTS: dict[str, ParamContract] = {
             f"{PARAMS_RESOURCE_URI}."
         ),
         full=(
-            "Reusing the key on the same tool with the same arguments (backend included) "
-            "replays the existing run instead of paying for a duplicate: an _async call "
-            "returns the same job_id. Sync and _async are separate tools and never share a "
-            "key. Reuse with different arguments is refused "
-            "(idempotency_conflict); a key whose prior result was consumed or evicted is "
-            "idempotency_result_unavailable; a still-publishing reservation is "
-            "idempotency_in_progress (retry). A completed result stays replayable while "
+            "Reusing the key on the same tool with the same effective execution arguments "
+            "(backend, model, reasoning_effort, backend_options, scope and the prompt "
+            "inputs; on a sync tool timeout_seconds only bounds the wait and `detail` only "
+            "shapes delivery, so either may differ) replays the existing run instead of "
+            "paying for a duplicate: an _async call returns the same job_id; a sync call "
+            "awaits that run and returns its result. A keyed sync run gets the job "
+            "deadline (AMICUS_JOB_MAX_SECONDS), as an _async run does, and timeout_seconds "
+            "bounds how long the call waits for it. A keyed sync wait that hits that bound "
+            "or is cancelled leaves the run going, and its `timeout` repair points at "
+            "amicus_job_status for that job; under the tasks extension a keyed task's job "
+            "likewise survives tasks/cancel. Sync and _async are separate tools and never "
+            "share a key. Reuse "
+            "with different arguments is refused (idempotency_conflict); a key whose prior "
+            "result was consumed or evicted is idempotency_result_unavailable; a "
+            "still-publishing reservation is idempotency_in_progress (retry; a sync call "
+            "waits about a second for it first). A completed result stays replayable while "
             "its job record lives (its TTL). meta.idempotency_replayed=true marks a "
-            "replayed (unpaid) response."
+            "replayed (unpaid) response. An empty key is rejected."
         ),
     ),
     "extra_context": ParamContract(
@@ -323,8 +335,10 @@ TimeoutSecondsParam = Annotated[
     Field(
         description=(
             f"Deadline in seconds, clamped to {MIN_TIMEOUT_SECONDS}-{MAX_TIMEOUT_SECONDS}; "
-            "omit for the server default (AMICUS_TIMEOUT_SECONDS). A sync call past its "
-            "deadline is terminated and its partial work lost; prefer the _async twin."
+            "omit for the server default (AMICUS_TIMEOUT_SECONDS). An unkeyed sync call "
+            "past its deadline is terminated and its partial work lost; prefer the _async "
+            "twin. For a keyed call (idempotency_key) this only bounds the wait: the run "
+            "gets the job deadline and the timeout says how to fetch it."
         )
     ),
 ]
@@ -346,7 +360,12 @@ CapabilitiesDetailParam = Annotated[
     ),
 ]
 IdempotencyKeyParam = Annotated[
-    str | None, Field(description=PARAMETER_CONTRACTS["idempotency_key"].summary, max_length=200)
+    str | None,
+    Field(
+        description=PARAMETER_CONTRACTS["idempotency_key"].summary,
+        min_length=1,
+        max_length=200,
+    ),
 ]
 BackendOptionsParam = Annotated[
     BackendOptions | None, Field(description=PARAMETER_CONTRACTS["backend_options"].summary)

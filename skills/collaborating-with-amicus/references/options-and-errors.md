@@ -10,8 +10,8 @@ Optional parameters, duplicate-spend protection, and what to do with an error en
 - **Follow `repair.next_step`**, and use `repair.tool` / `repair.arguments` when they are present
   rather than composing a retry yourself.
 - **Use `invalid_arguments[].allowed_values` to pick a corrected value** rather than guessing one.
-- **Reuse the same `idempotency_key` when retrying the same logical async request** after an
-  ambiguous failure, with identical arguments.
+- **Reuse the same `idempotency_key` when retrying the same logical request** after an
+  ambiguous failure, with identical arguments, on the same tool.
 - **Never reuse a key across a different tool or backend** — that is a different operation.
 - **Recover an existing job before paying again.**
 
@@ -38,14 +38,25 @@ costs nothing. Reaching a backend is what spends.
 
 ## `idempotency_key`
 
-An optional dedup key on the `_async` tools, scoped to **this tool + backend + workspace**.
+An optional dedup key on every paid tool, sync and `_async`, scoped to **this tool + backend +
+workspace**.
 
 - Same key, same arguments → the prior run is replayed with **no new spend**; an `_async` call
-  returns the same `job_id`. `meta.idempotency_replayed: true` marks a replayed response.
-- Same key, different arguments → refused as `idempotency_conflict`.
+  returns the same `job_id`, a sync call awaits that run and returns its result.
+  `meta.idempotency_replayed: true` marks a replayed response.
+- Same key, different arguments → refused as `idempotency_conflict`. On a sync tool
+  `timeout_seconds` only bounds the wait and `detail` only shapes delivery; neither counts.
 - A key whose result was consumed or evicted → `idempotency_result_unavailable`.
-- A reservation still publishing → `idempotency_in_progress` (retry).
+- A reservation still publishing → `idempotency_in_progress` (retry; a sync call waits about a
+  second for it first).
 - A completed result stays replayable while its job record lives (its TTL).
+- A keyed sync run gets the job deadline (`AMICUS_JOB_MAX_SECONDS`), as an `_async` run does. A
+  keyed wait that hits its `timeout_seconds` bound or is cancelled leaves the run going: the
+  `timeout` repair polls `amicus_job_status` for that job, and repeating the same keyed call
+  reattaches.
+  Under the tasks extension a keyed task's job survives `tasks/cancel`; an unkeyed one's is
+  cancelled with it.
+- An empty key is refused pre-spend.
 
 Sync and `_async` are separate tools and never share a key. Changing `backend` makes it a
 different operation, not a retry of the same one.

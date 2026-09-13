@@ -13,6 +13,7 @@ Keep the `_async` twins and `amicus_job_*` as the universal path.
 Additionally register the four paid sync tools with `task=True` when `AMICUS_TASKS=1` and the `fastmcp[tasks]` extra is installed.
 Persist a `task_id → job_id` mapping at task creation so `amicus_job_list(task_id=...)` recovers the job behind a task.
 Cancellation propagation is explicit and unconditional: a tasked call is always unkeyed (the sync tools carry no `idempotency_key`, ADR 0007), so cancelling a task cancels its job; `tasks/cancel` is an empty ack (SEP-2663), and the job behind a task is recovered with `amicus_job_list(task_id=...)`.
+Since [ADR 0020](0020-idempotency-keys-on-the-sync-tools.md) (2026-09-12) the sync tools do carry the key, and the clause reads as first written: an unkeyed task's job is cancelled with it; a keyed task's job survives.
 
 ## Spike report (M0)
 

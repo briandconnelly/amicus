@@ -272,3 +272,22 @@ async def test_lifecycle_meta_on_every_paid_tool():
     assert by_name["amicus_consult_async"].meta["dev.bconnelly.amicus/lifecycle"] == {
         "stability": "experimental"
     }
+
+
+async def test_every_paid_tool_declares_a_non_empty_idempotency_key():
+    """Issue #66: the sync tools take the key too, and an empty key is not a dedup identity
+    on either member of a pair (the siblings reject it as well)."""
+    by_name = await _tools(_app())
+    for name in params.TOOL_VERB:
+        prop = by_name[name].input_schema["properties"]["idempotency_key"]
+        assert prop["anyOf"][0] == {"type": "string", "minLength": 1, "maxLength": 200}, name
+
+
+@pytest.mark.parametrize("name", ["amicus_consult", "amicus_consult_async"])
+async def test_an_empty_idempotency_key_is_refused_pre_spend(name):
+    app = _app(registry=_fake_registry())
+    async with Client(app) as c:
+        res = await c.call_tool(name, {**VALID[name], "idempotency_key": ""}, raise_on_error=False)
+    err = res.structured_content["error"]
+    assert res.is_error and err["code"] == "invalid_arguments"
+    assert err["details"]["field"] == "idempotency_key"

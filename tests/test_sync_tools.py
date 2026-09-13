@@ -271,3 +271,61 @@ async def test_full_detail_keeps_raw_text(app, tmp_path):
             },
         )
     assert res.structured_content["raw_response"]["text"].startswith("{")
+
+
+async def test_keyed_consult_replays_and_conflicts(app, tmp_path):
+    """Issue #66: the sync tools take idempotency_key too. Same key + same args returns the
+    stored result marked replayed and spawns no second codex; different args are refused."""
+    args = {
+        "backend": "codex",
+        "question": "why?",
+        "workspace_root": str(tmp_path),
+        "idempotency_key": "abc",
+    }
+    async with Client(app) as c:
+        first = (await c.call_tool("amicus_consult", args)).structured_content
+        again = (await c.call_tool("amicus_consult", args)).structured_content
+        other = await c.call_tool(
+            "amicus_consult", {**args, "question": "why not?"}, raise_on_error=False
+        )
+    assert first["ok"] is True and "idempotency_replayed" not in first["meta"]
+    assert again["ok"] is True and again["summary"] == first["summary"]
+    assert again["meta"]["idempotency_replayed"] is True
+    assert again["meta"]["job_id"] == first["meta"]["job_id"]
+    assert other.is_error and other.structured_content["error"]["code"] == "idempotency_conflict"
+    assert other.structured_content["error"]["repair"]["tool"] == "amicus_consult"
+    assert len(_argv(tmp_path)) == 1
+    # A keyed sync run is prepared like its _async twin: the job deadline, not the wait bound.
+    store = lifecycle.job_store(server.state_of(app).settings)
+    spec_on_disk = json.loads(
+        (store._job_dir(str(tmp_path), first["meta"]["job_id"]) / "spec.json").read_text()
+    )
+    assert spec_on_disk["timeout_seconds"] == 1800 and first["meta"]["timeout_seconds"] == 1800
+
+
+async def test_keyed_and_unkeyed_sync_runs_differ_only_in_the_run_deadline(app, tmp_path):
+    args = {"backend": "codex", "question": "why?", "workspace_root": str(tmp_path)}
+    async with Client(app) as c:
+        unkeyed = await c.call_tool("amicus_consult", {**args, "timeout_seconds": 42})
+        keyed = await c.call_tool(
+            "amicus_consult", {**args, "timeout_seconds": 42, "idempotency_key": "k"}
+        )
+    assert unkeyed.structured_content["meta"]["timeout_seconds"] == 42
+    assert keyed.structured_content["meta"]["timeout_seconds"] == 1800
+    assert len(_argv(tmp_path)) == 2
+
+
+async def test_sync_and_async_keys_are_separate_identities(app, tmp_path):
+    """The contract says the pair never shares a key: the same key on the twin starts a
+    second paid run rather than replaying the sync result."""
+    args = {
+        "backend": "codex",
+        "question": "why?",
+        "workspace_root": str(tmp_path),
+        "idempotency_key": "shared",
+    }
+    async with Client(app) as c:
+        first = (await c.call_tool("amicus_consult", args)).structured_content
+        handle = (await c.call_tool("amicus_consult_async", args)).structured_content
+    assert handle["ok"] is True and handle["job_id"] != first["meta"]["job_id"]
+    assert handle["meta"]["idempotency_replayed"] is None

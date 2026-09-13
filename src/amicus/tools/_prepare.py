@@ -40,6 +40,10 @@ class Prepared:
     spec: RunSpec
     meta: Meta
     plugin: BackendPlugin
+    # How long a sync tool waits for the run: the caller's timeout_seconds, clamped. Equal
+    # to spec.timeout_seconds for an unkeyed sync call; a keyed sync call is prepared with
+    # `background=True`, so its run gets the job deadline and only the wait is this (#66).
+    wait_seconds: int
 
 
 def clamp_timeout(value: int) -> int:
@@ -128,13 +132,10 @@ async def prepare_run(
     model_v = model or defaults.get("model")
     effort_from_config = reasoning_effort is None
     effort = reasoning_effort if reasoning_effort is not None else defaults.get("reasoning_effort")
-    timeout = (
-        settings.job_max_seconds
-        if background
-        else clamp_timeout(
-            timeout_seconds if timeout_seconds is not None else settings.timeout_seconds
-        )
+    wait = clamp_timeout(
+        timeout_seconds if timeout_seconds is not None else settings.timeout_seconds
     )
+    timeout = settings.job_max_seconds if background else wait
 
     roots, roots_source = await ws.roots_from_ctx(ctx)
     host_name = prompts.host_display_name(ws.client_name_from_ctx(ctx), settings.host_name)
@@ -297,4 +298,4 @@ async def prepare_run(
         target=target,
         evidence=evidence,
     )
-    return Prepared(spec=spec, meta=meta_for(spec), plugin=plugin)
+    return Prepared(spec=spec, meta=meta_for(spec), plugin=plugin, wait_seconds=wait)

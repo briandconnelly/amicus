@@ -145,8 +145,8 @@ Import rules, enforced with import-linter: `backends/*` may import `amicus.plugi
 
 Paid, sync (`task=True` when tasks enabled): `amicus_consult`, `amicus_review_changes`,
 `amicus_delegate` (feature `delegate`), `amicus_adversarial_review` (feature
-`adversarial_review`). Async twins: the four `_async` variants (add `idempotency_key`,
-drop `timeout_seconds`/`detail`). Free: `amicus_dry_run`, `amicus_delegate_dry_run`,
+`adversarial_review`). Async twins: the four `_async` variants (drop
+`timeout_seconds`/`detail`; `idempotency_key` is on both since ADR 0020). Free: `amicus_dry_run`, `amicus_delegate_dry_run`,
 `amicus_backends` (catalog + readiness probe + option applicability + legacy-env
 warnings; optional `backend` filter; replaces per-backend `*_status`),
 `amicus_models(backend)`, `amicus_capabilities` (error catalog, schemas on request,
@@ -159,7 +159,7 @@ schema):
 
 | Parameter | consult | review_changes | adversarial_review | delegate |
 |---|---|---|---|---|
-| `backend` (required enum), `workspace_root`, `model`, `reasoning_effort`, `timeout_seconds`, `detail`, `idempotency_key` (async only) | ✓ | ✓ | ✓ | ✓ |
+| `backend` (required enum), `workspace_root`, `model`, `reasoning_effort`, `timeout_seconds`, `detail`, `idempotency_key` (async only until ADR 0020) | ✓ | ✓ | ✓ | ✓ |
 | `extra_context` | ✓ | ✓ | ✓ | – |
 | `instructions_append` (codex `developer_instructions`, claude `system_prompt_append`) | ✓ | ✓ | **–** (fixed critic stance is the product) | **–** (edits files) |
 | `scope`, `base`, `commit`, `paths`, `untracked` | – | ✓ | ✓ (optional attached diff, as today) | – |
@@ -233,8 +233,8 @@ backend. `_worker.py` re-resolves the plugin by id and runs the same loop. Sync 
 keep codex-in-claude's model; `meta.job_id` is always stamped. `task=True` wraps the
 same coroutine; the job store persists `task_id → job_id` at task creation,
 `amicus_job_list` accepts a `task_id` filter, cancellation propagation is explicit
-(a tasked call is always unkeyed, so `tasks/cancel` always cancels the job, per ADR
-0011's amendment), legacy fallback is claimed only after a host capture. Gated by
+(an unkeyed task's job is cancelled with it and a keyed task's survives, per ADR
+0011 as amended by ADR 0020), legacy fallback is claimed only after a host capture. Gated by
 `AMICUS_TASKS`. ADR 0004.
 
 ### Error envelope and codes
