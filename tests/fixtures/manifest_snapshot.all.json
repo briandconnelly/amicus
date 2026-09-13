@@ -1859,7 +1859,7 @@
           "stability": "experimental"
         },
         "dev.bconnelly.amicus/triage": {
-          "size_bytes": 5732
+          "size_bytes": 5900
         }
       },
       "mimeType": "application/json",
@@ -1875,7 +1875,7 @@
             "summary": "Author intent/background, sent as labeled UNTRUSTED prompt data. Not redacted, so no secrets. Bounds: amicus://params."
           },
           "idempotency_key": {
-            "full": "Reusing the key on the same tool with the same effective execution arguments (backend, model, reasoning_effort, backend_options, scope, the prompt inputs and, on a sync tool, timeout_seconds; `detail` only shapes delivery and may differ) replays the existing run instead of paying for a duplicate: an _async call returns the same job_id; a sync call awaits that run and returns its result. A keyed sync wait that hits its local deadline or is cancelled leaves the run going, and its `timeout` repair points at amicus_job_status for that job; under the tasks extension a keyed task's job likewise survives tasks/cancel. Sync and _async are separate tools and never share a key. Reuse with different arguments is refused (idempotency_conflict); a key whose prior result was consumed or evicted is idempotency_result_unavailable; a still-publishing reservation is idempotency_in_progress (retry; a sync call waits about a second for it first). A completed result stays replayable while its job record lives (its TTL). meta.idempotency_replayed=true marks a replayed (unpaid) response. An empty key is rejected.",
+            "full": "Reusing the key on the same tool with the same effective execution arguments (backend, model, reasoning_effort, backend_options, scope and the prompt inputs; on a sync tool timeout_seconds only bounds the wait and `detail` only shapes delivery, so either may differ) replays the existing run instead of paying for a duplicate: an _async call returns the same job_id; a sync call awaits that run and returns its result. A keyed sync run gets the job deadline (AMICUS_JOB_MAX_SECONDS), as an _async run does, and timeout_seconds bounds how long the call waits for it. A keyed sync wait that hits that bound or is cancelled leaves the run going, and its `timeout` repair points at amicus_job_status for that job; under the tasks extension a keyed task's job likewise survives tasks/cancel. Sync and _async are separate tools and never share a key. Reuse with different arguments is refused (idempotency_conflict); a key whose prior result was consumed or evicted is idempotency_result_unavailable; a still-publishing reservation is idempotency_in_progress (retry; a sync call waits about a second for it first). A completed result stays replayable while its job record lives (its TTL). meta.idempotency_replayed=true marks a replayed (unpaid) response. An empty key is rejected.",
             "summary": "Dedup key scoped to this tool + backend + workspace: reusing it with identical args replays the prior result unpaid; different args are refused. Lifecycle: amicus://params."
           },
           "instructions_append": {
@@ -1968,7 +1968,7 @@
           "stability": "experimental"
         },
         "dev.bconnelly.amicus/triage": {
-          "size_bytes": 5732
+          "size_bytes": 5900
         }
       },
       "description": "Full semantics for parameters whose inline description is a compressed summary.",
@@ -2687,7 +2687,7 @@
                 "type": "null"
               }
             ],
-            "description": "Deadline in seconds, clamped to 10-600; omit for the server default (AMICUS_TIMEOUT_SECONDS). An unkeyed sync call past its deadline is terminated and its partial work lost; prefer the _async twin. A keyed one (idempotency_key) leaves its run going and says how to fetch it."
+            "description": "Deadline in seconds, clamped to 10-600; omit for the server default (AMICUS_TIMEOUT_SECONDS). An unkeyed sync call past its deadline is terminated and its partial work lost; prefer the _async twin. For a keyed call (idempotency_key) this only bounds the wait: the run gets the job deadline and the timeout says how to fetch it."
           },
           "untracked": {
             "default": "explicit_only",
@@ -4310,7 +4310,7 @@
                 "type": "null"
               }
             ],
-            "description": "Deadline in seconds, clamped to 10-600; omit for the server default (AMICUS_TIMEOUT_SECONDS). An unkeyed sync call past its deadline is terminated and its partial work lost; prefer the _async twin. A keyed one (idempotency_key) leaves its run going and says how to fetch it."
+            "description": "Deadline in seconds, clamped to 10-600; omit for the server default (AMICUS_TIMEOUT_SECONDS). An unkeyed sync call past its deadline is terminated and its partial work lost; prefer the _async twin. For a keyed call (idempotency_key) this only bounds the wait: the run gets the job deadline and the timeout says how to fetch it."
           },
           "workspace_root": {
             "anyOf": [
@@ -5054,7 +5054,7 @@
                 "type": "null"
               }
             ],
-            "description": "Deadline in seconds, clamped to 10-600; omit for the server default (AMICUS_TIMEOUT_SECONDS). An unkeyed sync call past its deadline is terminated and its partial work lost; prefer the _async twin. A keyed one (idempotency_key) leaves its run going and says how to fetch it."
+            "description": "Deadline in seconds, clamped to 10-600; omit for the server default (AMICUS_TIMEOUT_SECONDS). An unkeyed sync call past its deadline is terminated and its partial work lost; prefer the _async twin. For a keyed call (idempotency_key) this only bounds the wait: the run gets the job deadline and the timeout says how to fetch it."
           },
           "workspace_root": {
             "anyOf": [
@@ -7814,7 +7814,7 @@
                 "type": "null"
               }
             ],
-            "description": "Deadline in seconds, clamped to 10-600; omit for the server default (AMICUS_TIMEOUT_SECONDS). An unkeyed sync call past its deadline is terminated and its partial work lost; prefer the _async twin. A keyed one (idempotency_key) leaves its run going and says how to fetch it."
+            "description": "Deadline in seconds, clamped to 10-600; omit for the server default (AMICUS_TIMEOUT_SECONDS). An unkeyed sync call past its deadline is terminated and its partial work lost; prefer the _async twin. For a keyed call (idempotency_key) this only bounds the wait: the run gets the job deadline and the timeout says how to fetch it."
           },
           "untracked": {
             "default": "explicit_only",

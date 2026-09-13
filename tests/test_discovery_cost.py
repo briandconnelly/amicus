@@ -86,15 +86,16 @@ next_step/tool instead of the whole RepairStep enum, which is not repetition but
 withdrawal of advertised values the field never carried. Nothing the earlier paragraphs chose
 to keep was touched: the findings_diagnostics, confidence and coverage prose is intact.
 
-The schema-17 -> schema-18 raise (+1532 bytes on the `all` profile: 95011 -> 96543) buys a
+The schema-17 -> schema-18 raise (+1744 bytes on the `all` profile: 95011 -> 96755) buys a
 parameter, not prose. `idempotency_key` reached the four sync paid tools (#66): four more
 copies of the same one-line summary plus its schema property are about 1000 bytes, the
 irreducible cost of the per-tool summary shape #41 chose. The rest is the keyed-wait
 qualification on `timeout_seconds` and the two server-instructions sentences that used to say
 categorically that a sync timeout terminates the run and that cancelling a task cancels its
 job; both are now false for a keyed call, and a description that stays categorical would
-misdirect the agent that reads it. Three error codes were added to each sync tool's catalog,
-which lives in amicus_capabilities and not on this wire.
+misdirect the agent that reads it; the `timeout_seconds` sentence also says that for a keyed
+call it bounds only the wait, because the run gets the job deadline. Three error codes were
+added to each sync tool's catalog, which lives in amicus_capabilities and not on this wire.
 """
 
 from __future__ import annotations
@@ -104,7 +105,7 @@ from tests.conftest import spawned_server_env
 
 from amicus import manifest
 
-MEASURED: dict[str, int] = {"all": 96543, "codex-kimi": 96551, "claude": 96543}
+MEASURED: dict[str, int] = {"all": 96755, "codex-kimi": 96763, "claude": 96755}
 BUDGET: dict[str, int] = {p: ((n // 1000) + 1) * 1000 for p, n in MEASURED.items()}
 
 
