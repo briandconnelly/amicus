@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from pathlib import Path
 
 import pytest
 from fastmcp import Client
@@ -12,7 +13,7 @@ from jsonschema import Draft202012Validator
 from pontonier.core.jobs import DiscardOutcome, JobStore
 
 from amicus import config, server
-from amicus.jobs import lifecycle, lookup
+from amicus.jobs import delivery, lifecycle, lookup
 from amicus.registry import BackendRegistry
 
 
@@ -106,6 +107,7 @@ async def test_status_result_and_consume_lifecycle(app, store, tmp_path):
         assert res.is_error is False and body["ok"] is True and body["tool"] == "amicus_consult"
         assert body["summary"] == "Looks fine" and body["raw_response"]["text"] is None
         assert body["meta"]["job_id"] == job_id and "idempotency_replayed" not in body["meta"]
+        assert "consume" not in body["meta"], "only a consume reports a disposition"
         full = (
             await c.call_tool("amicus_job_result", {"job_id": job_id, "detail": "full", **ws})
         ).structured_content
@@ -118,6 +120,7 @@ async def test_status_result_and_consume_lifecycle(app, store, tmp_path):
             await c.call_tool("amicus_job_consume_result", {"job_id": job_id, **ws})
         ).structured_content
         assert consumed["ok"] is True and consumed["summary"] == "Looks fine"
+        assert consumed["meta"]["consume"] == {"discard_outcome": "removed"}
         gone = await c.call_tool(
             "amicus_job_result", {"job_id": job_id, **ws}, raise_on_error=False
         )
@@ -145,6 +148,7 @@ async def test_consume_keeps_a_record_it_could_not_deliver(app, store, tmp_path,
         )
         assert stored.is_error and stored.structured_content["ok"] is False
         assert stored.structured_content["meta"]["job_id"] == job_id
+        assert stored.structured_content["meta"]["consume"] == {"discard_outcome": "removed"}
         assert store.status(str(tmp_path), job_id) is None, "a delivered stored error is consumed"
         # A corrupt payload is described, not delivered, so it survives a consume.
         job2 = await _start(c, tmp_path)
@@ -159,35 +163,116 @@ async def test_consume_keeps_a_record_it_could_not_deliver(app, store, tmp_path,
         assert store.status(str(tmp_path), job2) is not None
 
 
-async def test_consume_delivers_even_when_the_record_is_already_gone(
+async def test_consume_reports_a_record_already_gone_as_missing(app, store, tmp_path, monkeypatch):
+    """MISSING is a record the store dropped before this call's discard (a racing consume,
+    or expiry): a repeat call returns job_not_found, as consume promises, but this call did
+    not delete it, so the outcome says missing rather than removed. Delivery still
+    happens (#44)."""
+    real_discard = JobStore.discard
+
+    def raced(self, cwd, job_id):
+        assert real_discard(self, cwd, job_id) is DiscardOutcome.REMOVED
+        return real_discard(self, cwd, job_id)
+
+    monkeypatch.setattr(JobStore, "discard", raced)
+    ws = {"workspace_root": str(tmp_path)}
+    async with Client(app) as c:
+        job_id = await _start(c, tmp_path)
+        await _wait_done(store, tmp_path, job_id)
+        consumed = (
+            await c.call_tool("amicus_job_consume_result", {"job_id": job_id, **ws})
+        ).structured_content
+        assert consumed["ok"] is True and consumed["summary"] == "Looks fine"
+        assert consumed["meta"]["consume"] == {"discard_outcome": "missing"}
+        again = await c.call_tool(
+            "amicus_job_consume_result", {"job_id": job_id, **ws}, raise_on_error=False
+        )
+        assert again.structured_content["error"]["code"] == "job_not_found"
+
+
+@pytest.mark.parametrize("outcome", [DiscardOutcome.DELETE_FAILED, DiscardOutcome.NOT_DONE])
+async def test_consume_reports_a_retained_record_and_a_follow_up_that_resolves_it(
+    app, store, tmp_path, monkeypatch, outcome
+):
+    """An outcome that leaves the record still delivers, and meta.consume says so with a
+    follow_up whose own call shows the record; a record still `done` is then deleted by a
+    retried consume, as the follow_up's alternative says (#44)."""
+    real_discard = JobStore.discard
+    calls: list[str] = []
+
+    def first_call_keeps_it(self, cwd, job_id):
+        calls.append(job_id)
+        return outcome if len(calls) == 1 else real_discard(self, cwd, job_id)
+
+    monkeypatch.setattr(JobStore, "discard", first_call_keeps_it)
+    ws = {"workspace_root": str(tmp_path)}
+    async with Client(app) as c:
+        job_id = await _start(c, tmp_path)
+        await _wait_done(store, tmp_path, job_id)
+        consumed = (
+            await c.call_tool("amicus_job_consume_result", {"job_id": job_id, **ws})
+        ).structured_content
+        assert consumed["ok"] is True and consumed["summary"] == "Looks fine"
+        follow_up = {
+            "next_step": "inspect_and_retry",
+            "tool": "amicus_job_status",
+            "arguments": {"job_id": job_id, **ws},
+            "alternative": delivery.CONSUME_FOLLOW_UP,
+        }
+        assert consumed["meta"]["consume"] == {
+            "discard_outcome": outcome.value,
+            "follow_up": follow_up,
+        }
+        checked = (await c.call_tool(follow_up["tool"], follow_up["arguments"])).structured_content
+        assert checked["status"] == "done", "the record was retained"
+        retried = (
+            await c.call_tool("amicus_job_consume_result", {"job_id": job_id, **ws})
+        ).structured_content
+        assert retried["meta"]["consume"] == {"discard_outcome": "removed"}
+        gone = await c.call_tool(
+            "amicus_job_status", {"job_id": job_id, **ws}, raise_on_error=False
+        )
+        assert gone.structured_content["error"]["code"] == "job_not_found"
+
+
+async def test_a_real_failed_delete_is_reported_and_its_follow_up_shows_what_is_left(
     app, store, tmp_path, monkeypatch
 ):
-    """A MISSING discard outcome (someone else already removed the record, or a race)
-    is exactly what consume promised: the record is gone. Delivery still happens."""
-    monkeypatch.setattr(JobStore, "discard", lambda self, cwd, job_id: DiscardOutcome.MISSING)
+    """A real failure, not a faked outcome: the job directory's rmdir is refused, so
+    pontonier has already unlinked result.json and restores only meta.json, which the store
+    then reads as `failed`. The follow_up's own call reports that, and a repeat consume
+    returns job_failed and deletes nothing, so the prose may promise neither redelivery
+    nor job_not_found (#44)."""
     ws = {"workspace_root": str(tmp_path)}
     async with Client(app) as c:
         job_id = await _start(c, tmp_path)
         await _wait_done(store, tmp_path, job_id)
+        target = store._job_dir(str(tmp_path), job_id)
+        refused: list[Path] = []
+        real_rmdir = Path.rmdir
+
+        def refuse_the_job_dir(self):
+            if self == target:
+                refused.append(self)
+                raise OSError("rmdir refused")
+            return real_rmdir(self)
+
+        monkeypatch.setattr(Path, "rmdir", refuse_the_job_dir)
         consumed = (
             await c.call_tool("amicus_job_consume_result", {"job_id": job_id, **ws})
         ).structured_content
+        assert refused, "control: the failure was injected"
         assert consumed["ok"] is True and consumed["summary"] == "Looks fine"
-
-
-async def test_consume_delivers_when_deletion_fails(app, store, tmp_path, monkeypatch):
-    """Deletion is best-effort: a DELETE_FAILED outcome still delivers, and the TTL
-    reaper (not this call) owns the retained record."""
-    monkeypatch.setattr(JobStore, "discard", lambda self, cwd, job_id: DiscardOutcome.DELETE_FAILED)
-    ws = {"workspace_root": str(tmp_path)}
-    async with Client(app) as c:
-        job_id = await _start(c, tmp_path)
-        await _wait_done(store, tmp_path, job_id)
-        consumed = (
-            await c.call_tool("amicus_job_consume_result", {"job_id": job_id, **ws})
-        ).structured_content
-        assert consumed["ok"] is True and consumed["summary"] == "Looks fine"
-        assert store.status(str(tmp_path), job_id) is not None, "retained until its TTL"
+        disposition = consumed["meta"]["consume"]
+        assert disposition["discard_outcome"] == "delete_failed"
+        follow_up = disposition["follow_up"]
+        checked = (await c.call_tool(follow_up["tool"], follow_up["arguments"])).structured_content
+        assert checked["status"] == "failed" and checked["result_available"] is False
+        again = await c.call_tool(
+            "amicus_job_consume_result", {"job_id": job_id, **ws}, raise_on_error=False
+        )
+        assert again.structured_content["error"]["code"] == "job_failed"
+        assert sorted(p.name for p in target.iterdir()) == ["meta.json"]
 
 
 async def test_cancel_running_then_terminal_is_idempotent(app, store, tmp_path, monkeypatch):
@@ -336,3 +421,48 @@ async def test_two_tasks_on_one_job_report_the_first_task_on_every_surface(
     assert [j["task_id"] for j in listed["jobs"]] == ["task-first"]
     assert [(j["job_id"], j["task_id"]) for j in by_second["jobs"]] == [(job, "task-first")]
     assert status["task_id"] == "task-first" and result["meta"]["task_id"] == "task-first"
+
+
+async def test_missing_after_a_failed_expiry_cleanup_still_answers_job_not_found(
+    app, store, tmp_path, monkeypatch
+):
+    """Codex's review of #44: a record that expires between the read and the discard is
+    cleaned up inside the discard, and that cleanup ignores its own failure, so the discard
+    says MISSING while files remain. The repeat-call promise still holds, because an expired
+    record is dropped on every read, which is why `missing` claims only that the store no
+    longer serves the record, never that its files are gone."""
+    ws = {"workspace_root": str(tmp_path)}
+    async with Client(app) as c:
+        job_id = await _start(c, tmp_path)
+        await _wait_done(store, tmp_path, job_id)
+        target = store._job_dir(str(tmp_path), job_id)
+        expired = [False]
+        refused: list[Path] = []
+        real_discard = JobStore.discard
+        real_rmdir = Path.rmdir
+
+        def expire_then_discard(self, cwd, jid):
+            expired[0] = True
+            return real_discard(self, cwd, jid)
+
+        def refuse_the_job_dir(self):
+            if self == target:
+                refused.append(self)
+                raise OSError("rmdir refused")
+            return real_rmdir(self)
+
+        monkeypatch.setattr(JobStore, "_expired", lambda self, meta: expired[0])
+        monkeypatch.setattr(JobStore, "discard", expire_then_discard)
+        monkeypatch.setattr(Path, "rmdir", refuse_the_job_dir)
+        consumed = (
+            await c.call_tool("amicus_job_consume_result", {"job_id": job_id, **ws})
+        ).structured_content
+        assert refused, "control: the expiry cleanup ran and failed"
+        assert consumed["ok"] is True and consumed["summary"] == "Looks fine"
+        assert consumed["meta"]["consume"] == {"discard_outcome": "missing"}
+        assert target.exists(), "files a failed cleanup left remain"
+        again = await c.call_tool(
+            "amicus_job_consume_result", {"job_id": job_id, **ws}, raise_on_error=False
+        )
+        assert again.structured_content["error"]["code"] == "job_not_found"
+        assert target.exists(), "a read reports not-found without the files being gone"

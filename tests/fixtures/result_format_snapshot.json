@@ -3,6 +3,100 @@
   "schemas": {
     "AdversarialReviewResult": {
       "$defs": {
+        "ConsumeDisposition": {
+          "additionalProperties": false,
+          "properties": {
+            "discard_outcome": {
+              "enum": [
+                "removed",
+                "missing",
+                "not_done",
+                "delete_failed"
+              ],
+              "title": "Discard Outcome",
+              "type": "string"
+            },
+            "follow_up": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ConsumeFollowUp"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            }
+          },
+          "required": [
+            "discard_outcome"
+          ],
+          "title": "ConsumeDisposition",
+          "type": "object"
+        },
+        "ConsumeFollowUp": {
+          "additionalProperties": false,
+          "properties": {
+            "alternative": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Alternative"
+            },
+            "arguments": {
+              "$ref": "#/$defs/ConsumeFollowUpArguments"
+            },
+            "next_step": {
+              "const": "inspect_and_retry",
+              "title": "Next Step",
+              "type": "string"
+            },
+            "tool": {
+              "const": "amicus_job_status",
+              "title": "Tool",
+              "type": "string"
+            }
+          },
+          "required": [
+            "next_step",
+            "tool",
+            "arguments"
+          ],
+          "title": "ConsumeFollowUp",
+          "type": "object"
+        },
+        "ConsumeFollowUpArguments": {
+          "additionalProperties": false,
+          "properties": {
+            "job_id": {
+              "title": "Job Id",
+              "type": "string"
+            },
+            "workspace_root": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Workspace Root"
+            }
+          },
+          "required": [
+            "job_id"
+          ],
+          "title": "ConsumeFollowUpArguments",
+          "type": "object"
+        },
         "ContextSummary": {
           "additionalProperties": false,
           "properties": {
@@ -283,6 +377,17 @@
               },
               "title": "Compat Warnings",
               "type": "array"
+            },
+            "consume": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ConsumeDisposition"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
             },
             "context_summary": {
               "anyOf": [
@@ -809,6 +914,100 @@
     },
     "ConsultResult": {
       "$defs": {
+        "ConsumeDisposition": {
+          "additionalProperties": false,
+          "properties": {
+            "discard_outcome": {
+              "enum": [
+                "removed",
+                "missing",
+                "not_done",
+                "delete_failed"
+              ],
+              "title": "Discard Outcome",
+              "type": "string"
+            },
+            "follow_up": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ConsumeFollowUp"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            }
+          },
+          "required": [
+            "discard_outcome"
+          ],
+          "title": "ConsumeDisposition",
+          "type": "object"
+        },
+        "ConsumeFollowUp": {
+          "additionalProperties": false,
+          "properties": {
+            "alternative": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Alternative"
+            },
+            "arguments": {
+              "$ref": "#/$defs/ConsumeFollowUpArguments"
+            },
+            "next_step": {
+              "const": "inspect_and_retry",
+              "title": "Next Step",
+              "type": "string"
+            },
+            "tool": {
+              "const": "amicus_job_status",
+              "title": "Tool",
+              "type": "string"
+            }
+          },
+          "required": [
+            "next_step",
+            "tool",
+            "arguments"
+          ],
+          "title": "ConsumeFollowUp",
+          "type": "object"
+        },
+        "ConsumeFollowUpArguments": {
+          "additionalProperties": false,
+          "properties": {
+            "job_id": {
+              "title": "Job Id",
+              "type": "string"
+            },
+            "workspace_root": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Workspace Root"
+            }
+          },
+          "required": [
+            "job_id"
+          ],
+          "title": "ConsumeFollowUpArguments",
+          "type": "object"
+        },
         "ContextSummary": {
           "additionalProperties": false,
           "properties": {
@@ -1007,6 +1206,17 @@
               },
               "title": "Compat Warnings",
               "type": "array"
+            },
+            "consume": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ConsumeDisposition"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
             },
             "context_summary": {
               "anyOf": [
@@ -1460,6 +1670,100 @@
     },
     "DelegateResult": {
       "$defs": {
+        "ConsumeDisposition": {
+          "additionalProperties": false,
+          "properties": {
+            "discard_outcome": {
+              "enum": [
+                "removed",
+                "missing",
+                "not_done",
+                "delete_failed"
+              ],
+              "title": "Discard Outcome",
+              "type": "string"
+            },
+            "follow_up": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ConsumeFollowUp"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            }
+          },
+          "required": [
+            "discard_outcome"
+          ],
+          "title": "ConsumeDisposition",
+          "type": "object"
+        },
+        "ConsumeFollowUp": {
+          "additionalProperties": false,
+          "properties": {
+            "alternative": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Alternative"
+            },
+            "arguments": {
+              "$ref": "#/$defs/ConsumeFollowUpArguments"
+            },
+            "next_step": {
+              "const": "inspect_and_retry",
+              "title": "Next Step",
+              "type": "string"
+            },
+            "tool": {
+              "const": "amicus_job_status",
+              "title": "Tool",
+              "type": "string"
+            }
+          },
+          "required": [
+            "next_step",
+            "tool",
+            "arguments"
+          ],
+          "title": "ConsumeFollowUp",
+          "type": "object"
+        },
+        "ConsumeFollowUpArguments": {
+          "additionalProperties": false,
+          "properties": {
+            "job_id": {
+              "title": "Job Id",
+              "type": "string"
+            },
+            "workspace_root": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Workspace Root"
+            }
+          },
+          "required": [
+            "job_id"
+          ],
+          "title": "ConsumeFollowUpArguments",
+          "type": "object"
+        },
         "ContextSummary": {
           "additionalProperties": false,
           "properties": {
@@ -1658,6 +1962,17 @@
               },
               "title": "Compat Warnings",
               "type": "array"
+            },
+            "consume": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ConsumeDisposition"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
             },
             "context_summary": {
               "anyOf": [
@@ -2135,6 +2450,100 @@
     },
     "ErrorResult": {
       "$defs": {
+        "ConsumeDisposition": {
+          "additionalProperties": false,
+          "properties": {
+            "discard_outcome": {
+              "enum": [
+                "removed",
+                "missing",
+                "not_done",
+                "delete_failed"
+              ],
+              "title": "Discard Outcome",
+              "type": "string"
+            },
+            "follow_up": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ConsumeFollowUp"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            }
+          },
+          "required": [
+            "discard_outcome"
+          ],
+          "title": "ConsumeDisposition",
+          "type": "object"
+        },
+        "ConsumeFollowUp": {
+          "additionalProperties": false,
+          "properties": {
+            "alternative": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Alternative"
+            },
+            "arguments": {
+              "$ref": "#/$defs/ConsumeFollowUpArguments"
+            },
+            "next_step": {
+              "const": "inspect_and_retry",
+              "title": "Next Step",
+              "type": "string"
+            },
+            "tool": {
+              "const": "amicus_job_status",
+              "title": "Tool",
+              "type": "string"
+            }
+          },
+          "required": [
+            "next_step",
+            "tool",
+            "arguments"
+          ],
+          "title": "ConsumeFollowUp",
+          "type": "object"
+        },
+        "ConsumeFollowUpArguments": {
+          "additionalProperties": false,
+          "properties": {
+            "job_id": {
+              "title": "Job Id",
+              "type": "string"
+            },
+            "workspace_root": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Workspace Root"
+            }
+          },
+          "required": [
+            "job_id"
+          ],
+          "title": "ConsumeFollowUpArguments",
+          "type": "object"
+        },
         "ContextSummary": {
           "additionalProperties": false,
           "properties": {
@@ -2534,6 +2943,17 @@
               },
               "title": "Compat Warnings",
               "type": "array"
+            },
+            "consume": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ConsumeDisposition"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
             },
             "context_summary": {
               "anyOf": [
@@ -2958,6 +3378,100 @@
     },
     "ReviewResult": {
       "$defs": {
+        "ConsumeDisposition": {
+          "additionalProperties": false,
+          "properties": {
+            "discard_outcome": {
+              "enum": [
+                "removed",
+                "missing",
+                "not_done",
+                "delete_failed"
+              ],
+              "title": "Discard Outcome",
+              "type": "string"
+            },
+            "follow_up": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ConsumeFollowUp"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            }
+          },
+          "required": [
+            "discard_outcome"
+          ],
+          "title": "ConsumeDisposition",
+          "type": "object"
+        },
+        "ConsumeFollowUp": {
+          "additionalProperties": false,
+          "properties": {
+            "alternative": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Alternative"
+            },
+            "arguments": {
+              "$ref": "#/$defs/ConsumeFollowUpArguments"
+            },
+            "next_step": {
+              "const": "inspect_and_retry",
+              "title": "Next Step",
+              "type": "string"
+            },
+            "tool": {
+              "const": "amicus_job_status",
+              "title": "Tool",
+              "type": "string"
+            }
+          },
+          "required": [
+            "next_step",
+            "tool",
+            "arguments"
+          ],
+          "title": "ConsumeFollowUp",
+          "type": "object"
+        },
+        "ConsumeFollowUpArguments": {
+          "additionalProperties": false,
+          "properties": {
+            "job_id": {
+              "title": "Job Id",
+              "type": "string"
+            },
+            "workspace_root": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Workspace Root"
+            }
+          },
+          "required": [
+            "job_id"
+          ],
+          "title": "ConsumeFollowUpArguments",
+          "type": "object"
+        },
         "ContextSummary": {
           "additionalProperties": false,
           "properties": {
@@ -3238,6 +3752,17 @@
               },
               "title": "Compat Warnings",
               "type": "array"
+            },
+            "consume": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ConsumeDisposition"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
             },
             "context_summary": {
               "anyOf": [

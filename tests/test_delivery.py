@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+from typing import get_args
+
+from pontonier.core.jobs import DiscardOutcome as StoreDiscardOutcome
+
 from amicus.errors import error_envelope
 from amicus.jobs import delivery
-from amicus.schemas.envelope import Meta, dump_success
+from amicus.schemas.envelope import ConsumeDisposition, DiscardOutcome, Meta, dump_success
 from amicus.schemas.fingerprint import FINGERPRINT, RESULT_FORMAT
 from amicus.schemas.results import ConsultResult, RawResponse
 
@@ -186,3 +190,42 @@ def test_the_format_gate_covers_a_stored_error_too():
         _rec(fmt=RESULT_FORMAT - 1), stored, _JOB, "consult", Meta(), "full", None
     )
     assert not delivered and env["error"]["code"] == "job_result_incompatible"
+
+
+def test_the_wire_outcomes_are_exactly_the_stores():
+    """A new pontonier outcome must fail here, not validate as a value amicus never names."""
+    assert set(get_args(DiscardOutcome)) == {o.value for o in StoreDiscardOutcome}
+
+
+def test_attach_consume_disposition_maps_every_discard_outcome():
+    for outcome in StoreDiscardOutcome:
+        for root in (None, "/repo"):
+            env = delivery.attach_consume_disposition({"ok": True, "meta": {}}, outcome, _JOB, root)
+            got = env["meta"]["consume"]
+            assert got["discard_outcome"] == outcome.value
+            if outcome in (StoreDiscardOutcome.REMOVED, StoreDiscardOutcome.MISSING):
+                assert got == {"discard_outcome": outcome.value}, "the record is gone"
+                continue
+            arguments = {"job_id": _JOB}
+            if root is not None:
+                arguments["workspace_root"] = root
+            assert got["follow_up"] == {
+                "next_step": "inspect_and_retry",
+                "tool": "amicus_job_status",
+                "arguments": arguments,
+                "alternative": delivery.CONSUME_FOLLOW_UP,
+            }
+
+
+def test_consume_is_never_persisted_and_a_stored_copy_never_reaches_a_plain_read():
+    meta = Meta(consume=ConsumeDisposition(discard_outcome="removed"))
+    assert meta.consume is not None, "control: the field is set on the model"
+    assert "consume" not in dump_success(ConsultResult(summary="s", meta=meta))["meta"]
+    assert "consume" not in error_envelope("timeout", "t", meta)["meta"]
+    stored = _stored_success()
+    stored["meta"]["consume"] = {"discard_outcome": "removed"}
+    env, delivered = delivery.finished_job_envelope(
+        _rec(), stored, _JOB, "consult", Meta(), "summary", None
+    )
+    assert delivered, "control: a stored copy validates, so only the scrub removes it"
+    assert "consume" not in env["meta"]

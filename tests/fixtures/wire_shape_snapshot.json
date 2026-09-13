@@ -1,4 +1,36 @@
 {
+  "consumed": {
+    "delete_failed": {
+      "discard_outcome": "delete_failed",
+      "follow_up": {
+        "alternative": "The record may remain. amicus_job_status on this job shows what is left: job_not_found means the store no longer serves it; done means a retried consume can delete it; any other status means the result is no longer readable and the record stays until a later job call finds it expired.",
+        "arguments": {
+          "job_id": "00000000000000000000000000000000",
+          "workspace_root": "/repo"
+        },
+        "next_step": "inspect_and_retry",
+        "tool": "amicus_job_status"
+      }
+    },
+    "missing": {
+      "discard_outcome": "missing"
+    },
+    "not_done": {
+      "discard_outcome": "not_done",
+      "follow_up": {
+        "alternative": "The record may remain. amicus_job_status on this job shows what is left: job_not_found means the store no longer serves it; done means a retried consume can delete it; any other status means the result is no longer readable and the record stays until a later job call finds it expired.",
+        "arguments": {
+          "job_id": "00000000000000000000000000000000",
+          "workspace_root": "/repo"
+        },
+        "next_step": "inspect_and_retry",
+        "tool": "amicus_job_status"
+      }
+    },
+    "removed": {
+      "discard_outcome": "removed"
+    }
+  },
   "delivered": {
     "full": {
       "adversarial": {

@@ -105,7 +105,7 @@ from tests.conftest import spawned_server_env
 
 from amicus import manifest
 
-MEASURED: dict[str, int] = {"all": 96755, "codex-kimi": 96763, "claude": 96755}
+MEASURED: dict[str, int] = {"all": 96886, "codex-kimi": 96894, "claude": 96886}
 BUDGET: dict[str, int] = {p: ((n // 1000) + 1) * 1000 for p, n in MEASURED.items()}
 
 

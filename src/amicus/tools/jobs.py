@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 from fastmcp import Context
 
 from amicus.jobs import lifecycle, lookup
-from amicus.jobs.delivery import finished_job_envelope
+from amicus.jobs.delivery import attach_consume_disposition, finished_job_envelope
 from amicus.schemas.params import (
     DetailParam,
     JobIdParam,
@@ -101,12 +101,10 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
             envelope["meta"]["task_id"] = meta.task_id
         if not (consume and delivered):
             return envelope
-        # Once delivered is true, every discard outcome still returns the envelope: MISSING
-        # means the record is already gone (what consume promised), DELETE_FAILED means
-        # deletion is best-effort and the TTL reaper owns the retained record, and REMOVED
-        # is the normal case.
-        await asyncio.to_thread(store().discard, cwd, job_id)
-        return envelope
+        # Once delivered is true, every discard outcome still returns the envelope, since
+        # refusing would lose paid work; meta.consume reports which outcome it was (#44).
+        outcome = await asyncio.to_thread(store().discard, cwd, job_id)
+        return attach_consume_disposition(envelope, outcome, job_id, workspace_root)
 
     @app.tool(
         name="amicus_job_status",
@@ -158,9 +156,11 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
         title="Fetch and delete a background job's result (free)",
         meta=lifecycle_meta("amicus_job_consume_result"),
         description=(
-            f"{FREE_MARKER} Like amicus_job_result, then delete the record: a repeat call "
-            "returns job_not_found, so this is not idempotent. A corrupt or incompatible "
-            "record is not deleted."
+            f"{FREE_MARKER} Like amicus_job_result, then delete the record; "
+            "meta.consume.discard_outcome says what happened. After removed or missing a "
+            "repeat call returns job_not_found (not idempotent); otherwise the record may "
+            "remain, so follow meta.consume.follow_up. A corrupt or incompatible record is "
+            "not deleted."
         ),
     )
     @guard("amicus_job_consume_result", settings)

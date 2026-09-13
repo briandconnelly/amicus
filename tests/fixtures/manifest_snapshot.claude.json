@@ -127,6 +127,7 @@
       "task_id",
       "idempotency_replayed",
       "backend_details",
+      "consume",
       "request_id",
       "fingerprint",
       "server_version"
@@ -847,9 +848,9 @@
         "required_params": [
           "job_id"
         ],
-        "returns": "the originating tool's envelope.",
+        "returns": "the originating tool's envelope; meta.consume.discard_outcome is what the store did, with a follow_up after not_done or delete_failed.",
         "stability": null,
-        "use_when": "Fetch a finished job's envelope and delete the record."
+        "use_when": "Fetch a finished job's envelope and delete its record."
       },
       {
         "backends": [
@@ -934,12 +935,110 @@
           "stability": "experimental"
         },
         "dev.bconnelly.amicus/triage": {
-          "size_bytes": 12020
+          "size_bytes": 14416
         }
       },
       "mimeType": "application/schema+json",
       "text": {
         "$defs": {
+          "ConsumeDisposition": {
+            "additionalProperties": false,
+            "description": "What amicus_job_consume_result did to the record after delivering it (#44).",
+            "properties": {
+              "discard_outcome": {
+                "description": "What deleting the record did. removed: this call deleted it. missing: the store had already dropped it (consumed, expired or evicted); files a failed cleanup left may remain. After either, a repeat call returns job_not_found. not_done: it was no longer a finished result, so nothing was deleted. delete_failed: deletion failed or could not be verified, so the record may remain.",
+                "enum": [
+                  "delete_failed",
+                  "missing",
+                  "not_done",
+                  "removed"
+                ],
+                "title": "Discard Outcome",
+                "type": "string"
+              },
+              "follow_up": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/ConsumeFollowUp"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              }
+            },
+            "required": [
+              "discard_outcome"
+            ],
+            "title": "ConsumeDisposition",
+            "type": "object"
+          },
+          "ConsumeFollowUp": {
+            "additionalProperties": false,
+            "description": "The one follow-up a consume hands back: inspect the record it may have left. The\nsame shape as `Repair`, narrowed to that one action as `JobFollowUp` is, and its\n`arguments` narrowed to the call that action names (#44).",
+            "properties": {
+              "alternative": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Alternative"
+              },
+              "arguments": {
+                "$ref": "#/$defs/ConsumeFollowUpArguments"
+              },
+              "next_step": {
+                "const": "inspect_and_retry",
+                "title": "Next Step",
+                "type": "string"
+              },
+              "tool": {
+                "const": "amicus_job_status",
+                "title": "Tool",
+                "type": "string"
+              }
+            },
+            "required": [
+              "arguments",
+              "next_step",
+              "tool"
+            ],
+            "title": "ConsumeFollowUp",
+            "type": "object"
+          },
+          "ConsumeFollowUpArguments": {
+            "additionalProperties": false,
+            "description": "The amicus_job_status call a consume follow-up names, closed to that call's shape so\nthe published schema admits only a callable one. `workspace_root` is omitted, never\nnull, when the caller did not supply one.",
+            "properties": {
+              "job_id": {
+                "title": "Job Id",
+                "type": "string"
+              },
+              "workspace_root": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Workspace Root"
+              }
+            },
+            "required": [
+              "job_id"
+            ],
+            "title": "ConsumeFollowUpArguments",
+            "type": "object"
+          },
           "ContextSummary": {
             "additionalProperties": false,
             "properties": {
@@ -1361,6 +1460,18 @@
                 "title": "Compat Warnings",
                 "type": "array"
               },
+              "consume": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/ConsumeDisposition"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Set only by amicus_job_consume_result, on the envelope it delivers: what deleting the job record did. Never stored with the result."
+              },
               "context_summary": {
                 "anyOf": [
                   {
@@ -1390,7 +1501,7 @@
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-20",
+                "default": "amicus/0.1/schema-21",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -1951,7 +2062,7 @@
           "stability": "experimental"
         },
         "dev.bconnelly.amicus/triage": {
-          "size_bytes": 12020
+          "size_bytes": 14416
         }
       },
       "description": "The full ErrorResult schema; tool outputSchemas carry only an opaque error branch.",
@@ -1981,7 +2092,7 @@
           "stability": "experimental"
         },
         "dev.bconnelly.amicus/triage": {
-          "size_bytes": 5250
+          "size_bytes": 7646
         }
       },
       "description": "The full Meta schema every success envelope's opaque `meta` points at.",
@@ -1998,12 +2109,110 @@
           "stability": "experimental"
         },
         "dev.bconnelly.amicus/triage": {
-          "size_bytes": 5250
+          "size_bytes": 7646
         }
       },
       "mimeType": "application/schema+json",
       "text": {
         "$defs": {
+          "ConsumeDisposition": {
+            "additionalProperties": false,
+            "description": "What amicus_job_consume_result did to the record after delivering it (#44).",
+            "properties": {
+              "discard_outcome": {
+                "description": "What deleting the record did. removed: this call deleted it. missing: the store had already dropped it (consumed, expired or evicted); files a failed cleanup left may remain. After either, a repeat call returns job_not_found. not_done: it was no longer a finished result, so nothing was deleted. delete_failed: deletion failed or could not be verified, so the record may remain.",
+                "enum": [
+                  "delete_failed",
+                  "missing",
+                  "not_done",
+                  "removed"
+                ],
+                "title": "Discard Outcome",
+                "type": "string"
+              },
+              "follow_up": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/ConsumeFollowUp"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              }
+            },
+            "required": [
+              "discard_outcome"
+            ],
+            "title": "ConsumeDisposition",
+            "type": "object"
+          },
+          "ConsumeFollowUp": {
+            "additionalProperties": false,
+            "description": "The one follow-up a consume hands back: inspect the record it may have left. The\nsame shape as `Repair`, narrowed to that one action as `JobFollowUp` is, and its\n`arguments` narrowed to the call that action names (#44).",
+            "properties": {
+              "alternative": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Alternative"
+              },
+              "arguments": {
+                "$ref": "#/$defs/ConsumeFollowUpArguments"
+              },
+              "next_step": {
+                "const": "inspect_and_retry",
+                "title": "Next Step",
+                "type": "string"
+              },
+              "tool": {
+                "const": "amicus_job_status",
+                "title": "Tool",
+                "type": "string"
+              }
+            },
+            "required": [
+              "arguments",
+              "next_step",
+              "tool"
+            ],
+            "title": "ConsumeFollowUp",
+            "type": "object"
+          },
+          "ConsumeFollowUpArguments": {
+            "additionalProperties": false,
+            "description": "The amicus_job_status call a consume follow-up names, closed to that call's shape so\nthe published schema admits only a callable one. `workspace_root` is omitted, never\nnull, when the caller did not supply one.",
+            "properties": {
+              "job_id": {
+                "title": "Job Id",
+                "type": "string"
+              },
+              "workspace_root": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Workspace Root"
+              }
+            },
+            "required": [
+              "job_id"
+            ],
+            "title": "ConsumeFollowUpArguments",
+            "type": "object"
+          },
           "ContextSummary": {
             "additionalProperties": false,
             "properties": {
@@ -2178,6 +2387,18 @@
             "title": "Compat Warnings",
             "type": "array"
           },
+          "consume": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ConsumeDisposition"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Set only by amicus_job_consume_result, on the envelope it delivers: what deleting the job record did. Never stored with the result."
+          },
           "context_summary": {
             "anyOf": [
               {
@@ -2207,7 +2428,7 @@
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-20",
+            "default": "amicus/0.1/schema-21",
             "title": "Fingerprint",
             "type": "string"
           },
@@ -6706,7 +6927,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Free — no model call. Like amicus_job_result, then delete the record: a repeat call returns job_not_found, so this is not idempotent. A corrupt or incompatible record is not deleted.",
+      "description": "Free — no model call. Like amicus_job_result, then delete the record; meta.consume.discard_outcome says what happened. After removed or missing a repeat call returns job_not_found (not idempotent); otherwise the record may remain, so follow meta.consume.follow_up. A corrupt or incompatible record is not deleted.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,

@@ -121,6 +121,7 @@ def test_meta_field_names_are_the_documented_set():
         "task_id",
         "idempotency_replayed",
         "backend_details",
+        "consume",
         "request_id",
         "fingerprint",
         "server_version",
@@ -149,6 +150,21 @@ def test_result_meta_schema_carries_dialect_and_delivered_shape_rule():
     assert s["$schema"] == JSON_SCHEMA_DIALECT
     assert "backend" in s["properties"]
     assert "null-valued keys" in s["description"]
+
+
+def test_result_meta_schema_publishes_the_delivery_only_consume_field():
+    s = e.RESULT_META_SCHEMA
+    assert s["properties"]["consume"]["description"].startswith("Set only by amicus_job_consume")
+    outcome = s["$defs"]["ConsumeDisposition"]["properties"]["discard_outcome"]
+    assert outcome["enum"] == ["removed", "missing", "not_done", "delete_failed"]
+    follow_up = s["$defs"]["ConsumeFollowUp"]["properties"]
+    assert follow_up["tool"]["const"] == "amicus_job_status"
+    # The arguments are the call the follow-up names, not an open object that admits `{}`.
+    assert follow_up["arguments"]["$ref"].endswith("/ConsumeFollowUpArguments")
+    arguments = s["$defs"]["ConsumeFollowUpArguments"]
+    assert arguments["required"] == ["job_id"]
+    assert arguments["additionalProperties"] is False
+    assert set(arguments["properties"]) == {"job_id", "workspace_root"}
 
 
 def test_dump_success_retains_nulls():
