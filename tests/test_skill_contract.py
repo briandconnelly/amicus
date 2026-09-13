@@ -147,3 +147,99 @@ def test_no_rule_reads_a_repair_the_envelope_may_not_carry():
     for rules in (_BINDING_RULES, _OPTIONS_RULES):
         assert not unconditional.search(rules)
     assert "With no `error.repair`, fix what `error.details` names" in _OPTIONS_RULES
+
+
+# Issue #84: the Discovery rule told an agent to confirm `features` names the verb it was about
+# to call, but `features` never names `consult` or `review_changes` - only the verbs the server
+# gates (FEATURE_FOR_VERB) plus non-verb capabilities. A host following the rule literally
+# concluded the two baseline verbs were unsupported on every backend.
+_SYNC_REF = (_SKILL / "references" / "sync-vs-async.md").read_text(encoding="utf-8")
+_BACKENDS_REF = (_SKILL / "references" / "choosing-a-backend.md").read_text(encoding="utf-8")
+
+
+def _rules_section(heading: str) -> str:
+    """One `###` subsection of SKILL.md's binding rules."""
+    body = _BINDING_RULES.partition(f"\n### {heading}\n")[2].split("\n### ", 1)[0]
+    assert body, f"SKILL.md's binding rules have no `### {heading}` subsection"
+    return body
+
+
+def _bullets(text: str) -> list[str]:
+    return [b.strip() for b in re.split(r"\n(?=- )", text) if b.strip().startswith("- ")]
+
+
+def test_the_discovery_rule_gates_exactly_the_verbs_the_server_gates():
+    from amicus.schemas.codes import VERBS
+    from amicus.tools._resolve import FEATURE_FOR_VERB
+
+    bullets = [b for b in _bullets(_rules_section("Discovery")) if "`features`" in b]
+    assert len(bullets) == 1, "expected exactly one Discovery rule about `features`"
+    rule = bullets[0]
+    bold = re.search(r"\*\*(.+?)\*\*", rule, re.DOTALL)
+    assert bold, "the `features` rule has no bold obligation"
+    gated = set(re.findall(r"`([a-z_]+)`", bold.group(1))) - {"features"}
+    assert gated == set(FEATURE_FOR_VERB), (
+        f"the rule gates {sorted(gated)}; the server gates {sorted(FEATURE_FOR_VERB)}"
+    )
+    rest = rule[bold.end() :]
+    ungated = set(VERBS) - set(FEATURE_FOR_VERB)
+    assert ungated <= set(re.findall(r"`([a-z_]+)`", rest)), (
+        "the rule must name every ungated verb as one `features` never lists"
+    )
+    assert "never" in rest, "the rule must say the ungated verbs never appear in `features`"
+
+
+def test_the_backend_reference_names_every_declared_feature():
+    from amicus.backends.claude.contract import CONTRACT as claude
+    from amicus.backends.codex.contract import CONTRACT as codex
+    from amicus.backends.kimi.contract import CONTRACT as kimi
+    from amicus.schemas.codes import VERBS
+    from amicus.tools._resolve import FEATURE_FOR_VERB
+
+    section = _BACKENDS_REF.partition("\n## What `features` contains\n")[2].split("\n## ", 1)[0]
+    assert section, "choosing-a-backend.md has no `## What `features` contains` section"
+    named = set(re.findall(r"`([a-z_]+)`", section))
+    declared = codex.supported_features | kimi.supported_features | claude.supported_features
+    assert declared <= named, f"undocumented features: {sorted(declared - named)}"
+    assert set(VERBS) <= named, "every verb must be placed as gated or baseline"
+    assert "(the verbs it supports)" not in _BACKENDS_REF, (
+        "`features` is not the verb list; consult and review_changes never appear in it"
+    )
+    # The gate table itself, per backend: a verb listed as reachable on a backend whose
+    # contract does not declare its feature would send an agent into feature_unsupported.
+    for verb, feature in FEATURE_FOR_VERB.items():
+        bullet = next(b for b in _bullets(section) if b.startswith(f"- `amicus_{verb}`"))
+        first_sentence = bullet.partition(":")[2].partition(".")[0]
+        for backend_id, contract in (("codex", codex), ("kimi", kimi), ("claude", claude)):
+            listed = f"`{backend_id}`" in first_sentence
+            assert listed == (feature in contract.supported_features), (
+                f"{verb} on {backend_id}: reference says {listed}, contract says not"
+            )
+
+
+def test_the_polling_reference_states_the_hint_ceiling():
+    # The hint grows with elapsed time only up to pontonier's cap; a job that runs for
+    # minutes is polled at the cap for nearly its whole life, which is what the issue #84
+    # reporter observed as "no back-off". Read from the installed library so a pin bump
+    # that moves the cap fails here until the skill follows it.
+    from pontonier.core.jobs import MAX_POLL_AFTER_MS
+
+    polling = _SYNC_REF.partition("\n## Polling\n")[2].split("\n## ", 1)[0]
+    assert polling, "sync-vs-async.md has no `## Polling` section"
+    assert f"`{MAX_POLL_AFTER_MS // 1000} s`" in polling, "the poll hint's ceiling is unstated"
+
+
+def test_the_deadline_reference_states_both_sync_bounds_and_the_keyed_alternative():
+    from amicus.config import DEFAULT_TIMEOUT_SECONDS
+    from amicus.schemas.params import MAX_TIMEOUT_SECONDS
+
+    deadline = _SYNC_REF.partition("\n## The deadline\n")[2].split("\n## ", 1)[0]
+    assert deadline, "sync-vs-async.md has no `## The deadline` section"
+    deadline = " ".join(deadline.split())  # the reference wraps at 100 columns
+    assert f"default {DEFAULT_TIMEOUT_SECONDS}s" in deadline
+    assert f"at most {MAX_TIMEOUT_SECONDS}s" in deadline, "the raise-able ceiling is unstated"
+    assert "`idempotency_key`" in deadline
+    spend = _rules_section("Spend")
+    assert "`idempotency_key`" in next(b for b in _bullets(spend) if "`_async`" in b), (
+        "the sync-deadline rule must offer the keyed sync call beside the `_async` twin"
+    )

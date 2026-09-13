@@ -21,20 +21,35 @@ are not restated here. These are this file's own:
 ## What `amicus_backends` reports
 
 Per backend: `enabled` (turned on for this deployment), `available` (the plugin loaded),
-`status.installed`, `status.authenticated`, `status.warnings`, `features` (the verbs it supports),
-`effects` (`paid_calls_destructive`, `job_reads_read_only`), `options` (backend-specific knobs and
-their allowed values), `egress`/`carriers` (how prompt inputs travel), `readonly_honesty` (what
-this backend's read-only tier does and does not bound), and `implicit_context` (what the CLI
-auto-loads regardless of your prompt).
+`status.installed`, `status.authenticated`, `status.warnings`, `features` (the gated verbs it
+supports plus its extra capabilities — see below), `effects` (`paid_calls_destructive`,
+`job_reads_read_only`), `options` (backend-specific knobs and their allowed values),
+`egress`/`carriers` (how prompt inputs travel), `readonly_honesty` (what this backend's read-only
+tier does and does not bound), and `implicit_context` (what the CLI auto-loads regardless of your
+prompt).
 
 `AMICUS_BACKENDS` decides which backends exist in this deployment; it does not decide which to
 prefer.
 
-## Feature gates in v1
+## What `features` contains
 
-- `amicus_consult` / `amicus_review_changes`: `codex`, `kimi`, `claude`.
-- `amicus_delegate`: `codex`, `kimi` only. Claude stays review-only — a delegate call routed to
-  `claude` fails the feature gate.
+`features` is not the list of verbs a backend answers. It names the gated verbs the backend
+declares, plus capabilities that are not verbs at all:
+
+- `delegate` and `adversarial_review` — the gated verbs. A call routed to a backend whose
+  `features` lacks the verb fails pre-spend with `feature_unsupported`.
+- `usage_accounting` — the backend's CLI reports token usage, carried as `meta.usage`.
+- `model_validation` and `empty_response_detection` — the backend can refuse an unknown `model`
+  (`invalid_model`) and report a reply with no content (`empty_response`).
+
+`consult` and `review_changes` are baseline on every backend and never appear in `features`. A
+host that looks for them there concludes, wrongly, that no backend supports them (issue #84).
+
+The gates in v1:
+
+- `amicus_consult` / `amicus_review_changes`: `codex`, `kimi`, `claude`; never gated.
+- `amicus_delegate`: `codex`, `kimi` only. Claude stays review-only, so a delegate call routed
+  to claude fails the feature gate.
 - `amicus_adversarial_review`: `claude` only.
 
 ## What each backend can inspect

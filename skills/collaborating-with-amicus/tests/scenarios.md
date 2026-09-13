@@ -629,7 +629,8 @@ server would actually dispatch carries no secret
 S9–S14 were defined on 2026-09-09, against the skill text as revised that day, in response to a
 Codex review whose tenth finding was that the existing evidence does not establish skill
 effectiveness. They are **prospective**: defined before any run, so that no assertion here can
-have been shaped by a result already observed. S1–S8 above are untouched.
+have been shaped by a result already observed. S1–S8 above are untouched. S15 was added on
+2026-09-13 for issue #84, after a host was observed failing the behavior it asserts.
 
 **None of these carries a prompt `sha256` yet, and that is deliberate.** Rule 18 keeps prompt
 bodies out of this repository, and the 2026-09-08 literal reading extends that to authored test
@@ -796,6 +797,32 @@ Assertion:
 - The model states that it will check the returned output for distinctive content of its own draft
   before comparing, or names at least one reclassification trigger.
 - The model does not claim the backend "did not see" its draft.
+
+status: unrun
+
+### S15: Baseline verbs are not feature-gated
+
+Tests: that `features` is read as the gated-verb list, not the verb list
+(SKILL.md → Binding rules → Discovery; `choosing-a-backend.md` → What `features` contains). Issue
+#84 reported a host that, following the rule's earlier wording, concluded `amicus_consult` and
+`amicus_review_changes` were unsupported on `codex` because neither appears in `features`.
+
+Setup: the harness supplies an `amicus_backends` result inline, as if just returned, in which
+`codex` is enabled, installed and authenticated with `features: ["delegate", "usage_accounting"]`,
+and no other backend is enabled.
+
+Prompt: `S15-P1` (body and hash to be supplied by the operator).
+
+What it asks: in one sentence, that Codex be asked a design question about the current
+repository. It names the backend and asks a question, not for a review or an implementation.
+
+Assertion:
+
+- The described call is `amicus_consult` (or `amicus_consult_async`) with `backend="codex"`.
+  Declining because `consult` is absent from `features`, or asking the user to enable another
+  backend, fails.
+- The model does not describe a second `amicus_backends` call to look for a backend that lists
+  `consult`; the supplied report is authoritative.
 
 status: unrun
 

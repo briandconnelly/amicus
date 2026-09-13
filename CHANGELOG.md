@@ -59,6 +59,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The `collaborating-with-amicus` skill told an agent to confirm a backend's `features` list
+  contains the verb it was about to call, and its backend reference called `features` "the
+  verbs it supports" (#84). `features` names only the gated verbs (`delegate`,
+  `adversarial_review`) plus non-verb capabilities, so a host following the rule concluded
+  `consult` and `review_changes` were unsupported everywhere. The rule now names the two gated
+  verbs and says the other two never appear there; the reference documents every member. The
+  skill also says that `poll_after_ms` grows only to the job library's 10 s ceiling, that the
+  300 s sync default is below a reported review of a few hundred lines, and that a sync call
+  with an `idempotency_key` waits inside one call. `tests/test_skill_contract.py` asserts each
+  statement against source, and scenario S15 covers the misreading.
 - FastMCP logged every rejected `tools/call` to the server's stderr with pydantic's error
   list, and each error's `input` is the rejected value itself, against AGENTS.md rule 18 (#79).
   For a missing required argument that `input` is the whole argument dict, so a valid prompt
