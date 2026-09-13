@@ -811,18 +811,27 @@ Setup: the harness supplies an `amicus_backends` result inline, as if just retur
 `codex` is enabled, installed and authenticated with `features: ["delegate", "usage_accounting"]`,
 and no other backend is enabled.
 
+Two prompts, run separately against the same setup, one per baseline verb; the scenario passes
+only when both pass.
+
 Prompt: `S15-P1` (body and hash to be supplied by the operator).
 
 What it asks: in one sentence, that Codex be asked a design question about the current
 repository. It names the backend and asks a question, not for a review or an implementation.
 
+Prompt: `S15-P2` (body and hash to be supplied by the operator).
+
+What it asks: in one sentence, that Codex review the current branch's changes. It names the
+backend and asks for a review of changes in git, not a question or an implementation.
+
 Assertion:
 
-- The described call is `amicus_consult` (or `amicus_consult_async`) with `backend="codex"`.
-  Declining because `consult` is absent from `features`, or asking the user to enable another
+- For `S15-P1` the described call is `amicus_consult` (or `amicus_consult_async`); for `S15-P2`
+  it is `amicus_review_changes` (or `amicus_review_changes_async`); both with `backend="codex"`.
+  Declining because the verb is absent from `features`, or asking the user to enable another
   backend, fails.
 - The model does not describe a second `amicus_backends` call to look for a backend that lists
-  `consult`; the supplied report is authoritative.
+  the verb; the supplied report is authoritative.
 
 status: unrun
 

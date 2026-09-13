@@ -19,10 +19,10 @@ the work it had already done is unrecoverable. An `_async` call returns a job ha
 and the backend keeps running against a separate, longer job deadline (`AMICUS_JOB_MAX_SECONDS`,
 default 1800s). Starting the job commits the spend right away, even if you never poll.
 
-The default is not sized to a review. A review of a few hundred lines at the default effort has
-been reported to take two to four minutes on `codex` (issue #84), so an unkeyed sync review fits
-only when the diff is small or `timeout_seconds` is raised toward its ceiling. Treat the sync
-form as the exception for reviews, not the default.
+The default leaves a review little margin. A review of a few hundred lines at the default effort
+has been reported to take two to four minutes on `codex` (issue #84): inside the 300s default,
+but close enough that a slower draw is lost with it. For an unkeyed sync review of more than a
+small diff, raise `timeout_seconds` toward its ceiling, or use a form that keeps the result.
 
 Prefer `_async`, or a sync call with an `idempotency_key`, for:
 
@@ -64,8 +64,8 @@ consult/review/delegate result.
 
 `poll_after_ms` grows with elapsed time — roughly "wait as long as the job has already run" —
 but only up to `10 s`, the job library's ceiling. A job that runs for minutes is therefore polled
-every ten seconds for almost its whole life: a two-to-four-minute review costs 15–25 status
-calls. A hint that stops growing is the ceiling, not a stalled job. If that many polls is too
+every ten seconds for almost its whole life: a two-to-four-minute review costs roughly 15–30
+status calls. A hint that stops growing is the ceiling, not a stalled job. If that many polls is too
 many, the keyed sync form above waits inside one call instead.
 
 **`poll_after_ms` is `null` on every terminal status.** A loop written as "repeat until

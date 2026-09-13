@@ -183,9 +183,10 @@ An unkeyed synchronous call runs to a bounded deadline (`timeout_seconds`, defau
 the call is terminated: you receive nothing, and the work the backend already did is gone. An `_async` call
 returns a job handle immediately and runs against a longer job deadline
 (`AMICUS_JOB_MAX_SECONDS`, default 1800s). Starting an async job commits the spend immediately,
-whether or not you ever poll. The sync default is not sized to a review: a review of a few
-hundred lines has been reported to take longer than it on `codex` (issue #84), so treat a sync
-review as the exception — see [sync vs async](references/sync-vs-async.md).
+whether or not you ever poll. The sync default leaves a review little margin: a review of a few
+hundred lines has been reported to take two to four minutes on `codex` (issue #84), so raise
+`timeout_seconds` or use a form that keeps the result — see
+[sync vs async](references/sync-vs-async.md).
 
 The exception is a sync call made with an `idempotency_key`. Its run gets the job deadline, and
 `timeout_seconds` only bounds the wait: at that bound the call returns `timeout` with a repair

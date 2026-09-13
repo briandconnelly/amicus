@@ -177,9 +177,14 @@ def test_the_discovery_rule_gates_exactly_the_verbs_the_server_gates():
     rule = bullets[0]
     bold = re.search(r"\*\*(.+?)\*\*", rule, re.DOTALL)
     assert bold, "the `features` rule has no bold obligation"
+    # `features` carries feature names (the mapping's values); the rule tells the agent which
+    # verbs to look for. The two coincide only because every gated verb's feature is named
+    # after it, so pin that too: a gate whose feature name diverged would need new wording.
+    assert set(FEATURE_FOR_VERB) <= set(VERBS)
+    assert all(verb == feature for verb, feature in FEATURE_FOR_VERB.items())
     gated = set(re.findall(r"`([a-z_]+)`", bold.group(1))) - {"features"}
-    assert gated == set(FEATURE_FOR_VERB), (
-        f"the rule gates {sorted(gated)}; the server gates {sorted(FEATURE_FOR_VERB)}"
+    assert gated == set(FEATURE_FOR_VERB.values()), (
+        f"the rule gates {sorted(gated)}; the server gates {sorted(FEATURE_FOR_VERB.values())}"
     )
     rest = rule[bold.end() :]
     ungated = set(VERBS) - set(FEATURE_FOR_VERB)
@@ -187,6 +192,23 @@ def test_the_discovery_rule_gates_exactly_the_verbs_the_server_gates():
         "the rule must name every ungated verb as one `features` never lists"
     )
     assert "never" in rest, "the rule must say the ungated verbs never appear in `features`"
+
+
+def test_no_contract_declares_a_baseline_verb_as_a_feature():
+    # The rule and the reference say consult and review_changes never appear in `features`.
+    # That is a fact about the contracts, not the docs, so assert it there: a backend that
+    # declared one would make the text wrong while every docs-reading test stayed green.
+    from amicus.backends.claude.contract import CONTRACT as claude
+    from amicus.backends.codex.contract import CONTRACT as codex
+    from amicus.backends.kimi.contract import CONTRACT as kimi
+    from amicus.schemas.codes import VERBS
+    from amicus.tools._resolve import FEATURE_FOR_VERB
+
+    ungated = set(VERBS) - set(FEATURE_FOR_VERB)
+    for backend_id, contract in (("codex", codex), ("kimi", kimi), ("claude", claude)):
+        assert not (ungated & contract.supported_features), (
+            f"{backend_id} declares an ungated verb in supported_features; the skill says none do"
+        )
 
 
 def test_the_backend_reference_names_every_declared_feature():
@@ -229,7 +251,11 @@ def test_the_polling_reference_states_the_hint_ceiling():
     assert f"`{MAX_POLL_AFTER_MS // 1000} s`" in polling, "the poll hint's ceiling is unstated"
 
 
-def test_the_deadline_reference_states_both_sync_bounds_and_the_keyed_alternative():
+def test_the_deadline_reference_states_both_sync_bounds_and_names_the_keyed_alternative():
+    # The bounds are asserted against source. The keyed alternative is checked for presence
+    # only - that it is offered beside `_async` where the deadline is explained, and that its
+    # ADR 0020 limit is stated; its behaviour (job deadline, the run outliving the wait,
+    # reattachment, separate sync/async identities) is exercised in tests/test_lifecycle.py.
     from amicus.config import DEFAULT_TIMEOUT_SECONDS
     from amicus.schemas.params import MAX_TIMEOUT_SECONDS
 
@@ -239,6 +265,7 @@ def test_the_deadline_reference_states_both_sync_bounds_and_the_keyed_alternativ
     assert f"default {DEFAULT_TIMEOUT_SECONDS}s" in deadline
     assert f"at most {MAX_TIMEOUT_SECONDS}s" in deadline, "the raise-able ceiling is unstated"
     assert "`idempotency_key`" in deadline
+    assert "separate identities (ADR 0020)" in deadline, "the keyed form's limit is unstated"
     spend = _rules_section("Spend")
     assert "`idempotency_key`" in next(b for b in _bullets(spend) if "`_async`" in b), (
         "the sync-deadline rule must offer the keyed sync call beside the `_async` twin"
