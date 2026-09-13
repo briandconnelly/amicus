@@ -133,19 +133,22 @@ NO_CORRECTIVE_CALL: frozenset[str] = frozenset(
 )
 
 
-def lookup_arguments(tool: str | None, backend: str | None) -> dict[str, Any] | None:
-    """The complete call for a repair routed to a lookup tool (issue #42): amicus_models
-    requires `backend`, amicus_backends takes it as an optional filter. None for any other
-    tool, or for amicus_models with no backend to name. A third-party plugin's id is a valid
-    error.backend but not a value either tool's closed `backend` enum accepts, so it is never
-    named: amicus_backends falls back to its unfiltered call."""
+def complete_lookup(
+    tool: str | None, arguments: dict[str, Any] | None, backend: str | None
+) -> tuple[str | None, dict[str, Any] | None]:
+    """The (tool, arguments) of a repair routed to a lookup tool (issue #42). amicus_models
+    requires `backend` and amicus_backends takes it as an optional filter. A third-party
+    plugin's id is a valid error.backend but outside both tools' closed `backend` enum, so
+    it is never named: amicus_backends falls back to its unfiltered call, and amicus_models,
+    which cannot be called at all without one, is dropped so the repair stays a symbolic
+    next step. Explicit arguments, and every other tool, pass through unchanged."""
+    if arguments is not None or tool not in ("amicus_backends", "amicus_models"):
+        return tool, arguments
     if backend not in BACKEND_IDS:
         backend = None
     if tool == "amicus_backends":
-        return {"backend": backend} if backend else {}
-    if tool == "amicus_models" and backend:
-        return {"backend": backend}
-    return None
+        return tool, ({"backend": backend} if backend else {})
+    return (tool, {"backend": backend}) if backend else (None, None)
 
 
 def repair_table(plugin: BackendPlugin | None = None) -> dict[str, RepairRule]:
@@ -189,7 +192,7 @@ def make_error(
 ) -> ErrorInfo:
     """Build the envelope for `code`, deriving the symbolic repair from the table.
     `repair_tool` has three states: omitted keeps the table's tool, a string overrides
-    it, explicit None clears it. A lookup tool's repair is completed by `lookup_arguments`,
+    it, explicit None clears it. A lookup tool's repair is completed by `complete_lookup`,
     and a NO_CORRECTIVE_CALL code carries no repair. An `invalid_arguments` envelope must
     carry the list and `details` is always derived from its first entry."""
     if code == "invalid_arguments":
@@ -214,8 +217,7 @@ def make_error(
     tool = rule.tool if isinstance(repair_tool, _KeepTableTool) else repair_tool
     is_temp = rule.temporary if temporary is None else temporary
     backend_id = backend if backend is not None else (plugin.backend_id if plugin else None)
-    if repair_arguments is None:
-        repair_arguments = lookup_arguments(tool, backend_id)
+    tool, repair_arguments = complete_lookup(tool, repair_arguments, backend_id)
     repair = (
         None
         if code in NO_CORRECTIVE_CALL
@@ -286,19 +288,21 @@ def render_failure(plugin: BackendPlugin, failure: ClassifiedFailure, meta: Meta
     rule = table[code]
     temporary = rule.temporary if failure.retryable is None else failure.retryable
     if failure.repair is not None:
+        tool, arguments = complete_lookup(
+            failure.repair.tool, failure.repair.arguments, plugin.backend_id
+        )
         repair = Repair(
             next_step=failure.repair.next_step,  # ty: ignore[invalid-argument-type]
-            tool=failure.repair.tool,
-            arguments=failure.repair.arguments
-            if failure.repair.arguments is not None
-            else lookup_arguments(failure.repair.tool, plugin.backend_id),
+            tool=tool,
+            arguments=arguments,
             alternative=failure.repair.alternative or rule.alternative,
         )
     else:
+        tool, arguments = complete_lookup(rule.tool, None, plugin.backend_id)
         repair = Repair(
             next_step=rule.next_step,  # ty: ignore[invalid-argument-type]
-            tool=rule.tool,
-            arguments=lookup_arguments(rule.tool, plugin.backend_id),
+            tool=tool,
+            arguments=arguments,
             alternative=rule.alternative,
         )
     if code in NO_CORRECTIVE_CALL:

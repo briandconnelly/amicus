@@ -125,10 +125,15 @@ def test_lookup_repairs_never_name_a_backend_the_lookup_rejects():
     )["error"]["repair"]
     assert (unavailable["tool"], unavailable["arguments"]) == ("amicus_backends", {})
     Draft202012Validator(_input_schema("amicus_backends")).validate(unavailable["arguments"])
+    # amicus_models cannot be called without a backend it accepts, so naming it would be a
+    # dead route (Copilot review of #42): the repair stays a symbolic next step, no tool.
     model = errors.render_failure(
         plugin, ClassifiedFailure(code="invalid_model", detail="no"), Meta()
     )["error"]["repair"]
-    assert model["tool"] == "amicus_models" and "arguments" not in model
+    assert model["next_step"] == "use_allowed_value"
+    assert "tool" not in model and "arguments" not in model
+    bare = errors.make_error("invalid_reasoning_effort", "m").repair
+    assert bare is not None and (bare.tool, bare.arguments) == (None, None)
 
 
 def test_render_failure_keeps_workspace_codes_repair_free():
