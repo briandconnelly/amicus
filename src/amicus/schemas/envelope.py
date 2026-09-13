@@ -202,16 +202,17 @@ _OFFENDING_VALUE_POLICY = (
     "echoed, when they carry a control character."
 )
 _REPAIR_POLICY = (
-    "repair.arguments, when present, is a complete call: a lookup or poll repair carries "
-    "the failing call's backend, a job_id this server minted, or the workspace_root of a "
-    "call that already resolved it; an invalid_arguments repair whose every rejected "
-    "argument is an unknown key carries the call as sent minus those keys, but only when "
-    "every remaining value is null, a bool, a number or a member of the parameter's "
-    "published enum. Any other string could be a secret or a prompt input, so it "
-    "suppresses the arguments. That call corrects the failures this envelope reports; a "
-    "later check can still reject it with a repair of its own. repair is omitted where no "
-    "call can make the correction: invalid_workspace_root and workspace_outside_roots "
-    "name the field in details instead."
+    "repair.arguments, when present, is a complete call. A lookup or poll repair carries "
+    "the failing call's backend when the lookup tool accepts it, a job_id this server "
+    "minted, or the workspace_root of a call that already resolved it. An invalid_arguments "
+    "repair whose every rejected argument is an unknown key carries the call as sent minus "
+    "those keys, but only when every remaining value is null, a bool, a number, a member "
+    "of the parameter's published enum, or an object built from those. Any other string "
+    "could be a secret or a prompt input, so it suppresses the arguments. That call "
+    "corrects the failures this envelope reports; a later check can still reject it with "
+    "a repair of its own. A repair that names no tool is a symbolic next step, not a call. "
+    "invalid_workspace_root and workspace_outside_roots carry no repair at all: only the "
+    "caller holds the directory they need, and details names the field."
 )
 
 
