@@ -289,8 +289,8 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
         "cost": "free",
         "backends": list(BACKEND_IDS),
         "use_when": "Fetch a finished job's envelope and delete its record.",
-        "returns": "the originating tool's envelope; meta.consume says whether the record "
-        "was deleted.",
+        "returns": "the originating tool's envelope; meta.consume.discard_outcome is what "
+        "the store did, with a follow_up after not_done or delete_failed.",
         "error_codes": [
             "job_not_found",
             "job_running",

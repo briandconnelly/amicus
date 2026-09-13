@@ -4,12 +4,17 @@ per backend when each plugin's contract lands (its forbidden_surface_phrases joi
 from __future__ import annotations
 
 import json
+import re
+from pathlib import Path
+from typing import get_args
 
 import pytest
 from pontonier.testing import surface_honesty
 
 from amicus import errors, manifest
-from amicus.jobs import lifecycle
+from amicus.jobs import delivery, lifecycle
+from amicus.schemas.envelope import DiscardOutcome
+from amicus.tools import discovery
 
 # Cross-backend vocabulary that would teach an agent a mechanism amicus lacks.
 FORBIDDEN_SURFACE_PHRASES: tuple[str, ...] = (
@@ -127,3 +132,72 @@ def test_consume_description_conditions_the_repeat_call_promise(wire):
 
 def test_the_consume_instrument_can_fail():
     assert [p for p in _CONSUME_PHRASES if p in _SUPERSEDED_CONSUME] == []
+
+
+# PR #83 review: three more surfaces said meta.consume tells whether the record was deleted,
+# which `missing` cannot (a failed expiry cleanup can leave files), and one implied every
+# undeleted record carries a follow_up. Each must name discard_outcome, follow_up and every
+# outcome that carries one. Two are markdown, read here because nothing else in the gate
+# sees them.
+_REPO = Path(__file__).resolve().parents[1]
+_SUPERSEDED_CONSUME_SURFACES: dict[str, str] = {
+    "discovery returns": (
+        "the originating tool's envelope; meta.consume says whether the record was deleted."
+    ),
+    "jobs command": (
+        "Fetch a finished result and delete the record: `amicus_job_consume_result` with "
+        "`job_id` — use this once you are done with the result. Its `meta.consume` says "
+        "whether the record was deleted; when it carries a `follow_up`, the record may remain."
+    ),
+    "skill reference": (
+        "The consumed envelope's `meta.consume.discard_outcome` says whether the deletion "
+        "happened; when it did not, the record may remain and `meta.consume.follow_up` names "
+        "the call that shows what is left."
+    ),
+}
+
+
+def _outcomes_with_a_follow_up() -> tuple[str, ...]:
+    """Derived from the helper the tool calls, so a new outcome that gains a follow_up
+    must be named on every surface below."""
+    return tuple(
+        outcome
+        for outcome in get_args(DiscardOutcome)
+        if "follow_up"
+        in delivery.attach_consume_disposition({"meta": {}}, outcome, "j", None)["meta"]["consume"]
+    )
+
+
+def _consume_surface_phrases() -> tuple[str, ...]:
+    return ("discard_outcome", "follow_up", *_outcomes_with_a_follow_up())
+
+
+def _block(text: str, marker: str) -> str:
+    """The one paragraph or list item that carries `marker`."""
+    blocks = [b for b in re.split(r"\n\n|\n- ", text) if marker in b]
+    assert len(blocks) == 1, f"expected exactly one block carrying {marker!r}"
+    return blocks[0]
+
+
+def _consume_outcome_surfaces() -> dict[str, str]:
+    jobs_md = (_REPO / "commands" / "amicus" / "jobs.md").read_text(encoding="utf-8")
+    skill_ref = _REPO / "skills" / "collaborating-with-amicus" / "references"
+    options = (skill_ref / "options-and-errors.md").read_text(encoding="utf-8")
+    return {
+        "discovery returns": discovery.TOOL_DETAILS["amicus_job_consume_result"]["returns"],
+        "jobs command": _block(jobs_md, "`amicus_job_consume_result` with"),
+        "skill reference": _block(options, "meta.consume"),
+    }
+
+
+def test_consume_surfaces_report_the_outcome_not_whether_deletion_happened():
+    assert _outcomes_with_a_follow_up() == ("not_done", "delete_failed")
+    for name, text in _consume_outcome_surfaces().items():
+        for phrase in _consume_surface_phrases():
+            assert phrase in text, f"{name} does not say {phrase!r}"
+
+
+def test_the_consume_surface_instrument_can_fail():
+    phrases = _consume_surface_phrases()
+    for name, old in _SUPERSEDED_CONSUME_SURFACES.items():
+        assert [p for p in phrases if p not in old], name

@@ -84,9 +84,10 @@ If a call was interrupted and you do not know whether it started:
 
 Prefer `amicus_job_result` over `amicus_job_consume_result` while a workflow is still running.
 Consuming deletes the record, and a later synthesis, comparison, or second reviewer cannot read an
-artifact you have already destroyed. The consumed envelope's `meta.consume.discard_outcome` says
-whether the deletion happened; when it did not, the record may remain and `meta.consume.follow_up`
-names the call that shows what is left.
+artifact you have already destroyed. The consumed envelope's `meta.consume.discard_outcome`
+reports what the store did, not whether the files are gone: after `removed` or `missing` it no
+longer serves the record; after `not_done` or `delete_failed` the record may remain, and
+`meta.consume.follow_up` names the call that shows what is left.
 
 ## Backend-local codes
 
