@@ -19,8 +19,8 @@ the work it had already done is unrecoverable. An `_async` call returns a job ha
 and the backend keeps running against a separate, longer job deadline (`AMICUS_JOB_MAX_SECONDS`,
 default 1800s). Starting the job commits the spend right away, even if you never poll.
 
-The default leaves a review little margin. A review of a few hundred lines at the default effort
-has been reported to take two to four minutes on `codex` (issue #84): inside the 300s default,
+The default leaves a review little margin. A review of a few hundred lines at medium effort has
+been reported to take two to four minutes on `codex` (issue #84): inside the 300s default,
 but close enough that a slower draw is lost with it. For an unkeyed sync review of more than a
 small diff, raise `timeout_seconds` toward its ceiling, or use a form that keeps the result.
 

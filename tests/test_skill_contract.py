@@ -248,7 +248,8 @@ def test_the_polling_reference_states_the_hint_ceiling():
 
     polling = _SYNC_REF.partition("\n## Polling\n")[2].split("\n## ", 1)[0]
     assert polling, "sync-vs-async.md has no `## Polling` section"
-    assert f"`{MAX_POLL_AFTER_MS // 1000} s`" in polling, "the poll hint's ceiling is unstated"
+    # Exact seconds, not floor-divided: a cap of 10500 ms must not still read as `10 s`.
+    assert f"`{MAX_POLL_AFTER_MS / 1000:g} s`" in polling, "the poll hint's ceiling is unstated"
 
 
 def test_the_deadline_reference_states_both_sync_bounds_and_names_the_keyed_alternative():
