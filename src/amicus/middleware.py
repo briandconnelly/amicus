@@ -3,6 +3,7 @@ envelope at the call boundary, and the JSON-RPC error.data envelope for resource
 
 from __future__ import annotations
 
+import copy
 import unicodedata
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
@@ -19,6 +20,7 @@ from pydantic import ValidationError
 
 from amicus import obs
 from amicus.errors import make_error, serialize_error, serialize_error_info
+from amicus.request import INPUT_FIELDS
 from amicus.schemas.envelope import ErrorResult, InvalidArgument, Meta
 from amicus.schemas.fingerprint import JSON_SCHEMA_DIALECT
 
@@ -32,6 +34,7 @@ MAX_ARG_REASON_LEN = 300
 MAX_ARG_FIELD_LEN = 128
 WITHHELD_FIELD = "<withheld>"
 _MISSING_TYPES = frozenset({"missing", "missing_argument"})
+_EXTRA_TYPES = frozenset({"unexpected_keyword_argument", "extra_forbidden"})
 RESOURCE_NOT_FOUND_HANDSHAKE = -32002
 RESOURCE_NOT_FOUND_MODERN = INVALID_PARAMS
 TASKS_EXTENSION_ID = "io.modelcontextprotocol/tasks"
@@ -91,6 +94,31 @@ def _enum_for_property(prop: Any, *, element: bool = False) -> list[str] | None:
     return None
 
 
+def corrected_arguments(errors: list[Any], arguments: object) -> dict[str, Any] | None:
+    """The corrected call's arguments when dropping the unknown keys is the ONLY correction
+    ([6.repair-intent], issue #42): every error is an unknown key the caller actually sent,
+    and no surviving argument is a prompt input. Rule 18 never echoes one, and a call
+    without it is not the caller's call. None whenever the correction is not unique."""
+    if not isinstance(arguments, dict) or not errors:
+        return None
+    fixed = copy.deepcopy(arguments)
+    for err in errors:
+        loc = tuple(err.get("loc") or ())
+        if err.get("type") not in _EXTRA_TYPES or not loc:
+            return None
+        if not all(isinstance(c, str) for c in loc):
+            return None
+        parent: object = fixed
+        for component in loc[:-1]:
+            parent = parent.get(component) if isinstance(parent, dict) else None
+        if not isinstance(parent, dict) or loc[-1] not in parent:
+            return None
+        del parent[loc[-1]]
+    if any(name in INPUT_FIELDS for name in fixed):
+        return None
+    return fixed
+
+
 def invalid_arguments_envelope(
     tool_name: str,
     *,
@@ -98,9 +126,12 @@ def invalid_arguments_envelope(
     property_schemas: dict[str, Any],
     errors: list[Any],
     meta: Meta,
+    arguments: object = None,
 ) -> dict[str, Any] | None:
     """The `invalid_arguments` envelope for a pydantic argument ValidationError, or None
-    when the errors are not request-argument failures (re-raise those untouched)."""
+    when the errors are not request-argument failures (re-raise those untouched).
+    `arguments` is the call as received; the repair carries its corrected form only when
+    `corrected_arguments` finds the correction unique."""
     for err in errors:
         loc = err.get("loc") or ()
         is_extra = err.get("type") in ("unexpected_keyword_argument", "extra_forbidden")
@@ -146,6 +177,7 @@ def invalid_arguments_envelope(
                 "invalid_arguments",
                 message[:300],
                 repair_tool=tool_name,
+                repair_arguments=corrected_arguments(errors, arguments),
                 repair_alternative=alternative,
                 invalid_arguments=items,
             ),
@@ -286,6 +318,7 @@ class ValidationEnvelopeMiddleware(Middleware):
                 property_schemas=props,
                 errors=cause.errors(),
                 meta=Meta(timeout_seconds=self._settings.timeout_seconds),
+                arguments=getattr(context.message, "arguments", None),
             )
             if envelope is None:
                 raise

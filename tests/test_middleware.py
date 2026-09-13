@@ -12,9 +12,15 @@ from fastmcp import Client, FastMCP
 from fastmcp.client import extension_hooks
 from fastmcp.exceptions import ResourceError
 from mcp import MCPError
+from pydantic import BaseModel, ConfigDict
 
 from amicus import config, middleware
 from amicus.schemas.envelope import Meta
+
+
+class _Opts(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    level: int = 0
 
 
 def _scratch_app() -> FastMCP:
@@ -27,7 +33,12 @@ def _scratch_app() -> FastMCP:
     app.add_middleware(middleware.ResourceErrorMiddleware())
 
     @app.tool(name="probe")
-    async def probe(mode: Literal["ok", "fail"], paths: list[str] | None = None) -> dict:
+    async def probe(
+        mode: Literal["ok", "fail"],
+        paths: list[str] | None = None,
+        question: str | None = None,
+        options: _Opts | None = None,
+    ) -> dict:
         if mode == "fail":
             return {"ok": False, "error": {"code": "internal_error"}}
         return {"ok": True}
@@ -92,6 +103,57 @@ async def test_validation_envelope_indexed_loc_and_withheld_name():
     assert res.structured_content["error"]["details"]["field"] == "paths[0]"
     detail = bad.structured_content["error"]["details"]
     assert detail["field"] == middleware.WITHHELD_FIELD and detail["field_withheld"] is True
+
+
+async def test_unknown_argument_repair_carries_the_corrected_call():
+    # Issue #42: removing the unknown key is the only correction, so the repair is callable.
+    async with Client(_scratch_app()) as c:
+        res = await c.call_tool("probe", {"mode": "ok", "extra": 1}, raise_on_error=False)
+    repair = res.structured_content["error"]["repair"]
+    assert repair["tool"] == "probe" and repair["arguments"] == {"mode": "ok"}
+
+
+async def test_unknown_nested_key_repair_drops_only_that_key():
+    async with Client(_scratch_app()) as c:
+        res = await c.call_tool(
+            "probe", {"mode": "ok", "options": {"level": 2, "zzz": 1}}, raise_on_error=False
+        )
+    assert res.structured_content["error"]["repair"]["arguments"] == {
+        "mode": "ok",
+        "options": {"level": 2},
+    }
+
+
+async def test_a_second_failure_kind_leaves_the_correction_open():
+    # An enum or missing-argument failure has no unique correction: no arguments are minted.
+    async with Client(_scratch_app()) as c:
+        mixed = await c.call_tool("probe", {"mode": "nope", "extra": 1}, raise_on_error=False)
+        missing = await c.call_tool("probe", {"extra": 1}, raise_on_error=False)
+    assert "arguments" not in mixed.structured_content["error"]["repair"]
+    assert "arguments" not in missing.structured_content["error"]["repair"]
+
+
+async def test_a_surviving_prompt_input_suppresses_the_arguments():
+    # Rule 18: a prompt input is never echoed, so the corrected call cannot be completed.
+    async with Client(_scratch_app()) as c:
+        res = await c.call_tool(
+            "probe", {"mode": "ok", "question": "PROMPT-TEXT-42", "extra": 1}, raise_on_error=False
+        )
+    err = res.structured_content["error"]
+    assert err["repair"]["tool"] == "probe" and "arguments" not in err["repair"]
+    assert "PROMPT-TEXT-42" not in repr(res.structured_content)
+
+
+def test_an_unknown_only_call_repairs_to_empty_arguments():
+    out = middleware.invalid_arguments_envelope(
+        "probe",
+        param_names=set(),
+        property_schemas={},
+        errors=[{"loc": ("bogus",), "msg": "m", "type": "unexpected_keyword_argument"}],
+        meta=Meta(),
+        arguments={"bogus": 1},
+    )
+    assert out is not None and out["error"]["repair"]["arguments"] == {}
 
 
 def test_format_loc_bounds_and_withholds():
