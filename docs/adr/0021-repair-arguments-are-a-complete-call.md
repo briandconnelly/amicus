@@ -1,4 +1,4 @@
-# ADR 0021: A repair is a complete call, or it is absent
+# ADR 0021: Repair arguments are a complete call, and the workspace codes carry no repair
 
 **Status:** Accepted (2026-09-13)
 
@@ -11,6 +11,7 @@ Issue #42, from the 2026-09-09 agent-friendliness audit, found that on the commo
 The checklist's `[6.repair-object]` makes `tool` and `arguments` one callable call and omits `repair` when none exists.
 `[6.repair-intent]` keeps every still-valid, non-sensitive original argument, and `[6.offending-value]` makes safety a property of the value rather than of the parameter.
 A Codex consult on this issue (2026-09-13) rejected two parts of the first design, and both corrections are recorded below.
+Codex's review of the branch then found two gaps, a third-party backend id and the `render_failure` path, which the Decision also covers.
 
 ## Decision
 
@@ -25,9 +26,11 @@ The first design denylisted `INPUT_FIELDS` instead; Codex showed that `idempoten
 **A lookup repair carries the call that makes it.**
 `amicus_models` repairs name the failing call's `backend`, which that tool requires, and `amicus_backends` repairs name it as the filter (`errors.lookup_arguments`).
 `job_not_found` repairs to `amicus_job_list({})` when the workspace came from the client's roots, since that call resolves the same workspace.
+A third-party plugin's id is a valid `error.backend` but outside both tools' closed `backend` enum, so it is never named, and `amicus_backends` falls back to its unfiltered call.
 
 **`invalid_workspace_root` and `workspace_outside_roots` carry no repair.**
 Only the caller holds the intended absolute directory, so no call can make the correction; `details.field` and `candidate_roots` name what to fix (`errors.NO_CORRECTIVE_CALL`).
+The omission belongs to the code, so `render_failure` applies it as `make_error` does.
 The first design named the failing tool with no arguments; Codex held that a tool alone is not a corrective call, and the issue asked for a lookup or omission, of which only omission exists here.
 
 **A corrected call corrects the failures its envelope reports, and certifies nothing else.**

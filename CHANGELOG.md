@@ -32,18 +32,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Every pin was regenerated in a dedicated commit (rule 10). `RESULT_FORMAT` stays 5: no stored
   result changed shape.
 
-- **Breaking (`FINGERPRINT` `schema-20`).** An error's `repair` is a complete call wherever one is
-  uniquely known, and is absent where none exists (#42, ADR 0021). An `invalid_arguments` rejection
-  whose every rejected argument is an unknown key repairs with the call as sent minus those keys in
-  `repair.arguments`, but only when every remaining value is null, a bool, a number or a published
-  enum member: a prompt input, path, model slug or `idempotency_key` is never echoed and suppresses
-  the arguments instead. `amicus_models` and `amicus_backends` repairs name the failing call's
-  `backend` (`amicus_models` requires it, so its repair was not callable before), and
-  `job_not_found` repairs to `amicus_job_list({})` when the workspace came from roots.
-  `invalid_workspace_root` and `workspace_outside_roots` no longer carry a repair: no call can
-  supply the caller's directory, and `details.field` and `candidate_roots` already name what to
-  fix. The policy is published on the error-envelope schema. `RESULT_FORMAT` stays 5, because
-  `repair.arguments` was already in the stored schema.
+- **Breaking (`FINGERPRINT` `schema-20`).** An error's `repair.arguments` carries a complete call
+  wherever one is uniquely known, and the two workspace codes carry no repair (#42, ADR 0021). An
+  `invalid_arguments` rejection whose every rejected argument is an unknown key repairs with the call
+  as sent minus those keys, but only when every remaining value is null, a bool, a number, a
+  published enum member, or an object built from those: a prompt input, path, model slug or
+  `idempotency_key` is never echoed and suppresses the arguments instead. `amicus_models` and
+  `amicus_backends` repairs name the failing call's `backend` when the tool accepts it
+  (`amicus_models` requires it, so its repair was not callable before), and `job_not_found`
+  repairs to `amicus_job_list({})` when the workspace came from roots. `invalid_workspace_root` and
+  `workspace_outside_roots` no longer carry a repair: no call can supply the caller's directory,
+  and `details.field` and `candidate_roots` already name what to fix. A repair that names no tool
+  (`correct_config`, `reduce_input` and the like) is still a symbolic next step. The policy is
+  published on the error-envelope schema. `RESULT_FORMAT` stays 5, because `repair.arguments` was
+  already in the stored schema.
 
 ### Fixed
 
