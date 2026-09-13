@@ -21,6 +21,18 @@ pytestmark = pytest.mark.integration
 
 _VERDICTS = ("pass", "concerns", "fail", "unknown")
 
+# Issue #62. The gate pins a lower reasoning effort than the product default
+# (`contract.DEFAULT_EFFORT`, xhigh) because at xhigh these calls are not bounded: a 37-57s median
+# with a tail that runs away rather than finishing late. On 2026-09-13 (claude 2.1.270) one xhigh
+# consult ran 535s and stopped only at its $1.00 budget, having spent $1.66. The same consult and
+# review at medium went 10 for 10 in 15-40s at about $0.09 each, with findings every time. This
+# gate proves amicus's plumbing against the real CLI, not the model's depth; the default
+# `--effort xhigh` token is pinned hermetically by tests/test_claude_adapter.py.
+_LIVE_EFFORT = "medium"
+# 4.5x the slowest medium run measured (40.0s): room for a slow draw, and still a bound on a
+# runaway, which is what a live budget is for.
+_TIMEOUT_S = 180
+
 
 _SHAPE_KEYS = ("findings", "questions", "next_steps", "verdict", "confidence", "review_status")
 
@@ -72,12 +84,14 @@ async def test_consult_in_a_repo_spends_and_reports_it_live(live_claude, tmp_pat
                     "an empty list.\n\ndef average(values):\n    return sum(values) / len(values)\n"
                 ),
                 "workspace_root": str(tmp_path),
-                "timeout_seconds": 180,
+                "timeout_seconds": _TIMEOUT_S,
+                "reasoning_effort": _LIVE_EFFORT,
             },
             raise_on_error=False,
         )
     body = res.structured_content
     assert body["ok"] is True, body.get("error", {}).get("code")
+    assert body["meta"]["reasoning_effort"] == _LIVE_EFFORT
     assert body["summary"] and body["meta"]["session_id"] and body["meta"]["job_id"]
     cost = body["meta"]["usage"]["cost_usd"]
     assert cost > 0, cost  # a real run really spent
@@ -102,12 +116,14 @@ async def test_toolless_is_enforced_live(live_claude, tmp_path):
                     "tools. No other words."
                 ),
                 "workspace_root": str(tmp_path),
-                "timeout_seconds": 180,
+                "timeout_seconds": _TIMEOUT_S,
+                "reasoning_effort": _LIVE_EFFORT,
             },
             raise_on_error=False,
         )
     body = res.structured_content
     assert body["ok"] is True, body.get("error", {}).get("code")
+    assert body["meta"]["reasoning_effort"] == _LIVE_EFFORT
     names = {t.strip().lower() for t in re.split(r"[,\s]+", body["summary"]) if t.strip()}
     leaked = names & {"bash", "write", "edit", "read", "glob", "grep", "shell"}
     assert not leaked, sorted(leaked)
@@ -122,11 +138,17 @@ async def test_review_changes_live(live_claude, tmp_path):
     async with Client(_app()) as c:
         res = await c.call_tool(
             "amicus_review_changes",
-            {"backend": "claude", "workspace_root": str(tmp_path), "timeout_seconds": 180},
+            {
+                "backend": "claude",
+                "workspace_root": str(tmp_path),
+                "timeout_seconds": _TIMEOUT_S,
+                "reasoning_effort": _LIVE_EFFORT,
+            },
             raise_on_error=False,
         )
     body = res.structured_content
     assert body["ok"] is True, body.get("error", {}).get("code")
+    assert body["meta"]["reasoning_effort"] == _LIVE_EFFORT
     assert body["review_status"] == "completed" and body["verdict"] in _VERDICTS
     assert body["meta"]["context_summary"]["files_changed"] == 1
 
@@ -143,12 +165,14 @@ async def test_adversarial_review_live(live_claude, tmp_path):
                 ),
                 "evidence": "The provider's docs say retries happen only on a non-2xx response.",
                 "workspace_root": str(tmp_path),
-                "timeout_seconds": 180,
+                "timeout_seconds": _TIMEOUT_S,
+                "reasoning_effort": _LIVE_EFFORT,
             },
             raise_on_error=False,
         )
     body = res.structured_content
     assert body["ok"] is True, body.get("error", {}).get("code")
+    assert body["meta"]["reasoning_effort"] == _LIVE_EFFORT
     assert body["tool"] == "amicus_adversarial_review" and body["review_status"] == "completed"
     assert body["verdict"] in _VERDICTS and body["summary"]
     assert body["context_summary"] is None and body["meta"].get("instructions_append") is None
@@ -164,11 +188,13 @@ async def test_safe_mode_consult_live(live_claude, tmp_path):
                 "backend": "claude",
                 "question": "Reply in one sentence: what does DRY mean?",
                 "workspace_root": str(tmp_path),
-                "timeout_seconds": 180,
+                "timeout_seconds": _TIMEOUT_S,
+                "reasoning_effort": _LIVE_EFFORT,
                 "backend_options": {"config_mode": "safe"},
             },
             raise_on_error=False,
         )
     body = res.structured_content
     assert body["ok"] is True, body.get("error", {}).get("code")
+    assert body["meta"]["reasoning_effort"] == _LIVE_EFFORT
     assert body["summary"] and body["meta"]["backend_details"]["config_mode"] == "safe"
