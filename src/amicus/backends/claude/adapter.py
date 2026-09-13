@@ -96,9 +96,8 @@ class ClaudeBackend:
                     alternative=(
                         f"Pass one of: {', '.join(contract.VALID_EFFORTS)} — or omit "
                         "reasoning_effort for the configured default. Refused locally (zero "
-                        "spend): claude ignores an unrecognized level instead of rejecting it, "
-                        "so the run would silently use the default while the result claimed "
-                        "otherwise."
+                        "spend): claude only warns on an unrecognized level and runs at its "
+                        "default, so the result would name an effort the run did not use."
                     ),
                 ),
             )

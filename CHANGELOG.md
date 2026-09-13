@@ -27,7 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and "cancelling a task cancels its job" with the keyed exception. ADR 0020 supersedes ADR
   0008's unkeyed-sync clause. `RESULT_FORMAT` stays 5.
 - `FINGERPRINT` moves `amicus/0.1/schema-18` → `amicus/0.1/schema-19` for the `reasoning_effort`
-  parameter contract, which now names claude beside kimi as a backend whose CLI silently ignores
+  parameter contract, which now names claude beside kimi as a backend whose CLI does not reject
   a bad effort, and says claude checks a fixed list where kimi reads the model catalog (#76).
   Every pin was regenerated in a dedicated commit (rule 10). `RESULT_FORMAT` stays 5: no stored
   result changed shape.

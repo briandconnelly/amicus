@@ -229,7 +229,7 @@ PARAMETER_CONTRACTS: dict[str, ParamContract] = {
             "Omitted, the backend resolves its own default. The value is validated by the "
             "backend, and amicus_models's per-model set is advisory. A backend-rejected "
             "value fails as invalid_reasoning_effort (repair steers to amicus_models). "
-            "Backends whose CLI silently ignores a bad effort (claude, kimi) are "
+            "Backends whose CLI does not reject a bad effort (claude, kimi) are "
             "validated pre-spend: claude against a fixed list, kimi from the model "
             "catalog. Control characters, surrogates, and "
             f"values over {REASONING_EFFORT_MAX_LENGTH} chars are rejected at the MCP "
