@@ -245,9 +245,10 @@ CONTRACT = _pc.BackendContract(
     extra_args=_pc.ExtraArgsPolicy(reserved_keys=frozenset({"model", "effort"})),
     isolation_policy=_pc.IsolationPolicy.TOOL_ALLOWLIST,
     needs_orphan_sweep=False,
-    # claude rejects a bad --effort at arg-parse (loud), and the adapter enforces
-    # VALID_EFFORTS pre-spend anyway.
-    effort_silently_ignored_upstream=False,
+    # Verified on 2.1.270: claude WARNS on an unrecognized --effort and runs at its default
+    # effort instead of rejecting it, so pre-spend validation is the only protection
+    # (adapter.validate_request).
+    effort_silently_ignored_upstream=True,
     effort_validation="enumerated",
     usage_event_markers=tuple(sorted(USAGE_KEYS)),
     failure_signatures=_pc.FailureSignatures(

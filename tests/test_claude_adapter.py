@@ -67,14 +67,17 @@ def test_a_perturbed_backend_fails_conformance(pinned_claude_bin):
             return None
 
     loose = AcceptsAnything(backend._config, backend._binary, backend._help_probe)
-    # pontonier's kit probes a bogus effort only when the CLI would silently ignore it;
-    # Claude's CLI rejects an unknown --effort itself, so the adapter's validate_request is
-    # the gate under test here, not check_backend.
-    assert plugin.contract.effort_silently_ignored_upstream is False
+    # claude ignores an unknown --effort and runs at its default (#76), so validate_request
+    # is the only gate, and pontonier's kit probes it for this backend.
+    assert plugin.contract.effort_silently_ignored_upstream is True
     bogus = _req(reasoning_effort="ultra")
     assert backend.validate_request(bogus) is not None
     assert backend.validate_request(bogus).code == "invalid_reasoning_effort"
     assert loose.validate_request(bogus) is None  # the perturbation really removes the gate
+    assert any(
+        "validate_request accepted a bogus reasoning_effort" in v
+        for v in conformance.check_backend(plugin.contract, loose)
+    )
 
     class Raises(type(backend)):  # type: ignore[misc]
         def inspect_outcome(self, outcome, request):
