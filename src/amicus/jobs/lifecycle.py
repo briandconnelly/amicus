@@ -420,10 +420,13 @@ def _keyed_timeout(
     poll_arguments: dict[str, Any] = {"job_id": job_id, "workspace_root": cwd}
     return error_envelope(
         "timeout",
-        f"the run exceeded {timeout}s and the grace window; the keyed job continues in the "
-        "background; fetch it via amicus_job_result.",
+        f"this wait exceeded {timeout}s and the grace window; the keyed job continues to its "
+        "own deadline (AMICUS_JOB_MAX_SECONDS); fetch it via amicus_job_result.",
         meta,
         plugin=plugin,
+        # Temporary whatever the backend's own timeout rule says (Claude's is not): the
+        # run is still going, and a non-temporary error drops retry_after_ms.
+        temporary=True,
         repair_next_step="poll_job_status",
         repair_tool="amicus_job_status",
         repair_arguments=poll_arguments,
@@ -432,18 +435,53 @@ def _keyed_timeout(
     )
 
 
+def _record_late_keyed_start(
+    task_map: TaskJobMap, task_id: str
+) -> Callable[[asyncio.Future], None]:
+    """Done-callback for a keyed start whose awaiting task was cancelled mid-thread: the
+    thread still publishes (or replays) a job, and this task must be able to recover it
+    through amicus_job_list(task_id=...), so the association is written once the id is
+    known. The keyed job itself is left running, as every keyed path leaves it."""
+
+    def _cb(fut: asyncio.Future) -> None:
+        _PENDING_START_CLEANUPS.discard(fut)
+        if fut.cancelled() or fut.exception() is not None:
+            return
+        outcome = fut.result()
+        job_id = outcome.get("job_id") if outcome.get("kind") in ("created", "replay") else None
+        if not job_id:
+            return
+        with contextlib.suppress(RuntimeError):
+            rec = asyncio.get_running_loop().run_in_executor(None, task_map.record, task_id, job_id)
+            rec.add_done_callback(_swallow)
+
+    return _cb
+
+
 async def _start_keyed_sync(
-    store: JobStore, spec: RunSpec, meta: Meta, plugin: BackendPlugin, *, key: str
+    store: JobStore,
+    spec: RunSpec,
+    meta: Meta,
+    plugin: BackendPlugin,
+    *,
+    key: str,
+    task_id: str | None = None,
+    task_map: TaskJobMap | None = None,
 ) -> tuple[dict[str, Any], bool]:
     """Reserve (tool, key) for a sync waiter: ``({"job_id": ...}, replayed)`` names the
     job to await (a new run, or the EXISTING run for this key+args), else an error
-    envelope. A transient outcome is re-asked for up to IDEM_SYNC_INPROGRESS_WAIT_S before
-    it is surfaced. meta.job_id is set as soon as the job is known, so a keyed timeout or
-    terminal-error envelope built from this meta names the durable job to recover."""
+    envelope, with ``replayed`` true whenever the key resolved to an existing run. A
+    transient outcome is re-asked for up to IDEM_SYNC_INPROGRESS_WAIT_S before it is
+    surfaced. meta.job_id is set as soon as the job is known, so a keyed timeout or
+    terminal-error envelope built from this meta names the durable job to recover.
+
+    The reservation runs off-loop and is shielded: a cancellation that lands mid-thread
+    leaves the job running (it is shared), and when this call is tasked the task id is
+    still recorded against the job once the thread reports it."""
     wait_deadline = time.monotonic() + IDEM_SYNC_INPROGRESS_WAIT_S
     while True:
-        try:
-            outcome = await asyncio.to_thread(
+        start_fut = asyncio.ensure_future(
+            asyncio.to_thread(
                 store.start_idempotent,
                 worker_cmd,
                 spec.cwd,
@@ -456,6 +494,14 @@ async def _start_keyed_sync(
                 stdin_text=spec.inputs_json(),
                 lock_timeout=IDEM_LOCK_ACQUIRE_TIMEOUT_S,
             )
+        )
+        try:
+            outcome = await asyncio.shield(start_fut)
+        except asyncio.CancelledError:
+            if task_id is not None and task_map is not None:
+                _PENDING_START_CLEANUPS.add(start_fut)
+                start_fut.add_done_callback(_record_late_keyed_start(task_map, task_id))
+            raise
         except OSError as exc:
             return _spawn_failure(exc, meta, plugin), False
         result_kind = outcome["kind"]
@@ -466,7 +512,7 @@ async def _start_keyed_sync(
                 if snap is None:
                     return idem_error(
                         "idempotency_result_unavailable", meta, plugin, tool=spec.tool
-                    ), False
+                    ), True
             meta.job_id = job_id
             return {"job_id": job_id}, result_kind == "replay"
         if result_kind in ("conflict", "unavailable"):
@@ -519,18 +565,21 @@ async def run_sync(
 
     Keyed (#66, ADR 0020): a first reservation awaits its own new job; a duplicate awaits
     the EXISTING job and stamps meta.idempotency_replayed on whatever it delivers; conflict
-    and unavailable are their envelopes. A keyed wait never cancels the shared job, on
-    timeout or on this waiter's cancellation, so a tasked keyed call's job survives
-    tasks/cancel and is recovered through amicus_job_list(task_id=...) or by replaying
-    the key."""
+    and unavailable are their envelopes. ``timeout`` bounds only this wait: a keyed run
+    was prepared with the job deadline, as the _async twin's is. A keyed wait never
+    cancels the shared job, on timeout or on this waiter's cancellation, so a tasked keyed
+    call's job survives tasks/cancel and is recovered through amicus_job_list(task_id=...)
+    or by replaying the key."""
     keyed = idempotency_key is not None
+    task_id = current_task_id()
     if keyed:
-        handle, replayed = await _start_keyed_sync(store, spec, meta, plugin, key=idempotency_key)
+        handle, replayed = await _start_keyed_sync(
+            store, spec, meta, plugin, key=idempotency_key, task_id=task_id, task_map=task_map
+        )
     else:
         handle, replayed = await start_job(store, spec, meta, plugin, deadline=timeout), False
-    task_id = current_task_id()
     if handle.get("ok") is False:
-        return _with_task_id(handle, task_id)
+        return _with_task_id(mark_replayed(handle) if replayed else handle, task_id)
     job_id = handle["job_id"]
     if task_id is not None and task_map is not None:
         try:

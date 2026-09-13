@@ -221,9 +221,11 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
         assert cwd is not None
         rows = await asyncio.to_thread(store().list_jobs, cwd)
         tasks = lookup.task_map(settings).entries()
-        # First association wins, as TaskJobMap.task_for does: a keyed replay from a second
-        # task adds a forward entry for recovery, and the job's own task_id stays the task
-        # that created it on every surface (ADR 0020).
+        # First association wins, as TaskJobMap.task_for does: a keyed replay from another
+        # task adds a forward entry for recovery, and the job's own task_id is the first
+        # task that named it on every surface (ADR 0020). "First" is record order, not
+        # proof of creation: a creator and a replayer record concurrently, and an untasked
+        # creator records nothing.
         task_by_job: dict[str, str] = {}
         for task, job in tasks.items():
             task_by_job.setdefault(job, task)

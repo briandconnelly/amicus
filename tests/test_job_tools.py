@@ -313,12 +313,13 @@ async def test_workspace_rules_apply_to_every_job_tool(app, tmp_path):
                 assert res.structured_content["error"]["code"] == "job_not_found", tool
 
 
-async def test_two_tasks_on_one_job_report_the_creating_task_on_every_surface(
+async def test_two_tasks_on_one_job_report_the_first_task_on_every_surface(
     app, store, settings, tmp_path
 ):
-    """A keyed sync replay from a second task records a second forward association (#66,
+    """A keyed sync replay from another task records a further forward association (#66,
     ADR 0020). The job's task_id is the FIRST association on status, result and list
-    alike, and a list filtered by either task finds the job."""
+    alike (not a claim about which task created it), and a list filtered by either task
+    finds the job."""
     ws = {"workspace_root": str(tmp_path)}
     async with Client(app) as c:
         job = await _start(c, tmp_path)

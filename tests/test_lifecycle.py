@@ -882,6 +882,7 @@ async def test_keyed_run_sync_replay_whose_record_vanished_is_unavailable(tmp_pa
     )
     out = await _run_keyed(store, _spec(str(tmp_path)), "s6")
     assert out["ok"] is False and out["error"]["code"] == "idempotency_result_unavailable"
+    assert out["meta"]["idempotency_replayed"] is True
 
 
 async def test_keyed_run_sync_spawn_failure_is_an_internal_error(tmp_path, monkeypatch):
@@ -1074,6 +1075,7 @@ async def test_replayed_job_whose_record_vanishes_is_unavailable_not_internal(
     assert out["ok"] is False and out["error"]["code"] == "idempotency_result_unavailable"
     assert out["error"]["repair"]["next_step"] == "use_new_idempotency_key"
     assert out["error"]["repair"]["tool"] == "amicus_consult"
+    assert out["meta"]["idempotency_replayed"] is True  # unpaid, whichever read lost the race
 
 
 async def test_created_keyed_job_whose_record_vanishes_stays_an_internal_error(
@@ -1095,3 +1097,121 @@ async def test_created_keyed_job_whose_record_vanishes_stays_an_internal_error(
     out = await _run_keyed(store, _spec(str(tmp_path)), "s13")
     assert out["ok"] is False and out["error"]["code"] == "internal_error"
     assert "disappeared" in out["error"]["message"]
+
+
+async def test_keyed_timeout_is_temporary_even_when_the_backend_says_timeout_is_not(
+    tmp_path, monkeypatch
+):
+    """Claude's own `timeout` rule is non-temporary, and make_error drops retry_after_ms on a
+    non-temporary error. The keyed wait's timeout is about a run that is still going, so it
+    is temporary whatever the backend's rule says, and the poll hint survives."""
+    from pontonier.conventions.envelope import RepairRule
+
+    plugin = fakeplugin.make_plugin(
+        repair_overrides={"timeout": RepairRule("start_new_job", None, False, "gone")}
+    )
+    store = lifecycle.job_store(_settings(tmp_path))
+    monkeypatch.setattr(lifecycle, "SYNC_AWAIT_GRACE_S", 0.05)
+    monkeypatch.setattr(lifecycle, "SYNC_POLL_INTERVAL_S", 0.01)
+    monkeypatch.setattr(lifecycle, "worker_cmd", _sleeping_worker_cmd())
+    spec = _spec(str(tmp_path), timeout_seconds=1)
+    out = await lifecycle.run_sync(
+        store,
+        spec,
+        meta_for(spec),
+        plugin,
+        timeout=1,
+        detail="summary",
+        ctx=None,
+        idempotency_key="s14",
+    )
+    try:
+        assert out["error"]["code"] == "timeout" and out["error"]["temporary"] is True
+        assert out["error"]["retry_after_ms"] is not None
+        assert out["error"]["repair"]["next_step"] == "poll_job_status"
+        # The control: the same plugin's unkeyed timeout follows its own rule.
+        unkeyed = await lifecycle.run_sync(
+            store,
+            _spec(str(tmp_path), timeout_seconds=1),
+            meta_for(spec),
+            plugin,
+            timeout=1,
+            detail="summary",
+            ctx=None,
+        )
+        assert unkeyed["error"]["code"] == "timeout" and unkeyed["error"]["temporary"] is False
+        assert unkeyed["error"]["repair"]["next_step"] == "start_new_job"
+    finally:
+        store.cancel(str(tmp_path), out["meta"]["job_id"])
+
+
+async def test_keyed_start_cancelled_mid_thread_still_records_its_task(tmp_path, monkeypatch):
+    """A cancellation that lands while start_idempotent is still in its thread cannot stop
+    the thread from publishing the job. The job is left running (it is keyed), and the
+    task id is recorded once the thread reports the job, so amicus_job_list(task_id=...)
+    still recovers it (ADR 0020)."""
+    store = lifecycle.job_store(_settings(tmp_path))
+    monkeypatch.setattr(lifecycle, "worker_cmd", _sleeping_worker_cmd())
+    monkeypatch.setattr(lifecycle, "current_task_id", lambda: "task-late")
+    task_map = TaskJobMap(tmp_path / "tasks.json")
+    entered = threading.Event()
+    finished = threading.Event()
+    real_start_idempotent = store.start_idempotent
+
+    def slow_start_idempotent(*args, **kwargs):
+        entered.set()
+        time.sleep(0.3)
+        try:
+            return real_start_idempotent(*args, **kwargs)
+        finally:
+            finished.set()
+
+    monkeypatch.setattr(store, "start_idempotent", slow_start_idempotent)
+    spec = _spec(str(tmp_path))
+    task = asyncio.create_task(_run_keyed(store, spec, "s15", task_map=task_map))
+    while not entered.is_set():
+        await asyncio.sleep(0.01)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    deadline = time.monotonic() + 5
+    while not finished.is_set():
+        assert time.monotonic() < deadline
+        await asyncio.sleep(0.01)
+    jobs = store.list_jobs(str(tmp_path))
+    assert len(jobs) == 1
+    job_id = jobs[0]["job_id"]
+    try:
+        deadline = time.monotonic() + 5
+        while task_map.job_for("task-late") != job_id:
+            assert time.monotonic() < deadline
+            await asyncio.sleep(0.02)
+        assert store.status(str(tmp_path), job_id)["status"] == "running"
+    finally:
+        store.cancel(str(tmp_path), job_id)
+
+
+async def test_keyed_start_cancelled_mid_thread_records_nothing_without_a_task(
+    tmp_path, monkeypatch
+):
+    """The control for the test above: outside a task there is no id to record, and a
+    failing thread records nothing either."""
+    store = lifecycle.job_store(_settings(tmp_path))
+    monkeypatch.setattr(lifecycle, "current_task_id", lambda: "task-none")
+    task_map = TaskJobMap(tmp_path / "tasks.json")
+    entered = threading.Event()
+
+    def failing_start(*args, **kwargs):
+        entered.set()
+        time.sleep(0.2)
+        raise OSError("spawn failed")
+
+    monkeypatch.setattr(store, "start_idempotent", failing_start)
+    task = asyncio.create_task(_run_keyed(store, _spec(str(tmp_path)), "s16", task_map=task_map))
+    while not entered.is_set():
+        await asyncio.sleep(0.01)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    await asyncio.sleep(0.4)
+    assert task_map.entries() == {}

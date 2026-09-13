@@ -295,6 +295,24 @@ async def test_keyed_consult_replays_and_conflicts(app, tmp_path):
     assert other.is_error and other.structured_content["error"]["code"] == "idempotency_conflict"
     assert other.structured_content["error"]["repair"]["tool"] == "amicus_consult"
     assert len(_argv(tmp_path)) == 1
+    # A keyed sync run is prepared like its _async twin: the job deadline, not the wait bound.
+    store = lifecycle.job_store(server.state_of(app).settings)
+    spec_on_disk = json.loads(
+        (store._job_dir(str(tmp_path), first["meta"]["job_id"]) / "spec.json").read_text()
+    )
+    assert spec_on_disk["timeout_seconds"] == 1800 and first["meta"]["timeout_seconds"] == 1800
+
+
+async def test_keyed_and_unkeyed_sync_runs_differ_only_in_the_run_deadline(app, tmp_path):
+    args = {"backend": "codex", "question": "why?", "workspace_root": str(tmp_path)}
+    async with Client(app) as c:
+        unkeyed = await c.call_tool("amicus_consult", {**args, "timeout_seconds": 42})
+        keyed = await c.call_tool(
+            "amicus_consult", {**args, "timeout_seconds": 42, "idempotency_key": "k"}
+        )
+    assert unkeyed.structured_content["meta"]["timeout_seconds"] == 42
+    assert keyed.structured_content["meta"]["timeout_seconds"] == 1800
+    assert len(_argv(tmp_path)) == 2
 
 
 async def test_sync_and_async_keys_are_separate_identities(app, tmp_path):
