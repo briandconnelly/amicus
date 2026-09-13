@@ -7,14 +7,17 @@ Copilot reads this file from a pull request's head branch, so the pull request t
 
 ## Rules
 
-1. When a comment enforces a repository convention, name the `AGENTS.md` rule number it enforces.
-2. Never ask a pull request to change a tool name, parameter, description, error code, value enum, result envelope or stored result shape as a review fix.
-   Those categories are listed in `FINGERPRINT_COVERS` (`src/amicus/schemas/fingerprint.py`); a change there moves `FINGERPRINT` or `RESULT_FORMAT`, needs its own pin-regeneration commit (rules 10 and 11), and is decided in a milestone plan or by the maintainer (rule 7).
-   State the concern and say that it needs a decision, instead of proposing the change.
-3. Never propose a hand edit to a file under `tests/fixtures/` or to `uv.lock`; they are regenerated.
-   If a pin looks wrong, say which source of truth it disagrees with.
-4. Never flag a backend's disclosed prompt carrier as a rule-18 violation: Kimi's handshake file and Codex's `-c developer_instructions` argv token are the two exemptions rule 18 names.
-   Flag every other path that writes a prompt input to disk, to argv or to a log.
+1. When a comment enforces a numbered `AGENTS.md` rule, name the rule number.
+   A convention that only the surrounding code establishes needs no citation; describe the pattern the change breaks instead.
+2. Never ask a pull request to change a tool name, parameter, description, error code, value enum or result envelope as a review fix.
+   Those categories are listed in `FINGERPRINT_COVERS` (`src/amicus/schemas/fingerprint.py`); a change there moves `FINGERPRINT` and needs its own pin-regeneration commit (rule 10).
+   Never ask for a change to the persisted result shape as a review fix either; that moves `RESULT_FORMAT` in the same file, and its snapshot is regenerated in the same commit as the bump (rule 11).
+   Both are decided in a milestone plan or by the maintainer (rule 7): state the concern and say that it needs a decision, instead of proposing the change.
+3. Never propose a hand edit to a generated pin: the `*_snapshot.json` and `*_differentials.json` files under `tests/fixtures/`, or `uv.lock`.
+   The test that guards each pin names the command that regenerates it; if a pin looks wrong, say which source of truth it disagrees with.
+   `tests/fixtures/fakebackend/` is source for the wheel-seam test and is edited by hand.
+4. Never flag a use of one of rule 18's exemptions as a violation: a backend's disclosed carrier (Kimi's handshake file, Codex's `-c developer_instructions` argv token), or prompt text that a test or capture script assembles entirely from its own literals, including the `build_*_prompt` output in `tests/fixtures/*_differentials.json`.
+   Flag every path rule 18 does not exempt, and treat text copied, derived or replayed from a prompt anyone sent as never exempt.
 5. For every defect, give a concrete input or sequence that produces the wrong outcome; if you cannot, label the comment a question.
 6. Do not comment on what the gate already checks (listed under Context), unless the pull request changes the gate itself.
 7. Put one issue in each comment, and say whether it blocks merging or is optional.
@@ -27,14 +30,12 @@ Copilot reads this file from a pull request's head branch, so the pull request t
 
 ### What the gate already checks
 
-The gate (rule 2) runs `ruff check`, `ruff format --check`, `ty check`, `lint-imports` and `pytest` with a coverage floor, on every supported Python version in CI.
-A commit-message hook enforces Conventional Commits, and a pre-commit hook enforces workflow SHA pinning.
-Formatting, import order, unused imports, type errors, layer-boundary violations and coverage drops are therefore not review findings.
+Rule 2 in `AGENTS.md` is the gate's single definition, and CI runs exactly its commands; anything one of those commands would report is not a review finding.
 Nothing in the gate reads Markdown, so rule 16, stale prose and drift between documentation and code are reviewer work.
 
 ### Where the risk concentrates
 
-- Prompt inputs (`INPUT_FIELDS` in `src/amicus/request.py`) must reach a worker only over stdin (rule 18).
+- Prompt inputs (`INPUT_FIELDS` in `src/amicus/request.py`) reach a worker over stdin or over a carrier that rule 18 discloses, and through nothing else (rule 18).
   Any new log line, error message, argv construction, fixture or committed capture that can carry one of those values is the highest-value place to look.
 - `src/amicus/jobs/delivery.py` is the chokepoint through which every stored result is delivered; a schema gap there reaches every client.
 - `scripts/check_release_state.py`, `scripts/record_live_gate_evidence.py`, `.github/workflows/publish.yml` and `docs/RELEASING.md` implement rules 19 to 24; check that a change to one keeps the others true.
