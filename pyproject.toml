@@ -26,7 +26,7 @@ dependencies = [
     # Minor-line caps: fastmcp documents that breaking changes may land in minor releases.
     # Widening either cap is a deliberate upgrade PR, not a resolver decision.
     "fastmcp>=4.0,<4.1",
-    "mcp>=2.1,<2.2",
+    "mcp>=2.1,<2.3",
     "pydantic>=2",
 ]
 
