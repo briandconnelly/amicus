@@ -311,3 +311,27 @@ async def test_workspace_rules_apply_to_every_job_tool(app, tmp_path):
                 assert res.structured_content["ok"] is True and res.structured_content["jobs"] == []
             else:
                 assert res.structured_content["error"]["code"] == "job_not_found", tool
+
+
+async def test_two_tasks_on_one_job_report_the_creating_task_on_every_surface(
+    app, store, settings, tmp_path
+):
+    """A keyed sync replay from a second task records a second forward association (#66,
+    ADR 0020). The job's task_id is the FIRST association on status, result and list
+    alike, and a list filtered by either task finds the job."""
+    ws = {"workspace_root": str(tmp_path)}
+    async with Client(app) as c:
+        job = await _start(c, tmp_path)
+        await _wait_done(store, tmp_path, job)
+        task_map = lookup.task_map(settings)
+        task_map.record("task-first", job)
+        task_map.record("task-second", job)
+        listed = (await c.call_tool("amicus_job_list", ws)).structured_content
+        by_second = (
+            await c.call_tool("amicus_job_list", {"task_id": "task-second", **ws})
+        ).structured_content
+        status = (await c.call_tool("amicus_job_status", {"job_id": job, **ws})).structured_content
+        result = (await c.call_tool("amicus_job_result", {"job_id": job, **ws})).structured_content
+    assert [j["task_id"] for j in listed["jobs"]] == ["task-first"]
+    assert [(j["job_id"], j["task_id"]) for j in by_second["jobs"]] == [(job, "task-first")]
+    assert status["task_id"] == "task-first" and result["meta"]["task_id"] == "task-first"

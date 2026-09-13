@@ -111,6 +111,9 @@ class TaskJobMap:
         return self._read().get(task_id)
 
     def task_for(self, job_id: str) -> str | None:
+        """The task that created ``job_id``: the FIRST association in insertion order. A
+        keyed sync replay from a later task records a second forward entry (so that task
+        can recover the job by task_id) without changing which task the job reports."""
         for task_id, job in self._read().items():
             if job == job_id:
                 return task_id
