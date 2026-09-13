@@ -848,7 +848,7 @@
         "required_params": [
           "job_id"
         ],
-        "returns": "the originating tool's envelope; meta.consume says whether the record was deleted.",
+        "returns": "the originating tool's envelope; meta.consume.discard_outcome is what the store did, with a follow_up after not_done or delete_failed.",
         "stability": null,
         "use_when": "Fetch a finished job's envelope and delete its record."
       },
@@ -935,7 +935,7 @@
           "stability": "experimental"
         },
         "dev.bconnelly.amicus/triage": {
-          "size_bytes": 13833
+          "size_bytes": 14416
         }
       },
       "mimeType": "application/schema+json",
@@ -976,7 +976,7 @@
           },
           "ConsumeFollowUp": {
             "additionalProperties": false,
-            "description": "The one follow-up a consume hands back: inspect the record it may have left. The\nsame shape as `Repair`, narrowed to that one action, as `JobFollowUp` is (#44).",
+            "description": "The one follow-up a consume hands back: inspect the record it may have left. The\nsame shape as `Repair`, narrowed to that one action as `JobFollowUp` is, and its\n`arguments` narrowed to the call that action names (#44).",
             "properties": {
               "alternative": {
                 "anyOf": [
@@ -991,9 +991,7 @@
                 "title": "Alternative"
               },
               "arguments": {
-                "additionalProperties": true,
-                "title": "Arguments",
-                "type": "object"
+                "$ref": "#/$defs/ConsumeFollowUpArguments"
               },
               "next_step": {
                 "const": "inspect_and_retry",
@@ -1012,6 +1010,33 @@
               "tool"
             ],
             "title": "ConsumeFollowUp",
+            "type": "object"
+          },
+          "ConsumeFollowUpArguments": {
+            "additionalProperties": false,
+            "description": "The amicus_job_status call a consume follow-up names, closed to that call's shape so\nthe published schema admits only a callable one. `workspace_root` is omitted, never\nnull, when the caller did not supply one.",
+            "properties": {
+              "job_id": {
+                "title": "Job Id",
+                "type": "string"
+              },
+              "workspace_root": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Workspace Root"
+              }
+            },
+            "required": [
+              "job_id"
+            ],
+            "title": "ConsumeFollowUpArguments",
             "type": "object"
           },
           "ContextSummary": {
@@ -2037,7 +2062,7 @@
           "stability": "experimental"
         },
         "dev.bconnelly.amicus/triage": {
-          "size_bytes": 13833
+          "size_bytes": 14416
         }
       },
       "description": "The full ErrorResult schema; tool outputSchemas carry only an opaque error branch.",
@@ -2067,7 +2092,7 @@
           "stability": "experimental"
         },
         "dev.bconnelly.amicus/triage": {
-          "size_bytes": 7063
+          "size_bytes": 7646
         }
       },
       "description": "The full Meta schema every success envelope's opaque `meta` points at.",
@@ -2084,7 +2109,7 @@
           "stability": "experimental"
         },
         "dev.bconnelly.amicus/triage": {
-          "size_bytes": 7063
+          "size_bytes": 7646
         }
       },
       "mimeType": "application/schema+json",
@@ -2125,7 +2150,7 @@
           },
           "ConsumeFollowUp": {
             "additionalProperties": false,
-            "description": "The one follow-up a consume hands back: inspect the record it may have left. The\nsame shape as `Repair`, narrowed to that one action, as `JobFollowUp` is (#44).",
+            "description": "The one follow-up a consume hands back: inspect the record it may have left. The\nsame shape as `Repair`, narrowed to that one action as `JobFollowUp` is, and its\n`arguments` narrowed to the call that action names (#44).",
             "properties": {
               "alternative": {
                 "anyOf": [
@@ -2140,9 +2165,7 @@
                 "title": "Alternative"
               },
               "arguments": {
-                "additionalProperties": true,
-                "title": "Arguments",
-                "type": "object"
+                "$ref": "#/$defs/ConsumeFollowUpArguments"
               },
               "next_step": {
                 "const": "inspect_and_retry",
@@ -2161,6 +2184,33 @@
               "tool"
             ],
             "title": "ConsumeFollowUp",
+            "type": "object"
+          },
+          "ConsumeFollowUpArguments": {
+            "additionalProperties": false,
+            "description": "The amicus_job_status call a consume follow-up names, closed to that call's shape so\nthe published schema admits only a callable one. `workspace_root` is omitted, never\nnull, when the caller did not supply one.",
+            "properties": {
+              "job_id": {
+                "title": "Job Id",
+                "type": "string"
+              },
+              "workspace_root": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Workspace Root"
+              }
+            },
+            "required": [
+              "job_id"
+            ],
+            "title": "ConsumeFollowUpArguments",
             "type": "object"
           },
           "ContextSummary": {

@@ -50,9 +50,7 @@
               "title": "Alternative"
             },
             "arguments": {
-              "additionalProperties": true,
-              "title": "Arguments",
-              "type": "object"
+              "$ref": "#/$defs/ConsumeFollowUpArguments"
             },
             "next_step": {
               "const": "inspect_and_retry",
@@ -71,6 +69,32 @@
             "arguments"
           ],
           "title": "ConsumeFollowUp",
+          "type": "object"
+        },
+        "ConsumeFollowUpArguments": {
+          "additionalProperties": false,
+          "properties": {
+            "job_id": {
+              "title": "Job Id",
+              "type": "string"
+            },
+            "workspace_root": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Workspace Root"
+            }
+          },
+          "required": [
+            "job_id"
+          ],
+          "title": "ConsumeFollowUpArguments",
           "type": "object"
         },
         "ContextSummary": {
@@ -937,9 +961,7 @@
               "title": "Alternative"
             },
             "arguments": {
-              "additionalProperties": true,
-              "title": "Arguments",
-              "type": "object"
+              "$ref": "#/$defs/ConsumeFollowUpArguments"
             },
             "next_step": {
               "const": "inspect_and_retry",
@@ -958,6 +980,32 @@
             "arguments"
           ],
           "title": "ConsumeFollowUp",
+          "type": "object"
+        },
+        "ConsumeFollowUpArguments": {
+          "additionalProperties": false,
+          "properties": {
+            "job_id": {
+              "title": "Job Id",
+              "type": "string"
+            },
+            "workspace_root": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Workspace Root"
+            }
+          },
+          "required": [
+            "job_id"
+          ],
+          "title": "ConsumeFollowUpArguments",
           "type": "object"
         },
         "ContextSummary": {
@@ -1669,9 +1717,7 @@
               "title": "Alternative"
             },
             "arguments": {
-              "additionalProperties": true,
-              "title": "Arguments",
-              "type": "object"
+              "$ref": "#/$defs/ConsumeFollowUpArguments"
             },
             "next_step": {
               "const": "inspect_and_retry",
@@ -1690,6 +1736,32 @@
             "arguments"
           ],
           "title": "ConsumeFollowUp",
+          "type": "object"
+        },
+        "ConsumeFollowUpArguments": {
+          "additionalProperties": false,
+          "properties": {
+            "job_id": {
+              "title": "Job Id",
+              "type": "string"
+            },
+            "workspace_root": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Workspace Root"
+            }
+          },
+          "required": [
+            "job_id"
+          ],
+          "title": "ConsumeFollowUpArguments",
           "type": "object"
         },
         "ContextSummary": {
@@ -2425,9 +2497,7 @@
               "title": "Alternative"
             },
             "arguments": {
-              "additionalProperties": true,
-              "title": "Arguments",
-              "type": "object"
+              "$ref": "#/$defs/ConsumeFollowUpArguments"
             },
             "next_step": {
               "const": "inspect_and_retry",
@@ -2446,6 +2516,32 @@
             "arguments"
           ],
           "title": "ConsumeFollowUp",
+          "type": "object"
+        },
+        "ConsumeFollowUpArguments": {
+          "additionalProperties": false,
+          "properties": {
+            "job_id": {
+              "title": "Job Id",
+              "type": "string"
+            },
+            "workspace_root": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Workspace Root"
+            }
+          },
+          "required": [
+            "job_id"
+          ],
+          "title": "ConsumeFollowUpArguments",
           "type": "object"
         },
         "ContextSummary": {
@@ -3329,9 +3425,7 @@
               "title": "Alternative"
             },
             "arguments": {
-              "additionalProperties": true,
-              "title": "Arguments",
-              "type": "object"
+              "$ref": "#/$defs/ConsumeFollowUpArguments"
             },
             "next_step": {
               "const": "inspect_and_retry",
@@ -3350,6 +3444,32 @@
             "arguments"
           ],
           "title": "ConsumeFollowUp",
+          "type": "object"
+        },
+        "ConsumeFollowUpArguments": {
+          "additionalProperties": false,
+          "properties": {
+            "job_id": {
+              "title": "Job Id",
+              "type": "string"
+            },
+            "workspace_root": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Workspace Root"
+            }
+          },
+          "required": [
+            "job_id"
+          ],
+          "title": "ConsumeFollowUpArguments",
           "type": "object"
         },
         "ContextSummary": {
