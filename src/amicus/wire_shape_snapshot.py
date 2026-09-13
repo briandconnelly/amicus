@@ -10,9 +10,11 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from pontonier.core.jobs import DiscardOutcome
+
 from amicus.errors import make_error, serialize_error
 from amicus.jobs import lifecycle, lookup
-from amicus.jobs.delivery import finished_job_envelope
+from amicus.jobs.delivery import attach_consume_disposition, finished_job_envelope
 from amicus.orchestration.workspace import workspace_warning_for
 from amicus.request import RunSpec
 from amicus.schemas.envelope import (
@@ -234,6 +236,18 @@ def _lifecycle_envelopes() -> dict[str, dict[str, Any]]:
     }
 
 
+def _consumed() -> dict[str, Any]:
+    """The `meta.consume` amicus_job_consume_result adds to a delivered envelope, one per
+    discard outcome, built by the helper the tool itself calls (#44)."""
+    delivered = _deliver(_stored_envelopes()["consult"], "consult", "summary")
+    return {
+        outcome.value: attach_consume_disposition(
+            json.loads(json.dumps(delivered)), outcome, _JOB_ID_SENTINEL, "/repo"
+        )["meta"]["consume"]
+        for outcome in DiscardOutcome
+    }
+
+
 _STARTED_AT = "1970-01-01T00:00:00+00:00"
 _EXPIRES_AT = "1970-01-02T00:00:00+00:00"
 
@@ -358,6 +372,7 @@ def build_snapshot() -> dict[str, Any]:
             for name, env in stored.items()
         },
         "lifecycle": _lifecycle_envelopes(),
+        "consumed": _consumed(),
         "handles": _handles(),
     }
 

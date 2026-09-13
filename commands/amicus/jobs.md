@@ -14,7 +14,8 @@ Request: $ARGUMENTS
   returned `poll_after_ms` rather than polling on a fixed interval.
 - Fetch a finished result, keeping the record: `amicus_job_result` with `job_id`.
 - Fetch a finished result and delete the record: `amicus_job_consume_result` with
-  `job_id` — use this once you are done with the result.
+  `job_id` — use this once you are done with the result. Its `meta.consume` says
+  whether the record was deleted; when it carries a `follow_up`, the record may remain.
 - Cancel a running job: `amicus_job_cancel` with `job_id`.
 - Recover a lost `job_id`, or see what is in flight: `amicus_job_list`, filterable by
   `backend`, `status`, or `task_id`.

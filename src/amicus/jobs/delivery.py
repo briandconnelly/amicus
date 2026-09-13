@@ -12,7 +12,7 @@ from pydantic import BaseModel, ValidationError
 
 from amicus.errors import error_envelope, serialize_error
 from amicus.orchestration.finalize import sanitize_finding, sanitize_prose_value
-from amicus.schemas.envelope import ErrorResult
+from amicus.schemas.envelope import ConsumeDisposition, ErrorResult
 from amicus.schemas.fingerprint import FINGERPRINT, RESULT_FORMAT
 from amicus.schemas.results import (
     PAID_TOOLS,
@@ -144,6 +144,38 @@ def _validate_success(
     return payload
 
 
+# discard outcomes after which the record is gone and a repeat call is job_not_found.
+_RECORD_GONE = frozenset({"removed", "missing"})
+CONSUME_FOLLOW_UP = (
+    "The record may remain. amicus_job_status on this job shows what is left: job_not_found "
+    "means it is gone; done means a retried consume can delete it; any other status means "
+    "the result is no longer readable and the record stays until a later job call finds it "
+    "expired."
+)
+
+
+def attach_consume_disposition(
+    envelope: dict[str, Any], outcome: str, job_id: str, workspace_root: str | None
+) -> dict[str, Any]:
+    """Set `meta.consume` on a delivered envelope from the store's discard outcome, so a
+    failed delete is reported rather than hidden behind plain success (#44). Mutates."""
+    disposition: dict[str, Any] = {"discard_outcome": str(outcome)}
+    if str(outcome) not in _RECORD_GONE:
+        arguments: dict[str, Any] = {"job_id": job_id}
+        if workspace_root:
+            arguments["workspace_root"] = workspace_root
+        disposition["follow_up"] = {
+            "next_step": "inspect_and_retry",
+            "tool": "amicus_job_status",
+            "arguments": arguments,
+            "alternative": CONSUME_FOLLOW_UP,
+        }
+    envelope["meta"]["consume"] = ConsumeDisposition.model_validate(disposition).model_dump(
+        mode="json", exclude_none=True
+    )
+    return envelope
+
+
 def finished_job_envelope(
     rec: dict[str, Any],
     payload: dict[str, Any] | None,
@@ -173,6 +205,9 @@ def finished_job_envelope(
             validated = _validate_success(payload, kind, rec, meta)
             delivered = validated.get("ok") is True
             if delivered and isinstance(validated.get("meta"), dict):
+                # Strict validation returns the stored dict itself, so a `consume` it
+                # carries would reach a plain read; only a consume may report one (#44).
+                validated["meta"].pop("consume", None)
                 validated["meta"]["job_id"] = job_id
                 validated["meta"]["fingerprint"] = FINGERPRINT
                 validated = _sanitize_stored_presentation(validated)

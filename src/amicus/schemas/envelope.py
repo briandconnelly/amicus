@@ -72,6 +72,39 @@ class InstructionsFingerprint(BaseModel):
     bytes: int = Field(ge=1)
 
 
+DiscardOutcome = Literal["removed", "missing", "not_done", "delete_failed"]
+
+_DISCARD_OUTCOME_DESC = (
+    "What deleting the record did. removed: this call deleted it. missing: it was already "
+    "gone. After either, a repeat call returns job_not_found. not_done: it was no longer a "
+    "finished result, so nothing was deleted. delete_failed: deletion failed or could not "
+    "be verified, so the record may remain."
+)
+_CONSUME_DESC = (
+    "Set only by amicus_job_consume_result, on the envelope it delivers: what deleting "
+    "the job record did. Never stored with the result."
+)
+
+
+class ConsumeFollowUp(BaseModel):
+    """The one follow-up a consume hands back: inspect the record it may have left. The
+    same shape as `Repair`, narrowed to that one action, as `JobFollowUp` is (#44)."""
+
+    model_config = ConfigDict(extra="forbid")
+    next_step: Literal["inspect_and_retry"]
+    tool: Literal["amicus_job_status"]
+    arguments: dict[str, Any]
+    alternative: str | None = None
+
+
+class ConsumeDisposition(BaseModel):
+    """What amicus_job_consume_result did to the record after delivering it (#44)."""
+
+    model_config = ConfigDict(extra="forbid")
+    discard_outcome: DiscardOutcome = Field(description=_DISCARD_OUTCOME_DESC)
+    follow_up: ConsumeFollowUp | None = None
+
+
 class Meta(BaseModel):
     """Execution metadata on every envelope. Every field is optional except the
     identity trio at the end; `cwd` is None when no workspace was resolved (argument
@@ -102,6 +135,12 @@ class Meta(BaseModel):
     task_id: str | None = None
     idempotency_replayed: Literal[True] | None = None
     backend_details: dict[str, Any] | None = None
+    # Delivery-only: excluded from every dump, so a stored result.json keeps its shape and
+    # RESULT_FORMAT does not move; jobs.delivery.attach_consume_disposition sets it on the
+    # delivered dict instead (#44).
+    consume: ConsumeDisposition | None = Field(
+        default=None, exclude=True, description=_CONSUME_DESC
+    )
     request_id: str = Field(default_factory=lambda: uuid4().hex)
     fingerprint: str = FINGERPRINT
     server_version: str | None = server_version_field()

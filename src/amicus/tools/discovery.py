@@ -288,8 +288,9 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
     "amicus_job_consume_result": {
         "cost": "free",
         "backends": list(BACKEND_IDS),
-        "use_when": "Fetch a finished job's envelope and delete the record.",
-        "returns": "the originating tool's envelope.",
+        "use_when": "Fetch a finished job's envelope and delete its record.",
+        "returns": "the originating tool's envelope; meta.consume says whether the record "
+        "was deleted.",
         "error_codes": [
             "job_not_found",
             "job_running",

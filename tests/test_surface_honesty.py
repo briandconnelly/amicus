@@ -102,3 +102,28 @@ def test_the_polling_instrument_can_fail(wire):
         old = _SUPERSEDED[name]
         assert "result_available" in old, name
         assert [p for p in required if p in old] == [], name
+
+
+# Issue #44: consume promised job_not_found on every repeat call, while a failed delete
+# made that false and was reported as plain success. The description must condition the
+# promise on the outcome and point at the follow_up.
+_CONSUME_PHRASES: tuple[str, ...] = (
+    "meta.consume.discard_outcome",
+    "meta.consume.follow_up",
+    "otherwise the record may remain",
+)
+_SUPERSEDED_CONSUME = (
+    "Free — no model call. Like amicus_job_result, then delete the record: a repeat call "
+    "returns job_not_found, so this is not idempotent. A corrupt or incompatible record "
+    "is not deleted."
+)
+
+
+def test_consume_description_conditions_the_repeat_call_promise(wire):
+    text = next(t["description"] for t in wire["tools"] if t["name"] == "amicus_job_consume_result")
+    for phrase in _CONSUME_PHRASES:
+        assert phrase in text, f"consume description does not say {phrase!r}"
+
+
+def test_the_consume_instrument_can_fail():
+    assert [p for p in _CONSUME_PHRASES if p in _SUPERSEDED_CONSUME] == []
