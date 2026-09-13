@@ -12,12 +12,15 @@ import re
 from pathlib import Path
 from typing import get_args
 
+from amicus import errors
 from amicus.orchestration import review as review_mod
 from amicus.schemas.results import Confidence, CoverageReason, FindingReason, Verdict
 
 _SKILL = Path(__file__).resolve().parents[1] / "skills" / "collaborating-with-amicus"
 _RESULTS_REF = (_SKILL / "references" / "reading-results.md").read_text(encoding="utf-8")
 _SKILL_MD = (_SKILL / "SKILL.md").read_text(encoding="utf-8")
+_OPTIONS_REF = (_SKILL / "references" / "options-and-errors.md").read_text(encoding="utf-8")
+_OPTIONS_RULES = _OPTIONS_REF.partition("\n## Rules\n")[2].split("\n## ", 1)[0]
 
 
 def _binding_rules() -> str:
@@ -124,3 +127,23 @@ def test_every_amicus_substituted_low_sits_beside_an_unknown_verdict():
             f"review.py:{i + 1} writes `low` with no `unknown` verdict beside it; the "
             "published confidence description says every substituted low has one"
         )
+
+
+def test_the_skill_names_every_code_that_carries_no_repair():
+    # Issue #42: an agent told every envelope carries error.repair cannot recover from one
+    # that does not. A code added to NO_CORRECTIVE_CALL fails here until the skill says so.
+    section = _OPTIONS_REF.partition("\n## The error envelope\n")[2].split("\n## ", 1)[0]
+    assert section, "options-and-errors.md has no `## The error envelope` section"
+    assert set(errors.NO_CORRECTIVE_CALL) <= set(re.findall(r"`([a-z_]+)`", section))
+
+
+def test_no_rule_reads_a_repair_the_envelope_may_not_carry():
+    # Codex's second review of #42: two codes carry no error.repair, so a rule that reads or
+    # follows one unconditionally strands the agent on exactly those codes.
+    assert _OPTIONS_RULES, "options-and-errors.md has no `## Rules` section"
+    unconditional = re.compile(
+        r"read `error\.code` and `error\.repair`|\*\*Follow `repair\.next_step`\*\*", re.IGNORECASE
+    )
+    for rules in (_BINDING_RULES, _OPTIONS_RULES):
+        assert not unconditional.search(rules)
+    assert "With no `error.repair`, fix what `error.details` names" in _OPTIONS_RULES

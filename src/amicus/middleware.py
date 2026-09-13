@@ -3,6 +3,7 @@ envelope at the call boundary, and the JSON-RPC error.data envelope for resource
 
 from __future__ import annotations
 
+import copy
 import unicodedata
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
@@ -32,6 +33,7 @@ MAX_ARG_REASON_LEN = 300
 MAX_ARG_FIELD_LEN = 128
 WITHHELD_FIELD = "<withheld>"
 _MISSING_TYPES = frozenset({"missing", "missing_argument"})
+_EXTRA_TYPES = frozenset({"unexpected_keyword_argument", "extra_forbidden"})
 RESOURCE_NOT_FOUND_HANDSHAKE = -32002
 RESOURCE_NOT_FOUND_MODERN = INVALID_PARAMS
 TASKS_EXTENSION_ID = "io.modelcontextprotocol/tasks"
@@ -91,6 +93,58 @@ def _enum_for_property(prop: Any, *, element: bool = False) -> list[str] | None:
     return None
 
 
+def _object_properties(prop: Any) -> dict[str, Any] | None:
+    if not isinstance(prop, dict):
+        return None
+    for branch in [prop, *(b for b in prop.get("anyOf", []) if isinstance(b, dict))]:
+        props = branch.get("properties")
+        if isinstance(props, dict):
+            return props
+    return None
+
+
+def _echoable(value: object, prop: Any) -> bool:
+    """A value whose own domain proves it safe to repeat ([6.offending-value]): null, a
+    bool, a number, a member of the parameter's published enum, or an object of those. Any
+    other string can be a mispasted secret, or a prompt input (rule 18)."""
+    if value is None or isinstance(value, (bool, int, float)):
+        return True
+    if isinstance(value, str):
+        return value in (_enum_for_property(prop) or ())
+    if isinstance(value, dict):
+        nested = _object_properties(prop) or {}
+        return all(_echoable(v, nested.get(k)) for k, v in value.items())
+    return False
+
+
+def corrected_arguments(
+    errors: list[Any], arguments: object, property_schemas: dict[str, Any]
+) -> dict[str, Any] | None:
+    """The corrected call's arguments when dropping the unknown keys is the ONLY correction
+    ([6.repair-intent], issue #42): every error is an unknown key the caller actually sent,
+    and every surviving value is `_echoable`. A free-form survivor (a prompt input, a path,
+    an idempotency_key) can be neither repeated nor dropped without changing the call, so
+    it suppresses the arguments. None whenever the correction is not unique."""
+    if not isinstance(arguments, dict) or not errors:
+        return None
+    fixed = copy.deepcopy(arguments)
+    for err in errors:
+        loc = tuple(err.get("loc") or ())
+        if err.get("type") not in _EXTRA_TYPES or not loc:
+            return None
+        if not all(isinstance(c, str) for c in loc):
+            return None
+        parent: object = fixed
+        for component in loc[:-1]:
+            parent = parent.get(component) if isinstance(parent, dict) else None
+        if not isinstance(parent, dict) or loc[-1] not in parent:
+            return None
+        del parent[loc[-1]]
+    if not all(_echoable(v, property_schemas.get(k)) for k, v in fixed.items()):
+        return None
+    return fixed
+
+
 def invalid_arguments_envelope(
     tool_name: str,
     *,
@@ -98,12 +152,15 @@ def invalid_arguments_envelope(
     property_schemas: dict[str, Any],
     errors: list[Any],
     meta: Meta,
+    arguments: object = None,
 ) -> dict[str, Any] | None:
     """The `invalid_arguments` envelope for a pydantic argument ValidationError, or None
-    when the errors are not request-argument failures (re-raise those untouched)."""
+    when the errors are not request-argument failures (re-raise those untouched).
+    `arguments` is the call as received; the repair carries its corrected form only when
+    `corrected_arguments` finds the correction unique."""
     for err in errors:
         loc = err.get("loc") or ()
-        is_extra = err.get("type") in ("unexpected_keyword_argument", "extra_forbidden")
+        is_extra = err.get("type") in _EXTRA_TYPES
         if not is_extra and not (loc and str(loc[0]) in param_names):
             return None
     total = len(errors)
@@ -128,7 +185,7 @@ def invalid_arguments_envelope(
     message = f"{tool_name}: {total} invalid argument(s){shown}: {safe_field} — {first.reason}"
     types = {err.get("type") for err in errors}
     hints: list[str] = []
-    if types & {"unexpected_keyword_argument", "extra_forbidden"}:
+    if types & _EXTRA_TYPES:
         hints.append("remove the unknown argument(s)")
     if types & _MISSING_TYPES:
         hints.append("provide the required argument(s)")
@@ -146,6 +203,7 @@ def invalid_arguments_envelope(
                 "invalid_arguments",
                 message[:300],
                 repair_tool=tool_name,
+                repair_arguments=corrected_arguments(errors, arguments, property_schemas),
                 repair_alternative=alternative,
                 invalid_arguments=items,
             ),
@@ -286,6 +344,7 @@ class ValidationEnvelopeMiddleware(Middleware):
                 property_schemas=props,
                 errors=cause.errors(),
                 meta=Meta(timeout_seconds=self._settings.timeout_seconds),
+                arguments=getattr(context.message, "arguments", None),
             )
             if envelope is None:
                 raise

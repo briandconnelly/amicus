@@ -98,7 +98,9 @@ async def resolve_job_workspace(
 
 
 def job_not_found(job_id: str, meta: Meta, workspace_root: str | None) -> dict[str, Any]:
-    args = {"workspace_root": workspace_root} if workspace_root else None
+    # With no explicit root the workspace came from the client's roots, which
+    # amicus_job_list({}) resolves the same way, so the lookup call is still complete.
+    args = {"workspace_root": workspace_root} if workspace_root else {}
     return error_envelope(
         "job_not_found",
         f"No job '{redaction.sanitize_echo(job_id)}' in this workspace.",

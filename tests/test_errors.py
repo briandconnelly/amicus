@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import pytest
+from jsonschema import Draft202012Validator
 from pontonier.backend.protocol import ClassifiedFailure, RepairHint
 from pontonier.backend.protocol import Usage as PUsage
 from pontonier.conventions.envelope import RepairRule
@@ -62,6 +66,110 @@ def test_make_error_derives_repair_and_temporary_from_the_table():
     assert info.temporary is False and info.retry_after_ms is None
     info = errors.make_error("invalid_scope", "bad", temporary=True, retry_after_ms=5)
     assert info.retry_after_ms == 5
+
+
+def test_workspace_codes_carry_no_repair():
+    # Issue #42: no call can mint the caller's intended absolute directory, so the envelope
+    # names the field (details, candidate_roots) and omits repair rather than ship prose.
+    for code in ("invalid_workspace_root", "workspace_outside_roots"):
+        assert errors.make_error(code, "m").repair is None
+        payload = errors.error_envelope(code, "m", Meta())
+        assert "repair" not in payload["error"]
+
+
+def _input_schema(tool: str) -> dict:
+    fixture = Path(__file__).parent / "fixtures" / "manifest_snapshot.all.json"
+    record = next(t for t in json.loads(fixture.read_text())["tools"] if t["name"] == tool)
+    return record.get("inputSchema") or record["input_schema"]
+
+
+@pytest.mark.parametrize(
+    ("code", "backend", "tool", "arguments"),
+    [
+        ("invalid_model", "codex", "amicus_models", {"backend": "codex"}),
+        ("invalid_reasoning_effort", "kimi", "amicus_models", {"backend": "kimi"}),
+        ("backend_unavailable", "claude", "amicus_backends", {"backend": "claude"}),
+        ("api_key_missing", "claude", "amicus_backends", {"backend": "claude"}),
+        ("backend_unavailable", None, "amicus_backends", {}),
+    ],
+)
+def test_lookup_repairs_carry_a_complete_call(code, backend, tool, arguments):
+    # Issue #42: a repair routed to a lookup names the call that makes it, not only the
+    # tool; amicus_models requires backend, so a tool-only repair there is not callable.
+    info = errors.make_error(code, "m", backend=backend)
+    assert info.repair is not None
+    assert (info.repair.tool, info.repair.arguments) == (tool, arguments)
+    Draft202012Validator(_input_schema(tool)).validate(arguments)
+
+
+def test_render_failure_completes_a_lookup_repair():
+    plugin = fakeplugin.make_plugin("codex")
+    from_table = ClassifiedFailure(code="invalid_model", detail="no")
+    hinted = ClassifiedFailure(
+        code="invalid_model",
+        detail="no",
+        repair=RepairHint(next_step="use_allowed_value", tool="amicus_models", alternative="x"),
+    )
+    for failure in (from_table, hinted):
+        repair = errors.render_failure(plugin, failure, Meta())["error"]["repair"]
+        assert (repair["tool"], repair["arguments"]) == ("amicus_models", {"backend": "codex"})
+
+
+def test_lookup_repairs_never_name_a_backend_the_lookup_rejects():
+    # Codex review of #42: a third-party plugin id is a valid error.backend but not a value
+    # the lookup tools' closed `backend` enum accepts, so completing with it would mint a
+    # call its own tool rejects. amicus_backends falls back to the unfiltered call.
+    plugin = fakeplugin.make_plugin()
+    unavailable = errors.render_failure(
+        plugin, ClassifiedFailure(code="backend_unavailable", detail="no"), Meta()
+    )["error"]["repair"]
+    assert (unavailable["tool"], unavailable["arguments"]) == ("amicus_backends", {})
+    Draft202012Validator(_input_schema("amicus_backends")).validate(unavailable["arguments"])
+    # amicus_models cannot be called without a backend it accepts, so naming it would be a
+    # dead route (Copilot review of #42): the repair stays a symbolic next step, no tool.
+    model = errors.render_failure(
+        plugin, ClassifiedFailure(code="invalid_model", detail="no"), Meta()
+    )["error"]["repair"]
+    assert model["next_step"] == "use_allowed_value"
+    assert "tool" not in model and "arguments" not in model
+    bare = errors.make_error("invalid_reasoning_effort", "m").repair
+    assert bare is not None and (bare.tool, bare.arguments) == (None, None)
+
+
+@pytest.mark.parametrize(
+    ("tool", "hinted", "expected"),
+    [
+        ("amicus_models", {"backend": "kimi"}, ("amicus_models", {"backend": "kimi"})),
+        ("amicus_models", {}, (None, None)),
+        ("amicus_models", {"backend": "fake"}, (None, None)),
+        ("amicus_models", {"backend": "kimi", "x": 1}, (None, None)),
+        ("amicus_backends", {"backend": "kimi"}, ("amicus_backends", {"backend": "kimi"})),
+        ("amicus_backends", {}, ("amicus_backends", {})),
+        ("amicus_backends", {"backend": "fake"}, ("amicus_backends", {})),
+        ("amicus_backends", {"x": 1}, ("amicus_backends", {})),
+    ],
+)
+def test_an_explicit_lookup_call_is_kept_only_in_a_shape_its_tool_accepts(tool, hinted, expected):
+    # Codex's second review of #42: a plugin's own RepairHint arguments reach the envelope
+    # too, so the closed-backend guard applies to them, not only to completed calls.
+    hint = RepairHint(next_step="use_allowed_value", tool=tool, arguments=hinted, alternative="x")
+    failure = ClassifiedFailure(code="invalid_model", detail="no", repair=hint)
+    repair = errors.render_failure(fakeplugin.make_plugin(), failure, Meta())["error"]["repair"]
+    assert (repair.get("tool"), repair.get("arguments")) == expected
+    if expected[0] is not None:
+        Draft202012Validator(_input_schema(expected[0])).validate(expected[1])
+
+
+def test_render_failure_keeps_workspace_codes_repair_free():
+    # Codex review of #42: the omission is the code's, whichever path renders it.
+    plugin = fakeplugin.make_plugin("codex")
+    hint = RepairHint(next_step="correct_arguments", tool="amicus_consult", alternative="x")
+    for code in sorted(errors.NO_CORRECTIVE_CALL):
+        for failure in (
+            ClassifiedFailure(code=code, detail="no"),
+            ClassifiedFailure(code=code, detail="no", repair=hint),
+        ):
+            assert "repair" not in errors.render_failure(plugin, failure, Meta())["error"]
 
 
 def test_make_error_repair_tool_three_states():

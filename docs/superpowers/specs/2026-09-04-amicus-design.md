@@ -240,7 +240,8 @@ same coroutine; the job store persists `task_id → job_id` at task creation,
 ### Error envelope and codes
 
 Adopt codex-in-claude's `ErrorInfo` (`code`, `message`, `temporary`, `retry_after_ms`
-always present, single `repair {next_step, tool, arguments, alternative}`,
+always present, single `repair {next_step, tool, arguments, alternative}` (absent on
+the two workspace codes, ADR 0021),
 `details{field|fields, reason, allowed_values}`, `invalid_arguments[]`, `request_id`)
 plus `backend: str | null`. `details.value` only for known-safe values, policy
 disclosed on `amicus://error-envelope`. Rendering is backend-aware
@@ -250,7 +251,7 @@ defaults, `plugin.repair_overrides` win per code, backend-local codes are preser
 → `backend_*`, and machine fields the backend computed travel on the widened
 `ClassifiedFailure` (M-1). Resource failures carry the same envelope in JSON-RPC
 `error.data` with `machine_code`/`human_message`. Backend-specific meta lives under
-`meta.backend_details`. ADR 0005.
+`meta.backend_details`. ADR 0005; what a repair carries, ADR 0021.
 
 ### Annotations, lifecycle metadata, capability summary, workspace
 

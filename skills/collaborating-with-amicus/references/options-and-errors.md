@@ -5,10 +5,12 @@ Optional parameters, duplicate-spend protection, and what to do with an error en
 
 ## Rules
 
-- **Read `error.code` and `error.repair`; never infer a fix from the message prose.**
+- **Read `error.code` and, when present, `error.repair`; never infer a fix from the message
+  prose.**
 - **Never retry a call whose failing condition has not changed.**
-- **Follow `repair.next_step`**, and use `repair.tool` / `repair.arguments` when they are present
-  rather than composing a retry yourself.
+- **Follow `repair.next_step` when a repair is present**, and use `repair.tool` /
+  `repair.arguments` when they are present rather than composing a retry yourself.
+- **With no `error.repair`, fix what `error.details` names before retrying.**
 - **Use `invalid_arguments[].allowed_values` to pick a corrected value** rather than guessing one.
 - **Reuse the same `idempotency_key` when retrying the same logical request** after an
   ambiguous failure, with identical arguments, on the same tool.
@@ -18,7 +20,11 @@ Optional parameters, duplicate-spend protection, and what to do with an error en
 ## The error envelope
 
 On `ok: false` the envelope carries `error.code` (from a closed catalog), a message, optional
-`error.details`, optional `invalid_arguments[]`, and `error.repair`.
+`error.details`, optional `invalid_arguments[]`, and, on every code but two, `error.repair`. When
+`repair.arguments` is present it is a complete call. It is left out rather than repeat a value that
+could be a secret or a prompt, and a repair with no `repair.tool` is a symbolic next step rather
+than a call. `invalid_workspace_root` and `workspace_outside_roots` carry no `error.repair`,
+because only you hold the directory they need: fix what `error.details` names.
 
 `repair.next_step` is symbolic and closed. The ones you will meet most:
 

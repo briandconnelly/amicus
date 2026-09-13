@@ -134,6 +134,12 @@ async def test_unavailable_backend_feature_gate_and_placeholders(tmp_path):
     )
 
 
+async def test_workspace_errors_from_prepare_carry_no_repair(tmp_path):
+    for root in (None, "relative"):
+        out = await _prep(tmp_path, workspace_root=root)
+        assert out["error"]["code"] == "invalid_workspace_root" and "repair" not in out["error"]
+
+
 async def test_workspace_resolution_errors(tmp_path):
     out = await _prep(tmp_path, workspace_root=None)
     assert (

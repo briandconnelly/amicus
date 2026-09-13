@@ -74,8 +74,9 @@ obligations live in the reference each route names, under that file's own `Rules
   `idempotency_key` replay — see [options and errors](references/options-and-errors.md)).
 - **Never run the sync and `_async` forms of the same work concurrently**, and never launch the
   sync form speculatively intending to fall back to `_async`.
-- **After a terminal failure, start a new attempt only as `error.repair` directs and only within
-  the declared cap.** An unkeyed sync timeout's repair prescribes the `_async` twin; that is a
+- **After a terminal failure, start a new attempt only as `error.repair` directs, or, where the
+  envelope carries no `error.repair`, after fixing what `error.details` names; and only within the
+  declared cap.** An unkeyed sync timeout's repair prescribes the `_async` twin; that is a
   new paid run, not a duplicate of the lost one. A keyed sync timeout's repair prescribes polling
   the run that is still going; starting the twin or dropping the key there pays twice.
 
@@ -94,8 +95,8 @@ obligations live in the reference each route names, under that file's own `Rules
 
 ### Results
 
-- **Branch on `ok` first.** On `ok: false`, read `error.code` and `error.repair`; never infer
-  recovery from prose or retry an unchanged call.
+- **Branch on `ok` first.** On `ok: false`, read `error.code` and, when the envelope carries one,
+  `error.repair`; never infer recovery from prose or retry an unchanged call.
 - **Branch on the concrete tool before reading any success field.**
 - **Check `review_status`, `coverage`, `findings_diagnostics`, `meta.truncated`,
   `meta.security_warnings`, `meta.compat_warnings`, and `meta.redacted_paths` before drawing a

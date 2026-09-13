@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any
 from pontonier.conventions.envelope import BackendErrorVocabulary, RepairRule, repair_rules
 from pydantic import ValidationError
 
-from amicus.schemas.codes import ERROR_CODES, generalize_code
+from amicus.schemas.codes import BACKEND_IDS, ERROR_CODES, generalize_code
 from amicus.schemas.envelope import (
     ErrorDetail,
     ErrorInfo,
@@ -125,6 +125,42 @@ _TOOL_OVERRIDES: dict[str, str] = {
 }
 
 
+# Codes whose correction is a value only the caller holds: no call can mint the intended
+# absolute directory, so the envelope names the field and carries no repair at all
+# ([6.repair-object]: omit repair when no corrective call exists; issue #42).
+NO_CORRECTIVE_CALL: frozenset[str] = frozenset(
+    {"invalid_workspace_root", "workspace_outside_roots"}
+)
+
+
+_LOOKUP_TOOLS = frozenset({"amicus_backends", "amicus_models"})
+
+
+def complete_lookup(
+    tool: str | None, arguments: dict[str, Any] | None, backend: str | None
+) -> tuple[str | None, dict[str, Any] | None]:
+    """The (tool, arguments) of a repair routed to a lookup tool (issue #42). amicus_models
+    requires `backend` and amicus_backends takes it as an optional filter; each accepts only
+    a backend from its closed enum and no other key. An explicit call (a caller's, or a
+    plugin's own RepairHint) is kept when it has that shape; a malformed one is completed
+    from the failing call instead. A third-party plugin's id is a valid error.backend but
+    outside both enums, so it is never named: amicus_backends falls back to its unfiltered
+    call, and amicus_models, which cannot be called at all without one, is dropped so the
+    repair stays a symbolic next step. Every other tool passes through unchanged."""
+    if tool not in _LOOKUP_TOOLS:
+        return tool, arguments
+    if arguments is not None:
+        named = arguments.get("backend")
+        accepted = set(arguments) <= {"backend"} and (named is None or named in BACKEND_IDS)
+        if accepted and (tool == "amicus_backends" or named is not None):
+            return tool, dict(arguments)
+    if backend not in BACKEND_IDS:
+        backend = None
+    if tool == "amicus_backends":
+        return tool, ({"backend": backend} if backend else {})
+    return (tool, {"backend": backend}) if backend else (None, None)
+
+
 def repair_table(plugin: BackendPlugin | None = None) -> dict[str, RepairRule]:
     rules = dict(repair_rules(NEUTRAL_VOCABULARY, _FEATURES))
     rules.update(_LOCAL_RULES)
@@ -166,8 +202,9 @@ def make_error(
 ) -> ErrorInfo:
     """Build the envelope for `code`, deriving the symbolic repair from the table.
     `repair_tool` has three states: omitted keeps the table's tool, a string overrides
-    it, explicit None clears it. An `invalid_arguments` envelope must carry the list and
-    `details` is always derived from its first entry."""
+    it, explicit None clears it. A lookup tool's repair is completed by `complete_lookup`,
+    and a NO_CORRECTIVE_CALL code carries no repair. An `invalid_arguments` envelope must
+    carry the list and `details` is always derived from its first entry."""
     if code == "invalid_arguments":
         if not invalid_arguments:
             raise ValueError(
@@ -190,18 +227,24 @@ def make_error(
     tool = rule.tool if isinstance(repair_tool, _KeepTableTool) else repair_tool
     is_temp = rule.temporary if temporary is None else temporary
     backend_id = backend if backend is not None else (plugin.backend_id if plugin else None)
+    tool, repair_arguments = complete_lookup(tool, repair_arguments, backend_id)
+    repair = (
+        None
+        if code in NO_CORRECTIVE_CALL
+        else Repair(
+            next_step=next_step,  # ty: ignore[invalid-argument-type]
+            tool=tool,
+            arguments=repair_arguments,
+            alternative=repair_alternative or rule.alternative,
+        )
+    )
     return ErrorInfo(
         code=code,  # ty: ignore[invalid-argument-type]  # validated by pydantic against the catalog
         message=message,
         backend=backend_id,
         temporary=is_temp,
         retry_after_ms=retry_after_ms if is_temp else None,
-        repair=Repair(
-            next_step=next_step,  # ty: ignore[invalid-argument-type]
-            tool=tool,
-            arguments=repair_arguments,
-            alternative=repair_alternative or rule.alternative,
-        ),
+        repair=repair,
         details=details,
         invalid_arguments=invalid_arguments,
         limit_bytes=limit_bytes,
@@ -255,18 +298,25 @@ def render_failure(plugin: BackendPlugin, failure: ClassifiedFailure, meta: Meta
     rule = table[code]
     temporary = rule.temporary if failure.retryable is None else failure.retryable
     if failure.repair is not None:
+        tool, arguments = complete_lookup(
+            failure.repair.tool, failure.repair.arguments, plugin.backend_id
+        )
         repair = Repair(
             next_step=failure.repair.next_step,  # ty: ignore[invalid-argument-type]
-            tool=failure.repair.tool,
-            arguments=failure.repair.arguments,
+            tool=tool,
+            arguments=arguments,
             alternative=failure.repair.alternative or rule.alternative,
         )
     else:
+        tool, arguments = complete_lookup(rule.tool, None, plugin.backend_id)
         repair = Repair(
             next_step=rule.next_step,  # ty: ignore[invalid-argument-type]
-            tool=rule.tool,
+            tool=tool,
+            arguments=arguments,
             alternative=rule.alternative,
         )
+    if code in NO_CORRECTIVE_CALL:
+        repair = None
     if failure.usage is not None:
         meta = meta.model_copy(update={"usage": Usage(**dataclasses.asdict(failure.usage))})
     info = ErrorInfo(

@@ -129,6 +129,32 @@ async def test_sync_tools_need_a_workspace_from_a_sessionless_client():
     assert res.structured_content["meta"]["roots_source"] == "not_negotiated"
 
 
+async def test_unknown_argument_repair_is_callable_only_without_a_prompt_input():
+    # Issue #42 on the shipped surface: a review that sent no prompt input gets the corrected
+    # call back; a consult cannot, because rule 18 never echoes its required question.
+    app = _app(registry=_fake_registry())
+    async with Client(app) as c:
+        review = await c.call_tool(
+            "amicus_review_changes",
+            {"backend": "codex", "scope": "working_tree", "bogus": 1},
+            raise_on_error=False,
+        )
+        backends = await c.call_tool("amicus_backends", {"bogus": 1}, raise_on_error=False)
+        consult = await c.call_tool(
+            "amicus_consult", {**VALID["amicus_consult"], "bogus": 1}, raise_on_error=False
+        )
+        schema = next(
+            t for t in await c.list_tools() if t.name == "amicus_review_changes"
+        ).output_schema
+    repair = review.structured_content["error"]["repair"]
+    assert repair["tool"] == "amicus_review_changes"
+    assert repair["arguments"] == {"backend": "codex", "scope": "working_tree"}
+    Draft202012Validator(schema).validate(review.structured_content)
+    assert backends.structured_content["error"]["repair"]["arguments"] == {}
+    consult_repair = consult.structured_content["error"]["repair"]
+    assert consult_repair["tool"] == "amicus_consult" and "arguments" not in consult_repair
+
+
 async def test_feature_gating():
     app = _app(registry=_fake_registry())
     async with Client(app) as c:
