@@ -53,7 +53,8 @@ The behavior stays, every surface now names the case, and a test pins all three 
 Reporting the case as `not_done` by calling the store's discard anyway was rejected, because that call is not safe for `failed`.
 Pontonier stamps `cancelled` and `timeout` into the record, but it derives `failed` on every read without stamping it, so a record read as `failed` turns `done` if its `result.json` appears later.
 The discard re-reads the state under the store's lock, so a discard after that flip would delete a result this call never delivered.
-Deleting a terminal-error record is not possible from amicus at all: pontonier's discard returns `NOT_DONE` for any record that is not `done`, and the store has no other public delete.
+No public store call lets amicus delete a terminal-error record on request: pontonier's discard returns `NOT_DONE` for any record that is not `done`, and the store has no other public delete.
+Such a record goes when it expires or the per-workspace cap evicts it, or through an ordinary consume if a `failed` one turns `done` first.
 A safe deletion needs an atomic compare-and-delete from pontonier, requested as briandconnelly/pontonier#31.
 
 ## Consequences

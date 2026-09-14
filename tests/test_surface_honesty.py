@@ -240,10 +240,10 @@ def test_the_consume_surface_instrument_can_fail():
 # returns its terminal error, attempts no discard and attaches no meta.consume. Every
 # surface said meta.consume reports what the store did without naming that case. The match
 # ignores backticks, case and line wrapping, since the markdown surfaces wrap mid-phrase.
-_TERMINAL_CONSUME_PHRASES: tuple[str, ...] = (
-    "a failed, cancelled or timed-out job returns its terminal error",
-    "no meta.consume",
-    "is not deleted",
+# It is one clause, not three phrases, so no claim can drift onto another case (PR #105).
+_TERMINAL_CONSUME_CLAUSE = (
+    "a failed, cancelled or timed-out job returns its terminal error with no meta.consume "
+    "and is not deleted"
 )
 _SUPERSEDED_TERMINAL_CONSUME: dict[str, str] = {
     "tool description": (
@@ -288,11 +288,15 @@ def test_consume_surfaces_name_the_terminal_error_case(wire):
     surfaces = _terminal_consume_surfaces(wire)
     assert set(surfaces) == set(_SUPERSEDED_TERMINAL_CONSUME)
     for name, text in surfaces.items():
-        for phrase in _TERMINAL_CONSUME_PHRASES:
-            assert phrase in _plain(text), f"{name} does not say {phrase!r}"
+        assert _TERMINAL_CONSUME_CLAUSE in _plain(text), f"{name} omits the terminal-error case"
 
 
 def test_the_terminal_consume_instrument_can_fail():
-    """Every surface's wording before #94 fails the check."""
-    for name, old in _SUPERSEDED_TERMINAL_CONSUME.items():
-        assert [p for p in _TERMINAL_CONSUME_PHRASES if p not in _plain(old)], name
+    """Every surface's wording before #94 fails the check, and so does one that makes each
+    claim but binds the last two to another case."""
+    split = (
+        "A failed, cancelled or timed-out job returns its terminal error. A done job's "
+        "envelope carries no meta.consume and is not deleted."
+    )
+    for name, old in {**_SUPERSEDED_TERMINAL_CONSUME, "split claims": split}.items():
+        assert _TERMINAL_CONSUME_CLAUSE not in _plain(old), name
