@@ -9,7 +9,7 @@ This guide covers the environment-variable renames, the tool-name mapping for ea
 Every `AMICUS_*` name below is declared once in `src/amicus/config/envspec.py` (global) and each backend's `config.py` (per backend).
 A sibling's old name still works during the deprecation window: it is read only when the new `AMICUS_*` name is unset, and every such read logs a warning.
 Setting both the `AMICUS_*` name and a legacy name to different values is an error, not a silent override; two legacy names for the same setting that disagree is also an error.
-Legacy names are removed in `0.3.0`.
+Legacy names are removed in `0.4.0`.
 
 | amicus name | legacy names | default |
 | --- | --- | --- |
@@ -178,10 +178,10 @@ Every backend's options (`isolation`, `config_mode`, `access`, `max_budget_usd`,
 A key that the selected backend does not accept is a validation error (`invalid_arguments`, `details.field = "backend_options.<key>"`), not a value that gets silently dropped the way an unrecognized sibling option might have been.
 Check `amicus_backends(backend=...)` or a tool's `amicus_review_changes_dry_run` echo to see which options apply to your chosen backend before spending.
 
-**Legacy environment names warn now and are removed in `0.3.0`.**
+**Legacy environment names warn now and are removed in `0.4.0`.**
 Every sibling env var above is read automatically until then, but each read logs a warning naming the removal version.
 Setting the new `AMICUS_*` name and the old legacy name to different values is an error rather than a silent pick of one; the same is true if two legacy names for the same setting disagree with each other.
-Rename your environment before `0.3.0` ships to avoid a hard failure at that point.
+Rename your environment before `0.4.0` ships to avoid a hard failure at that point.
 
 ### Discovery defaults are concise
 
@@ -190,3 +190,32 @@ Pass `detail="full"` to read them.
 A `null` there means no loaded plugin declares one.
 The `amicus://backends/{backend}` resource is always the full entry.
 `amicus_capabilities(detail="contracts")` is removed: pass `include_tool_details=false` for the same rowless payload, and `detail` now selects only how much each `tool_details` row carries (`summary` is `name`, `cost`, `stability`, `backends`; `full` adds the rest, including `error_codes`).
+
+## Upgrading from 0.2.0
+
+The changes below are the ones a caller written against amicus 0.2.0 has to handle.
+`CHANGELOG.md` lists every surface bump; the rest add fields, tighten descriptions or move text, and a caller that ignores them keeps working.
+
+**Every success `meta` is sparse on the wire (`schema-24`).**
+A `meta` key whose value is null is omitted from every tool's success, not only from a delivered paid result as before.
+Read an absent key as null.
+Seven keys are always present, and the result-meta schema requires exactly them: `elapsed_ms`, `truncated`, `compat_warnings`, `security_warnings`, `redacted_paths`, `request_id` and `fingerprint`.
+
+**A review that did not run reports `confidence: unknown` (`schema-25`).**
+`review_status: not_run` carried `confidence: low`; it now carries `unknown`, the value an unreadable backend rating has carried since 0.2.0.
+Branch on `review_status` for whether a review ran, and read `unknown` as "no rating", never as a low one.
+
+**A finished job's `poll_after_ms` is null (`schema-28`, `schema-29`).**
+`amicus_job_status`, `amicus_job_cancel` and a replayed keyed `_async` handle report `poll_after_ms: null` on every terminal status; a replayed handle used to report `1000`.
+While a job runs the hint grows with its elapsed time to a ceiling of 30 s, not pontonier's 10 s.
+Poll only while `status` is `running`; a caller that read a non-null hint as "still running" waited one extra interval on every finished job.
+
+**The free discovery tools default to a summary (`schema-22`).**
+`amicus_capabilities(detail="contracts")` is rejected as `invalid_arguments`, and the default `amicus_backends` omits four disclosure fields; the "Discovery defaults are concise" section above has the replacement calls.
+
+**`amicus_dry_run` is a deprecated alias (`schema-27`).**
+Call `amicus_review_changes_dry_run`; the alias is removed at or after 0.5.0.
+
+**Two workspace errors carry no `repair` (`schema-20`).**
+`invalid_workspace_root` and `workspace_outside_roots` return `error.repair: null`, because no call can supply the caller's directory; read `details.field` and `details.candidate_roots` instead.
+Every other repair that names a tool carries a complete call in `repair.arguments`.

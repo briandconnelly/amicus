@@ -17,7 +17,12 @@ from typing import TYPE_CHECKING, Literal
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Mapping
 
-LEGACY_REMOVAL_VERSION = "0.3.0"
+# The release that drops every `EnvVar.legacy` alias. `scripts/check_release_state.py`
+# refuses to release at or past it while any alias is still declared, and docs/MIGRATION.md
+# states it (pinned by tests/test_migration_doc.py). Moved from 0.3.0 on 2026-09-14: 0.2.0,
+# the first release to warn on the aliases, shipped four days before 0.3.0 was cut, and one
+# warning-bearing release is too short a window for an operator-facing rename.
+LEGACY_REMOVAL_VERSION = "0.4.0"
 
 _PLACEHOLDER_RE = re.compile(r"^\$\{[A-Za-z_][A-Za-z0-9_]*\}$")
 

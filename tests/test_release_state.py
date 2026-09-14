@@ -86,6 +86,26 @@ DEPRECATIONS = """DEPRECATED_TOOLS: dict[str, ToolDeprecation] = {
 """
 
 
+LEGACY_REMOVAL = "2.0.0"  # after VERSION, so the unmodified fixture passes
+ENVSPEC = f'LEGACY_REMOVAL_VERSION = "{LEGACY_REMOVAL}"\n'
+# One alias the parser cannot evaluate (a helper call, as the real global namespace uses),
+# one declared as the real backend namespaces declare it (a tuple of f-strings over a
+# module-level prefix), and two with none: absent, and the empty tuple.
+ENV_DECLARATIONS = """PREFIX = "AMICUS_"
+_LEGACY = "OLD_"
+
+GLOBAL_ENV = EnvNamespace(
+    prefix=PREFIX,
+    vars=(
+        EnvVar("AMICUS_TIMEOUT", "seconds", "300", _legacy("TIMEOUT")),
+        EnvVar(f"{PREFIX}BIN", "path", None, (f"{_LEGACY}BIN",)),
+        EnvVar("AMICUS_BACKENDS", "which backends"),
+        EnvVar("AMICUS_TASKS", "tasks", "0", ()),
+    ),
+)
+"""
+
+
 @pytest.fixture
 def repo(tmp_path):
     """A minimal tree carrying every file the release predicate reads."""
@@ -124,6 +144,9 @@ def repo(tmp_path):
     (tmp_path / "CHANGELOG.md").write_text(CHANGELOG, encoding="utf-8")
     (tmp_path / "src" / "amicus" / "tools").mkdir()
     (tmp_path / release_state.DEPRECATIONS_PATH).write_text(DEPRECATIONS, encoding="utf-8")
+    (tmp_path / "src" / "amicus" / "config").mkdir()
+    (tmp_path / release_state.LEGACY_ENV_SPEC_PATH).write_text(ENVSPEC, encoding="utf-8")
+    (tmp_path / release_state.GLOBAL_ENV_PATH).write_text(ENV_DECLARATIONS, encoding="utf-8")
     return tmp_path
 
 
@@ -549,6 +572,91 @@ def test_a_window_that_is_not_a_version_is_rejected(repo):
     assert any("must be X.Y.Z" in p for p in _tree(repo))
 
 
+# --- the legacy environment window -------------------------------------------------------
+
+
+def _set_removal(repo: Path, version: str) -> None:
+    (repo / release_state.LEGACY_ENV_SPEC_PATH).write_text(
+        f'LEGACY_REMOVAL_VERSION = "{version}"\n', encoding="utf-8"
+    )
+
+
+def _set_declarations(repo: Path, source: str) -> None:
+    (repo / release_state.GLOBAL_ENV_PATH).write_text(source, encoding="utf-8")
+
+
+def test_the_static_read_sees_which_declarations_carry_legacy_names(repo):
+    """The instrument, before the predicate: a helper call and a tuple of f-strings both
+    count as declaring aliases (the first because it cannot be evaluated, the second by
+    value); an absent argument and an empty tuple both count as none."""
+    removal, declared, problems = release_state.legacy_env_state(repo)
+    assert problems == []
+    assert removal == LEGACY_REMOVAL
+    assert declared == {
+        "AMICUS_TIMEOUT": True,
+        "AMICUS_BIN": True,
+        "AMICUS_BACKENDS": False,
+        "AMICUS_TASKS": False,
+    }
+
+
+def test_a_release_at_the_legacy_removal_version_with_aliases_declared_is_rejected(repo):
+    _set_removal(repo, VERSION)
+    problems = _tree(repo)
+    assert len(problems) == 1
+    assert f"at or past LEGACY_REMOVAL_VERSION {VERSION}" in problems[0]
+    assert (
+        "AMICUS_TIMEOUT, AMICUS_BIN" in problems[0] or "AMICUS_BIN, AMICUS_TIMEOUT" in problems[0]
+    )
+    assert "AMICUS_BACKENDS" not in problems[0]
+
+
+def test_a_release_past_the_legacy_removal_version_with_aliases_declared_is_rejected(repo):
+    _set_removal(repo, "1.0.0")
+    assert any("still declare legacy names" in p for p in _tree(repo))
+
+
+def test_removal_versions_compare_numerically_not_as_strings(repo):
+    """As strings "1.10.0" > "1.2.3", so a string comparison would reject this release."""
+    _set_removal(repo, "1.10.0")
+    assert _tree(repo) == []
+
+
+def test_a_release_past_the_removal_version_with_no_aliases_left_is_accepted(repo):
+    _set_removal(repo, "1.0.0")
+    _set_declarations(
+        repo,
+        'GLOBAL_ENV = EnvNamespace(prefix="AMICUS_", vars=(EnvVar("AMICUS_A", "a"),'
+        ' EnvVar("AMICUS_B", "b", None, ()), EnvVar("AMICUS_C", "c", legacy=[])))\n',
+    )
+    assert _tree(repo) == []
+
+
+def test_a_legacy_argument_the_parser_cannot_evaluate_counts_as_declared(repo):
+    """Fail closed: `legacy=NAMES` might be empty at runtime, but the script cannot know."""
+    _set_removal(repo, "1.0.0")
+    _set_declarations(
+        repo, 'GLOBAL_ENV = EnvNamespace(vars=(EnvVar("AMICUS_A", "a", None, legacy=NAMES),))\n'
+    )
+    assert any("AMICUS_A" in p and "still declare legacy names" in p for p in _tree(repo))
+
+
+def test_a_missing_removal_version_is_rejected_rather_than_read_as_never(repo):
+    (repo / release_state.LEGACY_ENV_SPEC_PATH).write_text("X = 1\n", encoding="utf-8")
+    assert any("no literal `LEGACY_REMOVAL_VERSION`" in p for p in _tree(repo))
+
+
+def test_a_removal_version_that_is_not_x_y_z_is_rejected(repo):
+    _set_removal(repo, "soon")
+    assert any("must be X.Y.Z" in p for p in _tree(repo))
+
+
+def test_a_missing_declaration_module_is_rejected(repo):
+    (repo / release_state.GLOBAL_ENV_PATH).unlink()
+    _set_removal(repo, "1.0.0")
+    assert any("could not read" in p for p in _tree(repo))
+
+
 # --- this repository -------------------------------------------------------------------
 
 
@@ -584,6 +692,30 @@ def test_the_static_read_of_the_deprecation_table_matches_the_runtime_table():
         name: (deprecation.since, deprecation.removal_at_or_after)
         for name, deprecation in _meta.DEPRECATED_TOOLS.items()
     }
+
+
+def test_the_static_read_of_the_env_declarations_matches_the_runtime_declarations():
+    """Same reason as the deprecation table above: the script reads `EnvVar` calls with
+    `ast`, so a declaration shape it misses must fail here, not pass the release predicate
+    as an alias-free tree. Every declared name and whether it carries aliases must agree
+    with what amicus itself resolves at runtime."""
+    from amicus import packaging
+    from amicus.config.envspec import LEGACY_REMOVAL_VERSION
+
+    repo_root = Path(__file__).resolve().parent.parent
+    removal, declared, problems = release_state.legacy_env_state(repo_root)
+    assert problems == [], "; ".join(problems)
+    assert removal == LEGACY_REMOVAL_VERSION
+    runtime = {var.name: bool(var.legacy) for var in packaging.declared_vars()}
+    assert any(runtime.values()), "known positive: no runtime alias would prove nothing here"
+    assert declared == runtime
+
+
+def test_this_repository_s_declared_version_is_before_the_legacy_removal():
+    """The one legacy-window fact that holds on every commit, not only at a release."""
+    repo_root = Path(__file__).resolve().parent.parent
+    version = release_state.declared_version(repo_root)
+    assert release_state.check_legacy_env(version, repo_root=repo_root) == []
 
 
 # --- the real git path the workflow depends on -----------------------------------------
