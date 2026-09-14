@@ -53,10 +53,13 @@ No dry run is ever stored as a job result (`JOB_RESULT_MODELS` holds only the fo
 
 If the next release is not 0.3.0, both dates move in an ordinary PR before it; the release predicate says so if they do not.
 
-Commands, the skill and the docs name the new tool, and a test keeps every command off the alias.
+Commands, the skill, the README, MIGRATION.md and the spec name the new tool, and a test keeps every command off the alias.
+ADRs 0002 and 0007, whose standing decisions name `amicus_dry_run`, carry a status note pointing here; ADR 0019 mentions it only as history.
 Previews for consult and adversarial review stay out of scope.
 
 Codex was consulted once on the draft design, at high reasoning effort.
 It rejected the lean alias for the reason above and asked that the deprecated description keep the safety sentence.
 It recommended the release-state check and the removal ratchet, asked that the marker test cover both carriers, and found stale tool counts in the README, the skill, the spec and four test files.
 All of it was taken.
+Codex then reviewed the finished branch once and returned `concerns` at high confidence, with one low finding: ADRs 0002 and 0007 still taught the deprecated name as current guidance.
+They now carry the status note above, and this ADR no longer claims that every doc names the new tool.
