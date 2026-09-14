@@ -9,13 +9,16 @@ nothing at all.
 Branching on `ok`, branching on the concrete tool, reading the coverage fields, treating results
 as unverified claims, and matching verification to the claim are governed by SKILL.md → Binding
 rules → Results, which is their authoritative statement. This file explains what each of those
-means; it adds two obligations of its own:
+means; it adds three obligations of its own:
 
 - **Read `questions` and `assumptions` before treating an answer as responsive.** An answer built
   on a wrong assumption is not a wrong answer to your question; it is an answer to a different
   one.
 - **Run this project's full gate before calling implementation work complete**, whatever a
   returned result claims.
+- **Check that a `meta` key is present before indexing it, unless the `amicus://result-meta`
+  schema lists it as `required`.** `meta` is sparse on the wire: a null-valued key is dropped,
+  and its absence means what null means.
 
 `diffstat` is not an integrity check on `diff`; that rule lives in
 [reviewing a returned diff](reviewing-a-returned-diff.md), and the reason is under Semantics
@@ -155,6 +158,13 @@ The dropped content is not echoed back in any form. For a job whose record still
 `detail="full"` read returns `raw_response.text`, which is where the backend's own words survive.
 
 ## Meta fields that change a result's meaning
+
+`meta` is sparse on the wire, on every tool: a key with a null value is dropped, and its absence
+means exactly what null means (not applicable, not reported). The keys the `amicus://result-meta`
+schema lists as `required` are always present. An empty list among them (`security_warnings`,
+`compat_warnings`, `redacted_paths`) means that envelope reports none, not that a check ran: a
+job handle, status or list, and a dry run, report on the call that produced them, never on the
+run they name, and the run's warnings arrive on its own result.
 
 - `meta.truncated` / `meta.truncation_hint` — the payload was cut to a byte cap. On a delegate
   result the hint names the environment variable that raises the cap.

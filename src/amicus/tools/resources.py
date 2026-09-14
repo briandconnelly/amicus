@@ -6,6 +6,8 @@ import json
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
+from fastmcp.resources import FunctionResource
+from mcp_types import Resource as SDKResource
 from mcp_types import ResourceTemplateReference
 
 from amicus import middleware
@@ -33,15 +35,48 @@ STATIC_RESOURCE_URIS: tuple[str, ...] = (
 TEMPLATE_URIS: tuple[str, ...] = ("amicus://backends/{backend}", "amicus://models/{backend}")
 
 
-def _meta(payload: dict[str, Any] | None = None, *, volatile: bool = False) -> dict[str, Any]:
-    # `size_bytes` is always present (0 for a volatile resource with no static payload to
-    # size) so a caller can check it unconditionally before falling back to `volatile`.
-    triage: dict[str, Any] = {
-        "size_bytes": len(json.dumps(payload).encode()) if payload is not None else 0
-    }
+def _meta(*, volatile: bool = False) -> dict[str, Any]:
+    """The `_meta` block of a resource or template record. Size is not here: it has a
+    native home (`Resource.size`, see `SizedResource`), and it is omitted, never `0`,
+    when the body is built per read. `volatile` has no native home, so it stays a
+    convention extension and is the only triage key (#48)."""
+    meta = server_lifecycle_meta()
     if volatile:
-        triage["volatile"] = True
-    return {**server_lifecycle_meta(), TRIAGE_META_KEY: triage}
+        meta[TRIAGE_META_KEY] = {"volatile": True}
+    return meta
+
+
+class SizedResource(FunctionResource):
+    """A static resource whose record carries the native `Resource.size`. FastMCP's
+    `Resource` has no size field and its `to_mcp_resource` forwards none, so the value
+    rides this subclass and is set on the wire record here; `surface.py` and the manifest
+    both go through `to_mcp_resource`, so the digest and the snapshot see the same record
+    a client lists."""
+
+    size: int | None = None
+
+    def to_mcp_resource(self, **overrides: Any) -> SDKResource:
+        return super().to_mcp_resource(**overrides).model_copy(update={"size": self.size})
+
+
+def _static_body_size(payload: dict[str, Any]) -> int:
+    """The byte length of exactly the text a read returns. FastMCP serialises a dict
+    body with `json.dumps(value)` (no `indent`, no `separators`), so the same call here
+    is the size of the served content, which is what `Resource.size` is defined as."""
+    return len(json.dumps(payload).encode())
+
+
+def _add_static(
+    app: FastMCP, fn: Any, *, uri: str, name: str, title: str, mime_type: str, body: dict[str, Any]
+) -> None:
+    resource = SizedResource.from_function(
+        fn, uri=uri, name=name, title=title, mime_type=mime_type, meta=_meta()
+    )
+    # `from_function` builds `cls`; its annotation says the base class, so narrow it.
+    if not isinstance(resource, SizedResource):  # pragma: no cover
+        raise TypeError("from_function did not build a SizedResource")
+    resource.size = _static_body_size(body)
+    app.add_resource(resource)
 
 
 def complete_backend(ref: Any, argument: Any, context: Any) -> list[str] | None:  # noqa: ARG001
@@ -85,38 +120,47 @@ def register_resources(
             app, settings, registry, state.config_errors, state.tasks_active
         )
 
-    @app.resource(
-        "amicus://error-envelope",
-        name="amicus-error-envelope",
-        title="amicus error envelope schema",
-        mime_type="application/schema+json",
-        meta=_meta(ERROR_ENVELOPE_SCHEMA),
-    )
     def error_envelope_resource() -> dict[str, Any]:
         """The full ErrorResult schema; tool outputSchemas carry only an opaque error branch."""
         return ERROR_ENVELOPE_SCHEMA
 
-    @app.resource(
-        "amicus://result-meta",
-        name="amicus-result-meta",
-        title="amicus result metadata schema",
+    _add_static(
+        app,
+        error_envelope_resource,
+        uri="amicus://error-envelope",
+        name="amicus-error-envelope",
+        title="amicus error envelope schema",
         mime_type="application/schema+json",
-        meta=_meta(RESULT_META_SCHEMA),
+        body=ERROR_ENVELOPE_SCHEMA,
     )
+
     def result_meta_resource() -> dict[str, Any]:
         """The full Meta schema every success envelope's opaque `meta` points at."""
         return RESULT_META_SCHEMA
 
-    @app.resource(
-        PARAMS_RESOURCE_URI,
-        name="amicus-params",
-        title="amicus parameter contracts",
-        mime_type="application/json",
-        meta=_meta(params_resource_body()),
+    _add_static(
+        app,
+        result_meta_resource,
+        uri="amicus://result-meta",
+        name="amicus-result-meta",
+        title="amicus result metadata schema",
+        mime_type="application/schema+json",
+        body=RESULT_META_SCHEMA,
     )
+
     def params_resource() -> dict[str, Any]:
         """Full semantics for parameters whose inline description is a compressed summary."""
         return params_resource_body()
+
+    _add_static(
+        app,
+        params_resource,
+        uri=PARAMS_RESOURCE_URI,
+        name="amicus-params",
+        title="amicus parameter contracts",
+        mime_type="application/json",
+        body=params_resource_body(),
+    )
 
     @app.resource(
         "amicus://backends/{backend}",

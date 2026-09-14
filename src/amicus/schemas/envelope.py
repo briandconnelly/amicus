@@ -118,9 +118,13 @@ class ConsumeDisposition(BaseModel):
 
 
 class Meta(BaseModel):
-    """Execution metadata on every envelope. Every field is optional except the
-    identity trio at the end; `cwd` is None when no workspace was resolved (argument
-    errors, unimplemented tools). Backend-specific facts ride `backend_details`."""
+    """Execution metadata on every envelope. Construction: every field has a default, so
+    `Meta()` is valid. Wire: `META_ALWAYS_PRESENT` (the fields whose default is never None,
+    minus `server_version`) is the success schema's `required` and is always delivered;
+    every other key is delivered only when non-null (`slim_meta`, #47). `server_version`
+    is not required because a stored payload can predate it. `cwd` is None when no
+    workspace was resolved (argument errors, unimplemented tools). Backend-specific facts
+    ride `backend_details`."""
 
     model_config = ConfigDict(extra="forbid")
     backend: BackendRef | None = None
@@ -168,8 +172,41 @@ class SuccessBase(BaseModel):
 
 def dump_success(result: SuccessBase) -> dict[str, Any]:
     """Success envelopes retain null optionals (unlike serialize_error's exclude_none);
-    the asymmetry is part of the persisted result format (RESULT_FORMAT)."""
+    the asymmetry is part of the persisted result format (RESULT_FORMAT). This is the
+    STORED shape; `slim_meta` is the wire shape."""
     return result.model_dump(mode="json")
+
+
+def _always_present_meta() -> tuple[str, ...]:
+    """The meta keys every wire envelope carries: fields whose default is never None,
+    minus `server_version`, which a stored payload can predate and which is then omitted
+    rather than backfilled. Derived, so a defaulted field cannot be added without being
+    declared. `consume` is excluded from every dump and never listed."""
+    return tuple(
+        name
+        for name, field in Meta.model_fields.items()
+        if name != "server_version"
+        and not field.exclude
+        and (field.default is not None or field.default_factory is not None)
+    )
+
+
+META_ALWAYS_PRESENT: tuple[str, ...] = _always_present_meta()
+
+
+def slim_meta(envelope: dict[str, Any]) -> dict[str, Any]:
+    """Drop meta's null-valued keys from a success envelope on its way to the wire (#47).
+    Every tool's success passes through this, paid or free, at the guard; a delivered
+    stored result passes through it again at the delivery chokepoint. The persisted
+    envelope keeps them (`dump_success`). Keyed on `is None`, never falsiness: 0, False
+    and [] are populated values. Only `meta` is touched; a null outside it is that tool's
+    own contract. Mutates."""
+    if envelope.get("ok") is not True:
+        return envelope
+    meta = envelope.get("meta")
+    if isinstance(meta, dict):
+        envelope["meta"] = {k: v for k, v in meta.items() if v is not None}
+    return envelope
 
 
 class InvalidArgument(BaseModel):
@@ -290,11 +327,18 @@ ERROR_ENVELOPE_SCHEMA = _harden_error_envelope_schema(
 
 RESULT_META_SCHEMA: dict[str, Any] = TypeAdapter(Meta).json_schema(ref_template="#/$defs/{model}")
 RESULT_META_SCHEMA["$schema"] = JSON_SCHEMA_DIALECT
+# The always-present core is the schema's own `required`: a reader may index those keys
+# without a presence check, and every other key is present only when it carries a value.
+RESULT_META_SCHEMA["required"] = list(META_ALWAYS_PRESENT)
 RESULT_META_SCHEMA["description"] = (
     "The full result-metadata contract. Every success envelope's `meta` is advertised "
-    "as an opaque pointer to this schema. On the wire a delivered success envelope drops "
-    "meta's null-valued keys; absence means exactly what null means (not applicable / not "
-    "reported). Error envelopes strip absent optionals except retry_after_ms."
+    "as an opaque pointer to this schema. On the wire every success envelope, paid or "
+    "free, drops meta's null-valued keys; absence means exactly what null means (not "
+    "applicable / not reported). The keys in `required` are always present. An empty list "
+    "there means this envelope reports none, not that a check ran: a job handle, status or "
+    "list and a dry run report on the call that produced them, never on the run they name, "
+    "whose warnings arrive on its own result. Error envelopes strip absent optionals except "
+    "retry_after_ms."
 )
 
 # The `ok` discriminator description survives noise stripping on every published schema.

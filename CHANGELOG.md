@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking (`FINGERPRINT` `schema-24`).** Every success envelope's `meta` is sparse on the
+  wire, on every tool (#47, ADR 0025). A delivered paid result already dropped meta's
+  null-valued keys, and the `amicus://result-meta` description said so, but a job-lifecycle
+  handle, a job status, a job list or a dry run dumped the full model: the audit's plain
+  `amicus_job_list` call carried 27 meta keys, 15 of them null, 626 bytes that were about a
+  third of the result and paid twice because `content[0].text` mirrors `structuredContent`.
+  The guard every tool passes through now slims every success, keyed on null and never on
+  falsiness; the delivery chokepoint keeps slimming a stored result too, so a job result is
+  slimmed twice and the second pass is a no-op. The always-present core is published as the
+  schema's own `required`:
+  `elapsed_ms`, `truncated`, `compat_warnings`, `security_warnings`, `redacted_paths`,
+  `request_id` and `fingerprint`, derived from the model so a new defaulted field cannot be
+  added without being declared. An empty list there means that envelope reports none, not
+  that a check ran: a job handle, status or list and a dry run report on the call that
+  produced them, and the run's warnings arrive on its own result. Only meta's
+  top level is touched: a null inside `usage`, or outside `meta` such as
+  `JobListResult.truncation_hint`, is that object's own contract. The persisted dump is
+  unchanged, so `RESULT_FORMAT` stays 6. On the wire-shape snapshot's `amicus_job_list`
+  envelope, whose meta populates `workspace_source` and `roots_source` and so carried 14
+  nulls, `meta` falls from 591 to 304 bytes (27 keys to 13) on each carrier.
+
 - **Breaking (`FINGERPRINT` `schema-23`, `RESULT_FORMAT` 6).** The `questions`, `assumptions`
   and `next_steps` lists of consult, review and adversarial results no longer lose entries in
   silence (#52). `_str_list` kept string and numeric entries, dropped every other entry with
@@ -101,6 +122,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Resource records carry their size in the native `Resource.size` field, and only when it is
+  known (#48). Every record published `size_bytes` under the private
+  `dev.bconnelly.amicus/triage` `_meta` convention, which an off-the-shelf client may never
+  surface, while the native field stayed empty, and the volatile `amicus://capabilities`
+  advertised `size_bytes: 0` for a body of roughly 13.5 KB. The three static resources now
+  carry `size`, the byte length of exactly the text a read returns, and no triage block; the
+  volatile resource and both templates carry no size at all, and their triage block is the one
+  `volatile: true` key, which has no native home. Part of the `schema-24` bump above.
 - A structured answer whose JSON object repeats a key is now refused as `invalid_json` (#51).
   `classify_structured` parsed with plain `json.loads`, which keeps the last member silently,
   so a populated `findings` followed by `findings: []` reached `coerce_findings` as empty and

@@ -24,6 +24,7 @@ from amicus.schemas.envelope import (
     Meta,
     Usage,
     dump_success,
+    slim_meta,
 )
 from amicus.schemas.fingerprint import FINGERPRINT, RESULT_FORMAT
 from amicus.schemas.results import (
@@ -351,12 +352,17 @@ def _handles() -> dict[str, Any]:
         ),
         meta=_handle_meta(),
     ).model_dump(mode="json")
+    # The builders dump the full model; on the wire the guard (`tools._guard.as_tool_result`)
+    # slims every success envelope's meta, so the snapshot applies the same function (#47).
     return {
-        "job_started": started,
-        "job_started_replayed": replayed,
-        "job_status_running": running,
-        "job_status_cancelled": cancelled,
-        "job_list": listed,
+        name: slim_meta(env)
+        for name, env in {
+            "job_started": started,
+            "job_started_replayed": replayed,
+            "job_status_running": running,
+            "job_status_cancelled": cancelled,
+            "job_list": listed,
+        }.items()
     }
 
 

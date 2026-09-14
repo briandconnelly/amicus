@@ -80,6 +80,7 @@ async def test_status_result_and_consume_lifecycle(app, store, tmp_path):
         ).structured_content
         schemas["amicus_job_status"].validate(status)
         assert status["ok"] is True and status["backend"] == "codex" and status["kind"] == "consult"
+        assert [k for k, v in status["meta"].items() if v is None] == []  # #47
         assert status["status"] in ("running", "done") and status["task_id"] is None
         assert (
             status["workspace"]["cwd"] == str(tmp_path)
@@ -319,6 +320,8 @@ async def test_list_filters_and_the_task_id_lookup(app, store, settings, tmp_pat
         lookup.task_map(settings).record("task-xyz", first)
         listed = (await c.call_tool("amicus_job_list", ws)).structured_content
         schemas["amicus_job_list"].validate(listed)
+        # #47: a job-lifecycle success is as sparse as a delivered paid one.
+        assert [k for k, v in listed["meta"].items() if v is None] == []
         assert [j["job_id"] for j in listed["jobs"]] == [second, first]
         assert listed["truncated"] is False and listed["truncation_hint"] is None
         assert listed["jobs"][1]["task_id"] == "task-xyz" and listed["jobs"][0]["task_id"] is None

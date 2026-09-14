@@ -120,7 +120,7 @@ async def test_keyed_consult_async_replays_and_conflicts(app, store, tmp_path):
         other = await c.call_tool(
             "amicus_consult_async", {**args, "question": "why not?"}, raise_on_error=False
         )
-    assert first["meta"]["idempotency_replayed"] is None  # a handle keeps null meta keys
+    assert "idempotency_replayed" not in first["meta"]  # a null meta key is dropped (#47)
     assert again["ok"] is True and again["job_id"] == first["job_id"]
     assert again["meta"]["idempotency_replayed"] is True and again["status"] == "done"
     assert other.is_error and other.structured_content["error"]["code"] == "idempotency_conflict"

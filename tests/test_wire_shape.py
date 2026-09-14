@@ -8,7 +8,7 @@ from pathlib import Path
 from jsonschema import Draft202012Validator
 
 from amicus import wire_shape_snapshot as wss
-from amicus.schemas.envelope import RESULT_META_SCHEMA, Meta
+from amicus.schemas.envelope import META_ALWAYS_PRESENT, RESULT_META_SCHEMA, Meta
 
 _FIXTURE = Path(__file__).parent / "fixtures" / "wire_shape_snapshot.json"
 _REGEN = (
@@ -34,6 +34,11 @@ def test_delivered_meta_carries_no_nulls_and_something_was_omitted():
     omitted = snap["omitted_meta_keys"]
     assert omitted and all(keys for keys in omitted.values())
     assert "context_summary" in omitted["consult"]
+    # The job-lifecycle handles ride the same rule: no free or lifecycle envelope carries
+    # a null meta key on the wire (#47).
+    for name, env in snap["handles"].items():
+        assert [k for k, v in env["meta"].items() if v is None] == [], name
+        assert set(env["meta"]) >= set(META_ALWAYS_PRESENT), name
 
 
 def test_populated_optionals_survive_and_every_producible_optional_is_populated_somewhere():

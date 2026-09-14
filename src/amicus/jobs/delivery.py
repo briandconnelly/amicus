@@ -12,10 +12,9 @@ from pydantic import BaseModel, ValidationError
 
 from amicus.errors import error_envelope, serialize_error
 from amicus.orchestration.finalize import sanitize_finding, sanitize_prose_value
-from amicus.schemas.envelope import ConsumeDisposition, ErrorResult
+from amicus.schemas.envelope import ConsumeDisposition, ErrorResult, slim_meta
 from amicus.schemas.fingerprint import FINGERPRINT, RESULT_FORMAT
 from amicus.schemas.results import (
-    PAID_TOOLS,
     AdversarialReviewResult,
     ConsultResult,
     DelegateResult,
@@ -37,7 +36,6 @@ STATE_TO_ERROR: dict[str, tuple[str, str]] = {
     "timeout": ("job_timeout", "The job exceeded its wall-clock deadline and was stopped."),
     "failed": ("job_failed", "The job failed without producing a result."),
 }
-_SLIMMED_TOOLS = frozenset(PAID_TOOLS)
 _STORED_PRESENTATION_KEYS = ("summary", "findings", "questions", "next_steps", "assumptions")
 
 
@@ -48,17 +46,6 @@ def apply_detail(envelope: dict[str, Any], detail: str) -> dict[str, Any]:
     raw = envelope.get("raw_response")
     if isinstance(raw, dict):
         raw["text"] = None
-    return envelope
-
-
-def slim_meta(envelope: dict[str, Any]) -> dict[str, Any]:
-    """Drop meta's null-valued keys from a DELIVERED paid-tool success (wire only; the
-    persisted envelope keeps them). Keyed on `is None`, never falsiness. Mutates."""
-    if envelope.get("ok") is not True or envelope.get("tool") not in _SLIMMED_TOOLS:
-        return envelope
-    meta = envelope.get("meta")
-    if isinstance(meta, dict):
-        envelope["meta"] = {k: v for k, v in meta.items() if v is not None}
     return envelope
 
 

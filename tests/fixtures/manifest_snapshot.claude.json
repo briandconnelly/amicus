@@ -935,9 +935,6 @@
       "_meta": {
         "dev.bconnelly.amicus/lifecycle": {
           "stability": "experimental"
-        },
-        "dev.bconnelly.amicus/triage": {
-          "size_bytes": 14416
         }
       },
       "mimeType": "application/schema+json",
@@ -1414,7 +1411,7 @@
           },
           "Meta": {
             "additionalProperties": false,
-            "description": "Execution metadata on every envelope. Every field is optional except the\nidentity trio at the end; `cwd` is None when no workspace was resolved (argument\nerrors, unimplemented tools). Backend-specific facts ride `backend_details`.",
+            "description": "Execution metadata on every envelope. Construction: every field has a default, so\n`Meta()` is valid. Wire: `META_ALWAYS_PRESENT` (the fields whose default is never None,\nminus `server_version`) is the success schema's `required` and is always delivered;\nevery other key is delivered only when non-null (`slim_meta`, #47). `server_version`\nis not required because a stored payload can predate it. `cwd` is None when no\nworkspace was resolved (argument errors, unimplemented tools). Backend-specific facts\nride `backend_details`.",
             "properties": {
               "backend": {
                 "anyOf": [
@@ -1503,7 +1500,7 @@
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-23",
+                "default": "amicus/0.1/schema-24",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -1968,9 +1965,6 @@
       "_meta": {
         "dev.bconnelly.amicus/lifecycle": {
           "stability": "experimental"
-        },
-        "dev.bconnelly.amicus/triage": {
-          "size_bytes": 5948
         }
       },
       "mimeType": "application/json",
@@ -2014,7 +2008,6 @@
           "stability": "experimental"
         },
         "dev.bconnelly.amicus/triage": {
-          "size_bytes": 0,
           "volatile": true
         }
       },
@@ -2030,7 +2023,6 @@
           "stability": "experimental"
         },
         "dev.bconnelly.amicus/triage": {
-          "size_bytes": 0,
           "volatile": true
         }
       },
@@ -2048,7 +2040,6 @@
           "stability": "experimental"
         },
         "dev.bconnelly.amicus/triage": {
-          "size_bytes": 0,
           "volatile": true
         }
       },
@@ -2062,14 +2053,12 @@
       "_meta": {
         "dev.bconnelly.amicus/lifecycle": {
           "stability": "experimental"
-        },
-        "dev.bconnelly.amicus/triage": {
-          "size_bytes": 14416
         }
       },
       "description": "The full ErrorResult schema; tool outputSchemas carry only an opaque error branch.",
       "mimeType": "application/schema+json",
       "name": "amicus-error-envelope",
+      "size": 14717,
       "title": "amicus error envelope schema",
       "uri": "amicus://error-envelope"
     },
@@ -2077,14 +2066,12 @@
       "_meta": {
         "dev.bconnelly.amicus/lifecycle": {
           "stability": "experimental"
-        },
-        "dev.bconnelly.amicus/triage": {
-          "size_bytes": 5948
         }
       },
       "description": "Full semantics for parameters whose inline description is a compressed summary.",
       "mimeType": "application/json",
       "name": "amicus-params",
+      "size": 5948,
       "title": "amicus parameter contracts",
       "uri": "amicus://params"
     },
@@ -2092,14 +2079,12 @@
       "_meta": {
         "dev.bconnelly.amicus/lifecycle": {
           "stability": "experimental"
-        },
-        "dev.bconnelly.amicus/triage": {
-          "size_bytes": 7646
         }
       },
       "description": "The full Meta schema every success envelope's opaque `meta` points at.",
       "mimeType": "application/schema+json",
       "name": "amicus-result-meta",
+      "size": 8053,
       "title": "amicus result metadata schema",
       "uri": "amicus://result-meta"
     }
@@ -2109,9 +2094,6 @@
       "_meta": {
         "dev.bconnelly.amicus/lifecycle": {
           "stability": "experimental"
-        },
-        "dev.bconnelly.amicus/triage": {
-          "size_bytes": 7646
         }
       },
       "mimeType": "application/schema+json",
@@ -2341,7 +2323,7 @@
         },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
-        "description": "The full result-metadata contract. Every success envelope's `meta` is advertised as an opaque pointer to this schema. On the wire a delivered success envelope drops meta's null-valued keys; absence means exactly what null means (not applicable / not reported). Error envelopes strip absent optionals except retry_after_ms.",
+        "description": "The full result-metadata contract. Every success envelope's `meta` is advertised as an opaque pointer to this schema. On the wire every success envelope, paid or free, drops meta's null-valued keys; absence means exactly what null means (not applicable / not reported). The keys in `required` are always present. An empty list there means this envelope reports none, not that a check ran: a job handle, status or list and a dry run report on the call that produced them, never on the run they name, whose warnings arrive on its own result. Error envelopes strip absent optionals except retry_after_ms.",
         "properties": {
           "backend": {
             "anyOf": [
@@ -2430,7 +2412,7 @@
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-23",
+            "default": "amicus/0.1/schema-24",
             "title": "Fingerprint",
             "type": "string"
           },
@@ -2647,6 +2629,15 @@
             "title": "Workspace Warning"
           }
         },
+        "required": [
+          "compat_warnings",
+          "elapsed_ms",
+          "fingerprint",
+          "redacted_paths",
+          "request_id",
+          "security_warnings",
+          "truncated"
+        ],
         "title": "Meta",
         "type": "object"
       },
