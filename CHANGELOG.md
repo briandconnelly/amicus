@@ -13,8 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `confidence: unknown`, not `low` (#54, ADR 0026). No backend ran on an empty scope, so there
   was no rating to carry, and `low` is the lowest rating a backend can report: stating it
   manufactured a claim in the direction issue #53 had already removed. The published
-  `confidence` description now names `not_run` as one of the two meanings of `unknown`,
-  beside an unreadable backend rating, and the substituted `low` has two sources instead of
+  `confidence` description now names `not_run` as one of the two causes of `unknown`,
+  beside an unreadable backend rating, one meaning with two causes rather than two meanings, and the substituted `low` has two sources instead of
   three: partial coverage and findings amicus could not carry, each still beside an `unknown`
   verdict, so a `low` beside any other verdict is still the backend's word. A caller that
   read only `low` as "do not rely on this" has to handle `unknown` on every review and branch

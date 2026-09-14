@@ -37,8 +37,8 @@ This change removes the one case where `low` was doing that job, which is the ch
 
 ## Consequences
 
-The value itself is not part of the published surface, so `RESULT_FORMAT` stays 6: the enum is unchanged and a format-6 reader accepts `unknown` where it accepted `low`.
-The published `confidence` description moves, so `FINGERPRINT` moves to `schema-25` (`tool_output_schemas`) and the manifest pins are regenerated in their own commit.
+The permitted enum and the stored-result schema are unchanged, so `RESULT_FORMAT` stays 6: a format-6 reader accepts `unknown` where it accepted `low`, and that acceptance is the criterion, not whether the value a result carries changed, which it did.
+The published `confidence` description moves, so `FINGERPRINT` moves to `schema-25` (`tool_output_schemas`) and the manifest pins are regenerated in their own commit; the value a result carries is not part of that fingerprinted surface, its description is.
 The `wire_shape_snapshot` fixture is untouched: its `low` values belong to completed partial-coverage reviews, not to a `not_run` result.
 
 Codex was consulted once on the decision, at high reasoning effort, and committed to `unknown` on the argument recorded above; it named the one thing that would change its mind, a deliberate redefinition of `confidence` as an envelope-level reliance grade across the whole published schema, which nothing in the description, the skill or ADR 0017 supports.
