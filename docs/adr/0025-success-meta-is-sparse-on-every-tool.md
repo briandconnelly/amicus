@@ -13,10 +13,12 @@ Issue #48 from the same audit is fixed in the same change and needs no decision:
 
 ## Decision
 
-**Slimming happens once, at the guard, for every tool.**
+**The guard guarantees slimming for every tool; delivery keeps its own pass.**
 `slim_meta` moves to `schemas.envelope` and `tools._guard.as_tool_result` applies it to every `ok: true` envelope.
 Every tool is guarded, and the guard is already the one chokepoint a task-augmented call shares with the middleware path (ADR 0004), so no delivery path is left out.
-The delivery chokepoint keeps applying it to a stored result, so the wire-shape snapshot, which drives that chokepoint directly, still renders the delivered shape; its handles section applies the same function, because the builders it calls dump the full model and the guard is what slims them in production.
+The delivery chokepoint keeps applying it to a stored result as well, so the wire-shape snapshot, which drives that chokepoint directly, still renders the delivered shape; its handles section applies the same function, because the builders it calls dump the full model and the guard is what slims them in production.
+A job result is therefore slimmed twice on its way out, and the second pass is a no-op; removing the delivery pass would leave the snapshot rendering a shape no client sees.
+Codex's review of the branch caught the first draft of this ADR and the changelog saying the slimming happens "once", which the code contradicted.
 Slimming at each builder was rejected: seven dump sites today, and a new one would default to the wrong shape.
 
 **The always-present core is the schema's own `required`.**

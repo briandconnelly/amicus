@@ -12,18 +12,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking (`FINGERPRINT` `schema-24`).** Every success envelope's `meta` is sparse on the
   wire, on every tool (#47, ADR 0025). A delivered paid result already dropped meta's
   null-valued keys, and the `amicus://result-meta` description said so, but a job-lifecycle
-  handle, a job status, a job list or a dry run dumped the full model: a plain
-  `amicus_job_list` carried 27 meta keys, 15 of them null, 626 bytes that were about a third
-  of the result and paid twice because `content[0].text` mirrors `structuredContent`. The
-  slimming now happens once, at the guard every tool passes through, keyed on null and never
-  on falsiness. The always-present core is published as the schema's own `required`:
+  handle, a job status, a job list or a dry run dumped the full model: the audit's plain
+  `amicus_job_list` call carried 27 meta keys, 15 of them null, 626 bytes that were about a
+  third of the result and paid twice because `content[0].text` mirrors `structuredContent`.
+  The guard every tool passes through now slims every success, keyed on null and never on
+  falsiness; the delivery chokepoint keeps slimming a stored result too, so a job result is
+  slimmed twice and the second pass is a no-op. The always-present core is published as the
+  schema's own `required`:
   `elapsed_ms`, `truncated`, `compat_warnings`, `security_warnings`, `redacted_paths`,
   `request_id` and `fingerprint`, derived from the model so a new defaulted field cannot be
   added without being declared; an empty list there means checked, none found. Only meta's
   top level is touched: a null inside `usage`, or outside `meta` such as
   `JobListResult.truncation_hint`, is that object's own contract. The persisted dump is
   unchanged, so `RESULT_FORMAT` stays 6. On the wire-shape snapshot's `amicus_job_list`
-  envelope, `meta` falls from 591 to 304 bytes (27 keys to 13) on each carrier.
+  envelope, whose meta populates `workspace_source` and `roots_source` and so carried 14
+  nulls, `meta` falls from 591 to 304 bytes (27 keys to 13) on each carrier.
 
 - **Breaking (`FINGERPRINT` `schema-23`, `RESULT_FORMAT` 6).** The `questions`, `assumptions`
   and `next_steps` lists of consult, review and adversarial results no longer lose entries in
