@@ -31,6 +31,12 @@ The same reading covers a consult answered in prose rather than the requested ob
 Nothing was parsed from such an answer, so every required member was absent: it now reports `missing_member` on all three lists, and `findings_diagnostics` reports `missing_findings` on the same path, which #38 had left null.
 The answer itself is carried whole in `summary`, so nothing is lost; what changes is that the empty lists no longer claim to be the backend's answer.
 
+**A `not_run` review keeps both diagnostics null, and `review_status` is the signal.**
+Copilot's review of the branch named the other constructor site that parses nothing: a review or critique over an empty scope returns `review_status: not_run` with no backend call.
+That is not the prose-consult case.
+There, output existed and its members were absent, which `missing_member` and `missing_findings` state exactly; here, nothing ran, and a reason vocabulary about the backend's output would describe output that never existed.
+`review_status` already carries the fact on the wire as a first-class field, the skill's rules say to check it, and the published descriptions of both diagnostics now name the case rather than leaving null to be read as a measurement.
+
 **Nothing folds into the verdict or confidence.**
 A finding is the review's correctness signal, so `apply_findings_loss` stops a `pass` from standing over a finding amicus could not carry.
 A next step is advice: no verdict is computed from it, no confidence rests on it, and a `pass` delivered with two lost next steps is still the backend's `pass`.

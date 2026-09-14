@@ -122,6 +122,8 @@ two next steps amicus could not carry.
 A consult answered in prose rather than the requested object parsed nothing: the answer is
 `summary`, and `findings_diagnostics` reports `missing_findings` while every member here
 reports `missing_member`. The empty lists on such a result are not the backend saying none.
+A `review_status: not_run` result is the other way round: no backend ran at all, so there is no
+output to measure, both diagnostics are null, and `review_status` is the signal that says so.
 
 Nothing here moves the verdict or the confidence. A finding is the review's correctness signal,
 so losing one stops a `pass` from standing; a next step is advice, and no verdict is computed

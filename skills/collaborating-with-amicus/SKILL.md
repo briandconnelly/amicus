@@ -101,10 +101,11 @@ obligations live in the reference each route names, under that file's own `Rules
 - **Branch on `ok` first.** On `ok: false`, read `error.code` and, when the envelope carries one,
   `error.repair`; never infer recovery from prose or retry an unchanged call.
 - **Branch on the concrete tool before reading any success field.**
-- **Check `review_status`, `coverage`, `findings_diagnostics`, `lists_diagnostics`,
+- **Check each of `review_status`, `coverage`, `findings_diagnostics`, `lists_diagnostics`,
   `meta.truncated`, `meta.security_warnings`, `meta.compat_warnings`, and `meta.redacted_paths`
-  before drawing a conclusion from a result.** A result can be `ok: true` and still cover
-  nothing.
+  that the concrete result carries before drawing a conclusion from it.** A result can be
+  `ok: true` and still cover nothing. `review_status` and `coverage` are on review and
+  adversarial results only, and `lists_diagnostics` is on those and consult.
 - **Read `findings_diagnostics.reasons`, never its `dropped` count alone, before acting on an
   empty or short `findings` list.** A non-null value means the backend reported something amicus
   could not carry intact; `dropped: 0` still means content was lost when `extra_fields_omitted`
@@ -113,7 +114,8 @@ obligations live in the reference each route names, under that file's own `Rules
   A null field means `questions`, `assumptions` and `next_steps` were all carried intact, and a
   null member means that list was; a non-null member names a list amicus could not carry
   intact, with `dropped: null` when the member could not be read at all. Nothing in it moves
-  the verdict or confidence. Delegate results do not carry the field.
+  the verdict or confidence. On `review_status: not_run` no backend ran, so it is null and
+  `review_status` is the signal. Delegate results do not carry the field.
 - **Never read `confidence: "unknown"` as a low rating.** It means no rating was available:
   the backend supplied none amicus could read, and the verdict was not withheld either.
 - **Never read a high `confidence` as evidence that coverage was complete or findings intact.**

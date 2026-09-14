@@ -24,7 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in prose rather than the requested object reports `missing_member` on all three lists and,
   on the same path, `findings_diagnostics` now reports `missing_findings` where #38 left it
   null: nothing was parsed, the answer is `summary`, and the empty lists are not the backend
-  saying none. Nothing folds into the verdict or confidence (ADR 0024). Delegate results do not carry the field: their
+  saying none. A `review_status: not_run` result keeps both diagnostics null, because no
+  backend ran and `review_status` is the signal; both published descriptions say so. Nothing
+  folds into the verdict or confidence (ADR 0024). Delegate results do not carry the field: their
   `next_steps` is amicus's own text. `RESULT_FORMAT` moves to 6 so a format-5 record's
   defaulted null cannot assert that every list was carried intact by a run that never measured
   it. `tools/list` grows 5181 bytes on the `all` profile, the field's description once per

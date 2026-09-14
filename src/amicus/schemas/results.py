@@ -98,7 +98,8 @@ _REASONS_DESC = (
 )
 _DIAGNOSTICS_DESC = (
     "What the backend reported that amicus could not carry intact; null when nothing "
-    "deviated. Read this before acting on an empty or short `findings` list."
+    "deviated. Read this before acting on an empty or short `findings` list. On a "
+    "review_status of not_run no backend ran: this is null and review_status is the signal."
 )
 _CONFIDENCE_DESC = (
     "How sure this review is. Usually the backend's own low|medium|high. amicus substitutes "
@@ -138,7 +139,8 @@ _LISTS_DESC = (
     "at all) and `reasons` says why. number_stringified: a number delivered as its string, "
     "nothing lost. invalid_entry: an entry that was not a string or number, dropped whole. "
     "invalid_container: present but not a list. missing_member: the required member was "
-    "absent. None of these touches the verdict or confidence."
+    "absent. None of these touches the verdict or confidence. On a review_status of not_run "
+    "no backend ran: this is null and review_status is the signal."
 )
 publish.KEPT_DESCRIPTIONS.add(_LISTS_DESC)
 
