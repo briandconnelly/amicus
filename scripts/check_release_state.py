@@ -7,9 +7,10 @@ question, and the difference matters more than the code:
 1. **Release-state coherence** (`check_tree`). Every version literal AGENTS.md rule 19 names
    agrees with the version being released, `CHANGELOG.md` has exactly one dated section for
    that version with `## [Unreleased]` above it, `uv.lock` is current, and `.mcp.json`'s pin
-   names a tag no newer than this release that resolves IN THIS CHECKOUT, and every tool
+   names a tag no newer than this release that resolves IN THIS CHECKOUT, every tool
    deprecation window (`DEPRECATED_TOOLS` in `src/amicus/tools/_meta.py`) contains this
-   release. These are facts of
+   release, and no `EnvVar` still declares a legacy name once this release reaches
+   `LEGACY_REMOVAL_VERSION` (`src/amicus/config/envspec.py`). These are facts of
    the tagged tree (and, for the pin, of this checkout), so a green result here *proves* them.
    Nothing self-asserts.
 
@@ -385,6 +386,144 @@ def check_deprecations(version: str, *, repo_root: Path = REPO_ROOT) -> list[str
     return problems
 
 
+LEGACY_ENV_SPEC_PATH = "src/amicus/config/envspec.py"
+_LEGACY_REMOVAL_NAME = "LEGACY_REMOVAL_VERSION"
+GLOBAL_ENV_PATH = "src/amicus/config/__init__.py"
+BACKEND_ENV_GLOB = "src/amicus/backends/*/config.py"
+_ENV_VAR_CALL = "EnvVar"
+_LEGACY_POSITION = 3  # EnvVar(name, description, default, legacy)
+
+
+def env_declaration_files(repo_root: Path = REPO_ROOT) -> list[Path]:
+    """Every module that declares `EnvVar`s: the global namespace and each backend's."""
+    return [repo_root / GLOBAL_ENV_PATH, *sorted(repo_root.glob(BACKEND_ENV_GLOB))]
+
+
+def _module_strings(tree: ast.Module) -> dict[str, str]:
+    """Module-level `NAME = "literal"` assignments, for resolving `f"{PREFIX}BIN"`."""
+    strings: dict[str, str] = {}
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and isinstance(node.value, ast.Constant):
+            value = node.value.value
+            if isinstance(value, str):
+                for name in _assigned_names(node):
+                    strings[name] = value
+    return strings
+
+
+def _string_of(node: ast.expr, strings: dict[str, str]) -> str | None:
+    """A string literal, or an f-string whose only placeholders are module-level string
+    constants; None for anything else."""
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    if isinstance(node, ast.JoinedStr):
+        out = ""
+        for part in node.values:
+            if isinstance(part, ast.Constant) and isinstance(part.value, str):
+                out += part.value
+            elif (
+                isinstance(part, ast.FormattedValue)
+                and isinstance(part.value, ast.Name)
+                and part.value.id in strings
+            ):
+                out += strings[part.value.id]
+            else:
+                return None
+        return out
+    return None
+
+
+def _declares_legacy(call: ast.Call) -> bool:
+    """Whether an `EnvVar(...)` call carries a legacy tuple. Fails closed: only an absent
+    argument or an empty tuple/list literal means "no legacy names"; `_legacy(...)`, a
+    name, or any other expression counts as declaring some, because this script cannot
+    evaluate it and the release predicate must not read an alias it cannot see as gone."""
+    # `EnvVar("X", "d", *tail)` or `EnvVar("X", "d", **fields)` can carry the legacy
+    # argument inside a value this script cannot see, so either counts as declaring some
+    # (a Copilot review finding on PR #107).
+    if any(isinstance(arg, ast.Starred) for arg in call.args) or any(
+        keyword.arg is None for keyword in call.keywords
+    ):
+        return True
+    legacy: ast.expr | None = None
+    if len(call.args) > _LEGACY_POSITION:
+        legacy = call.args[_LEGACY_POSITION]
+    for keyword in call.keywords:
+        if keyword.arg == "legacy":
+            legacy = keyword.value
+    if legacy is None:
+        return False
+    return not (isinstance(legacy, (ast.Tuple, ast.List)) and not legacy.elts)
+
+
+def legacy_env_state(
+    repo_root: Path = REPO_ROOT,
+) -> tuple[str | None, dict[str, bool], list[str]]:
+    """`(removal_version, {env var name: declares legacy}, problems)`, read statically.
+
+    Statically for the reason `deprecation_windows` is: the `verify` job cannot import
+    amicus. A test pins this read against `packaging.declared_vars()`, so a declaration
+    shape this parser misses fails there rather than passing here as "no aliases"."""
+    problems: list[str] = []
+    removal: str | None = None
+    spec_path = repo_root / LEGACY_ENV_SPEC_PATH
+    try:
+        spec_tree = ast.parse(spec_path.read_text(encoding="utf-8"), filename=str(spec_path))
+    except (OSError, SyntaxError) as exc:
+        return None, {}, [f"could not read {LEGACY_ENV_SPEC_PATH}: {exc}"]
+    removal = _module_strings(spec_tree).get(_LEGACY_REMOVAL_NAME)
+    if removal is None:
+        problems.append(f"{LEGACY_ENV_SPEC_PATH} has no literal `{_LEGACY_REMOVAL_NAME}` string")
+    declared: dict[str, bool] = {}
+    for path in env_declaration_files(repo_root):
+        relative = path.relative_to(repo_root).as_posix()
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        except (OSError, SyntaxError) as exc:
+            problems.append(f"could not read {relative}: {exc}")
+            continue
+        strings = _module_strings(tree)
+        for node in ast.walk(tree):
+            if not (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == _ENV_VAR_CALL
+            ):
+                continue
+            name = _string_of(node.args[0], strings) if node.args else None
+            if name is None:
+                name = f"{relative}:{node.lineno}"
+            if name in declared:
+                # Fail closed on a name declared twice: the runtime resolves the FIRST
+                # declaration, so a later alias-free duplicate must not hide an earlier
+                # alias-bearing one (a Codex review finding, 2026-09-14).
+                problems.append(f"{relative}:{node.lineno}: {name} is declared more than once")
+            declared[name] = declared.get(name, False) or _declares_legacy(node)
+    return removal, declared, problems
+
+
+def check_legacy_env(version: str, *, repo_root: Path = REPO_ROOT) -> list[str]:
+    """Once a release reaches `LEGACY_REMOVAL_VERSION`, no `EnvVar` may still declare a
+    legacy name: the shim warns that the names are "removed in" that version, and a release
+    that ships them anyway makes every such warning false. Fixed in an ordinary PR (drop the
+    aliases, or move the version), never in the release PR (AGENTS.md rule 19)."""
+    removal, declared, problems = legacy_env_state(repo_root)
+    if removal is None:
+        return problems
+    if not VERSION_RE.match(removal):
+        return [*problems, f"{_LEGACY_REMOVAL_NAME} {removal!r} must be X.Y.Z"]
+    if _parts(version) < _parts(removal):
+        return problems
+    still = sorted(name for name, has_legacy in declared.items() if has_legacy)
+    if still:
+        problems.append(
+            f"{version} is at or past {_LEGACY_REMOVAL_NAME} {removal} but "
+            f"{len(still)} EnvVar(s) still declare legacy names ({', '.join(still)}); "
+            "drop the aliases or move the version in an ordinary PR before releasing"
+        )
+    return problems
+
+
 def check_tree(
     version: str,
     *,
@@ -403,6 +542,7 @@ def check_tree(
         *check_lock(repo_root=repo_root, run=run),
         *check_mcp_pin_tag_exists(repo_root=repo_root, git=git),
         *check_deprecations(version, repo_root=repo_root),
+        *check_legacy_env(version, repo_root=repo_root),
     ]
 
 

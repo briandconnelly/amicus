@@ -24,3 +24,13 @@ def poll_hint_ms(rec: dict[str, Any]) -> int | None:
     if rec["status"] != "running":
         return None
     return poll_backoff_ms(rec["elapsed_ms"], base=DEFAULT_POLL_AFTER_MS, cap=POLL_HINT_CAP_MS)
+
+
+def job_status_arguments(job_id: str, workspace_root: str | None) -> dict[str, Any]:
+    """The complete `amicus_job_status` call every poll repair and follow-up names (ADR
+    0021). One builder, so every site agrees: `workspace_root` is present when the caller
+    supplied one and absent, never null, when it did not."""
+    arguments: dict[str, Any] = {"job_id": job_id}
+    if workspace_root:
+        arguments["workspace_root"] = workspace_root
+    return arguments

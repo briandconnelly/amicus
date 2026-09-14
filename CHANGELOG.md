@@ -5,7 +5,28 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+An entry that moves `FINGERPRINT` carries one of two labels. **Breaking** means a call the
+previous release accepted is now rejected, a value a caller read has changed meaning or
+disappeared, or a stored job result can no longer be delivered: a caller has to change
+something. **Surface** means the fingerprint moved for any other reason (a description, the
+instructions text, an added field or parameter), so a fingerprint-aware client re-reads the
+catalog and nothing else has to change. Entries before `schema-16` predate the distinction
+and say Breaking for both.
+
 ## [Unreleased]
+
+Fifteen `FINGERPRINT` bumps since 0.2.0 (`schema-16` to `schema-30`). Four of them change
+what a caller written against 0.2.0 reads, and `docs/MIGRATION.md` ("Upgrading from 0.2.0")
+walks through them: every success `meta` is sparse, so an absent key reads as null
+(`schema-24`); a review that did not run reports `confidence: unknown` (`schema-25`); a
+finished job's `poll_after_ms` is null on every surface (`schema-29`); and the free
+discovery tools default to a summary, with `amicus_capabilities(detail="contracts")` gone
+(`schema-22`). One deprecates: `amicus_dry_run` is now an alias of
+`amicus_review_changes_dry_run` (`schema-27`). Two make a stored job result from 0.2.0
+unreadable (`schema-16`, `schema-23`); one rejects an empty `idempotency_key` that 0.2.0's
+`_async` tools accepted (`schema-18`); and one drops the `repair` two workspace errors used
+to carry (`schema-20`). The rest are labelled **Surface** below: the fingerprint moved, and
+a caller that ignores the change keeps working.
 
 ### Added
 
@@ -21,7 +42,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Breaking (`FINGERPRINT` `schema-30`).** Every `amicus_job_consume_result` surface now says
+- Legacy environment names (`CODEX_IN_CLAUDE_*`, `MOONBRIDGE_*`, `CLAUDE_IN_CODEX_*`) are
+  removed in 0.4.0, not 0.3.0. 0.2.0, the first release to warn on them, shipped four days
+  before 0.3.0 was cut, and one warning-bearing release is too short a window for an
+  operator-facing rename. `scripts/check_release_state.py` now refuses a release at or past
+  `LEGACY_REMOVAL_VERSION` while any `EnvVar` still declares a legacy name, read statically
+  as the tool-deprecation windows are and failing closed on a declaration it cannot read, so
+  the promise cannot be missed again. `docs/MIGRATION.md` states the new version and gains an
+  "Upgrading from 0.2.0" section for the changes in this release a caller has to handle.
+  The discovery-cost ratchet's budget is now a literal equal to the last measurement rather
+  than that measurement rounded up to the next kilobyte, so any growth of `tools/list` fails
+  until a PR raises it.
+- **Surface (`FINGERPRINT` `schema-30`).** Every `amicus_job_consume_result` surface now says
   what a consume does to a job that failed, was cancelled or timed out (#94). Such a job has no
   stored envelope, so a consume returns its terminal error with no `meta.consume` and attempts
   no discard, leaving the record to the usual expiry and per-workspace eviction. The tool
@@ -46,7 +78,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `tools/list` grows by 953 bytes on the `all` profile. `RESULT_FORMAT` stays 6: a handle is
   never stored as a job result.
 
-- **Breaking (`FINGERPRINT` `schema-28`).** A running job's `poll_after_ms` now keeps growing
+- **Surface (`FINGERPRINT` `schema-28`).** A running job's `poll_after_ms` now keeps growing
   past ten seconds, up to 30 s (#95). The hint still means roughly "wait about as long as the
   job has already run", but pontonier 0.9.0 stops it at 10 s, so a job that ran for minutes was
   polled every ten seconds for almost its whole life: about 28 `amicus_job_status` calls for a
@@ -59,7 +91,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now states the ceiling. MCP tasks keep FastMCP's own flat `pollIntervalMs` (#100).
   `RESULT_FORMAT` stays 6: no stored result carries the hint.
 
-- **Breaking (`FINGERPRINT` `schema-27`).** The review preview is now
+- **Surface (`FINGERPRINT` `schema-27`).** The review preview is now
   `amicus_review_changes_dry_run`, named for the call it previews as `amicus_delegate_dry_run`
   is (#98, ADR 0028). `amicus_dry_run` read as a preview for any paid call, while it covers only
   `amicus_review_changes`, and consult and adversarial review have no preview at all. The new
@@ -72,7 +104,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that is not deprecated. tools/list grows by 9,042 bytes on the `all` profile while the alias
   ships. `RESULT_FORMAT` stays 6: no dry run is ever stored as a job result.
 
-- **Breaking (`FINGERPRINT` `schema-26`).** The server `instructions` lead with their rules
+- **Surface (`FINGERPRINT` `schema-26`).** The server `instructions` lead with their rules
   and ship as three blocks - what amicus does and does not do, a list of rules, then
   reference - instead of one unbroken 4,033-character line that opened with protocol
   background (#49). The order is not style. Claude Code shows the model only the first 2,048
@@ -187,8 +219,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   instructions, `timeout_seconds` and task-support text qualify their categorical "terminated"
   and "cancelling a task cancels its job" with the keyed exception. ADR 0020 supersedes ADR
   0008's unkeyed-sync clause. `RESULT_FORMAT` stays 5.
-- `FINGERPRINT` moves `amicus/0.1/schema-18` → `amicus/0.1/schema-19` for the `reasoning_effort`
-  parameter contract, which now names claude beside kimi as a backend whose CLI does not reject
+- **Surface (`FINGERPRINT` `schema-19`).** The `reasoning_effort`
+  parameter contract now names claude beside kimi as a backend whose CLI does not reject
   a bad effort, and says claude checks a fixed list where kimi reads the model catalog (#76).
   Every pin was regenerated in a dedicated commit (rule 10). `RESULT_FORMAT` stays 5: no stored
   result changed shape.
@@ -208,7 +240,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   published on the error-envelope schema. `RESULT_FORMAT` stays 5, because `repair.arguments` was
   already in the stored schema.
 
-- **Breaking (`FINGERPRINT` `schema-21`).** `amicus_job_consume_result` reports what deleting the
+- **Surface (`FINGERPRINT` `schema-21`).** `amicus_job_consume_result` reports what deleting the
   record did, in `meta.consume` (#44, ADR 0022). It always delivered the stored envelope, but
   reported plain success even when the deletion failed, while its description promised that a
   repeat call returns `job_not_found`. `meta.consume.discard_outcome` is `removed`, `missing`,
@@ -217,6 +249,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that reads as `failed`, so the follow-up promises neither redelivery nor deletion at expiry. The
   field is delivery-only: it is never stored, and `amicus_job_result` never sets it.
   `RESULT_FORMAT` stays 5.
+
+- **Surface (`FINGERPRINT` `schema-17`).** `tools/list` is 10,474 bytes smaller (105,485 to
+  95,011 on the `all` profile as the stdio transport writes it for a handshake-era client, the
+  era both captured hosts negotiate; 26,046 to 23,800 o200k_base tokens), with no tool,
+  parameter, accepted input value, runtime behaviour or error changed (#41); the one output
+  contract that narrows is named below. Each tool's schema is self-contained on the wire, so
+  the six shared parameter contracts (`workspace_root`, `reasoning_effort`, `backend_options`,
+  `instructions_append`, `extra_context`, `idempotency_key`) were repeated up to fifteen times
+  per catalog; their inline descriptions are now a one-line summary plus the `amicus://params`
+  pointer, and the elaboration lives in that resource's `full` text, which was already the
+  authoritative contract. The `default: null` pydantic stamps on every optional parameter is
+  stripped at list time (a FastMCP transform, so `surface_digest` and the wire agree);
+  non-null defaults such as `detail: "summary"` stay. The error-envelope and result-meta
+  pointer descriptions on every `outputSchema` are one clause each, and the four `_async`
+  tools' `follow_up` is published as the one action it ever carries (`poll_job_status` via
+  `amicus_job_status`) instead of the whole repair-step enum. The discovery-cost ratchet now
+  measures the result body of a real `amicus.server` subprocess, taken off the response line
+  byte for byte, and `python -m amicus.manifest --measure --tokens` (`uv sync --group
+  measure`) reports reference-encoding token counts of that text in place of the byte/4
+  proxy. `RESULT_FORMAT` stays 5:
+  no stored result shape moved.
+- **Breaking (`FINGERPRINT` `schema-16`, `RESULT_FORMAT` 5).** Review and adversarial-review
+  results, and `amicus_dry_run`, now carry a top-level `coverage` object (#65): `status`,
+  untracked-file counts, `omission_reasons` and a `redaction` breakdown, in the siblings' shape
+  plus amicus's own `focused` reason. An omitted untracked file, a tree that changed during the
+  gather, or a focused pass used to reach a caller only as prose in `summary`, and the free
+  preview reported none of it. `amicus_dry_run` also accepts `focus` and reports
+  `max_input_bytes`, so it previews the coverage the paid call will report. A stored job result
+  written under `RESULT_FORMAT` 4 is now returned as `job_result_incompatible`. ADR 0019
+  supersedes ADR 0007's coverage clause.
 
 ### Deprecated
 
@@ -294,38 +356,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A job named by several tasks reported one task on `amicus_job_status` and `amicus_job_result`
   and another on `amicus_job_list`; every surface now reports the first task that named it, and
   a list filtered by any associated task still finds the job (#66).
-
-- **Breaking (`FINGERPRINT` `schema-17`).** `tools/list` is 10,474 bytes smaller (105,485 to
-  95,011 on the `all` profile as the stdio transport writes it for a handshake-era client, the
-  era both captured hosts negotiate; 26,046 to 23,800 o200k_base tokens), with no tool,
-  parameter, accepted input value, runtime behaviour or error changed (#41); the one output
-  contract that narrows is named below. Each tool's schema is self-contained on the wire, so
-  the six shared parameter contracts (`workspace_root`, `reasoning_effort`, `backend_options`,
-  `instructions_append`, `extra_context`, `idempotency_key`) were repeated up to fifteen times
-  per catalog; their inline descriptions are now a one-line summary plus the `amicus://params`
-  pointer, and the elaboration lives in that resource's `full` text, which was already the
-  authoritative contract. The `default: null` pydantic stamps on every optional parameter is
-  stripped at list time (a FastMCP transform, so `surface_digest` and the wire agree);
-  non-null defaults such as `detail: "summary"` stay. The error-envelope and result-meta
-  pointer descriptions on every `outputSchema` are one clause each, and the four `_async`
-  tools' `follow_up` is published as the one action it ever carries (`poll_job_status` via
-  `amicus_job_status`) instead of the whole repair-step enum. The discovery-cost ratchet now
-  measures the result body of a real `amicus.server` subprocess, taken off the response line
-  byte for byte, and `python -m amicus.manifest --measure --tokens` (`uv sync --group
-  measure`) reports reference-encoding token counts of that text in place of the byte/4
-  proxy. `RESULT_FORMAT` stays 5:
-  no stored result shape moved.
-- **Breaking (`FINGERPRINT` `schema-16`, `RESULT_FORMAT` 5).** Review and adversarial-review
-  results, and `amicus_dry_run`, now carry a top-level `coverage` object (#65): `status`,
-  untracked-file counts, `omission_reasons` and a `redaction` breakdown, in the siblings' shape
-  plus amicus's own `focused` reason. An omitted untracked file, a tree that changed during the
-  gather, or a focused pass used to reach a caller only as prose in `summary`, and the free
-  preview reported none of it. `amicus_dry_run` also accepts `focus` and reports
-  `max_input_bytes`, so it previews the coverage the paid call will report. A stored job result
-  written under `RESULT_FORMAT` 4 is now returned as `job_result_incompatible`. ADR 0019
-  supersedes ADR 0007's coverage clause.
-
-### Fixed
 
 - Keep exception text out of stored background-job crash results and returned spawn-failure
   envelopes, since backend exceptions can contain prompt inputs (#56).

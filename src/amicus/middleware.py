@@ -33,7 +33,6 @@ MAX_ARG_REASON_LEN = 300
 MAX_ARG_FIELD_LEN = 128
 WITHHELD_FIELD = "<withheld>"
 _MISSING_TYPES = frozenset({"missing", "missing_argument"})
-_EXTRA_TYPES = frozenset({"unexpected_keyword_argument", "extra_forbidden"})
 RESOURCE_NOT_FOUND_HANDSHAKE = -32002
 RESOURCE_NOT_FOUND_MODERN = INVALID_PARAMS
 TASKS_EXTENSION_ID = "io.modelcontextprotocol/tasks"
@@ -130,7 +129,7 @@ def corrected_arguments(
     fixed = copy.deepcopy(arguments)
     for err in errors:
         loc = tuple(err.get("loc") or ())
-        if err.get("type") not in _EXTRA_TYPES or not loc:
+        if err.get("type") not in obs.EXTRA_ARGUMENT_TYPES or not loc:
             return None
         if not all(isinstance(c, str) for c in loc):
             return None
@@ -160,7 +159,7 @@ def invalid_arguments_envelope(
     `corrected_arguments` finds the correction unique."""
     for err in errors:
         loc = err.get("loc") or ()
-        is_extra = err.get("type") in _EXTRA_TYPES
+        is_extra = err.get("type") in obs.EXTRA_ARGUMENT_TYPES
         if not is_extra and not (loc and str(loc[0]) in param_names):
             return None
     total = len(errors)
@@ -185,7 +184,7 @@ def invalid_arguments_envelope(
     message = f"{tool_name}: {total} invalid argument(s){shown}: {safe_field} — {first.reason}"
     types = {err.get("type") for err in errors}
     hints: list[str] = []
-    if types & _EXTRA_TYPES:
+    if types & obs.EXTRA_ARGUMENT_TYPES:
         hints.append("remove the unknown argument(s)")
     if types & _MISSING_TYPES:
         hints.append("provide the required argument(s)")

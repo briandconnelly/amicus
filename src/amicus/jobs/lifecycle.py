@@ -18,13 +18,13 @@ from pontonier.core.jobs import JobStore
 from amicus import obs
 from amicus.errors import error_envelope
 from amicus.jobs.delivery import finished_job_envelope
-from amicus.jobs.polling import poll_hint_ms
+from amicus.jobs.polling import job_status_arguments, poll_hint_ms
 from amicus.orchestration.isolation import WORKTREE_PREFIX
 from amicus.schemas.fingerprint import RESULT_FORMAT
 from amicus.schemas.results import JobFollowUp, JobStarted
 
 if TYPE_CHECKING:  # pragma: no cover
-    from collections.abc import Callable
+    from collections.abc import Callable, Coroutine
 
     from amicus.config import Settings
     from amicus.jobs.taskmap import TaskJobMap
@@ -127,7 +127,6 @@ def job_started_handle(
 ) -> dict[str, Any]:
     meta.job_id = job_id
     meta.task_id = task_id
-    poll_arguments: dict[str, Any] = {"job_id": job_id, "workspace_root": spec.cwd}
     return JobStarted(
         job_id=job_id,
         backend=spec.backend,
@@ -141,7 +140,7 @@ def job_started_handle(
         follow_up=JobFollowUp(
             next_step="poll_job_status",
             tool="amicus_job_status",
-            arguments=poll_arguments,
+            arguments=job_status_arguments(job_id, spec.cwd),
             alternative=POLL_FOLLOW_UP,
         ),
         meta=meta,
@@ -258,6 +257,28 @@ async def start_job(
     )
 
 
+def _reserve_keyed(store: JobStore, spec: RunSpec, key: str) -> Coroutine[Any, Any, dict[str, Any]]:
+    """The one keyed reservation both start paths make: (tool, key) in the workspace index
+    under this spec's dedup identity, off the event loop because the store call blocks on
+    a cross-process lock. One call site, so a sync and an _async keyed call can never be
+    given different identities for the same key (ADR 0020). The caller decides how to
+    await it: plainly (`start_async`), or shielded so a cancellation mid-thread leaves the
+    committed job running (`_start_keyed_sync`)."""
+    return asyncio.to_thread(
+        store.start_idempotent,
+        worker_cmd,
+        spec.cwd,
+        kind=spec.kind,
+        tool=spec.tool,
+        key=key,
+        arg_hash=spec.arg_hash(),
+        extra=_extra(spec),
+        write_spec=spec.public(),
+        stdin_text=spec.inputs_json(),
+        lock_timeout=IDEM_LOCK_ACQUIRE_TIMEOUT_S,
+    )
+
+
 async def start_async(
     store: JobStore,
     spec: RunSpec,
@@ -279,19 +300,7 @@ async def start_async(
     if idempotency_key is None:
         return await start_job(store, spec, meta, plugin, deadline=deadline)
     try:
-        outcome = await asyncio.to_thread(
-            store.start_idempotent,
-            worker_cmd,
-            spec.cwd,
-            kind=spec.kind,
-            tool=spec.tool,
-            key=idempotency_key,
-            arg_hash=spec.arg_hash(),
-            extra=_extra(spec),
-            write_spec=spec.public(),
-            stdin_text=spec.inputs_json(),
-            lock_timeout=IDEM_LOCK_ACQUIRE_TIMEOUT_S,
-        )
+        outcome = await _reserve_keyed(store, spec, idempotency_key)
     except OSError as exc:
         return _spawn_failure(exc, meta, plugin)
     result_kind = outcome["kind"]
@@ -420,7 +429,6 @@ def _keyed_timeout(
     """The `timeout` envelope for a keyed wait whose run was left going: it keeps the code
     but steers to amicus_job_status for THIS job (as job_running does), echoing the record's
     status tool's own poll hint (jobs/polling.py) so the backoff matches it."""
-    poll_arguments: dict[str, Any] = {"job_id": job_id, "workspace_root": cwd}
     return error_envelope(
         "timeout",
         f"this wait exceeded {timeout}s and the grace window; the keyed job continues to its "
@@ -432,7 +440,7 @@ def _keyed_timeout(
         temporary=True,
         repair_next_step="poll_job_status",
         repair_tool="amicus_job_status",
-        repair_arguments=poll_arguments,
+        repair_arguments=job_status_arguments(job_id, cwd),
         retry_after_ms=poll_hint_ms(rec),
         repair_alternative=KEYED_TIMEOUT_ALTERNATIVE,
     )
@@ -483,21 +491,7 @@ async def _start_keyed_sync(
     still recorded against the job once the thread reports it."""
     wait_deadline = time.monotonic() + IDEM_SYNC_INPROGRESS_WAIT_S
     while True:
-        start_fut = asyncio.ensure_future(
-            asyncio.to_thread(
-                store.start_idempotent,
-                worker_cmd,
-                spec.cwd,
-                kind=spec.kind,
-                tool=spec.tool,
-                key=key,
-                arg_hash=spec.arg_hash(),
-                extra=_extra(spec),
-                write_spec=spec.public(),
-                stdin_text=spec.inputs_json(),
-                lock_timeout=IDEM_LOCK_ACQUIRE_TIMEOUT_S,
-            )
-        )
+        start_fut = asyncio.ensure_future(_reserve_keyed(store, spec, key))
         try:
             outcome = await asyncio.shield(start_fut)
         except asyncio.CancelledError:

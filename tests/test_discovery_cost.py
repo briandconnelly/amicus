@@ -1,9 +1,10 @@
 """Wire-size ratchet for tools/list, per profile.
 
 The least-capable realistic client preloads every tool definition, so the serialized
-catalog is a per-session token tax. The budget is a ceiling; the target is the last
-deliberate measurement so a failure message shows the drift. Raising a budget is a
-reviewed decision — say why in the PR body.
+catalog is a per-session token tax. The budget is a ceiling equal to the last deliberate
+measurement, so any growth fails; the measurement is kept beside it so a failure message
+shows the drift. Raising a budget is a reviewed decision — say why in the PR body, and in
+a paragraph below.
 
 What this ratchet does and does not cover, scoped against captured host evidence rather
 than assumed. It bounds the TOKEN COST of discovery. It is not a measure of first-call
@@ -153,8 +154,15 @@ from tests.conftest import spawned_server_env
 
 from amicus import manifest
 
-MEASURED: dict[str, int] = {"all": 114683, "codex-kimi": 114691, "claude": 114683}
-BUDGET: dict[str, int] = {p: ((n // 1000) + 1) * 1000 for p, n in MEASURED.items()}
+MEASURED: dict[str, int] = {"all": 114780, "codex-kimi": 114788, "claude": 114780}
+# The budget is a literal, not MEASURED rounded up to the next kilobyte as it was until
+# 2026-09-14. The rounding left up to 1 KB of growth per bucket that no PR had to own, and
+# this file records three such accumulations (448 and 12 bytes in the paragraphs above, and
+# the 97 bytes between the schema-29 measurement and 114780, the consume-result wording of
+# #94 that landed after it), each noticed only when the next deliberate raise re-measured.
+# Any growth now fails until a PR raises BUDGET and says why; a shrink passes and shows as
+# drift against MEASURED. Raising one means re-measuring and moving both.
+BUDGET: dict[str, int] = {"all": 114780, "codex-kimi": 114788, "claude": 114780}
 
 
 @pytest.mark.parametrize("profile", sorted(manifest.PROFILES))
@@ -169,3 +177,15 @@ def test_tools_list_wire_size_budget(profile):
 
 def test_measured_values_are_real():
     assert all(n > 0 for n in MEASURED.values())
+
+
+@pytest.mark.parametrize("profile", sorted(manifest.PROFILES))
+def test_the_budget_admits_no_unreviewed_growth(profile):
+    """The negative control for the ratchet: one byte over the last deliberate measurement
+    is over budget. A budget above MEASURED is exactly the unreviewed headroom the old
+    rounding gave away, so raising one means re-measuring and moving both."""
+    assert BUDGET[profile] == MEASURED[profile], (
+        f"[{profile}] BUDGET {BUDGET[profile]} leaves {BUDGET[profile] - MEASURED[profile]} "
+        f"bytes of headroom over MEASURED {MEASURED[profile]}"
+    )
+    assert MEASURED[profile] + 1 > BUDGET[profile]

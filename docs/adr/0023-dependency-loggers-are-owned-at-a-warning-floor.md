@@ -52,3 +52,10 @@ The takeover does not make every dependency record safe: a message either librar
 The one such record known to carry prompt text is the one rewritten above.
 Loggers outside `amicus`, `pontonier`, `fastmcp` and `mcp` still fall through to `logging.lastResort`.
 `tests/test_fastmcp_argument_log.py` reads a real stdio server's stderr and log file at WARNING and DEBUG, with a positive control for each.
+
+## Audited versions
+
+Every claim above about what a dependency logs was read from a specific release, and a bump of either dependency is a reason to read it again, because the filter's shape test and the WARNING floor are sized to those releases.
+The audit on 2026-09-13 read fastmcp 4.0.3 and mcp 2.1.1.
+mcp moved to 2.2.0 on 2026-09-14 (PR #81), after the audit, and a re-read that day found the two facts unchanged: FastMCP's argument-validation record is still written on `fastmcp.server.server` with pydantic's error list as its second argument, and the `mcp` stdio runner still logs a dropped pre-initialization frame at DEBUG.
+Record the next bump's re-read here.

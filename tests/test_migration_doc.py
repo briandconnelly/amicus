@@ -204,6 +204,60 @@ def test_prose_no_alias_claims_agree_with_the_declarations():
     )
 
 
+# --- the "Upgrading from 0.2.0" section ----------------------------------------------------
+#
+# Its prose states four facts of the source that the table assertions above do not reach:
+# which meta keys are always present, the poll-hint ceiling, the current stored-result
+# format, and which error codes carry no repair. Each is pinned to the constant it
+# describes, so the section cannot drift from the code the way the "no legacy alias" claim
+# once did.
+
+
+def _upgrade_section() -> str:
+    text = DOC.read_text()
+    start = text.index("## Upgrading from 0.2.0")
+    return text[start:]
+
+
+def _line_containing(section: str, needle: str) -> str:
+    lines = [line for line in section.splitlines() if needle in line]
+    assert len(lines) == 1, f"expected exactly one line containing {needle!r}, got {lines}"
+    return lines[0]
+
+
+def test_upgrade_section_names_the_always_present_meta_keys_exactly():
+    from amicus.schemas.envelope import META_ALWAYS_PRESENT
+
+    line = _line_containing(_upgrade_section(), "always present")
+    named = re.findall(r"`([a-z_]+)`", line)
+    assert set(named) == set(META_ALWAYS_PRESENT), (named, META_ALWAYS_PRESENT)
+    assert len(named) == len(META_ALWAYS_PRESENT)
+
+
+def test_upgrade_section_states_the_poll_hint_ceiling():
+    from amicus.jobs.polling import POLL_HINT_CAP_MS
+
+    line = _line_containing(_upgrade_section(), "ceiling of")
+    assert f"ceiling of {POLL_HINT_CAP_MS // 1000} s" in line
+
+
+def test_upgrade_section_states_the_current_result_format():
+    from amicus.schemas.fingerprint import RESULT_FORMAT
+
+    line = _line_containing(_upgrade_section(), "`RESULT_FORMAT` moved")
+    assert f"moved from 4 to {RESULT_FORMAT}" in line, line
+    assert "`job_result_incompatible`" in line
+
+
+def test_upgrade_section_names_exactly_the_codes_that_carry_no_repair():
+    from amicus.errors import NO_CORRECTIVE_CALL
+
+    line = _line_containing(_upgrade_section(), "`error.repair: null`")
+    named = set(re.findall(r"`([a-z_]+)`", line)) - {"error.repair: null"}
+    named &= {code for code in named if not code.startswith("details")}
+    assert named == set(NO_CORRECTIVE_CALL), (named, NO_CORRECTIVE_CALL)
+
+
 def _first_table_line() -> str:
     """The doc's first AMICUS_* env-table row, verbatim."""
     for line in DOC.read_text().splitlines():
