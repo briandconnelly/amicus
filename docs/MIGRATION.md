@@ -70,7 +70,7 @@ Most amicus tools take `backend` as a required parameter (no default); pick `"co
 | `codex_delegate` | `amicus_delegate(backend="codex", ...)` |
 | `codex_delegate_async` | `amicus_delegate_async(backend="codex", ...)` |
 | `codex_delegate_dry_run` | `amicus_delegate_dry_run(backend="codex", ...)` |
-| `codex_dry_run` | `amicus_dry_run(backend="codex", ...)` |
+| `codex_dry_run` | `amicus_review_changes_dry_run(backend="codex", ...)` |
 | `codex_status` | `amicus_backends(backend="codex")` |
 | `codex_capabilities` | `amicus_capabilities()` (server-wide now; per-backend detail is `amicus_backends(backend="codex")`) |
 | `codex_models` | `amicus_models(backend="codex")` |
@@ -92,7 +92,7 @@ Most amicus tools take `backend` as a required parameter (no default); pick `"co
 | `kimi_delegate` | `amicus_delegate(backend="kimi", ...)` |
 | `kimi_delegate_async` | `amicus_delegate_async(backend="kimi", ...)` |
 | `kimi_delegate_dry_run` | `amicus_delegate_dry_run(backend="kimi", ...)` |
-| `kimi_dry_run` | `amicus_dry_run(backend="kimi", ...)` |
+| `kimi_dry_run` | `amicus_review_changes_dry_run(backend="kimi", ...)` |
 | `kimi_status` | `amicus_backends(backend="kimi")` |
 | `kimi_capabilities` | `amicus_capabilities()` (server-wide now; per-backend detail is `amicus_backends(backend="kimi")`) |
 | `kimi_models` | `amicus_models(backend="kimi")` |
@@ -112,7 +112,7 @@ Most amicus tools take `backend` as a required parameter (no default); pick `"co
 | `claude_review_changes_async` | `amicus_review_changes_async(backend="claude", ...)` |
 | `claude_adversarial_review` | `amicus_adversarial_review(backend="claude", ...)` |
 | `claude_adversarial_review_async` | `amicus_adversarial_review_async(backend="claude", ...)` |
-| `claude_dry_run` | `amicus_dry_run(backend="claude", ...)` |
+| `claude_dry_run` | `amicus_review_changes_dry_run(backend="claude", ...)` |
 | `claude_status` | `amicus_backends(backend="claude")` |
 | `claude_capabilities` | `amicus_capabilities()` (server-wide now; per-backend detail is `amicus_backends(backend="claude")`) |
 | `claude_models` | `amicus_models(backend="claude")` |
@@ -127,10 +127,14 @@ Most amicus tools take `backend` as a required parameter (no default); pick `"co
 
 ## Behavior deltas
 
-Review results and `amicus_dry_run` carry a top-level `coverage` object, in the shape `codex_review_changes` returns (#65).
+`amicus_dry_run` was renamed `amicus_review_changes_dry_run` (#98), and the sibling maps above point at the new name.
+The old name still works as a deprecated alias until 0.5.0, with the same arguments and the same result, whose `tool` stays `amicus_dry_run`.
+Call the new name in anything you write now.
+
+Review results and `amicus_review_changes_dry_run` carry a top-level `coverage` object, in the shape `codex_review_changes` returns (#65).
 Its `status`, untracked counts, `omission_reasons` and `redaction` read as they do there, and it adds one reason of amicus's own: `focused`, for a call that passed `focus`.
 Adversarial reviews carry it too, with null untracked counts when no scope was attached.
-`amicus_dry_run` now accepts `focus` and reports `coverage` and `max_input_bytes`, so a preview reports the same omissions the paid call will.
+`amicus_review_changes_dry_run` now accepts `focus` and reports `coverage` and `max_input_bytes`, so a preview reports the same omissions the paid call will.
 It still has no `redacted_paths_count` or top-level `deadline_advisory`: count `meta.redacted_paths` instead, and read the advisory from `warnings`.
 
 Claude adversarial reviews (sync and async) now default to `config_mode="safe"`, isolating them from inherited Claude instructions that can displace the JSON critique contract (#64).
@@ -138,7 +142,7 @@ When `AMICUS_CLAUDE_CONFIG_MODE=bare`, the default remains `bare` so API-key-onl
 Consult and review-changes calls still use the configured default, and an explicit `backend_options.config_mode` overrides the default on every verb.
 This also applies when the operator explicitly configures `inherit` or `scoped`; use a per-call override to opt an adversarial review into inherited configuration.
 `amicus_backends` reports structured `default_by_verb` values and a null common `default` when the verbs differ; each call's `meta.backend_details.config_mode` reports its resolved mode.
-`amicus_dry_run` previews review-changes defaults, not adversarial-review defaults.
+`amicus_review_changes_dry_run` previews review-changes defaults, not adversarial-review defaults.
 If an explicitly inherited configuration produces `invalid_json` or `schema_violation`, change `backend_options.config_mode` to `safe` before making another paid call.
 An invalid JSON response alone does not establish config displacement, so the error is not automatically reclassified as a permanent configuration failure.
 
@@ -172,7 +176,7 @@ Point `AMICUS_STATE_DIR` at separate directories only if you need to keep job hi
 **`backend_options` is a closed superset (ADR 0002).**
 Every backend's options (`isolation`, `config_mode`, `access`, `max_budget_usd`, and the rest) live in one closed schema shared by all calls.
 A key that the selected backend does not accept is a validation error (`invalid_arguments`, `details.field = "backend_options.<key>"`), not a value that gets silently dropped the way an unrecognized sibling option might have been.
-Check `amicus_backends(backend=...)` or a tool's `amicus_dry_run` echo to see which options apply to your chosen backend before spending.
+Check `amicus_backends(backend=...)` or a tool's `amicus_review_changes_dry_run` echo to see which options apply to your chosen backend before spending.
 
 **Legacy environment names warn now and are removed in `0.3.0`.**
 Every sibling env var above is read automatically until then, but each read logs a warning naming the removal version.
