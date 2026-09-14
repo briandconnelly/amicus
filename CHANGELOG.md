@@ -67,8 +67,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   adversarial paths already return as a hard error, and consult falls to its existing prose
   passthrough (sanitized summary, redacted `raw_response`). The codex backend's `parse_structured` delegates to the shared
   classifier as claude's and kimi's already did, so `ExecResult.structured` cannot carry a
-  collapsed object on any backend. `FINGERPRINT` and `RESULT_FORMAT` do not move: no code,
-  shape or description changes.
+  collapsed object on any backend. `FINGERPRINT` and `RESULT_FORMAT` do not move: no error
+  code, value enum, envelope shape, tool description or stored result shape changes.
 - The `collaborating-with-amicus` skill told an agent to confirm a backend's `features` list
   contains the verb it was about to call, and its backend reference called `features` "the
   verbs it supports" (#84). `features` names only the gated verbs (`delegate`,
