@@ -18,6 +18,7 @@ from pontonier.core.jobs import JobStore
 from amicus import obs
 from amicus.errors import error_envelope
 from amicus.jobs.delivery import finished_job_envelope
+from amicus.jobs.polling import poll_hint_ms
 from amicus.orchestration.isolation import WORKTREE_PREFIX
 from amicus.schemas.fingerprint import RESULT_FORMAT
 from amicus.schemas.results import JobFollowUp, JobStarted
@@ -317,7 +318,9 @@ async def start_async(
                 deadline=snap["deadline_seconds"],
                 expires_at=snap["expires_at"],
                 meta=meta,
-                poll_after_ms=snap["poll_after_ms"],
+                # A running replay hands back the status tool's own hint (#95); a terminal
+                # one keeps the store's flat base, as a fresh handle does.
+                poll_after_ms=poll_hint_ms(snap) or snap["poll_after_ms"],
             )
         )
     if result_kind == "io_error":
@@ -416,7 +419,7 @@ def _keyed_timeout(
 ) -> dict[str, Any]:
     """The `timeout` envelope for a keyed wait whose run was left going: it keeps the code
     but steers to amicus_job_status for THIS job (as job_running does), echoing the record's
-    grown poll_after_ms so the backoff matches the status tool's own hint."""
+    status tool's own poll hint (jobs/polling.py) so the backoff matches it."""
     poll_arguments: dict[str, Any] = {"job_id": job_id, "workspace_root": cwd}
     return error_envelope(
         "timeout",
@@ -430,7 +433,7 @@ def _keyed_timeout(
         repair_next_step="poll_job_status",
         repair_tool="amicus_job_status",
         repair_arguments=poll_arguments,
-        retry_after_ms=rec.get("poll_after_ms"),
+        retry_after_ms=poll_hint_ms(rec),
         repair_alternative=KEYED_TIMEOUT_ALTERNATIVE,
     )
 

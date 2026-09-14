@@ -21,6 +21,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking (`FINGERPRINT` `schema-28`).** A running job's `poll_after_ms` now keeps growing
+  past ten seconds, up to 30 s (#95). The hint still means roughly "wait about as long as the
+  job has already run", but pontonier 0.9.0 stops it at 10 s, so a job that ran for minutes was
+  polled every ten seconds for almost its whole life: about 28 `amicus_job_status` calls for a
+  four-minute review, the 15–25 the #84 reporter counted. amicus now computes the hint itself,
+  with pontonier's own formula and a 30 s ceiling, which makes that about 13 calls and notices a
+  finished job at most 30 s late; a 60 s ceiling would save three more calls and double that
+  delay. Every place that hands out the hint agrees on it: `amicus_job_status`, the
+  `job_running` repair's `retry_after_ms`, a keyed sync wait's `timeout` repair, and a replayed
+  keyed `_async` handle for a job that is still running. The `amicus_job_status` description
+  now states the ceiling. MCP tasks keep FastMCP's own flat `pollIntervalMs` (#100).
+  `RESULT_FORMAT` stays 6: no stored result carries the hint.
+
 - **Breaking (`FINGERPRINT` `schema-27`).** The review preview is now
   `amicus_review_changes_dry_run`, named for the call it previews as `amicus_delegate_dry_run`
   is (#98, ADR 0028). `amicus_dry_run` read as a preview for any paid call, while it covers only
@@ -216,7 +229,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `adversarial_review`) plus non-verb capabilities, so a host following the rule concluded
   `consult` and `review_changes` were unsupported everywhere. The rule now names the two gated
   verbs and says the other two never appear there; the reference documents every member. The
-  skill also says that `poll_after_ms` grows only to the job library's 10 s ceiling, that a
+  skill also says that `poll_after_ms` grows only to a ceiling (30 s, see #95 above), that a
   reported review of a few hundred lines runs two to four minutes against the 300 s sync
   default, and that a sync call with an `idempotency_key` waits inside one call.
   `tests/test_skill_contract.py` asserts the gated verbs, the declared features, the poll

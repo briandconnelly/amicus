@@ -977,7 +977,7 @@
           "tool": "amicus_job_status"
         },
         "request_id": "00000000000000000000000000000000",
-        "retry_after_ms": 500,
+        "retry_after_ms": 30000,
         "temporary": true
       },
       "meta": {

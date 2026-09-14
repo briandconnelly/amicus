@@ -26,7 +26,15 @@ def _stored_success(text="RAW", **meta_fields):
 
 
 def _rec(status="done", fmt=RESULT_FORMAT, **extra):
-    return {"status": status, "extra": {"result_format": fmt}, "poll_after_ms": 1500, **extra}
+    # A real store record carries elapsed_ms beside pontonier's hint; the job_running hint
+    # is derived from it (#95), so 1500 ms elapsed is a 1500 ms hint.
+    return {
+        "status": status,
+        "extra": {"result_format": fmt},
+        "elapsed_ms": 1500,
+        "poll_after_ms": 1500,
+        **extra,
+    }
 
 
 def test_apply_detail_and_slim_meta():
@@ -89,6 +97,15 @@ def test_done_error_is_validated_and_keeps_the_producer_version():
         _rec(), {"ok": False, "error": {"code": "nope"}}, _JOB, "consult", Meta(), "full", None
     )
     assert not delivered and env["error"]["code"] == "internal_error"
+
+
+def test_job_running_retry_follows_the_grown_poll_hint():
+    # retry_after_ms matches amicus_job_status's own hint, not pontonier's capped one (#95).
+    rec = _rec("running", elapsed_ms=240_000, poll_after_ms=10000)
+    env, delivered = delivery.finished_job_envelope(
+        rec, None, _JOB, "consult", Meta(), "full", "/repo"
+    )
+    assert not delivered and env["error"]["retry_after_ms"] == 30000
 
 
 def test_lifecycle_states():

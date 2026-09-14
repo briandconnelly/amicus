@@ -1564,7 +1564,7 @@
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-27",
+                "default": "amicus/0.1/schema-28",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -2476,7 +2476,7 @@
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-27",
+            "default": "amicus/0.1/schema-28",
             "title": "Fingerprint",
             "type": "string"
           },
@@ -7774,7 +7774,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Free — no model call. Poll a job's state without fetching its result: status, elapsed time, result_available, result_ok, and poll_after_ms to honor before the next poll (it grows with elapsed time). Records expire after AMICUS_JOB_TTL (default 24h) and a per-workspace cap evicts the oldest terminal records; read results promptly.",
+      "description": "Free — no model call. Poll a job's state without fetching its result: status, elapsed time, result_available, result_ok, and poll_after_ms to honor before the next poll (it grows with elapsed time, up to 30 s). Records expire after AMICUS_JOB_TTL (default 24h) and a per-workspace cap evicts the oldest terminal records; read results promptly.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,

@@ -456,6 +456,8 @@ async def test_keyed_start_creates_then_replays_the_real_handle(tmp_path, monkey
     assert again["ok"] is True and again["job_id"] == first["job_id"]
     assert again["meta"]["idempotency_replayed"] is True
     assert again["status"] == "done" and again["expires_at"] is not None
+    # A terminal replay has no growing hint to hand back; it keeps the store's flat base.
+    assert again["poll_after_ms"] == 1000
     assert again["started_at"] == first["started_at"]
     assert len(store.list_jobs(str(tmp_path))) == 1
     spec_on_disk = json.loads(
@@ -940,6 +942,48 @@ async def test_keyed_await_timeout_leaves_the_shared_job_running(tmp_path, monke
         assert store.status(str(tmp_path), job_id)["status"] == "running"
     finally:
         store.cancel(str(tmp_path), job_id)
+
+
+def _aged(store, elapsed_ms):
+    """store.status with the job's age moved: the real snapshot, carrying pontonier's own
+    capped hint for that age, so a site that echoes it instead of amicus's is caught."""
+    real = store.status
+
+    def status(cwd, job_id):
+        snap = real(cwd, job_id)
+        return {**snap, "elapsed_ms": elapsed_ms, "poll_after_ms": 10000}
+
+    return status
+
+
+async def test_keyed_timeout_retry_follows_the_grown_poll_hint(tmp_path, monkeypatch):
+    # The keyed wait's backoff must match amicus_job_status's own hint (#95).
+    store = lifecycle.job_store(_settings(tmp_path))
+    monkeypatch.setattr(lifecycle, "worker_cmd", _sleeping_worker_cmd(30))
+    spec = _spec(str(tmp_path), tool="amicus_consult_async", timeout_seconds=1800)
+    job_id = (await _start(store, spec, None))["job_id"]
+    try:
+        rec = _aged(store, 240_000)(str(tmp_path), job_id)
+        out = lifecycle._keyed_timeout(
+            rec, str(tmp_path), job_id, 1, meta_for(spec), fakeplugin.make_plugin()
+        )
+        assert out["error"]["code"] == "timeout" and out["error"]["retry_after_ms"] == 30000
+    finally:
+        store.cancel(str(tmp_path), job_id)
+
+
+async def test_a_replayed_running_handle_carries_the_grown_poll_hint(tmp_path, monkeypatch):
+    store = lifecycle.job_store(_settings(tmp_path))
+    monkeypatch.setattr(lifecycle, "worker_cmd", _sleeping_worker_cmd(30))
+    spec = _spec(str(tmp_path), tool="amicus_consult_async", timeout_seconds=1800)
+    first = await _start(store, spec, "p95")
+    try:
+        monkeypatch.setattr(store, "status", _aged(store, 240_000))
+        again = await _start(store, spec, "p95")
+        assert again["job_id"] == first["job_id"] and again["meta"]["idempotency_replayed"]
+        assert again["status"] == "running" and again["poll_after_ms"] == 30000
+    finally:
+        store.cancel(str(tmp_path), first["job_id"])
 
 
 async def test_unkeyed_await_timeout_still_cancels(tmp_path, monkeypatch):

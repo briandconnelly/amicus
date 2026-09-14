@@ -63,10 +63,10 @@ consult/review/delegate result.
    (`result_ok: false`) — see [reading results](reading-results.md).
 
 `poll_after_ms` grows with elapsed time — roughly "wait as long as the job has already run" —
-but only up to `10 s`, the job library's ceiling. A job that runs for minutes is therefore polled
-every ten seconds for almost its whole life: a two-to-four-minute review costs roughly 15–30
-status calls. A hint that stops growing is the ceiling, not a stalled job. If that many polls is too
-many, the keyed sync form above waits inside one call instead.
+up to `30 s`, amicus's ceiling. Once a job is older than that it is polled about every thirty
+seconds: a two-to-four-minute review costs roughly 9–13 status calls, and a finished job is
+noticed at most thirty seconds late. A hint that stops growing is the ceiling, not a stalled job.
+If that many polls is too many, the keyed sync form above waits inside one call instead.
 
 **`poll_after_ms` is `null` on every terminal status.** A loop written as "repeat until
 `result_available` is true" therefore never terminates for a cancelled, failed, or timed-out job:

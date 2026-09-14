@@ -172,7 +172,9 @@ def _deliver(stored: dict[str, Any], name: str, detail: str) -> dict[str, Any]:
     return envelope
 
 
-_POLL_AFTER_MS_SENTINEL = 500
+# A four-minute-old running record, carrying pontonier's own capped hint for that age: the
+# pinned job_running retry_after_ms is amicus's ceiling, not pontonier's 10000 (#95).
+_LONG_RUNNING_ELAPSED_MS = 240_000
 # result_format the chokepoint reads today; a stored record claiming a DIFFERENT value
 # (never None, never the current one) is what makes `_unreadable` report
 # job_result_incompatible instead of internal_error.
@@ -199,7 +201,7 @@ def _lifecycle_envelopes() -> dict[str, dict[str, Any]]:
     payload IS an error envelope (passthrough), and a `done` record whose payload
     fails its kind's schema under a result_format the chokepoint no longer reads."""
     running = _lifecycle_envelope(
-        {"status": "running", "poll_after_ms": _POLL_AFTER_MS_SENTINEL},
+        {"status": "running", "elapsed_ms": _LONG_RUNNING_ELAPSED_MS, "poll_after_ms": 10000},
         None,
         "consult",
         workspace_root="/repo",

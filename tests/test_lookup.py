@@ -98,6 +98,15 @@ def test_job_meta_and_not_found(tmp_path):
     assert lookup.job_not_found("b" * 32, meta, None)["error"]["repair"]["arguments"] == {}
 
 
+def test_a_long_running_status_keeps_growing_its_poll_hint(tmp_path):
+    # pontonier's own row hint saturates at 10000 at four minutes; amicus's does not (#95).
+    settings = _settings(tmp_path)
+    ws = lookup.workspace_of("/repo", "param")
+    meta = lookup.job_meta(settings, "/repo", "param", "client", backend="codex", kind="consult")
+    running = lookup.status_model(_row(elapsed_ms=240_000, poll_after_ms=10000), ws, None, meta)
+    assert running["poll_after_ms"] == 30000
+
+
 def test_status_and_summary_models_carry_backend_task_and_detail(tmp_path):
     settings = _settings(tmp_path)
     ws = lookup.workspace_of("/repo", "param")
