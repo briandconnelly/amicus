@@ -21,6 +21,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking (`FINGERPRINT` `schema-26`).** The server `instructions` lead with their rules
+  and ship as three blocks - what amicus does and does not do, a list of rules, then
+  reference - instead of one unbroken 4,033-character line that opened with protocol
+  background (#49). The order is not style. Claude Code shows the model only the first 2,048
+  characters of a server's instructions (measured on amicus 0.2.0 and codex-in-claude 0.22.0,
+  both cut at exactly that offset), so on 0.2.0 everything after "read error.backend, and"
+  never reached it there: following `error.repair`, treating findings as claims, reading a
+  `completed` task as a delivery statement rather than a success, and the job-handle TTL.
+  Every rule now ends before character 2,048, and a test holds it there (ADR 0027). The
+  failure rule names each carrier's own path: a resource-read failure's code is
+  `error.data.machine_code`, not the era-bound numeric JSON-RPC `error.code`. The
+  protocol-era mechanics moved to reference, beside the now-stated `stdio` transport, and the
+  host-capture provenance is gone; `amicus_capabilities` already carries `protocol_revision`
+  and `tasks`. The text is now 3,381 characters. `initialize` and `server/discover` change;
+  `RESULT_FORMAT` does not.
+
 - **Breaking (`FINGERPRINT` `schema-25`).** A `review_status: not_run` review reports
   `confidence: unknown`, not `low` (#54, ADR 0026). No backend ran on an empty scope, so there
   was no rating to carry, and `low` is the lowest rating a backend can report: stating it

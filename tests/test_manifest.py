@@ -378,6 +378,9 @@ async def test_the_workspace_prerequisite_is_bound_to_the_schemas(tmp_path):
     stated = WORKSPACE_PREREQUISITE.rstrip(".")
     for where, text in surfaces.items():
         assert WORKSPACE_PREREQUISITE in text, where
-        # and nowhere else on that surface, so no second sentence can contradict it.
-        stray = [s.rstrip(".") for s in text.split(". ") if "workspace_root" in s]
+        # and nowhere else on that surface, so no second sentence can contradict it. A
+        # sentence ends at a period before any whitespace, a newline included: the
+        # instructions are a list (#49), and a ". " split would weld a rule to its neighbour.
+        sentences = (s.strip().removeprefix("- ") for s in re.split(r"(?<=\.)\s+", text))
+        stray = [s.rstrip(".") for s in sentences if "workspace_root" in s]
         assert stray == [stated], (where, stray)
