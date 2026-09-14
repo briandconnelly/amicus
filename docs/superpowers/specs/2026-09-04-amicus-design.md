@@ -267,10 +267,11 @@ defaults, `plugin.repair_overrides` win per code, backend-local codes are preser
 - SEP-2549 cache hints: the four list methods and `server/discover` carry `ttlMs: 300000`/`cacheScope: private`, and `resources/read` carries none because the `backends`/`models` templates report live state.
   Both eras report `listChanged: false`.
   ADR 0018.
-- `CAPABILITY_SUMMARY` is rules-then-context, serves as `instructions` and
-  `amicus://capabilities`: does/does-not, spec target, error carriers, task `completed`
-  is a delivery statement, when a task may be returned, `amicus_job_*` fallback and
-  task→job recovery, handle TTLs, workspace resolution, per-backend egress and carriers.
+- `CAPABILITY_SUMMARY` serves as `instructions`; `amicus://capabilities` serves the `amicus_capabilities` payload, not this text.
+  It is three blocks — scope with does/does-not, a list of rules, then reference — and every rule ends inside the first 2,048 characters, the prefix Claude Code shows the model (#49).
+  The rules cover the first free call, the `_async` preference, workspace resolution, the tool and resource error carriers, findings as claims, a `completed` task as a delivery statement, handle TTLs, and reading `fingerprint` beside `surface_digest`.
+  Reference carries the discovery and preview tools, the `amicus_job_*` fallback, per-backend egress and carriers, when a task may be returned, task→job recovery, the transport and the spec target.
+  ADR 0027.
 - Workspace: explicit `workspace_root` → handshake-era file roots (ADR 0004 D5) →
   structured `invalid_workspace_root`. Server cwd only under an operator opt-in that
   discloses the path. ADR 0003.

@@ -21,9 +21,9 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 # sha256 of each profile's canonical manifest JSON; regenerate per the failure message.
 EXPECTED_MANIFEST_HASH: dict[str, str] = {
-    "all": "9c02c5ab69c0bc71545b725709501b79f8db1fa599e5b77df9cd63ca533473fc",
-    "codex-kimi": "5317cc30963742ac97fcef03af661c08a58fc5dbbc8a4c35756d5c230b023f85",
-    "claude": "948d060172cd81eaa881ec5a8a9357eaa1a0699e856f14ed7a17dfe5af788109",
+    "all": "181de1a9e41a8a98ea36d1b36810eb48ae252a44ab117e4ddd4ce9d488a7720f",
+    "codex-kimi": "a731b7cc7f9f41ace095dacbfaebed06f7c44e95aa0ded26120b2c1963f44adf",
+    "claude": "2754142a378cca4f163aae361f922979a4166dadd9ce2a72880f2b48cd67a91a",
 }
 
 _CACHING_SPEC_LIST_METHODS = (
@@ -378,6 +378,9 @@ async def test_the_workspace_prerequisite_is_bound_to_the_schemas(tmp_path):
     stated = WORKSPACE_PREREQUISITE.rstrip(".")
     for where, text in surfaces.items():
         assert WORKSPACE_PREREQUISITE in text, where
-        # and nowhere else on that surface, so no second sentence can contradict it.
-        stray = [s.rstrip(".") for s in text.split(". ") if "workspace_root" in s]
+        # and nowhere else on that surface, so no second sentence can contradict it. A
+        # sentence ends at a period before any whitespace, a newline included: the
+        # instructions are a list (#49), and a ". " split would weld a rule to its neighbour.
+        sentences = (s.strip().removeprefix("- ") for s in re.split(r"(?<=\.)\s+", text))
+        stray = [s.rstrip(".") for s in sentences if "workspace_root" in s]
         assert stray == [stated], (where, stray)
