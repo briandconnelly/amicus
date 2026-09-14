@@ -97,14 +97,15 @@ misdirect the agent that reads it; the `timeout_seconds` sentence also says that
 call it bounds only the wait, because the run gets the job deadline. Three error codes were
 added to each sync tool's catalog, which lives in amicus_capabilities and not on this wire.
 
-The schema-21 -> schema-22 raise (+1441 bytes on the `all` profile: 96886 -> 98327) buys a
+The schema-21 -> schema-22 raise (+1517 bytes on the `all` profile: 96886 -> 98403) buys a
 concise default on the two free discovery tools (#46), and is paid back on the first call to
 either: the default amicus_capabilities result fell from 27,842 to 14,864 bytes and the default
 amicus_backends result from 17,250 to 4,000, both carriers. On this wire it is two new
 parameters, amicus_backends' `detail` and amicus_capabilities' `include_tool_details`, each
 with the one-line description that says what the projection leaves out; the four disclosure
 fields on amicus_backends' outputSchema, which now carry one short description each so a
-reader of the schema knows an absent key means "not requested" and a null means "undeclared";
+reader of the schema knows an absent key means "not requested" and a null means no loaded
+plugin declares one;
 the new `omitted_fields` property that names the projection in-band; and the two tool
 descriptions, which now say to read detail=full before the first paid call.
 """
@@ -116,7 +117,7 @@ from tests.conftest import spawned_server_env
 
 from amicus import manifest
 
-MEASURED: dict[str, int] = {"all": 98327, "codex-kimi": 98335, "claude": 98327}
+MEASURED: dict[str, int] = {"all": 98403, "codex-kimi": 98411, "claude": 98403}
 BUDGET: dict[str, int] = {p: ((n // 1000) + 1) * 1000 for p, n in MEASURED.items()}
 
 

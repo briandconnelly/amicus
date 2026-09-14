@@ -3792,7 +3792,7 @@
                           "type": "null"
                         }
                       ],
-                      "description": "Omitted on detail=summary (see omitted_fields); null when undeclared."
+                      "description": "Omitted on detail=summary (see omitted_fields); null when no loaded plugin declares one."
                     },
                     "display_name": {
                       "type": "string"
@@ -3822,7 +3822,7 @@
                           "type": "null"
                         }
                       ],
-                      "description": "Omitted on detail=summary (see omitted_fields); null when undeclared."
+                      "description": "Omitted on detail=summary (see omitted_fields); null when no loaded plugin declares one."
                     },
                     "enabled": {
                       "type": "boolean"
@@ -3847,7 +3847,7 @@
                           "type": "null"
                         }
                       ],
-                      "description": "Omitted on detail=summary (see omitted_fields); null when undeclared."
+                      "description": "Omitted on detail=summary (see omitted_fields); null when no loaded plugin declares one."
                     },
                     "options": {
                       "items": {
@@ -3922,7 +3922,7 @@
                           "type": "null"
                         }
                       ],
-                      "description": "Omitted on detail=summary (see omitted_fields); null when undeclared."
+                      "description": "Omitted on detail=summary (see omitted_fields); null when no loaded plugin declares one."
                     },
                     "status": {
                       "anyOf": [
