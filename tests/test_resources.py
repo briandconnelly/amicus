@@ -51,7 +51,11 @@ async def test_templates_are_listed_and_readable():
         templates = {t.uri_template for t in await c.list_resource_templates()}
         assert templates == set(resources.TEMPLATE_URIS)
         [entry] = await c.read_resource("amicus://backends/codex")
-        assert json.loads(entry.text)["available"] is True
+        entry_body = json.loads(entry.text)
+        assert entry_body["available"] is True
+        # The resource is the full entry: a single-backend read is the on-demand path to
+        # the disclosures the tool's default summary omits.
+        assert {"egress", "carriers", "readonly_honesty", "implicit_context"} <= set(entry_body)
         [models] = await c.read_resource("amicus://models/codex")
         assert json.loads(models.text)["models"][0]["slug"] == "fake-1"
         [kimi] = await c.read_resource("amicus://backends/kimi")

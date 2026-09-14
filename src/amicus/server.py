@@ -92,7 +92,9 @@ CAPABILITY_SUMMARY = (
     "handshake-era client always gets the plain result (Claude Code and Codex CLI both do, "
     "captured in docs/host-captures/). "
     "Use amicus_backends (free) before the first paid call to see which backends are "
-    "enabled, installed and authenticated, and each backend's features and options. "
+    "enabled, installed and authenticated, and each backend's features and options; pass "
+    "detail=full on that first read, because the default summary omits the per-backend "
+    "disclosures and names them in omitted_fields. "
     "Use amicus_consult for a read-only second opinion or Q&A; amicus_review_changes for "
     "a review of changes in git; amicus_adversarial_review to have a fixed critic attack a "
     "plan or claim (Claude only in v1); amicus_delegate for a reviewable diff (Codex and "
@@ -126,7 +128,7 @@ CAPABILITY_SUMMARY = (
     "Background: every paid tool has an _async twin polled via amicus_job_status/result/"
     "consume_result/cancel/list; a sync call also records its run as a job (meta.job_id) "
     "so a dropped connection can be recovered the same way. Per-backend egress and prompt "
-    "carriers are disclosed on amicus_backends."
+    "carriers are disclosed on amicus_backends(detail=full)."
 )
 
 

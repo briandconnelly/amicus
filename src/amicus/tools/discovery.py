@@ -15,14 +15,17 @@ from amicus.schemas.options import OPTION_ALLOWED_VALUES
 from amicus.schemas.params import (
     WORKSPACE_PREREQUISITE,
     BackendParam,
+    BackendsDetailParam,
     CapabilitiesDetailParam,
     IncludeSchemasParam,
+    IncludeToolDetailsParam,
     OptionalBackendParam,
     expected_params,
     expected_required,
     params_resource_body,
 )
 from amicus.schemas.results import (
+    BACKEND_DISCLOSURE_FIELDS,
     BACKENDS_SCHEMA,
     CAPABILITIES_RESULT_SCHEMA,
     CAPABILITIES_SCHEMA,
@@ -62,7 +65,9 @@ if TYPE_CHECKING:  # pragma: no cover
     from amicus.plugin import BackendPlugin
     from amicus.registry import BackendRegistry
 
-_SUMMARY_FIELDS = ("name", "cost", "stability", "backends", "error_codes")
+# What a tool_details row carries on detail=summary; results.TOOL_DETAIL_FULL_FIELDS is
+# the rest. The row count never changes with detail (include_tool_details selects rows).
+_SUMMARY_FIELDS = ("name", "cost", "stability", "backends")
 
 # Per-tool inventory facts tools/list does not carry. required/key params are derived
 # from the matrix for the paid tools so this table cannot disagree with the schemas.
@@ -327,9 +332,9 @@ _JOB_PARAMS: dict[str, tuple[list[str], list[str]]] = {
         ["scope", "base", "commit", "paths", "workspace_root", "backend_options"],
     ),
     "amicus_delegate_dry_run": (["backend", "task"], ["workspace_root", "backend_options"]),
-    "amicus_backends": ([], ["backend"]),
+    "amicus_backends": ([], ["backend", "detail"]),
     "amicus_models": (["backend"], []),
-    "amicus_capabilities": ([], ["detail", "include_schemas"]),
+    "amicus_capabilities": ([], ["detail", "include_schemas", "include_tool_details"]),
     "amicus_job_status": (["job_id"], ["workspace_root"]),
     "amicus_job_result": (["job_id"], ["workspace_root", "detail"]),
     "amicus_job_consume_result": (["job_id"], ["workspace_root", "detail"]),
@@ -389,7 +394,11 @@ def backends_payload(
     registry: BackendRegistry,
     config_errors: list[str],
     backend: str | None = None,
+    *,
+    detail: str,
 ) -> dict[str, Any]:
+    """`detail` is keyword-required so the tool and the amicus://backends/{backend}
+    resource each choose a projection on purpose; neither can inherit the other's."""
     ids = list(dict.fromkeys([*BACKEND_IDS, *settings.enabled_backends]))
     entries: list[BackendEntry] = []
     for backend_id in ids:
@@ -424,6 +433,7 @@ def backends_payload(
         for u in registry.unavailable.values()
         if backend is None or u.backend_id == backend
     ]
+    omitted = list(BACKEND_DISCLOSURE_FIELDS) if detail == "summary" else []
     return BackendsResult(
         backends=entries,
         unavailable=unavailable,
@@ -432,7 +442,8 @@ def backends_payload(
             *(f"{p} is an unexpanded ${{...}} placeholder" for p in settings.placeholders),
         ],
         config_errors=list(config_errors),
-    ).model_dump(mode="json")
+        omitted_fields=omitted,
+    ).model_dump(mode="json", exclude={"backends": {"__all__": set(omitted)}})
 
 
 def models_payload(registry: BackendRegistry, backend: str) -> dict[str, Any]:
@@ -469,6 +480,7 @@ async def capabilities_payload(
     tasks_active: bool,
     detail: str = "summary",
     include_schemas: Sequence[str] | None = None,
+    include_tool_details: bool = True,
 ) -> dict[str, Any]:
     effects = effects_for(settings)
     details = [
@@ -570,7 +582,7 @@ async def capabilities_payload(
         meta_fields=list(Meta.model_fields),
         schemas=schemas,
     ).model_dump(mode="json", exclude_none=True)
-    if detail == "contracts":
+    if not include_tool_details:
         caps["tool_details"] = []
     elif detail == "summary":
         caps["tool_details"] = [
@@ -594,15 +606,19 @@ def register(
         description=(
             f"{FREE_MARKER} Every known backend with enabled/available state, an installed/"
             "authenticated probe for the available ones, declared features, the backend_options "
-            "each accepts with allowed values, annotation effects, egress and prompt carriers; "
-            "plus why an enabled backend is unavailable, legacy-env warnings and config errors. "
-            "Run it before the first paid call."
+            "each accepts with allowed values and annotation effects; plus why an enabled "
+            "backend is unavailable, legacy-env warnings and config errors. detail=full adds "
+            "each backend's egress, prompt carriers, read-only honesty and implicit-context "
+            "disclosures; summary (default) names them in omitted_fields instead. Run "
+            "detail=full before the first paid call; summary is enough for a readiness re-check."
         ),
     )
     @guard("amicus_backends", settings)
-    async def amicus_backends(backend: OptionalBackendParam = None) -> dict[str, Any]:
+    async def amicus_backends(
+        backend: OptionalBackendParam = None, detail: BackendsDetailParam = "summary"
+    ) -> dict[str, Any]:
         """List backends."""
-        return backends_payload(settings, registry, state.config_errors, backend)
+        return backends_payload(settings, registry, state.config_errors, backend, detail=detail)
 
     @app.tool(
         name="amicus_models",
@@ -642,14 +658,17 @@ def register(
             f"{FREE_MARKER} The tool inventory, fingerprint and surface_digest (cache by them), "
             "result_format (the stored job-result version this release reads), "
             "the full error-code catalog, the annotation policy, the tasks/jobs contract, and "
-            "meta's field list. detail=summary (default) | full | contracts; include_schemas "
-            "embeds error-envelope, result-meta, capabilities-result and/or "
-            "parameter-contracts for resource-blind clients."
+            "meta's field list. detail sets how much each tool_details row carries (summary, "
+            "the default, or full); include_tool_details=false drops the rows for a cheap "
+            "digest re-check; include_schemas embeds error-envelope, result-meta, "
+            "capabilities-result and/or parameter-contracts for resource-blind clients."
         ),
     )
     @guard("amicus_capabilities", settings)
     async def amicus_capabilities(
-        detail: CapabilitiesDetailParam = "summary", include_schemas: IncludeSchemasParam = None
+        detail: CapabilitiesDetailParam = "summary",
+        include_schemas: IncludeSchemasParam = None,
+        include_tool_details: IncludeToolDetailsParam = True,
     ) -> dict[str, Any]:
         """List capabilities. An unknown `include_schemas` name is rejected at the call
         boundary (ValidationEnvelopeMiddleware) since the parameter is a Literal list."""
@@ -661,6 +680,7 @@ def register(
             state.tasks_active,
             detail,
             include_schemas,
+            include_tool_details,
         )
 
     return ("amicus_backends", "amicus_models", "amicus_capabilities")

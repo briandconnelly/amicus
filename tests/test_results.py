@@ -242,5 +242,7 @@ def test_backends_result_shape():
         effects=r.EffectsInfo(paid_calls_destructive=False, job_reads_read_only=True),
         options=[],
     )
-    res = r.BackendsResult(backends=[entry], unavailable=[], env_warnings=[], config_errors=[])
+    res = r.BackendsResult(
+        backends=[entry], unavailable=[], env_warnings=[], config_errors=[], omitted_fields=[]
+    )
     assert res.ok is True and res.backends[0].status is None

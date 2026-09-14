@@ -53,8 +53,10 @@ obligations live in the reference each route names, under that file's own `Rules
 
 ### Discovery
 
-- **Call `amicus_backends` before the first paid call of a session.** Its per-backend report is
-  what makes the remaining discovery rules checkable.
+- **Call `amicus_backends(detail="full")` before the first paid call of a session.** Its
+  per-backend report is what makes the remaining discovery rules checkable, and the default
+  `summary` omits the `egress`, `carriers`, `readonly_honesty` and `implicit_context`
+  disclosures (it names them in `omitted_fields`); `summary` is enough for a readiness re-check.
 - **Pass only a backend reported `enabled: true`, `status.installed: true`, and
   `status.authenticated: true`.** `enabled` alone is not eligibility.
 - **Confirm the backend's `features` list names `delegate` or `adversarial_review` before calling
@@ -138,7 +140,7 @@ obligations live in the reference each route names, under that file's own `Rules
 
 - **Never put a secret in any free-text field you supply:** `question`, `task`, `target`,
   `evidence`, `extra_context`, `instructions_append`, `focus`.
-- **Read `carriers` on `amicus_backends` before supplying `instructions_append`.**
+- **Read `carriers` on `amicus_backends(detail="full")` before supplying `instructions_append`.**
 - **Never treat a dry run as evidence that a paid call is safe to make.**
 - **Never point a paid call at a workspace whose contents you would not hand to that backend's
   provider.**
@@ -255,7 +257,8 @@ verification each kind of claim needs.
   writes one to its own logs, and for an async job they reach the job worker over that worker's
   stdin, never on its argv and never into the job directory.
 - That is amicus's own transport only. How a field reaches the backend CLI is the backend's
-  choice, `carriers` on `amicus_backends` is the authoritative per-backend statement, and they
+  choice, `carriers` on `amicus_backends(detail="full")` is the authoritative per-backend
+  statement, and they
   differ enough to matter: on `codex`, `instructions_append` rides **argv**, visible to anything
   that can list processes on this machine for the run's duration. The per-backend table is in
   [choosing a backend](references/choosing-a-backend.md).

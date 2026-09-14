@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking (`FINGERPRINT` `schema-22`).** The free discovery tools have a concise default
+  (#46). `amicus_capabilities(detail="summary")`, the default, now carries `name`, `cost`,
+  `stability` and `backends` per `tool_details` row; `use_when`, `required_params`,
+  `key_optional_params`, `returns` and `error_codes` are on `detail="full"`, and a summary row
+  carries no `error_codes` key at all rather than an empty list that would read as "raises
+  nothing". `detail` now changes field density only, never the row count: the `contracts`
+  value, which returned zero rows, is removed, and a new `include_tool_details=false` selects
+  the rowless payload for a fingerprint or `surface_digest` re-check. `amicus_backends` gains
+  `detail` (`summary` default, `full`); `summary` leaves each backend's `egress`, `carriers`,
+  `readonly_honesty` and `implicit_context` keys out of every entry and names them in a new
+  top-level `omitted_fields` (empty on `full`), so an absent key means "not requested" and a
+  `null` on `full` still means the backend declares none. The `amicus://backends/{backend}`
+  resource is always the `full` entry. Measured on the `all` profile, both carriers: the
+  default `amicus_capabilities` falls from 27,842 to 14,864 bytes and the default
+  `amicus_backends` from 17,250 to 4,000; `detail="full"` on each is unchanged within 40 bytes.
+  The server instructions and the skill now say to read `amicus_backends(detail="full")` once
+  before the first paid call. `RESULT_FORMAT` stays 5.
 - **Breaking (`FINGERPRINT` `schema-18`).** `amicus_consult`, `amicus_review_changes`,
   `amicus_adversarial_review` and `amicus_delegate` accept `idempotency_key`, as both siblings'
   sync tools do (#66); it was async-only, and `docs/MIGRATION.md` never said so. A keyed sync

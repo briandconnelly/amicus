@@ -188,11 +188,12 @@ async def test_backends_catalog_reports_enabled_available_and_unavailable():
         registry=_mixed_registry(),
     )
     async with Client(app) as c:
-        res = await c.call_tool("amicus_backends", {})
+        res = await c.call_tool("amicus_backends", {"detail": "full"})
         tool = next(t for t in await c.list_tools() if t.name == "amicus_backends")
         only = await c.call_tool("amicus_backends", {"backend": "kimi"})
     payload = res.structured_content
     Draft202012Validator(tool.output_schema).validate(payload)
+    assert payload["omitted_fields"] == []
     by_id = {b["id"]: b for b in payload["backends"]}
     assert set(by_id) == {"codex", "kimi", "claude"}
     assert by_id["codex"]["enabled"] and by_id["codex"]["available"]
@@ -204,6 +205,8 @@ async def test_backends_catalog_reports_enabled_available_and_unavailable():
     }
     assert by_id["codex"]["features"] == ["delegate"]
     assert by_id["codex"]["egress"] == "sends to OpenAI" and by_id["codex"]["carriers"] == "argv"
+    # full keeps a null where the backend declares nothing (kimi has no loaded plugin).
+    assert by_id["kimi"]["egress"] is None and "egress" in by_id["kimi"]
     assert {o["name"] for o in by_id["codex"]["options"]} == {"isolation"}
     assert by_id["codex"]["options"][0]["allowed_values"] == [
         "inherit",
@@ -263,14 +266,50 @@ async def test_models_for_available_and_unavailable_backends():
     assert "unavailable" in err["message"]
 
 
-async def test_capabilities_summary_full_contracts_and_include_schemas():
+async def test_backends_summary_omits_the_disclosures_and_says_so():
+    """The default projection drops the four disclosure KEYS (not nulls them, which would
+    read as "declares none") and names them in omitted_fields; the resource never does."""
+    app = _app(env={"AMICUS_BACKENDS": "codex,kimi"}, registry=_mixed_registry())
+    async with Client(app) as c:
+        tool = next(t for t in await c.list_tools() if t.name == "amicus_backends")
+        summary = (await c.call_tool("amicus_backends", {})).structured_content
+        full = (await c.call_tool("amicus_backends", {"detail": "full"})).structured_content
+        [entry] = await c.read_resource("amicus://backends/codex")
+    Draft202012Validator(tool.output_schema).validate(summary)
+    assert tool.input_schema["properties"]["detail"]["default"] == "summary"
+    omitted = {"egress", "carriers", "readonly_honesty", "implicit_context"}
+    assert summary["omitted_fields"] == sorted(
+        omitted, key=list(results.BACKEND_DISCLOSURE_FIELDS).index
+    )
+    assert set(results.BACKEND_DISCLOSURE_FIELDS) == omitted
+    assert [b["id"] for b in summary["backends"]] == [b["id"] for b in full["backends"]]
+    for thin, fat in zip(summary["backends"], full["backends"], strict=True):
+        assert not (omitted & set(thin)), thin["id"]
+        assert omitted <= set(fat), fat["id"]
+        assert {k: v for k, v in fat.items() if k not in omitted} == thin
+    assert summary["unavailable"] == full["unavailable"]
+    resource_entry = json.loads(entry.text)
+    assert resource_entry["carriers"] == "argv" and resource_entry["egress"] == "sends to OpenAI"
+    assert "omitted_fields" not in resource_entry
+    # The wire cost the projection buys, per entry: the disclosures are most of it.
+    thin_codex = json.dumps(summary["backends"][0], separators=(",", ":"))
+    fat_codex = json.dumps(full["backends"][0], separators=(",", ":"))
+    assert len(thin_codex) < len(fat_codex)
+
+
+async def test_capabilities_summary_full_row_selection_and_include_schemas():
     app = _app()
     async with Client(app) as c:
         tool = next(t for t in await c.list_tools() if t.name == "amicus_capabilities")
         summary = (await c.call_tool("amicus_capabilities", {})).structured_content
         full = (await c.call_tool("amicus_capabilities", {"detail": "full"})).structured_content
-        contracts = (
-            await c.call_tool("amicus_capabilities", {"detail": "contracts"})
+        no_rows = (
+            await c.call_tool("amicus_capabilities", {"include_tool_details": False})
+        ).structured_content
+        no_rows_full = (
+            await c.call_tool(
+                "amicus_capabilities", {"include_tool_details": False, "detail": "full"}
+            )
         ).structured_content
         with_schemas = (
             await c.call_tool(
@@ -288,18 +327,30 @@ async def test_capabilities_summary_full_contracts_and_include_schemas():
     assert summary["tasks"]["enabled"] is False and summary["tasks"]["task_tools"] == []
     assert summary["enabled_backends"] == ["codex", "kimi", "claude"]
     assert {d["name"] for d in summary["tool_details"]} == set(tools.TOOL_ORDER)
+    # detail changes field density only: same rows, same order, at both levels.
+    assert [d["name"] for d in summary["tool_details"]] == [d["name"] for d in full["tool_details"]]
     entry = next(d for d in summary["tool_details"] if d["name"] == "amicus_consult")
-    assert set(entry) == {"name", "cost", "stability", "backends", "error_codes"}
+    assert set(entry) == {"name", "cost", "stability", "backends"}
     assert entry["stability"] is None
     entry_full = next(d for d in full["tool_details"] if d["name"] == "amicus_consult")
+    assert set(entry_full) == set(entry) | set(results.TOOL_DETAIL_FULL_FIELDS)
     assert entry_full["required_params"] == ["backend", "question"]
     assert "use_when" in entry_full and entry_full["returns"]
-    assert contracts["tool_details"] == []
+    assert "backend_unavailable" in entry_full["error_codes"]
+    # A summary row never carries error_codes at all: an empty list there would claim the
+    # tool raises nothing, and the key's absence is what says "not requested".
+    assert all("error_codes" not in d for d in summary["tool_details"])
+    # Row selection rides include_tool_details, never detail.
+    assert no_rows["tool_details"] == [] and no_rows_full["tool_details"] == []
+    assert {k: v for k, v in no_rows.items() if k != "tool_details"} == {
+        k: v for k, v in summary.items() if k != "tool_details"
+    }
     assert set(with_schemas["schemas"]) == {"error-envelope", "parameter-contracts"}
     assert with_schemas["schemas"]["error-envelope"]["$schema"]
     assert "surface_digest" in summary and summary["fingerprint"] == FINGERPRINT
     assert "delivery statement" in summary["tasks"]["fallback"]
-    assert set(get_args(CapabilitiesDetail)) == {"summary", "full", "contracts"}
+    assert set(get_args(CapabilitiesDetail)) == {"summary", "full"}
+    assert tool.input_schema["properties"]["include_tool_details"]["default"] is True
 
 
 async def test_capabilities_reports_unknown_include_schemas_as_invalid_arguments():
