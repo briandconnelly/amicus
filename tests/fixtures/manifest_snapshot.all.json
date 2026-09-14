@@ -1565,7 +1565,7 @@
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-28",
+                "default": "amicus/0.1/schema-29",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -2477,7 +2477,7 @@
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-28",
+            "default": "amicus/0.1/schema-29",
             "title": "Fingerprint",
             "type": "string"
           },
@@ -3517,7 +3517,7 @@
         "openWorldHint": true,
         "readOnlyHint": false
       },
-      "description": "PAID — spends the selected backend's quota on every new call. Async twin of amicus_adversarial_review: returns a job handle; poll amicus_job_status, read amicus_job_result. Same egress and feature gate.",
+      "description": "PAID — spends the selected backend's quota on every new call. Async twin of amicus_adversarial_review: returns a job handle; poll amicus_job_status while status is running, then read amicus_job_result. Same egress and feature gate.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
@@ -3842,7 +3842,15 @@
                 "type": "boolean"
               },
               "poll_after_ms": {
-                "type": "integer"
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Milliseconds to wait before the next poll while status is running; null on any terminal status."
               },
               "started_at": {
                 "type": "string"
@@ -5142,7 +5150,7 @@
         "openWorldHint": true,
         "readOnlyHint": false
       },
-      "description": "PAID — spends the selected backend's quota on every new call. Async twin of amicus_consult: returns a job handle immediately; poll amicus_job_status, read amicus_job_result. Egress: sends question, extra_context and instructions_append raw to the backend's provider; the backend can read files outside the workspace. Starting a job commits to spend. Deadline: AMICUS_JOB_MAX_SECONDS (default 1800s).",
+      "description": "PAID — spends the selected backend's quota on every new call. Async twin of amicus_consult: returns a job handle immediately; poll amicus_job_status while status is running, then read amicus_job_result. Egress: sends question, extra_context and instructions_append raw to the backend's provider; the backend can read files outside the workspace. Starting a job commits to spend. Deadline: AMICUS_JOB_MAX_SECONDS (default 1800s).",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
@@ -5389,7 +5397,15 @@
                 "type": "boolean"
               },
               "poll_after_ms": {
-                "type": "integer"
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Milliseconds to wait before the next poll while status is running; null on any terminal status."
               },
               "started_at": {
                 "type": "string"
@@ -5908,7 +5924,7 @@
         "openWorldHint": true,
         "readOnlyHint": false
       },
-      "description": "PAID — spends the selected backend's quota on every new call. Async twin of amicus_delegate: returns a job handle; poll amicus_job_status, read amicus_job_result. Same egress and feature gate. Starting a job commits to spend. Deadline: AMICUS_JOB_MAX_SECONDS (default 1800s).",
+      "description": "PAID — spends the selected backend's quota on every new call. Async twin of amicus_delegate: returns a job handle; poll amicus_job_status while status is running, then read amicus_job_result. Same egress and feature gate. Starting a job commits to spend. Deadline: AMICUS_JOB_MAX_SECONDS (default 1800s).",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
@@ -6133,7 +6149,15 @@
                 "type": "boolean"
               },
               "poll_after_ms": {
-                "type": "integer"
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Milliseconds to wait before the next poll while status is running; null on any terminal status."
               },
               "started_at": {
                 "type": "string"
@@ -7154,7 +7178,8 @@
                   {
                     "type": "null"
                   }
-                ]
+                ],
+                "description": "Milliseconds to wait before the next poll while status is running; null on any terminal status."
               },
               "result_available": {
                 "type": "boolean"
@@ -7775,7 +7800,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Free — no model call. Poll a job's state without fetching its result: status, elapsed time, result_available, result_ok, and poll_after_ms to honor before the next poll (it grows with elapsed time, up to 30 s). Records expire after AMICUS_JOB_TTL (default 24h) and a per-workspace cap evicts the oldest terminal records; read results promptly.",
+      "description": "Free — no model call. Poll a job's state without fetching its result: status, elapsed time, result_available, result_ok, and poll_after_ms to honor before the next poll while status is running (it grows with elapsed time, up to 30 s; null on any terminal status). Records expire after AMICUS_JOB_TTL (default 24h) and a per-workspace cap evicts the oldest terminal records; read results promptly.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
@@ -7856,7 +7881,8 @@
                   {
                     "type": "null"
                   }
-                ]
+                ],
+                "description": "Milliseconds to wait before the next poll while status is running; null on any terminal status."
               },
               "result_available": {
                 "type": "boolean"
@@ -8945,7 +8971,7 @@
         "openWorldHint": true,
         "readOnlyHint": false
       },
-      "description": "PAID — spends the selected backend's quota on every new call. Async twin of amicus_review_changes: returns a job handle; poll amicus_job_status, read amicus_job_result. Same egress. Starting a job commits to spend. Deadline: AMICUS_JOB_MAX_SECONDS (default 1800s).",
+      "description": "PAID — spends the selected backend's quota on every new call. Async twin of amicus_review_changes: returns a job handle; poll amicus_job_status while status is running, then read amicus_job_result. Same egress. Starting a job commits to spend. Deadline: AMICUS_JOB_MAX_SECONDS (default 1800s).",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
@@ -9259,7 +9285,15 @@
                 "type": "boolean"
               },
               "poll_after_ms": {
-                "type": "integer"
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Milliseconds to wait before the next poll while status is running; null on any terminal status."
               },
               "started_at": {
                 "type": "string"

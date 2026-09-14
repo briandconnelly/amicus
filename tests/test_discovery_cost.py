@@ -133,6 +133,17 @@ the sentence saying a preview does not bound what the backend reads has to survi
 name. A lean alias without the outputSchema would have cost about 4 KB less and was rejected
 for that reason. The bytes come back when the alias is removed. The 448 bytes between the last
 MEASURED and 104676 predate this change: they accumulated on main inside the old budget.
+
+The schema-28 -> schema-29 raise (+953 bytes on the `all` profile: 113730 -> 114683) makes the
+job hint honest about terminal jobs (#101). A replayed keyed `_async` start can hand back a job
+that has already finished, whose `poll_after_ms` is now null. All 953 bytes are tool records.
+The field gains a null branch on the four `_async` outputSchemas, 28 bytes each. It gains a
+one-line description, 112 bytes on each of the six outputSchemas that carry it: the four
+`_async` tools, amicus_job_status and amicus_job_cancel. Without it, a schema-only reader sees
+an integer-or-null with no rule for the null. The four `_async` descriptions gain 29 bytes each
+and amicus_job_status's gains 53, so that every instruction to wait on the hint says it applies
+only while the job runs. The 12 bytes between the last MEASURED and 113730 predate this change:
+they accumulated on main inside the old budget.
 """
 
 from __future__ import annotations
@@ -142,7 +153,7 @@ from tests.conftest import spawned_server_env
 
 from amicus import manifest
 
-MEASURED: dict[str, int] = {"all": 113718, "codex-kimi": 113726, "claude": 113718}
+MEASURED: dict[str, int] = {"all": 114683, "codex-kimi": 114691, "claude": 114683}
 BUDGET: dict[str, int] = {p: ((n // 1000) + 1) * 1000 for p, n in MEASURED.items()}
 
 
