@@ -108,6 +108,17 @@ reader of the schema knows an absent key means "not requested" and a null means 
 plugin declares one;
 the new `omitted_fields` property that names the projection in-band; and the two tool
 descriptions, which now say to read detail=full before the first paid call.
+
+The schema-22 -> schema-23 raise (+5181 bytes on the `all` profile: 98403 -> 103584) is
+`lists_diagnostics` on the three tools whose prose lists are parsed from backend output
+(#52), the same trade #38 made for `findings_diagnostics` and about the same size. About 1750
+bytes is prose: one description per tool, carried on the field rather than on each member's
+`reasons`, where the first draft inlined it nine times for 2400 bytes more. The rest is
+structure - the object, its three nullable members and their `dropped`/`reasons` shape, inlined
+per tool. The prose guards the misreadings the field exists to prevent: that a null member
+beside an empty list means the backend said none, and that `dropped: 0` under
+`number_stringified` means nothing was lost. amicus_delegate does not carry the field, so it
+pays nothing.
 """
 
 from __future__ import annotations
@@ -117,7 +128,7 @@ from tests.conftest import spawned_server_env
 
 from amicus import manifest
 
-MEASURED: dict[str, int] = {"all": 98403, "codex-kimi": 98411, "claude": 98403}
+MEASURED: dict[str, int] = {"all": 103584, "codex-kimi": 103592, "claude": 103584}
 BUDGET: dict[str, int] = {p: ((n // 1000) + 1) * 1000 for p, n in MEASURED.items()}
 
 
