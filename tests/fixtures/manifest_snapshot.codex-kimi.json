@@ -3183,7 +3183,7 @@
                     "type": "null"
                   }
                 ],
-                "description": "What the backend reported that amicus could not carry intact; null when nothing deviated. Read this before acting on an empty or short `findings` list."
+                "description": "What the backend reported that amicus could not carry intact; null when nothing deviated. Read this before acting on an empty or short `findings` list. On a review_status of not_run no backend ran: this is null and review_status is the signal."
               },
               "lists_diagnostics": {
                 "anyOf": [
@@ -3317,7 +3317,7 @@
                     "type": "null"
                   }
                 ],
-                "description": "What the backend put in `questions`, `assumptions` or `next_steps` that amicus could not carry intact; null when all three were clean, and a null member is a clean list. Per member, `dropped` counts entries dropped whole (null: the member could not be read at all) and `reasons` says why. number_stringified: a number delivered as its string, nothing lost. invalid_entry: an entry that was not a string or number, dropped whole. invalid_container: present but not a list. missing_member: the required member was absent. None of these touches the verdict or confidence."
+                "description": "What the backend put in `questions`, `assumptions` or `next_steps` that amicus could not carry intact; null when all three were clean, and a null member is a clean list. Per member, `dropped` counts entries dropped whole (null: the member could not be read at all) and `reasons` says why. number_stringified: a number delivered as its string, nothing lost. invalid_entry: an entry that was not a string or number, dropped whole. invalid_container: present but not a list. missing_member: the required member was absent. None of these touches the verdict or confidence. On a review_status of not_run no backend ran: this is null and review_status is the signal."
               },
               "meta": {
                 "description": "Result metadata; schema at amicus://result-meta",
@@ -4826,7 +4826,7 @@
                     "type": "null"
                   }
                 ],
-                "description": "What the backend reported that amicus could not carry intact; null when nothing deviated. Read this before acting on an empty or short `findings` list."
+                "description": "What the backend reported that amicus could not carry intact; null when nothing deviated. Read this before acting on an empty or short `findings` list. On a review_status of not_run no backend ran: this is null and review_status is the signal."
               },
               "lists_diagnostics": {
                 "anyOf": [
@@ -4960,7 +4960,7 @@
                     "type": "null"
                   }
                 ],
-                "description": "What the backend put in `questions`, `assumptions` or `next_steps` that amicus could not carry intact; null when all three were clean, and a null member is a clean list. Per member, `dropped` counts entries dropped whole (null: the member could not be read at all) and `reasons` says why. number_stringified: a number delivered as its string, nothing lost. invalid_entry: an entry that was not a string or number, dropped whole. invalid_container: present but not a list. missing_member: the required member was absent. None of these touches the verdict or confidence."
+                "description": "What the backend put in `questions`, `assumptions` or `next_steps` that amicus could not carry intact; null when all three were clean, and a null member is a clean list. Per member, `dropped` counts entries dropped whole (null: the member could not be read at all) and `reasons` says why. number_stringified: a number delivered as its string, nothing lost. invalid_entry: an entry that was not a string or number, dropped whole. invalid_container: present but not a list. missing_member: the required member was absent. None of these touches the verdict or confidence. On a review_status of not_run no backend ran: this is null and review_status is the signal."
               },
               "meta": {
                 "description": "Result metadata; schema at amicus://result-meta",
@@ -5724,7 +5724,7 @@
                     "type": "null"
                   }
                 ],
-                "description": "What the backend reported that amicus could not carry intact; null when nothing deviated. Read this before acting on an empty or short `findings` list."
+                "description": "What the backend reported that amicus could not carry intact; null when nothing deviated. Read this before acting on an empty or short `findings` list. On a review_status of not_run no backend ran: this is null and review_status is the signal."
               },
               "meta": {
                 "description": "Result metadata; schema at amicus://result-meta",
@@ -8602,7 +8602,7 @@
                     "type": "null"
                   }
                 ],
-                "description": "What the backend reported that amicus could not carry intact; null when nothing deviated. Read this before acting on an empty or short `findings` list."
+                "description": "What the backend reported that amicus could not carry intact; null when nothing deviated. Read this before acting on an empty or short `findings` list. On a review_status of not_run no backend ran: this is null and review_status is the signal."
               },
               "lists_diagnostics": {
                 "anyOf": [
@@ -8736,7 +8736,7 @@
                     "type": "null"
                   }
                 ],
-                "description": "What the backend put in `questions`, `assumptions` or `next_steps` that amicus could not carry intact; null when all three were clean, and a null member is a clean list. Per member, `dropped` counts entries dropped whole (null: the member could not be read at all) and `reasons` says why. number_stringified: a number delivered as its string, nothing lost. invalid_entry: an entry that was not a string or number, dropped whole. invalid_container: present but not a list. missing_member: the required member was absent. None of these touches the verdict or confidence."
+                "description": "What the backend put in `questions`, `assumptions` or `next_steps` that amicus could not carry intact; null when all three were clean, and a null member is a clean list. Per member, `dropped` counts entries dropped whole (null: the member could not be read at all) and `reasons` says why. number_stringified: a number delivered as its string, nothing lost. invalid_entry: an entry that was not a string or number, dropped whole. invalid_container: present but not a list. missing_member: the required member was absent. None of these touches the verdict or confidence. On a review_status of not_run no backend ran: this is null and review_status is the signal."
               },
               "meta": {
                 "description": "Result metadata; schema at amicus://result-meta",
