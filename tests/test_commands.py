@@ -10,9 +10,27 @@ from tests.support import fakeplugin
 
 from amicus import config, server
 from amicus.registry import BackendRegistry
-from amicus.tools import TOOL_ORDER
+from amicus.tools import PAIRS, TOOL_ORDER
 
 COMMANDS = Path(__file__).resolve().parents[1] / "commands" / "amicus"
+
+# A command launches the tool its opening sentence names as "the `amicus_x` MCP tool";
+# `dry-run.md` and `jobs.md` drive several tools and name none that way.
+_LAUNCH = re.compile(r"`(amicus_[a-z_]+)`\s+MCP\s+tool")
+
+# Async twins that get a command of their own rather than a pointer inside their verb's
+# command. Delegation is the verb likeliest to outrun the sync deadline, where a sync call
+# is terminated with its partial work lost (#67); the other twins stay reachable from
+# their verb's command.
+ASYNC_TWINS_WITH_A_COMMAND = frozenset({"amicus_delegate_async"})
+
+
+def _launched_tools() -> set[str]:
+    return {
+        match.group(1)
+        for path in COMMANDS.glob("*.md")
+        if (match := _LAUNCH.search(path.read_text()))
+    }
 
 
 def test_every_referenced_tool_exists():
@@ -28,6 +46,23 @@ def test_every_tool_is_reachable_from_some_command():
     for path in COMMANDS.glob("*.md"):
         referenced.update(re.findall(r"\bamicus_[a-z_]+\b", path.read_text()))
     assert set(TOOL_ORDER) - referenced == set()
+
+
+def test_every_verb_and_listed_twin_has_a_command_that_launches_it():
+    """Reachability let #67 through: `delegate.md` names `amicus_delegate_async` in
+    prose, so the twin counted as reachable while no command started it."""
+    assert {twin for _, twin in PAIRS} >= ASYNC_TWINS_WITH_A_COMMAND
+    wanted = {verb for verb, _ in PAIRS} | ASYNC_TWINS_WITH_A_COMMAND
+    missing = wanted - _launched_tools()
+    assert not missing, f"no command launches {sorted(missing)}"
+
+
+def test_every_command_is_listed_in_the_readme():
+    """The README's slash-command table is kept by hand; a command it omits is one a
+    reader never learns exists."""
+    readme = (COMMANDS.parents[1] / "README.md").read_text()
+    unlisted = sorted(p.stem for p in COMMANDS.glob("*.md") if f"`/amicus:{p.stem}`" not in readme)
+    assert not unlisted, f"the README's command table omits {unlisted}"
 
 
 # `status.md` says to check `status`, not just `enabled`, on an `amicus_backends` result.

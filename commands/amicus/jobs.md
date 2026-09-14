@@ -12,7 +12,11 @@ Request: $ARGUMENTS
 
 - Poll without fetching the result: `amicus_job_status` with `job_id`. Honor the
   returned `poll_after_ms` rather than polling on a fixed interval.
-- Fetch a finished result, keeping the record: `amicus_job_result` with `job_id`.
+- Fetch a finished result, keeping the record: `amicus_job_result` with `job_id`, once
+  `amicus_job_status` reports any status but `running`. Do not wait on
+  `result_available` for this: it is true only for `done`, so a job that failed, was
+  cancelled or timed out never sets it, and `amicus_job_result` returns that job's
+  terminal error instead.
 - Fetch a finished result and delete the record: `amicus_job_consume_result` with
   `job_id` — use this once you are done with the result. Its
   `meta.consume.discard_outcome` reports what the store did: after `removed` or
