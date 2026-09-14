@@ -31,5 +31,6 @@ Treat the returned `verdict` and `confidence` as claims to verify, not settled f
 — run this project's own checks before acting on a finding.
 
 For a review that can exceed the synchronous deadline, use
-`amicus_adversarial_review_async` instead and poll `amicus_job_status` for the
-result — a sync call whose deadline expires still spends the paid run.
+`amicus_adversarial_review_async` instead: poll `amicus_job_status` while its
+status is `running`, then fetch with `amicus_job_result` — a sync call whose
+deadline expires still spends the paid run.
