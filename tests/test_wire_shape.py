@@ -156,6 +156,8 @@ def test_handles_section_pins_the_job_envelopes():
     assert handles["job_started"]["task_id"] is None
     assert handles["job_started_replayed"]["meta"]["idempotency_replayed"] is True
     assert handles["job_started_replayed"]["status"] == "done"
+    assert handles["job_started"]["poll_after_ms"] == 1000
+    assert handles["job_started_replayed"]["poll_after_ms"] is None
     assert handles["job_status_running"]["poll_after_ms"] == 1000
     assert handles["job_status_cancelled"]["poll_after_ms"] is None
     assert handles["job_status_cancelled"]["cleanup_warnings"] == ["/tmp/amicus-wt-leftover"]

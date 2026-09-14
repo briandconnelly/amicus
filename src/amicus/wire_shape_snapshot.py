@@ -323,7 +323,7 @@ def _handles() -> dict[str, Any]:
             deadline=1800,
             expires_at=_EXPIRES_AT,
             meta=_handle_meta(),
-            poll_after_ms=1000,
+            poll_after_ms=None,
             task_id="task-0",
         )
     )
