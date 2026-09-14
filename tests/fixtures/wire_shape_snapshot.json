@@ -51,6 +51,7 @@
         },
         "findings": [],
         "findings_diagnostics": null,
+        "lists_diagnostics": null,
         "meta": {
           "backend": "codex",
           "backend_details": {
@@ -110,6 +111,7 @@
         "assumptions": [],
         "findings": [],
         "findings_diagnostics": null,
+        "lists_diagnostics": null,
         "meta": {
           "backend": "codex",
           "backend_details": {
@@ -205,6 +207,7 @@
         },
         "findings": [],
         "findings_diagnostics": null,
+        "lists_diagnostics": null,
         "meta": {
           "backend": "codex",
           "backend_details": {
@@ -275,6 +278,7 @@
         },
         "findings": [],
         "findings_diagnostics": null,
+        "lists_diagnostics": null,
         "meta": {
           "backend": "codex",
           "backend_details": {
@@ -351,6 +355,7 @@
         },
         "findings": [],
         "findings_diagnostics": null,
+        "lists_diagnostics": null,
         "meta": {
           "backend": "codex",
           "backend_details": {
@@ -410,6 +415,7 @@
         "assumptions": [],
         "findings": [],
         "findings_diagnostics": null,
+        "lists_diagnostics": null,
         "meta": {
           "backend": "codex",
           "backend_details": {
@@ -505,6 +511,7 @@
         },
         "findings": [],
         "findings_diagnostics": null,
+        "lists_diagnostics": null,
         "meta": {
           "backend": "codex",
           "backend_details": {
@@ -575,6 +582,7 @@
         },
         "findings": [],
         "findings_diagnostics": null,
+        "lists_diagnostics": null,
         "meta": {
           "backend": "codex",
           "backend_details": {
@@ -961,7 +969,7 @@
       "error": {
         "backend": null,
         "code": "job_result_incompatible",
-        "message": "stored job result was written under a different result format (result_format 6; this release reads 5, producer server_version 0.0.0): stored under another result format",
+        "message": "stored job result was written under a different result format (result_format 7; this release reads 6, producer server_version 0.0.0): stored under another result format",
         "repair": {
           "alternative": "The stored result predates this server version; start a new job.",
           "next_step": "start_new_job"

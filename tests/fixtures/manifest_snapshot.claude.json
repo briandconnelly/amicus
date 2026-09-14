@@ -147,7 +147,7 @@
     ],
     "protocol_revision": "2026-07-28",
     "resource_error_carrier": "JSON-RPC error; the envelope (machine_code/human_message/backend/temporary/retry_after_ms/repair/resource_uri/request_id) is in error.data. Classify by error.data.machine_code: the numeric is era-bound (-32002 on a 2025-11-25 connection, -32602 on 2026-07-28; -32603 for a read failure on both).",
-    "result_format": 5,
+    "result_format": 6,
     "result_meta_resource": "amicus://result-meta",
     "scope": [
       "Second opinions, git-change reviews, adversarial critiques and delegated diffs from Codex, Kimi or Claude Code, selected per call.",
@@ -1503,7 +1503,7 @@
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-22",
+                "default": "amicus/0.1/schema-23",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -2430,7 +2430,7 @@
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-22",
+            "default": "amicus/0.1/schema-23",
             "title": "Fingerprint",
             "type": "string"
           },
@@ -3182,7 +3182,141 @@
                     "type": "null"
                   }
                 ],
-                "description": "What the backend reported that amicus could not carry intact; null when nothing deviated. Read this before acting on an empty or short `findings` list."
+                "description": "What the backend reported that amicus could not carry intact; null when nothing deviated. Read this before acting on an empty or short `findings` list. On a review_status of not_run no backend ran: this is null and review_status is the signal."
+              },
+              "lists_diagnostics": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "assumptions": {
+                        "anyOf": [
+                          {
+                            "additionalProperties": false,
+                            "properties": {
+                              "dropped": {
+                                "anyOf": [
+                                  {
+                                    "minimum": 0,
+                                    "type": "integer"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "reasons": {
+                                "items": {
+                                  "enum": [
+                                    "invalid_container",
+                                    "invalid_entry",
+                                    "missing_member",
+                                    "number_stringified"
+                                  ],
+                                  "type": "string"
+                                },
+                                "minItems": 1,
+                                "type": "array"
+                              }
+                            },
+                            "required": [
+                              "reasons"
+                            ],
+                            "type": "object"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "next_steps": {
+                        "anyOf": [
+                          {
+                            "additionalProperties": false,
+                            "properties": {
+                              "dropped": {
+                                "anyOf": [
+                                  {
+                                    "minimum": 0,
+                                    "type": "integer"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "reasons": {
+                                "items": {
+                                  "enum": [
+                                    "invalid_container",
+                                    "invalid_entry",
+                                    "missing_member",
+                                    "number_stringified"
+                                  ],
+                                  "type": "string"
+                                },
+                                "minItems": 1,
+                                "type": "array"
+                              }
+                            },
+                            "required": [
+                              "reasons"
+                            ],
+                            "type": "object"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "questions": {
+                        "anyOf": [
+                          {
+                            "additionalProperties": false,
+                            "properties": {
+                              "dropped": {
+                                "anyOf": [
+                                  {
+                                    "minimum": 0,
+                                    "type": "integer"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "reasons": {
+                                "items": {
+                                  "enum": [
+                                    "invalid_container",
+                                    "invalid_entry",
+                                    "missing_member",
+                                    "number_stringified"
+                                  ],
+                                  "type": "string"
+                                },
+                                "minItems": 1,
+                                "type": "array"
+                              }
+                            },
+                            "required": [
+                              "reasons"
+                            ],
+                            "type": "object"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "What the backend put in `questions`, `assumptions` or `next_steps` that amicus could not carry intact; null when all three were clean, and a null member is a clean list. Per member, `dropped` counts entries dropped whole (null: the member could not be read at all) and `reasons` says why. number_stringified: a number delivered as its string, nothing lost. invalid_entry: an entry that was not a string or number, dropped whole. invalid_container: present but not a list. missing_member: the required member was absent. None of these touches the verdict or confidence. On a review_status of not_run no backend ran: this is null and review_status is the signal."
               },
               "meta": {
                 "description": "Result metadata; schema at amicus://result-meta",
@@ -4691,7 +4825,141 @@
                     "type": "null"
                   }
                 ],
-                "description": "What the backend reported that amicus could not carry intact; null when nothing deviated. Read this before acting on an empty or short `findings` list."
+                "description": "What the backend reported that amicus could not carry intact; null when nothing deviated. Read this before acting on an empty or short `findings` list. On a review_status of not_run no backend ran: this is null and review_status is the signal."
+              },
+              "lists_diagnostics": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "assumptions": {
+                        "anyOf": [
+                          {
+                            "additionalProperties": false,
+                            "properties": {
+                              "dropped": {
+                                "anyOf": [
+                                  {
+                                    "minimum": 0,
+                                    "type": "integer"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "reasons": {
+                                "items": {
+                                  "enum": [
+                                    "invalid_container",
+                                    "invalid_entry",
+                                    "missing_member",
+                                    "number_stringified"
+                                  ],
+                                  "type": "string"
+                                },
+                                "minItems": 1,
+                                "type": "array"
+                              }
+                            },
+                            "required": [
+                              "reasons"
+                            ],
+                            "type": "object"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "next_steps": {
+                        "anyOf": [
+                          {
+                            "additionalProperties": false,
+                            "properties": {
+                              "dropped": {
+                                "anyOf": [
+                                  {
+                                    "minimum": 0,
+                                    "type": "integer"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "reasons": {
+                                "items": {
+                                  "enum": [
+                                    "invalid_container",
+                                    "invalid_entry",
+                                    "missing_member",
+                                    "number_stringified"
+                                  ],
+                                  "type": "string"
+                                },
+                                "minItems": 1,
+                                "type": "array"
+                              }
+                            },
+                            "required": [
+                              "reasons"
+                            ],
+                            "type": "object"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "questions": {
+                        "anyOf": [
+                          {
+                            "additionalProperties": false,
+                            "properties": {
+                              "dropped": {
+                                "anyOf": [
+                                  {
+                                    "minimum": 0,
+                                    "type": "integer"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "reasons": {
+                                "items": {
+                                  "enum": [
+                                    "invalid_container",
+                                    "invalid_entry",
+                                    "missing_member",
+                                    "number_stringified"
+                                  ],
+                                  "type": "string"
+                                },
+                                "minItems": 1,
+                                "type": "array"
+                              }
+                            },
+                            "required": [
+                              "reasons"
+                            ],
+                            "type": "object"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "What the backend put in `questions`, `assumptions` or `next_steps` that amicus could not carry intact; null when all three were clean, and a null member is a clean list. Per member, `dropped` counts entries dropped whole (null: the member could not be read at all) and `reasons` says why. number_stringified: a number delivered as its string, nothing lost. invalid_entry: an entry that was not a string or number, dropped whole. invalid_container: present but not a list. missing_member: the required member was absent. None of these touches the verdict or confidence. On a review_status of not_run no backend ran: this is null and review_status is the signal."
               },
               "meta": {
                 "description": "Result metadata; schema at amicus://result-meta",
@@ -5455,7 +5723,7 @@
                     "type": "null"
                   }
                 ],
-                "description": "What the backend reported that amicus could not carry intact; null when nothing deviated. Read this before acting on an empty or short `findings` list."
+                "description": "What the backend reported that amicus could not carry intact; null when nothing deviated. Read this before acting on an empty or short `findings` list. On a review_status of not_run no backend ran: this is null and review_status is the signal."
               },
               "meta": {
                 "description": "Result metadata; schema at amicus://result-meta",
@@ -8333,7 +8601,141 @@
                     "type": "null"
                   }
                 ],
-                "description": "What the backend reported that amicus could not carry intact; null when nothing deviated. Read this before acting on an empty or short `findings` list."
+                "description": "What the backend reported that amicus could not carry intact; null when nothing deviated. Read this before acting on an empty or short `findings` list. On a review_status of not_run no backend ran: this is null and review_status is the signal."
+              },
+              "lists_diagnostics": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "assumptions": {
+                        "anyOf": [
+                          {
+                            "additionalProperties": false,
+                            "properties": {
+                              "dropped": {
+                                "anyOf": [
+                                  {
+                                    "minimum": 0,
+                                    "type": "integer"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "reasons": {
+                                "items": {
+                                  "enum": [
+                                    "invalid_container",
+                                    "invalid_entry",
+                                    "missing_member",
+                                    "number_stringified"
+                                  ],
+                                  "type": "string"
+                                },
+                                "minItems": 1,
+                                "type": "array"
+                              }
+                            },
+                            "required": [
+                              "reasons"
+                            ],
+                            "type": "object"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "next_steps": {
+                        "anyOf": [
+                          {
+                            "additionalProperties": false,
+                            "properties": {
+                              "dropped": {
+                                "anyOf": [
+                                  {
+                                    "minimum": 0,
+                                    "type": "integer"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "reasons": {
+                                "items": {
+                                  "enum": [
+                                    "invalid_container",
+                                    "invalid_entry",
+                                    "missing_member",
+                                    "number_stringified"
+                                  ],
+                                  "type": "string"
+                                },
+                                "minItems": 1,
+                                "type": "array"
+                              }
+                            },
+                            "required": [
+                              "reasons"
+                            ],
+                            "type": "object"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "questions": {
+                        "anyOf": [
+                          {
+                            "additionalProperties": false,
+                            "properties": {
+                              "dropped": {
+                                "anyOf": [
+                                  {
+                                    "minimum": 0,
+                                    "type": "integer"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "reasons": {
+                                "items": {
+                                  "enum": [
+                                    "invalid_container",
+                                    "invalid_entry",
+                                    "missing_member",
+                                    "number_stringified"
+                                  ],
+                                  "type": "string"
+                                },
+                                "minItems": 1,
+                                "type": "array"
+                              }
+                            },
+                            "required": [
+                              "reasons"
+                            ],
+                            "type": "object"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "What the backend put in `questions`, `assumptions` or `next_steps` that amicus could not carry intact; null when all three were clean, and a null member is a clean list. Per member, `dropped` counts entries dropped whole (null: the member could not be read at all) and `reasons` says why. number_stringified: a number delivered as its string, nothing lost. invalid_entry: an entry that was not a string or number, dropped whole. invalid_container: present but not a list. missing_member: the required member was absent. None of these touches the verdict or confidence. On a review_status of not_run no backend ran: this is null and review_status is the signal."
               },
               "meta": {
                 "description": "Result metadata; schema at amicus://result-meta",

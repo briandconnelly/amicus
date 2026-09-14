@@ -75,6 +75,17 @@ def test_gather_not_run_on_a_clean_tree_and_discloses_omitted_untracked(repo):
     assert "name them in paths" not in out["summary"]
 
 
+def test_not_run_keeps_both_diagnostics_null_because_review_status_is_the_signal(repo):
+    """The documented exception to "null means measured and clean" (#52, Copilot's review
+    of PR #90): no backend ran, so there is no output for either diagnostic to measure, and
+    `review_status` is the machine signal. Pinned so a future site that starts emitting
+    `missing_member` here, describing output that never existed, has to change the docs."""
+    out = review.gather(_spec(str(repo)), meta_for(_spec(str(repo))), fakeplugin.make_plugin())
+    assert out["review_status"] == "not_run"
+    assert out["findings_diagnostics"] is None and out["lists_diagnostics"] is None
+    assert out["findings"] == [] and out["next_steps"] == [] and out["questions"] == []
+
+
 def test_not_run_discloses_the_omitted_untracked_file_as_coverage(repo):
     """#65: the omission reaches the caller as a field it can branch on, not only as prose."""
     (repo / "new.py").write_text("n = 1\n")

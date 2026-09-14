@@ -97,6 +97,40 @@ delivered as `unknown`/`low` with its own sentence in the summary, separate from
 sentence. A `fail` or `concerns` keeps its verdict **and its confidence** — missing output does not
 refute a negative the model did reach, so read `findings_diagnostics` on those yourself.
 
+## `lists_diagnostics`: the prose lists amicus could not carry
+
+The same disclosure for `questions`, `assumptions` and `next_steps` on consult, review and
+adversarial results. The output schema asks for each as an array of strings. A number in one
+is delivered as its string and reported; anything else amicus cannot carry is dropped and
+counted, never guessed at. The field is
+`null` when all three lists were carried intact. Otherwise it has one member per list, `null`
+for a list that was clean and `{dropped, reasons}` for one that was not:
+
+| Reason | What it means |
+| --- | --- |
+| `number_stringified` | A number was delivered as its string. Nothing was lost. |
+| `invalid_entry` | An entry that was not a string or a number (an object, an array, a boolean, a null) was dropped whole. Its content is not in the result. |
+| `invalid_container` | The member was present but was not a list. Nothing could be read from it. |
+| `missing_member` | The member was absent. The output schema requires it, so this is not the backend saying "none". |
+
+`dropped` counts whole entries, so it is `0` under `number_stringified` alone and `null` under
+`invalid_container` or `missing_member`, where there was no list to count. **An empty list
+beside a non-null member is a loss, not an answer:** `next_steps: []` with
+`lists_diagnostics.next_steps: {dropped: 2, reasons: ["invalid_entry"]}` means the backend gave
+two next steps amicus could not carry.
+
+A consult answered in prose rather than the requested object parsed nothing: the answer is
+`summary`, and `findings_diagnostics` reports `missing_findings` while every member here
+reports `missing_member`. The empty lists on such a result are not the backend saying none.
+A `review_status: not_run` result is the other way round: no backend ran at all, so there is no
+output to measure, both diagnostics are null, and `review_status` is the signal that says so.
+
+Nothing here moves the verdict or the confidence. A finding is the review's correctness signal,
+so losing one stops a `pass` from standing; a next step is advice, and no verdict is computed
+from it. The diagnostic is the whole disclosure, which is why the rule says to read it before
+treating an empty list as the backend's answer. Delegate results do not carry the field: their
+`next_steps` is amicus's own literal, so there is no backend output to measure.
+
 ## `confidence`: whose rating it is
 
 `confidence` answers how sure the review is, and two different parties can set it. Usually it is

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 # Bump on any externally observable change to a category below; the committed manifest
 # snapshot (tests/test_manifest.py) fails on drift and its message says to bump this.
-FINGERPRINT = "amicus/0.1/schema-22"
+FINGERPRINT = "amicus/0.1/schema-23"
 
 # Persisted result-format version stamped into job records (M2); moves only when a
 # stored result.json shape an older reader's closed schema could reject changes.
@@ -15,7 +15,10 @@ FINGERPRINT = "amicus/0.1/schema-22"
 # carries it - which is the point: the alternative was a 3-valid `medium` amicus invented.
 # 5 (#65): review results gained a required `coverage`. A 4 record has none, and a default
 # would claim, for a run that never measured it, that nothing in scope was left out.
-RESULT_FORMAT: int = 5
+# 6 (#52): consult, review and adversarial results gained lists_diagnostics. A 5 record's
+# defaulted null would assert that every prose list was carried intact by a run that never
+# measured it.
+RESULT_FORMAT: int = 6
 
 JSON_SCHEMA_DIALECT = "https://json-schema.org/draft/2020-12/schema"
 PROTOCOL_REVISION = "2026-07-28"

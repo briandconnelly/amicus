@@ -1,5 +1,5 @@
 {
-  "result_format": 5,
+  "result_format": 6,
   "schemas": {
     "AdversarialReviewResult": {
       "$defs": {
@@ -327,6 +327,83 @@
             "bytes"
           ],
           "title": "InstructionsFingerprint",
+          "type": "object"
+        },
+        "ListDiagnostics": {
+          "additionalProperties": false,
+          "properties": {
+            "dropped": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Dropped"
+            },
+            "reasons": {
+              "items": {
+                "enum": [
+                  "number_stringified",
+                  "invalid_entry",
+                  "invalid_container",
+                  "missing_member"
+                ],
+                "type": "string"
+              },
+              "minItems": 1,
+              "title": "Reasons",
+              "type": "array"
+            }
+          },
+          "required": [
+            "reasons"
+          ],
+          "title": "ListDiagnostics",
+          "type": "object"
+        },
+        "ListsDiagnostics": {
+          "additionalProperties": false,
+          "properties": {
+            "assumptions": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ListDiagnostics"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "next_steps": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ListDiagnostics"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "questions": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ListDiagnostics"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            }
+          },
+          "title": "ListsDiagnostics",
           "type": "object"
         },
         "Meta": {
@@ -838,6 +915,17 @@
           ],
           "default": null
         },
+        "lists_diagnostics": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ListsDiagnostics"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "meta": {
           "$ref": "#/$defs/Meta"
         },
@@ -1156,6 +1244,83 @@
             "bytes"
           ],
           "title": "InstructionsFingerprint",
+          "type": "object"
+        },
+        "ListDiagnostics": {
+          "additionalProperties": false,
+          "properties": {
+            "dropped": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Dropped"
+            },
+            "reasons": {
+              "items": {
+                "enum": [
+                  "number_stringified",
+                  "invalid_entry",
+                  "invalid_container",
+                  "missing_member"
+                ],
+                "type": "string"
+              },
+              "minItems": 1,
+              "title": "Reasons",
+              "type": "array"
+            }
+          },
+          "required": [
+            "reasons"
+          ],
+          "title": "ListDiagnostics",
+          "type": "object"
+        },
+        "ListsDiagnostics": {
+          "additionalProperties": false,
+          "properties": {
+            "assumptions": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ListDiagnostics"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "next_steps": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ListDiagnostics"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "questions": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ListDiagnostics"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            }
+          },
+          "title": "ListsDiagnostics",
           "type": "object"
         },
         "Meta": {
@@ -1609,6 +1774,17 @@
           "anyOf": [
             {
               "$ref": "#/$defs/FindingsDiagnostics"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "lists_diagnostics": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ListsDiagnostics"
             },
             {
               "type": "null"
@@ -3704,6 +3880,83 @@
           "title": "InstructionsFingerprint",
           "type": "object"
         },
+        "ListDiagnostics": {
+          "additionalProperties": false,
+          "properties": {
+            "dropped": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Dropped"
+            },
+            "reasons": {
+              "items": {
+                "enum": [
+                  "number_stringified",
+                  "invalid_entry",
+                  "invalid_container",
+                  "missing_member"
+                ],
+                "type": "string"
+              },
+              "minItems": 1,
+              "title": "Reasons",
+              "type": "array"
+            }
+          },
+          "required": [
+            "reasons"
+          ],
+          "title": "ListDiagnostics",
+          "type": "object"
+        },
+        "ListsDiagnostics": {
+          "additionalProperties": false,
+          "properties": {
+            "assumptions": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ListDiagnostics"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "next_steps": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ListDiagnostics"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "questions": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ListDiagnostics"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            }
+          },
+          "title": "ListsDiagnostics",
+          "type": "object"
+        },
         "Meta": {
           "additionalProperties": false,
           "properties": {
@@ -4213,6 +4466,17 @@
           ],
           "default": null
         },
+        "lists_diagnostics": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ListsDiagnostics"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "meta": {
           "$ref": "#/$defs/Meta"
         },
@@ -4305,6 +4569,7 @@
       },
       "findings": [],
       "findings_diagnostics": null,
+      "lists_diagnostics": null,
       "meta": {
         "backend": "codex",
         "backend_details": null,
@@ -4347,6 +4612,7 @@
       "assumptions": [],
       "findings": [],
       "findings_diagnostics": null,
+      "lists_diagnostics": null,
       "meta": {
         "backend": "codex",
         "backend_details": null,
@@ -4525,6 +4791,7 @@
       },
       "findings": [],
       "findings_diagnostics": null,
+      "lists_diagnostics": null,
       "meta": {
         "backend": "codex",
         "backend_details": null,

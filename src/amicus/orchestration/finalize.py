@@ -21,6 +21,9 @@ from amicus.schemas.results import (
     Finding,
     FindingReason,
     FindingsDiagnostics,
+    ListDiagnostics,
+    ListReason,
+    ListsDiagnostics,
     RawResponse,
     ReviewResult,
     Severity,
@@ -38,6 +41,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from amicus.schemas.results import Coverage
 
 _PROSE_KEYS = ("summary", "questions", "assumptions", "next_steps")
+_LIST_KEYS = ("questions", "assumptions", "next_steps")
 _FINDING_PROSE_KEYS = ("title", "evidence", "suggestion")
 _MODEL_FLAG = "--model"
 _FINDING_FIELDS = frozenset(Finding.model_fields)
@@ -175,10 +179,50 @@ def _enum(value: object, allowed: tuple[str, ...], default: str) -> Any:
     return value if isinstance(value, str) and value in allowed else default
 
 
-def _str_list(value: object) -> list[str]:
-    if not isinstance(value, list):
-        return []
-    return [str(v) for v in value if isinstance(v, (str, int, float))]
+def coerce_str_list(raw: object) -> tuple[list[str], ListDiagnostics | None]:
+    """One prose list (questions, assumptions, next_steps), plus what could not be carried
+    from it (issue #52). The output schema requires each as an array of strings, so an
+    absent member (`missing_member`, pass ABSENT) and a present non-list one
+    (`invalid_container`, which an explicit null reaches) both deviate and leave the count
+    unknowable. A number is kept as its string and said so (`number_stringified`); a bool,
+    null, object or array entry is dropped and counted (`invalid_entry`), never guessed at
+    - amicus does not decide what `{"step": ..., "why": ...}` reads as. Diagnostics are
+    None only when nothing deviated, so `[]` still means the backend said none."""
+    if raw is ABSENT:
+        return [], ListDiagnostics(dropped=None, reasons=["missing_member"])
+    if not isinstance(raw, list):
+        return [], ListDiagnostics(dropped=None, reasons=["invalid_container"])
+    items: list[str] = []
+    seen: set[str] = set()
+    dropped = 0
+    for entry in raw:
+        if isinstance(entry, str):
+            items.append(entry)
+        elif isinstance(entry, (int, float)) and not isinstance(entry, bool):
+            items.append(str(entry))
+            seen.add("number_stringified")
+        else:
+            dropped += 1
+            seen.add("invalid_entry")
+    if not seen:
+        return items, None
+    return items, ListDiagnostics(
+        dropped=dropped, reasons=[r for r in get_args(ListReason) if r in seen]
+    )
+
+
+def coerce_prose_lists(
+    structured: dict[str, Any],
+) -> tuple[dict[str, list[str]], ListsDiagnostics | None]:
+    """The three prose lists of a structured result and, when any deviated, one
+    diagnostic per list; None when all three were clean, so the outer null means it."""
+    lists: dict[str, list[str]] = {}
+    diagnostics: dict[str, ListDiagnostics] = {}
+    for key in _LIST_KEYS:
+        lists[key], diagnostic = coerce_str_list(structured.get(key, ABSENT))
+        if diagnostic is not None:
+            diagnostics[key] = diagnostic
+    return lists, ListsDiagnostics(**diagnostics) if diagnostics else None
 
 
 def _raw(result: ExecResult, meta: Meta) -> RawResponse:
@@ -195,23 +239,36 @@ def consult_result(result: ExecResult, meta: Meta) -> dict[str, Any]:
     if structured is not None:
         s = cast("dict[str, Any]", _sanitize_structured(structured))
         findings, diagnostics = coerce_findings(s.get("findings", ABSENT))
+        lists, lists_diagnostics = coerce_prose_lists(s)
         return dump_success(
             ConsultResult(
                 summary=_summary_of(s),
                 findings=findings,
                 findings_diagnostics=diagnostics,
-                questions=_str_list(s.get("questions")),
-                assumptions=_str_list(s.get("assumptions")),
-                next_steps=_str_list(s.get("next_steps")),
+                lists_diagnostics=lists_diagnostics,
+                questions=lists["questions"],
+                assumptions=lists["assumptions"],
+                next_steps=lists["next_steps"],
                 raw_response=_raw(result, meta),
                 meta=meta,
             )
         )
-    # Consult is Q&A: exit-0 prose is itself a valid answer.
+    # Consult is Q&A: exit-0 prose is itself a valid answer, carried whole in summary.
+    # But nothing was parsed from it, so the findings and the prose lists are not "clean"
+    # - every required member was absent, and both diagnostics say so rather than letting
+    # a null claim that the backend reported none (a Codex review finding on #52).
+    findings, diagnostics = coerce_findings(ABSENT)
+    lists, lists_diagnostics = coerce_prose_lists({})
     return dump_success(
         ConsultResult(
             summary=redaction.sanitize_echo_prose(result.answer).strip()
             or "(the backend returned no message)",
+            findings=findings,
+            findings_diagnostics=diagnostics,
+            lists_diagnostics=lists_diagnostics,
+            questions=lists["questions"],
+            assumptions=lists["assumptions"],
+            next_steps=lists["next_steps"],
             raw_response=_raw(result, meta),
             meta=meta,
         )
@@ -258,6 +315,9 @@ def _parse_reviewed(
     verdict, confidence, summary = review_mod.apply_findings_loss(
         verdict, confidence, summary, diagnostics
     )
+    # A lost prose entry is advice, not the review's correctness signal: no verdict is
+    # computed from these lists, so their loss is disclosed and nothing is folded.
+    lists, lists_diagnostics = coerce_prose_lists(s)
     return None, {
         "summary": summary,
         "verdict": verdict,
@@ -267,9 +327,8 @@ def _parse_reviewed(
         "coverage": coverage,
         "findings": findings,
         "findings_diagnostics": diagnostics,
-        "questions": _str_list(s.get("questions")),
-        "assumptions": _str_list(s.get("assumptions")),
-        "next_steps": _str_list(s.get("next_steps")),
+        "lists_diagnostics": lists_diagnostics,
+        **lists,
         "raw_response": _raw(result, meta),
         "meta": meta,
     }
