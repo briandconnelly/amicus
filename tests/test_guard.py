@@ -9,6 +9,7 @@ from fastmcp.tools import ToolResult
 
 from amicus import config
 from amicus.errors import error_envelope
+from amicus.schemas import envelope as e
 from amicus.schemas.envelope import Meta
 from amicus.tools._guard import GUARD_MARKER, as_tool_result, guard
 
@@ -24,6 +25,28 @@ def test_ok_false_becomes_an_error_tool_result_and_ok_true_passes_through():
     assert out.structured_content == env
     assert as_tool_result({"ok": True, "x": 1}) == {"ok": True, "x": 1}
     assert as_tool_result({"x": 1}) == {"x": 1}
+
+
+def test_ok_true_drops_null_meta_keys_on_every_tool_and_keeps_falsy_values():
+    """The one wire chokepoint every tool passes through drops meta's null-valued keys, so
+    a free or job-lifecycle envelope is as sparse as a delivered paid one (#47). Keyed on
+    `is None`: 0, False and [] are populated values and survive."""
+    meta = Meta(timeout_seconds=5, command_exit_code=0, truncated=False).model_dump(mode="json")
+    assert meta["backend"] is None and meta["usage"] is None, "control: nulls went in"
+    out = as_tool_result({"ok": True, "tool": "amicus_job_list", "meta": meta, "jobs": []})
+    assert isinstance(out, dict)
+    assert [k for k, v in out["meta"].items() if v is None] == []
+    assert out["meta"]["command_exit_code"] == 0 and out["meta"]["truncated"] is False
+    assert out["meta"]["compat_warnings"] == [] and out["meta"]["timeout_seconds"] == 5
+    assert set(out["meta"]) >= set(e.META_ALWAYS_PRESENT)
+    # The payload outside meta is untouched: a top-level null is that tool's own contract.
+    assert (
+        as_tool_result({"ok": True, "meta": meta, "truncation_hint": None})["truncation_hint"]
+        is None
+    )
+    # An error envelope is not slimmed here; serialize_error already applied exclude_none.
+    err = _envelope()
+    assert as_tool_result(err).structured_content == err
 
 
 async def test_guard_result_matches_fastmcp_dict_conversion_byte_for_byte():

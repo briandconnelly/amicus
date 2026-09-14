@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
 
 import pytest
@@ -10,6 +11,7 @@ from jsonschema import Draft202012Validator
 
 from amicus import config, server
 from amicus.registry import BackendRegistry
+from amicus.schemas.envelope import META_ALWAYS_PRESENT
 
 
 @pytest.fixture
@@ -63,6 +65,11 @@ async def test_dry_run_previews_the_review(app, repo):
         )
         body = res.structured_content
         Draft202012Validator(await _schema(c, "amicus_dry_run")).validate(body)
+        # #47: a free tool's success is as sparse on the wire as a delivered paid one, on
+        # both carriers, and the always-present core survives the slimming.
+        for env in (body, json.loads(res.content[0].text)):
+            assert [k for k, v in env["meta"].items() if v is None] == []
+            assert set(env["meta"]) >= set(META_ALWAYS_PRESENT)
     assert (
         body["would_call_model"] is True
         and body["prompt_bytes"] > 100

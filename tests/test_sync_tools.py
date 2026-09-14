@@ -328,4 +328,4 @@ async def test_sync_and_async_keys_are_separate_identities(app, tmp_path):
         first = (await c.call_tool("amicus_consult", args)).structured_content
         handle = (await c.call_tool("amicus_consult_async", args)).structured_content
     assert handle["ok"] is True and handle["job_id"] != first["meta"]["job_id"]
-    assert handle["meta"]["idempotency_replayed"] is None
+    assert "idempotency_replayed" not in handle["meta"]  # dropped on the wire (#47)

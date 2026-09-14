@@ -156,6 +156,12 @@ The dropped content is not echoed back in any form. For a job whose record still
 
 ## Meta fields that change a result's meaning
 
+`meta` is sparse on the wire, on every tool: a key with a null value is dropped, and its absence
+means exactly what null means (not applicable, not reported). The keys the `amicus://result-meta`
+schema lists as `required` are always present, and an empty list among them (`security_warnings`,
+`compat_warnings`, `redacted_paths`) means checked, none found. Read any other key with a
+presence check.
+
 - `meta.truncated` / `meta.truncation_hint` — the payload was cut to a byte cap. On a delegate
   result the hint names the environment variable that raises the cap.
 - `meta.redacted_paths` — secret-scrubbing altered content on these paths. The model may have

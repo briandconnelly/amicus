@@ -150,6 +150,35 @@ def test_result_meta_schema_carries_dialect_and_delivered_shape_rule():
     assert s["$schema"] == JSON_SCHEMA_DIALECT
     assert "backend" in s["properties"]
     assert "null-valued keys" in s["description"]
+    assert "every success envelope" in s["description"]
+
+
+def test_result_meta_schema_requires_exactly_the_fields_that_are_always_present():
+    """The always-present core is published as the schema's `required` (#47): the fields
+    whose model default is never None, so a reader may index them without a presence
+    check, minus `server_version`, which a stored payload can predate. Derived from the
+    model, so a new defaulted field cannot be added without being declared."""
+    core = e.META_ALWAYS_PRESENT
+    assert e.RESULT_META_SCHEMA["required"] == list(core)
+    assert set(core) == {
+        "elapsed_ms",
+        "truncated",
+        "compat_warnings",
+        "security_warnings",
+        "redacted_paths",
+        "request_id",
+        "fingerprint",
+    }
+    assert "server_version" not in core and "consume" not in core
+    for name in core:
+        field = e.Meta.model_fields[name]
+        assert field.default is not None or field.default_factory is not None, name
+    optional = [n for n, f in e.Meta.model_fields.items() if f.default is None and n not in core]
+    assert "backend" in optional and "usage" in optional
+    assert all(n not in core for n in optional)
+    # An empty list is a populated value: checked, none found. It is required, never dropped.
+    delivered = e.Meta().model_dump(mode="json")
+    assert delivered["security_warnings"] == [] and "security_warnings" in core
 
 
 def test_result_meta_schema_publishes_the_delivery_only_consume_field():

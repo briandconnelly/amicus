@@ -10,6 +10,7 @@ from fastmcp.tools import ToolResult
 
 from amicus import obs
 from amicus.errors import error_envelope
+from amicus.schemas.envelope import slim_meta
 from amicus.tools._meta import base_meta
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -21,8 +22,9 @@ GUARD_MARKER = "_amicus_guarded"
 
 
 def as_tool_result(envelope: dict[str, Any]) -> dict[str, Any] | ToolResult:
-    """An `ok: false` envelope becomes a `ToolResult` with `is_error=True`; anything else
-    is returned unchanged for FastMCP's own conversion.
+    """An `ok: false` envelope becomes a `ToolResult` with `is_error=True`; an `ok: true`
+    envelope has its null meta keys dropped (#47) and is returned for FastMCP's own
+    conversion; anything else is returned unchanged.
 
     FastMCP derives the text mirror of a `ToolResult` built from `structured_content` on
     the same path (`_convert_to_content`) it uses for a dict returned under an explicit
@@ -33,7 +35,7 @@ def as_tool_result(envelope: dict[str, Any]) -> dict[str, Any] | ToolResult:
     intact."""
     if envelope.get("ok") is False:
         return ToolResult(structured_content=envelope, is_error=True)
-    return envelope
+    return slim_meta(envelope)
 
 
 def guard(
