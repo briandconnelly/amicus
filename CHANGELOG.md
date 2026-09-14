@@ -30,11 +30,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   never reached it there: following `error.repair`, treating findings as claims, reading a
   `completed` task as a delivery statement rather than a success, and the job-handle TTL.
   Every rule now ends before character 2,048, and a test holds it there (ADR 0027). The
-  failure rule names each carrier's own path: a resource-read failure's code is
-  `error.data.machine_code`, not the era-bound numeric JSON-RPC `error.code`. The
+  tool-failure and resource-read-failure rules are separate items, each naming its own
+  path: a resource-read failure's code is `error.data.machine_code`, not the era-bound
+  numeric JSON-RPC `error.code`. The
   protocol-era mechanics moved to reference, beside the now-stated `stdio` transport, and the
   host-capture provenance is gone; `amicus_capabilities` already carries `protocol_revision`
-  and `tasks`. The text is now 3,381 characters. `initialize` and `server/discover` change;
+  and `tasks`. The text is now 3,374 characters. `initialize` and `server/discover` change;
   `RESULT_FORMAT` does not.
 
 - **Breaking (`FINGERPRINT` `schema-25`).** A `review_status: not_run` review reports
