@@ -21,6 +21,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking (`FINGERPRINT` `schema-29`).** A replayed keyed `_async` handle for a job that has
+  already finished now reports `poll_after_ms: null`, as `amicus_job_status` does for the same
+  job on every terminal status (#101). It used to report `1000`, the store's flat base, so a
+  host that read a non-null hint as "still running" waited a second and polled once more before
+  it saw the terminal status. `JobStarted.poll_after_ms` is now required but nullable on the
+  four `_async` tools' output schemas. It also carries a published description saying when it
+  is null, the same one `amicus_job_status` and `amicus_job_cancel` now carry. The four `_async`
+  descriptions, the `amicus_job_status` description, the synchronous `timeout` repair and the
+  skill now say to poll only while `status` is `running`, and the skill says to read a handle's
+  `status` before waiting on its hint. A terminal handle's `follow_up` still names
+  `amicus_job_status`, because pontonier has no repair step yet for fetching a finished job's
+  result (briandconnelly/pontonier#30, #103).
+  `tools/list` grows by 953 bytes on the `all` profile. `RESULT_FORMAT` stays 6: a handle is
+  never stored as a job result.
+
 - **Breaking (`FINGERPRINT` `schema-28`).** A running job's `poll_after_ms` now keeps growing
   past ten seconds, up to 30 s (#95). The hint still means roughly "wait about as long as the
   job has already run", but pontonier 0.9.0 stops it at 10 s, so a job that ran for minutes was

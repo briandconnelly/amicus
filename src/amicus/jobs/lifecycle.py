@@ -122,7 +122,7 @@ def job_started_handle(
     deadline: int,
     expires_at: str | None,
     meta: Meta,
-    poll_after_ms: int = 1000,
+    poll_after_ms: int | None = 1000,
     task_id: str | None = None,
 ) -> dict[str, Any]:
     meta.job_id = job_id
@@ -318,9 +318,9 @@ async def start_async(
                 deadline=snap["deadline_seconds"],
                 expires_at=snap["expires_at"],
                 meta=meta,
-                # A running replay hands back the status tool's own hint (#95); a terminal
-                # one keeps the store's flat base, as a fresh handle does.
-                poll_after_ms=poll_hint_ms(snap) or snap["poll_after_ms"],
+                # The status tool's own hint: the capped growing one while the job runs
+                # (#95), null once it is terminal (#101).
+                poll_after_ms=poll_hint_ms(snap),
             )
         )
     if result_kind == "io_error":

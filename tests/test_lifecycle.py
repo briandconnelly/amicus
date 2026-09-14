@@ -15,7 +15,7 @@ from pontonier.core import jobs as pjobs
 from tests.support import fakeplugin
 
 from amicus import config
-from amicus.jobs import lifecycle
+from amicus.jobs import lifecycle, lookup
 from amicus.jobs.taskmap import TaskJobMap
 from amicus.request import RunSpec, meta_for
 from amicus.schemas.envelope import Meta, dump_success
@@ -456,8 +456,20 @@ async def test_keyed_start_creates_then_replays_the_real_handle(tmp_path, monkey
     assert again["ok"] is True and again["job_id"] == first["job_id"]
     assert again["meta"]["idempotency_replayed"] is True
     assert again["status"] == "done" and again["expires_at"] is not None
-    # A terminal replay has no growing hint to hand back; it keeps the store's flat base.
-    assert again["poll_after_ms"] == 1000
+    # A terminal replay reports no hint, exactly as amicus_job_status does for this job (#101).
+    assert again["poll_after_ms"] is None
+    status = lookup.status_model(
+        store.status(str(tmp_path), first["job_id"]),
+        lookup.workspace_of(str(tmp_path), "param"),
+        None,
+        lookup.job_meta(
+            _settings(tmp_path), str(tmp_path), "param", "client", backend="fake", kind="consult"
+        ),
+    )
+    assert status["status"] == "done" and status["poll_after_ms"] is None
+    # Its follow_up still names the status tool: pontonier has no step for fetching a
+    # finished job's result yet (briandconnelly/pontonier#30). Flip this with #103.
+    assert again["follow_up"]["next_step"] == "poll_job_status"
     assert again["started_at"] == first["started_at"]
     assert len(store.list_jobs(str(tmp_path))) == 1
     spec_on_disk = json.loads(

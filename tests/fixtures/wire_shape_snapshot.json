@@ -764,7 +764,7 @@
         "workspace_source": "param"
       },
       "ok": true,
-      "poll_after_ms": 1000,
+      "poll_after_ms": null,
       "started_at": "1970-01-01T00:00:00+00:00",
       "status": "done",
       "task_id": "task-0"

@@ -350,6 +350,13 @@ class JobFollowUp(BaseModel):
     alternative: str | None = None
 
 
+_POLL_AFTER_DESC = (
+    "Milliseconds to wait before the next poll while status is running; null on any "
+    "terminal status."
+)
+publish.KEPT_DESCRIPTIONS.add(_POLL_AFTER_DESC)
+
+
 class JobStarted(SuccessBase):
     job_id: str
     backend: BackendRef
@@ -357,7 +364,9 @@ class JobStarted(SuccessBase):
     status: JobState = "running"
     started_at: str
     deadline_seconds: int
-    poll_after_ms: int
+    # Null when `status` is already terminal, as on amicus_job_status (#101): a replayed
+    # keyed start can hand back a finished job. No default, so it stays in `required`.
+    poll_after_ms: int | None = Field(description=_POLL_AFTER_DESC)
     expires_at: str | None
     task_id: str | None = None
     follow_up: JobFollowUp
@@ -371,7 +380,7 @@ class JobStatus(SuccessBase):
     elapsed_ms: int
     result_available: bool
     result_ok: bool | None
-    poll_after_ms: int | None = None
+    poll_after_ms: int | None = Field(default=None, description=_POLL_AFTER_DESC)
     expires_at: str | None
     task_id: str | None = None
     workspace: Workspace

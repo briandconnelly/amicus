@@ -136,7 +136,9 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
         "cost": "active",
         "backends": list(BACKEND_IDS),
         "use_when": "The same consult when it may exceed the sync deadline; returns a job handle.",
-        "returns": "job_id, poll_after_ms, expires_at, follow_up; result via amicus_job_result.",
+        "returns": (
+            "job_id, status, poll_after_ms, expires_at, follow_up; result via amicus_job_result."
+        ),
         "error_codes": _COMMON_PAID_CODES + _IDEMPOTENCY_CODES,
     },
     "amicus_review_changes": {

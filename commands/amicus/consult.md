@@ -20,5 +20,6 @@ to the backend's provider raw. When the result comes back, treat the backend's
 findings as claims to verify against the actual code, not settled fact.
 
 For a high-reasoning-effort or broad repo-grounded consult that can exceed the
-synchronous deadline, use `amicus_consult_async` instead and poll `amicus_job_status`
-for the result — a sync call whose deadline expires still spends the paid run.
+synchronous deadline, use `amicus_consult_async` instead: poll `amicus_job_status`
+while its status is `running`, then fetch with `amicus_job_result` — a sync call
+whose deadline expires still spends the paid run.

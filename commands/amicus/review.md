@@ -20,8 +20,9 @@ that preview covers the input amicus assembles, not what the backend itself read
 during the paid run.
 
 For a multi-file or whole-branch review that can exceed the synchronous deadline,
-use `amicus_review_changes_async` instead and poll `amicus_job_status` for the
-result — a sync call whose deadline expires still spends the paid run.
+use `amicus_review_changes_async` instead: poll `amicus_job_status` while its
+status is `running`, then fetch with `amicus_job_result` — a sync call whose
+deadline expires still spends the paid run.
 
 When findings come back, verify each one against the actual code before presenting
 it — note which you confirm and which you think are false positives.

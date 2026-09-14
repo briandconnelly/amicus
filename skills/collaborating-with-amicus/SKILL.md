@@ -139,7 +139,8 @@ obligations live in the reference each route names, under that file's own `Rules
 
 - **Poll only while `status == "running"`.** Once a job is terminal, fetch its result or its
   terminal error instead of polling again.
-- **Wait at least the returned `poll_after_ms` between polls.**
+- **While `status == "running"`, wait at least the returned `poll_after_ms` before the next
+  poll.**
 - **Fetch a completed result promptly rather than letting it expire.**
 - **Prefer `amicus_job_result` over `amicus_job_consume_result`** whenever another step may still
   need the artifact.
@@ -216,11 +217,13 @@ Every paid call — sync or async — is recorded as a job (`meta.job_id`). A sy
 result directly; an async call returns a handle, and the result is fetched later.
 
 `amicus_job_status` reports `status`, `result_available`, and `result_ok` — three different facts.
-`poll_after_ms` is returned only while `status` is `running`, and grows with elapsed time only to
+`poll_after_ms` is non-null only while `status` is `running`, and grows with elapsed time only to
 a ceiling ([sync vs async](references/sync-vs-async.md) → Polling); on any terminal status it is `null`,
 which is why a loop that waits for `result_available` alone never ends for a cancelled or failed
-job. Records expire (`AMICUS_JOB_TTL`, default 24h) and a per-workspace cap evicts the oldest
-terminal ones. [sync vs async](references/sync-vs-async.md) has the lifecycle and recovery.
+job. A job handle follows the same rule: a repeated keyed `_async` call replays the existing
+job's handle, which can already be terminal. Records expire (`AMICUS_JOB_TTL`, default 24h) and
+a per-workspace cap evicts the oldest terminal ones. [sync vs async](references/sync-vs-async.md)
+has the lifecycle and recovery.
 
 ### Annotations follow the worst enabled backend
 
