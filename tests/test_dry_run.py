@@ -14,6 +14,8 @@ from amicus import config, server
 from amicus.registry import BackendRegistry
 from amicus.schemas.envelope import META_ALWAYS_PRESENT
 from amicus.schemas.fingerprint import LIFECYCLE_META_KEY
+from amicus.schemas.results import ToolDeprecation
+from amicus.tools import _meta
 from amicus.tools._resolve import FREE_MARKER
 
 
@@ -272,3 +274,31 @@ async def test_only_the_alias_is_deprecated_and_its_marker_names_a_live_tool(app
     assert description.startswith(FREE_MARKER)
     assert f"Deprecated: use {marker['replaced_by']}" in description
     assert marker["removal_at_or_after"] in description
+
+
+async def test_a_marker_without_a_successor_keeps_its_null_on_the_capability_row(app, monkeypatch):
+    """[9.deprecation-marker] fixes the field set, so a deprecation with no successor carries
+    `replaced_by: null` on its amicus_capabilities row as well as in its lifecycle _meta.
+    The shipped alias has a successor, so this patches in one that has none: the row is
+    dumped with exclude_none, which would drop the null, and only the restamp from the
+    lifecycle source keeps it (Copilot's review of #99)."""
+    monkeypatch.setitem(
+        _meta.DEPRECATED_TOOLS,
+        "amicus_models",
+        ToolDeprecation(
+            since="0.3.0", removal_at_or_after="0.5.0", replaced_by=None, migration="m"
+        ),
+    )
+    expected = {
+        "since": "0.3.0",
+        "removal_at_or_after": "0.5.0",
+        "replaced_by": None,
+        "migration": "m",
+    }
+    async with Client(app) as c:
+        for detail in ("summary", "full"):
+            rows = (
+                await c.call_tool("amicus_capabilities", {"detail": detail})
+            ).structured_content["tool_details"]
+            row = next(r for r in rows if r["name"] == "amicus_models")
+            assert row["deprecation"] == expected, detail
