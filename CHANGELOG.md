@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking (`FINGERPRINT` `schema-23`, `RESULT_FORMAT` 6).** The `questions`, `assumptions`
+  and `next_steps` lists of consult, review and adversarial results no longer lose entries in
+  silence (#52). `_str_list` kept string and numeric entries, dropped every other entry with
+  no count and no reason, and turned a non-list member into `[]`, so a backend that structured
+  a next step as an object lost it and the caller could not tell "the backend said nothing"
+  from "amicus could not carry what it said". Those results now carry `lists_diagnostics`, the
+  prose-list twin of `findings_diagnostics` (#38): null when all three lists were carried
+  intact, otherwise one `{dropped, reasons}` member per list that was not, with a fixed reason
+  vocabulary (`number_stringified`, `invalid_entry`, `invalid_container`, `missing_member`) and
+  never the omitted content. A number is still delivered as its string and now says so; a
+  bool, null, object or array entry is dropped and counted; a present non-list member and an
+  absent one are told apart, because the output schema requires all three. Nothing folds into
+  the verdict or confidence (ADR 0024). Delegate results do not carry the field: their
+  `next_steps` is amicus's own text. `RESULT_FORMAT` moves to 6 so a format-5 record's
+  defaulted null cannot assert that every list was carried intact by a run that never measured
+  it. `tools/list` grows 5181 bytes on the `all` profile, the field's description once per
+  tool plus the object inlined per tool; the first draft carried the reason prose on each of
+  the nine inlined members and was 2400 bytes larger.
 - **Breaking (`FINGERPRINT` `schema-22`).** The free discovery tools have a concise default
   (#46). `amicus_capabilities(detail="summary")`, the default, now carries `name`, `cost`,
   `stability` and `backends` per `tool_details` row; `use_when`, `required_params`,

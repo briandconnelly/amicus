@@ -14,7 +14,13 @@ from typing import get_args
 
 from amicus import errors
 from amicus.orchestration import review as review_mod
-from amicus.schemas.results import Confidence, CoverageReason, FindingReason, Verdict
+from amicus.schemas.results import (
+    Confidence,
+    CoverageReason,
+    FindingReason,
+    ListReason,
+    Verdict,
+)
 
 _SKILL = Path(__file__).resolve().parents[1] / "skills" / "collaborating-with-amicus"
 _RESULTS_REF = (_SKILL / "references" / "reading-results.md").read_text(encoding="utf-8")
@@ -55,6 +61,7 @@ _VOCABULARY = {
     "Verdict": (Verdict, _section("Coverage")),
     "CoverageReason": (CoverageReason, _section("Coverage")),
     "FindingReason": (FindingReason, _section("`findings_diagnostics`")),
+    "ListReason": (ListReason, _section("`lists_diagnostics`")),
 }
 
 
@@ -94,6 +101,17 @@ def test_the_coverage_field_is_named_in_the_binding_rules():
     """#65: `coverage` is the machine-readable disclosure. Under ADR 0016 a signal named only
     in reading-results.md does not bind, so the rules block must name it itself."""
     assert "`coverage`" in _BINDING_RULES
+
+
+def test_the_lists_diagnostics_field_is_named_in_the_binding_rules():
+    """#52: the prose-list twin of `findings_diagnostics`. The two rules an agent needs are
+    that the field exists to be checked and that a null member is a clean list - an
+    empty `next_steps` beside a non-null member is a loss, not the backend saying none."""
+    assert "`lists_diagnostics`" in _BINDING_RULES
+    assert (
+        "Read `lists_diagnostics` before treating an empty prose list as the backend saying "
+        "none." in _BINDING_RULES
+    )
 
 
 def test_the_high_confidence_misreading_is_a_rule_of_its_own():
