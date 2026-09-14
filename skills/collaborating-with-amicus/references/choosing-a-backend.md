@@ -78,14 +78,14 @@ that mode loads, which `implicit_context` states per backend.
 Read-only bounds *modification*, never *reach*, on any of the three. Codex's sandbox bounds
 writes, not reads; kimi's `Read` accepts absolute paths; Claude's `readonly` accepts absolute
 paths too and, having read a file itself, bypasses the diff redaction entirely. The workspace
-selects where a backend works, not what it can read — `readonly_honesty` on `amicus_backends` is
+selects where a backend works, not what it can read — `readonly_honesty` on `amicus_backends(detail="full")` is
 each backend's own statement of that limit.
 
 ## How your text reaches each backend
 
 Amicus's own transport is the same for all three: free-text fields never touch its logs, and for
 an async job they reach the worker over stdin. How a field reaches the *backend CLI* is the
-backend's own choice, and `carriers` on `amicus_backends` is authoritative. Today:
+backend's own choice, and `carriers` on `amicus_backends(detail="full")` is authoritative. Today:
 
 | | Prompt carrier | `instructions_append` | Exposure to note |
 | --- | --- | --- | --- |
@@ -95,7 +95,7 @@ backend's own choice, and `carriers` on `amicus_backends` is authoritative. Toda
 
 Each backend also loads context you did not supply — `AGENTS.md`, skills, and on `claude` under
 `inherit`/`scoped`, workspace hooks that run outside the tool allowlist. `implicit_context` on
-`amicus_backends` is the authoritative per-backend statement.
+`amicus_backends(detail="full")` is the authoritative per-backend statement.
 
 ## Judgment call: which backend for a consult or review
 
