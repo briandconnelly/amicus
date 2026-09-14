@@ -34,7 +34,7 @@ A replayed job whose record vanishes before its result is read is `idempotency_r
 **A keyed waiter does not own the job.**
 Unkeyed, a sync call cancels its job when its local grace deadline passes and when the caller cancels, including a cancellation that lands while the task id is being recorded.
 Keyed, it does none of that: another idempotent caller may be awaiting the same run.
-On the deadline it returns `timeout` with `repair.next_step: poll_job_status` naming `amicus_job_status` for that job and echoing the record's `poll_after_ms`, and its `alternative` says not to switch to the async twin or drop the key, because either starts a second paid run under a different dedup identity while this one completes unobserved.
+On the deadline it returns `timeout` with `repair.next_step: poll_job_status` naming `amicus_job_status` for that job and echoing the `poll_after_ms` that tool would report for it, and its `alternative` says not to switch to the async twin or drop the key, because either starts a second paid run under a different dedup identity while this one completes unobserved.
 Only `amicus_job_cancel` stops a keyed run.
 
 **Task cancellation follows ownership.**
