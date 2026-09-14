@@ -239,8 +239,9 @@ def _parse_reviewed(
         return (
             error_envelope(
                 status,
-                "the backend exited 0 but did not return a schema-valid JSON object for the "
-                f"{noun} (the output schema appears to have been ignored).{tail}",
+                "the backend exited 0 but did not return one unambiguous schema-valid JSON "
+                f"object for the {noun} (the output schema appears to have been ignored, or "
+                f"the object repeats a key).{tail}",
                 meta,
                 plugin=plugin,
             ),

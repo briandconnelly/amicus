@@ -137,6 +137,16 @@ def test_finalize_extracts_answer_usage_with_cache_and_session(pinned_codex_bin)
     assert empty.answer == "A" and empty.usage is None and empty.structured is None
 
 
+def test_finalize_refuses_a_last_message_that_repeats_a_key(pinned_codex_bin):
+    # #51: consult_result reads ExecResult.structured directly, so the adapter must hand it
+    # None for a duplicate-member object rather than the last member's value.
+    _, backend = cf.make_backend()
+    text = '{"summary":"s","findings":[{"title":"t"}],"findings":[]}'
+    outcome = RunOutcome(run=CommandRun("", "", 0, 5, False), artifact_texts={"last-message": text})
+    result = backend.finalize(outcome, _req(schema={"type": "object"}))
+    assert result.answer == text and result.structured is None
+
+
 def test_classify_failure_uses_the_request_shape_and_aliases(pinned_codex_bin, tmp_path):
     _, backend = cf.make_backend()
     stderr = (

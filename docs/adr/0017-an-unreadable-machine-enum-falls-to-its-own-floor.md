@@ -15,6 +15,7 @@ That is issue #38's defect on a different field: the result asserts more than th
 
 The path is live rather than theoretical.
 Only `codex` is held to `REVIEW_OUTPUT_SCHEMA` natively; `claude` and `kimi` receive it as prompt text, and `classify_structured` checks only that the payload is a JSON object.
+Since #51 it also refuses an object that repeats a key; that is a shape check, and the field-level leniency this record describes is unchanged.
 Field-level deviation on two of three backends is the expected case.
 Measured against the tree at `e0f60e2`, a reply carrying a valid findings list and `confidence: "very high"` was delivered as `pass`/`medium` with `findings_diagnostics: null` — an envelope asserting that nothing deviated while a required member had been unreadable.
 
