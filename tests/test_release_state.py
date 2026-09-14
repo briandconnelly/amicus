@@ -641,6 +641,22 @@ def test_a_legacy_argument_the_parser_cannot_evaluate_counts_as_declared(repo):
     assert any("AMICUS_A" in p and "still declare legacy names" in p for p in _tree(repo))
 
 
+def test_a_duplicate_name_cannot_hide_an_earlier_alias(repo):
+    """Codex review finding (2026-09-14): a last-write-wins read would see only the second,
+    alias-free declaration, while `EnvNamespace.var()` resolves the first. The scan ORs the
+    flags and reports the duplicate itself, even before the removal version is reached."""
+    _set_declarations(
+        repo,
+        'GLOBAL_ENV = EnvNamespace(vars=(EnvVar("AMICUS_A", "a", None, ("OLD_A",)),'
+        ' EnvVar("AMICUS_A", "a again"),))\n',
+    )
+    _, declared, problems = release_state.legacy_env_state(repo)
+    assert declared == {"AMICUS_A": True}
+    assert any("AMICUS_A is declared more than once" in p for p in problems)
+    _set_removal(repo, "1.0.0")
+    assert any("AMICUS_A" in p and "still declare legacy names" in p for p in _tree(repo))
+
+
 def test_a_missing_removal_version_is_rejected_rather_than_read_as_never(repo):
     (repo / release_state.LEGACY_ENV_SPEC_PATH).write_text("X = 1\n", encoding="utf-8")
     assert any("no literal `LEGACY_REMOVAL_VERSION`" in p for p in _tree(repo))
@@ -706,7 +722,12 @@ def test_the_static_read_of_the_env_declarations_matches_the_runtime_declaration
     removal, declared, problems = release_state.legacy_env_state(repo_root)
     assert problems == [], "; ".join(problems)
     assert removal == LEGACY_REMOVAL_VERSION
-    runtime = {var.name: bool(var.legacy) for var in packaging.declared_vars()}
+    runtime_vars = packaging.declared_vars()
+    runtime_names = [var.name for var in runtime_vars]
+    # Compared as a sequence, not a dict: a dict would collapse a duplicate name the way the
+    # static read refuses to (see test_a_duplicate_name_cannot_hide_an_earlier_alias).
+    assert len(runtime_names) == len(set(runtime_names)), "runtime declares a name twice"
+    runtime = {var.name: bool(var.legacy) for var in runtime_vars}
     assert any(runtime.values()), "known positive: no runtime alias would prove nothing here"
     assert declared == runtime
 

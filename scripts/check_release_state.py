@@ -486,7 +486,12 @@ def legacy_env_state(
             name = _string_of(node.args[0], strings) if node.args else None
             if name is None:
                 name = f"{relative}:{node.lineno}"
-            declared[name] = _declares_legacy(node)
+            if name in declared:
+                # Fail closed on a name declared twice: the runtime resolves the FIRST
+                # declaration, so a later alias-free duplicate must not hide an earlier
+                # alias-bearing one (a Codex review finding, 2026-09-14).
+                problems.append(f"{relative}:{node.lineno}: {name} is declared more than once")
+            declared[name] = declared.get(name, False) or _declares_legacy(node)
     return removal, declared, problems
 
 

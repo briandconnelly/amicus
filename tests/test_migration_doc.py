@@ -240,6 +240,14 @@ def test_upgrade_section_states_the_poll_hint_ceiling():
     assert f"ceiling of {POLL_HINT_CAP_MS // 1000} s" in line
 
 
+def test_upgrade_section_states_the_current_result_format():
+    from amicus.schemas.fingerprint import RESULT_FORMAT
+
+    line = _line_containing(_upgrade_section(), "`RESULT_FORMAT` moved")
+    assert f"moved from 4 to {RESULT_FORMAT}" in line, line
+    assert "`job_result_incompatible`" in line
+
+
 def test_upgrade_section_names_exactly_the_codes_that_carry_no_repair():
     from amicus.errors import NO_CORRECTIVE_CALL
 
