@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking (`FINGERPRINT` `schema-25`).** A `review_status: not_run` review reports
+  `confidence: unknown`, not `low` (#54, ADR 0026). No backend ran on an empty scope, so there
+  was no rating to carry, and `low` is the lowest rating a backend can report: stating it
+  manufactured a claim in the direction issue #53 had already removed. The published
+  `confidence` description now names `not_run` as one of the two causes of `unknown`,
+  beside an unreadable backend rating, one meaning with two causes rather than two meanings, and the substituted `low` has two sources instead of
+  three: partial coverage and findings amicus could not carry, each still beside an `unknown`
+  verdict, so a `low` beside any other verdict is still the backend's word. A caller that
+  read only `low` as "do not rely on this" has to handle `unknown` on every review and branch
+  on `review_status` for whether one ran; it already had to, since an unreadable rating on a
+  completed review has been `unknown` since 0.2.0. The enum is unchanged, so `RESULT_FORMAT`
+  stays 6.
+
 - **Breaking (`FINGERPRINT` `schema-24`).** Every success envelope's `meta` is sparse on the
   wire, on every tool (#47, ADR 0025). A delivered paid result already dropped meta's
   null-valued keys, and the `amicus://result-meta` description said so, but a job-lifecycle

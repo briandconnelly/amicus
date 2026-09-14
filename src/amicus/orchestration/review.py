@@ -165,6 +165,9 @@ def apply_findings_loss(
 
 
 def _not_run(spec: RunSpec, meta: Meta, diff: DiffResult) -> dict[str, Any]:
+    """The zero-spend envelope for a scope that gathered nothing. No backend ran, so there
+    is no rating to carry: confidence is `unknown`, the absence of one, never a `low`
+    amicus would have to invent (issue #54, ADR 0026). `review_status` is the signal."""
     coverage = build_coverage(spec.scope, diff, focused=is_focused(spec))
     omitted = coverage.untracked_files_omitted or 0
     remedy = (
@@ -198,7 +201,7 @@ def _not_run(spec: RunSpec, meta: Meta, diff: DiffResult) -> dict[str, Any]:
             AdversarialReviewResult(
                 summary=critique_summary,
                 verdict="unknown",
-                confidence="low",
+                confidence="unknown",
                 review_status="not_run",
                 context_summary=meta.context_summary,
                 coverage=coverage,
@@ -209,7 +212,7 @@ def _not_run(spec: RunSpec, meta: Meta, diff: DiffResult) -> dict[str, Any]:
         ReviewResult(
             summary=summary,
             verdict="unknown",
-            confidence="low",
+            confidence="unknown",
             review_status="not_run",
             context_summary=meta.context_summary,
             coverage=coverage,

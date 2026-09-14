@@ -1500,7 +1500,7 @@
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-24",
+                "default": "amicus/0.1/schema-25",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -2412,7 +2412,7 @@
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-24",
+            "default": "amicus/0.1/schema-25",
             "title": "Fingerprint",
             "type": "string"
           },
@@ -2943,7 +2943,7 @@
                 "type": "array"
               },
               "confidence": {
-                "description": "How sure this review is. Usually the backend's own low|medium|high. amicus substitutes `low` exactly where it also withholds the verdict as `unknown`: partial coverage, findings it could not carry, or `review_status: not_run`, where no backend was called at all. So beside any OTHER verdict this is the backend's word - a `fail` or `concerns` keeps its rating whatever was lost, and a high one is no evidence that coverage was complete. `unknown` is the ABSENCE of a rating - no readable value, and no such substitution - never a low one.",
+                "description": "How sure this review is. Usually the backend's own low|medium|high. amicus substitutes `low` only for partial coverage or findings it could not carry, and only where it also withholds the verdict as `unknown`. So beside any OTHER verdict this is the backend's word - a `fail` or `concerns` keeps its rating whatever was lost, and a high one is no evidence that coverage was complete. `unknown` is the ABSENCE of a rating, never a low one: no backend ran (`review_status: not_run`), or it supplied no readable value and no such substitution applied.",
                 "enum": [
                   "high",
                   "low",
@@ -8362,7 +8362,7 @@
                 "type": "array"
               },
               "confidence": {
-                "description": "How sure this review is. Usually the backend's own low|medium|high. amicus substitutes `low` exactly where it also withholds the verdict as `unknown`: partial coverage, findings it could not carry, or `review_status: not_run`, where no backend was called at all. So beside any OTHER verdict this is the backend's word - a `fail` or `concerns` keeps its rating whatever was lost, and a high one is no evidence that coverage was complete. `unknown` is the ABSENCE of a rating - no readable value, and no such substitution - never a low one.",
+                "description": "How sure this review is. Usually the backend's own low|medium|high. amicus substitutes `low` only for partial coverage or findings it could not carry, and only where it also withholds the verdict as `unknown`. So beside any OTHER verdict this is the backend's word - a `fail` or `concerns` keeps its rating whatever was lost, and a high one is no evidence that coverage was complete. `unknown` is the ABSENCE of a rating, never a low one: no backend ran (`review_status: not_run`), or it supplied no readable value and no such substitution applied.",
                 "enum": [
                   "high",
                   "low",

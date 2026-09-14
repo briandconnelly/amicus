@@ -116,8 +116,9 @@ obligations live in the reference each route names, under that file's own `Rules
   intact, with `dropped: null` when the member could not be read at all. Nothing in it moves
   the verdict or confidence. On `review_status: not_run` no backend ran, so it is null and
   `review_status` is the signal. Delegate results do not carry the field.
-- **Never read `confidence: "unknown"` as a low rating.** It means no rating was available:
-  the backend supplied none amicus could read, and the verdict was not withheld either.
+- **Never read `confidence: "unknown"` as a low rating.** It means no rating exists: either
+  no backend ran (`review_status: not_run`), or the backend supplied none amicus could read
+  and amicus did not substitute `low`.
 - **Never read a high `confidence` as evidence that coverage was complete or findings intact.**
   A `fail` or `concerns` keeps the backend's rating whatever was lost. Read `review_status`,
   `coverage` and `findings_diagnostics` for that, never the rating.
@@ -250,11 +251,11 @@ list that was not. Delegate does not carry it, because its `next_steps` is amicu
 rather than backend output.
 
 `confidence` is two things at once. Usually it is the backend's own `low|medium|high`. amicus
-substitutes `low` exactly where it also withholds the verdict as `unknown` — partial coverage,
-findings it could not carry, or a `not_run` review, where no backend was called. The two move
-together or not at all, so a `low` beside any other verdict is the backend's word. `unknown`
-confidence is neither: it is the absence of a rating. Both rules for reading it are under
-[Results](#results).
+substitutes `low` only for partial coverage or findings it could not carry, and only where it
+also withholds the verdict as `unknown`. The two move together or not at all, so a `low` beside
+any other verdict is the backend's word. `unknown` confidence is neither: it is the absence of a
+rating, which a `not_run` review always carries because no backend ran. Both rules for reading
+it are under [Results](#results).
 Discovery, dry-run, async-start, and job-lifecycle tools each have their own schema.
 
 A result being `ok: true` says the call worked, not that it covered anything —

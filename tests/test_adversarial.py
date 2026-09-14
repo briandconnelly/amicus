@@ -186,7 +186,7 @@ async def test_adversarial_with_an_empty_scope_is_not_run_and_never_spawns(monke
     assert (
         out["review_status"] == "not_run"
         and out["verdict"] == "unknown"
-        and out["confidence"] == "low"
+        and out["confidence"] == "unknown"  # issue #54: no rating exists, so none is invented
     )
     assert "critique did not run" in out["summary"] and spawned == []
 
