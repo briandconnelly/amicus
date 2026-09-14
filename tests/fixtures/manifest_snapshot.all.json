@@ -937,9 +937,6 @@
       "_meta": {
         "dev.bconnelly.amicus/lifecycle": {
           "stability": "experimental"
-        },
-        "dev.bconnelly.amicus/triage": {
-          "size_bytes": 14416
         }
       },
       "mimeType": "application/schema+json",
@@ -1505,7 +1502,7 @@
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-23",
+                "default": "amicus/0.1/schema-24",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -1970,9 +1967,6 @@
       "_meta": {
         "dev.bconnelly.amicus/lifecycle": {
           "stability": "experimental"
-        },
-        "dev.bconnelly.amicus/triage": {
-          "size_bytes": 5948
         }
       },
       "mimeType": "application/json",
@@ -2016,7 +2010,6 @@
           "stability": "experimental"
         },
         "dev.bconnelly.amicus/triage": {
-          "size_bytes": 0,
           "volatile": true
         }
       },
@@ -2032,7 +2025,6 @@
           "stability": "experimental"
         },
         "dev.bconnelly.amicus/triage": {
-          "size_bytes": 0,
           "volatile": true
         }
       },
@@ -2050,7 +2042,6 @@
           "stability": "experimental"
         },
         "dev.bconnelly.amicus/triage": {
-          "size_bytes": 0,
           "volatile": true
         }
       },
@@ -2064,14 +2055,12 @@
       "_meta": {
         "dev.bconnelly.amicus/lifecycle": {
           "stability": "experimental"
-        },
-        "dev.bconnelly.amicus/triage": {
-          "size_bytes": 14416
         }
       },
       "description": "The full ErrorResult schema; tool outputSchemas carry only an opaque error branch.",
       "mimeType": "application/schema+json",
       "name": "amicus-error-envelope",
+      "size": 14416,
       "title": "amicus error envelope schema",
       "uri": "amicus://error-envelope"
     },
@@ -2079,14 +2068,12 @@
       "_meta": {
         "dev.bconnelly.amicus/lifecycle": {
           "stability": "experimental"
-        },
-        "dev.bconnelly.amicus/triage": {
-          "size_bytes": 5948
         }
       },
       "description": "Full semantics for parameters whose inline description is a compressed summary.",
       "mimeType": "application/json",
       "name": "amicus-params",
+      "size": 5948,
       "title": "amicus parameter contracts",
       "uri": "amicus://params"
     },
@@ -2094,14 +2081,12 @@
       "_meta": {
         "dev.bconnelly.amicus/lifecycle": {
           "stability": "experimental"
-        },
-        "dev.bconnelly.amicus/triage": {
-          "size_bytes": 7646
         }
       },
       "description": "The full Meta schema every success envelope's opaque `meta` points at.",
       "mimeType": "application/schema+json",
       "name": "amicus-result-meta",
+      "size": 7873,
       "title": "amicus result metadata schema",
       "uri": "amicus://result-meta"
     }
@@ -2111,9 +2096,6 @@
       "_meta": {
         "dev.bconnelly.amicus/lifecycle": {
           "stability": "experimental"
-        },
-        "dev.bconnelly.amicus/triage": {
-          "size_bytes": 7646
         }
       },
       "mimeType": "application/schema+json",
@@ -2343,7 +2325,7 @@
         },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
-        "description": "The full result-metadata contract. Every success envelope's `meta` is advertised as an opaque pointer to this schema. On the wire a delivered success envelope drops meta's null-valued keys; absence means exactly what null means (not applicable / not reported). Error envelopes strip absent optionals except retry_after_ms.",
+        "description": "The full result-metadata contract. Every success envelope's `meta` is advertised as an opaque pointer to this schema. On the wire every success envelope, paid or free, drops meta's null-valued keys; absence means exactly what null means (not applicable / not reported). The keys in `required` are always present: an empty list there means checked, none found. Error envelopes strip absent optionals except retry_after_ms.",
         "properties": {
           "backend": {
             "anyOf": [
@@ -2432,7 +2414,7 @@
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-23",
+            "default": "amicus/0.1/schema-24",
             "title": "Fingerprint",
             "type": "string"
           },
@@ -2649,6 +2631,15 @@
             "title": "Workspace Warning"
           }
         },
+        "required": [
+          "compat_warnings",
+          "elapsed_ms",
+          "fingerprint",
+          "redacted_paths",
+          "request_id",
+          "security_warnings",
+          "truncated"
+        ],
         "title": "Meta",
         "type": "object"
       },
