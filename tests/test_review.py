@@ -57,10 +57,11 @@ def test_gather_not_run_on_a_clean_tree_and_discloses_omitted_untracked(repo):
     spec = _spec(str(repo))
     out = review.gather(spec, meta_for(spec), fakeplugin.make_plugin())
     assert isinstance(out, dict) and out["ok"] is True
+    # Issue #54: no backend ran, so there is no rating to carry - `unknown`, never `low`.
     assert (out["review_status"], out["verdict"], out["confidence"]) == (
         "not_run",
         "unknown",
-        "low",
+        "unknown",
     )
     (repo / "new.py").write_text("n = 1\n")
     out = review.gather(spec, meta_for(spec), fakeplugin.make_plugin())

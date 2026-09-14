@@ -210,7 +210,7 @@ def test_success_payloads_validate_against_their_schemas():
     not_run = r.AdversarialReviewResult(
         summary="s",
         verdict="unknown",
-        confidence="low",
+        confidence="unknown",
         review_status="not_run",
         context_summary=ContextSummary(files_changed=0),
         coverage=r.Coverage(status="complete"),

@@ -14,6 +14,7 @@ from typing import get_args
 
 from amicus import errors
 from amicus.orchestration import review as review_mod
+from amicus.schemas import results
 from amicus.schemas.results import (
     Confidence,
     CoverageReason,
@@ -127,24 +128,42 @@ def test_the_high_confidence_misreading_is_a_rule_of_its_own():
 
 def test_every_amicus_substituted_low_sits_beside_an_unknown_verdict():
     """The invariant the published `confidence` description rests on, asserted against the
-    source that has to keep it. Every `low` amicus writes itself - the two folds and both
-    `_not_run` envelopes - is paired with an `unknown` verdict, which is what makes "a
-    `low` beside any other verdict is the backend's word" true rather than merely tidy.
+    source that has to keep it. Every `low` amicus writes itself - the two folds, and
+    nothing else - is paired with an `unknown` verdict, which is what makes "a `low`
+    beside any other verdict is the backend's word" true rather than merely tidy.
 
-    A fourth site that wrote `low` beside a concrete verdict would silently make the
+    A third site that wrote `low` beside a concrete verdict would silently make the
     published description a lie, and no other test in this repository would notice: the
     description is prose, and prose is what the gate cannot read (issue #53, Copilot's
-    review of PR #55 having found `_not_run` as an unnamed third source)."""
+    review of PR #55 having found `_not_run` as an unnamed third source). Issue #54 then
+    took `_not_run` out of the count: no backend ran, so it carries no rating at all."""
     source = Path(review_mod.__file__).read_text(encoding="utf-8")
     lines = source.splitlines()
     lows = [i for i, line in enumerate(lines) if re.search(r'(confidence=)?"low",?$', line.strip())]
-    assert len(lows) == 4, f"expected 4 amicus-written `low` sites in review.py, found {len(lows)}"
+    assert len(lows) == 2, f"expected 2 amicus-written `low` sites in review.py, found {len(lows)}"
     for i in lows:
         window = "\n".join(lines[max(0, i - 3) : i + 1])
         assert '"unknown"' in window, (
             f"review.py:{i + 1} writes `low` with no `unknown` verdict beside it; the "
             "published confidence description says every substituted low has one"
         )
+
+
+def test_a_not_run_review_is_documented_as_carrying_no_rating():
+    """Issue #54: a `not_run` result carries `confidence: unknown`, and the reader has to
+    be told that this is the same absence as an unreadable backend rating, not a fourth
+    meaning. Asserted on the published description (the MCP-only caller's only text), the
+    section of the skill that owns the vocabulary, and the binding rule - the rules slice,
+    not the whole file, for the reason ADR 0016 gives."""
+    assert "`review_status: not_run`" in results._CONFIDENCE_DESC
+    assert "amicus substitutes `low` only" in results._CONFIDENCE_DESC
+    assert "not_run" not in results._CONFIDENCE_DESC.partition("`unknown`")[0], (
+        "the description names not_run as a substituted-low case; #54 moved it to `unknown`"
+    )
+    confidence_section = _VOCABULARY["Confidence"][1]
+    assert "`review_status: not_run`" in confidence_section
+    assert "there are three" not in confidence_section
+    assert "no backend ran (`review_status: not_run`)" in _BINDING_RULES
 
 
 def test_the_skill_names_every_code_that_carries_no_repair():

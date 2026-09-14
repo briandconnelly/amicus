@@ -68,3 +68,4 @@ Neither is provenance, and this repository should not imply otherwise.
 
 `review_status: "not_run"` still returns `unknown`/`low`.
 No backend ran, so there is an argument that it should carry `unknown` confidence too; it is filed rather than decided here.
+ADR 0026 decides it: a `not_run` review carries `unknown` confidence, and the substituted `low` has two sources, not three.
