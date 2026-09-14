@@ -170,9 +170,11 @@ async def test_review_and_its_dry_run_disclose_the_same_coverage(app, repo):
     args = {"backend": "codex", "workspace_root": str(repo)}
     focused_args = {**args, "focus": "locking"}
     async with Client(app) as c:
-        preview = (await c.call_tool("amicus_dry_run", args)).structured_content
+        preview = (await c.call_tool("amicus_review_changes_dry_run", args)).structured_content
         body = (await c.call_tool("amicus_review_changes", args)).structured_content
-        focused_preview = (await c.call_tool("amicus_dry_run", focused_args)).structured_content
+        focused_preview = (
+            await c.call_tool("amicus_review_changes_dry_run", focused_args)
+        ).structured_content
         focused = (await c.call_tool("amicus_review_changes", focused_args)).structured_content
     # A focus is framed into the prompt the preview measures, and recorded the same way.
     assert focused_preview["prompt_bytes"] > preview["prompt_bytes"]

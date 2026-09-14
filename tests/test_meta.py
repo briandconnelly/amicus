@@ -3,8 +3,9 @@ and the base Meta builder (exercised end-to-end once real tools land in Task 12)
 
 from __future__ import annotations
 
-from amicus import config
+from amicus import __version__, config
 from amicus.schemas.fingerprint import LIFECYCLE_META_KEY
+from amicus.schemas.results import ToolDeprecation
 from amicus.tools import _meta
 
 
@@ -32,6 +33,73 @@ def test_lifecycle_meta_carries_the_stability_tier():
 
 def test_server_lifecycle_meta_carries_the_server_wide_tier():
     assert _meta.server_lifecycle_meta() == {LIFECYCLE_META_KEY: {"stability": "experimental"}}
+
+
+def test_a_deprecated_tool_carries_the_marker_beside_its_tier():
+    """[9.stability-tiers]: deprecation is its own axis, so the alias keeps the tier it had
+    and gains the marker; its replacement carries no marker at all."""
+    block = _meta.lifecycle_meta("amicus_dry_run")[LIFECYCLE_META_KEY]
+    assert block == {
+        "stability": "experimental",
+        "deprecation": {
+            "since": "0.3.0",
+            "removal_at_or_after": "0.5.0",
+            "replaced_by": "amicus_review_changes_dry_run",
+            "migration": _meta.DEPRECATED_TOOLS["amicus_dry_run"].migration,
+        },
+    }
+    replacement = _meta.lifecycle_meta("amicus_review_changes_dry_run")[LIFECYCLE_META_KEY]
+    assert replacement == {"stability": "experimental"}
+
+
+def test_a_null_replaced_by_is_published_rather_than_dropped(monkeypatch):
+    """[9.deprecation-marker] fixes the field set: a tool with no successor says so with a
+    null, which an exclude_none dump would silently remove."""
+    monkeypatch.setitem(
+        _meta.DEPRECATED_TOOLS,
+        "amicus_consult",
+        ToolDeprecation(
+            since="0.3.0", removal_at_or_after="0.5.0", replaced_by=None, migration="m"
+        ),
+    )
+    marker = _meta.lifecycle_meta("amicus_consult")[LIFECYCLE_META_KEY]["deprecation"]
+    assert marker == {
+        "since": "0.3.0",
+        "removal_at_or_after": "0.5.0",
+        "replaced_by": None,
+        "migration": "m",
+    }
+    assert _meta.deprecation_marker("amicus_consult") == marker
+
+
+def _minor(version: str) -> tuple[int, int, int]:
+    major, minor, micro = (int(part) for part in version.split("."))
+    return major, minor, micro
+
+
+def test_every_window_spans_the_two_minor_releases_the_policy_promises():
+    """amicus_capabilities.deprecation_policy: discoverable for two minor releases, so a
+    deprecation in x.y.0 may be removed no earlier than x.(y+2).0."""
+    assert _meta.DEPRECATED_TOOLS, "known positive: the loop below would pass on an empty table"
+    for name, deprecation in _meta.DEPRECATED_TOOLS.items():
+        major, minor, micro = _minor(deprecation.since)
+        assert micro == 0, name
+        assert _minor(deprecation.removal_at_or_after) == (major, minor + 2, 0), name
+        assert deprecation.replaced_by != name
+        assert deprecation.replaced_by not in _meta.DEPRECATED_TOOLS, name
+
+
+def test_no_deprecated_tool_outlives_its_window():
+    """The removal ratchet: once the tree declares a version at or past a tool's
+    removal_at_or_after, the tool must already be gone. It first fires on the release PR that
+    moves the version, and that release waits for an ordinary removal PR (rule 19 keeps a
+    release PR to its version literals); scripts/check_release_state.py holds the same line
+    at tag time."""
+    for name, deprecation in _meta.DEPRECATED_TOOLS.items():
+        assert _minor(__version__) < _minor(deprecation.removal_at_or_after), (
+            f"{name} is past its removal_at_or_after {deprecation.removal_at_or_after}: "
+            "remove it, its alias registration and its DEPRECATED_TOOLS entry"
+        )
 
 
 def test_effects_for_is_destructive_when_any_enabled_backend_is():

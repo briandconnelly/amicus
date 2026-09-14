@@ -119,7 +119,7 @@ CAPABILITY_SUMMARY = (
     "JSON-RPC error.code is era-bound, and error.data.machine_code is not. "
     "amicus_capabilities carries the full "
     "inventory, fingerprint, surface_digest, error catalog and task support; "
-    "amicus_models(backend) lists model slugs; amicus_dry_run previews an "
+    "amicus_models(backend) lists model slugs; amicus_review_changes_dry_run previews an "
     "amicus_review_changes call and amicus_delegate_dry_run an amicus_delegate call without "
     "spending, and consult and adversarial review have no preview. Every paid tool has an "
     "_async twin polled via amicus_job_status/result/consume_result/cancel/list; a sync call "

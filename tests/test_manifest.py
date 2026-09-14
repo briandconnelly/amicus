@@ -52,7 +52,7 @@ async def test_build_manifest_covers_full_surface():
     assert {t["name"] for t in m["tools"]} == set(m["capabilities"]["active_tools"]) | set(
         m["capabilities"]["free_tools"]
     ) | set(m["capabilities"]["job_tools"])
-    assert len(m["tools"]) == 18
+    assert len(m["tools"]) == 19
     for section in (
         "resources",
         "resource_templates",

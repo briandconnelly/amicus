@@ -11,6 +11,7 @@ from tests.support import fakeplugin
 from amicus import config, server
 from amicus.registry import BackendRegistry
 from amicus.tools import PAIRS, TOOL_ORDER
+from amicus.tools._meta import DEPRECATED_TOOLS
 
 COMMANDS = Path(__file__).resolve().parents[1] / "commands" / "amicus"
 
@@ -47,11 +48,22 @@ def test_every_referenced_tool_exists():
     assert not unknown, f"commands name tools that do not exist: {sorted(unknown)}"
 
 
-def test_every_tool_is_reachable_from_some_command():
-    referenced = set()
+def _referenced_tools() -> set[str]:
+    referenced: set[str] = set()
     for path in COMMANDS.glob("*.md"):
         referenced.update(re.findall(r"\bamicus_[a-z_]+\b", path.read_text()))
-    assert set(TOOL_ORDER) - referenced == set()
+    return referenced
+
+
+def test_every_live_tool_is_reachable_from_some_command():
+    """A deprecated alias is the one exemption: it stays listed for its window, but no
+    command should lead anyone to it (#98)."""
+    assert set(TOOL_ORDER) - set(DEPRECATED_TOOLS) - _referenced_tools() == set()
+
+
+def test_no_command_names_a_deprecated_tool():
+    assert DEPRECATED_TOOLS, "known positive: an empty table makes the check below vacuous"
+    assert _referenced_tools() & set(DEPRECATED_TOOLS) == set()
 
 
 def test_every_verb_and_listed_twin_has_a_command_that_launches_it():

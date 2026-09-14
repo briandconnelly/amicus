@@ -472,7 +472,9 @@ async def test_discovery_reads_the_fake(app, monkeypatch):
         ).structured_content
         models = (await c.call_tool("amicus_models", {"backend": "claude"})).structured_content
         dry = await c.call_tool(
-            "amicus_dry_run", {"backend": "claude", "workspace_root": "/tmp"}, raise_on_error=False
+            "amicus_review_changes_dry_run",
+            {"backend": "claude", "workspace_root": "/tmp"},
+            raise_on_error=False,
         )
     entry = backends["backends"][0]
     assert entry["id"] == "claude" and entry["available"] is True
@@ -517,7 +519,7 @@ async def test_dry_run_previews_the_review_without_spawning(app, tmp_path, repo)
     (repo / "a.py").write_text("x = 2\n")
     async with Client(app) as c:
         res = await c.call_tool(
-            "amicus_dry_run",
+            "amicus_review_changes_dry_run",
             {"backend": "claude", "workspace_root": str(repo)},
         )
     body = res.structured_content

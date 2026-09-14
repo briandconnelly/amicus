@@ -49,9 +49,11 @@ from amicus.tools._meta import (
     TOOL_STABILITY,
     annotations_for,
     base_meta,
+    deprecation_marker,
     effects_for,
     lifecycle_meta,
     server_stability,
+    tool_deprecation,
 )
 from amicus.tools._resolve import FREE_MARKER
 
@@ -67,7 +69,7 @@ if TYPE_CHECKING:  # pragma: no cover
 
 # What a tool_details row carries on detail=summary; results.TOOL_DETAIL_FULL_FIELDS is
 # the rest. The row count never changes with detail (include_tool_details selects rows).
-_SUMMARY_FIELDS = ("name", "cost", "stability", "backends")
+_SUMMARY_FIELDS = ("name", "cost", "stability", "deprecation", "backends")
 
 # Per-tool inventory facts tools/list does not carry. required/key params are derived
 # from the matrix for the paid tools so this table cannot disagree with the schemas.
@@ -199,7 +201,7 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
         "returns": "a job handle; result via amicus_job_result.",
         "error_codes": _COMMON_PAID_CODES + _REVIEW_CODES + _IDEMPOTENCY_CODES,
     },
-    "amicus_dry_run": {
+    "amicus_review_changes_dry_run": {
         "cost": "free",
         "backends": list(BACKEND_IDS),
         "use_when": "Preview a review's scope, size and resolved options before spending.",
@@ -326,11 +328,18 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
         "error_codes": ["invalid_workspace_root", "workspace_outside_roots"],
     },
 }
+# A deprecated alias reports its replacement's facts; only `use_when` says what it is.
+TOOL_DETAILS["amicus_dry_run"] = {
+    **TOOL_DETAILS["amicus_review_changes_dry_run"],
+    "use_when": "Deprecated alias: call amicus_review_changes_dry_run instead.",
+}
+_REVIEW_PREVIEW_PARAMS: tuple[list[str], list[str]] = (
+    ["backend"],
+    ["scope", "base", "commit", "paths", "workspace_root", "backend_options"],
+)
 _JOB_PARAMS: dict[str, tuple[list[str], list[str]]] = {
-    "amicus_dry_run": (
-        ["backend"],
-        ["scope", "base", "commit", "paths", "workspace_root", "backend_options"],
-    ),
+    "amicus_review_changes_dry_run": _REVIEW_PREVIEW_PARAMS,
+    "amicus_dry_run": _REVIEW_PREVIEW_PARAMS,
     "amicus_delegate_dry_run": (["backend", "task"], ["workspace_root", "backend_options"]),
     "amicus_backends": ([], ["backend", "detail"]),
     "amicus_models": (["backend"], []),
@@ -488,6 +497,7 @@ async def capabilities_payload(
             name=name,
             cost=TOOL_DETAILS[name]["cost"],
             stability=TOOL_STABILITY.get(name),
+            deprecation=tool_deprecation(name),
             backends=TOOL_DETAILS[name]["backends"],
             use_when=TOOL_DETAILS[name]["use_when"],
             required_params=_params_for(name)[0],
@@ -582,6 +592,10 @@ async def capabilities_payload(
         meta_fields=list(Meta.model_fields),
         schemas=schemas,
     ).model_dump(mode="json", exclude_none=True)
+    for entry in caps["tool_details"]:
+        # Re-stamped from the lifecycle source rather than left to the exclude_none dump,
+        # which would drop a marker's null `replaced_by` and an absent marker's key.
+        entry["deprecation"] = deprecation_marker(entry["name"])
     if not include_tool_details:
         caps["tool_details"] = []
     elif detail == "summary":

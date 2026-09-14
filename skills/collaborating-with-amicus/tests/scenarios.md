@@ -662,8 +662,8 @@ Assertion:
 - The described call sets `scope="branch"`. Accepting the `working_tree` default, or omitting
   `scope`, fails — on this environment that gathers nothing and returns `review_status: not_run`.
 - The call does not set `commit`, which belongs to `scope="commit"`.
-- If the model runs `amicus_dry_run` first, that is permitted and does not affect the assertion;
-  a dry run whose reported scope the model then contradicts fails.
+- If the model runs `amicus_review_changes_dry_run` first, that is permitted and does not affect
+  the assertion; a dry run whose reported scope the model then contradicts fails.
 
 status: unrun
 

@@ -38,7 +38,7 @@ statement — this list is a map, not a second copy.
 | Which backend to pick, and what evidence it can actually inspect | `amicus_backends` (free) | [choosing a backend](references/choosing-a-backend.md) |
 | You and one backend attempt the same problem independently, then you synthesize | independent attempt | [independent attempt](references/independent-attempt.md) |
 | You draft, a backend critiques, you revise | declared review–revise | [review–revise](references/review-revise.md) |
-| Preview a review's or delegate's scope, size, and resolved options before spending | `amicus_dry_run` / `amicus_delegate_dry_run` (free) | [active workflows](references/active-workflows.md) |
+| Preview a review's or delegate's scope, size, and resolved options before spending | `amicus_review_changes_dry_run` / `amicus_delegate_dry_run` (free) | [active workflows](references/active-workflows.md) |
 | Model slugs and reasoning-effort sets before overriding `model` or `reasoning_effort` | `amicus_models` (free) | — |
 | Full tool inventory, fingerprint, and error catalog | `amicus_capabilities` (free) | — |
 | Poll, fetch, list, or cancel a background job | `amicus_job_status` / `amicus_job_result` / `amicus_job_consume_result` / `amicus_job_list` / `amicus_job_cancel` (all free) | [sync vs async](references/sync-vs-async.md) |
@@ -177,7 +177,7 @@ Facts the rules above depend on. Nothing here is an obligation.
 ### Backend as a parameter
 
 amicus has no "default" backend the way a single-model server implies one model by its own name.
-`backend` names which model answers a given call, and the same 18 tools work for all three.
+`backend` names which model answers a given call, and the same tools work for all three.
 `AMICUS_BACKENDS` (an operator/deployment setting) controls which backends are *enabled* in this
 deployment; it says nothing about which to prefer for a task. A backend can be enabled and still
 not be ready, which is why the discovery rules turn on `status` rather than on `enabled`.
@@ -240,7 +240,8 @@ prompted. That is why attribution needs host evidence rather than inference.
 Consult, review, delegate, and adversarial-review results share `summary`, `findings`,
 `findings_diagnostics`, `questions`, `assumptions`, `next_steps`, and `meta`. Only review and
 adversarial results carry `verdict`, `confidence`, `review_status`, and `coverage`; only delegate
-carries `diff` and `diffstat`. `amicus_dry_run` carries the same `coverage` the paid review would.
+carries `diff` and `diffstat`. `amicus_review_changes_dry_run` carries the same `coverage` the
+paid review would.
 
 `findings_diagnostics` is null when nothing deviated, and otherwise names what was lost — the
 rule for reading it is under [Results](#results), and

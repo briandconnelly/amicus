@@ -69,11 +69,11 @@ So "review this branch before I open the PR" is `scope="branch"`, not the defaul
 `working_tree` on a clean tree it gathers nothing and returns `review_status: not_run` — an
 `ok: true` result that reviewed nothing ([reading results](reading-results.md)).
 
-`amicus_dry_run` is free and reports exactly what the paid call would gather: `scope`, `base`,
-`commit`, `paths`, `prompt_bytes`, a `context_summary` of files and lines, the resolved `model`,
-`reasoning_effort` and `backend_options`, and `warnings`. Run it whenever the scope could
-surprise you — an unexpectedly broad `context_summary` is the cheapest signal that the selection
-is wrong.
+`amicus_review_changes_dry_run` is free and reports exactly what the paid call would gather:
+`scope`, `base`, `commit`, `paths`, `prompt_bytes`, a `context_summary` of files and lines, the
+resolved `model`, `reasoning_effort` and `backend_options`, and `warnings`. Run it whenever the
+scope could surprise you — an unexpectedly broad `context_summary` is the cheapest signal that the
+selection is wrong.
 
 Review returns `verdict`, `confidence`, and `review_status` on top of the shared fields. All three
 are claims; the coverage rules in [reading results](reading-results.md) govern what they mean.

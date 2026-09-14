@@ -1,5 +1,6 @@
-"""amicus_dry_run and amicus_delegate_dry_run: free previews of a review/delegate call's
-scope, size and resolved options, failing pre-spend exactly where the paid call would."""
+"""amicus_review_changes_dry_run and amicus_delegate_dry_run: free previews of a
+review/delegate call's scope, size and resolved options, failing pre-spend exactly where the
+paid call would. amicus_dry_run is the review preview's deprecated alias (#98)."""
 
 from __future__ import annotations
 
@@ -30,14 +31,16 @@ from amicus.schemas.params import (
 )
 from amicus.schemas.results import (
     DELEGATE_DRY_RUN_SCHEMA,
+    DEPRECATED_DRY_RUN_SCHEMA,
     DRY_RUN_SCHEMA,
     Coverage,
     DelegateDryRunResult,
+    DeprecatedDryRunResult,
     DryRunResult,
     WorktreePlan,
 )
 from amicus.tools._guard import guard
-from amicus.tools._meta import annotations_for, lifecycle_meta
+from amicus.tools._meta import annotations_for, lifecycle_meta, tool_deprecation
 from amicus.tools._prepare import deadline_advisory, prepare_run
 from amicus.tools._resolve import FREE_MARKER, blank_input_error
 
@@ -73,17 +76,31 @@ def _workspace(prep: Prepared) -> Workspace:
     )
 
 
-def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tuple[str, ...]:
+def _register_review_preview(
+    app: FastMCP,
+    settings: Settings,
+    registry: BackendRegistry,
+    *,
+    name: str,
+    title: str,
+    description: str,
+    output_schema: dict[str, Any],
+    result_model: type[DryRunResult],
+) -> None:
+    """One review-preview handler under `name`. The deprecated alias registers the same
+    handler, so the two cannot drift; each reports its own name as `tool`, through the
+    result model whose schema it publishes."""
+
     @app.tool(
-        name="amicus_dry_run",
+        name=name,
         annotations=annotations_for("free", settings),
-        output_schema=DRY_RUN_SCHEMA,
-        title="Preview a review (free)",
-        meta=lifecycle_meta("amicus_dry_run"),
-        description=_DRY_RUN_DESC,
+        output_schema=output_schema,
+        title=title,
+        meta=lifecycle_meta(name),
+        description=description,
     )
-    @guard("amicus_dry_run", settings)
-    async def amicus_dry_run(
+    @guard(name, settings)
+    async def review_preview(
         backend: BackendParam,
         ctx: Context | None = None,
         scope: ScopeParam = "working_tree",
@@ -103,7 +120,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
         prep = await prepare_run(
             registry=registry,
             settings=settings,
-            tool_name="amicus_dry_run",
+            tool_name=name,
             verb="review_changes",
             backend=backend,
             backend_options=backend_options,
@@ -160,7 +177,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
         if advisory:
             warnings.append(advisory)
         return dump_success(
-            DryRunResult(
+            result_model(
                 backend=backend,
                 would_call_model=would_call_model,
                 scope=scope,
@@ -179,6 +196,19 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
                 meta=meta,
             )
         )
+
+
+def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tuple[str, ...]:
+    _register_review_preview(
+        app,
+        settings,
+        registry,
+        name="amicus_review_changes_dry_run",
+        title="Preview a review (free)",
+        description=_DRY_RUN_DESC,
+        output_schema=DRY_RUN_SCHEMA,
+        result_model=DryRunResult,
+    )
 
     @app.tool(
         name="amicus_delegate_dry_run",
@@ -258,4 +288,31 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
             )
         )
 
-    return ("amicus_dry_run", "amicus_delegate_dry_run")
+    return ("amicus_review_changes_dry_run", "amicus_delegate_dry_run")
+
+
+def register_deprecated(
+    app: FastMCP, settings: Settings, registry: BackendRegistry
+) -> tuple[str, ...]:
+    """Tools inside their deprecation window ([9.rename]): each keeps its old name, input
+    schema and outputSchema, and carries the marker naming its replacement. The description
+    leads with the deprecation, because a host may never show _meta to the model, and keeps
+    the replacement's selection and safety text after it."""
+    marker = tool_deprecation("amicus_dry_run")
+    assert marker is not None
+    _register_review_preview(
+        app,
+        settings,
+        registry,
+        name="amicus_dry_run",
+        title="Preview a review (deprecated)",
+        description=(
+            f"{FREE_MARKER} Deprecated: use {marker.replaced_by}, which takes the same "
+            "arguments and returns the same result with `tool` naming it; this alias is "
+            f"removed at or after {marker.removal_at_or_after}. "
+            + _DRY_RUN_DESC.removeprefix(f"{FREE_MARKER} ")
+        ),
+        output_schema=DEPRECATED_DRY_RUN_SCHEMA,
+        result_model=DeprecatedDryRunResult,
+    )
+    return ("amicus_dry_run",)
