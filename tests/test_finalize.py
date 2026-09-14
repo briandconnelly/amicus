@@ -106,7 +106,10 @@ def test_consult_with_a_repeated_key_takes_the_prose_path():
     structured = codex_normalize.parse_structured(answer)
     out = fz.consult_result(ExecResult(answer=answer, structured=structured), Meta())
     assert out["ok"] is True and out["summary"] == answer and out["findings"] == []
-    assert out["findings_diagnostics"] is None and out["raw_response"]["text"] == answer
+    assert out["raw_response"]["text"] == answer
+    # The refused object was never parsed, so its members were absent from what amicus
+    # read: a null here would claim the backend reported no findings.
+    assert out["findings_diagnostics"] == {"dropped": None, "reasons": ["missing_findings"]}
 
 
 def test_review_is_strict_and_folds_coverage():
@@ -715,11 +718,25 @@ def test_prose_lists_are_sanitized_before_they_are_measured():
     assert out["questions"] == ["q"] and out["lists_diagnostics"] is None
 
 
-def test_consult_prose_fallback_and_delegate_carry_no_lists_diagnostics():
-    """A prose consult parsed nothing, so nothing was measured; a delegate's next_steps is
-    amicus's own literal, so the field would be a promise about output that was never
-    backend output. Delegate does not publish it at all."""
-    assert fz.consult_result(ExecResult(answer="plain"), Meta())["lists_diagnostics"] is None
+def test_a_prose_consult_reports_every_unparsed_member_rather_than_a_clean_null():
+    """A consult answered in prose parsed nothing: the answer is `summary`, and the findings
+    and the three lists are empty because no member was read, not because the backend
+    reported none. Null on either diagnostic would say the opposite, so both report the
+    absent members (Codex, reviewing PR #90)."""
+    out = fz.consult_result(ExecResult(answer="plain"), Meta())
+    assert out["summary"] == "plain" and out["findings"] == [] and out["next_steps"] == []
+    assert out["findings_diagnostics"] == {"dropped": None, "reasons": ["missing_findings"]}
+    missing = {"dropped": None, "reasons": ["missing_member"]}
+    assert out["lists_diagnostics"] == {
+        "questions": missing,
+        "assumptions": missing,
+        "next_steps": missing,
+    }
+
+
+def test_delegate_does_not_carry_lists_diagnostics():
+    """A delegate's next_steps is amicus's own literal, so the field would be a promise
+    about output that was never backend output. Delegate does not publish it at all."""
     out = fz.delegate_result(
         ExecResult(answer="ok"), Meta(), diff="", aliases=(), max_diff_bytes=10
     )

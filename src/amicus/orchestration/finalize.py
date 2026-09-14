@@ -253,11 +253,22 @@ def consult_result(result: ExecResult, meta: Meta) -> dict[str, Any]:
                 meta=meta,
             )
         )
-    # Consult is Q&A: exit-0 prose is itself a valid answer.
+    # Consult is Q&A: exit-0 prose is itself a valid answer, carried whole in summary.
+    # But nothing was parsed from it, so the findings and the prose lists are not "clean"
+    # - every required member was absent, and both diagnostics say so rather than letting
+    # a null claim that the backend reported none (a Codex review finding on #52).
+    findings, diagnostics = coerce_findings(ABSENT)
+    lists, lists_diagnostics = coerce_prose_lists({})
     return dump_success(
         ConsultResult(
             summary=redaction.sanitize_echo_prose(result.answer).strip()
             or "(the backend returned no message)",
+            findings=findings,
+            findings_diagnostics=diagnostics,
+            lists_diagnostics=lists_diagnostics,
+            questions=lists["questions"],
+            assumptions=lists["assumptions"],
+            next_steps=lists["next_steps"],
             raw_response=_raw(result, meta),
             meta=meta,
         )

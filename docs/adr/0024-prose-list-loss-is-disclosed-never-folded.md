@@ -27,6 +27,9 @@ A number is still delivered as its string, for compatibility, and reported as `n
 A bool is not a number amicus will stringify: `bool` subclasses `int`, so the old code delivered `True` as a next step, and it is now dropped and counted as `invalid_entry` with nulls, objects and arrays.
 An absent member is `missing_member` and a present non-list one is `invalid_container`, told apart with the same `ABSENT` sentinel #38 introduced, because `[]` is how a conforming backend says "none" and absence is how amicus learns it cannot know.
 A backend that routinely omits `assumptions` will routinely say so in this field; that is the honest signal, and collapsing it into `[]` would be the defect again.
+The same reading covers a consult answered in prose rather than the requested object, which Codex's review of the branch found the first draft delivering with a null diagnostic beside three empty lists.
+Nothing was parsed from such an answer, so every required member was absent: it now reports `missing_member` on all three lists, and `findings_diagnostics` reports `missing_findings` on the same path, which #38 had left null.
+The answer itself is carried whole in `summary`, so nothing is lost; what changes is that the empty lists no longer claim to be the backend's answer.
 
 **Nothing folds into the verdict or confidence.**
 A finding is the review's correctness signal, so `apply_findings_loss` stops a `pass` from standing over a finding amicus could not carry.

@@ -100,8 +100,9 @@ refute a negative the model did reach, so read `findings_diagnostics` on those y
 ## `lists_diagnostics`: the prose lists amicus could not carry
 
 The same disclosure for `questions`, `assumptions` and `next_steps` on consult, review and
-adversarial results. The output schema asks for each as an array of strings; a backend that
-answers with something else is not corrected and not guessed at, it is measured. The field is
+adversarial results. The output schema asks for each as an array of strings. A number in one
+is delivered as its string and reported; anything else amicus cannot carry is dropped and
+counted, never guessed at. The field is
 `null` when all three lists were carried intact. Otherwise it has one member per list, `null`
 for a list that was clean and `{dropped, reasons}` for one that was not:
 
@@ -115,8 +116,12 @@ for a list that was clean and `{dropped, reasons}` for one that was not:
 `dropped` counts whole entries, so it is `0` under `number_stringified` alone and `null` under
 `invalid_container` or `missing_member`, where there was no list to count. **An empty list
 beside a non-null member is a loss, not an answer:** `next_steps: []` with
-`next_steps: {dropped: 2, reasons: ["invalid_entry"]}` means the backend gave two next steps
-amicus could not carry.
+`lists_diagnostics.next_steps: {dropped: 2, reasons: ["invalid_entry"]}` means the backend gave
+two next steps amicus could not carry.
+
+A consult answered in prose rather than the requested object parsed nothing: the answer is
+`summary`, and `findings_diagnostics` reports `missing_findings` while every member here
+reports `missing_member`. The empty lists on such a result are not the backend saying none.
 
 Nothing here moves the verdict or the confidence. A finding is the review's correctness signal,
 so losing one stops a `pass` from standing; a next step is advice, and no verdict is computed
