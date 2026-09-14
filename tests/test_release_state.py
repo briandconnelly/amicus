@@ -641,6 +641,25 @@ def test_a_legacy_argument_the_parser_cannot_evaluate_counts_as_declared(repo):
     assert any("AMICUS_A" in p and "still declare legacy names" in p for p in _tree(repo))
 
 
+@pytest.mark.parametrize(
+    "declaration",
+    [
+        'EnvVar("AMICUS_A", "a", *TAIL)',
+        'EnvVar("AMICUS_A", "a", **FIELDS)',
+        'EnvVar("AMICUS_A", *REST)',
+    ],
+)
+def test_an_unpacked_argument_counts_as_declaring_aliases(repo, declaration):
+    """Copilot review finding on PR #107: `EnvVar("AMICUS_A", "a", *TAIL)` with
+    `TAIL = (None, ("OLD_A",))` is a runtime alias the AST shows as three positional nodes.
+    Anything unpacked into the call is treated as legacy-bearing."""
+    _set_removal(repo, "1.0.0")
+    _set_declarations(repo, f"GLOBAL_ENV = EnvNamespace(vars=({declaration},))\n")
+    _, declared, _ = release_state.legacy_env_state(repo)
+    assert declared == {"AMICUS_A": True}
+    assert any("AMICUS_A" in p and "still declare legacy names" in p for p in _tree(repo))
+
+
 def test_a_duplicate_name_cannot_hide_an_earlier_alias(repo):
     """Codex review finding (2026-09-14): a last-write-wins read would see only the second,
     alias-free declaration, while `EnvNamespace.var()` resolves the first. The scan ORs the

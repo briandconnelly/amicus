@@ -206,10 +206,11 @@ def test_prose_no_alias_claims_agree_with_the_declarations():
 
 # --- the "Upgrading from 0.2.0" section ----------------------------------------------------
 #
-# Its prose states three facts of the source that the table assertions above do not reach:
-# which meta keys are always present, the poll-hint ceiling, and which error codes carry no
-# repair. Each is pinned to the constant it describes, so the section cannot drift from the
-# code the way the "no legacy alias" claim once did.
+# Its prose states four facts of the source that the table assertions above do not reach:
+# which meta keys are always present, the poll-hint ceiling, the current stored-result
+# format, and which error codes carry no repair. Each is pinned to the constant it
+# describes, so the section cannot drift from the code the way the "no legacy alias" claim
+# once did.
 
 
 def _upgrade_section() -> str:

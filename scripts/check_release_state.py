@@ -438,6 +438,13 @@ def _declares_legacy(call: ast.Call) -> bool:
     argument or an empty tuple/list literal means "no legacy names"; `_legacy(...)`, a
     name, or any other expression counts as declaring some, because this script cannot
     evaluate it and the release predicate must not read an alias it cannot see as gone."""
+    # `EnvVar("X", "d", *tail)` or `EnvVar("X", "d", **fields)` can carry the legacy
+    # argument inside a value this script cannot see, so either counts as declaring some
+    # (a Copilot review finding on PR #107).
+    if any(isinstance(arg, ast.Starred) for arg in call.args) or any(
+        keyword.arg is None for keyword in call.keywords
+    ):
+        return True
     legacy: ast.expr | None = None
     if len(call.args) > _LEGACY_POSITION:
         legacy = call.args[_LEGACY_POSITION]

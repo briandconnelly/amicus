@@ -213,7 +213,7 @@ Poll only while `status` is `running`; a caller that read a non-null hint as "st
 **The free discovery tools default to a summary (`schema-22`).**
 `amicus_capabilities(detail="contracts")` is rejected as `invalid_arguments`, and the default `amicus_backends` omits four disclosure fields; the "Discovery defaults are concise" section above has the replacement calls.
 
-**A job result 0.2.0 stored is no longer readable (`schema-16`, `schema-23`).**
+**A job result stored by 0.2.0 is no longer readable (`schema-16`, `schema-23`).**
 `RESULT_FORMAT` moved from 4 to 6, so `amicus_job_result` and `amicus_job_consume_result` return `job_result_incompatible` for a record 0.2.0 wrote, rather than a result whose new fields would answer for a run that never measured them.
 Fetch or consume any stored result you still need before upgrading; the record itself stays until `AMICUS_JOB_TTL` or the per-workspace cap evicts it.
 
