@@ -35,7 +35,7 @@ def _structured(**over):
         ],
         "questions": ["q"],
         "assumptions": [],
-        "next_steps": [1, "x"],
+        "next_steps": ["x"],
     }
     base.update(over)
     return base
@@ -68,7 +68,7 @@ def test_consult_structured_and_prose_and_sanitization():
     assert (
         out["findings"] == []
     )  # severity is a machine field: a control-split value degrades, never repairs
-    assert out["questions"] == ["q"] and out["next_steps"] == ["1", "x"]
+    assert out["questions"] == ["q"] and out["next_steps"] == ["x"]
     assert out["meta"]["usage"]["cached_input_tokens"] == 1 and out["meta"]["session_id"] == "s1"
     assert out["raw_response"]["text"] == json.dumps(
         payload
@@ -579,3 +579,148 @@ def test_confidence_is_lowered_only_where_the_verdict_is_withheld():
         fakeplugin.make_plugin(),
     )
     assert (out["verdict"], out["confidence"]) == ("pass", "high")
+
+
+# --- prose lists (issue #52) ------------------------------------------------------------
+
+
+def _review(payload):
+    return fz.review_result(
+        ExecResult(answer=json.dumps(payload), structured=payload),
+        Meta(),
+        _COMPLETE,
+        fakeplugin.make_plugin(),
+    )
+
+
+def _consult(payload):
+    return fz.consult_result(ExecResult(answer=json.dumps(payload), structured=payload), Meta())
+
+
+def test_clean_prose_lists_carry_no_lists_diagnostics():
+    """An empty array is how a conforming backend says "none", and it is clean."""
+    payload = _structured(questions=[], assumptions=[], next_steps=["x"])
+    assert _consult(payload)["lists_diagnostics"] is None
+    assert _review(payload)["lists_diagnostics"] is None
+    assert _consult(payload)["assumptions"] == []
+
+
+def test_a_prose_item_amicus_cannot_represent_is_counted_not_swallowed():
+    """The defect: `{"step": "...", "why": "..."}` vanished with no count and no reason,
+    so "the backend said nothing" and "amicus could not carry it" were the same answer."""
+    payload = _structured(
+        next_steps=[{"step": "run it", "why": "because"}, ["a", "b"], None, True, "kept"]
+    )
+    out = _consult(payload)
+    assert out["next_steps"] == ["kept"]
+    assert out["lists_diagnostics"] == {
+        "questions": None,
+        "assumptions": None,
+        "next_steps": {"dropped": 4, "reasons": ["invalid_entry"]},
+    }
+
+
+def test_the_omitted_prose_content_is_never_echoed_in_the_diagnostic():
+    """Rule 18: backend output can echo caller input, so the diagnostic is a count and a
+    reason from a fixed vocabulary, never the entry itself."""
+    payload = _structured(questions=[{"text": "SECRET-MARKER"}])
+    out = _consult(payload)
+    assert "SECRET-MARKER" not in json.dumps(out["lists_diagnostics"])
+    assert out["questions"] == []
+
+
+def test_a_number_in_a_prose_list_is_stringified_and_reported():
+    """Kept as a string for compatibility, but the schema asked for strings, so a null
+    diagnostic would claim schema-faithful output over a value amicus changed."""
+    out = _consult(_structured(next_steps=[1, 2.5, "x"]))
+    assert out["next_steps"] == ["1", "2.5", "x"]
+    assert out["lists_diagnostics"]["next_steps"] == {
+        "dropped": 0,
+        "reasons": ["number_stringified"],
+    }
+
+
+def test_a_bool_is_not_a_number_amicus_will_stringify():
+    """bool subclasses int, so the old `str(v)` delivered `True` as a next step."""
+    out = _consult(_structured(next_steps=[True, False]))
+    assert out["next_steps"] == []
+    assert out["lists_diagnostics"]["next_steps"] == {"dropped": 2, "reasons": ["invalid_entry"]}
+
+
+def test_list_reasons_are_reported_in_their_fixed_order():
+    out = _consult(_structured(next_steps=[{"a": 1}, 7]))
+    assert out["lists_diagnostics"]["next_steps"] == {
+        "dropped": 1,
+        "reasons": ["number_stringified", "invalid_entry"],
+    }
+
+
+def test_an_absent_prose_member_differs_from_an_empty_one():
+    """The output schema REQUIRES all three members, so an omitted one is not the backend
+    saying "none": the count is unknowable, and it is reported as such (null, not 0)."""
+    payload = _structured()
+    del payload["assumptions"]
+    out = _review(payload)
+    assert out["assumptions"] == []
+    assert out["lists_diagnostics"]["assumptions"] == {
+        "dropped": None,
+        "reasons": ["missing_member"],
+    }
+
+
+def test_a_null_or_non_list_prose_member_is_an_invalid_container():
+    for value in (None, "just prose", {"one": "two"}, 3):
+        out = _consult(_structured(questions=value))
+        assert out["questions"] == [], value
+        assert out["lists_diagnostics"]["questions"] == {
+            "dropped": None,
+            "reasons": ["invalid_container"],
+        }, value
+
+
+def test_each_prose_list_is_diagnosed_independently():
+    payload = _structured(questions=["q"], assumptions=[{"a": 1}], next_steps=None)
+    out = _review(payload)
+    assert out["lists_diagnostics"] == {
+        "questions": None,
+        "assumptions": {"dropped": 1, "reasons": ["invalid_entry"]},
+        "next_steps": {"dropped": None, "reasons": ["invalid_container"]},
+    }
+
+
+def test_prose_list_loss_never_touches_the_verdict_or_its_confidence():
+    """Unlike a lost finding, a lost next step is advice, not the review's correctness
+    signal: no verdict is computed from it, so a `pass` stands, its confidence stands,
+    and the summary gains no sentence. The diagnostic is the whole disclosure."""
+    payload = _structured(verdict="pass", confidence="high", next_steps=[{"step": "s"}])
+    del payload["assumptions"]
+    for out in (
+        _review(payload),
+        fz.adversarial_result(
+            ExecResult(answer=json.dumps(payload), structured=payload),
+            Meta(),
+            _COMPLETE,
+            fakeplugin.make_plugin(),
+        ),
+    ):
+        assert (out["verdict"], out["confidence"], out["summary"]) == ("pass", "high", "Looks fine")
+        assert out["findings_diagnostics"] is None
+        assert out["lists_diagnostics"]["next_steps"]["dropped"] == 1
+
+
+def test_prose_lists_are_sanitized_before_they_are_measured():
+    """Control characters are stripped from a string item, and a string with them is
+    still a string: sanitization reshapes prose, it never turns an item into a loss."""
+    out = _consult(_structured(questions=["q\x07"]))
+    assert out["questions"] == ["q"] and out["lists_diagnostics"] is None
+
+
+def test_consult_prose_fallback_and_delegate_carry_no_lists_diagnostics():
+    """A prose consult parsed nothing, so nothing was measured; a delegate's next_steps is
+    amicus's own literal, so the field would be a promise about output that was never
+    backend output. Delegate does not publish it at all."""
+    assert fz.consult_result(ExecResult(answer="plain"), Meta())["lists_diagnostics"] is None
+    out = fz.delegate_result(
+        ExecResult(answer="ok"), Meta(), diff="", aliases=(), max_diff_bytes=10
+    )
+    assert "lists_diagnostics" not in out

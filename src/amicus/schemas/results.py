@@ -43,6 +43,15 @@ FindingReason = Literal[
     "invalid_container",
     "missing_findings",
 ]
+# Why a prose-list entry (questions, assumptions, next_steps) did not reach the caller
+# intact, in this fixed order (issue #52). The same discipline as FindingReason: a fixed
+# vocabulary, never the omitted content.
+ListReason = Literal[
+    "number_stringified",
+    "invalid_entry",
+    "invalid_container",
+    "missing_member",
+]
 CoverageStatus = Literal["complete", "partial"]
 # Why a review was not complete, in this fixed order (review.build_coverage). Not every
 # reason withholds input: `focused` narrows the ask, `tree_changed_during_gather` is a
@@ -118,6 +127,46 @@ class FindingsDiagnostics(BaseModel):
     model_config = ConfigDict(extra="forbid")
     dropped: int | None = Field(default=None, description=_DROPPED_DESC)
     reasons: list[FindingReason] = Field(default_factory=list, description=_REASONS_DESC)
+
+
+# One description on the field, not on each member's `reasons`: the member schema is
+# inlined three times per tool, and the prose must reach an MCP-only caller exactly once.
+_LISTS_DESC = (
+    "What the backend put in `questions`, `assumptions` or `next_steps` that amicus could "
+    "not carry intact; null when all three were clean, and a null member is a clean list. "
+    "Per member, `dropped` counts entries dropped whole (null: the member could not be read "
+    "at all) and `reasons` says why. number_stringified: a number delivered as its string, "
+    "nothing lost. invalid_entry: an entry that was not a string or number, dropped whole. "
+    "invalid_container: present but not a list. missing_member: the required member was "
+    "absent. None of these touches the verdict or confidence."
+)
+publish.KEPT_DESCRIPTIONS.add(_LISTS_DESC)
+
+
+class ListDiagnostics(BaseModel):
+    """What amicus could not carry from one prose list (issue #52). `dropped` counts the
+    entries dropped whole; it is 0 under `number_stringified` alone, and null when the
+    member was absent or not a list, so the count is unknowable."""
+
+    model_config = ConfigDict(extra="forbid")
+    dropped: int | None = Field(default=None, ge=0)
+    reasons: list[ListReason] = Field(min_length=1)
+
+
+class ListsDiagnostics(BaseModel):
+    """One member per prose list, null where that list was clean. Present on a result only
+    when at least one deviated, so the outer null keeps its meaning."""
+
+    model_config = ConfigDict(extra="forbid")
+    questions: ListDiagnostics | None = None
+    assumptions: ListDiagnostics | None = None
+    next_steps: ListDiagnostics | None = None
+
+    @model_validator(mode="after")
+    def _at_least_one(self) -> ListsDiagnostics:
+        if self.questions is None and self.assumptions is None and self.next_steps is None:
+            raise ValueError("lists_diagnostics with no deviating member must be null")
+        return self
 
 
 class RawResponse(BaseModel):
@@ -241,11 +290,19 @@ class _ModelResult(SuccessBase):
     raw_response: RawResponse | None = None
 
 
-class ConsultResult(_ModelResult):
+class _StructuredResult(_ModelResult):
+    """A result whose prose lists were parsed from the backend's structured output, so
+    their loss can be measured. Delegate's lists are amicus's own literals and stay on
+    the base: a diagnostic there would be a promise about output that never existed."""
+
+    lists_diagnostics: ListsDiagnostics | None = Field(default=None, description=_LISTS_DESC)
+
+
+class ConsultResult(_StructuredResult):
     tool: Literal["amicus_consult"] = "amicus_consult"
 
 
-class ReviewResult(_ModelResult):
+class ReviewResult(_StructuredResult):
     tool: Literal["amicus_review_changes"] = "amicus_review_changes"
     verdict: Verdict
     confidence: Confidence = Field(description=_CONFIDENCE_DESC)
@@ -254,7 +311,7 @@ class ReviewResult(_ModelResult):
     coverage: Coverage = Field(description=_COVERAGE_DESC)
 
 
-class AdversarialReviewResult(_ModelResult):
+class AdversarialReviewResult(_StructuredResult):
     tool: Literal["amicus_adversarial_review"] = "amicus_adversarial_review"
     verdict: Verdict
     confidence: Confidence = Field(description=_CONFIDENCE_DESC)
