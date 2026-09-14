@@ -21,7 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   schema's own `required`:
   `elapsed_ms`, `truncated`, `compat_warnings`, `security_warnings`, `redacted_paths`,
   `request_id` and `fingerprint`, derived from the model so a new defaulted field cannot be
-  added without being declared; an empty list there means checked, none found. Only meta's
+  added without being declared. An empty list there means that envelope reports none, not
+  that a check ran: a job handle, status or list and a dry run report on the call that
+  produced them, and the run's warnings arrive on its own result. Only meta's
   top level is touched: a null inside `usage`, or outside `meta` such as
   `JobListResult.truncation_hint`, is that object's own contract. The persisted dump is
   unchanged, so `RESULT_FORMAT` stays 6. On the wire-shape snapshot's `amicus_job_list`

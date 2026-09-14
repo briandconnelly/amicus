@@ -118,9 +118,13 @@ class ConsumeDisposition(BaseModel):
 
 
 class Meta(BaseModel):
-    """Execution metadata on every envelope. Every field is optional except the
-    identity trio at the end; `cwd` is None when no workspace was resolved (argument
-    errors, unimplemented tools). Backend-specific facts ride `backend_details`."""
+    """Execution metadata on every envelope. Construction: every field has a default, so
+    `Meta()` is valid. Wire: `META_ALWAYS_PRESENT` (the fields whose default is never None,
+    minus `server_version`) is the success schema's `required` and is always delivered;
+    every other key is delivered only when non-null (`slim_meta`, #47). `server_version`
+    is not required because a stored payload can predate it. `cwd` is None when no
+    workspace was resolved (argument errors, unimplemented tools). Backend-specific facts
+    ride `backend_details`."""
 
     model_config = ConfigDict(extra="forbid")
     backend: BackendRef | None = None
@@ -330,8 +334,10 @@ RESULT_META_SCHEMA["description"] = (
     "The full result-metadata contract. Every success envelope's `meta` is advertised "
     "as an opaque pointer to this schema. On the wire every success envelope, paid or "
     "free, drops meta's null-valued keys; absence means exactly what null means (not "
-    "applicable / not reported). The keys in `required` are always present: an empty "
-    "list there means checked, none found. Error envelopes strip absent optionals except "
+    "applicable / not reported). The keys in `required` are always present. An empty list "
+    "there means this envelope reports none, not that a check ran: a job handle, status or "
+    "list and a dry run report on the call that produced them, never on the run they name, "
+    "whose warnings arrive on its own result. Error envelopes strip absent optionals except "
     "retry_after_ms."
 )
 

@@ -176,7 +176,7 @@ def test_result_meta_schema_requires_exactly_the_fields_that_are_always_present(
     optional = [n for n, f in e.Meta.model_fields.items() if f.default is None and n not in core]
     assert "backend" in optional and "usage" in optional
     assert all(n not in core for n in optional)
-    # An empty list is a populated value: checked, none found. It is required, never dropped.
+    # An empty list is a populated value (this envelope reports none): required, never dropped.
     delivered = e.Meta().model_dump(mode="json")
     assert delivered["security_warnings"] == [] and "security_warnings" in core
 

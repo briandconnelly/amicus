@@ -28,9 +28,12 @@ It is `elapsed_ms`, `truncated`, `compat_warnings`, `security_warnings`, `redact
 A new `Meta` field with a non-null default joins the core without a separate declaration, and a test asserts the set, so the change is visible.
 A new field in the capabilities payload was rejected: `meta_fields` still lists every name, and the presence claim belongs beside the schema it qualifies.
 
-**Empty lists stay.**
-`security_warnings: []` means checked, none found, which is information a reader acts on, and the skill tells an agent to read all three lists before drawing a conclusion.
+**Empty lists stay, and they say what this envelope reports.**
+`security_warnings: []` on a result means the run reported none, which is information a reader acts on, and the skill tells an agent to read all three lists before drawing a conclusion.
 They are required, never dropped.
+Copilot's review of the branch caught the first wording, "checked, none found", overstating what a lifecycle envelope can claim: a job handle, status or list, and a dry run, build their meta with those lists at their empty defaults before any backend has run, so a client reading the status of a Claude job would conclude no hook warning existed while the result it names carries one.
+The published meaning is therefore the weaker one every path satisfies: an empty list means this envelope reports none, a lifecycle or dry-run envelope reports on the call that produced it, and the run's warnings arrive on its own result.
+Omitting the lists until a check has run was rejected: the skill has told agents to read all three lists since M4, and a handle that dropped them would make that rule a presence check of its own.
 
 **Only `meta`'s top level is touched.**
 A null inside `usage` or another nested object, and a null outside `meta` such as `JobStatus.poll_after_ms` or `JobListResult.truncation_hint`, is that object's own contract and is delivered as it is.
