@@ -8,6 +8,20 @@ one backend package."""
 from __future__ import annotations
 
 import json
+from typing import Any
+
+
+def _reject_repeated_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    """`object_pairs_hook`: an object that repeats a key does not denote one value. Plain
+    `json.loads` keeps the last member silently, which would let `"findings": [...]`
+    followed by `"findings": []` reach `coerce_findings` as empty with nothing for the
+    loss diagnostics to see (#51), so the parse fails instead."""
+    obj: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in obj:
+            raise ValueError(f"repeated key {key!r}")
+        obj[key] = value
+    return obj
 
 
 def _strip_code_fence(text: str) -> str:
@@ -24,11 +38,14 @@ def _strip_code_fence(text: str) -> str:
 
 def classify_structured(last_message: str | None) -> tuple[str, dict | None]:
     """("ok", dict) | ("invalid_json", None) | ("schema_violation", None) for the strict
-    review path: absent/unparseable vs parseable-but-not-an-object."""
+    review path: absent/unparseable vs parseable-but-not-an-object. An object that repeats
+    a key at any depth is unparseable here: there is no one value to deliver."""
     if not last_message or not last_message.strip():
         return ("invalid_json", None)
     try:
-        parsed = json.loads(_strip_code_fence(last_message))
+        parsed = json.loads(
+            _strip_code_fence(last_message), object_pairs_hook=_reject_repeated_keys
+        )
     except (json.JSONDecodeError, ValueError):
         return ("invalid_json", None)
     if not isinstance(parsed, dict):

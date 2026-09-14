@@ -82,6 +82,33 @@ def test_consult_structured_and_prose_and_sanitization():
     assert empty["summary"] == "(the backend returned no message)"
 
 
+def test_review_with_a_repeated_findings_key_is_invalid_json_not_an_empty_pass():
+    # #51: the duplicate collapses inside json.loads, before coerce_findings can measure
+    # loss, so the only honest outcome is the hard invalid_json error the strict path
+    # already returns for unparseable output - never a `pass` carrying no findings.
+    plugin = fakeplugin.make_plugin()
+    payload = _structured()
+    head = json.dumps(payload)[:-1]
+    answer = head + ',"findings":[]}'
+    assert json.loads(answer)["findings"] == []  # the collapse this test guards against
+    out = fz.review_result(ExecResult(answer=answer), Meta(), _COMPLETE, plugin)
+    assert out["ok"] is False and out["error"]["code"] == "invalid_json"
+    assert "repeats a key" in out["error"]["message"]
+
+
+def test_consult_with_a_repeated_key_takes_the_prose_path():
+    # Consult is Q&A: the refused object goes down the existing prose path (sanitized
+    # summary, redacted raw_response), not a clean structured result with the collapsed
+    # member. This payload has nothing for either transform to change.
+    from amicus.backends.codex import normalize as codex_normalize
+
+    answer = '{"summary":"s","findings":[{"title":"t"}],"findings":[]}'
+    structured = codex_normalize.parse_structured(answer)
+    out = fz.consult_result(ExecResult(answer=answer, structured=structured), Meta())
+    assert out["ok"] is True and out["summary"] == answer and out["findings"] == []
+    assert out["findings_diagnostics"] is None and out["raw_response"]["text"] == answer
+
+
 def test_review_is_strict_and_folds_coverage():
     plugin = fakeplugin.make_plugin()
     out = fz.review_result(ExecResult(answer="prose"), Meta(), _COMPLETE, plugin)

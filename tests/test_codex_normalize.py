@@ -68,3 +68,11 @@ def test_extract_error_message_unwraps_nested_json():
         == "bad schema"
     )
     assert normalize.extract_error_message('{"type":"turn.completed"}') is None
+
+
+def test_parse_structured_refuses_a_repeated_key_instead_of_keeping_the_last():
+    # #51: ExecResult.structured feeds consult_result directly, so the codex parser must
+    # refuse the object the shared classifier refuses rather than deliver the collapsed one.
+    text = '{"summary":"s","findings":[{"title":"t"}],"findings":[]}'
+    assert normalize.parse_structured(text) is None
+    assert normalize.classify_structured(text) == ("invalid_json", None)

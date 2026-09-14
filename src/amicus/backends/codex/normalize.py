@@ -10,7 +10,7 @@ import json
 from pontonier.backend.protocol import Usage
 
 from amicus.backends.codex import contract
-from amicus.schemas.structured import _strip_code_fence, classify_structured
+from amicus.schemas.structured import classify_structured
 
 __all__ = [
     "classify_structured",
@@ -139,10 +139,8 @@ def _usage_from(blob: dict) -> Usage | None:
 
 
 def parse_structured(last_message: str | None) -> dict | None:
-    if not last_message:
-        return None
-    try:
-        parsed = json.loads(_strip_code_fence(last_message))
-    except (json.JSONDecodeError, ValueError):
-        return None
-    return parsed if isinstance(parsed, dict) else None
+    """The answer as a JSON object (code fence tolerated), else None (prose). One parser
+    for every backend, so a repeated key is refused here exactly as the strict path
+    refuses it (#51)."""
+    status, parsed = classify_structured(last_message)
+    return parsed if status == "ok" else None
