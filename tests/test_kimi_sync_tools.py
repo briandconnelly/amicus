@@ -217,7 +217,7 @@ async def test_failures_are_classified_and_recorded(app, tmp_path, repo, monkeyp
 
 async def test_discovery_tools_read_the_fake(app, tmp_path, repo):
     async with Client(app) as c:
-        backends = await c.call_tool("amicus_backends", {"backend": "kimi"})
+        backends = await c.call_tool("amicus_backends", {"backend": "kimi", "detail": "full"})
         models = await c.call_tool("amicus_models", {"backend": "kimi"})
         dry = await c.call_tool("amicus_dry_run", {"backend": "kimi", "workspace_root": str(repo)})
     [entry] = backends.structured_content["backends"]

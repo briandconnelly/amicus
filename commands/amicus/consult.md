@@ -9,7 +9,7 @@ tool from the amicus server.
 Request: $ARGUMENTS
 
 `backend` is required — amicus has no default backend. If the request does not name
-one (`codex`, `kimi`, or `claude`), call `amicus_backends` first and choose only
+one (`codex`, `kimi`, or `claude`), call `amicus_backends` with `detail="full"` first and choose only
 among backends it reports `enabled: true` and `status.authenticated: true`; do not
 guess or fall back to a favorite.
 

@@ -271,3 +271,33 @@ def test_the_deadline_reference_states_both_sync_bounds_and_names_the_keyed_alte
     assert "`idempotency_key`" in next(b for b in _bullets(spend) if "`_async`" in b), (
         "the sync-deadline rule must offer the keyed sync call beside the `_async` twin"
     )
+
+
+def test_the_disclosure_rules_name_the_full_detail_level():
+    """amicus_backends' default summary omits egress/carriers/readonly_honesty/
+    implicit_context (#46). A binding rule that sends the agent to `carriers` on a bare
+    `amicus_backends` call sends it to a response that does not carry the field, so the
+    two rules that read a disclosure must name detail="full" - and so must the server
+    text that points at the disclosures, or the two surfaces disagree."""
+    from amicus.schemas.results import BACKEND_DISCLOSURE_FIELDS
+    from amicus.server import CAPABILITY_SUMMARY as INSTRUCTIONS
+
+    first_call = re.search(
+        r"\*\*Call `amicus_backends\(([^`]*)\)` before the first paid call", _BINDING_RULES
+    )
+    assert first_call, "no binding rule calls amicus_backends before the first paid call"
+    assert first_call.group(1) == 'detail="full"'
+    carriers = re.search(r"\*\*Read `carriers` on `amicus_backends\(([^`]*)\)`", _BINDING_RULES)
+    assert carriers, "no binding rule reads `carriers` on amicus_backends"
+    assert carriers.group(1) == 'detail="full"'
+    # The rule stays a callable obligation; what the projection leaves out is context, and
+    # the reference that owns the field list is where every omitted field must be named.
+    reports = _BACKENDS_REF.partition("\n## What `amicus_backends` reports\n")[2].split("\n## ", 1)[
+        0
+    ]
+    assert reports, "choosing-a-backend.md has no `## What `amicus_backends` reports` section"
+    assert 'detail="full"' in reports and "`omitted_fields`" in reports
+    for field in BACKEND_DISCLOSURE_FIELDS:
+        assert f"`{field}`" in reports, f"the reference must name `{field}`"
+    assert "disclosed on amicus_backends(detail=full)" in INSTRUCTIONS
+    assert "pass detail=full on that first read" in INSTRUCTIONS

@@ -355,8 +355,28 @@ CapabilitiesDetailParam = Annotated[
     CapabilitiesDetail,
     Field(
         description=(
-            "summary (default): name, cost, stability, backends, error_codes per tool; "
-            "full adds use_when/returns/params; contracts omits tool_details."
+            "Field density of each tool_details row, never the row count: summary (default) "
+            "is name, cost, stability, backends; full adds use_when, required_params, "
+            "key_optional_params, returns, error_codes."
+        )
+    ),
+]
+IncludeToolDetailsParam = Annotated[
+    bool,
+    Field(
+        description=(
+            "false returns everything except tool_details (empty), for a fingerprint or "
+            "surface_digest re-check; true (default) returns every tool's row at `detail`."
+        )
+    ),
+]
+BackendsDetailParam = Annotated[
+    Detail,
+    Field(
+        description=(
+            "summary (default) omits each backend's egress, carriers, readonly_honesty and "
+            "implicit_context (named in omitted_fields); full includes them. Read full once "
+            "before the first paid call; summary is enough for a readiness re-check."
         )
     ),
 ]

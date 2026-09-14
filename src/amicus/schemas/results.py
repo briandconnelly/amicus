@@ -30,7 +30,7 @@ Confidence = Literal["low", "medium", "high", "unknown"]
 ReviewScope = Literal["working_tree", "branch", "commit"]
 Untracked = Literal["explicit_only", "include", "exclude"]
 Detail = Literal["summary", "full"]
-CapabilitiesDetail = Literal["summary", "full", "contracts"]
+CapabilitiesDetail = Literal["summary", "full"]
 JobState = Literal["running", "done", "failed", "cancelled", "timeout"]
 ToolStability = Literal["stable", "preview", "experimental"]
 ReviewStatus = Literal["completed", "not_run"]
@@ -415,6 +415,25 @@ class BackendOptionInfo(BaseModel):
     )
 
 
+# The four per-backend disclosures amicus_backends(detail="summary") leaves out. An absent
+# key means the field was not requested; a present null means no loaded plugin declares
+# one, which covers both a backend that declares none and one whose plugin did not load.
+BACKEND_DISCLOSURE_FIELDS: tuple[str, ...] = (
+    "egress",
+    "carriers",
+    "readonly_honesty",
+    "implicit_context",
+)
+_DISCLOSURE_DESC = (
+    "Omitted on detail=summary (see omitted_fields); null when no loaded plugin declares one."
+)
+_OMITTED_FIELDS_DESC = (
+    "Per-backend keys this detail level left out of every entry; empty on detail=full. "
+    "Pass detail=full to read them."
+)
+publish.KEPT_DESCRIPTIONS.update({_DISCLOSURE_DESC, _OMITTED_FIELDS_DESC})
+
+
 class BackendEntry(BaseModel):
     model_config = ConfigDict(extra="forbid")
     id: BackendRef
@@ -425,10 +444,10 @@ class BackendEntry(BaseModel):
     features: list[str]
     effects: EffectsInfo
     options: list[BackendOptionInfo]
-    egress: str | None = None
-    carriers: str | None = None
-    readonly_honesty: str | None = None
-    implicit_context: str | None = None
+    egress: str | None = Field(default=None, description=_DISCLOSURE_DESC)
+    carriers: str | None = Field(default=None, description=_DISCLOSURE_DESC)
+    readonly_honesty: str | None = Field(default=None, description=_DISCLOSURE_DESC)
+    implicit_context: str | None = Field(default=None, description=_DISCLOSURE_DESC)
 
 
 class UnavailableEntry(BaseModel):
@@ -445,6 +464,7 @@ class BackendsResult(BaseModel):
     unavailable: list[UnavailableEntry]
     env_warnings: list[str]
     config_errors: list[str]
+    omitted_fields: list[str] = Field(description=_OMITTED_FIELDS_DESC)
     fingerprint: str = FINGERPRINT
     server_version: str | None = server_version_field()
 
@@ -487,17 +507,36 @@ _TOOL_DETAILS_POINTER_DESC = (
 publish.KEPT_DESCRIPTIONS.update({_TOOL_STABILITY_DESC, _TOOL_DETAILS_POINTER_DESC})
 
 
+# The per-tool fields amicus_capabilities(detail="summary") leaves out of every row. An
+# absent key means the field was not requested, never that the list is empty: a present
+# empty list on detail=full is the claim that there is genuinely nothing to list.
+TOOL_DETAIL_FULL_FIELDS: tuple[str, ...] = (
+    "use_when",
+    "required_params",
+    "key_optional_params",
+    "returns",
+    "error_codes",
+)
+_TOOL_FULL_ONLY_DESC = "Present on detail=full only; absent on detail=summary."
+_TOOL_FULL_ONLY_LIST_DESC = _TOOL_FULL_ONLY_DESC + " A present empty list means none."
+publish.KEPT_DESCRIPTIONS.update({_TOOL_FULL_ONLY_DESC, _TOOL_FULL_ONLY_LIST_DESC})
+
+
 class ToolCapability(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str
     cost: Literal["free", "active"]
     stability: ToolStability | None = Field(default=None, description=_TOOL_STABILITY_DESC)
     backends: list[BackendRef] | None = None
-    use_when: str | None = None
-    required_params: list[str] = Field(default_factory=list)
-    key_optional_params: list[str] = Field(default_factory=list)
-    returns: str | None = None
-    error_codes: list[ErrorCode] = Field(default_factory=list)
+    use_when: str | None = Field(default=None, description=_TOOL_FULL_ONLY_DESC)
+    required_params: list[str] = Field(default_factory=list, description=_TOOL_FULL_ONLY_LIST_DESC)
+    key_optional_params: list[str] = Field(
+        default_factory=list, description=_TOOL_FULL_ONLY_LIST_DESC
+    )
+    returns: str | None = Field(default=None, description=_TOOL_FULL_ONLY_DESC)
+    error_codes: list[ErrorCode] = Field(
+        default_factory=list, description=_TOOL_FULL_ONLY_LIST_DESC
+    )
 
 
 RESULT_FORMAT_DESC = (

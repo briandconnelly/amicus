@@ -43,7 +43,7 @@ artifact, a `gh --version`, and a push or fetch against a **filesystem** remote 
 network, so none of them is excluded. On `kimi` even the egress half does not hold: a task can reach the network and
 write outside the worktree with the user's own privileges. On either, the returned diff shows what
 changed *in the worktree*, not everything the run did. Confirm the backend before relying on any of this, and read `effects`
-and `egress` on `amicus_backends` rather than assuming the table above is still current.
+and `egress` on `amicus_backends(detail="full")` rather than assuming the table above is still current.
 
 ## What to check before applying
 

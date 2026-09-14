@@ -26,7 +26,11 @@ supports plus its extra capabilities — see below), `effects` (`paid_calls_dest
 `job_reads_read_only`), `options` (backend-specific knobs and their allowed values),
 `egress`/`carriers` (how prompt inputs travel), `readonly_honesty` (what this backend's read-only
 tier does and does not bound), and `implicit_context` (what the CLI auto-loads regardless of your
-prompt).
+prompt). The last four are on `detail="full"` only: the default `summary` leaves those keys out of
+every entry and lists them in the top-level `omitted_fields`, so an absent key means "not
+requested", while a `null` on `full` means no loaded plugin declares one (the backend declares
+none, or its plugin did not load). `summary` is enough for a readiness re-check once the full
+report has been read.
 
 `AMICUS_BACKENDS` decides which backends exist in this deployment; it does not decide which to
 prefer.
@@ -76,14 +80,14 @@ that mode loads, which `implicit_context` states per backend.
 Read-only bounds *modification*, never *reach*, on any of the three. Codex's sandbox bounds
 writes, not reads; kimi's `Read` accepts absolute paths; Claude's `readonly` accepts absolute
 paths too and, having read a file itself, bypasses the diff redaction entirely. The workspace
-selects where a backend works, not what it can read — `readonly_honesty` on `amicus_backends` is
+selects where a backend works, not what it can read — `readonly_honesty` on `amicus_backends(detail="full")` is
 each backend's own statement of that limit.
 
 ## How your text reaches each backend
 
 Amicus's own transport is the same for all three: free-text fields never touch its logs, and for
 an async job they reach the worker over stdin. How a field reaches the *backend CLI* is the
-backend's own choice, and `carriers` on `amicus_backends` is authoritative. Today:
+backend's own choice, and `carriers` on `amicus_backends(detail="full")` is authoritative. Today:
 
 | | Prompt carrier | `instructions_append` | Exposure to note |
 | --- | --- | --- | --- |
@@ -93,7 +97,7 @@ backend's own choice, and `carriers` on `amicus_backends` is authoritative. Toda
 
 Each backend also loads context you did not supply — `AGENTS.md`, skills, and on `claude` under
 `inherit`/`scoped`, workspace hooks that run outside the tool allowlist. `implicit_context` on
-`amicus_backends` is the authoritative per-backend statement.
+`amicus_backends(detail="full")` is the authoritative per-backend statement.
 
 ## Judgment call: which backend for a consult or review
 

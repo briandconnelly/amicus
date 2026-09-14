@@ -126,8 +126,11 @@ def register_resources(
         meta=_meta(volatile=True),
     )
     def backend_resource(backend: str) -> dict[str, Any]:
-        """The amicus_backends entry for one backend."""
-        payload = discovery.backends_payload(settings, registry, state.config_errors, backend)
+        """The amicus_backends(detail="full") entry for one backend: a single-backend read
+        is the on-demand path to its disclosures, so it never takes the summary projection."""
+        payload = discovery.backends_payload(
+            settings, registry, state.config_errors, backend, detail="full"
+        )
         if not payload["backends"]:
             raise _resource_not_found(f"amicus://backends/{backend}")
         return {**payload["backends"][0], "unavailable": payload["unavailable"]}

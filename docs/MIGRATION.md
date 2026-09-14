@@ -178,3 +178,11 @@ Check `amicus_backends(backend=...)` or a tool's `amicus_dry_run` echo to see wh
 Every sibling env var above is read automatically until then, but each read logs a warning naming the removal version.
 Setting the new `AMICUS_*` name and the old legacy name to different values is an error rather than a silent pick of one; the same is true if two legacy names for the same setting disagree with each other.
 Rename your environment before `0.3.0` ships to avoid a hard failure at that point.
+
+### Discovery defaults are concise
+
+`amicus_backends` now takes `detail` and defaults to `summary`, which omits each backend's `egress`, `carriers`, `readonly_honesty` and `implicit_context` and lists those names in the top-level `omitted_fields`.
+Pass `detail="full"` to read them.
+A `null` there means no loaded plugin declares one.
+The `amicus://backends/{backend}` resource is always the full entry.
+`amicus_capabilities(detail="contracts")` is removed: pass `include_tool_details=false` for the same rowless payload, and `detail` now selects only how much each `tool_details` row carries (`summary` is `name`, `cost`, `stability`, `backends`; `full` adds the rest, including `error_codes`).

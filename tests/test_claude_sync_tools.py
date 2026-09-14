@@ -467,7 +467,9 @@ async def test_invalid_effort_and_budget_are_refused_pre_spend(app, tmp_path):
 
 async def test_discovery_reads_the_fake(app, monkeypatch):
     async with Client(app) as c:
-        backends = (await c.call_tool("amicus_backends", {"backend": "claude"})).structured_content
+        backends = (
+            await c.call_tool("amicus_backends", {"backend": "claude", "detail": "full"})
+        ).structured_content
         models = (await c.call_tool("amicus_models", {"backend": "claude"})).structured_content
         dry = await c.call_tool(
             "amicus_dry_run", {"backend": "claude", "workspace_root": "/tmp"}, raise_on_error=False
