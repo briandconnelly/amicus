@@ -12,6 +12,7 @@ from pontonier.core import redaction
 
 from amicus.errors import error_envelope
 from amicus.jobs.delivery import STATE_TO_ERROR
+from amicus.jobs.polling import poll_hint_ms
 from amicus.jobs.taskmap import TaskJobMap
 from amicus.orchestration import workspace as ws
 from amicus.schemas.envelope import ErrorDetail, Meta, RootsSource, Workspace
@@ -130,7 +131,7 @@ def status_model(
         elapsed_ms=row["elapsed_ms"],
         result_available=row["result_available"],
         result_ok=row["result_ok"],
-        poll_after_ms=row["poll_after_ms"] if state == "running" else None,
+        poll_after_ms=poll_hint_ms(row),
         expires_at=row["expires_at"],
         task_id=task_id,
         workspace=workspace,

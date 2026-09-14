@@ -12,6 +12,7 @@ from fastmcp import Context
 
 from amicus.jobs import lifecycle, lookup
 from amicus.jobs.delivery import attach_consume_disposition, finished_job_envelope
+from amicus.jobs.polling import POLL_HINT_CAP_MS
 from amicus.schemas.params import (
     DetailParam,
     JobIdParam,
@@ -115,7 +116,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
         description=(
             f"{FREE_MARKER} Poll a job's state without fetching its result: status, elapsed "
             "time, result_available, result_ok, and poll_after_ms to honor before the next "
-            f"poll (it grows with elapsed time). {_RETENTION}"
+            f"poll (it grows with elapsed time, up to {POLL_HINT_CAP_MS / 1000:g} s). {_RETENTION}"
         ),
     )
     @guard("amicus_job_status", settings)

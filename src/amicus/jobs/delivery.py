@@ -11,6 +11,7 @@ from pontonier.core import redaction
 from pydantic import BaseModel, ValidationError
 
 from amicus.errors import error_envelope, serialize_error
+from amicus.jobs.polling import poll_hint_ms
 from amicus.orchestration.finalize import sanitize_finding, sanitize_prose_value
 from amicus.schemas.envelope import ConsumeDisposition, ErrorResult, slim_meta
 from amicus.schemas.fingerprint import FINGERPRINT, RESULT_FORMAT
@@ -234,7 +235,7 @@ def finished_job_envelope(
             message,
             meta,
             repair_arguments=poll_params if running else None,
-            retry_after_ms=rec.get("poll_after_ms") if running else None,
+            retry_after_ms=poll_hint_ms(rec),
         ),
         False,
     )

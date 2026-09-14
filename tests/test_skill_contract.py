@@ -283,16 +283,16 @@ def test_the_backend_reference_names_every_declared_feature():
 
 
 def test_the_polling_reference_states_the_hint_ceiling():
-    # The hint grows with elapsed time only up to pontonier's cap; a job that runs for
-    # minutes is polled at the cap for nearly its whole life, which is what the issue #84
-    # reporter observed as "no back-off". Read from the installed library so a pin bump
-    # that moves the cap fails here until the skill follows it.
-    from pontonier.core.jobs import MAX_POLL_AFTER_MS
+    # The hint grows with elapsed time only up to amicus's own ceiling (#95); a job that runs
+    # for minutes is polled at the ceiling for most of its life, which the issue #84 reporter
+    # observed at pontonier's 10 s cap as "no back-off". Read from source so a change to the
+    # ceiling fails here until the skill follows it.
+    from amicus.jobs.polling import POLL_HINT_CAP_MS
 
     polling = _SYNC_REF.partition("\n## Polling\n")[2].split("\n## ", 1)[0]
     assert polling, "sync-vs-async.md has no `## Polling` section"
-    # Exact seconds, not floor-divided: a cap of 10500 ms must not still read as `10 s`.
-    assert f"`{MAX_POLL_AFTER_MS / 1000:g} s`" in polling, "the poll hint's ceiling is unstated"
+    # Exact seconds, not floor-divided: a cap of 30500 ms must not still read as `30 s`.
+    assert f"`{POLL_HINT_CAP_MS / 1000:g} s`" in polling, "the poll hint's ceiling is unstated"
 
 
 def test_the_deadline_reference_states_both_sync_bounds_and_names_the_keyed_alternative():
