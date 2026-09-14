@@ -132,6 +132,13 @@ reasoning effort, and binary path (`AMICUS_CODEX_MODEL`, `AMICUS_KIMI_REASONING_
 `AMICUS_CLAUDE_BIN`, and so on), and there are limits for timeouts, job retention and payload
 sizes. The full list is the `env_vars` array in [`.mcp.json`](.mcp.json).
 
+Logging goes to stderr, and `AMICUS_LOG_FILE` mirrors amicus's own records to a file. The
+`fastmcp` and `mcp` libraries' records also reach stderr, but never below WARNING whatever
+`AMICUS_LOG_LEVEL` says, never the file, and with every unaudited FastMCP server record
+reduced to its level, logger and exception type. That is deliberate (ADR 0023): those
+libraries can log a caller's prompt text, so a FastMCP-side failure is diagnosed from the
+exception type and frames rather than its message.
+
 ## Coming from codex-in-claude, moonbridge, or claude-in-codex
 
 amicus replaces all three. [`docs/MIGRATION.md`](docs/MIGRATION.md) maps the old tool names onto
