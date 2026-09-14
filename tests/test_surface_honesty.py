@@ -300,3 +300,27 @@ def test_the_terminal_consume_instrument_can_fail():
     )
     for name, old in {**_SUPERSEDED_TERMINAL_CONSUME, "split claims": split}.items():
         assert _TERMINAL_CONSUME_CLAUSE not in _plain(old), name
+
+
+# PR #105 review (Copilot): a done record whose stored result does not read back (corrupt,
+# or written under another result format) is described rather than delivered, and is not
+# deleted, so "the originating tool's envelope for a done job" overstated discovery too.
+_UNREADABLE_DONE_CLAUSE = "nor is a corrupt or incompatible record"
+_UNREADABLE_DONE_SURFACES = ("tool description", "discovery returns")
+
+
+def test_consume_surfaces_name_the_unreadable_done_case(wire):
+    surfaces = _terminal_consume_surfaces(wire)
+    for name in _UNREADABLE_DONE_SURFACES:
+        assert _UNREADABLE_DONE_CLAUSE in _plain(surfaces[name]), name
+
+
+def test_the_unreadable_done_instrument_can_fail():
+    discovery_before_review = (
+        "the originating tool's envelope for a done job; meta.consume.discard_outcome is what "
+        "the store did, with a follow_up after not_done or delete_failed. A failed, cancelled "
+        "or timed-out job returns its terminal error with no meta.consume and is not deleted."
+    )
+    olds = [_SUPERSEDED_TERMINAL_CONSUME[n] for n in _UNREADABLE_DONE_SURFACES]
+    for old in [*olds, discovery_before_review]:
+        assert _UNREADABLE_DONE_CLAUSE not in _plain(old)
