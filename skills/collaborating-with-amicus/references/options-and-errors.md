@@ -87,7 +87,8 @@ Consuming deletes the record, and a later synthesis, comparison, or second revie
 artifact you have already destroyed. The consumed envelope's `meta.consume.discard_outcome`
 reports what the store did, not whether the files are gone: after `removed` or `missing` it no
 longer serves the record; after `not_done` or `delete_failed` the record may remain, and
-`meta.consume.follow_up` names the call that shows what is left.
+`meta.consume.follow_up` names the call that shows what is left. A failed, cancelled or timed-out
+job returns its terminal error with no `meta.consume` and is not deleted.
 
 ## Backend-local codes
 

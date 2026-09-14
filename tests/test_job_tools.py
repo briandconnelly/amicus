@@ -4,6 +4,7 @@ cancel, list, the filters, the task-id echo, and the workspace and not-found env
 from __future__ import annotations
 
 import asyncio
+import json
 import time
 from pathlib import Path
 
@@ -274,6 +275,79 @@ async def test_a_real_failed_delete_is_reported_and_its_follow_up_shows_what_is_
         )
         assert again.structured_content["error"]["code"] == "job_failed"
         assert sorted(p.name for p in target.iterdir()) == ["meta.json"]
+
+
+async def _terminal_error_job(c, store, tmp_path, monkeypatch, state):
+    """A job left in `state` the way the store derives it: `cancelled` by a real cancel,
+    `timeout` by a deadline already past at the next read, and `failed` as a finished record
+    with no result.json and no terminal stamp, as a worker that exited without one leaves."""
+    cwd = str(tmp_path)
+    if state == "failed":
+        job_id = await _start(c, tmp_path)
+        await _wait_done(store, tmp_path, job_id)
+        jd = store._job_dir(cwd, job_id)
+        (jd / "result.json").unlink()
+        meta = json.loads((jd / "meta.json").read_text(encoding="utf-8"))
+        meta["terminal_status"] = None
+        (jd / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
+    else:
+        monkeypatch.setenv("FAKE_CODEX_SLEEP", "30")
+        job_id = await _start(c, tmp_path)
+        jd = store._job_dir(cwd, job_id)
+        deadline = time.monotonic() + 10
+        while not (jd / "worker.lock").exists() and time.monotonic() < deadline:
+            await asyncio.sleep(0.05)
+        assert (jd / "worker.lock").exists()
+        if state == "cancelled":
+            await c.call_tool("amicus_job_cancel", {"job_id": job_id, "workspace_root": cwd})
+        else:
+            meta = json.loads((jd / "meta.json").read_text(encoding="utf-8"))
+            meta["deadline_epoch"] = 0
+            (jd / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
+    assert store.status(cwd, job_id)["status"] == state, "control: the state was built"
+    return job_id
+
+
+@pytest.mark.parametrize(
+    ("state", "code"),
+    [("failed", "job_failed"), ("cancelled", "job_cancelled"), ("timeout", "job_timeout")],
+)
+async def test_consume_on_a_terminal_error_job_returns_the_error_and_deletes_nothing(
+    app, store, tmp_path, monkeypatch, state, code
+):
+    """A failed, cancelled or timed-out job has no stored envelope, so a consume delivers
+    nothing: it returns the terminal error with no meta.consume, never calls discard, and the
+    record survives a repeat call (#94). Discard must not even be attempted: the store never
+    stamps `failed` as terminal, so a record read as `failed` turns `done` if its result.json
+    appears after the read, and a discard then would delete a result never delivered."""
+    discards: list[str] = []
+    real_discard = JobStore.discard
+
+    def counted(self, cwd, job_id):
+        discards.append(job_id)
+        return real_discard(self, cwd, job_id)
+
+    monkeypatch.setattr(JobStore, "discard", counted)
+    ws = {"workspace_root": str(tmp_path)}
+    async with Client(app) as c:
+        schemas = await _schemas(c)
+        job_id = await _terminal_error_job(c, store, tmp_path, monkeypatch, state)
+        for attempt in (1, 2):
+            res = await c.call_tool(
+                "amicus_job_consume_result", {"job_id": job_id, **ws}, raise_on_error=False
+            )
+            body = res.structured_content
+            schemas["amicus_job_consume_result"].validate(body)
+            assert res.is_error and body["error"]["code"] == code, attempt
+            assert "consume" not in body["meta"], attempt
+            assert store.status(str(tmp_path), job_id)["status"] == state, attempt
+        assert discards == []
+        # Control: the counter sees the discard a delivered consume makes.
+        monkeypatch.delenv("FAKE_CODEX_SLEEP", raising=False)
+        done = await _start(c, tmp_path)
+        await _wait_done(store, tmp_path, done)
+        await c.call_tool("amicus_job_consume_result", {"job_id": done, **ws})
+        assert discards == [done]
 
 
 async def test_cancel_running_then_terminal_is_idempotent(app, store, tmp_path, monkeypatch):

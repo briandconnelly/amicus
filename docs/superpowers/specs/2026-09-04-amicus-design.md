@@ -154,8 +154,8 @@ warnings; optional `backend` filter; replaces per-backend `*_status`),
 `amicus_models(backend)`, `amicus_capabilities` (error catalog, schemas on request,
 fingerprint + surface digest, annotation policy). Jobs: `amicus_job_status`,
 `amicus_job_result`, `amicus_job_consume_result`, `amicus_job_cancel`, `amicus_job_list`
-(all backends; `backend` and `task_id` filters; a consume reports its discard outcome in
-`meta.consume`, ADR 0022). Codex `transfer` deferred.
+(all backends; `backend` and `task_id` filters; a consume that delivers a stored envelope
+reports its discard outcome in `meta.consume`, ADR 0022). Codex `transfer` deferred.
 
 **Verb × backend parameter matrix** (`schemas/params.py`, written and tested before any
 schema):
