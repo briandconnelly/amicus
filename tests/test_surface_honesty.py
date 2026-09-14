@@ -109,6 +109,31 @@ def test_the_polling_instrument_can_fail(wire):
         assert [p for p in required if p in old] == [], name
 
 
+# Issue #101: a repeated keyed start replays the existing job's handle, which can already be
+# terminal, so each async tool's description gates its polling on `status` as well.
+_ASYNC_POLL_PHRASE = "poll amicus_job_status while status is running"
+_ASYNC_SUPERSEDED = "poll amicus_job_status, read amicus_job_result"
+_ASYNC_TOOLS: tuple[str, ...] = (
+    "amicus_consult_async",
+    "amicus_review_changes_async",
+    "amicus_adversarial_review_async",
+    "amicus_delegate_async",
+)
+
+
+def test_async_descriptions_gate_polling_on_status(wire):
+    descriptions = {t["name"]: t["description"] for t in wire["tools"]}
+    for name in _ASYNC_TOOLS:
+        assert _ASYNC_POLL_PHRASE in descriptions[name], f"{name} polls without a status gate"
+        assert _ASYNC_SUPERSEDED not in descriptions[name], name
+
+
+def test_the_async_description_instrument_can_fail():
+    """The phrase check fails against the wording each async description replaced (#101)."""
+    old = f"returns a job handle; {_ASYNC_SUPERSEDED}. Same egress."
+    assert _ASYNC_POLL_PHRASE not in old
+
+
 # Issue #44: consume promised job_not_found on every repeat call, while a failed delete
 # made that false and was reported as plain success. The description must condition the
 # promise on the outcome and point at the follow_up.

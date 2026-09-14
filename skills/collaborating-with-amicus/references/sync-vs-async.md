@@ -45,14 +45,18 @@ started with the `_async` twin.
 
 ## What `_async` returns
 
-A job handle: `job_id`, `poll_after_ms`, `expires_at`, and a `follow_up` pointer. It is not the
-consult/review/delegate result.
+A job handle: `job_id`, `status`, `poll_after_ms`, `expires_at`, and a `follow_up` pointer. It is
+not the consult/review/delegate result. A fresh start is always `running`. Repeating a keyed
+`_async` call replays the existing job's handle instead, and that job may already be terminal:
+then `poll_after_ms` is `null`. Go by `status` there, not by `follow_up`, which names
+`amicus_job_status` on every handle.
 
 ## Polling
 
 1. Call the matching `_async` tool once and keep its `job_id`.
-2. Wait at least the returned `poll_after_ms`, then call `amicus_job_status` with the same
-   `job_id` and the same absolute `workspace_root`.
+2. Read the handle's `status`. If it is already terminal, go straight to step 4. Otherwise wait at
+   least the returned `poll_after_ms`, then call `amicus_job_status` with the same `job_id` and
+   the same absolute `workspace_root`.
 3. **While `status` is `running`**, honor each new `poll_after_ms` and poll again.
 4. **Once `status` is terminal** — `done`, `failed`, `cancelled`, or `timeout` — stop polling and
    branch:

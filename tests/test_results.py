@@ -149,6 +149,23 @@ def test_job_started_follow_up_is_narrowed_to_the_one_action_it_carries():
     assert Repair(next_step="retry_after_delay").next_step == "retry_after_delay"
 
 
+def test_job_started_poll_hint_is_required_but_nullable():
+    """A replayed keyed start can hand back a finished job, whose hint is null as it is on
+    amicus_job_status (#101). Required, so every handle carries the key; nullable, so a
+    terminal handle can say there is nothing left to wait for."""
+    assert r.JobStarted.model_fields["poll_after_ms"].is_required()
+    branch = r.JOB_STARTED_SCHEMA["anyOf"][0]
+    assert "poll_after_ms" in branch["required"]
+    prop = branch["properties"]["poll_after_ms"]
+    validator = Draft202012Validator(prop)
+    assert validator.is_valid(None) and validator.is_valid(1000)
+    assert not validator.is_valid("1000")
+    # The null's meaning is published, and is the one amicus_job_status publishes.
+    assert "null on any terminal status" in prop["description"]
+    status_prop = r.JOB_STATUS_SCHEMA["anyOf"][0]["properties"]["poll_after_ms"]
+    assert status_prop["description"] == prop["description"]
+
+
 def test_job_result_schema_is_an_opaque_union_over_the_paid_tools():
     branch = r.JOB_RESULT_SCHEMA["anyOf"][0]
     assert set(branch["properties"]["tool"]["enum"]) == set(r.PAID_TOOLS)

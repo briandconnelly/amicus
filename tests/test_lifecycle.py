@@ -467,6 +467,9 @@ async def test_keyed_start_creates_then_replays_the_real_handle(tmp_path, monkey
         ),
     )
     assert status["status"] == "done" and status["poll_after_ms"] is None
+    # Its follow_up still names the status tool: pontonier has no step for fetching a
+    # finished job's result yet (briandconnelly/pontonier#30). Flip this with #103.
+    assert again["follow_up"]["next_step"] == "poll_job_status"
     assert again["started_at"] == first["started_at"]
     assert len(store.list_jobs(str(tmp_path))) == 1
     spec_on_disk = json.loads(
