@@ -23,6 +23,6 @@ extra-context argument.
 `diff` in the result) — it does not apply it. Review the diff yourself before
 applying it with your own tools.
 
-For a task that can exceed the synchronous deadline, use `amicus_delegate_async`
-instead and poll `amicus_job_status` for the result — a sync call whose deadline
-expires still spends the paid run.
+For a task that can exceed the synchronous deadline, use `/amicus:delegate-async`
+(`amicus_delegate_async`) instead — a sync call made without an idempotency key is
+terminated at its deadline with its partial work lost, and the paid run is still spent.
