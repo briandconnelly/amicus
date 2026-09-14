@@ -11,7 +11,7 @@ Request: $ARGUMENTS
 `backend` is required — amicus has no default backend. `amicus_delegate` supports
 `codex` and `kimi` only in v1 (Claude stays review-only) — do not route a delegate
 request to `claude`. If the request does not name a backend, call `amicus_backends`
-first and choose only among backends it reports `enabled: true`,
+with `detail="full"` first and choose only among backends it reports `enabled: true`,
 `status.authenticated: true`, and delegate listed under supported features.
 
 Pass the absolute repository path as `workspace_root` and describe the task

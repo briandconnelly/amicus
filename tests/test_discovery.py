@@ -205,7 +205,7 @@ async def test_backends_catalog_reports_enabled_available_and_unavailable():
     }
     assert by_id["codex"]["features"] == ["delegate"]
     assert by_id["codex"]["egress"] == "sends to OpenAI" and by_id["codex"]["carriers"] == "argv"
-    # full keeps a null where the backend declares nothing (kimi has no loaded plugin).
+    # full keeps a null where no loaded plugin declares one (kimi's plugin did not load).
     assert by_id["kimi"]["egress"] is None and "egress" in by_id["kimi"]
     assert {o["name"] for o in by_id["codex"]["options"]} == {"isolation"}
     assert by_id["codex"]["options"][0]["allowed_values"] == [
@@ -268,7 +268,8 @@ async def test_models_for_available_and_unavailable_backends():
 
 async def test_backends_summary_omits_the_disclosures_and_says_so():
     """The default projection drops the four disclosure KEYS (not nulls them, which would
-    read as "declares none") and names them in omitted_fields; the resource never does."""
+    read as "no loaded plugin declares one") and names them in omitted_fields; the
+    resource never does."""
     app = _app(env={"AMICUS_BACKENDS": "codex,kimi"}, registry=_mixed_registry())
     async with Client(app) as c:
         tool = next(t for t in await c.list_tools() if t.name == "amicus_backends")

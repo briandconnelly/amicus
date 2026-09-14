@@ -28,7 +28,8 @@ supports plus its extra capabilities — see below), `effects` (`paid_calls_dest
 tier does and does not bound), and `implicit_context` (what the CLI auto-loads regardless of your
 prompt). The last four are on `detail="full"` only: the default `summary` leaves those keys out of
 every entry and lists them in the top-level `omitted_fields`, so an absent key means "not
-requested", while a `null` on `full` means the backend declares none.
+requested", while a `null` on `full` means no loaded plugin declares one (the backend declares
+none, or its plugin did not load).
 
 `AMICUS_BACKENDS` decides which backends exist in this deployment; it does not decide which to
 prefer.

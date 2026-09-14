@@ -416,14 +416,17 @@ class BackendOptionInfo(BaseModel):
 
 
 # The four per-backend disclosures amicus_backends(detail="summary") leaves out. An absent
-# key means the field was not requested; a present null means the backend declares none.
+# key means the field was not requested; a present null means no loaded plugin declares
+# one, which covers both a backend that declares none and one whose plugin did not load.
 BACKEND_DISCLOSURE_FIELDS: tuple[str, ...] = (
     "egress",
     "carriers",
     "readonly_honesty",
     "implicit_context",
 )
-_DISCLOSURE_DESC = "Omitted on detail=summary (see omitted_fields); null when undeclared."
+_DISCLOSURE_DESC = (
+    "Omitted on detail=summary (see omitted_fields); null when no loaded plugin declares one."
+)
 _OMITTED_FIELDS_DESC = (
     "Per-backend keys this detail level left out of every entry; empty on detail=full. "
     "Pass detail=full to read them."
@@ -514,10 +517,9 @@ TOOL_DETAIL_FULL_FIELDS: tuple[str, ...] = (
     "returns",
     "error_codes",
 )
-_TOOL_FULL_ONLY_DESC = (
-    "Present on detail=full only; absent on detail=summary. A present empty list means none."
-)
-publish.KEPT_DESCRIPTIONS.add(_TOOL_FULL_ONLY_DESC)
+_TOOL_FULL_ONLY_DESC = "Present on detail=full only; absent on detail=summary."
+_TOOL_FULL_ONLY_LIST_DESC = _TOOL_FULL_ONLY_DESC + " A present empty list means none."
+publish.KEPT_DESCRIPTIONS.update({_TOOL_FULL_ONLY_DESC, _TOOL_FULL_ONLY_LIST_DESC})
 
 
 class ToolCapability(BaseModel):
@@ -527,10 +529,14 @@ class ToolCapability(BaseModel):
     stability: ToolStability | None = Field(default=None, description=_TOOL_STABILITY_DESC)
     backends: list[BackendRef] | None = None
     use_when: str | None = Field(default=None, description=_TOOL_FULL_ONLY_DESC)
-    required_params: list[str] = Field(default_factory=list, description=_TOOL_FULL_ONLY_DESC)
-    key_optional_params: list[str] = Field(default_factory=list, description=_TOOL_FULL_ONLY_DESC)
+    required_params: list[str] = Field(default_factory=list, description=_TOOL_FULL_ONLY_LIST_DESC)
+    key_optional_params: list[str] = Field(
+        default_factory=list, description=_TOOL_FULL_ONLY_LIST_DESC
+    )
     returns: str | None = Field(default=None, description=_TOOL_FULL_ONLY_DESC)
-    error_codes: list[ErrorCode] = Field(default_factory=list, description=_TOOL_FULL_ONLY_DESC)
+    error_codes: list[ErrorCode] = Field(
+        default_factory=list, description=_TOOL_FULL_ONLY_LIST_DESC
+    )
 
 
 RESULT_FORMAT_DESC = (

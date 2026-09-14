@@ -182,5 +182,5 @@ Rename your environment before `0.3.0` ships to avoid a hard failure at that poi
 ### Discovery defaults are concise
 
 `amicus_backends` now takes `detail` and defaults to `summary`, which omits each backend's `egress`, `carriers`, `readonly_honesty` and `implicit_context` and lists those names in the top-level `omitted_fields`.
-Pass `detail="full"` to read them; the `amicus://backends/{backend}` resource is always the full entry.
+Pass `detail="full"` to read them; a `null` there means no loaded plugin declares one, and the `amicus://backends/{backend}` resource is always the full entry.
 `amicus_capabilities(detail="contracts")` is removed: pass `include_tool_details=false` for the same rowless payload, and `detail` now selects only how much each `tool_details` row carries (`summary` is `name`, `cost`, `stability`, `backends`; `full` adds the rest, including `error_codes`).
