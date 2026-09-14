@@ -12,6 +12,7 @@ from tests.support import fakeplugin
 
 from amicus import config, server
 from amicus.registry import BackendRegistry
+from amicus.schemas.fingerprint import TRIAGE_META_KEY
 from amicus.tools import resources
 
 
@@ -35,12 +36,20 @@ async def test_static_resources_list_and_read_as_json_with_triage_and_lifecycle_
         for uri, rec in listed.items():
             meta = rec.meta or {}
             assert "dev.bconnelly.amicus/lifecycle" in meta, uri
-            assert meta["dev.bconnelly.amicus/triage"]["size_bytes"] > 0 or meta[
-                "dev.bconnelly.amicus/triage"
-            ].get("volatile")
             [block] = await c.read_resource(uri)
             body = json.loads(block.text)
             assert isinstance(body, dict)
+            if uri == "amicus://capabilities":
+                # Volatile: the body is built per read, so no size is claimed (#48).
+                # Absence is the signal; `volatile` carries the reason.
+                assert rec.size is None, uri
+                assert meta[TRIAGE_META_KEY] == {"volatile": True}
+            else:
+                # Static: the native `size` is the byte length of exactly the text a
+                # read returns, and the private triage block is gone (#48).
+                assert rec.size == len(block.text.encode()), uri
+                assert rec.size > 0
+                assert TRIAGE_META_KEY not in meta, uri
         assert listed["amicus://error-envelope"].mime_type == "application/schema+json"
         assert listed["amicus://params"].mime_type == "application/json"
 
@@ -48,8 +57,11 @@ async def test_static_resources_list_and_read_as_json_with_triage_and_lifecycle_
 async def test_templates_are_listed_and_readable():
     reg = BackendRegistry({"codex": fakeplugin.make_plugin("codex")}, {})
     async with Client(_app(reg)) as c:
-        templates = {t.uri_template for t in await c.list_resource_templates()}
-        assert templates == set(resources.TEMPLATE_URIS)
+        listed = {t.uri_template: t for t in await c.list_resource_templates()}
+        assert set(listed) == set(resources.TEMPLATE_URIS)
+        for template in listed.values():
+            # A template's body depends on its argument: volatile, never sized (#48).
+            assert (template.meta or {})[TRIAGE_META_KEY] == {"volatile": True}
         [entry] = await c.read_resource("amicus://backends/codex")
         entry_body = json.loads(entry.text)
         assert entry_body["available"] is True
