@@ -11,6 +11,7 @@ from pontonier.conventions.annotations import AnnotationEffects
 from amicus.backends import KNOWN_EFFECTS
 from amicus.schemas.envelope import Meta
 from amicus.schemas.fingerprint import LIFECYCLE_META_KEY
+from amicus.schemas.results import ToolDeprecation
 
 if TYPE_CHECKING:  # pragma: no cover
     from amicus.config import Settings
@@ -36,10 +37,42 @@ def tool_stability(name: str) -> ToolStability:
     return TOOL_STABILITY.get(name, SERVER_STABILITY)
 
 
+# Tools inside their deprecation window, keyed by the deprecated name. Each marker rides
+# the tool's lifecycle _meta and its amicus_capabilities row, so read it through
+# `tool_deprecation()` rather than importing this table (the #43 trap).
+DEPRECATED_TOOLS: dict[str, ToolDeprecation] = {
+    "amicus_dry_run": ToolDeprecation(
+        since="0.3.0",
+        removal_at_or_after="0.5.0",
+        replaced_by="amicus_review_changes_dry_run",
+        migration=(
+            "Call amicus_review_changes_dry_run with the same arguments. Its result is the "
+            "same, except that `tool` names amicus_review_changes_dry_run."
+        ),
+    ),
+}
+
+
+def tool_deprecation(name: str) -> ToolDeprecation | None:
+    return DEPRECATED_TOOLS.get(name)
+
+
+def deprecation_marker(name: str) -> dict[str, Any] | None:
+    """The marker as every surface publishes it: all four fields, a null `replaced_by`
+    included, which an `exclude_none` dump would drop."""
+    deprecation = tool_deprecation(name)
+    return None if deprecation is None else deprecation.model_dump(mode="json")
+
+
 def lifecycle_meta(name: str) -> dict[str, Any]:
-    """The `<reverse-dns>/lifecycle` _meta block ([9.tier-metadata]); the deprecation
-    marker is absent, which is the not-deprecated signal."""
-    return {LIFECYCLE_META_KEY: {"stability": tool_stability(name)}}
+    """The `<reverse-dns>/lifecycle` _meta block ([9.tier-metadata]): the stability tier,
+    and beside it the deprecation marker only for a deprecated tool. Its absence is the
+    not-deprecated signal ([9.deprecation-marker])."""
+    block: dict[str, Any] = {"stability": tool_stability(name)}
+    marker = deprecation_marker(name)
+    if marker is not None:
+        block["deprecation"] = marker
+    return {LIFECYCLE_META_KEY: block}
 
 
 def server_stability() -> ToolStability:

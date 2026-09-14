@@ -7,7 +7,9 @@ question, and the difference matters more than the code:
 1. **Release-state coherence** (`check_tree`). Every version literal AGENTS.md rule 19 names
    agrees with the version being released, `CHANGELOG.md` has exactly one dated section for
    that version with `## [Unreleased]` above it, `uv.lock` is current, and `.mcp.json`'s pin
-   names a tag no newer than this release that resolves IN THIS CHECKOUT. These are facts of
+   names a tag no newer than this release that resolves IN THIS CHECKOUT, and every tool
+   deprecation window (`DEPRECATED_TOOLS` in `src/amicus/tools/_meta.py`) contains this
+   release. These are facts of
    the tagged tree (and, for the pin, of this checkout), so a green result here *proves* them.
    Nothing self-asserts.
 
@@ -63,6 +65,7 @@ Pure stdlib (no deps): this script must run in a bare checkout without a synced 
 from __future__ import annotations
 
 import argparse
+import ast
 import importlib.util
 import json
 import re
@@ -294,6 +297,94 @@ def check_lock(
     return []
 
 
+DEPRECATIONS_PATH = "src/amicus/tools/_meta.py"
+_DEPRECATIONS_TABLE = "DEPRECATED_TOOLS"
+
+
+def _assigned_names(node: ast.stmt) -> list[str]:
+    if isinstance(node, ast.Assign):
+        return [target.id for target in node.targets if isinstance(target, ast.Name)]
+    if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+        return [node.target.id]
+    return []
+
+
+def deprecation_windows(
+    repo_root: Path = REPO_ROOT,
+) -> tuple[dict[str, tuple[str, str]], list[str]]:
+    """`{tool: (since, removal_at_or_after)}`, read statically from `DEPRECATED_TOOLS`.
+
+    Statically, because the `verify` job runs this script with `--no-project`: amicus itself
+    is not importable there. A test pins this read against the runtime table, so a table
+    this parser cannot read fails there rather than passing here as "no deprecations"."""
+    path = repo_root / DEPRECATIONS_PATH
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    except (OSError, SyntaxError) as exc:
+        return {}, [f"could not read {DEPRECATIONS_PATH}: {exc}"]
+    table = next(
+        (
+            node.value
+            for node in tree.body
+            if isinstance(node, (ast.Assign, ast.AnnAssign))
+            and _DEPRECATIONS_TABLE in _assigned_names(node)
+        ),
+        None,
+    )
+    if not isinstance(table, ast.Dict):
+        return {}, [f"{DEPRECATIONS_PATH} has no literal `{_DEPRECATIONS_TABLE}` dict"]
+    windows: dict[str, tuple[str, str]] = {}
+    problems: list[str] = []
+    for key, value in zip(table.keys, table.values, strict=True):
+        fields = {
+            keyword.arg: keyword.value.value
+            for keyword in (value.keywords if isinstance(value, ast.Call) else [])
+            if isinstance(keyword.value, ast.Constant) and isinstance(keyword.value.value, str)
+        }
+        if not (
+            isinstance(key, ast.Constant)
+            and isinstance(key.value, str)
+            and {"since", "removal_at_or_after"} <= fields.keys()
+        ):
+            problems.append(
+                f"{DEPRECATIONS_PATH}: every `{_DEPRECATIONS_TABLE}` entry needs a literal tool "
+                "name and literal `since` and `removal_at_or_after` strings"
+            )
+            continue
+        windows[key.value] = (fields["since"], fields["removal_at_or_after"])
+    return windows, problems
+
+
+def check_deprecations(version: str, *, repo_root: Path = REPO_ROOT) -> list[str]:
+    """Every shipped deprecation window must contain `version`: the deprecation took effect
+    no later than this release, and this release is still before its removal.
+
+    A `since` later than the release would publish, in fingerprint-covered metadata, a
+    deprecation that never took effect. A release at or past `removal_at_or_after` with the
+    entry still in the table ships the tool past the end its marker announced; amicus reads
+    that field as the release that removes it. Both are fixed in an ordinary PR (move the
+    window, or remove the tool), never in the release PR, which moves only version literals
+    (AGENTS.md rule 19)."""
+    windows, problems = deprecation_windows(repo_root)
+    for name, (since, removal) in windows.items():
+        if not (VERSION_RE.match(since) and VERSION_RE.match(removal)):
+            problems.append(
+                f"{name}: since {since!r} and removal_at_or_after {removal!r} must be X.Y.Z"
+            )
+            continue
+        if _parts(since) > _parts(version):
+            problems.append(
+                f"{name} is marked deprecated since {since}, after the {version} being "
+                "released; move its window to this release in an ordinary PR"
+            )
+        if _parts(version) >= _parts(removal):
+            problems.append(
+                f"{name} still ships at {version}, at or past its removal_at_or_after "
+                f"{removal}; remove it in an ordinary PR before releasing"
+            )
+    return problems
+
+
 def check_tree(
     version: str,
     *,
@@ -311,6 +402,7 @@ def check_tree(
         *check_changelog(version, repo_root=repo_root),
         *check_lock(repo_root=repo_root, run=run),
         *check_mcp_pin_tag_exists(repo_root=repo_root, git=git),
+        *check_deprecations(version, repo_root=repo_root),
     ]
 
 

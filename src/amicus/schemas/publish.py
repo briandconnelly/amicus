@@ -16,7 +16,7 @@ from pydantic import BaseModel, TypeAdapter
 
 from amicus.schemas.fingerprint import JSON_SCHEMA_DIALECT
 
-# Pointer descriptions ride every tool's outputSchema (the error branch on all eighteen,
+# Pointer descriptions ride every tool's outputSchema (the error branch on every tool,
 # meta on every success branch), so they are one clause plus the resource (issue #41).
 ERROR_POINTER_DESC = "Error envelope; schema at amicus://error-envelope"
 OPAQUE_ERROR_BRANCH: dict[str, Any] = {

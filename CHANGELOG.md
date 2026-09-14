@@ -21,6 +21,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking (`FINGERPRINT` `schema-27`).** The review preview is now
+  `amicus_review_changes_dry_run`, named for the call it previews as `amicus_delegate_dry_run`
+  is (#98, ADR 0028). `amicus_dry_run` read as a preview for any paid call, while it covers only
+  `amicus_review_changes`, and consult and adversarial review have no preview at all. The new
+  tool takes the same arguments and returns the same result, with `tool` naming it; the old
+  name stays as a deprecated alias (see Deprecated). This is amicus's first deprecation, so
+  the marker the `deprecation_policy` promised now exists: a deprecated tool's lifecycle
+  `_meta` carries `deprecation` beside its unchanged `stability`, with exactly `since`,
+  `removal_at_or_after`, `replaced_by` and `migration`, and every `amicus_capabilities`
+  `tool_details` row gains a `deprecation` field carrying the same object, null for a tool
+  that is not deprecated. tools/list grows by 9,042 bytes on the `all` profile while the alias
+  ships. `RESULT_FORMAT` stays 6: no dry run is ever stored as a job result.
+
 - **Breaking (`FINGERPRINT` `schema-26`).** The server `instructions` lead with their rules
   and ship as three blocks - what amicus does and does not do, a list of rules, then
   reference - instead of one unbroken 4,033-character line that opened with protocol
@@ -166,6 +179,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that reads as `failed`, so the follow-up promises neither redelivery nor deletion at expiry. The
   field is delivery-only: it is never stored, and `amicus_job_result` never sets it.
   `RESULT_FORMAT` stays 5.
+
+### Deprecated
+
+- `amicus_dry_run`, in favour of `amicus_review_changes_dry_run` (#98, ADR 0028). It stays
+  listed, last among the free tools, with its input schema, annotations and outputSchema
+  unchanged by the rename, so existing calls keep working; its title,
+  description and lifecycle `_meta` now say it is deprecated, and its description still
+  carries the full preview contract. It is deprecated from 0.3.0 and removed in 0.5.0:
+  `scripts/check_release_state.py` refuses to release outside that window, and a unit test
+  fails once the tree declares 0.5.0 with the alias still in place.
 
 ### Fixed
 

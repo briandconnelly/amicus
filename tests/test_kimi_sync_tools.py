@@ -219,7 +219,9 @@ async def test_discovery_tools_read_the_fake(app, tmp_path, repo):
     async with Client(app) as c:
         backends = await c.call_tool("amicus_backends", {"backend": "kimi", "detail": "full"})
         models = await c.call_tool("amicus_models", {"backend": "kimi"})
-        dry = await c.call_tool("amicus_dry_run", {"backend": "kimi", "workspace_root": str(repo)})
+        dry = await c.call_tool(
+            "amicus_review_changes_dry_run", {"backend": "kimi", "workspace_root": str(repo)}
+        )
     [entry] = backends.structured_content["backends"]
     assert entry["available"] is True and entry["status"] == {
         "installed": True,

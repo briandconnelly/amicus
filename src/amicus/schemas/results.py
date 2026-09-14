@@ -412,7 +412,7 @@ publish.KEPT_DESCRIPTIONS.update({_DRY_RUN_COVERAGE_DESC, _MAX_INPUT_BYTES_DESC}
 
 
 class DryRunResult(SuccessBase):
-    tool: Literal["amicus_dry_run"] = "amicus_dry_run"
+    tool: Literal["amicus_review_changes_dry_run"] = "amicus_review_changes_dry_run"
     backend: BackendRef
     would_call_model: bool
     scope: ReviewScope
@@ -428,6 +428,14 @@ class DryRunResult(SuccessBase):
     backend_options: dict[str, Any] = Field(default_factory=dict)
     workspace: Workspace
     warnings: list[str] = Field(default_factory=list)
+
+
+class DeprecatedDryRunResult(DryRunResult):
+    """What the deprecated amicus_dry_run alias returns (#98): the preview under the `tool`
+    value it always had, so the alias's published outputSchema stays the one a caller
+    already holds."""
+
+    tool: Literal["amicus_dry_run"] = "amicus_dry_run"
 
 
 class WorktreePlan(BaseModel):
@@ -586,11 +594,30 @@ _TOOL_FULL_ONLY_LIST_DESC = _TOOL_FULL_ONLY_DESC + " A present empty list means 
 publish.KEPT_DESCRIPTIONS.update({_TOOL_FULL_ONLY_DESC, _TOOL_FULL_ONLY_LIST_DESC})
 
 
+class ToolDeprecation(BaseModel):
+    """The deprecation marker ([9.deprecation-marker]): present only on a tool inside its
+    deprecation window, beside its stability tier, which it never replaces."""
+
+    model_config = ConfigDict(extra="forbid")
+    since: str
+    removal_at_or_after: str
+    replaced_by: str | None
+    migration: str
+
+
+_TOOL_DEPRECATION_DESC = (
+    "The same marker the tool's lifecycle _meta carries: since, removal_at_or_after, "
+    "replaced_by, migration. null means the tool is not deprecated."
+)
+publish.KEPT_DESCRIPTIONS.add(_TOOL_DEPRECATION_DESC)
+
+
 class ToolCapability(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str
     cost: Literal["free", "active"]
     stability: ToolStability | None = Field(default=None, description=_TOOL_STABILITY_DESC)
+    deprecation: ToolDeprecation | None = Field(default=None, description=_TOOL_DEPRECATION_DESC)
     backends: list[BackendRef] | None = None
     use_when: str | None = Field(default=None, description=_TOOL_FULL_ONLY_DESC)
     required_params: list[str] = Field(default_factory=list, description=_TOOL_FULL_ONLY_LIST_DESC)
@@ -658,6 +685,7 @@ JOB_STARTED_SCHEMA = publish.published_schema(JobStarted)
 JOB_STATUS_SCHEMA = publish.published_schema(JobStatus)
 JOB_LIST_SCHEMA = publish.published_schema(JobListResult)
 DRY_RUN_SCHEMA = publish.published_schema(DryRunResult)
+DEPRECATED_DRY_RUN_SCHEMA = publish.published_schema(DeprecatedDryRunResult)
 DELEGATE_DRY_RUN_SCHEMA = publish.published_schema(DelegateDryRunResult)
 BACKENDS_SCHEMA = publish.published_schema(BackendsResult)
 MODEL_CATALOG_SCHEMA = publish.published_schema(ModelCatalogResult)

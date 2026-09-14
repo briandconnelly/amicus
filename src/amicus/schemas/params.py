@@ -255,7 +255,8 @@ PARAMETER_CONTRACTS: dict[str, ParamContract] = {
             "config_mode overrides are honored. Discovery reports default_by_verb when verbs "
             "differ, with default null. access — claude: toolless|readonly. max_budget_usd "
             "— claude: per-call best-effort spend cap in USD, 0.01–5.00. Unset keys "  # noqa: RUF001
-            "take the backend's defaults; amicus_dry_run echoes review_changes values."
+            "take the backend's defaults; amicus_review_changes_dry_run echoes review_changes "
+            "values."
         ),
     ),
 }

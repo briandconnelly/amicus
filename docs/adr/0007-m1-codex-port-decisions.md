@@ -2,6 +2,7 @@
 
 **Status:** Accepted (2026-09-05, M1).
 Its coverage clause is superseded by [ADR 0019](0019-review-results-disclose-coverage-as-a-field.md) (2026-09-12); the other decisions stand.
+The review preview it names as `amicus_dry_run` is `amicus_review_changes_dry_run` since [ADR 0028](0028-a-deprecated-tool-keeps-its-record-beside-one-marker.md) (2026-09-14), with `amicus_dry_run` its deprecated alias until removal.
 
 ## Context
 

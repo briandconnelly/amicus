@@ -21,9 +21,9 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 # sha256 of each profile's canonical manifest JSON; regenerate per the failure message.
 EXPECTED_MANIFEST_HASH: dict[str, str] = {
-    "all": "181de1a9e41a8a98ea36d1b36810eb48ae252a44ab117e4ddd4ce9d488a7720f",
-    "codex-kimi": "a731b7cc7f9f41ace095dacbfaebed06f7c44e95aa0ded26120b2c1963f44adf",
-    "claude": "2754142a378cca4f163aae361f922979a4166dadd9ce2a72880f2b48cd67a91a",
+    "all": "965cd75d9046eb7329890f7117868b4758cc03b26af7abe80ad9acbc8c8f8f1f",
+    "codex-kimi": "c833084a501b1fe938416ba0779aa6799fc60138e6832827b0f71d0d35b19ae8",
+    "claude": "23427c56a2854a499ab0cb8e6a7e5b08b3939ebe8fbce66bf54c91f0dbb08ca0",
 }
 
 _CACHING_SPEC_LIST_METHODS = (
@@ -52,7 +52,7 @@ async def test_build_manifest_covers_full_surface():
     assert {t["name"] for t in m["tools"]} == set(m["capabilities"]["active_tools"]) | set(
         m["capabilities"]["free_tools"]
     ) | set(m["capabilities"]["job_tools"])
-    assert len(m["tools"]) == 18
+    assert len(m["tools"]) == 19
     for section in (
         "resources",
         "resource_templates",

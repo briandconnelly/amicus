@@ -141,12 +141,14 @@ Import rules, enforced with import-linter: `backends/*` may import `amicus.plugi
 `server` or `tools`. The worktree prefix `amicus-wt-` is orchestration policy set by
 `isolation.py`, not a plugin choice (JobStore has one `cleanup_prefix`).
 
-### Tool surface (18 tools, deterministic order)
+### Tool surface (19 tools, deterministic order)
 
 Paid, sync (`task=True` when tasks enabled): `amicus_consult`, `amicus_review_changes`,
 `amicus_delegate` (feature `delegate`), `amicus_adversarial_review` (feature
 `adversarial_review`). Async twins: the four `_async` variants (drop
-`timeout_seconds`/`detail`; `idempotency_key` is on both since ADR 0020). Free: `amicus_dry_run`, `amicus_delegate_dry_run`,
+`timeout_seconds`/`detail`; `idempotency_key` is on both since ADR 0020). Free:
+`amicus_review_changes_dry_run` (and, last in the group, its deprecated alias
+`amicus_dry_run`, ADR 0028), `amicus_delegate_dry_run`,
 `amicus_backends` (catalog + readiness probe + option applicability + legacy-env
 warnings; optional `backend` filter; replaces per-backend `*_status`),
 `amicus_models(backend)`, `amicus_capabilities` (error catalog, schemas on request,
@@ -174,7 +176,7 @@ schema):
 `access`, `max_budget_usd` (bounds), each described with which backends accept it;
 applicability validated in `tools/_resolve.py` with `invalid_arguments` naming
 `backend_options.<key>` and `allowed_values` for that backend; resolved values echoed by
-`amicus_dry_run`. A new backend option changes the schema and bumps the fingerprint
+`amicus_review_changes_dry_run`. A new backend option changes the schema and bumps the fingerprint
 deliberately. `OptionSpec` carries defaults and applicability, not the schema. ADR 0002.
 
 Resources: `amicus://capabilities`, `amicus://backends/{backend}` (template +

@@ -15,7 +15,7 @@ among backends it reports `enabled: true` and `status.authenticated: true`.
 Map the rest of the request to the tool's parameters: default `scope=working_tree`;
 for a branch review pass `scope=branch` and `base=<branch>`; for a single commit pass
 `scope=commit` and `commit=<sha>`. Pass the absolute repo path as `workspace_root`.
-Optionally call `amicus_dry_run` first (free) to preview the scope and diff size —
+Optionally call `amicus_review_changes_dry_run` first (free) to preview the scope and diff size —
 that preview covers the input amicus assembles, not what the backend itself reads
 during the paid run.
 

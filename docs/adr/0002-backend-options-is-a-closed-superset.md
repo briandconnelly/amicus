@@ -1,6 +1,7 @@
 # ADR 0002: `backend_options` is a closed superset object
 
-**Status:** Accepted (2026-09-04, M0)
+**Status:** Accepted (2026-09-04, M0).
+The review preview it names as `amicus_dry_run` is `amicus_review_changes_dry_run` since [ADR 0028](0028-a-deprecated-tool-keeps-its-record-beside-one-marker.md) (2026-09-14), with `amicus_dry_run` its deprecated alias until removal; the decision stands.
 
 ## Context
 

@@ -262,7 +262,7 @@ def test_the_directories_both_manifests_point_at_exist():
 
 
 async def test_server_boots_in_process_with_no_amicus_env_set(monkeypatch):
-    """A server-unit boot test: the app comes up and lists 18 tools with no AMICUS_* set.
+    """A server-unit boot test: the app comes up and lists 19 tools with no AMICUS_* set.
 
     This does NOT test the manifest. It reads no `.mcp.json`, starts no `uvx`, and applies no
     `env_vars` list. Step 8 is the test that covers the manifest; this one only rules out an
@@ -271,7 +271,7 @@ async def test_server_boots_in_process_with_no_amicus_env_set(monkeypatch):
         monkeypatch.delenv(name, raising=False)
     async with Client(create_app()) as client:
         tools = await client.list_tools()
-    assert len(tools) == 18
+    assert len(tools) == 19
 
 
 def _minimal_subprocess_path(command: str) -> str:
@@ -322,7 +322,7 @@ async def test_the_committed_manifest_command_starts_a_real_server(tmp_path):
     transport = StdioTransport(command=server["command"], args=args, env=env)
     async with Client(transport) as client:
         tools = await client.list_tools()
-    assert len(tools) == 18
+    assert len(tools) == 19
 
 
 def unreleased_section(text: str) -> tuple[str, bool]:

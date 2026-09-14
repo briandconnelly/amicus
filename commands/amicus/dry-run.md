@@ -13,7 +13,7 @@ what amicus would assemble *for that backend's resolved options*, not whether th
 backend itself is ready or authenticated; use `amicus_backends` for that, and if the
 request does not name a backend ask which one to preview against.
 
-For a review preview, call `amicus_dry_run` (free — no model call). Map the scope
+For a review preview, call `amicus_review_changes_dry_run` (free — no model call). Map the scope
 request to `scope`/`base`/`commit` as for `/amicus:review`, and pass the absolute
 repo path as `workspace_root`. Report the context summary (files/lines changed), the
 prompt size, whether the diff would be truncated, and any redacted secret paths.

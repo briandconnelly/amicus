@@ -121,6 +121,18 @@ beside an empty list means the backend said none, and that `dropped: 0` under
 pays nothing. 644 of the bytes are one clause on both diagnostics' descriptions, on every
 tool that carries them, naming the case Copilot's review found undocumented: on a `not_run`
 review no backend ran, both are null, and `review_status` is the signal.
+
+The schema-26 -> schema-27 raise (+9042 bytes on the `all` profile: 104676 -> 113718) is the
+deprecation window for `amicus_dry_run`, and it is temporary (#98, ADR 0028). The review preview
+now ships under its own name, `amicus_review_changes_dry_run`, and the old name stays listed as
+a deprecated alias until 0.5.0, so almost all of the bytes are the alias's record. It keeps the
+whole record: the same input schema, so callers keep working; the same outputSchema byte for
+byte, because [3.output-schema] binds every data-bearing tool; and the replacement's description
+behind a one-sentence deprecation lead, because a host may never show `_meta` to the model and
+the sentence saying a preview does not bound what the backend reads has to survive on either
+name. A lean alias without the outputSchema would have cost about 4 KB less and was rejected
+for that reason. The bytes come back when the alias is removed. The 448 bytes between the last
+MEASURED and 104676 predate this change: they accumulated on main inside the old budget.
 """
 
 from __future__ import annotations
@@ -130,7 +142,7 @@ from tests.conftest import spawned_server_env
 
 from amicus import manifest
 
-MEASURED: dict[str, int] = {"all": 104228, "codex-kimi": 104236, "claude": 104228}
+MEASURED: dict[str, int] = {"all": 113718, "codex-kimi": 113726, "claude": 113718}
 BUDGET: dict[str, int] = {p: ((n // 1000) + 1) * 1000 for p, n in MEASURED.items()}
 
 

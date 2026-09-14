@@ -85,13 +85,13 @@ anything.
 
 ## The tools
 
-Eighteen tools, in five groups. Everything paid has a free way to inspect it first.
+Nineteen tools, in five groups, one of them a deprecated alias. Everything paid has a free way to inspect it first.
 
 | Group | Tools |
 | --- | --- |
 | Discovery — free | `amicus_backends`, `amicus_capabilities`, `amicus_models` |
 | Verbs — paid | `amicus_consult`, `amicus_review_changes`, `amicus_delegate`, `amicus_adversarial_review` |
-| Previews — free | `amicus_dry_run` (review), `amicus_delegate_dry_run` |
+| Previews — free | `amicus_review_changes_dry_run` (review), `amicus_delegate_dry_run`; `amicus_dry_run` is the review preview's deprecated alias, removed at or after 0.5.0 |
 | Background twins — paid | the four verbs again, each with an `_async` suffix |
 | Jobs — free | `amicus_job_status`, `amicus_job_result`, `amicus_job_consume_result`, `amicus_job_list`, `amicus_job_cancel` |
 

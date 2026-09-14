@@ -75,6 +75,16 @@ CHANGELOG = f"""# Changelog
 - A thing.
 """
 
+DEPRECATIONS = """DEPRECATED_TOOLS: dict[str, ToolDeprecation] = {
+    "old_tool": ToolDeprecation(
+        since="1.2.0",
+        removal_at_or_after="1.4.0",
+        replaced_by="new_tool",
+        migration="Call new_tool.",
+    ),
+}
+"""
+
 
 @pytest.fixture
 def repo(tmp_path):
@@ -112,6 +122,8 @@ def repo(tmp_path):
         encoding="utf-8",
     )
     (tmp_path / "CHANGELOG.md").write_text(CHANGELOG, encoding="utf-8")
+    (tmp_path / "src" / "amicus" / "tools").mkdir()
+    (tmp_path / release_state.DEPRECATIONS_PATH).write_text(DEPRECATIONS, encoding="utf-8")
     return tmp_path
 
 
@@ -471,6 +483,72 @@ def test_a_well_formed_tag_yields_its_version():
     assert release_state.version_for_tag("v1.2.3") == ("1.2.3", [])
 
 
+# --- deprecation windows ---------------------------------------------------------------
+
+
+def _set_window(repo: Path, old: str, new: str) -> None:
+    path = repo / release_state.DEPRECATIONS_PATH
+    text = path.read_text(encoding="utf-8")
+    assert old in text, f"known positive: the fixture no longer carries {old!r}"
+    path.write_text(text.replace(old, new), encoding="utf-8")
+
+
+def _tree(repo: Path) -> list[str]:
+    return release_state.check_tree(VERSION, repo_root=repo, run=_lock_ok, git=_tag_exists)
+
+
+def test_a_deprecation_dated_after_the_release_is_rejected(repo):
+    """#98: `since` names an unreleased version when the work lands. If the next release is
+    not that version, the marker would publish a deprecation that never took effect."""
+    _set_window(repo, 'since="1.2.0"', 'since="1.3.0"')
+    problems = _tree(repo)
+    assert len(problems) == 1 and "deprecated since 1.3.0" in problems[0]
+
+
+def test_a_window_whose_since_is_this_release_is_accepted(repo):
+    _set_window(repo, 'since="1.2.0"', f'since="{VERSION}"')
+    assert _tree(repo) == []
+
+
+def test_windows_compare_numerically_not_as_strings(repo):
+    """As strings, "1.10.0" sorts before "1.2.3"; only a numeric comparison rejects it."""
+    _set_window(repo, 'since="1.2.0"', 'since="1.10.0"')
+    assert any("deprecated since 1.10.0" in p for p in _tree(repo))
+
+
+def test_a_release_at_the_removal_version_with_the_tool_still_listed_is_rejected(repo):
+    _set_window(repo, 'removal_at_or_after="1.4.0"', f'removal_at_or_after="{VERSION}"')
+    problems = _tree(repo)
+    assert len(problems) == 1 and f"at or past its removal_at_or_after {VERSION}" in problems[0]
+
+
+def test_an_empty_table_is_accepted(repo):
+    (repo / release_state.DEPRECATIONS_PATH).write_text(
+        "DEPRECATED_TOOLS: dict[str, ToolDeprecation] = {}\n", encoding="utf-8"
+    )
+    assert _tree(repo) == []
+
+
+def test_a_missing_table_file_is_rejected_rather_than_read_as_no_deprecations(repo):
+    (repo / release_state.DEPRECATIONS_PATH).unlink()
+    assert any("could not read" in p for p in _tree(repo))
+
+
+def test_a_table_the_parser_cannot_find_is_rejected(repo):
+    _set_window(repo, "DEPRECATED_TOOLS:", "RENAMED_TABLE:")
+    assert any("no literal `DEPRECATED_TOOLS` dict" in p for p in _tree(repo))
+
+
+def test_a_window_that_is_not_a_literal_is_rejected(repo):
+    _set_window(repo, 'since="1.2.0"', "since=SINCE")
+    assert any("literal `since` and `removal_at_or_after`" in p for p in _tree(repo))
+
+
+def test_a_window_that_is_not_a_version_is_rejected(repo):
+    _set_window(repo, 'since="1.2.0"', 'since="soon"')
+    assert any("must be X.Y.Z" in p for p in _tree(repo))
+
+
 # --- this repository -------------------------------------------------------------------
 
 
@@ -490,6 +568,22 @@ def test_this_repository_s_version_literals_all_agree():
     version = release_state.declared_version(repo_root)
     problems = release_state.check_version_literals(version, repo_root=repo_root)
     assert problems == [], "; ".join(problems)
+
+
+def test_the_static_read_of_the_deprecation_table_matches_the_runtime_table():
+    """The script reads `DEPRECATED_TOOLS` with `ast` because the `verify` job cannot import
+    amicus. This is what keeps that read honest: a table rewritten into a shape the parser
+    misses fails here, instead of passing the release predicate as an empty table would."""
+    from amicus.tools import _meta
+
+    repo_root = Path(__file__).resolve().parent.parent
+    windows, problems = release_state.deprecation_windows(repo_root)
+    assert problems == [], "; ".join(problems)
+    assert _meta.DEPRECATED_TOOLS, "known positive: an empty runtime table proves nothing here"
+    assert windows == {
+        name: (deprecation.since, deprecation.removal_at_or_after)
+        for name, deprecation in _meta.DEPRECATED_TOOLS.items()
+    }
 
 
 # --- the real git path the workflow depends on -----------------------------------------

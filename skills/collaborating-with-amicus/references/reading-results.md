@@ -62,9 +62,9 @@ fixed order from a fixed vocabulary. The reasons do not all mean that something 
 amicus read it — nor that the backend examined every line, and on a `not_run` result nothing was
 reviewed at all, whatever `coverage` says.
 
-`amicus_dry_run` returns the `coverage` the paid review would report for the same arguments, from
-the same gather and the same `focus`, so an omitted untracked file shows up before you spend. It
-is a preview: the tree can change before you call.
+`amicus_review_changes_dry_run` returns the `coverage` the paid review would report for the same
+arguments, from the same gather and the same `focus`, so an omitted untracked file shows up
+before you spend. It is a preview: the tree can change before you call.
 
 **The degradation is one-directional, and this matters.** A model `pass` over partial coverage is
 delivered as `verdict: unknown`, `confidence: low`, with the reasons also named in the summary. A
