@@ -164,6 +164,12 @@ def test_a_not_run_review_is_documented_as_carrying_no_rating():
     assert "`review_status: not_run`" in confidence_section
     assert "there are three" not in confidence_section
     assert "no backend ran (`review_status: not_run`)" in _BINDING_RULES
+    # Codex's review of PR #92: one cause named is not both. Each text has to keep the
+    # unreadable-rating cause beside the not_run one, or a later edit could say `unknown`
+    # occurs only when no backend ran with this test still green.
+    assert "supplied no readable value" in results._CONFIDENCE_DESC
+    assert "nothing amicus could read there" in confidence_section
+    assert "supplied none amicus could read" in _BINDING_RULES
 
 
 def test_the_skill_names_every_code_that_carries_no_repair():
