@@ -245,7 +245,7 @@ def _safe_msg(msg: object) -> object:
 # list and each error's `input` is the rejected value itself. For a missing required
 # argument that `input` is the whole argument dict, so a valid prompt field sent beside the
 # omission would be logged verbatim.
-_EXTRA_ARGUMENT_TYPES = frozenset({"unexpected_keyword_argument", "extra_forbidden"})
+EXTRA_ARGUMENT_TYPES = frozenset({"unexpected_keyword_argument", "extra_forbidden"})
 _MAX_ARGUMENT_ERRORS = 10
 _DETAIL_WITHHELD = "<detail withheld>"
 # pydantic's own error types are lowercase snake_case. A `PydanticCustomError` may carry any
@@ -275,7 +275,7 @@ def _argument_error(err: object) -> str:
     loc = err.get("loc")
     if (
         error_type is not None
-        and error_type not in _EXTRA_ARGUMENT_TYPES
+        and error_type not in EXTRA_ARGUMENT_TYPES
         and type(loc) in (tuple, list)
         and loc
     ):
@@ -309,7 +309,7 @@ _RECORD_WITHHELD = "<unaudited fastmcp.server.server record withheld>"
 # record is written only after the name was looked up, so an identifier-shaped name in it is
 # a declared one and is kept. A resource URI is the client's own text, so it never is.
 _NAMED_FAILURE = re.compile(
-    r"(?:Error calling tool|Error rendering prompt) '[A-Za-z_][A-Za-z0-9_]{0,63}'"
+    rf"(?:Error calling tool|Error rendering prompt) '{_IDENTIFIER.pattern}'"
 )
 _RESOURCE_FAILURE = "Error reading resource "
 
