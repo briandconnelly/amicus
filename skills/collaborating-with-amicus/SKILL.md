@@ -177,7 +177,10 @@ Facts the rules above depend on. Nothing here is an obligation.
 ### Backend as a parameter
 
 amicus has no "default" backend the way a single-model server implies one model by its own name.
-`backend` names which model answers a given call, and the same tools work for all three.
+`backend` names which model answers a given call. The tools are shared, but not every tool takes
+every backend: `amicus_delegate` and its twins take `codex` or `kimi`, and
+`amicus_adversarial_review` and its twin take only `claude`; any other pairing fails
+`feature_unsupported`.
 `AMICUS_BACKENDS` (an operator/deployment setting) controls which backends are *enabled* in this
 deployment; it says nothing about which to prefer for a task. A backend can be enabled and still
 not be ready, which is why the discovery rules turn on `status` rather than on `enabled`.
