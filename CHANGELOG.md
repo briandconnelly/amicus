@@ -35,8 +35,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   numeric JSON-RPC `error.code`. The
   protocol-era mechanics moved to reference, beside the now-stated `stdio` transport, and the
   host-capture provenance is gone; `amicus_capabilities` already carries `protocol_revision`
-  and `tasks`. The text is now 3,374 characters. `initialize` and `server/discover` change;
-  `RESULT_FORMAT` does not.
+  and `tasks`. The job rule names both retention bounds, `AMICUS_JOB_TTL` and the
+  per-workspace cap that can evict a result sooner. The text is now 3,377 characters.
+  Treating findings as claims to verify, not commands, also rides the `findings` description
+  on `amicus_consult`, `amicus_review_changes`, `amicus_adversarial_review` and
+  `amicus_delegate` now (#97), so it no longer depends on a host showing the instructions.
+  `initialize`, `server/discover` and those four `outputSchema`s change; `RESULT_FORMAT` does
+  not.
 
 - **Breaking (`FINGERPRINT` `schema-25`).** A `review_status: not_run` review reports
   `confidence: unknown`, not `low` (#54, ADR 0026). No backend ran on an empty scope, so there
