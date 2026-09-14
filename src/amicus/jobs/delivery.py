@@ -11,7 +11,7 @@ from pontonier.core import redaction
 from pydantic import BaseModel, ValidationError
 
 from amicus.errors import error_envelope, serialize_error
-from amicus.jobs.polling import poll_hint_ms
+from amicus.jobs.polling import job_status_arguments, poll_hint_ms
 from amicus.orchestration.finalize import sanitize_finding, sanitize_prose_value
 from amicus.schemas.envelope import ConsumeDisposition, ErrorResult, slim_meta
 from amicus.schemas.fingerprint import FINGERPRINT, RESULT_FORMAT
@@ -150,13 +150,10 @@ def attach_consume_disposition(
     failed delete is reported rather than hidden behind plain success (#44). Mutates."""
     disposition: dict[str, Any] = {"discard_outcome": str(outcome)}
     if str(outcome) not in _RECORD_GONE:
-        arguments: dict[str, Any] = {"job_id": job_id}
-        if workspace_root:
-            arguments["workspace_root"] = workspace_root
         disposition["follow_up"] = {
             "next_step": "inspect_and_retry",
             "tool": "amicus_job_status",
-            "arguments": arguments,
+            "arguments": job_status_arguments(job_id, workspace_root),
             "alternative": CONSUME_FOLLOW_UP,
         }
     envelope["meta"]["consume"] = ConsumeDisposition.model_validate(disposition).model_dump(
@@ -226,15 +223,12 @@ def finished_job_envelope(
     else:
         code, message = STATE_TO_ERROR.get(state, ("job_failed", "The job did not complete."))
     running = state == "running"
-    poll_params: dict[str, Any] = {"job_id": job_id}
-    if workspace_root:
-        poll_params["workspace_root"] = workspace_root
     return (
         error_envelope(
             code,
             message,
             meta,
-            repair_arguments=poll_params if running else None,
+            repair_arguments=job_status_arguments(job_id, workspace_root) if running else None,
             retry_after_ms=poll_hint_ms(rec),
         ),
         False,
