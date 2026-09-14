@@ -11,9 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `/amicus:delegate-async`, a slash command that starts one `amicus_delegate_async` job,
   reports its `job_id` and hands the poll and fetch to `/amicus:jobs` (#67). Delegation is the
-  verb likeliest to outrun the synchronous deadline, and a sync call past it is terminated with
-  its partial work lost, yet it was the one verb whose background start had no command of its
-  own. `/amicus:delegate` now points at it for long tasks, and `/amicus:jobs` now says to fetch
+  verb likeliest to outrun the synchronous deadline, where a sync call made without an
+  idempotency key is terminated with its partial work lost, so its background start is the one
+  that gets a command of its own; the other async twins stay reachable from their verb's
+  command. `/amicus:delegate` now points at it for long tasks, and `/amicus:jobs` now says to fetch
   once the status is anything but `running` rather than waiting on `result_available`, which
   is true only for `done`: a job that failed, was cancelled or timed out never sets it, so
   waiting on it polls that job forever.

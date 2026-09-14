@@ -24,5 +24,5 @@ extra-context argument.
 applying it with your own tools.
 
 For a task that can exceed the synchronous deadline, use `/amicus:delegate-async`
-(`amicus_delegate_async`) instead — a sync call past its deadline is terminated and its
-partial work lost, and the paid run is still spent.
+(`amicus_delegate_async`) instead — a sync call made without an idempotency key is
+terminated at its deadline with its partial work lost, and the paid run is still spent.

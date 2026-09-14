@@ -20,16 +20,22 @@ _LAUNCH = re.compile(r"`(amicus_[a-z_]+)`\s+MCP\s+tool")
 
 # Async twins that get a command of their own rather than a pointer inside their verb's
 # command. Delegation is the verb likeliest to outrun the sync deadline, where a sync call
-# is terminated with its partial work lost (#67); the other twins stay reachable from
-# their verb's command.
+# made without an idempotency key is terminated with its partial work lost (#67); the other
+# twins stay reachable from their verb's command.
 ASYNC_TWINS_WITH_A_COMMAND = frozenset({"amicus_delegate_async"})
+
+
+def _opening_paragraph(path: Path) -> str:
+    """The first paragraph after the frontmatter, so a later mention cannot count."""
+    body = path.read_text().split("---", 2)[2]
+    return body.strip().split("\n\n", 1)[0]
 
 
 def _launched_tools() -> set[str]:
     return {
         match.group(1)
         for path in COMMANDS.glob("*.md")
-        if (match := _LAUNCH.search(path.read_text()))
+        if (match := _LAUNCH.search(_opening_paragraph(path)))
     }
 
 

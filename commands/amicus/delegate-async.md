@@ -29,7 +29,8 @@ Collect it later with `/amicus:jobs`, which polls `amicus_job_status` and fetche
 **This never edits your working tree.** A finished job carries a diff; it does not
 apply it. Review the diff yourself before applying it with your own tools.
 
-If the start call fails ambiguously in transport, retry this same tool with the same
-arguments and the same `idempotency_key` — that replays the job instead of starting a
-second paid run. Never switch to `amicus_delegate` expecting the key to carry over: sync
-and async are separate tools and never share one.
+Pass a fresh `idempotency_key` on the start call. If that call then fails ambiguously in
+transport, look for the job with `amicus_job_list` first; only if none exists, retry this
+same tool with the same arguments and the same key, which replays the job instead of
+starting a second paid run. Never switch to `amicus_delegate` expecting the key to
+carry over: sync and async are separate tools and never share one.
