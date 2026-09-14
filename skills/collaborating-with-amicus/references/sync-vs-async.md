@@ -54,9 +54,12 @@ then `poll_after_ms` is `null`. Go by `status` there, not by `follow_up`, which 
 ## Polling
 
 1. Call the matching `_async` tool once and keep its `job_id`.
-2. Read the handle's `status`. If it is already terminal, go straight to step 4. Otherwise wait at
-   least the returned `poll_after_ms`, then call `amicus_job_status` with the same `job_id` and
-   the same absolute `workspace_root`.
+2. Read the handle's `status`. If it is already terminal, do not poll. Call `amicus_job_result`
+   with the same `job_id` and absolute `workspace_root`, which returns the stored result for
+   `done` and the terminal error for any other status, then go to step 5. A handle carries no
+   `result_available`, so step 4's branches are for `amicus_job_status` responses only. Otherwise
+   wait at least the returned `poll_after_ms`, then call `amicus_job_status` with the same
+   `job_id` and the same absolute `workspace_root`.
 3. **While `status` is `running`**, honor each new `poll_after_ms` and poll again.
 4. **Once `status` is terminal** — `done`, `failed`, `cancelled`, or `timeout` — stop polling and
    branch:

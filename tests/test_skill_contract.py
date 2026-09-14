@@ -295,6 +295,20 @@ def test_the_polling_reference_states_the_hint_ceiling():
     assert f"`{POLL_HINT_CAP_MS / 1000:g} s`" in polling, "the poll hint's ceiling is unstated"
 
 
+def test_the_polling_recipe_fetches_a_terminal_handle_directly():
+    # A repeated keyed start can replay a handle that is already terminal (#101). A handle has
+    # no result_available, so the recipe's handle step must send a terminal one straight to
+    # amicus_job_result rather than into the status-response branches that read that field.
+    from amicus.schemas.results import JobStarted
+
+    assert "result_available" not in JobStarted.model_fields
+    polling = _SYNC_REF.partition("\n## Polling\n")[2].split("\n## ", 1)[0]
+    step2 = polling.partition("\n2. ")[2].partition("\n3. ")[0]
+    assert step2, "the polling recipe has no step 2"
+    assert "already terminal" in step2, "step 2 does not branch on the handle's status"
+    assert "amicus_job_result" in step2, "step 2 does not fetch a terminal handle's result"
+
+
 def test_the_deadline_reference_states_both_sync_bounds_and_names_the_keyed_alternative():
     # The bounds are asserted against source. The keyed alternative is checked for presence
     # only - that it is offered beside `_async` where the deadline is explained, and that its
