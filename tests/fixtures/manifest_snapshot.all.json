@@ -913,7 +913,7 @@
         "required_params": [
           "job_id"
         ],
-        "returns": "the originating tool's envelope for a done job; meta.consume.discard_outcome is what the store did, with a follow_up after not_done or delete_failed. A failed, cancelled or timed-out job returns its terminal error with no meta.consume and is not deleted.",
+        "returns": "the originating tool's envelope for a done job whose stored result reads back; meta.consume.discard_outcome is what the store did, with a follow_up after not_done or delete_failed. A failed, cancelled or timed-out job returns its terminal error with no meta.consume and is not deleted, nor is a corrupt or incompatible record.",
         "stability": null,
         "use_when": "Fetch a done job's envelope and delete its record."
       },
