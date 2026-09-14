@@ -912,9 +912,9 @@
         "required_params": [
           "job_id"
         ],
-        "returns": "the originating tool's envelope; meta.consume.discard_outcome is what the store did, with a follow_up after not_done or delete_failed.",
+        "returns": "the originating tool's envelope for a done job; meta.consume.discard_outcome is what the store did, with a follow_up after not_done or delete_failed. A failed, cancelled or timed-out job returns its terminal error with no meta.consume and is not deleted.",
         "stability": null,
-        "use_when": "Fetch a finished job's envelope and delete its record."
+        "use_when": "Fetch a done job's envelope and delete its record."
       },
       {
         "backends": [
@@ -1564,7 +1564,7 @@
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-29",
+                "default": "amicus/0.1/schema-30",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -2476,7 +2476,7 @@
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-29",
+            "default": "amicus/0.1/schema-30",
             "title": "Fingerprint",
             "type": "string"
           },
@@ -7311,7 +7311,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Free — no model call. Like amicus_job_result, then delete the record; meta.consume.discard_outcome says what happened. After removed or missing a repeat call returns job_not_found (not idempotent); otherwise the record may remain, so follow meta.consume.follow_up. A corrupt or incompatible record is not deleted.",
+      "description": "Free — no model call. Like amicus_job_result, then delete the record; meta.consume.discard_outcome says what happened. After removed or missing a repeat call returns job_not_found (not idempotent); otherwise the record may remain, so follow meta.consume.follow_up. A failed, cancelled or timed-out job returns its terminal error with no meta.consume and is not deleted, nor is a corrupt or incompatible record.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
