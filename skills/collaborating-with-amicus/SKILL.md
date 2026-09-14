@@ -217,12 +217,13 @@ Every paid call — sync or async — is recorded as a job (`meta.job_id`). A sy
 result directly; an async call returns a handle, and the result is fetched later.
 
 `amicus_job_status` reports `status`, `result_available`, and `result_ok` — three different facts.
-`poll_after_ms` is returned only while `status` is `running`, and grows with elapsed time only to
+`poll_after_ms` is non-null only while `status` is `running`, and grows with elapsed time only to
 a ceiling ([sync vs async](references/sync-vs-async.md) → Polling); on any terminal status it is `null`,
 which is why a loop that waits for `result_available` alone never ends for a cancelled or failed
 job. A job handle follows the same rule: a repeated keyed `_async` call replays the existing
-job's handle, which can already be terminal. Records expire (`AMICUS_JOB_TTL`, default 24h) and a per-workspace cap evicts the oldest
-terminal ones. [sync vs async](references/sync-vs-async.md) has the lifecycle and recovery.
+job's handle, which can already be terminal. Records expire (`AMICUS_JOB_TTL`, default 24h) and
+a per-workspace cap evicts the oldest terminal ones. [sync vs async](references/sync-vs-async.md)
+has the lifecycle and recovery.
 
 ### Annotations follow the worst enabled backend
 

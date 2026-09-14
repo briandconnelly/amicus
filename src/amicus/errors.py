@@ -104,8 +104,8 @@ _PROSE_OVERRIDES: dict[str, str] = {
         "Retrying the same synchronous call will likely time out again. Prefer the matching "
         "async tool (amicus_consult_async / amicus_review_changes_async / "
         "amicus_adversarial_review_async / amicus_delegate_async), then poll "
-        "amicus_job_status and fetch amicus_job_result. Otherwise narrow the task or raise "
-        "timeout_seconds."
+        "amicus_job_status while status is running; on any terminal status, fetch "
+        "amicus_job_result. Otherwise narrow the task or raise timeout_seconds."
     ),
     "resource_not_found": (
         "List the available resource URIs via the MCP resources/list method (or "

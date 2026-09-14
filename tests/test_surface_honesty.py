@@ -128,6 +128,14 @@ def test_async_descriptions_gate_polling_on_status(wire):
         assert _ASYNC_SUPERSEDED not in descriptions[name], name
 
 
+def test_the_timeout_repair_gates_polling_on_status():
+    # The sync timeout repair sends the caller to an async twin, then to the status tool; it
+    # gates that polling on `status` as the job_running repair does (#101).
+    text = errors.repair_table()["timeout"].alternative
+    assert text and _ASYNC_POLL_PHRASE in text and "terminal status" in text
+    assert "then poll amicus_job_status and fetch amicus_job_result" not in text
+
+
 def test_the_async_description_instrument_can_fail():
     """The phrase check fails against the wording each async description replaced (#101)."""
     old = f"returns a job handle; {_ASYNC_SUPERSEDED}. Same egress."
