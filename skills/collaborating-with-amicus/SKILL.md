@@ -54,9 +54,8 @@ obligations live in the reference each route names, under that file's own `Rules
 ### Discovery
 
 - **Call `amicus_backends(detail="full")` before the first paid call of a session.** Its
-  per-backend report is what makes the remaining discovery rules checkable, and the default
-  `summary` omits the `egress`, `carriers`, `readonly_honesty` and `implicit_context`
-  disclosures (it names them in `omitted_fields`); `summary` is enough for a readiness re-check.
+  per-backend report, including the disclosures the default `summary` leaves out, is what makes
+  the remaining discovery rules checkable.
 - **Pass only a backend reported `enabled: true`, `status.installed: true`, and
   `status.authenticated: true`.** `enabled` alone is not eligibility.
 - **Confirm the backend's `features` list names `delegate` or `adversarial_review` before calling

@@ -23,7 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `null` on `full` still means no loaded plugin declares one. The `amicus://backends/{backend}`
   resource is always the `full` entry. Measured on the `all` profile, both carriers: the
   default `amicus_capabilities` falls from 27,842 to 14,864 bytes and the default
-  `amicus_backends` from 17,250 to 4,000; `detail="full"` on each is unchanged within 40 bytes.
+  `amicus_backends` from 17,250 to 4,000. `detail="full"` grows by 64 bytes on
+  `amicus_capabilities` (the two new parameters appear in two tools' `key_optional_params`) and
+  by 40 on `amicus_backends` (the empty `omitted_fields`).
   The server instructions and the skill now say to read `amicus_backends(detail="full")` once
   before the first paid call. `RESULT_FORMAT` stays 5.
 - **Breaking (`FINGERPRINT` `schema-18`).** `amicus_consult`, `amicus_review_changes`,

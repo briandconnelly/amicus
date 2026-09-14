@@ -290,7 +290,14 @@ def test_the_disclosure_rules_name_the_full_detail_level():
     carriers = re.search(r"\*\*Read `carriers` on `amicus_backends\(([^`]*)\)`", _BINDING_RULES)
     assert carriers, "no binding rule reads `carriers` on amicus_backends"
     assert carriers.group(1) == 'detail="full"'
+    # The rule stays a callable obligation; what the projection leaves out is context, and
+    # the reference that owns the field list is where every omitted field must be named.
+    reports = _BACKENDS_REF.partition("\n## What `amicus_backends` reports\n")[2].split("\n## ", 1)[
+        0
+    ]
+    assert reports, "choosing-a-backend.md has no `## What `amicus_backends` reports` section"
+    assert 'detail="full"' in reports and "`omitted_fields`" in reports
     for field in BACKEND_DISCLOSURE_FIELDS:
-        assert f"`{field}`" in _BINDING_RULES, f"the first-call rule must name `{field}` as omitted"
+        assert f"`{field}`" in reports, f"the reference must name `{field}`"
     assert "disclosed on amicus_backends(detail=full)" in INSTRUCTIONS
     assert "pass detail=full on that first read" in INSTRUCTIONS
