@@ -297,9 +297,12 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
     "amicus_job_consume_result": {
         "cost": "free",
         "backends": list(BACKEND_IDS),
-        "use_when": "Fetch a finished job's envelope and delete its record.",
-        "returns": "the originating tool's envelope; meta.consume.discard_outcome is what "
-        "the store did, with a follow_up after not_done or delete_failed.",
+        "use_when": "Fetch a done job's envelope and delete its record.",
+        "returns": "the originating tool's envelope for a done job whose stored result reads "
+        "back; meta.consume.discard_outcome is what the store did, with a follow_up after "
+        "not_done or delete_failed. A failed, cancelled or timed-out job returns its terminal "
+        "error with no meta.consume and is not deleted, nor is a corrupt or incompatible "
+        "record.",
         "error_codes": [
             "job_not_found",
             "job_running",

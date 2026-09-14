@@ -1,6 +1,6 @@
 # ADR 0022: A consume reports its discard outcome as delivery-only metadata
 
-**Status:** Accepted (2026-09-13)
+**Status:** Accepted (2026-09-13); amended 2026-09-14 for issue #94
 
 ## Context
 
@@ -46,10 +46,23 @@ Persisting the field was not an option: `dump_success` keeps null optionals, and
 Bumping `RESULT_FORMAT` instead would have made every retained format-5 record unreadable, for a field no stored record needs.
 Excluding the field only in `dump_success` was rejected on Codex's advice, since several results dump `Meta` directly.
 
+**A terminal-error job is described, not delivered, so a consume attempts no discard.**
+Issue #94 found that every consume surface said `meta.consume.discard_outcome` reports what the store did, while a consume of a `failed`, `cancelled` or `timeout` job attached no `meta.consume` and deleted nothing.
+Such a job has no stored envelope, so `finished_job_envelope` builds its terminal error and reports it undelivered, and a consume returns that error without calling the store's discard.
+The behavior stays, every surface now names the case, and a test pins all three states end to end, including that no discard is attempted.
+Reporting the case as `not_done` by calling the store's discard anyway was rejected, because that call is not safe for `failed`.
+Pontonier stamps `cancelled` and `timeout` into the record, but it derives `failed` on every read without stamping it, so a record read as `failed` turns `done` if its `result.json` appears later.
+The discard re-reads the state under the store's lock, so a discard after that flip would delete a result this call never delivered.
+No public store call lets amicus delete a terminal-error record on request: pontonier's discard returns `NOT_DONE` for any record that is not `done`, and the store has no other public delete.
+Such a record goes when it expires or the per-workspace cap evicts it, or through an ordinary consume if a `failed` one turns `done` first.
+A safe deletion needs an atomic compare-and-delete from pontonier, requested as briandconnelly/pontonier#31.
+
 ## Consequences
 
 - `FINGERPRINT` moves to `schema-21`.
   The result-format snapshot's persisted section is byte-identical, and only its schema view moved.
+- The #94 amendment moves `FINGERPRINT` to `schema-30` for the corrected descriptions.
+  Behavior and `RESULT_FORMAT` are unchanged.
 - A future delivery-only `Meta` field should follow the same pattern: excluded from every dump, set on the delivered dictionary, and scrubbed from a stored copy.
 - Pontonier's `_rmtree` comment says a partial failure leaves the record fully readable.
   It does not once `result.json` has been unlinked, and the leftover record then reports the job as `failed`.

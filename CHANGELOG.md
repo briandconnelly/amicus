@@ -21,6 +21,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking (`FINGERPRINT` `schema-30`).** Every `amicus_job_consume_result` surface now says
+  what a consume does to a job that failed, was cancelled or timed out (#94). Such a job has no
+  stored envelope, so a consume returns its terminal error with no `meta.consume` and attempts
+  no discard, leaving the record to the usual expiry and per-workspace eviction. The tool
+  description, discovery's `use_when` and `returns`, `/amicus:jobs` and the skill's
+  options-and-errors reference all said that `meta.consume.discard_outcome` reports what the
+  store did, and none of them named this case. Behavior and `RESULT_FORMAT` are unchanged.
+  Deleting such a record on request needs an atomic compare-and-delete from pontonier
+  (briandconnelly/pontonier#31), because a record read as `failed` can turn `done` after it is
+  read.
 - **Breaking (`FINGERPRINT` `schema-29`).** A replayed keyed `_async` handle for a job that has
   already finished now reports `poll_after_ms: null`, as `amicus_job_status` does for the same
   job on every terminal status (#101). It used to report `1000`, the store's flat base, so a

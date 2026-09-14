@@ -161,8 +161,9 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
             f"{FREE_MARKER} Like amicus_job_result, then delete the record; "
             "meta.consume.discard_outcome says what happened. After removed or missing a "
             "repeat call returns job_not_found (not idempotent); otherwise the record may "
-            "remain, so follow meta.consume.follow_up. A corrupt or incompatible record is "
-            "not deleted."
+            "remain, so follow meta.consume.follow_up. A failed, cancelled or timed-out job "
+            "returns its terminal error with no meta.consume and is not deleted, nor is a "
+            "corrupt or incompatible record."
         ),
     )
     @guard("amicus_job_consume_result", settings)

@@ -234,3 +234,93 @@ def test_the_consume_surface_instrument_can_fail():
     phrases = _consume_surface_phrases()
     for name, old in _SUPERSEDED_CONSUME_SURFACES.items():
         assert [p for p in phrases if p not in old], name
+
+
+# Issue #94: a failed, cancelled or timed-out job has no stored envelope, so a consume
+# returns its terminal error, attempts no discard and attaches no meta.consume. Every
+# surface said meta.consume reports what the store did without naming that case. The match
+# ignores backticks, case and line wrapping, since the markdown surfaces wrap mid-phrase.
+# It is one clause, not three phrases, so no claim can drift onto another case (PR #105).
+_TERMINAL_CONSUME_CLAUSE = (
+    "a failed, cancelled or timed-out job returns its terminal error with no meta.consume "
+    "and is not deleted"
+)
+_SUPERSEDED_TERMINAL_CONSUME: dict[str, str] = {
+    "tool description": (
+        "Free — no model call. Like amicus_job_result, then delete the record; "
+        "meta.consume.discard_outcome says what happened. After removed or missing a repeat "
+        "call returns job_not_found (not idempotent); otherwise the record may remain, so "
+        "follow meta.consume.follow_up. A corrupt or incompatible record is not deleted."
+    ),
+    "discovery returns": (
+        "the originating tool's envelope; meta.consume.discard_outcome is what the store "
+        "did, with a follow_up after not_done or delete_failed."
+    ),
+    "jobs command": (
+        "Fetch a finished result and delete the record: `amicus_job_consume_result` with "
+        "`job_id` — use this once you are done with the result. Its "
+        "`meta.consume.discard_outcome` reports what the store did: after `removed` or "
+        "`missing` it no longer serves the record, so a repeat call returns `job_not_found`; "
+        "after `not_done` or `delete_failed` the record may remain, and "
+        "`meta.consume.follow_up` names the call that shows what is left."
+    ),
+    "skill reference": (
+        "The consumed envelope's `meta.consume.discard_outcome` reports what the store did, "
+        "not whether the files are gone: after `removed` or `missing` it no longer serves the "
+        "record; after `not_done` or `delete_failed` the record may remain, and "
+        "`meta.consume.follow_up` names the call that shows what is left."
+    ),
+}
+
+
+def _plain(text: str) -> str:
+    return re.sub(r"\s+", " ", text.replace("`", "")).lower()
+
+
+def _terminal_consume_surfaces(wire) -> dict[str, str]:
+    description = next(
+        t["description"] for t in wire["tools"] if t["name"] == "amicus_job_consume_result"
+    )
+    return {"tool description": description, **_consume_outcome_surfaces()}
+
+
+def test_consume_surfaces_name_the_terminal_error_case(wire):
+    surfaces = _terminal_consume_surfaces(wire)
+    assert set(surfaces) == set(_SUPERSEDED_TERMINAL_CONSUME)
+    for name, text in surfaces.items():
+        assert _TERMINAL_CONSUME_CLAUSE in _plain(text), f"{name} omits the terminal-error case"
+
+
+def test_the_terminal_consume_instrument_can_fail():
+    """Every surface's wording before #94 fails the check, and so does one that makes each
+    claim but binds the last two to another case."""
+    split = (
+        "A failed, cancelled or timed-out job returns its terminal error. A done job's "
+        "envelope carries no meta.consume and is not deleted."
+    )
+    for name, old in {**_SUPERSEDED_TERMINAL_CONSUME, "split claims": split}.items():
+        assert _TERMINAL_CONSUME_CLAUSE not in _plain(old), name
+
+
+# PR #105 review (Copilot): a done record whose stored result does not read back (corrupt,
+# or written under another result format) is described rather than delivered, and is not
+# deleted, so "the originating tool's envelope for a done job" overstated discovery too.
+_UNREADABLE_DONE_CLAUSE = "nor is a corrupt or incompatible record"
+_UNREADABLE_DONE_SURFACES = ("tool description", "discovery returns")
+
+
+def test_consume_surfaces_name_the_unreadable_done_case(wire):
+    surfaces = _terminal_consume_surfaces(wire)
+    for name in _UNREADABLE_DONE_SURFACES:
+        assert _UNREADABLE_DONE_CLAUSE in _plain(surfaces[name]), name
+
+
+def test_the_unreadable_done_instrument_can_fail():
+    discovery_before_review = (
+        "the originating tool's envelope for a done job; meta.consume.discard_outcome is what "
+        "the store did, with a follow_up after not_done or delete_failed. A failed, cancelled "
+        "or timed-out job returns its terminal error with no meta.consume and is not deleted."
+    )
+    olds = [_SUPERSEDED_TERMINAL_CONSUME[n] for n in _UNREADABLE_DONE_SURFACES]
+    for old in [*olds, discovery_before_review]:
+        assert _UNREADABLE_DONE_CLAUSE not in _plain(old)
