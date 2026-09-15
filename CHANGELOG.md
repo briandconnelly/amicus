@@ -42,11 +42,13 @@ a caller that ignores the change keeps working.
 
 ### Changed
 
-- The kimi backend supports kimi-code 0.42 (#109). Its `--help` differs from 0.41.0's only by
-  a new `rc|remote` subcommand and its `provider list --json` shape is unchanged (captures in
-  `docs/kimi-help/0.42.0/`), so `amicus_backends` no longer warns that a 0.42 install is
-  outside the versions amicus was built against. `FINGERPRINT` does not move: the supported
-  set is not part of the discovery surface.
+- The kimi backend supports kimi-code 0.42 and 0.43 (#109). Neither changes a flag amicus
+  sends or refuses: 0.42.0's `--help` adds only an `rc|remote` subcommand, 0.43.1's only an
+  `[options]` placeholder on `upgrade`, and the `provider list --json` shape is unchanged in
+  both (captures in `docs/kimi-help/0.42.0/` and `docs/kimi-help/0.43.1/`). `amicus_backends`
+  no longer warns that such an install is outside the versions amicus was built against, and
+  the kimi live gate now requires the newest supported minor rather than a literal `0.41`.
+  `FINGERPRINT` does not move: the supported set is not part of the discovery surface.
 - Legacy environment names (`CODEX_IN_CLAUDE_*`, `MOONBRIDGE_*`, `CLAUDE_IN_CODEX_*`) are
   removed in 0.4.0, not 0.3.0. 0.2.0, the first release to warn on them, shipped four days
   before 0.3.0 was cut, and one warning-bearing release is too short a window for an

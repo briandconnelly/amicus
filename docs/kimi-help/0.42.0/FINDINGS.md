@@ -22,4 +22,4 @@ The behavioural findings carried from moonbridge's 0.39.1 probes, listed in `doc
 The 0.3.0 evidence run on 2026-09-15 (release commit `f349ef1`, before this change) ran `tests/test_kimi_live.py` against kimi 0.42.0.
 Five of its six tests passed: consult outside a repo, the read-only profile check, `amicus_review_changes`, `amicus_delegate`, and the unknown-model rejection.
 The sixth, `test_backends_reports_kimi_ready_live`, failed only on the version pin and the drift warning that 0.42 was outside `SUPPORTED_VERSIONS`, which this capture resolves.
-The full live gate on 0.42.0 is re-run as the 0.3.0 release evidence after this change, and that record, not this file, is where its outcome lives.
+The full live gate was never re-run on 0.42.0: the maintainer's CLI moved to 0.43.1 before this capture merged, so the 0.3.0 release evidence runs on 0.43.1 instead (see `docs/kimi-help/0.43.1/`).
