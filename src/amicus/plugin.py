@@ -23,7 +23,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from amicus.sdk.conventions.envelope import BackendErrorVocabulary, RepairRule
     from amicus.sdk.conventions.preflight import HelpProbe
 
-PLUGIN_API_VERSION = 1
+PLUGIN_API_VERSION = 2
 ENTRY_POINT_GROUP = "amicus.backends"
 
 
