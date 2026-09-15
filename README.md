@@ -146,9 +146,11 @@ the new ones.
 
 ## Status and known limits
 
-0.2.0 is the current release, and it is a breaking one: the discovery surface moved from
-`amicus/0.1/schema-7` to `amicus/0.1/schema-13` and stored job results from `RESULT_FORMAT` 2 to
-`4`. [`CHANGELOG.md`](CHANGELOG.md) says what moved and what a cached client should re-read. The
+0.3.0 is the current release, and it is a breaking one: the discovery surface moved from
+`amicus/0.1/schema-13` to `amicus/0.1/schema-30` and stored job results from `RESULT_FORMAT` 4 to
+`6`, so a job result 0.2.0 stored cannot be read after upgrading.
+[`docs/MIGRATION.md`](docs/MIGRATION.md#upgrading-from-020) walks through what a caller written
+against 0.2.0 has to change, and [`CHANGELOG.md`](CHANGELOG.md) lists everything that moved. The
 server's wire contract is exercised by the test suite and by host captures against Claude Code and
 Codex, but:
 
