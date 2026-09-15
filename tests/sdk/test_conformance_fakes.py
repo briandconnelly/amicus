@@ -9,7 +9,7 @@ the protocol was shaped around:
   from stream events, prompt-appended schema, generated read-only agent file,
   MANDATORY pre-spend effort validation (upstream silently ignores bad values).
 * ClaudeLike — stdin prompt, answer from a stdout JSON envelope, config-mode
-  env scrubbing, envelope-aware failure classification via the backend hook.
+  env scrubbing, envelope-aware failure classification ahead of the shared order.
 
 These are smoke checks: they prove the protocol CAN express all three shapes.
 They are not the compatibility authority — the ``amicus.sdk.backend`` module
@@ -45,6 +45,7 @@ from amicus.sdk.backend.protocol import (
     RunRequest,
     Usage,
 )
+from amicus.sdk.core import runtime as runtime_module
 from amicus.sdk.testing import conformance
 
 
@@ -62,7 +63,10 @@ def _jsonl(events: str) -> list[dict]:
 def _classify(contract: BackendContract, outcome: RunOutcome) -> ClassifiedFailure:
     """The shared failure order a fake falls back to: binary missing, timeout, then the
     contract's signature tables (drift, auth, rate limit, invalid model), then nonzero exit.
-    Each real backend classifies in its own ``cli`` module instead."""
+    Each real backend classifies in its own ``cli`` module instead.
+
+    Unlike the classifier this replaces, it does not read ``failure_signatures.retry_after_ms``:
+    no fake contract declares that pattern, and a fake's rate-limit failure carries no delay."""
     run = outcome.run
     b = contract.backend_id
     if run.binary_missing:
@@ -340,6 +344,64 @@ def test_effort_conformance_catches_missing_validation():
 
     violations = conformance.check_backend(KIMI_CONTRACT, Lax())
     assert any("pre-spend" in v for v in violations)
+
+
+_SIG_CONTRACT = make_contract(
+    backend_id="siglike",
+    failure_signatures=FailureSignatures(
+        auth=(r"please log in",),
+        contract_drift=(r"unknown option",),
+        invalid_model=(r"unknown model",),
+        rate_limited=(r"rate limited",),
+    ),
+)
+
+
+@pytest.mark.parametrize(
+    "run,expected",
+    [
+        (
+            runtime_module.CommandRun("", runtime_module.BINARY_NOT_FOUND, 127, 5, True),
+            "siglike_not_found",
+        ),
+        (make_run(stderr="please log in", exit_code=1, timed_out=True), "timeout"),
+        (make_run(stderr="unknown option --x, please log in", exit_code=1), "cli_contract_changed"),
+        (make_run(stderr="please log in, rate limited", exit_code=1), "siglike_auth_required"),
+        (make_run(stderr="rate limited, unknown model", exit_code=1), "siglike_rate_limited"),
+        (make_run(stderr="unknown model", exit_code=1), "invalid_model"),
+        (make_run(stderr="something else entirely", exit_code=1), "nonzero_exit"),
+    ],
+    ids=[
+        "binary-missing-beats-timeout",
+        "timeout-beats-signatures",
+        "drift-beats-auth",
+        "auth-beats-rate-limit",
+        "rate-limit-beats-invalid-model",
+        "invalid-model",
+        "fallback",
+    ],
+)
+def test_the_fakes_shared_order_is_the_documented_one(run, expected):
+    """Every step of `_classify`'s order, including each overlap it has to break. Without
+    this, a helper that returned `nonzero_exit` unconditionally — or one that tried auth
+    before contract drift — would leave the rest of this file green."""
+    assert _classify(_SIG_CONTRACT, RunOutcome(run=run)).code == expected
+
+
+def test_each_fake_falls_through_to_the_shared_order():
+    """The fakes reach `_classify` once their own evidence says nothing: CodexLike always,
+    KimiLike on a failed run (its empty-response branch is for a zero exit), and ClaudeLike
+    when the stdout envelope is not the budget case — with its own auth table applying."""
+    request = RunRequest(kind="consult", prompt="q", cwd=".", timeout_seconds=10)
+    failed = RunOutcome(run=make_run(stderr="boom", exit_code=1))
+    assert CodexLikeBackend().classify_failure(failed, request).code == "nonzero_exit"
+    assert KimiLikeBackend().classify_failure(failed, request).code == "nonzero_exit"
+    envelope = RunOutcome(
+        run=make_run(stdout='{"subtype": "other"}', stderr="login required", exit_code=1)
+    )
+    assert (
+        ClaudeLikeBackend().classify_failure(envelope, request).code == "claudelike_auth_required"
+    )
 
 
 async def test_codexlike_lifecycle():

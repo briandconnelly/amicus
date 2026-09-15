@@ -2,9 +2,9 @@
 
 Behavior lives in the :class:`~amicus.sdk.backend.protocol.AgentBackend`
 implementation; everything here is declarative and inspectable — the material
-capability output, conformance checks, and the shared failure classifier are
-driven by. Each bridge's ``cli_contract.py`` collapses into one instance of
-this plus whatever backend-local constants remain.
+the capability output, the conformance checks and a backend's own failure
+classifier are driven by. Each bridge's ``cli_contract.py`` collapses into one
+instance of this plus whatever backend-local constants remain.
 """
 
 from __future__ import annotations
@@ -69,10 +69,12 @@ class ExtraArgsPolicy:
 
 @dataclass(frozen=True)
 class FailureSignatures:
-    """Regex tables the shared classifier consumes; the predicate functions in
-    today's ``cli_contract.py`` files become this data. All patterns are matched
-    against the run's combined diagnostics (stderr and, where the backend hook
-    says so, event/envelope text)."""
+    """Regex tables a failure classifier consumes, as data rather than code, so a
+    generic consumer can map a failed run without knowing the backend. amicus's own
+    backends classify in their ``cli`` modules, through predicates their ``contract``
+    modules own, and declare these tables from those same patterns. Patterns are
+    matched against the run's diagnostics: stderr, plus any event or envelope text
+    the consumer chooses to include."""
 
     auth: tuple[str, ...] = ()
     contract_drift: tuple[str, ...] = ()
