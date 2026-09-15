@@ -194,7 +194,7 @@ The `amicus://backends/{backend}` resource is always the full entry.
 ## Upgrading from 0.2.0
 
 The changes below are the ones a caller written against amicus 0.2.0 has to handle.
-`CHANGELOG.md` lists every change since 0.2.0; the rest add fields, tighten descriptions or move text, and a caller that ignores them keeps working.
+`CHANGELOG.md`'s 0.3.0 section lists every user-visible change since 0.2.0, and a caller written against 0.2.0 needs to change nothing for the ones not listed here.
 
 **Every success `meta` is sparse on the wire (#47).**
 A `meta` key whose value is null is omitted from every tool's success, not only from a delivered paid result as before.
@@ -229,7 +229,7 @@ Call `amicus_review_changes_dry_run`; the alias is removed at or after 0.5.0.
 Every other repair that names a tool carries a complete call in `repair.arguments`.
 
 **Claude adversarial reviews default to `config_mode="safe"` (#64).**
-An adversarial review no longer inherits your Claude configuration unless the call passes `backend_options.config_mode`; the "Behavior deltas" section above has the details.
+An adversarial review no longer inherits your Claude configuration unless the call passes `backend_options.config_mode` as `inherit` or `scoped`, the two modes that read the workspace's `CLAUDE.md` and `.claude/settings*.json`; the "Behavior deltas" section above has the details.
 `amicus_backends` reports that option's per-verb defaults in `default_by_verb`, and its common `default` is null where the verbs differ.
 
 **A bool in a prose list is dropped and counted (#52).**

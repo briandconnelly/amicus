@@ -152,8 +152,9 @@ which goes when the alias does.
   `""` as a key (#66).
 - **Breaking.** Claude adversarial reviews, sync and async, default to `config_mode="safe"`
   (#64). Inherited Claude instructions can displace the JSON critique contract, so an
-  adversarial review no longer inherits the user's Claude configuration unless the call asks
-  for it with `backend_options.config_mode`, which every verb honours. When
+  adversarial review no longer inherits the user's Claude configuration unless the call passes
+  `backend_options.config_mode` as `inherit` or `scoped`, the two modes that read it; an
+  explicit mode is honoured on every verb. When
   `AMICUS_CLAUDE_CONFIG_MODE=bare` the default stays `bare`, so API-key-only installations keep
   their authentication path; consult and review-changes calls still use the configured default.
   `amicus_backends` reports the option's per-verb defaults in `default_by_verb`, with a null
