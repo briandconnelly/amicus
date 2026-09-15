@@ -219,6 +219,22 @@ which goes when the alias does.
   `docs/kimi-help/0.43.1/`), so `amicus_backends` does not warn that such an install is outside
   the versions amicus was built against. `FINGERPRINT` does not move: the supported set is not
   part of the discovery surface.
+- The codex backend supports codex-cli 0.154 (#112), beside 0.152 and 0.153. Zero-spend checks
+  against 0.153.4 found no change in what they cover: `codex exec --help` adds only
+  `--worktree`, `codex --help` drops only the `mcp-server` subcommand amicus never used,
+  `remote_plugin` and `sleep_tool` are still feature flags, and the rejections amicus
+  classifies (an unknown config key in both forms, an unknown feature, an unknown flag, an
+  invalid value, an unknown enum variant) read the same. The paid semantic probes (the
+  workspace-write sandbox pins, the reasoning-effort key, structured output) were not re-run
+  for 0.154. `amicus_backends` does not warn that such an install is outside the versions
+  amicus was built against. When codex's `models_cache.json` is unreadable, `amicus_models`
+  lists 0.154.0's catalog where 0.2.0 listed 0.149.1's: `gpt-6-astra` is added and `gpt-5.4`
+  and `gpt-5.4-mini` are gone. `gpt-6-astra` advertises codex's `clock` tools, so its default
+  exec path offers `clock.sleep`, which can wait up to 12 hours; the `--disable sleep_tool`
+  amicus sends on every model-bearing run removes it. `FINGERPRINT` does not move: the
+  supported set only decides a status warning, and the listed models are runtime values in
+  `amicus_models` results, while `FINGERPRINT_COVERS` covers that tool's schema rather than
+  the values it returns.
 - Legacy environment names (`CODEX_IN_CLAUDE_*`, `MOONBRIDGE_*`, `CLAUDE_IN_CODEX_*`) are
   removed in 0.4.0, not in 0.3.0 as 0.2.0's warnings and `docs/MIGRATION.md` said. 0.2.0, the
   first release to warn on them, shipped four days before 0.3.0 was cut, and one
