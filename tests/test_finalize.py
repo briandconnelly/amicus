@@ -5,14 +5,14 @@ from __future__ import annotations
 
 import json
 
-from pontonier.backend.protocol import ExecResult, Usage
-from pontonier.core import worktree
-from pontonier.core.runtime import CommandRun
 from tests.support import fakeplugin
 
 from amicus.orchestration import finalize as fz
 from amicus.schemas.envelope import Meta
 from amicus.schemas.results import Coverage
+from amicus.sdk.backend.protocol import ExecResult, Usage
+from amicus.sdk.core import worktree
+from amicus.sdk.core.runtime import CommandRun
 
 _COMPLETE = Coverage(status="complete")
 _TRUNCATED = Coverage(status="partial", omission_reasons=["truncated"])

@@ -5,11 +5,11 @@ from __future__ import annotations
 import subprocess
 
 import pytest
-from pontonier.core.gitdiff import DiffResult, DiffSummary, InvalidUntrackedError
 from tests.support import fakeplugin
 
 from amicus.orchestration import review
 from amicus.request import RunSpec, meta_for
+from amicus.sdk.core.gitdiff import DiffResult, DiffSummary, InvalidUntrackedError
 
 
 def _spec(cwd, **kw):

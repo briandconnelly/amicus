@@ -4,14 +4,14 @@ refusals, staging (stdin carrier, constant argv, scrubbed env), finalize, the in
 from __future__ import annotations
 
 import pytest
-from pontonier.backend.protocol import AgentBackend, OutcomeInspector, RunOutcome, RunRequest
-from pontonier.core.runtime import BINARY_NOT_FOUND, TIMED_OUT, CommandRun
-from pontonier.testing import conformance
 from tests.support import claudefixtures as cf
 
 from amicus.backends.claude import adversarial, contract
 from amicus.backends.claude import config as claude_config
 from amicus.backends.claude.binary import BinaryNotFoundError
+from amicus.sdk.backend.protocol import AgentBackend, OutcomeInspector, RunOutcome, RunRequest
+from amicus.sdk.core.runtime import BINARY_NOT_FOUND, TIMED_OUT, CommandRun
+from amicus.sdk.testing import conformance
 
 
 def _req(**kw) -> RunRequest:

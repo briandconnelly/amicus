@@ -8,10 +8,10 @@ import re
 from pathlib import Path
 
 import pytest
-from pontonier.backend.contract import IsolationPolicy
-from pontonier.testing import conformance
 
 from amicus.backends.kimi import contract
+from amicus.sdk.backend.contract import IsolationPolicy
+from amicus.sdk.testing import conformance
 
 _DOCS_ROOT = Path(__file__).parent.parent / "docs" / "kimi-help"
 CAPTURES = sorted(p for p in _DOCS_ROOT.iterdir() if p.is_dir())

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pontonier.conventions import envelope as _pe
+from amicus.sdk.conventions import envelope as _pe
 
 BACKEND_IDS: tuple[str, ...] = ("codex", "kimi", "claude")
 BackendId = Literal["codex", "kimi", "claude"]

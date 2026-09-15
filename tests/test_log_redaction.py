@@ -141,7 +141,7 @@ async def test_restoring_exc_summary_in_the_guard_message_fails_the_assertion(lo
     """Mutation control for the message-side leak the issue did not name: with
     `exc_summary(exc)` interpolated the way the guard used to do it, the marker lands in
     both handlers. This is the instrument proving the test above can fail."""
-    from pontonier.core.redaction import exc_summary
+    from amicus.sdk.core.redaction import exc_summary
 
     try:
         raise RuntimeError(_message())
@@ -171,7 +171,7 @@ def test_restoring_the_plain_formatter_fails_the_traceback_assertion(logs, tmp_p
 
 
 def test_an_exception_passed_as_a_message_argument_renders_as_its_type(logs):
-    """`pontonier.core.runtime` logs `("...: %s", exc, exc_info=True)` through these very
+    """`amicus.sdk.core.runtime` logs `("...: %s", exc, exc_info=True)` through these very
     handlers, so this is a live path, not a hypothetical future mistake."""
     try:
         raise ValueError(_message())
@@ -443,7 +443,7 @@ def test_the_call_site_scan_detects_a_planted_violation(tmp_path):
     planted = tmp_path / "amicus" / "planted.py"
     planted.parent.mkdir(parents=True)
     planted.write_text(
-        "import logging\nfrom pontonier.core.redaction import exc_summary\n"
+        "import logging\nfrom amicus.sdk.core.redaction import exc_summary\n"
         "def f(exc):\n    logging.getLogger('x').warning('boom: %s', exc_summary(exc))\n"
         "def g(exc):\n    logging.getLogger('x').warning('boom: %s', type(exc).__name__)\n",
         encoding="utf-8",

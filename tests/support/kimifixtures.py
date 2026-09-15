@@ -8,13 +8,12 @@ import json
 import re
 from pathlib import Path
 
-from pontonier.conventions.preflight import FlagSupport, HelpProbe
-from pontonier.core.runtime import CommandRun
-
 from amicus.backends import kimi as kimi_pkg
 from amicus.backends.kimi import contract
 from amicus.backends.kimi.adapter import KimiBackend
 from amicus.plugin import ModelEntry, ModelListing
+from amicus.sdk.conventions.preflight import FlagSupport, HelpProbe
+from amicus.sdk.core.runtime import CommandRun
 
 ALL_FLAGS = FlagSupport(
     supported=frozenset(set(contract.ALWAYS_SEND_FLAGS) | set(contract.HELP_GATED_FLAGS)),

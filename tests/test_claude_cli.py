@@ -7,11 +7,11 @@ import json
 import subprocess
 
 import pytest
-from pontonier.conventions.preflight import FlagSupport
-from pontonier.core.runtime import BINARY_NOT_FOUND, TIMED_OUT, CommandRun
 from tests.support import claudefixtures as cf
 
 from amicus.backends.claude import cli, contract
+from amicus.sdk.conventions.preflight import FlagSupport
+from amicus.sdk.core.runtime import BINARY_NOT_FOUND, TIMED_OUT, CommandRun
 
 ALL = FlagSupport(
     supported=frozenset(set(contract.ALWAYS_SEND_FLAGS) | set(contract.HELP_GATED_FLAGS)),

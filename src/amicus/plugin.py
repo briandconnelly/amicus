@@ -16,13 +16,12 @@ from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Mapping
 
-    from pontonier.backend.contract import BackendContract
-    from pontonier.backend.protocol import AgentBackend
-    from pontonier.conventions.annotations import AnnotationEffects
-    from pontonier.conventions.envelope import BackendErrorVocabulary, RepairRule
-    from pontonier.conventions.preflight import HelpProbe
-
     from amicus.config.envspec import EnvNamespace
+    from amicus.sdk.backend.contract import BackendContract
+    from amicus.sdk.backend.protocol import AgentBackend
+    from amicus.sdk.conventions.annotations import AnnotationEffects
+    from amicus.sdk.conventions.envelope import BackendErrorVocabulary, RepairRule
+    from amicus.sdk.conventions.preflight import HelpProbe
 
 PLUGIN_API_VERSION = 1
 ENTRY_POINT_GROUP = "amicus.backends"

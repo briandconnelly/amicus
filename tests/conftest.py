@@ -11,9 +11,9 @@ from pathlib import Path
 
 import fastmcp
 import pytest
-from pontonier.core.runtime import CommandRun
 
 from amicus import config, obs
+from amicus.sdk.core.runtime import CommandRun
 
 # Run the suite with fastmcp's camelCase compatibility bridge OFF so any camelCase read
 # that sneaks in fails today as a hard AttributeError instead of on the next major.

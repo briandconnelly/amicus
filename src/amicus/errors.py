@@ -11,7 +11,6 @@ from __future__ import annotations
 import dataclasses
 from typing import TYPE_CHECKING, Any
 
-from pontonier.conventions.envelope import BackendErrorVocabulary, RepairRule, repair_rules
 from pydantic import ValidationError
 
 from amicus.schemas.codes import BACKEND_IDS, ERROR_CODES, generalize_code
@@ -24,11 +23,11 @@ from amicus.schemas.envelope import (
     Repair,
     Usage,
 )
+from amicus.sdk.conventions.envelope import BackendErrorVocabulary, RepairRule, repair_rules
 
 if TYPE_CHECKING:  # pragma: no cover
-    from pontonier.backend.protocol import ClassifiedFailure
-
     from amicus.plugin import BackendPlugin
+    from amicus.sdk.backend.protocol import ClassifiedFailure
 
 NEUTRAL_VOCABULARY = BackendErrorVocabulary(
     backend_id="backend",

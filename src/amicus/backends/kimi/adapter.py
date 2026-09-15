@@ -10,25 +10,23 @@ import os
 import shutil
 from typing import TYPE_CHECKING
 
-from pontonier.backend.protocol import ClassifiedFailure, ExecResult, PreparedRun, RepairHint
-from pontonier.core import runtime, worktree
-
 from amicus.backends.kimi import cli, contract, models, normalize
 from amicus.backends.kimi import config as kimi_config
 from amicus.backends.kimi.binary import BinaryNotFoundError
 from amicus.schemas import instructions
 from amicus.schemas.params import reasoning_effort_shape_error
 from amicus.schemas.structured import schema_instruction
+from amicus.sdk.backend.protocol import ClassifiedFailure, ExecResult, PreparedRun, RepairHint
+from amicus.sdk.core import runtime, worktree
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import AsyncIterator
 
-    from pontonier.backend.protocol import RunOutcome, RunRequest
-    from pontonier.conventions.preflight import HelpProbe
-
     from amicus.backends.kimi.binary import KimiBinary
     from amicus.backends.kimi.config import KimiConfig
     from amicus.backends.kimi.models import KimiModels
+    from amicus.sdk.backend.protocol import RunOutcome, RunRequest
+    from amicus.sdk.conventions.preflight import HelpProbe
 
 _INSTRUCTION_KINDS = frozenset({"consult", "review_changes"})
 EMPTY_RESPONSE_DETAIL = (

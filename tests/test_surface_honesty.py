@@ -9,11 +9,11 @@ from pathlib import Path
 from typing import get_args
 
 import pytest
-from pontonier.testing import surface_honesty
 
 from amicus import errors, manifest
 from amicus.jobs import delivery, lifecycle
 from amicus.schemas.envelope import DiscardOutcome
+from amicus.sdk.testing import surface_honesty
 from amicus.tools import discovery
 
 # Cross-backend vocabulary that would teach an agent a mechanism amicus lacks.

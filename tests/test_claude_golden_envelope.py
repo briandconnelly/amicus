@@ -7,12 +7,12 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from pontonier.backend.protocol import RunOutcome, RunRequest
-from pontonier.core.runtime import CommandRun
 from tests.support import claudefixtures as cf
 
 from amicus.orchestration import run as run_mod
 from amicus.request import RunSpec
+from amicus.sdk.backend.protocol import RunOutcome, RunRequest
+from amicus.sdk.core.runtime import CommandRun
 
 GOLDEN = json.loads(cf.GOLDEN)
 

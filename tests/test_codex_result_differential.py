@@ -5,13 +5,13 @@ shared projection; codes are compared after amicus's `backend_*` generalization.
 from __future__ import annotations
 
 import pytest
-from pontonier.core.gitdiff import DiffResult, DiffSummary
 from tests.support import codexfixtures as cf
 
 from amicus.orchestration import review
 from amicus.orchestration import run as run_mod
 from amicus.request import RunSpec
 from amicus.schemas.codes import generalize_code
+from amicus.sdk.core.gitdiff import DiffResult, DiffSummary
 
 # Codes whose `temporary` deliberately differs from the sibling (pontonier's shared table
 # is the amicus default). Empty until a run of this test proves a difference; then record

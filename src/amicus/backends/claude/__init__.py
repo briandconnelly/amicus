@@ -5,10 +5,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from pontonier.conventions.annotations import AnnotationEffects
-from pontonier.conventions.envelope import BackendErrorVocabulary, RepairRule
-from pontonier.conventions.preflight import HelpProbe
-
 from amicus.backends.claude import cli, contract
 from amicus.backends.claude import config as claude_config
 from amicus.backends.claude.adapter import ClaudeBackend
@@ -18,6 +14,9 @@ from amicus.backends.claude.models import ClaudeModels
 from amicus.backends.claude.options import options_for
 from amicus.backends.claude.status import ClaudeStatus
 from amicus.plugin import BackendPlugin
+from amicus.sdk.conventions.annotations import AnnotationEffects
+from amicus.sdk.conventions.envelope import BackendErrorVocabulary, RepairRule
+from amicus.sdk.conventions.preflight import HelpProbe
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Mapping

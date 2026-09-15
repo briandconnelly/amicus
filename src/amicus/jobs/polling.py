@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pontonier.core.jobs import DEFAULT_POLL_AFTER_MS, poll_backoff_ms
+from amicus.sdk.core.jobs import DEFAULT_POLL_AFTER_MS, poll_backoff_ms
 
 # "Wait about as long as it has already run", up to thirty seconds: a four-minute job is
 # polled about thirteen times instead of about twenty-eight, and a finished job is noticed at

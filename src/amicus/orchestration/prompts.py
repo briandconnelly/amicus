@@ -5,8 +5,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from pontonier.conventions import prompts as _pp
-from pontonier.core import redaction
+from amicus.sdk.conventions import prompts as _pp
+from amicus.sdk.core import redaction
 
 if TYPE_CHECKING:  # pragma: no cover
     from amicus.plugin import BackendPlugin

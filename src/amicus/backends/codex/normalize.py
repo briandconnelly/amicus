@@ -7,10 +7,9 @@ from __future__ import annotations
 
 import json
 
-from pontonier.backend.protocol import Usage
-
 from amicus.backends.codex import contract
 from amicus.schemas.structured import classify_structured
+from amicus.sdk.backend.protocol import Usage
 
 __all__ = [
     "classify_structured",

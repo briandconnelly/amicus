@@ -6,9 +6,9 @@ below is the sibling's captured phrasing."""
 from __future__ import annotations
 
 import pytest
-from pontonier.testing import conformance
 
 from amicus.backends.codex import contract as c
+from amicus.sdk.testing import conformance
 
 
 def test_contract_passes_pontonier_checks_and_names_the_amicus_namespace():

@@ -17,14 +17,13 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from pontonier.core.jobs import ActivityRecorder
-
 from amicus import obs
 from amicus.errors import error_envelope
 from amicus.orchestration.run import run_request
 from amicus.registry import BackendRegistry
 from amicus.request import RunSpec, meta_for
 from amicus.schemas.envelope import Meta
+from amicus.sdk.core.jobs import ActivityRecorder
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Callable

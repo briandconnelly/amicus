@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from pontonier.core.redaction import exc_summary
-
 from amicus import SERVER_NAME, __version__, surface
 from amicus.backends import KNOWN_DISPLAY_NAMES, KNOWN_EFFECTS
 from amicus.errors import error_envelope
@@ -43,6 +41,7 @@ from amicus.schemas.results import (
     ToolCapability,
     UnavailableEntry,
 )
+from amicus.sdk.core.redaction import exc_summary
 from amicus.tools import ACTIVE_TOOLS, FREE_TOOLS, JOB_TOOLS, TOOL_ORDER
 from amicus.tools._guard import guard
 from amicus.tools._meta import (

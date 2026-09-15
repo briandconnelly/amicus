@@ -7,7 +7,6 @@ from __future__ import annotations
 import unicodedata
 from typing import TYPE_CHECKING, Any
 
-from pontonier.core import redaction
 from pydantic import BaseModel, ValidationError
 
 from amicus.errors import error_envelope, serialize_error
@@ -21,6 +20,7 @@ from amicus.schemas.results import (
     DelegateResult,
     ReviewResult,
 )
+from amicus.sdk.core import redaction
 
 if TYPE_CHECKING:  # pragma: no cover
     from amicus.schemas.envelope import Meta

@@ -11,11 +11,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from pontonier.core import redaction
-
 from amicus.backends.kimi import contract
 from amicus.config import settings as global_settings
 from amicus.config.envspec import EnvConflictError, EnvNamespace, EnvVar, is_env_placeholder
+from amicus.sdk.core import redaction
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Mapping

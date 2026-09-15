@@ -7,12 +7,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from pontonier.conventions.preflight import FlagSupport, HelpProbe
-from pontonier.core.runtime import CommandRun
-
 from amicus.backends import claude as claude_pkg
 from amicus.backends.claude import contract
 from amicus.backends.claude.adapter import ClaudeBackend
+from amicus.sdk.conventions.preflight import FlagSupport, HelpProbe
+from amicus.sdk.core.runtime import CommandRun
 
 ALL_FLAGS = FlagSupport(
     supported=frozenset(set(contract.ALWAYS_SEND_FLAGS) | set(contract.HELP_GATED_FLAGS)),

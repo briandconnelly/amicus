@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import json
 
-from pontonier.core.runtime import BINARY_NOT_FOUND, CommandRun
-
 from amicus.backends.kimi import binary as kb
 from amicus.backends.kimi import config as kc
 from amicus.backends.kimi import models
+from amicus.sdk.core.runtime import BINARY_NOT_FOUND, CommandRun
 
 PAYLOAD = {
     "providers": {"p1": {"apiKey": "sk-" + "s" * 40, "baseUrl": "https://private.example"}},

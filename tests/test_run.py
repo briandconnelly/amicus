@@ -7,12 +7,12 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from pontonier.backend.protocol import ClassifiedFailure
 from tests.support import codexfixtures as cf
 from tests.support import fakeplugin
 
 from amicus.orchestration import run as run_mod
 from amicus.request import RunSpec
+from amicus.sdk.backend.protocol import ClassifiedFailure
 
 
 def _spec(kind="consult", cwd="/repo", **kw):
@@ -235,7 +235,7 @@ async def test_orphan_sweep_runs_when_the_contract_asks(monkeypatch):
         def prepare(self, request):
             import contextlib
 
-            from pontonier.backend.protocol import PreparedRun
+            from amicus.sdk.backend.protocol import PreparedRun
 
             @contextlib.asynccontextmanager
             async def _cm():
@@ -256,9 +256,8 @@ async def test_non_repo_consult_under_all_tiers_runs_in_an_empty_dir_with_a_warn
 ):
     import dataclasses
 
-    from pontonier.backend.contract import IsolationPolicy
-
     from amicus.orchestration import isolation
+    from amicus.sdk.backend.contract import IsolationPolicy
 
     calls: list = []
     monkeypatch.setattr(
@@ -279,7 +278,7 @@ async def test_non_repo_consult_under_all_tiers_runs_in_an_empty_dir_with_a_warn
 def test_artifact_reads_are_hardened(tmp_path):
     import os
 
-    from pontonier.backend.protocol import PreparedRun
+    from amicus.sdk.backend.protocol import PreparedRun
 
     normal = tmp_path / "a.txt"
     normal.write_text("hello")

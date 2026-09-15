@@ -10,25 +10,23 @@ import os
 from stat import S_ISREG
 from typing import TYPE_CHECKING, Any
 
-from pontonier.backend.protocol import RunOutcome, RunRequest, inspect_outcome
-from pontonier.core import runtime
-
 from amicus.errors import error_envelope, render_failure
 from amicus.orchestration import finalize, prompts, review
 from amicus.orchestration.isolation import SiteError, select_site
 from amicus.request import meta_for
 from amicus.schemas.envelope import ErrorDetail
+from amicus.sdk.backend.protocol import RunOutcome, RunRequest, inspect_outcome
+from amicus.sdk.core import runtime
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Callable
-
-    from pontonier.backend.protocol import PreparedRun
-    from pontonier.core.gitdiff import DiffResult
 
     from amicus.plugin import BackendPlugin
     from amicus.request import RunSpec
     from amicus.schemas.envelope import Meta
     from amicus.schemas.results import Coverage
+    from amicus.sdk.backend.protocol import PreparedRun
+    from amicus.sdk.core.gitdiff import DiffResult
 
 MAX_ARTIFACT_BYTES = 1_000_000
 

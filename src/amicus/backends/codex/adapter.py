@@ -11,23 +11,21 @@ import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from pontonier.backend.protocol import ClassifiedFailure, ExecResult, PreparedRun, Usage
-from pontonier.core import worktree
-
 from amicus.backends.codex import cli, normalize
 from amicus.backends.codex.binary import BinaryNotFoundError
 from amicus.backends.codex.config import reasoning_effort_shape_error, sandbox_for_kind
 from amicus.backends.codex.models import CodexModels
 from amicus.schemas import instructions
+from amicus.sdk.backend.protocol import ClassifiedFailure, ExecResult, PreparedRun, Usage
+from amicus.sdk.core import worktree
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import AsyncIterator
 
-    from pontonier.backend.protocol import RunOutcome, RunRequest
-    from pontonier.conventions.preflight import HelpProbe
-
     from amicus.backends.codex.binary import CodexBinary
     from amicus.backends.codex.config import CodexConfig
+    from amicus.sdk.backend.protocol import RunOutcome, RunRequest
+    from amicus.sdk.conventions.preflight import HelpProbe
 
 TEMP_PREFIX = "amicus-codex-"
 _INSTRUCTION_KINDS = frozenset({"consult", "review_changes"})

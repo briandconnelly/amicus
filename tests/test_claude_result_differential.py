@@ -6,13 +6,13 @@ after amicus's `backend_*` generalization; deviations are pinned per CASE."""
 from __future__ import annotations
 
 import pytest
-from pontonier.core.gitdiff import DiffResult, DiffSummary
 from tests.support import claudefixtures as cf
 
 from amicus.orchestration import review
 from amicus.orchestration import run as run_mod
 from amicus.request import RunSpec
 from amicus.schemas.codes import generalize_code
+from amicus.sdk.core.gitdiff import DiffResult, DiffSummary
 
 FIXTURE = cf.load_fixture()
 SECRET = "sk-" + "c" * 32

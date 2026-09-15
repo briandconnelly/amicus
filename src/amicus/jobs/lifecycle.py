@@ -13,8 +13,6 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from pontonier.core.jobs import JobStore
-
 from amicus import obs
 from amicus.errors import error_envelope
 from amicus.jobs.delivery import finished_job_envelope
@@ -22,6 +20,7 @@ from amicus.jobs.polling import job_status_arguments, poll_hint_ms
 from amicus.orchestration.isolation import WORKTREE_PREFIX
 from amicus.schemas.fingerprint import RESULT_FORMAT
 from amicus.schemas.results import JobFollowUp, JobStarted
+from amicus.sdk.core.jobs import JobStore
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Callable, Coroutine

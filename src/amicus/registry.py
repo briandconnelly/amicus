@@ -11,11 +11,10 @@ from dataclasses import dataclass
 from importlib.metadata import EntryPoint, entry_points
 from typing import TYPE_CHECKING, Any, Literal
 
-from pontonier.core.redaction import exc_summary
-from pontonier.testing import conformance
-
 from amicus import backends as in_tree_backends
 from amicus.plugin import ENTRY_POINT_GROUP, PLUGIN_API_VERSION, BackendPlugin
+from amicus.sdk.core.redaction import exc_summary
+from amicus.sdk.testing import conformance
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Iterable, Mapping

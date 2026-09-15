@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import re
 
-from pontonier.backend import contract as _pc
+from amicus.sdk.backend import contract as _pc
 
 CLAUDE_BIN = "claude"
 

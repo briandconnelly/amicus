@@ -5,10 +5,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from pontonier.conventions.annotations import AnnotationEffects
-from pontonier.conventions.envelope import BackendErrorVocabulary
-from pontonier.conventions.preflight import HelpProbe
-
 from amicus.backends.kimi import config as kimi_config
 from amicus.backends.kimi import contract
 from amicus.backends.kimi.adapter import KimiBackend
@@ -17,6 +13,9 @@ from amicus.backends.kimi.models import KimiModels
 from amicus.backends.kimi.options import options_for
 from amicus.backends.kimi.status import KimiStatus
 from amicus.plugin import BackendPlugin
+from amicus.sdk.conventions.annotations import AnnotationEffects
+from amicus.sdk.conventions.envelope import BackendErrorVocabulary
+from amicus.sdk.conventions.preflight import HelpProbe
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Mapping

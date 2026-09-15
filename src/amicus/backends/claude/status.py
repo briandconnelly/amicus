@@ -10,10 +10,9 @@ from amicus.backends.claude.config import api_key_present, version_supported
 from amicus.plugin import StatusReport
 
 if TYPE_CHECKING:  # pragma: no cover
-    from pontonier.conventions.preflight import HelpProbe
-
     from amicus.backends.claude.binary import ClaudeBinary
     from amicus.backends.claude.config import ClaudeConfig
+    from amicus.sdk.conventions.preflight import HelpProbe
 
 VERSION_WARNING = (
     "The installed claude major version is outside the versions amicus was built against; "

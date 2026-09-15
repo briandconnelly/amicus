@@ -16,7 +16,7 @@ import re
 from dataclasses import dataclass
 from typing import Literal
 
-from pontonier.backend import contract as _pc
+from amicus.sdk.backend import contract as _pc
 
 CODEX_BIN = "codex"
 

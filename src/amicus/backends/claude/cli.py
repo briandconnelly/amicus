@@ -17,18 +17,17 @@ import re
 import subprocess
 from typing import TYPE_CHECKING, Any
 
-from pontonier.backend.protocol import ClassifiedFailure, RepairHint
-from pontonier.conventions import preflight
-from pontonier.core import redaction, runtime
-
 from amicus.backends.claude import contract, normalize
 from amicus.config.envspec import is_env_placeholder
+from amicus.sdk.backend.protocol import ClassifiedFailure, RepairHint
+from amicus.sdk.conventions import preflight
+from amicus.sdk.core import redaction, runtime
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Callable, Mapping
 
-    from pontonier.conventions.preflight import FlagSupport
-    from pontonier.core.runtime import CommandRun
+    from amicus.sdk.conventions.preflight import FlagSupport
+    from amicus.sdk.core.runtime import CommandRun
 
 _ECHO_MAX_CHARS = 300
 _RESULT_ECHO_MAX_CHARS = 200

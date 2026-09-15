@@ -8,7 +8,6 @@ from __future__ import annotations
 import dataclasses
 from typing import TYPE_CHECKING, Any, cast, get_args
 
-from pontonier.core import redaction, worktree
 from pydantic import ValidationError
 
 from amicus.errors import error_envelope
@@ -29,16 +28,16 @@ from amicus.schemas.results import (
     Severity,
 )
 from amicus.schemas.structured import classify_structured
+from amicus.sdk.core import redaction, worktree
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Iterable
 
-    from pontonier.backend.protocol import ExecResult
-    from pontonier.core.runtime import CommandRun
-
     from amicus.plugin import BackendPlugin
     from amicus.schemas.envelope import Meta
     from amicus.schemas.results import Coverage
+    from amicus.sdk.backend.protocol import ExecResult
+    from amicus.sdk.core.runtime import CommandRun
 
 _PROSE_KEYS = ("summary", "questions", "assumptions", "next_steps")
 _LIST_KEYS = ("questions", "assumptions", "next_steps")

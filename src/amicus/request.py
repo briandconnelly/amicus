@@ -11,10 +11,9 @@ import json
 from dataclasses import dataclass, field
 from typing import Any
 
-from pontonier.core import idempotency
-
 from amicus.schemas import instructions
 from amicus.schemas.envelope import Meta
+from amicus.sdk.core import idempotency
 
 INPUT_FIELDS: tuple[str, ...] = (
     "question",

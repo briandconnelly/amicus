@@ -5,13 +5,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Literal
 
-from pontonier.conventions import annotations as ann
-from pontonier.conventions.annotations import AnnotationEffects
-
 from amicus.backends import KNOWN_EFFECTS
 from amicus.schemas.envelope import Meta
 from amicus.schemas.fingerprint import LIFECYCLE_META_KEY
 from amicus.schemas.results import ToolDeprecation
+from amicus.sdk.conventions import annotations as ann
+from amicus.sdk.conventions.annotations import AnnotationEffects
 
 if TYPE_CHECKING:  # pragma: no cover
     from amicus.config import Settings

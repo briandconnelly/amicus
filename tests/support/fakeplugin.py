@@ -9,18 +9,6 @@ import contextlib
 from collections.abc import AsyncIterator
 from typing import Any
 
-from pontonier.backend.contract import BackendContract, IsolationPolicy, ModelCatalog
-from pontonier.backend.protocol import (
-    ClassifiedFailure,
-    ExecResult,
-    PreparedRun,
-    RunOutcome,
-    RunRequest,
-)
-from pontonier.conventions.annotations import AnnotationEffects
-from pontonier.conventions.envelope import BackendErrorVocabulary
-from pontonier.conventions.preflight import HelpProbe
-
 from amicus.config.envspec import EnvNamespace
 from amicus.plugin import (
     PLUGIN_API_VERSION,
@@ -30,6 +18,17 @@ from amicus.plugin import (
     OptionSpec,
     StatusReport,
 )
+from amicus.sdk.backend.contract import BackendContract, IsolationPolicy, ModelCatalog
+from amicus.sdk.backend.protocol import (
+    ClassifiedFailure,
+    ExecResult,
+    PreparedRun,
+    RunOutcome,
+    RunRequest,
+)
+from amicus.sdk.conventions.annotations import AnnotationEffects
+from amicus.sdk.conventions.envelope import BackendErrorVocabulary
+from amicus.sdk.conventions.preflight import HelpProbe
 
 
 def make_contract(

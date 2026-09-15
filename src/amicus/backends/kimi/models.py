@@ -13,10 +13,9 @@ import json
 import time
 from typing import TYPE_CHECKING
 
-from pontonier.core import redaction, runtime
-
 from amicus.backends.kimi import contract
 from amicus.plugin import ModelEntry, ModelListing
+from amicus.sdk.core import redaction, runtime
 
 if TYPE_CHECKING:  # pragma: no cover
     from amicus.backends.kimi.binary import KimiBinary

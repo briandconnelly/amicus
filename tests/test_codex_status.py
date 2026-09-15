@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from pontonier.core.runtime import BINARY_NOT_FOUND, CommandRun
 from tests.support import codexfixtures as cf
 
 from amicus.backends.codex import status as st
+from amicus.sdk.core.runtime import BINARY_NOT_FOUND, CommandRun
 
 
 def _probe_with(

@@ -4,13 +4,12 @@ from __future__ import annotations
 
 from typing import get_args
 
-from pontonier.core.jobs import DiscardOutcome as StoreDiscardOutcome
-
 from amicus.errors import error_envelope
 from amicus.jobs import delivery
 from amicus.schemas.envelope import ConsumeDisposition, DiscardOutcome, Meta, dump_success
 from amicus.schemas.fingerprint import FINGERPRINT, RESULT_FORMAT
 from amicus.schemas.results import ConsultResult, RawResponse
+from amicus.sdk.core.jobs import DiscardOutcome as StoreDiscardOutcome
 
 _JOB = "0" * 32
 

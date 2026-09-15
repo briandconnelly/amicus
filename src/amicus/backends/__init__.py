@@ -4,7 +4,7 @@ honest state, never a startup failure."""
 
 from __future__ import annotations
 
-from pontonier.conventions.annotations import AnnotationEffects
+from amicus.sdk.conventions.annotations import AnnotationEffects
 
 # backend id -> "module:attribute" of a BackendPlugin or a zero-argument factory.
 IN_TREE: dict[str, str] = {

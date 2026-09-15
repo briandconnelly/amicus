@@ -7,19 +7,18 @@ import json
 import re
 from typing import TYPE_CHECKING
 
-from pontonier.backend.protocol import ClassifiedFailure, RepairHint
-from pontonier.conventions import preflight
-from pontonier.core import redaction, runtime
-
 from amicus.backends.codex import contract, normalize
 from amicus.backends.codex.config import ExtraArgs, isolation_flags
 from amicus.schemas import instructions
+from amicus.sdk.backend.protocol import ClassifiedFailure, RepairHint
+from amicus.sdk.conventions import preflight
+from amicus.sdk.core import redaction, runtime
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Callable
 
-    from pontonier.conventions.preflight import FlagSupport
-    from pontonier.core.runtime import CommandRun
+    from amicus.sdk.conventions.preflight import FlagSupport
+    from amicus.sdk.core.runtime import CommandRun
 
 _CONFIG_OVERRIDE_FLAGS = ("-c", "--config")
 

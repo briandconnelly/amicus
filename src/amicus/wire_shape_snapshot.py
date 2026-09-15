@@ -10,8 +10,6 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from pontonier.core.jobs import DiscardOutcome
-
 from amicus.errors import make_error, serialize_error
 from amicus.jobs import lifecycle, lookup
 from amicus.jobs.delivery import attach_consume_disposition, finished_job_envelope
@@ -36,6 +34,7 @@ from amicus.schemas.results import (
     RawResponse,
     ReviewResult,
 )
+from amicus.sdk.core.jobs import DiscardOutcome
 
 _FINGERPRINT_SENTINEL = "<fingerprint>"
 _VERSION_SENTINEL = "0.0.0"
