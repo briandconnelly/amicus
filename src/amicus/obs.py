@@ -7,12 +7,12 @@ only its type and the source locations it passed through.
 The reason is AGENTS.md rule 18. An exception raised deep in a backend adapter can embed
 the text that provoked it, and that text may be an ``INPUT_FIELDS`` prompt input, which
 rule 18 forbids writing to a log. Nothing at the logging boundary can tell a prompt-bearing
-message from an innocent one, and ``pontonier``'s ``exc_summary``/``redact_text`` cannot
-help: they mask *secrets* and control characters, which is a different question. So the
-policy withholds the whole category rather than guessing case by case, and it is enforced
-where output is produced rather than at each call site, because the call sites include
-``pontonier``'s own — `runtime.py` logs ``("stdout capture failed: %s", exc,
-exc_info=True)`` through these handlers, and this package does not own that line.
+message from an innocent one, and the SDK's ``exc_summary``/``redact_text`` cannot help:
+they mask *secrets* and control characters, which is a different question. So the policy
+withholds the whole category rather than guessing case by case, and it is enforced where
+output is produced rather than at each call site, because the call sites include the SDK's
+own: ``amicus.sdk.core.runtime`` logs ``("stdout capture failed: %s", exc, exc_info=True)``
+through these handlers.
 
 Closing it takes more than suppressing tracebacks, because ``logging`` will render an
 exception through several shapes that never look like one: as the message itself
@@ -52,7 +52,6 @@ if TYPE_CHECKING:  # pragma: no cover
     from amicus.config import Settings
 
 ROOT_LOGGER_NAME = "amicus"
-LIBRARY_LOGGER_NAME = "pontonier"
 # Third-party loggers whose records reach this process's stderr (issue #79). See
 # `_own_dependency_loggers`.
 DEPENDENCY_LOGGER_NAMES = ("fastmcp", "mcp")
@@ -75,7 +74,7 @@ _MAX_LINES = 200
 # Values that may be rendered into a message as themselves. Everything else is replaced by
 # its type, because an arbitrary object's `__str__`/`__repr__` can reach an exception it
 # holds (a list of exceptions renders each one's message) and no scrub can chase that
-# through types this module has never seen. Both `amicus` and `pontonier` log only these.
+# through types this module has never seen. Everything under `amicus` logs only these.
 _RENDERABLE = (str, int, float, bool, type(None))
 
 # Stands in for any location or type name the policy declines to render.
@@ -478,30 +477,28 @@ def _own_dependency_loggers(formatter: logging.Formatter, level: int) -> None:
 
 
 def configure(settings: Settings, *, force: bool = False) -> logging.Logger:
-    """Configure the amicus and pontonier loggers, and take over the fastmcp and mcp ones for
-    stderr (issue #79), once (idempotent unless ``force``)."""
+    """Configure the amicus logger, under which the SDK logs as ``amicus.sdk.*``, and take
+    over the fastmcp and mcp ones for stderr (issue #79), once (idempotent unless ``force``)."""
     global _configured  # noqa: PLW0603
     logger = logging.getLogger(ROOT_LOGGER_NAME)
     if _configured and not force:
         return logger
     formatter = PolicyFormatter(_LOG_FORMAT)
-    for name in (ROOT_LOGGER_NAME, LIBRARY_LOGGER_NAME):
-        target = logging.getLogger(name)
-        target.setLevel(settings.log_level)
-        target.propagate = False
-        _remove_handlers(target)
-        stderr_handler = PolicyStreamHandler(sys.stderr)
-        stderr_handler.setFormatter(formatter)
-        target.addHandler(stderr_handler)
-        if settings.log_file:
-            try:
-                file_handler = PolicyFileHandler(settings.log_file, encoding="utf-8")
-                file_handler.setFormatter(formatter)
-                target.addHandler(file_handler)
-            except OSError:
-                target.warning(
-                    "could not open AMICUS_LOG_FILE %r; logging to stderr only", settings.log_file
-                )
+    logger.setLevel(settings.log_level)
+    logger.propagate = False
+    _remove_handlers(logger)
+    stderr_handler = PolicyStreamHandler(sys.stderr)
+    stderr_handler.setFormatter(formatter)
+    logger.addHandler(stderr_handler)
+    if settings.log_file:
+        try:
+            file_handler = PolicyFileHandler(settings.log_file, encoding="utf-8")
+            file_handler.setFormatter(formatter)
+            logger.addHandler(file_handler)
+        except OSError:
+            logger.warning(
+                "could not open AMICUS_LOG_FILE %r; logging to stderr only", settings.log_file
+            )
     level = max(logging.getLevelNamesMapping()[settings.log_level], logging.WARNING)
     _own_dependency_loggers(formatter, level)
     _configured = True

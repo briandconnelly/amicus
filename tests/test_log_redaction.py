@@ -2,10 +2,11 @@
 notes, or a rendered traceback — reaches either handler `obs.configure` installs.
 
 The guarantee is scoped and stated honestly. It covers the handlers this server owns, so
-it holds for every call site that logs through them, amicus's own and `pontonier`'s alike
-(`obs.configure` attaches handlers to both logger names and turns propagation off). It is
-NOT a guarantee that no prompt input can ever be logged: a call site that interpolates a
-prompt field itself (`log.error("failed: %s", question)`) still would, and nothing here
+it holds for every call site that logs through them, amicus's own and the SDK's alike
+(the SDK logs under `amicus.sdk`, and `obs.configure` attaches handlers to `amicus` and
+turns its propagation off). It is NOT a guarantee that no prompt input can ever be logged:
+a call site that interpolates a prompt field itself (`log.error("failed: %s", question)`)
+still would, and nothing here
 stops it. What is structurally closed is the exception-text family, which is what carried
 prompt inputs into the log unnoticed (issue #39).
 
@@ -32,7 +33,6 @@ from amicus import config, obs
 # not reach the log by way of this module's own text.
 MARKER = "PROMPT" + "MARKER" + "39"
 
-LIBRARY_LOGGER = "pontonier"
 POLICY_HANDLERS = (obs.PolicyStreamHandler, obs.PolicyFileHandler)
 
 
@@ -73,30 +73,24 @@ def logs(tmp_path, clean_env, monkeypatch):
             child = logging.getLogger(name)
             # The child AND the configured ancestor its records propagate to: pytest
             # appends its capture handler to whichever of them it reaches.
-            for target in (child, configured, logging.getLogger(LIBRARY_LOGGER)):
+            for target in (child, configured):
                 for handler in target.handlers[:]:
                     if not isinstance(handler, POLICY_HANDLERS):
                         target.removeHandler(handler)
             return child
 
         def read(self) -> tuple[str, str]:
-            # Both logger trees: `obs.configure` gives each its own handler instances,
-            # pointing at the same stderr object and the same file.
-            for name in (obs.ROOT_LOGGER_NAME, LIBRARY_LOGGER):
-                for handler in logging.getLogger(name).handlers:
-                    if isinstance(handler, POLICY_HANDLERS):
-                        handler.flush()
+            for handler in configured.handlers:
+                if isinstance(handler, POLICY_HANDLERS):
+                    handler.flush()
             return stderr.getvalue(), log_file.read_text(encoding="utf-8")
 
     yield Sink()
-    # BOTH trees: `obs.configure` gives `pontonier` its own handler instances, and leaving
-    # them attached leaves an open file handle on `tmp_path` and points any later
-    # `pontonier` record at a `StringIO` belonging to a finished test.
-    for name in (obs.ROOT_LOGGER_NAME, LIBRARY_LOGGER):
-        target = logging.getLogger(name)
-        for handler in target.handlers[:]:
-            target.removeHandler(handler)
-            handler.close()
+    # Leaving the handlers attached would leave an open file handle on `tmp_path` and point
+    # any later record at a `StringIO` belonging to a finished test.
+    for handler in configured.handlers[:]:
+        configured.removeHandler(handler)
+        handler.close()
     obs._configured = False
 
 
@@ -176,10 +170,31 @@ def test_an_exception_passed_as_a_message_argument_renders_as_its_type(logs):
     try:
         raise ValueError(_message())
     except ValueError as exc:
-        logs.logger_for("pontonier.probe").error("stdout capture failed: %s", exc, exc_info=True)
+        logs.logger_for("amicus.sdk.core.runtime").error(
+            "stdout capture failed: %s", exc, exc_info=True
+        )
     for text in _both(logs):
         assert MARKER not in text
         assert "stdout capture failed: ValueError" in text
+
+
+def test_an_sdk_record_reaches_the_policy_handlers(logs):
+    """The SDK's core modules log on `logging.getLogger(__name__)`, so their records come from
+    `amicus.sdk.*`, a subtree of `amicus`, and reach the handlers `obs.configure` installs
+    there by propagation. No second logger tree is configured for them."""
+    logs.logger_for("amicus.sdk.core.jobs").info("sdk record %s", "reached")
+    for text in _both(logs):
+        assert "sdk record reached" in text
+
+
+def test_an_sdk_record_is_lost_when_its_subtree_stops_propagating(logs, monkeypatch):
+    """Mutation control for the test above: cut `amicus.sdk` off from `amicus` and the same
+    record reaches neither handler, so the positive result is evidence of propagation. INFO
+    stays below `logging.lastResort`'s WARNING floor, so no fallback handler writes it."""
+    monkeypatch.setattr(logging.getLogger("amicus.sdk"), "propagate", False)
+    logs.logger_for("amicus.sdk.core.jobs").info("sdk record %s", "reached")
+    for text in _both(logs):
+        assert "sdk record reached" not in text
 
 
 def test_a_cached_exc_text_is_discarded_rather_than_appended(logs):

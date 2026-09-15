@@ -323,22 +323,17 @@ def configured(tmp_path, clean_env, monkeypatch):
 
     class Sink:
         def read(self) -> tuple[str, str]:
-            for name in (
-                *obs.DEPENDENCY_LOGGER_NAMES,
-                obs.ROOT_LOGGER_NAME,
-                obs.LIBRARY_LOGGER_NAME,
-            ):
+            for name in (*obs.DEPENDENCY_LOGGER_NAMES, obs.ROOT_LOGGER_NAME):
                 for handler in logging.getLogger(name).handlers:
                     if isinstance(handler, POLICY_HANDLERS):
                         handler.flush()
             return stderr.getvalue(), log_file.read_text(encoding="utf-8")
 
     yield Sink()
-    for name in (obs.ROOT_LOGGER_NAME, obs.LIBRARY_LOGGER_NAME):
-        target = logging.getLogger(name)
-        for handler in target.handlers[:]:
-            target.removeHandler(handler)
-            handler.close()
+    target = logging.getLogger(obs.ROOT_LOGGER_NAME)
+    for handler in target.handlers[:]:
+        target.removeHandler(handler)
+        handler.close()
     obs._configured = False
 
 
@@ -410,11 +405,10 @@ def test_after_a_restore_an_unforced_configure_takes_over_again(clean_env, monke
         assert sum(isinstance(f, obs.FastMCPServerRecordFilter) for f in server.filters) == 1
         assert fastmcp.settings.log_enabled is False
     finally:
-        for name in (obs.ROOT_LOGGER_NAME, obs.LIBRARY_LOGGER_NAME):
-            target = logging.getLogger(name)
-            for handler in target.handlers[:]:
-                target.removeHandler(handler)
-                handler.close()
+        target = logging.getLogger(obs.ROOT_LOGGER_NAME)
+        for handler in target.handlers[:]:
+            target.removeHandler(handler)
+            handler.close()
 
 
 def test_an_mcp_exception_renders_as_its_type_not_its_text(configured):
