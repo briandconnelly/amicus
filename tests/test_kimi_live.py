@@ -13,6 +13,8 @@ import pytest
 from fastmcp import Client
 
 from amicus import config, server
+from amicus.backends.kimi import config as kimi_config
+from amicus.backends.kimi import contract as kimi_contract
 from amicus.orchestration.isolation import NO_REPO_WARNING
 from amicus.registry import BackendRegistry
 
@@ -44,7 +46,10 @@ async def test_backends_reports_kimi_ready_live(live_kimi):
     entry = body["backends"][0]
     assert entry["available"] is True and entry["status"]["installed"] is True
     assert entry["status"]["authenticated"] is True, entry["status"]
-    assert entry["status"]["version"].startswith("0.41"), entry["status"]
+    # The evidence must vouch for the newest minor the contract claims, not merely a supported
+    # one, so a release that adds a minor cannot ship on evidence taken on an older CLI.
+    installed = kimi_config.parse_version(entry["status"]["version"])
+    assert installed == max(kimi_contract.SUPPORTED_VERSIONS), entry["status"]
     assert entry["status"]["warnings"] == [], entry["status"]
     assert models["source"] == "live" and models["models"], models
 

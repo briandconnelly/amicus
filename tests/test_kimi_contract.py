@@ -1,8 +1,10 @@
 """The Kimi CLI contract: derivations from the constants, the failure signatures, and the
-0.41.0 evidence rule (a flag the contract sends or refuses must appear in the capture)."""
+evidence rule (a flag the contract sends or refuses must be declared by an option row in
+every capture under docs/kimi-help/)."""
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -11,9 +13,36 @@ from pontonier.testing import conformance
 
 from amicus.backends.kimi import contract
 
-_DOCS_PATH = Path(__file__).parent.parent / "docs" / "kimi-help" / "0.41.0"
-HELP = (_DOCS_PATH / "kimi-help.txt").read_text()
-VERSION = (_DOCS_PATH / "kimi-version.txt").read_text().strip()
+_DOCS_ROOT = Path(__file__).parent.parent / "docs" / "kimi-help"
+CAPTURES = sorted(p for p in _DOCS_ROOT.iterdir() if p.is_dir())
+# An option row: two spaces, then the declaration column up to the gap before its description.
+_OPTION_ROW = re.compile(r"^  (-\S.*?)(?: {2,}|$)")
+_FLAG = re.compile(r"(?<![\w-])-{1,2}[A-Za-z][\w-]*")
+
+
+def _help(capture: Path) -> str:
+    return (capture / "kimi-help.txt").read_text()
+
+
+def _declared(help_text: str) -> frozenset[str]:
+    """Flags an option row declares. A flag that appears only in prose (`--agent-file` in the
+    `--agent` description, `-c` inside `kimi-code`) is not declared, so a substring match
+    would keep passing after kimi dropped the option."""
+    return frozenset(
+        flag
+        for line in help_text.splitlines()
+        if (row := _OPTION_ROW.match(line))
+        for flag in _FLAG.findall(row.group(1))
+    )
+
+
+def _version(capture: Path) -> str:
+    return (capture / "kimi-version.txt").read_text().strip()
+
+
+def _minor(capture: Path) -> tuple[int, int]:
+    major, minor, _patch = _version(capture).split(".")
+    return int(major), int(minor)
 
 
 def test_contract_is_derived_from_the_constants_and_self_consistent():
@@ -37,10 +66,30 @@ def test_read_only_tools_carry_no_shell_or_write():
     assert contract.READ_ONLY_AGENT_NAME == "amicus-readonly"
 
 
-def test_evidence_the_instrument_can_fail():
-    assert "--definitely-not-a-kimi-flag" not in HELP
+def test_the_captures_are_the_ones_the_contract_claims():
+    # An empty parameter set skips rather than fails, so pin the directories the tests below
+    # run over.
+    assert [p.name for p in CAPTURES] == ["0.41.0", "0.42.0", "0.43.1"]
+    assert frozenset({(0, 35), (0, 39), (0, 41), (0, 42), (0, 43)}) == contract.SUPPORTED_VERSIONS
+    # The newest supported minor is the one the live gate pins, so it must carry a capture.
+    assert max(_minor(p) for p in CAPTURES) == max(contract.SUPPORTED_VERSIONS)
 
 
+def test_the_flag_matcher_reads_declarations_not_prose():
+    row = "  --agent <name>   loaded via --agent-file; see kimi-code (-c, --continue)\n"
+    assert _declared(f"Options:\n{row}") == {"--agent"}
+    assert _declared("  -S, --session [id]   Resume.\n  export [options]   Export.\n") == {
+        "-S",
+        "--session",
+    }
+
+
+@pytest.mark.parametrize("capture", CAPTURES, ids=lambda p: p.name)
+def test_evidence_the_instrument_can_fail(capture):
+    assert "--definitely-not-a-kimi-flag" not in _declared(_help(capture))
+
+
+@pytest.mark.parametrize("capture", CAPTURES, ids=lambda p: p.name)
 @pytest.mark.parametrize(
     "flag",
     [
@@ -50,14 +99,14 @@ def test_evidence_the_instrument_can_fail():
         *contract.PROMPT_MODE_INCOMPATIBLE_FLAGS,
     ],
 )
-def test_every_sent_or_refused_flag_is_in_the_captured_help(flag):
-    assert flag in HELP
+def test_every_sent_or_refused_flag_is_in_the_captured_help(capture, flag):
+    assert flag in _declared(_help(capture))
 
 
-def test_captured_version_is_a_supported_version():
-    major, minor, _patch = VERSION.split(".")
-    assert (int(major), int(minor)) in contract.SUPPORTED_VERSIONS
-    assert frozenset({(0, 35), (0, 39), (0, 41)}) == contract.SUPPORTED_VERSIONS
+@pytest.mark.parametrize("capture", CAPTURES, ids=lambda p: p.name)
+def test_captured_version_is_a_supported_version(capture):
+    assert _version(capture) == capture.name
+    assert _minor(capture) in contract.SUPPORTED_VERSIONS
 
 
 @pytest.mark.parametrize(
