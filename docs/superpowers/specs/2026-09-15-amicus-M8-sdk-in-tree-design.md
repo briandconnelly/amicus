@@ -177,6 +177,9 @@ Not moved: pontonier's docs, scripts, README, CHANGELOG and `pyproject.toml`, an
   4. `testing.pair_parity` out of the wheel into `tests/support`, with `testing.conformance` and `testing.surface_honesty` staying because the registry runs conformance and conformance calls `surface_honesty`.
   5. `backend/classify.py` retired: the conformance fakes stop using it and it is deleted.
   6. The four pontonier-named defaults retired, of which only the nohooks prefix changes anything on disk.
+ADR 0030 narrowed that list after this spec was written, because three of those destinations are ones a backend may not import.
+`core.runtime`, `core.jsoncache`, `conventions.envelope` and `conventions.annotations` stay in `amicus.sdk`; `core.gitproc` moved to `amicus.orchestration` with the rest of the git layer; and `conventions.prompts` joined issue 3's scope.
+
 - Modules no issue names (`backend.protocol`, `backend.contract`, `core.redaction`, `core.gitproc`, `core.streamcap`, `conventions.preflight` and `conventions.prompts`) stay in `amicus.sdk` until an issue argues otherwise.
   `backend.protocol` and `backend.contract` are what a plugin imports, so moving either changes every plugin's imports again.
 - The only step in pontonier's repository is optional and the maintainer's: noting in its README that amicus no longer consumes it.
