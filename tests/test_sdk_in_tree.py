@@ -5,7 +5,10 @@ a broken scan."""
 from __future__ import annotations
 
 import ast
+import importlib.util
 from pathlib import Path
+
+import amicus.sdk
 
 ROOT = Path(__file__).resolve().parent.parent
 # scripts/ is exempt: the differential capture scripts run inside a sibling's virtualenv and
@@ -40,3 +43,16 @@ def test_the_import_scan_detects_a_planted_import(tmp_path):
     planted.write_text("from pontonier.core import runtime\nimport pontonier\n", encoding="utf-8")
     (tmp_path / "tests").mkdir()
     assert _pontonier_imports(tmp_path) == ["src/planted.py:1", "src/planted.py:2"]
+
+
+def test_pontonier_is_not_installed():
+    """amicus runs without the pontonier distribution: nothing requires it any more, and
+    `uv sync` removes what nothing requires."""
+    assert importlib.util.find_spec("pontonier") is None
+
+
+def test_the_sdk_root_names_its_origin_and_has_no_version_lookup():
+    """R4: the package root cites the tag's commit instead of asking the pontonier
+    distribution for a version it no longer has."""
+    assert not hasattr(amicus.sdk, "__version__")
+    assert "185b16cd7a3c7cb86b07f2a8ca58d1527372aa1d" in (amicus.sdk.__doc__ or "")

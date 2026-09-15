@@ -57,8 +57,7 @@ def test_python_floor_matches_classifiers():
 def test_runtime_dependencies_are_exactly_the_spec_set():
     deps = _pyproject()["project"]["dependencies"]
     names = sorted(re.split(r"[<>=!\[]", d, maxsplit=1)[0] for d in deps)
-    assert names == ["anyio", "fastmcp", "mcp", "pontonier", "pydantic"]
-    assert "pontonier==0.9.0" in deps
+    assert names == ["anyio", "fastmcp", "mcp", "pydantic"]
 
 
 def test_console_script_points_at_server_main():

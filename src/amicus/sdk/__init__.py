@@ -1,20 +1,12 @@
-"""Pontonier: shared core library for cross-model agent-bridge MCP servers.
+"""The backend SDK amicus's backends are built on, and the lifecycle they run under.
 
-The supported public surface in this release is ``amicus.sdk.core`` (see its
-docstring for the module inventory) and ``amicus.sdk.conventions`` /
-``amicus.sdk.testing``, and ``amicus.sdk.backend`` (FROZEN at
-``CONTRACT_API_VERSION = 1``: required members are stable within a minor line;
-new behavior lands as defaulted fields or optional capability protocols).
-Anything not documented as public is internal and may change without notice.
+Copied in M8 from pontonier v0.9.0 (commit 185b16cd7a3c7cb86b07f2a8ca58d1527372aa1d,
+https://github.com/briandconnelly/pontonier), which amicus no longer depends on; ADR 0029
+records why. Four layers: ``amicus.sdk.core`` (jobs, idempotency, worktrees, diff
+gathering, redaction, the subprocess runtime, workspace resolution), ``amicus.sdk.backend``
+(the backend protocol and contract, FROZEN at ``CONTRACT_API_VERSION = 1``: required members
+are stable, and new behavior lands as defaulted fields or optional capability protocols),
+``amicus.sdk.conventions`` (error vocabulary, annotations, fingerprint, preflight, prompt
+framings) and ``amicus.sdk.testing`` (the conformance kit, which the registry runs on every
+plugin it loads). ``amicus.sdk.core`` never imports the other three.
 """
-
-from __future__ import annotations
-
-from importlib.metadata import version as _version
-
-# Single-sourced from the distribution metadata, which hatchling fills from the
-# one declaration in pyproject.toml. Do not hardcode a literal here: the pair
-# drifted once already (__version__ stuck at 0.3.0.dev0 across two bumps).
-__version__ = _version("pontonier")
-
-__all__ = ["__version__"]
