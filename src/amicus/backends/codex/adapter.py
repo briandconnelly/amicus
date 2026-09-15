@@ -17,7 +17,7 @@ from amicus.backends.codex.config import reasoning_effort_shape_error, sandbox_f
 from amicus.backends.codex.models import CodexModels
 from amicus.schemas import instructions
 from amicus.sdk.backend.protocol import ClassifiedFailure, ExecResult, PreparedRun, Usage
-from amicus.sdk.core import worktree
+from amicus.sdk.core import pathalias
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import AsyncIterator
@@ -160,7 +160,7 @@ class CodexBackend:
 
     def classify_failure(self, outcome: RunOutcome, request: RunRequest) -> ClassifiedFailure:
         aliases = request.sanitize_aliases
-        sanitize = (lambda t: worktree.sanitize_echo_prose(t, aliases) or "") if aliases else None
+        sanitize = (lambda t: pathalias.sanitize_echo_prose(t, aliases) or "") if aliases else None
         effort = self._effort(request)
         return cli.classify_failure(
             outcome.run,

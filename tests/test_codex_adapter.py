@@ -11,7 +11,7 @@ from tests.support import codexfixtures as cf
 from amicus.backends.codex import contract
 from amicus.schemas import instructions as ins
 from amicus.sdk.backend.protocol import AgentBackend, RunOutcome, RunRequest
-from amicus.sdk.core import worktree
+from amicus.sdk.core import pathalias
 from amicus.sdk.core.runtime import CommandRun
 from amicus.sdk.testing import conformance
 
@@ -163,7 +163,7 @@ def test_classify_failure_uses_the_request_shape_and_aliases(pinned_codex_bin, t
     wt = str(tmp_path / "amicus-wt-x" / "tree")
     out = backend.classify_failure(
         RunOutcome(run=CommandRun("", f"fatal: {wt}/f.py missing", 1, 5, False)),
-        _req(kind="delegate", cwd=wt, sanitize_aliases=worktree.path_aliases(wt)),
+        _req(kind="delegate", cwd=wt, sanitize_aliases=pathalias.path_aliases(wt)),
     )
     assert out.code == "nonzero_exit" and wt not in out.detail and "./f.py" in out.detail
     effort = RunOutcome(

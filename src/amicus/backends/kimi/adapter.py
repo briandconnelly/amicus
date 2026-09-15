@@ -17,7 +17,7 @@ from amicus.schemas import instructions
 from amicus.schemas.params import reasoning_effort_shape_error
 from amicus.schemas.structured import schema_instruction
 from amicus.sdk.backend.protocol import ClassifiedFailure, ExecResult, PreparedRun, RepairHint
-from amicus.sdk.core import runtime, worktree
+from amicus.sdk.core import pathalias, runtime
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import AsyncIterator
@@ -233,7 +233,7 @@ class KimiBackend:
 
     def classify_failure(self, outcome: RunOutcome, request: RunRequest) -> ClassifiedFailure:
         aliases = request.sanitize_aliases
-        sanitize = (lambda t: worktree.sanitize_echo_prose(t, aliases) or "") if aliases else None
+        sanitize = (lambda t: pathalias.sanitize_echo_prose(t, aliases) or "") if aliases else None
         return cli.classify_failure(
             outcome.run,
             last_message=self._answer(outcome),

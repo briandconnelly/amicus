@@ -10,7 +10,7 @@ from amicus.backends.codex import cli, contract
 from amicus.backends.codex import config as cc
 from amicus.schemas import instructions as ins
 from amicus.sdk.conventions.preflight import FlagSupport
-from amicus.sdk.core import worktree
+from amicus.sdk.core import pathalias
 from amicus.sdk.core.runtime import BINARY_NOT_FOUND, TIMED_OUT, CommandRun
 
 _ALL_FLAGS = FlagSupport(
@@ -230,10 +230,10 @@ def test_classify_nonzero_generic_sanitizes_before_truncating():
 
 def test_classify_sanitize_relativizes_worktree_paths(tmp_path):
     wt = str(tmp_path / "amicus-wt-x" / "tree")
-    aliases = worktree.path_aliases(wt)
+    aliases = pathalias.path_aliases(wt)
     out = _classify(
         CommandRun("", f"fatal: cannot open {wt}/f.py", 1, 1, False),
-        sanitize=lambda t: worktree.sanitize_echo_prose(t, aliases) or "",
+        sanitize=lambda t: pathalias.sanitize_echo_prose(t, aliases) or "",
     )
     assert wt not in out.detail and "./f.py" in out.detail
 

@@ -16,7 +16,7 @@ from amicus.backends.claude.options import adversarial_config_mode
 from amicus.schemas import instructions
 from amicus.schemas.structured import schema_instruction
 from amicus.sdk.backend.protocol import ClassifiedFailure, ExecResult, PreparedRun, RepairHint
-from amicus.sdk.core import worktree
+from amicus.sdk.core import pathalias
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import AsyncIterator, Callable
@@ -66,7 +66,7 @@ class ClaudeBackend:
         aliases = request.sanitize_aliases
         if not aliases:
             return None
-        return lambda text: worktree.sanitize_echo_prose(text, aliases) or ""
+        return lambda text: pathalias.sanitize_echo_prose(text, aliases) or ""
 
     @staticmethod
     def _invalid(detail: str, field: str) -> ClassifiedFailure:

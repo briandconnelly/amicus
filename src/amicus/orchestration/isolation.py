@@ -8,7 +8,7 @@ import tempfile
 from typing import TYPE_CHECKING
 
 from amicus.sdk.backend.contract import IsolationPolicy
-from amicus.sdk.core import redaction, worktree
+from amicus.sdk.core import pathalias, redaction, worktree
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Callable
@@ -81,7 +81,7 @@ class EmptyDirSite:
     def __enter__(self) -> EmptyDirSite:
         self._tmp = tempfile.TemporaryDirectory(prefix=WORKTREE_PREFIX)
         self.cwd = self._tmp.name
-        self.aliases = worktree.path_aliases(self.cwd)
+        self.aliases = pathalias.path_aliases(self.cwd)
         return self
 
     def __exit__(self, *exc: object) -> bool:
@@ -121,7 +121,7 @@ class WorktreeSite:
                 repair_alternative="Ensure the repo has at least one commit and a clean git state.",
             ) from exc
         self.cwd = self._wt.path
-        self.aliases = worktree.path_aliases(self._wt.path)
+        self.aliases = pathalias.path_aliases(self._wt.path)
         self.security_warnings = (self._wt.baseline_warning,) if self._wt.baseline_warning else ()
         return self
 
