@@ -43,7 +43,8 @@ No release can enable a third-party backend yet, so no running deployment is aff
 The pinned manifest, wire-shape and result-format fixtures pass unchanged.
 
 The separate `pontonier` logger is gone.
-The SDK's modules log on `amicus.sdk.*`, a subtree of `amicus`, so their records reach the policy handlers `obs.configure` installs there; ADR 0023 carries a note.
+The SDK's modules log on `amicus.sdk.*`, a subtree of `amicus`, so in a process that has called `obs.configure` their records reach the policy handlers it installs there; ADR 0023 carries a note.
+The job worker never calls `obs.configure`, so there an SDK record falls through to `logging.lastResort` and the worker's `stderr.log`, exactly as the `pontonier` logger's records did before M8; #128 tracks that.
 
 Four literal defaults in `amicus.sdk.core.worktree` still name pontonier: the worktree prefix, the git identity pair and the `pontonier-nohooks-` temporary-directory prefix.
 amicus passes its own prefix and identity, so only the last reaches the filesystem, and #123 retires all four.

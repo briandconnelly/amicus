@@ -11,8 +11,9 @@ message from an innocent one, and the SDK's ``exc_summary``/``redact_text`` cann
 they mask *secrets* and control characters, which is a different question. So the policy
 withholds the whole category rather than guessing case by case, and it is enforced where
 output is produced rather than at each call site, because the call sites include the SDK's
-own: ``amicus.sdk.core.runtime`` logs ``("stdout capture failed: %s", exc, exc_info=True)``
-through these handlers.
+own: ``amicus.sdk.core.runtime`` logs ``("stdout capture failed: %s", exc, exc_info=True)``.
+That reaches these handlers only in a process that has called ``configure``: the job worker
+does not, so its records still fall through to ``logging.lastResort`` (#128).
 
 Closing it takes more than suppressing tracebacks, because ``logging`` will render an
 exception through several shapes that never look like one: as the message itself

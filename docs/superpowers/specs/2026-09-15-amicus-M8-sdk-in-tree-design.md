@@ -3,7 +3,7 @@
 - Date: 2026-09-15
 - Milestone: M8, shipping in 0.4.0
 - Status: design approved by the maintainer on 2026-09-15, including decision 6 and changes 1 and 6 below.
-- Review: Codex reviewed the first draft (commit `f40ecaf`); its three factual findings are fixed, and this written form awaits the maintainer's review.
+- Review: Codex reviewed the first draft (commit `f40ecaf`) and its three factual findings are fixed; the maintainer approved this written form on 2026-09-15, and M8 was planned and executed from it.
 - Decides issue #13 (separate repositories or one uv workspace): neither.
 
 ## Why
@@ -101,13 +101,14 @@ Not moved: pontonier's docs, scripts, README, CHANGELOG and `pyproject.toml`, an
   `tests/test_import_contracts.py:17` pins the kept-contract count, which moves from 3 to 5.
 - **Dependencies.**
   `pontonier==0.9.0` leaves `[project] dependencies` and `uv.lock` is regenerated, leaving `anyio`, `fastmcp`, `mcp` and `pydantic`; `anyio` is already a direct dependency.
-  `tests/test_packaging.py` pins that set twice, as the name list on line 60 and the requirement string on line 61, and both change.
+  `tests/test_packaging.py` pinned that set twice, as the name list on line 60 and the `pontonier==0.9.0` requirement string on line 61; the name list changes and the requirement-string assertion goes.
 - **Plugin API version.**
   `src/amicus/plugin.py:27` becomes `PLUGIN_API_VERSION = 2` (decision 6), and `tests/test_plugin.py:13`, which pins 1, changes with it.
   The constant appears only in `plugin.py` and `registry.py`, on no wire surface, so it moves no `FINGERPRINT_COVERS` category.
 - **Logging.**
   `obs.py` drops `LIBRARY_LOGGER_NAME` and its entry in `configure()`.
-  An `amicus.sdk.*` logger descends from `amicus`, which stops propagation and carries the policy handlers, so its records reach the same `PolicyStreamHandler`, `PolicyFileHandler` and `PolicyFormatter` that the separate `pontonier` logger had.
+  An `amicus.sdk.*` logger descends from `amicus`, which stops propagation and carries the policy handlers, so in a process that has called `obs.configure` its records reach the same `PolicyStreamHandler`, `PolicyFileHandler` and `PolicyFormatter` that the separate `pontonier` logger had.
+  The job worker never calls `obs.configure`, before or after M8, so there SDK records fall through to `logging.lastResort` and the worker's `stderr.log`; #128 tracks that, and M8 leaves the routing as it was.
   The tests that name the `pontonier` logger (`tests/test_obs.py:19`, `tests/test_log_redaction.py:35` and `tests/test_fastmcp_argument_log.py:329`, `:337` and `:413`) instead show that a record logged on an `amicus.sdk.*` logger passes through the policy.
   Their mutation control sets `propagate = False` on `amicus.sdk` and watches them fail.
 - **Fingerprint and result format.**
@@ -136,7 +137,7 @@ Not moved: pontonier's docs, scripts, README, CHANGELOG and `pyproject.toml`, an
 - **ADR 0029** records the decision.
   One consumer is left, so the SDK lives in-tree.
   It names what moved and the tag and commit it came from, explains why pontonier stays published, and states the divergence policy below and the ADR 0005 reading above.
-  It closes #13.
+  It answers #13; the AGENTS.md update that completes #13's definition of done lands in the governance PR (rule 9), so the M8 PR references #13 without closing it.
 - **ADR 0023** gets a one-line note that the separate `pontonier` logger is gone, since its lines 10, 45 and 53 name it.
   Every other ADR that names pontonier stays as written, as history.
 - **The design spec** (`docs/superpowers/specs/2026-09-04-amicus-design.md`) keeps its pontonier paragraph, reuse table and M-1 row as history.
