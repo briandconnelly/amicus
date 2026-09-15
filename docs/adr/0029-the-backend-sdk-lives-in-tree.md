@@ -58,4 +58,5 @@ briandconnelly/pontonier#29 is already worked around in `src/amicus/jobs/polling
 
 AGENTS.md still says amicus is built on the pontonier SDK; it changes in a PR of its own (rule 9).
 
-`amicus.sdk` import paths are not yet stable for plugin authors, because #118 to #123 move its modules during the 0.x dissolution and #120 moves the conventions types a plugin imports.
+`amicus.sdk` import paths are not yet stable for plugin authors, because #118 to #123 move its modules during the 0.x dissolution.
+ADR 0030 later kept `conventions.envelope`, `annotations` and `preflight` here, so the types a plugin imports do not move after all, and the plugin API version stays where M8 put it.

@@ -5,8 +5,9 @@
 ## Context
 
 ADR 0029 copied pontonier into amicus as `amicus.sdk` and left "merging the modules into the amicus packages that own each concern" to #118 through #123.
-Three of those issues named destinations a backend cannot reach.
+Three of those issues named a destination the module's own importers cannot reach: two of them a backend cannot, and the third the sdk itself cannot.
 The design spec lets `backends/*` import `amicus.plugin`, `amicus.config.envspec`, `amicus.schemas.codes` and `amicus.sdk`, and the import contract "backends never import the server layer" forbids `amicus.orchestration` and `amicus.jobs`.
+It does not forbid `amicus.schemas`, which a backend already imports; the boundary that rules out #120's destination is the sdk's own.
 Yet all three backends run their CLIs through `core.runtime`, which #119 would have moved to `amicus.orchestration`.
 All three clean their own diagnostics with the alias-aware `sanitize_echo_prose` in `core.worktree`, which was bound for `amicus.orchestration` too.
 The Codex backend reads its model cache through `core.jsoncache`, which #118 would have moved to `amicus.jobs`.
