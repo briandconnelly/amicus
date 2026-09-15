@@ -41,7 +41,8 @@ The first item changes a choice the maintainer approved and needs their confirma
 2. **The conformance kit stays in the wheel.**
    The approved follow-ups moved "the test kit out of the wheel".
    `src/amicus/registry.py:15` imports `pontonier.testing.conformance` and runs `check_contract` and `check_backend` on every plugin it loads, so conformance is runtime code.
-   Only `surface_honesty` and `pair_parity`, which nothing under `src/` imports, can leave.
+   So is `surface_honesty`, because `check_contract` calls its `find_contract_self_contradictions` (pontonier `src/pontonier/testing/conformance.py:20`).
+   Only `pair_parity`, which nothing under `src/` reaches, can leave.
 3. **The moved tests need a second rewrite.**
    The approved design expected a package marker to be enough for the moved suite.
    The suite imports its helpers by bare module name (`from conftest import run_git`, `from test_contract import ...`, `from tests.test_conformance_fakes import ...`), and inside amicus `conftest` resolves to amicus's own `tests/conftest.py`.
@@ -49,7 +50,8 @@ The first item changes a choice the maintainer approved and needs their confirma
 4. **Third-party plugins change their imports.**
    A backend distribution registered through the `amicus.backends` entry-point group builds on pontonier's types, as `tests/fixtures/fakebackend` does.
    After M8 it imports them from `amicus.sdk`, because a pontonier class is a different class from its amicus copy.
-   No working third-party plugin can exist today, since the README's "Status and known limits" says a third-party id cannot be enabled or called, so this breaks nothing in use; the CHANGELOG still says so, and the fixture is rewritten.
+   The server never loads a third-party plugin today, because `AMICUS_BACKENDS` rejects any id outside `BACKEND_IDS` (`src/amicus/config/__init__.py:169`), so only a direct `BackendRegistry.load` call, as in the wheel-seam tests, reaches one.
+   The change therefore breaks no running deployment; the CHANGELOG still says so, and the fixture is rewritten.
 5. **The capture scripts keep importing pontonier.**
    `scripts/capture_codex_differentials.py` and `scripts/capture_kimi_differentials.py` import `pontonier.core.runtime.CommandRun` to feed a sibling's own finalizers, and they run inside that sibling's virtualenv.
    They must use the sibling's pontonier, so no rewrite touches `scripts/`.
@@ -60,7 +62,7 @@ The first item changes a choice the maintainer approved and needs their confirma
 
 ## 1. Package shape
 
-`src/amicus/sdk/` holds pontonier's four layers, `core`, `backend`, `conventions` and `testing`, with every file name kept: 25 files and 8,144 lines at the tag.
+`src/amicus/sdk/` holds pontonier's four layers, `core`, `backend`, `conventions` and `testing`, with every file name kept: 26 files and 8,144 lines at the tag.
 
 The move allows these edits and no others:
 
@@ -106,14 +108,14 @@ Not moved: pontonier's docs, scripts, README, CHANGELOG and `pyproject.toml`, an
   The job store writes JSON, and the tag's `src/` contains `pontonier` only in docstrings and the four defaults above, so no stored record carries a pontonier-named value and records written by 0.3.0 stay readable.
   The pinned manifest, wire-shape and fixture tests pass unchanged, and they are the control that shows it.
 - **Provenance check.**
-  A plan step rebuilds the move from the tag, reading `~/projects/pontonier` with `git show v0.9.0:<path>` (rule 17 permits reading), applies R1 to R3, and diffs the result against the move commit.
-  The verbatim copy with R1 to R3 lands in a commit of its own, so the expected diff is empty.
+  A plan step rebuilds the move from the tag, reading `~/projects/pontonier` with `git show v0.9.0:<path>` (rule 17 permits reading), applies R1 to R3 with the Ruff version `uv.lock` pins, and diffs the result against the move commit.
+  The verbatim copy with R1 to R3 lands in a commit of its own, so the expected diff is empty; R4, R5 and the amicus-side wiring land in later commits, outside the comparison.
   That lets review check one empty diff instead of reading 8,000 lines.
   The check runs once and its output goes in the PR body; it is not a committed test, because CI has no pontonier checkout.
 
 ## 3. Tests
 
-- pontonier's suite lands under `tests/sdk/`: its `conftest.py` (autouse git-environment isolation, `run_git`, `scrubbed_git_env`, `GIT_ISOLATION_VARS` and `make_run`), 28 test modules, and an empty `__init__.py`.
+- pontonier's suite lands under `tests/sdk/`: its `conftest.py` (autouse git-environment isolation, `run_git`, `scrubbed_git_env`, `GIT_ISOLATION_VARS` and `make_run`), 29 test modules, and an empty `__init__.py`.
 - That package marker lets the five basenames the two suites share (`conftest.py`, `test_envelope.py`, `test_fingerprint.py`, `test_prompts.py` and `test_workspace.py`) import under distinct names.
 - The autouse guards in amicus's root `tests/conftest.py` apply to `tests/sdk/` unchanged, so rule 6 holds without touching the guard.
 - After R3 the moved tests trip no ruff rule, because amicus's `tests/**` per-file ignores already cover what they need.
@@ -163,7 +165,7 @@ Not moved: pontonier's docs, scripts, README, CHANGELOG and `pyproject.toml`, an
   1. `core.jobs`, `core.idempotency` and `core.jsoncache` into `amicus.jobs`, folding in the poll-cap workaround.
   2. `core.worktree`, `core.gitdiff`, `core.runtime` and `core.workspace` into `amicus.orchestration`.
   3. The `conventions` vocabulary (`envelope`, `annotations` and `fingerprint`) into `amicus.schemas`.
-  4. `testing.surface_honesty` and `testing.pair_parity` out of the wheel into `tests/support`, with `testing.conformance` staying because the registry runs it.
+  4. `testing.pair_parity` out of the wheel into `tests/support`, with `testing.conformance` and `testing.surface_honesty` staying because the registry runs conformance and conformance calls `surface_honesty`.
   5. `backend/classify.py` retired: the conformance fakes stop using it and it is deleted.
   6. The four pontonier-named defaults retired, of which only the nohooks prefix changes anything on disk.
 - Modules no issue names (`backend.protocol`, `backend.contract`, `core.redaction`, `core.gitproc`, `core.streamcap`, `conventions.preflight` and `conventions.prompts`) stay in `amicus.sdk` until an issue argues otherwise.
