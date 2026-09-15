@@ -20,6 +20,17 @@ per-change, as its own lead says.
 
 ## [Unreleased]
 
+### Changed
+
+- amicus no longer depends on `pontonier`. Its backend SDK is now part of amicus, as
+  `amicus.sdk` (#13, ADR 0029): the same code as pontonier 0.9.0, copied from its `v0.9.0`
+  tag with the imports rewritten. Nothing on the wire or in a stored job result changes, and
+  `FINGERPRINT` does not move. A third-party backend distribution imports the SDK types from
+  `amicus.sdk` instead of `pontonier` and declares plugin API version 2: `PLUGIN_API_VERSION`
+  moved from 1 to 2, so the registry rejects a plugin that pins `api_version=1` (#115 covers
+  one that leaves it unset). No release can enable a third-party backend yet, so no running
+  deployment is affected.
+
 ## [0.3.0] - 2026-09-15
 
 Across this release the discovery surface moves `amicus/0.1/schema-13`, what 0.2.0 shipped, to

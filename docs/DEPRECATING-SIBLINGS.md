@@ -12,7 +12,7 @@ Every step below points a user at the `amicus` package or its README, so running
 ## The three siblings
 
 amicus replaces `codex-in-claude`, `moonbridge`, and `claude-in-codex`.
-It does not replace `pontonier`: that repository is the shared backend SDK amicus depends on (`pontonier==0.9.0` in `pyproject.toml`), and it is not deprecated.
+It does not deprecate `pontonier`: amicus carries pontonier's code as `amicus.sdk` and no longer depends on it (ADR 0029), but pontonier stays published, feature-frozen at 0.9.0, for these three siblings until they are archived.
 
 `codex-in-claude` and `claude-in-codex` are published by the maintainer on PyPI under those exact names: `GET https://pypi.org/pypi/codex-in-claude/json` and `GET https://pypi.org/pypi/claude-in-codex/json` both return HTTP 200 with `info.author` "Brian Connelly" and `info.project_urls.Repository` under `github.com/briandconnelly/`, confirmed 2026-09-08.
 `moonbridge` is not published by the maintainer under that name: PyPI's `moonbridge` package (latest `0.16.0`) belongs to an unrelated project, `info.author_email` "Phaedrus <hello@mistystep.io>" and `info.project_urls.Repository` `https://github.com/misty-step/moonbridge` — a name collision, not the maintainer's package.
@@ -53,6 +53,7 @@ See the `moonbridge` section below for how users actually install `briandconnell
 
 `pontonier`'s own release process depends on all three siblings staying checked out and runnable: `docs/releasing.md` (in the `pontonier` checkout) runs `scripts/check_consumers.sh` against `../codex-in-claude`, `../moonbridge`, and `../claude-in-codex` as a compatibility gate before every pontonier release.
 Archiving or gutting any of the three sibling checkouts will break that script; update `pontonier`'s release runbook (a change to the `pontonier` repository, out of scope for amicus) before or alongside this deprecation, so a future pontonier release does not stall on missing consumers.
+Because pontonier is maintained only for these siblings (ADR 0029), archiving the last of them is also the point at which pontonier itself can be archived.
 
 `pontonier`'s own `README.md` and `pyproject.toml` describe the three siblings as its consumers by name; update those references once the siblings are archived, so pontonier's own documentation does not point at dead projects.
 

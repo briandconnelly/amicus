@@ -173,7 +173,7 @@ version.
 
 | Question | Read |
 | --- | --- |
-| What is being built and why | `docs/superpowers/specs/2026-09-04-amicus-design.md` |
+| What is being built and why | `docs/superpowers/specs/2026-09-04-amicus-design.md`; for M8, `docs/superpowers/specs/2026-09-15-amicus-M8-sdk-in-tree-design.md` |
 | How milestones are executed by agents | `docs/superpowers/plans/2026-09-04-amicus-execution-model.md` |
 | Architecture decisions | `docs/adr/` |
 | How a release is cut | `docs/RELEASING.md` |

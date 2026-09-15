@@ -136,7 +136,7 @@ backends/            __init__.py IN_TREE lazy factories; codex/, kimi/, claude/ 
 ```
 
 Import rules, enforced with import-linter: `backends/*` may import `amicus.plugin`,
-`amicus.config.envspec`, `amicus.schemas.codes` and pontonier, never
+`amicus.config.envspec`, `amicus.schemas.codes` and `amicus.sdk`, never
 `tools`/`server`/`orchestration`; `orchestration`, `jobs`, `_worker` never import
 `server` or `tools`. The worktree prefix `amicus-wt-` is orchestration policy set by
 `isolation.py`, not a plugin choice (JobStore has one `cleanup_prefix`).
@@ -178,7 +178,7 @@ completion), `amicus://error-envelope`, `amicus://result-meta`, `amicus://params
 ### Plugin interface (`plugin.py`)
 
 ```python
-PLUGIN_API_VERSION = 1; ENTRY_POINT_GROUP = "amicus.backends"
+PLUGIN_API_VERSION = 2; ENTRY_POINT_GROUP = "amicus.backends"
 @dataclass(frozen=True) class OptionSpec: name, maps_to (RunRequest field), applies_to, default
 @dataclass(frozen=True) class BackendPlugin:
     contract: BackendContract; backend: AgentBackend           # pontonier: facts + behavior
@@ -308,6 +308,7 @@ fixtures in `skills/collaborating-with-amicus/tests/`.
 | M5 | `task=True` on the four paid sync tools behind `AMICUS_TASKS`; capability-summary wording; host captures | in-memory task-client tests; both host captures |
 | M6 | Packaging, docs, eval fixtures, migration doc, annotation-friction capture | install smoke for the shipped command line on both hosts, Codex's own plugin loader unexercised (`docs/host-captures/install-smoke/codex/`); FakePlugin loads as a wheel via the entry point, but `config._profile` and the closed `BackendParam` mean it can be neither enabled nor called (ADR 0012); agent-friendly-mcp review walk |
 | M7 | Release + deprecate siblings | AGENTS.md rules 20-21 (local pre-tag live-gate evidence, tag-protecting ruleset) and `docs/RELEASING.md`'s release procedure, since hosted CI has no authenticated backends to enforce a live gate itself; sibling differentials green; release lockstep CI |
+| M8 | The backend SDK moves in-tree: pontonier v0.9.0 copied into `amicus.sdk`, the dependency dropped, `PLUGIN_API_VERSION` 2 (`docs/superpowers/specs/2026-09-15-amicus-M8-sdk-in-tree-design.md`, ADR 0029) | the provenance check rebuilds the move commit from the tag with an empty diff; gate green with pontonier uninstalled; `FINGERPRINT` and `RESULT_FORMAT` unchanged |
 
 ## Verification (all milestones)
 
