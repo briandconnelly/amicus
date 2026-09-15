@@ -212,6 +212,13 @@ which goes when the alias does.
 - **Surface.** The `reasoning_effort` contract names claude beside kimi as a backend whose CLI
   does not reject a bad effort, and says claude checks a fixed list where kimi reads the model
   catalog (#76). The adapter change is under Fixed.
+- The kimi backend supports kimi-code 0.42 and 0.43 (#109), beside 0.35, 0.39 and 0.41.
+  Neither changes a flag amicus sends or refuses: 0.42.0's `--help` adds only an `rc|remote`
+  subcommand, 0.43.1's only an `[options]` placeholder on `upgrade`, and the
+  `provider list --json` shape is unchanged in both (captures in `docs/kimi-help/0.42.0/` and
+  `docs/kimi-help/0.43.1/`), so `amicus_backends` does not warn that such an install is outside
+  the versions amicus was built against. `FINGERPRINT` does not move: the supported set is not
+  part of the discovery surface.
 - Legacy environment names (`CODEX_IN_CLAUDE_*`, `MOONBRIDGE_*`, `CLAUDE_IN_CODEX_*`) are
   removed in 0.4.0, not in 0.3.0 as 0.2.0's warnings and `docs/MIGRATION.md` said. 0.2.0, the
   first release to warn on them, shipped four days before 0.3.0 was cut, and one
