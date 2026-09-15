@@ -151,8 +151,9 @@ def test_parse_retry_after_ms(text, expected):
 
 
 def test_static_catalog_and_version_pins():
-    assert "gpt-5.5" in c.KNOWN_MODEL_SLUGS
+    assert {"gpt-6-astra", "gpt-5.5"} <= set(c.KNOWN_MODEL_SLUGS)
+    assert all(c.MODEL_SLUG_PATTERN.match(s) for s in c.KNOWN_MODEL_SLUGS)
     assert c.MODEL_SLUG_PATTERN.match("gpt-5.4-mini")
     assert not c.MODEL_SLUG_PATTERN.match("-bad")
-    assert (0, 153) in c.SUPPORTED_VERSIONS
+    assert {(0, 153), (0, 154)} <= c.SUPPORTED_VERSIONS
     assert c.RATE_LIMIT_DEFAULT_BACKOFF_MS == 60_000

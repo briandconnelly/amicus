@@ -1,5 +1,5 @@
 """Single source of truth for the external `codex` CLI contract (ported from
-codex-in-claude `cli_contract.py`, verified against codex-cli 0.152.0/0.153.x).
+codex-in-claude `cli_contract.py`, verified against codex-cli 0.152.0/0.153.x/0.154.0).
 
 Every assumption amicus makes about the `codex` CLI — subcommands, flags, sandbox values,
 config keys it pins, the event/result extraction surface, and the stderr phrasings that
@@ -40,7 +40,8 @@ VALID_SANDBOXES = (SANDBOX_READ_ONLY, SANDBOX_WORKSPACE_WRITE, SANDBOX_DANGER_FU
 # --- Features forced off on every model-bearing run --------------------------------
 # remote_plugin (codex 0.143+ default-on third-party connectors: a network side-effect
 # channel outside the sandbox) and sleep_tool (0.152+, a native sleep of up to 12h that can
-# burn a run's budget into `timeout`). `--disable X` == `-c features.X=false`, wins over any
+# burn a run's budget into `timeout`; 0.154.0's gpt-6-astra advertises `clock`, so its default
+# exec path offers `clock.sleep`). `--disable X` == `-c features.X=false`, wins over any
 # `--enable` in either order, and an unknown feature name fails loud as
 # `Error: Unknown feature flag` (classified cli_contract_changed). One `--disable` per
 # entry, in this order, emitted before operator extra args; the config denylist derives
@@ -271,22 +272,22 @@ MODELS_CACHE_FILENAME = "models_cache.json"
 MODELS_CACHE_MAX_BYTES = 1_000_000
 MODELS_CACHE_MAX_ENTRIES = 256
 MODEL_SLUG_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
-# Bundled fallback, copied from codex-cli 0.149.1's cache (re-verified unchanged at 0.152.0).
+# Bundled fallback, copied from codex-cli 0.154.0's cache in priority order (the same slug set
+# `codex debug models` reports from its bundled catalog).
 KNOWN_MODEL_SLUGS: tuple[str, ...] = (
+    "gpt-6-astra",
+    "gpt-reserve",
     "gpt-5.6-sol",
     "gpt-5.6-terra",
     "gpt-5.6-luna",
-    "gpt-reserve",
     "gpt-5.5",
-    "gpt-5.4",
-    "gpt-5.4-mini",
     "codex-auto-review",
 )
 
 HELP_CACHE_TTL_SECONDS = 300
 
 # Advisory: a mismatch warns on amicus_backends, never blocks.
-SUPPORTED_VERSIONS = frozenset({(0, 152), (0, 153)})
+SUPPORTED_VERSIONS = frozenset({(0, 152), (0, 153), (0, 154)})
 
 # --- Result / event extraction surface -----------------------------------------------------
 USAGE_EVENT_MARKERS = ("token_count", "usage")
