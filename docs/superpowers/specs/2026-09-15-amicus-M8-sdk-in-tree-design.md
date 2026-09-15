@@ -2,7 +2,8 @@
 
 - Date: 2026-09-15
 - Milestone: M8, shipping in 0.4.0
-- Status: design approved by the maintainer on 2026-09-15; this written form awaits their review.
+- Status: design approved by the maintainer on 2026-09-15, including decision 6 and changes 1 and 6 below.
+- Review: Codex reviewed the first draft (commit `f40ecaf`); its three factual findings are fixed, and this written form awaits the maintainer's review.
 - Decides issue #13 (separate repositories or one uv workspace): neither.
 
 ## Why
@@ -27,12 +28,15 @@ These were settled with the maintainer while brainstorming, and the plan does no
 4. **The subpackage is `amicus.sdk`.**
 5. **It ships in 0.4.0.**
    The approved design branches M8 after the 0.3.0 release so the move never sits inside a release window; 0.3.0 shipped on 2026-09-15, so that precondition is met.
+6. **`PLUGIN_API_VERSION` moves from 1 to 2.**
+   M8 changes which types a plugin must hand amicus, from pontonier's classes to `amicus.sdk`'s, and the version is the registry's declared compatibility gate (`src/amicus/registry.py:61-66`).
+   The bump rejects only a plugin that pins `api_version=1`, because `BackendPlugin.api_version` defaults to the running amicus's own constant (`src/amicus/plugin.py:107`); fixing that default is #115, outside M8.
 
 ## Changes from the design approved in chat
 
 Writing this spec meant checking the chat design against the tree.
 Three of its premises did not hold, and three consequences had not been considered.
-The first item changes a choice the maintainer approved and needs their confirmation.
+The first item changed a choice the maintainer had approved, and the sixth reads an existing ADR anew; the maintainer confirmed both on 2026-09-15.
 
 1. **`backend/classify.py` moves too.**
    The approved design left it behind because nothing imports it.
@@ -52,6 +56,7 @@ The first item changes a choice the maintainer approved and needs their confirma
    After M8 it imports them from `amicus.sdk`, because a pontonier class is a different class from its amicus copy.
    The server never loads a third-party plugin today, because `AMICUS_BACKENDS` rejects any id outside `BACKEND_IDS` (`src/amicus/config/__init__.py:169`), so only a direct `BackendRegistry.load` call, as in the wheel-seam tests, reaches one.
    The change therefore breaks no running deployment; the CHANGELOG still says so, and the fixture is rewritten.
+   Decision 6 marks the change by bumping `PLUGIN_API_VERSION`.
 5. **The capture scripts keep importing pontonier.**
    `scripts/capture_codex_differentials.py` and `scripts/capture_kimi_differentials.py` import `pontonier.core.runtime.CommandRun` to feed a sibling's own finalizers, and they run inside that sibling's virtualenv.
    They must use the sibling's pontonier, so no rewrite touches `scripts/`.
@@ -97,6 +102,9 @@ Not moved: pontonier's docs, scripts, README, CHANGELOG and `pyproject.toml`, an
 - **Dependencies.**
   `pontonier==0.9.0` leaves `[project] dependencies` and `uv.lock` is regenerated, leaving `anyio`, `fastmcp`, `mcp` and `pydantic`; `anyio` is already a direct dependency.
   `tests/test_packaging.py` pins that set twice, as the name list on line 60 and the requirement string on line 61, and both change.
+- **Plugin API version.**
+  `src/amicus/plugin.py:27` becomes `PLUGIN_API_VERSION = 2` (decision 6), and `tests/test_plugin.py:13`, which pins 1, changes with it.
+  The constant appears only in `plugin.py` and `registry.py`, on no wire surface, so it moves no `FINGERPRINT_COVERS` category.
 - **Logging.**
   `obs.py` drops `LIBRARY_LOGGER_NAME` and its entry in `configure()`.
   An `amicus.sdk.*` logger descends from `amicus`, which stops propagation and carries the policy handlers, so its records reach the same `PolicyStreamHandler`, `PolicyFileHandler` and `PolicyFormatter` that the separate `pontonier` logger had.
@@ -133,12 +141,12 @@ Not moved: pontonier's docs, scripts, README, CHANGELOG and `pyproject.toml`, an
   Every other ADR that names pontonier stays as written, as history.
 - **The design spec** (`docs/superpowers/specs/2026-09-04-amicus-design.md`) keeps its pontonier paragraph, reuse table and M-1 row as history.
   Its import-rule sentence, which lets `backends/*` import "... and pontonier", states current policy, so it names `amicus.sdk` instead.
-  Its Milestones table gains an M8 row.
+  Its plugin sketch's `PLUGIN_API_VERSION = 1` (line 181) becomes 2, and its Milestones table gains an M8 row.
 - **`docs/MIGRATION.md:210`** ("not pontonier's 10 s") is reworded.
 - **`docs/DEPRECATING-SIBLINGS.md`** is reworded where it says amicus depends on pontonier (line 15) and where it describes pontonier's release gate (lines 54 to 57).
 - **The README's Development table** lists this spec beside the design spec.
 - **`CHANGELOG.md`** gets an Unreleased entry.
-  It says that amicus no longer depends on pontonier and that a third-party backend imports the SDK types from `amicus.sdk`.
+  It says that amicus no longer depends on pontonier, that a third-party backend imports the SDK types from `amicus.sdk`, and that the plugin API version is now 2.
   It carries no Breaking or Surface label, because the fingerprint does not move.
 - **`scripts/check_commit_message.py`** gains an `sdk` scope in the same PR (rule 13).
 - **AGENTS.md** changes in a governance PR of its own after M8 merges (rule 9): its "built on FastMCP and the pontonier backend SDK" sentence and its Siblings paragraph.
