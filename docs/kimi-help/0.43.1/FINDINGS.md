@@ -20,5 +20,16 @@ The behavioural findings carried from moonbridge's 0.39.1 probes, listed in `doc
 
 ## Live gate outcome
 
-No live test was run on 0.43.1 for this capture, because rule 5 of `AGENTS.md` runs one only when the maintainer asks.
-The 0.3.0 release evidence runs `tests/test_kimi_live.py` against this CLI, and that record, not this file, is where its outcome lives.
+Run once (2026-09-15, at the maintainer's request under rule 5 of `AGENTS.md`) on the PR branch at `d6a701c`, against the maintainer's real kimi 0.43.1:
+
+```
+AMICUS_REQUIRE_LIVE=1 uv run pytest -m integration --no-cov tests/test_kimi_live.py -v
+```
+
+All 6 tests passed in 55.85s.
+
+- `test_backends_reports_kimi_ready_live` PASSED — the installed version matched the newest supported minor, `(0, 43)`, and `amicus_backends` reported no warnings.
+- `test_consult_outside_a_repo_live`, `test_read_only_profile_is_enforced_live`, `test_review_changes_live`, `test_delegate_live` and `test_unknown_model_alias_is_invalid_model_live` PASSED.
+
+This run is not rule-20 release evidence.
+That evidence is recorded by `scripts/record_live_gate_evidence.py` against the release commit itself, and that record, not this file, is where the release run's outcome lives.
