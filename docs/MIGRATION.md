@@ -194,36 +194,47 @@ The `amicus://backends/{backend}` resource is always the full entry.
 ## Upgrading from 0.2.0
 
 The changes below are the ones a caller written against amicus 0.2.0 has to handle.
-`CHANGELOG.md` lists every surface bump; the rest add fields, tighten descriptions or move text, and a caller that ignores them keeps working.
+`CHANGELOG.md`'s 0.3.0 section lists every user-visible change since 0.2.0, and a caller written against 0.2.0 needs to change nothing for the ones not listed here.
 
-**Every success `meta` is sparse on the wire (`schema-24`).**
+**Every success `meta` is sparse on the wire (#47).**
 A `meta` key whose value is null is omitted from every tool's success, not only from a delivered paid result as before.
 Read an absent key as null.
 Seven keys are always present, and the result-meta schema requires exactly them: `elapsed_ms`, `truncated`, `compat_warnings`, `security_warnings`, `redacted_paths`, `request_id` and `fingerprint`.
 
-**A review that did not run reports `confidence: unknown` (`schema-25`).**
+**A review that did not run reports `confidence: unknown` (#54).**
 `review_status: not_run` carried `confidence: low`; it now carries `unknown`, the value an unreadable backend rating has carried since 0.2.0.
 Branch on `review_status` for whether a review ran, and read `unknown` as "no rating", never as a low one.
 
-**A finished job's `poll_after_ms` is null (`schema-28`, `schema-29`).**
+**A finished job's `poll_after_ms` is null (#95, #101).**
 `amicus_job_status`, `amicus_job_cancel` and a replayed keyed `_async` handle report `poll_after_ms: null` on every terminal status; a replayed handle used to report `1000`.
 While a job runs the hint grows with its elapsed time to a ceiling of 30 s, not pontonier's 10 s.
 Poll only while `status` is `running`; a caller that read a non-null hint as "still running" waited one extra interval on every finished job.
 
-**The free discovery tools default to a summary (`schema-22`).**
+**The free discovery tools default to a summary (#46).**
 `amicus_capabilities(detail="contracts")` is rejected as `invalid_arguments`, and the default `amicus_backends` omits four disclosure fields; the "Discovery defaults are concise" section above has the replacement calls.
 
-**A job result stored by 0.2.0 is no longer readable (`schema-16`, `schema-23`).**
+**A job result stored by 0.2.0 is no longer readable (#65, #52).**
 `RESULT_FORMAT` moved from 4 to 6, so `amicus_job_result` and `amicus_job_consume_result` return `job_result_incompatible` for a record 0.2.0 wrote, rather than a result whose new fields would answer for a run that never measured them.
 Fetch or consume any stored result you still need before upgrading; the record itself stays until `AMICUS_JOB_TTL` or the per-workspace cap evicts it.
 
-**An empty `idempotency_key` is rejected (`schema-18`).**
+**An empty `idempotency_key` is rejected (#66).**
 The four `_async` tools accepted `""`; every paid tool now rejects it before spending as `invalid_arguments` (`minLength: 1`).
 Omit the key instead.
 
-**`amicus_dry_run` is a deprecated alias (`schema-27`).**
+**`amicus_dry_run` is a deprecated alias (#98).**
 Call `amicus_review_changes_dry_run`; the alias is removed at or after 0.5.0.
 
-**Two workspace errors carry no `repair` (`schema-20`).**
+**Two workspace errors carry no `repair` (#42).**
 `invalid_workspace_root` and `workspace_outside_roots` return `error.repair: null`, because no call can supply the caller's directory; read `details.field` and `details.candidate_roots` instead.
 Every other repair that names a tool carries a complete call in `repair.arguments`.
+
+**Claude adversarial reviews default to `config_mode="safe"` (#64).**
+An adversarial review no longer inherits your Claude configuration unless the call passes `backend_options.config_mode` as `inherit` or `scoped`, the two modes that read the workspace's `CLAUDE.md` and `.claude/settings*.json`; the "Behavior deltas" section above has the details.
+`amicus_backends` reports that option's per-verb defaults in `default_by_verb`, and its common `default` is null where the verbs differ.
+
+**A bool in a prose list is dropped and counted (#52).**
+0.2.0 delivered a bool entry of `questions`, `assumptions` or `next_steps` as the string `"True"` or `"False"`.
+It is now dropped and counted in `lists_diagnostics`, as a null, object or array entry is.
+
+**A resource's size is the native `size` field (#48).**
+The `size_bytes` key under the `dev.bconnelly.amicus/triage` `_meta` block is gone; read `Resource.size`, which only the three static resources carry.

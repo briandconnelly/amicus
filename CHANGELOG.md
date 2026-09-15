@@ -5,348 +5,291 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-An entry that moves `FINGERPRINT` carries one of two labels. **Breaking** means a call the
-previous release accepted is now rejected, a value a caller read has changed meaning or
+An entry for a change that moved `FINGERPRINT` carries one of two labels. **Breaking** means a
+call the previous release accepted is now rejected, a value a caller read has changed meaning or
 disappeared, or a stored job result can no longer be delivered: a caller has to change
 something. **Surface** means the fingerprint moved for any other reason (a description, the
 instructions text, an added field or parameter), so a fingerprint-aware client re-reads the
-catalog and nothing else has to change. Entries before `schema-16` predate the distinction
-and say Breaking for both.
+catalog and nothing else has to change. Sections before 0.3.0 predate the distinction and say
+Breaking for both.
+
+A release's section records what changed between the previous release and this one, not the
+pull requests in between: an entry says where the release leaves a contract, and a problem
+introduced and fixed between two releases is not listed. The 0.2.0 section predates this and is
+per-change, as its own lead says.
 
 ## [Unreleased]
 
-Fifteen `FINGERPRINT` bumps since 0.2.0 (`schema-16` to `schema-30`). Four of them change
-what a caller written against 0.2.0 reads, and `docs/MIGRATION.md` ("Upgrading from 0.2.0")
-walks through them: every success `meta` is sparse, so an absent key reads as null
-(`schema-24`); a review that did not run reports `confidence: unknown` (`schema-25`); a
-finished job's `poll_after_ms` is null on every surface (`schema-29`); and the free
-discovery tools default to a summary, with `amicus_capabilities(detail="contracts")` gone
-(`schema-22`). One deprecates: `amicus_dry_run` is now an alias of
-`amicus_review_changes_dry_run` (`schema-27`). Two make a stored job result from 0.2.0
-unreadable (`schema-16`, `schema-23`); one rejects an empty `idempotency_key` that 0.2.0's
-`_async` tools accepted (`schema-18`); and one drops the `repair` two workspace errors used
-to carry (`schema-20`). The rest are labelled **Surface** below: the fingerprint moved, and
-a caller that ignores the change keeps working.
+## [0.3.0] - 2026-09-15
+
+Across this release the discovery surface moves `amicus/0.1/schema-13`, what 0.2.0 shipped, to
+`amicus/0.1/schema-30`, and stored job results move `RESULT_FORMAT` 4 to 6, so a job result
+0.2.0 stored cannot be delivered after upgrading. The entries labelled **Breaking** are the
+changes a caller written against 0.2.0 has to handle, and `docs/MIGRATION.md` ("Upgrading from
+0.2.0") walks through each. `tools/list` grows from 18 tools to 19 and from 98,925 to 114,780
+bytes on the `all` profile, both measured the same way, as a real stdio server writes the result
+for a handshake-era client; about 9 KB of the growth is the deprecated `amicus_dry_run` alias,
+which goes when the alias does.
 
 ### Added
 
+- **Surface.** Review and adversarial-review results and the review preview carry a top-level
+  `coverage` object (#65, ADR 0019): `status`, untracked-file counts, `omission_reasons` and a
+  `redaction` breakdown, in the siblings' shape plus amicus's own `focused` reason. An omitted
+  untracked file, a tree that changed during the gather, or a focused pass reached a 0.2.0
+  caller only as prose in `summary`, and the free preview reported none of it. The preview also
+  accepts `focus` and reports `max_input_bytes`, so it previews the coverage the paid call will
+  report. ADR 0019 supersedes ADR 0007's coverage clause.
+- **Breaking.** Consult, review and adversarial-review results carry `lists_diagnostics`, the
+  prose-list twin of `findings_diagnostics` (#52, ADR 0024). In 0.2.0 their `questions`,
+  `assumptions` and `next_steps` lists kept string, number and bool entries as strings, dropped
+  every other entry with no count, and turned a non-list member into `[]`, so a caller could not
+  tell "the backend said nothing" from "amicus could not carry what it said". The field is null
+  when all three lists were carried intact, otherwise one `{dropped, reasons}` member per list
+  that was not, with a fixed reason vocabulary (`number_stringified`, `invalid_entry`,
+  `invalid_container`, `missing_member`) and never the omitted content. A number is still
+  delivered as its string and now says so; a bool, which 0.2.0 delivered as `"True"` or
+  `"False"`, is now dropped and counted like a null, object or array entry. A consult answered
+  in prose rather than the requested object reports `missing_member` on all three lists and
+  `missing_findings` in `findings_diagnostics`, which 0.2.0 left null on that path. A
+  `review_status: not_run` result keeps both diagnostics null, because no backend ran. Nothing
+  folds into the verdict or confidence. Delegate results do not carry the field: their
+  `next_steps` is amicus's own text.
+- **Surface.** `amicus_consult`, `amicus_review_changes`, `amicus_adversarial_review` and
+  `amicus_delegate` accept `idempotency_key`, as both siblings' synchronous tools do (#66, ADR
+  0020); in 0.2.0 only the `_async` twins accepted it. A keyed sync call awaits the run the key
+  names, its own or another caller's for the same key and arguments, and delivers its result
+  marked `meta.idempotency_replayed: true`, so a retried sync call cannot pay twice. A keyed
+  sync run gets the job deadline (`AMICUS_JOB_MAX_SECONDS`), as an `_async` run does, and
+  `timeout_seconds` bounds only how long the call waits for it. A keyed waiter does not own the
+  job: its local timeout returns a temporary `timeout` with a `poll_job_status` repair naming
+  `amicus_job_status` for that job instead of cancelling it, its cancellation leaves the run
+  going, and under the tasks extension a keyed task's job survives `tasks/cancel` (an unkeyed
+  task's is still cancelled with it). Sync and `_async` stay separate identities, and the sync
+  tools' error catalogs name the three dedup codes. ADR 0020 supersedes ADR 0008's unkeyed-sync
+  clause. The empty-key rejection that came with this is under Changed.
+- **Surface.** `amicus_review_changes_dry_run`, the review preview, named for the call it
+  previews as `amicus_delegate_dry_run` is (#98, ADR 0028). It takes `amicus_dry_run`'s
+  arguments and returns its result, with `tool` naming it; the old name is under Deprecated.
+  With it comes the marker the `deprecation_policy` promised: a deprecated tool's lifecycle
+  `_meta` carries `deprecation` beside its unchanged `stability`, with exactly `since`,
+  `removal_at_or_after`, `replaced_by` and `migration`, and every `amicus_capabilities`
+  `tool_details` row carries a `deprecation` field with the same object, null for a tool that is
+  not deprecated.
 - `/amicus:delegate-async`, a slash command that starts one `amicus_delegate_async` job,
   reports its `job_id` and hands the poll and fetch to `/amicus:jobs` (#67). Delegation is the
-  verb likeliest to outrun the synchronous deadline, where a sync call made without an
-  idempotency key is terminated with its partial work lost, so its background start is the one
-  that gets a command of its own; the other async twins stay reachable from their verb's
-  command. `/amicus:delegate` now points at it for long tasks, and `/amicus:jobs` now says to fetch
-  once the status is anything but `running` rather than waiting on `result_available`, which
-  is true only for `done`: a job that failed, was cancelled or timed out never sets it, so
-  waiting on it polls that job forever.
+  verb likeliest to outrun the synchronous deadline, so its background start is the one that
+  gets a command of its own; the other async twins stay reachable from their verb's command.
+  `/amicus:delegate` points at it for long tasks, and `/amicus:jobs` says to fetch once the
+  status is anything but `running` rather than waiting on `result_available`, which is true
+  only for `done`.
 
 ### Changed
 
-- The kimi backend supports kimi-code 0.42 and 0.43 (#109). Neither changes a flag amicus
-  sends or refuses: 0.42.0's `--help` adds only an `rc|remote` subcommand, 0.43.1's only an
-  `[options]` placeholder on `upgrade`, and the `provider list --json` shape is unchanged in
-  both (captures in `docs/kimi-help/0.42.0/` and `docs/kimi-help/0.43.1/`). `amicus_backends`
-  no longer warns that such an install is outside the versions amicus was built against, and
-  the kimi live gate now requires the newest supported minor rather than a literal `0.41`.
-  `FINGERPRINT` does not move: the supported set is not part of the discovery surface.
-- The codex backend supports codex-cli 0.154. Zero-spend checks against 0.153.4 found no
-  change in what they cover: `codex exec --help` adds only `--worktree`, `codex --help` drops
-  only the `mcp-server` subcommand amicus never used, `remote_plugin` and `sleep_tool` are
-  still feature flags, and the rejections amicus classifies (an unknown config key in both
-  forms, an unknown feature, an unknown flag, an invalid value, an unknown enum variant) read
-  the same. The paid semantic probes (the workspace-write sandbox pins, the reasoning-effort
-  key, structured output) were not re-run for 0.154. `amicus_backends` no longer warns that
-  such an install is outside the versions amicus was built against. When codex's
-  `models_cache.json` is unreadable, `amicus_models` now lists 0.154.0's catalog:
-  `gpt-6-astra` is added and `gpt-5.4` and `gpt-5.4-mini` are gone. `gpt-6-astra` advertises
-  codex's `clock` tools, so its default exec path offers `clock.sleep`, which can wait up to
-  12 hours; the `--disable sleep_tool` amicus sends on every model-bearing run removes it.
-  `FINGERPRINT` does not move: the supported set only decides a status warning, and the
-  listed models are runtime values in `amicus_models` results, while `FINGERPRINT_COVERS`
-  covers that tool's schema rather than the values it returns.
-- Legacy environment names (`CODEX_IN_CLAUDE_*`, `MOONBRIDGE_*`, `CLAUDE_IN_CODEX_*`) are
-  removed in 0.4.0, not 0.3.0. 0.2.0, the first release to warn on them, shipped four days
-  before 0.3.0 was cut, and one warning-bearing release is too short a window for an
-  operator-facing rename. `scripts/check_release_state.py` now refuses a release at or past
-  `LEGACY_REMOVAL_VERSION` while any `EnvVar` still declares a legacy name, read statically
-  as the tool-deprecation windows are and failing closed on a declaration it cannot read, so
-  the promise cannot be missed again. `docs/MIGRATION.md` states the new version and gains an
-  "Upgrading from 0.2.0" section for the changes in this release a caller has to handle.
-  The discovery-cost ratchet's budget is now a literal equal to the last measurement rather
-  than that measurement rounded up to the next kilobyte, so any growth of `tools/list` fails
-  until a PR raises it.
-- **Surface (`FINGERPRINT` `schema-30`).** Every `amicus_job_consume_result` surface now says
-  what a consume does to a job that failed, was cancelled or timed out (#94). Such a job has no
-  stored envelope, so a consume returns its terminal error with no `meta.consume` and attempts
-  no discard, leaving the record to the usual expiry and per-workspace eviction. The tool
-  description, discovery's `use_when` and `returns`, `/amicus:jobs` and the skill's
-  options-and-errors reference all said that `meta.consume.discard_outcome` reports what the
-  store did, and none of them named this case. Behavior and `RESULT_FORMAT` are unchanged.
-  Deleting such a record on request needs an atomic compare-and-delete from pontonier
-  (briandconnelly/pontonier#31), because a record read as `failed` can turn `done` after it is
-  read.
-- **Breaking (`FINGERPRINT` `schema-29`).** A replayed keyed `_async` handle for a job that has
-  already finished now reports `poll_after_ms: null`, as `amicus_job_status` does for the same
-  job on every terminal status (#101). It used to report `1000`, the store's flat base, so a
-  host that read a non-null hint as "still running" waited a second and polled once more before
-  it saw the terminal status. `JobStarted.poll_after_ms` is now required but nullable on the
-  four `_async` tools' output schemas. It also carries a published description saying when it
-  is null, the same one `amicus_job_status` and `amicus_job_cancel` now carry. The four `_async`
-  descriptions, the `amicus_job_status` description, the synchronous `timeout` repair and the
-  skill now say to poll only while `status` is `running`, and the skill says to read a handle's
-  `status` before waiting on its hint. A terminal handle's `follow_up` still names
+- **Breaking.** A job result stored by 0.2.0 can no longer be delivered. `RESULT_FORMAT` moves
+  from 4 to 6 for `coverage` (#65) and `lists_diagnostics` (#52), so `amicus_job_result` and
+  `amicus_job_consume_result` return `job_result_incompatible` for a record 0.2.0 wrote, rather
+  than a result whose new fields would answer for a run that never measured them. The record
+  itself stays until `AMICUS_JOB_TTL` or the per-workspace cap evicts it.
+- **Breaking.** Every success envelope's `meta` is sparse on the wire, on every tool (#47, ADR
+  0025). In 0.2.0 only a delivered paid result dropped meta's null-valued keys, as the
+  `amicus://result-meta` description said; a job handle, job status, job list or dry run carried
+  every key, null or not. Read an absent key as null. The guard every tool passes through slims
+  every success, keyed on null and never on falsiness. The always-present core is published as
+  the schema's own `required`: `elapsed_ms`, `truncated`, `compat_warnings`,
+  `security_warnings`, `redacted_paths`, `request_id` and `fingerprint`. An empty list there
+  means that envelope reports none, not that a check ran: a job handle, status or list and a
+  dry run report on the call that produced them, and the run's warnings arrive on its own
+  result. Only meta's top level is touched: a null inside `usage`, or outside `meta` such as
+  `JobListResult.truncation_hint`, is that object's own contract.
+- **Breaking.** A `review_status: not_run` review reports `confidence: unknown`, not `low` (#54,
+  ADR 0026). No backend ran on an empty scope, so there was no rating to carry, and `low` is
+  the lowest rating a backend can report: stating it manufactured a claim. The published
+  `confidence` description names `not_run` as one of the two causes of `unknown`, beside an
+  unreadable backend rating, and the substituted `low` has two sources instead of three:
+  partial coverage and findings amicus could not carry, each beside an `unknown` verdict, so a
+  `low` beside any other verdict is still the backend's word. Branch on `review_status` for
+  whether a review ran.
+- **Breaking.** A replayed keyed `_async` handle for a job that has already finished reports
+  `poll_after_ms: null`, as `amicus_job_status` already did on every terminal status (#101). In
+  0.2.0 it reported `1000`, the store's flat base, so a host that read a non-null hint as "still
+  running" waited a second and polled once more before it saw the terminal status.
+  `JobStarted.poll_after_ms` is required but nullable on the four `_async` tools' output
+  schemas, with a published description saying when it is null, the same one
+  `amicus_job_status` and `amicus_job_cancel` carry. The four `_async` descriptions, the
+  `amicus_job_status` description, the synchronous `timeout` repair and the skill say to poll
+  only while `status` is `running`. A terminal handle's `follow_up` still names
   `amicus_job_status`, because pontonier has no repair step yet for fetching a finished job's
   result (briandconnelly/pontonier#30, #103).
-  `tools/list` grows by 953 bytes on the `all` profile. `RESULT_FORMAT` stays 6: a handle is
-  never stored as a job result.
-
-- **Surface (`FINGERPRINT` `schema-28`).** A running job's `poll_after_ms` now keeps growing
-  past ten seconds, up to 30 s (#95). The hint still means roughly "wait about as long as the
-  job has already run", but pontonier 0.9.0 stops it at 10 s, so a job that ran for minutes was
-  polled every ten seconds for almost its whole life: about 28 `amicus_job_status` calls for a
-  four-minute review, the 15–25 the #84 reporter counted. amicus now computes the hint itself,
-  with pontonier's own formula and a 30 s ceiling, which makes that about 13 calls and notices a
-  finished job at most 30 s late; a 60 s ceiling would save three more calls and double that
-  delay. Every place that hands out the hint agrees on it: `amicus_job_status`, the
-  `job_running` repair's `retry_after_ms`, a keyed sync wait's `timeout` repair, and a replayed
-  keyed `_async` handle for a job that is still running. The `amicus_job_status` description
-  now states the ceiling. MCP tasks keep FastMCP's own flat `pollIntervalMs` (#100).
-  `RESULT_FORMAT` stays 6: no stored result carries the hint.
-
-- **Surface (`FINGERPRINT` `schema-27`).** The review preview is now
-  `amicus_review_changes_dry_run`, named for the call it previews as `amicus_delegate_dry_run`
-  is (#98, ADR 0028). `amicus_dry_run` read as a preview for any paid call, while it covers only
-  `amicus_review_changes`, and consult and adversarial review have no preview at all. The new
-  tool takes the same arguments and returns the same result, with `tool` naming it; the old
-  name stays as a deprecated alias (see Deprecated). This is amicus's first deprecation, so
-  the marker the `deprecation_policy` promised now exists: a deprecated tool's lifecycle
-  `_meta` carries `deprecation` beside its unchanged `stability`, with exactly `since`,
-  `removal_at_or_after`, `replaced_by` and `migration`, and every `amicus_capabilities`
-  `tool_details` row gains a `deprecation` field carrying the same object, null for a tool
-  that is not deprecated. tools/list grows by 9,042 bytes on the `all` profile while the alias
-  ships. `RESULT_FORMAT` stays 6: no dry run is ever stored as a job result.
-
-- **Surface (`FINGERPRINT` `schema-26`).** The server `instructions` lead with their rules
-  and ship as three blocks - what amicus does and does not do, a list of rules, then
-  reference - instead of one unbroken 4,033-character line that opened with protocol
-  background (#49). The order is not style. Claude Code shows the model only the first 2,048
-  characters of a server's instructions (measured on amicus 0.2.0 and codex-in-claude 0.22.0,
-  both cut at exactly that offset), so on 0.2.0 everything after "read error.backend, and"
-  never reached it there: following `error.repair`, treating findings as claims, reading a
-  `completed` task as a delivery statement rather than a success, and the job-handle TTL.
-  Every rule now ends before character 2,048, and a test holds it there (ADR 0027). The
-  tool-failure and resource-read-failure rules are separate items, each naming its own
-  path: a resource-read failure's code is `error.data.machine_code`, not the era-bound
-  numeric JSON-RPC `error.code`. The
-  protocol-era mechanics moved to reference, beside the now-stated `stdio` transport, and the
-  host-capture provenance is gone; `amicus_capabilities` already carries `protocol_revision`
-  and `tasks`. The job rule names both retention bounds, `AMICUS_JOB_TTL` and the
-  per-workspace cap that can evict a result sooner. The text is now 3,377 characters.
-  Treating findings as claims to verify, not commands, also rides the `findings` description
-  on `amicus_consult`, `amicus_review_changes`, `amicus_adversarial_review` and
-  `amicus_delegate` now (#97), so it no longer depends on a host showing the instructions.
-  `initialize`, `server/discover` and those four `outputSchema`s change; `RESULT_FORMAT` does
-  not.
-
-- **Breaking (`FINGERPRINT` `schema-25`).** A `review_status: not_run` review reports
-  `confidence: unknown`, not `low` (#54, ADR 0026). No backend ran on an empty scope, so there
-  was no rating to carry, and `low` is the lowest rating a backend can report: stating it
-  manufactured a claim in the direction issue #53 had already removed. The published
-  `confidence` description now names `not_run` as one of the two causes of `unknown`,
-  beside an unreadable backend rating, one meaning with two causes rather than two meanings, and the substituted `low` has two sources instead of
-  three: partial coverage and findings amicus could not carry, each still beside an `unknown`
-  verdict, so a `low` beside any other verdict is still the backend's word. A caller that
-  read only `low` as "do not rely on this" has to handle `unknown` on every review and branch
-  on `review_status` for whether one ran; it already had to, since an unreadable rating on a
-  completed review has been `unknown` since 0.2.0. The enum is unchanged, so `RESULT_FORMAT`
-  stays 6.
-
-- **Breaking (`FINGERPRINT` `schema-24`).** Every success envelope's `meta` is sparse on the
-  wire, on every tool (#47, ADR 0025). A delivered paid result already dropped meta's
-  null-valued keys, and the `amicus://result-meta` description said so, but a job-lifecycle
-  handle, a job status, a job list or a dry run dumped the full model: the audit's plain
-  `amicus_job_list` call carried 27 meta keys, 15 of them null, 626 bytes that were about a
-  third of the result and paid twice because `content[0].text` mirrors `structuredContent`.
-  The guard every tool passes through now slims every success, keyed on null and never on
-  falsiness; the delivery chokepoint keeps slimming a stored result too, so a job result is
-  slimmed twice and the second pass is a no-op. The always-present core is published as the
-  schema's own `required`:
-  `elapsed_ms`, `truncated`, `compat_warnings`, `security_warnings`, `redacted_paths`,
-  `request_id` and `fingerprint`, derived from the model so a new defaulted field cannot be
-  added without being declared. An empty list there means that envelope reports none, not
-  that a check ran: a job handle, status or list and a dry run report on the call that
-  produced them, and the run's warnings arrive on its own result. Only meta's
-  top level is touched: a null inside `usage`, or outside `meta` such as
-  `JobListResult.truncation_hint`, is that object's own contract. The persisted dump is
-  unchanged, so `RESULT_FORMAT` stays 6. On the wire-shape snapshot's `amicus_job_list`
-  envelope, whose meta populates `workspace_source` and `roots_source` and so carried 14
-  nulls, `meta` falls from 591 to 304 bytes (27 keys to 13) on each carrier.
-
-- **Breaking (`FINGERPRINT` `schema-23`, `RESULT_FORMAT` 6).** The `questions`, `assumptions`
-  and `next_steps` lists of consult, review and adversarial results no longer lose entries in
-  silence (#52). `_str_list` kept string and numeric entries, dropped every other entry with
-  no count and no reason, and turned a non-list member into `[]`, so a backend that structured
-  a next step as an object lost it and the caller could not tell "the backend said nothing"
-  from "amicus could not carry what it said". Those results now carry `lists_diagnostics`, the
-  prose-list twin of `findings_diagnostics` (#38): null when all three lists were carried
-  intact, otherwise one `{dropped, reasons}` member per list that was not, with a fixed reason
-  vocabulary (`number_stringified`, `invalid_entry`, `invalid_container`, `missing_member`) and
-  never the omitted content. A number is still delivered as its string and now says so; a
-  bool, null, object or array entry is dropped and counted; a present non-list member and an
-  absent one are told apart, because the output schema requires all three. A consult answered
-  in prose rather than the requested object reports `missing_member` on all three lists and,
-  on the same path, `findings_diagnostics` now reports `missing_findings` where #38 left it
-  null: nothing was parsed, the answer is `summary`, and the empty lists are not the backend
-  saying none. A `review_status: not_run` result keeps both diagnostics null, because no
-  backend ran and `review_status` is the signal; both published descriptions say so. Nothing
-  folds into the verdict or confidence (ADR 0024). Delegate results do not carry the field: their
-  `next_steps` is amicus's own text. `RESULT_FORMAT` moves to 6 so a format-5 record's
-  defaulted null cannot assert that every list was carried intact by a run that never measured
-  it. `tools/list` grows 5181 bytes on the `all` profile, the field's description once per
-  tool plus the object inlined per tool; the first draft carried the reason prose on each of
-  the nine inlined members and was 2400 bytes larger.
-- **Breaking (`FINGERPRINT` `schema-22`).** The free discovery tools have a concise default
-  (#46). `amicus_capabilities(detail="summary")`, the default, now carries `name`, `cost`,
-  `stability` and `backends` per `tool_details` row; `use_when`, `required_params`,
-  `key_optional_params`, `returns` and `error_codes` are on `detail="full"`, and a summary row
-  carries no `error_codes` key at all rather than an empty list that would read as "raises
-  nothing". `detail` now changes field density only, never the row count: the `contracts`
-  value, which returned zero rows, is removed, and a new `include_tool_details=false` selects
-  the rowless payload for a fingerprint or `surface_digest` re-check. `amicus_backends` gains
-  `detail` (`summary` default, `full`); `summary` leaves each backend's `egress`, `carriers`,
-  `readonly_honesty` and `implicit_context` keys out of every entry and names them in a new
-  top-level `omitted_fields` (empty on `full`), so an absent key means "not requested" and a
-  `null` on `full` still means no loaded plugin declares one. The `amicus://backends/{backend}`
-  resource is always the `full` entry. Measured on the `all` profile, both carriers: the
-  default `amicus_capabilities` falls from 27,842 to 14,864 bytes and the default
-  `amicus_backends` from 17,250 to 4,000. `detail="full"` grows by 64 bytes on
-  `amicus_capabilities` (the two new parameters appear in two tools' `key_optional_params`) and
-  by 40 on `amicus_backends` (the empty `omitted_fields`).
-  The server instructions and the skill now say to read `amicus_backends(detail="full")` once
-  before the first paid call. `RESULT_FORMAT` stays 5.
-- **Breaking (`FINGERPRINT` `schema-18`).** `amicus_consult`, `amicus_review_changes`,
-  `amicus_adversarial_review` and `amicus_delegate` accept `idempotency_key`, as both siblings'
-  sync tools do (#66); it was async-only, and `docs/MIGRATION.md` never said so. A keyed sync
-  call awaits the run the key names (its own, or another caller's for the same key and
-  arguments) and delivers its result marked `meta.idempotency_replayed: true`, so a retried
-  sync call cannot pay twice. A keyed sync run gets the job deadline (`AMICUS_JOB_MAX_SECONDS`),
-  as an `_async` run does, and `timeout_seconds` bounds only how long the call waits for it. A
-  keyed waiter does not own the job: its local timeout returns a temporary `timeout` with a
-  `poll_job_status` repair naming `amicus_job_status` for that job instead of cancelling it, its
-  cancellation leaves the run going, and under the tasks extension a keyed task's job survives
-  `tasks/cancel` (an unkeyed task's is still cancelled with it). Sync and `_async` stay separate
-  identities. An empty key is now rejected pre-spend on every paid tool
-  (`minLength: 1`, the siblings' bound), which tightens the `_async` contract by that one
-  value. The sync tools' error catalogs name the three dedup codes, and the server
-  instructions, `timeout_seconds` and task-support text qualify their categorical "terminated"
-  and "cancelling a task cancels its job" with the keyed exception. ADR 0020 supersedes ADR
-  0008's unkeyed-sync clause. `RESULT_FORMAT` stays 5.
-- **Surface (`FINGERPRINT` `schema-19`).** The `reasoning_effort`
-  parameter contract now names claude beside kimi as a backend whose CLI does not reject
-  a bad effort, and says claude checks a fixed list where kimi reads the model catalog (#76).
-  Every pin was regenerated in a dedicated commit (rule 10). `RESULT_FORMAT` stays 5: no stored
-  result changed shape.
-
-- **Breaking (`FINGERPRINT` `schema-20`).** An error's `repair.arguments` carries a complete call
-  wherever one is uniquely known, and the two workspace codes carry no repair (#42, ADR 0021). An
-  `invalid_arguments` rejection whose every rejected argument is an unknown key repairs with the call
-  as sent minus those keys, but only when every remaining value is null, a bool, a number, a
-  published enum member, or an object built from those: a prompt input, path, model slug or
-  `idempotency_key` is never echoed and suppresses the arguments instead. `amicus_models` and
-  `amicus_backends` repairs name the failing call's `backend` when the tool accepts it
-  (`amicus_models` requires it, so its repair was not callable before), and `job_not_found`
-  repairs to `amicus_job_list({})` when the workspace came from roots. `invalid_workspace_root` and
-  `workspace_outside_roots` no longer carry a repair: no call can supply the caller's directory,
-  and `details.field` and `candidate_roots` already name what to fix. A repair that names no tool
-  (`correct_config`, `reduce_input` and the like) is still a symbolic next step. The policy is
-  published on the error-envelope schema. `RESULT_FORMAT` stays 5, because `repair.arguments` was
-  already in the stored schema.
-
-- **Surface (`FINGERPRINT` `schema-21`).** `amicus_job_consume_result` reports what deleting the
-  record did, in `meta.consume` (#44, ADR 0022). It always delivered the stored envelope, but
-  reported plain success even when the deletion failed, while its description promised that a
-  repeat call returns `job_not_found`. `meta.consume.discard_outcome` is `removed`, `missing`,
-  `not_done` or `delete_failed`; only the first two keep that promise, and the other two carry a
-  `follow_up` that calls `amicus_job_status` on the job. A real failed delete can leave a record
-  that reads as `failed`, so the follow-up promises neither redelivery nor deletion at expiry. The
-  field is delivery-only: it is never stored, and `amicus_job_result` never sets it.
-  `RESULT_FORMAT` stays 5.
-
-- **Surface (`FINGERPRINT` `schema-17`).** `tools/list` is 10,474 bytes smaller (105,485 to
-  95,011 on the `all` profile as the stdio transport writes it for a handshake-era client, the
-  era both captured hosts negotiate; 26,046 to 23,800 o200k_base tokens), with no tool,
-  parameter, accepted input value, runtime behaviour or error changed (#41); the one output
-  contract that narrows is named below. Each tool's schema is self-contained on the wire, so
-  the six shared parameter contracts (`workspace_root`, `reasoning_effort`, `backend_options`,
-  `instructions_append`, `extra_context`, `idempotency_key`) were repeated up to fifteen times
-  per catalog; their inline descriptions are now a one-line summary plus the `amicus://params`
-  pointer, and the elaboration lives in that resource's `full` text, which was already the
-  authoritative contract. The `default: null` pydantic stamps on every optional parameter is
-  stripped at list time (a FastMCP transform, so `surface_digest` and the wire agree);
-  non-null defaults such as `detail: "summary"` stay. The error-envelope and result-meta
-  pointer descriptions on every `outputSchema` are one clause each, and the four `_async`
-  tools' `follow_up` is published as the one action it ever carries (`poll_job_status` via
-  `amicus_job_status`) instead of the whole repair-step enum. The discovery-cost ratchet now
-  measures the result body of a real `amicus.server` subprocess, taken off the response line
-  byte for byte, and `python -m amicus.manifest --measure --tokens` (`uv sync --group
-  measure`) reports reference-encoding token counts of that text in place of the byte/4
-  proxy. `RESULT_FORMAT` stays 5:
-  no stored result shape moved.
-- **Breaking (`FINGERPRINT` `schema-16`, `RESULT_FORMAT` 5).** Review and adversarial-review
-  results, and `amicus_dry_run`, now carry a top-level `coverage` object (#65): `status`,
-  untracked-file counts, `omission_reasons` and a `redaction` breakdown, in the siblings' shape
-  plus amicus's own `focused` reason. An omitted untracked file, a tree that changed during the
-  gather, or a focused pass used to reach a caller only as prose in `summary`, and the free
-  preview reported none of it. `amicus_dry_run` also accepts `focus` and reports
-  `max_input_bytes`, so it previews the coverage the paid call will report. A stored job result
-  written under `RESULT_FORMAT` 4 is now returned as `job_result_incompatible`. ADR 0019
-  supersedes ADR 0007's coverage clause.
+- **Breaking.** The free discovery tools default to a summary (#46). `amicus_capabilities`
+  defaults to `detail="summary"`, whose `tool_details` rows carry `name`, `cost`, `stability`,
+  `deprecation` and `backends`; `use_when`, `required_params`, `key_optional_params`, `returns`
+  and `error_codes` are on `detail="full"`, and a summary row carries no `error_codes` key at
+  all rather than an empty list that would read as "raises nothing". `detail` changes field
+  density only, never the row count, and a new `include_tool_details=false` selects the
+  rowless payload for a fingerprint or `surface_digest` re-check (see Removed).
+  `amicus_backends` gains `detail` (`summary` default, `full`); `summary` leaves each backend's
+  `egress`, `carriers`, `readonly_honesty` and `implicit_context` keys out of every entry and
+  names them in a new top-level `omitted_fields` (empty on `full`), so an absent key means "not
+  requested" and a `null` on `full` still means no loaded plugin declares one. The
+  `amicus://backends/{backend}` resource is always the `full` entry. The server instructions
+  and the skill say to read `amicus_backends(detail="full")` once before the first paid call.
+- **Breaking.** Two workspace errors, `invalid_workspace_root` and `workspace_outside_roots`,
+  carry no `repair` (#42, ADR 0021): no call can supply the caller's directory, and
+  `details.field` and `candidate_roots` already name what to fix. Every other error's
+  `repair.arguments` carries a complete call wherever one is uniquely known. An
+  `invalid_arguments` rejection whose every rejected argument is an unknown key repairs with
+  the call as sent minus those keys, but only when every remaining value is null, a bool, a
+  number, a published enum member, or an object built from those: a prompt input, path, model
+  slug or `idempotency_key` is never echoed and suppresses the arguments instead.
+  `amicus_models` and `amicus_backends` repairs name the failing call's `backend` when the tool
+  accepts it (`amicus_models` requires it, so its 0.2.0 repair was not callable), and
+  `job_not_found` repairs to `amicus_job_list({})` when the workspace came from roots. A repair
+  that names no tool (`correct_config`, `reduce_input` and the like) is still a symbolic next
+  step. The policy is published on the error-envelope schema.
+- **Breaking.** An empty `idempotency_key` is rejected before spending on every paid tool, as
+  `invalid_arguments` (`minLength: 1`, the siblings' bound); 0.2.0's `_async` tools accepted
+  `""` as a key (#66).
+- **Breaking.** Claude adversarial reviews, sync and async, default to `config_mode="safe"`
+  (#64). Inherited Claude instructions can displace the JSON critique contract, so an
+  adversarial review no longer inherits the user's Claude configuration unless the call passes
+  `backend_options.config_mode` as `inherit` or `scoped`, the two modes that read it; an
+  explicit mode is honoured on every verb. When
+  `AMICUS_CLAUDE_CONFIG_MODE=bare` the default stays `bare`, so API-key-only installations keep
+  their authentication path; consult and review-changes calls still use the configured default.
+  `amicus_backends` reports the option's per-verb defaults in `default_by_verb`, with a null
+  common `default` where the verbs differ, where 0.2.0 reported one default for every verb.
+  Adversarial runs also carry a JSON-only, no-simulated-tools guardrail in their prompt.
+- **Surface.** `amicus_job_consume_result` reports what deleting the record did, in
+  `meta.consume` (#44, ADR 0022). 0.2.0 always delivered the stored envelope but reported plain
+  success even when the deletion failed, while its description promised that a repeat call
+  returns `job_not_found`. `meta.consume.discard_outcome` is `removed`, `missing`, `not_done` or
+  `delete_failed`; only the first two keep that promise, and the other two carry a `follow_up`
+  that calls `amicus_job_status` on the job. A real failed delete can leave a record that reads
+  as `failed`, so the follow-up promises neither redelivery nor deletion at expiry. The field is
+  delivery-only: it is never stored, and `amicus_job_result` never sets it. A job that failed,
+  was cancelled or timed out has no stored envelope, so consuming it returns its terminal error
+  with no `meta.consume` and deletes nothing, leaving the record to the usual expiry and
+  per-workspace eviction as 0.2.0 did; every consume surface now says so (#94). Deleting such a
+  record on request needs an atomic compare-and-delete from pontonier
+  (briandconnelly/pontonier#31), because a record read as `failed` can turn `done` after it is
+  read.
+- **Surface.** A running job's `poll_after_ms` keeps growing past ten seconds, up to 30 s (#95).
+  The hint still means roughly "wait about as long as the job has already run", but 0.2.0
+  inherited pontonier's 10 s stop, so a four-minute review was polled about 28 times; with the
+  30 s ceiling it is about 13, and a finished job is noticed at most 30 s late. Every place that
+  hands out the hint agrees on it: `amicus_job_status`, the `job_running` repair's
+  `retry_after_ms`, a keyed sync wait's `timeout` repair, and a replayed keyed `_async` handle
+  for a job that is still running. The `amicus_job_status` description states the ceiling. MCP
+  tasks keep FastMCP's own flat `pollIntervalMs` (#100).
+- **Surface.** The server `instructions` lead with their rules and ship as three blocks: what
+  amicus does and does not do, a list of rules, then reference (#49, ADR 0027). 0.2.0's were one
+  unbroken 3,698-character line, and Claude Code shows the model only the first 2,048
+  characters of a server's instructions, so everything after "read error.backend, and" never
+  reached it there: following `error.repair`, treating findings as claims, reading a
+  `completed` task as a delivery statement rather than a success, and the job-handle TTL. Every
+  rule now ends before character 2,048, and a test holds it there. The tool-failure and
+  resource-read-failure rules are separate items, each naming its own path: a resource-read
+  failure's code is `error.data.machine_code`, not the era-bound numeric JSON-RPC
+  `error.code`. The protocol-era mechanics moved to reference, beside the now-stated `stdio`
+  transport, and the host-capture provenance is gone. The job rule names both retention bounds,
+  `AMICUS_JOB_TTL` and the per-workspace cap that can evict a result sooner. The text is 3,392
+  characters. Treating findings as claims to verify, not commands, also rides the `findings`
+  description on `amicus_consult`, `amicus_review_changes`, `amicus_adversarial_review` and
+  `amicus_delegate` (#97), so it no longer depends on a host showing the instructions.
+- **Surface.** `tools/list` states each shared parameter contract once in full rather than on
+  every tool (#41). Each tool's schema is self-contained on the wire, so the six shared
+  contracts (`workspace_root`, `reasoning_effort`, `backend_options`, `instructions_append`,
+  `extra_context`, `idempotency_key`) were repeated on every tool that declares them, up to
+  fifteen times per catalog; their inline descriptions are now a one-line summary plus the
+  `amicus://params` pointer, and the elaboration lives in that resource's `full` text, which was
+  already the authoritative contract. The `default: null` pydantic stamps on every optional
+  parameter is stripped at list time; non-null defaults such as `detail: "summary"` stay. The
+  error-envelope and result-meta pointer descriptions on every `outputSchema` are one clause
+  each, and the four `_async` tools' `follow_up` is published as the one action it ever carries
+  (`poll_job_status` via `amicus_job_status`) instead of the whole repair-step enum. No tool,
+  parameter, accepted input value, runtime behaviour or error changed.
+- **Surface.** The `reasoning_effort` contract names claude beside kimi as a backend whose CLI
+  does not reject a bad effort, and says claude checks a fixed list where kimi reads the model
+  catalog (#76). The adapter change is under Fixed.
+- The kimi backend supports kimi-code 0.42 and 0.43 (#109), beside 0.35, 0.39 and 0.41.
+  Neither changes a flag amicus sends or refuses: 0.42.0's `--help` adds only an `rc|remote`
+  subcommand, 0.43.1's only an `[options]` placeholder on `upgrade`, and the
+  `provider list --json` shape is unchanged in both (captures in `docs/kimi-help/0.42.0/` and
+  `docs/kimi-help/0.43.1/`), so `amicus_backends` does not warn that such an install is outside
+  the versions amicus was built against. `FINGERPRINT` does not move: the supported set is not
+  part of the discovery surface.
+- The codex backend supports codex-cli 0.154 (#112), beside 0.152 and 0.153. Zero-spend checks
+  against 0.153.4 found no change in what they cover: `codex exec --help` adds only
+  `--worktree`, `codex --help` drops only the `mcp-server` subcommand amicus never used,
+  `remote_plugin` and `sleep_tool` are still feature flags, and the rejections amicus
+  classifies (an unknown config key in both forms, an unknown feature, an unknown flag, an
+  invalid value, an unknown enum variant) read the same. The paid semantic probes (the
+  workspace-write sandbox pins, the reasoning-effort key, structured output) were not re-run
+  for 0.154. `amicus_backends` does not warn that such an install is outside the versions
+  amicus was built against. When codex's `models_cache.json` is unreadable, `amicus_models`
+  lists 0.154.0's catalog where 0.2.0 listed 0.149.1's: `gpt-6-astra` is added and `gpt-5.4`
+  and `gpt-5.4-mini` are gone. `gpt-6-astra` advertises codex's `clock` tools, so its default
+  exec path offers `clock.sleep`, which can wait up to 12 hours; the `--disable sleep_tool`
+  amicus sends on every model-bearing run removes it. `FINGERPRINT` does not move: the
+  supported set only decides a status warning, and the listed models are runtime values in
+  `amicus_models` results, while `FINGERPRINT_COVERS` covers that tool's schema rather than
+  the values it returns.
+- Legacy environment names (`CODEX_IN_CLAUDE_*`, `MOONBRIDGE_*`, `CLAUDE_IN_CODEX_*`) are
+  removed in 0.4.0, not in 0.3.0 as 0.2.0's warnings and `docs/MIGRATION.md` said. 0.2.0, the
+  first release to warn on them, shipped four days before 0.3.0 was cut, and one
+  warning-bearing release is too short a window for an operator-facing rename; each warning
+  now names 0.4.0. `scripts/check_release_state.py` refuses a release at or past
+  `LEGACY_REMOVAL_VERSION` while any `EnvVar` still declares a legacy name, so the promise
+  cannot be missed again.
+- The `mcp` requirement is `>=2.1,<2.3`, so amicus runs on mcp 2.2 (#81); 0.2.0 capped it below
+  2.2. `fastmcp` stays `>=4.0,<4.1` and pontonier stays at `0.9.0`.
 
 ### Deprecated
 
-- `amicus_dry_run`, in favour of `amicus_review_changes_dry_run` (#98, ADR 0028). It stays
-  listed, last among the free tools, with its input schema, annotations and outputSchema
-  unchanged by the rename, so existing calls keep working; its title,
-  description and lifecycle `_meta` now say it is deprecated, and its description still
+- **Surface.** `amicus_dry_run`, in favour of `amicus_review_changes_dry_run` (#98, ADR 0028).
+  It read as a preview for any paid call, while it covers only `amicus_review_changes`. It
+  stays listed, last among the free tools, with its input schema, annotations and outputSchema
+  unchanged, so existing calls keep working and its result's `tool` stays `amicus_dry_run`; its
+  title, description and lifecycle `_meta` say it is deprecated, and its description still
   carries the full preview contract. It is deprecated from 0.3.0 and removed in 0.5.0:
-  `scripts/check_release_state.py` refuses to release outside that window, and a unit test
-  fails once the tree declares 0.5.0 with the alias still in place.
+  `scripts/check_release_state.py` refuses to release outside that window.
+
+### Removed
+
+- **Breaking.** `amicus_capabilities(detail="contracts")`, which returned no `tool_details` rows
+  (#46). It is rejected as `invalid_arguments`; pass `include_tool_details=false` for the same
+  rowless payload.
 
 ### Fixed
 
-- Resource records carry their size in the native `Resource.size` field, and only when it is
-  known (#48). Every record published `size_bytes` under the private
+- **Breaking.** Resource records carry their size in the native `Resource.size` field, and only
+  when it is known (#48). In 0.2.0 every record published `size_bytes` under the private
   `dev.bconnelly.amicus/triage` `_meta` convention, which an off-the-shelf client may never
   surface, while the native field stayed empty, and the volatile `amicus://capabilities`
-  advertised `size_bytes: 0` for a body of roughly 13.5 KB. The three static resources now
+  advertised `size_bytes: 0` for a body that is never empty. The three static resources now
   carry `size`, the byte length of exactly the text a read returns, and no triage block; the
   volatile resource and both templates carry no size at all, and their triage block is the one
-  `volatile: true` key, which has no native home. Part of the `schema-24` bump above.
-- A structured answer whose JSON object repeats a key is now refused as `invalid_json` (#51).
-  `classify_structured` parsed with plain `json.loads`, which keeps the last member silently,
-  so a populated `findings` followed by `findings: []` reached `coerce_findings` as empty and
-  `findings_diagnostics` reported no loss: the content was gone before anything could measure
-  it. The parse now fails on a repeated key at any depth, which the strict review and
-  adversarial paths already return as a hard error, and consult falls to its existing prose
-  passthrough (sanitized summary, redacted `raw_response`). The codex backend's `parse_structured` delegates to the shared
-  classifier as claude's and kimi's already did, so `ExecResult.structured` cannot carry a
-  collapsed object on any backend. `FINGERPRINT` and `RESULT_FORMAT` do not move: no error
-  code, value enum, envelope shape, tool description or stored result shape changes.
+  `volatile: true` key, which has no native home.
+- A structured answer whose JSON object repeats a key is refused as `invalid_json` (#51). 0.2.0
+  parsed it with plain `json.loads`, which keeps the last member silently, so a populated
+  `findings` followed by `findings: []` arrived as empty and `findings_diagnostics` reported no
+  loss: the content was gone before anything could measure it. The parse now fails on a
+  repeated key at any depth, which the strict review and adversarial paths return as a hard
+  error, and consult falls to its prose passthrough (sanitized summary, redacted
+  `raw_response`). The codex backend's `parse_structured` delegates to the shared classifier as
+  claude's and kimi's already did, so no backend can carry a collapsed object.
 - The `collaborating-with-amicus` skill told an agent to confirm a backend's `features` list
   contains the verb it was about to call, and its backend reference called `features` "the
   verbs it supports" (#84). `features` names only the gated verbs (`delegate`,
   `adversarial_review`) plus non-verb capabilities, so a host following the rule concluded
   `consult` and `review_changes` were unsupported everywhere. The rule now names the two gated
-  verbs and says the other two never appear there; the reference documents every member. The
-  skill also says that `poll_after_ms` grows only to a ceiling (30 s, see #95 above), that a
-  reported review of a few hundred lines runs two to four minutes against the 300 s sync
-  default, and that a sync call with an `idempotency_key` waits inside one call.
-  `tests/test_skill_contract.py` asserts the gated verbs, the declared features, the poll
-  ceiling and the timeout bounds against source and checks that the keyed alternative is named
-  (its behaviour is tested in `tests/test_lifecycle.py`); scenario S15 covers the misreading
-  for both baseline verbs.
-- FastMCP logged every rejected `tools/call` to the server's stderr with pydantic's error
-  list, and each error's `input` is the rejected value itself, against AGENTS.md rule 18 (#79).
+  verbs and says the other two never appear there, and the reference documents every member.
+  The skill also says that `poll_after_ms` grows only to a 30 s ceiling, that a reported review
+  of a few hundred lines runs two to four minutes against the 300 s sync default, and that a
+  sync call with an `idempotency_key` waits inside one call.
+- FastMCP logged every rejected `tools/call` to the server's stderr with pydantic's error list,
+  and each error's `input` is the rejected value itself, against AGENTS.md rule 18 (#79).
   For a missing required argument that `input` is the whole argument dict, so a valid prompt
   field sent beside the omission was written verbatim, and a key the client chose reached the
   log through `loc`. amicus now rewrites the record on `fastmcp.server.server` before any
@@ -362,29 +305,18 @@ a caller that ignores the change keeps working.
   prints rather than logs, still does, once, before any request arrives. This does not make every
   dependency record safe: a message either library preformats with an f-string is still written
   as it stands.
-
 - The claude contract declared `effort_silently_ignored_upstream=False`, but claude 2.1.270 warns
   on an unknown `--effort`, ignores it and runs at its default effort (#76). Callers were never
   exposed: the adapter already refuses any effort outside its fixed list before spending. The flag
   is now `True`, so pontonier's conformance check probes that refusal when the plugin loads, and a
   claude adapter that dropped it would be registered unavailable rather than spend at the wrong
   effort. The refusal's repair text no longer says claude rejects the value itself.
-
 - A claude budget stop returned `nonzero_exit` instead of `budget_exceeded`, so a caller got
   a generic error rather than the repair that names `backend_options.max_budget_usd` (#73).
   Claude reports the stop as `subtype: "error_max_budget_usd"` with no `result` text, and the
   word-bounded budget pattern could not match inside the subtype.
-
-- A job named by several tasks reported one task on `amicus_job_status` and `amicus_job_result`
-  and another on `amicus_job_list`; every surface now reports the first task that named it, and
-  a list filtered by any associated task still finds the job (#66).
-
-- Keep exception text out of stored background-job crash results and returned spawn-failure
+- Exception text is kept out of stored background-job crash results and returned spawn-failure
   envelopes, since backend exceptions can contain prompt inputs (#56).
-- Default Claude adversarial reviews to `safe` config isolation (preserving a configured
-  `bare` API-key mode) and reinforce their JSON-only and available-tool contract (#64).
-  Explicit per-call modes remain supported; consult and review-changes defaults are unchanged.
-  Discovery exposes `default_by_verb` when defaults vary by verb, with no single common default.
 
 ## [0.2.0] - 2026-09-10
 
@@ -600,6 +532,7 @@ per-change rather than net, so they also name intermediate states that no releas
 - The tagged publish path to pypi.org has never run. Only the TestPyPI dispatch path has been exercised.
 - Eval scenario S6 in `skills/collaborating-with-amicus/tests/scenarios.md` passed on one run (status: `pass`, validated by that run alone); an M7 follow-up run against the current skill text did not isolate the still-open F3 finding, so F3 remains open. S7 (real-host approval friction) has failed both of its recorded runs (status: `fail`); an M7 zero-spend recheck reached neither a pass nor a fail and is recorded as inconclusive, so it does not move S7's status. See their `status` fields and ADR 0012.
 
-[Unreleased]: https://github.com/briandconnelly/amicus/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/briandconnelly/amicus/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/briandconnelly/amicus/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/briandconnelly/amicus/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/briandconnelly/amicus/releases/tag/v0.1.0
