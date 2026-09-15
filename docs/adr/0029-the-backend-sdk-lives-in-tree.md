@@ -21,6 +21,7 @@ History and blame stay in pontonier's repository.
 `amicus.sdk` keeps pontonier's four layers, `core`, `backend`, `conventions` and `testing`.
 import-linter keeps `amicus.sdk` from importing the rest of amicus, and `amicus.sdk.core` from importing the other three layers.
 Merging the modules into the amicus packages that own each concern is follow-up work: #118, #119, #120, #121, #122 and #123.
+ADR 0030 narrows that follow-up: `amicus.sdk` keeps the modules a backend imports, and only those the server alone uses move out.
 
 **pontonier stays published for the siblings.**
 It is feature-frozen at 0.9.0 and maintained only for codex-in-claude, moonbridge and claude-in-codex until they are archived.

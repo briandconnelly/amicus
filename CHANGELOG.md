@@ -32,8 +32,9 @@ per-change, as its own lead says.
   deployment is affected. SDK log records are now named `amicus.sdk.*` instead of
   `pontonier.*` in stderr and `AMICUS_LOG_FILE`, since the log format prints the logger
   name, which matters for an operator who filters logs by name. These `amicus.sdk` import
-  paths are not yet stable for a third-party backend: issues #118-#123 move its modules
-  during the 0.x dissolution.
+  paths are not yet stable for a third-party backend: `amicus.sdk` keeps only what a backend
+  imports, and the modules only the server uses move out of it into the amicus packages that
+  own them (ADR 0030).
 
 ## [0.3.0] - 2026-09-15
 
