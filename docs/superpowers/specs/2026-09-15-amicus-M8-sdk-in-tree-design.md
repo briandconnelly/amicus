@@ -169,7 +169,7 @@ Not moved: pontonier's docs, scripts, README, CHANGELOG and `pyproject.toml`, an
 
 ## 6. Sequencing and follow-ups
 
-- M8 is one plan, `docs/superpowers/plans/2026-09-15-amicus-M8-sdk-in-tree.md`, and one draft PR from `~/projects/amicus-wt-m8` on `feat/m8-sdk-in-tree`.
+- M8 was one plan, which was executed and then deleted as the execution model requires (git history keeps it), and one PR, #129, from `feat/m8-sdk-in-tree`.
 - The plan ends by filing the dissolution issues, one per concern:
   1. `core.jobs`, `core.idempotency` and `core.jsoncache` into `amicus.jobs`, folding in the poll-cap workaround.
   2. `core.worktree`, `core.gitdiff`, `core.runtime` and `core.workspace` into `amicus.orchestration`.
