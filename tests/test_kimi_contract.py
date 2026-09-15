@@ -1,9 +1,10 @@
 """The Kimi CLI contract: derivations from the constants, the failure signatures, and the
-evidence rule (a flag the contract sends or refuses must appear in every capture under
-docs/kimi-help/)."""
+evidence rule (a flag the contract sends or refuses must be declared by an option row in
+every capture under docs/kimi-help/)."""
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -14,10 +15,25 @@ from amicus.backends.kimi import contract
 
 _DOCS_ROOT = Path(__file__).parent.parent / "docs" / "kimi-help"
 CAPTURES = sorted(p for p in _DOCS_ROOT.iterdir() if p.is_dir())
+# An option row: two spaces, then the declaration column up to the gap before its description.
+_OPTION_ROW = re.compile(r"^  (-\S.*?)(?: {2,}|$)")
+_FLAG = re.compile(r"(?<![\w-])-{1,2}[A-Za-z][\w-]*")
 
 
 def _help(capture: Path) -> str:
     return (capture / "kimi-help.txt").read_text()
+
+
+def _declared(help_text: str) -> frozenset[str]:
+    """Flags an option row declares. A flag that appears only in prose (`--agent-file` in the
+    `--agent` description, `-c` inside `kimi-code`) is not declared, so a substring match
+    would keep passing after kimi dropped the option."""
+    return frozenset(
+        flag
+        for line in help_text.splitlines()
+        if (row := _OPTION_ROW.match(line))
+        for flag in _FLAG.findall(row.group(1))
+    )
 
 
 def _version(capture: Path) -> str:
@@ -59,9 +75,18 @@ def test_the_captures_are_the_ones_the_contract_claims():
     assert max(_minor(p) for p in CAPTURES) == max(contract.SUPPORTED_VERSIONS)
 
 
+def test_the_flag_matcher_reads_declarations_not_prose():
+    row = "  --agent <name>   loaded via --agent-file; see kimi-code (-c, --continue)\n"
+    assert _declared(f"Options:\n{row}") == {"--agent"}
+    assert _declared("  -S, --session [id]   Resume.\n  export [options]   Export.\n") == {
+        "-S",
+        "--session",
+    }
+
+
 @pytest.mark.parametrize("capture", CAPTURES, ids=lambda p: p.name)
 def test_evidence_the_instrument_can_fail(capture):
-    assert "--definitely-not-a-kimi-flag" not in _help(capture)
+    assert "--definitely-not-a-kimi-flag" not in _declared(_help(capture))
 
 
 @pytest.mark.parametrize("capture", CAPTURES, ids=lambda p: p.name)
@@ -75,7 +100,7 @@ def test_evidence_the_instrument_can_fail(capture):
     ],
 )
 def test_every_sent_or_refused_flag_is_in_the_captured_help(capture, flag):
-    assert flag in _help(capture)
+    assert flag in _declared(_help(capture))
 
 
 @pytest.mark.parametrize("capture", CAPTURES, ids=lambda p: p.name)
