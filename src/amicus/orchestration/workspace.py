@@ -14,7 +14,6 @@ from typing import TYPE_CHECKING, Any
 from urllib.parse import unquote, urlparse
 
 from amicus.schemas.params import WORKSPACE_SCOPE
-from amicus.sdk.core import workspace as _pw
 
 if TYPE_CHECKING:  # pragma: no cover
     from amicus.schemas.envelope import RootsSource
@@ -36,6 +35,47 @@ _NO_WORKSPACE = (
 )
 
 
+def _is_within(child: Path, parent: Path) -> bool:
+    try:
+        child.relative_to(parent)
+    except ValueError:
+        return False
+    return True
+
+
+def resolve_workspace(
+    explicit: str | None,
+    roots: list[str],
+    server_cwd: str,
+) -> WorkspaceResolution:
+    """The precedence alone, before the cwd policy `resolve` applies: the explicit path, then
+    the first root, then `server_cwd`. `roots` are absolute filesystem paths already
+    extracted from the client's MCP roots (file:// URIs decoded by the caller)."""
+    norm_roots = [str(Path(r).resolve()) for r in roots]
+    if explicit is not None:
+        candidate = Path(explicit)
+        if not candidate.is_absolute():
+            return WorkspaceResolution(
+                None, None, "invalid_workspace_root", "workspace_root must be an absolute path"
+            )
+        resolved = candidate.resolve()
+        if not resolved.is_dir():
+            return WorkspaceResolution(
+                None, None, "invalid_workspace_root", f"not a directory: {resolved}"
+            )
+        if norm_roots and not any(_is_within(resolved, Path(r)) for r in norm_roots):
+            return WorkspaceResolution(
+                None,
+                None,
+                "workspace_outside_roots",
+                f"{resolved} is outside the client's MCP roots",
+            )
+        return WorkspaceResolution(str(resolved), "param")
+    if norm_roots:
+        return WorkspaceResolution(norm_roots[0], "roots")
+    return WorkspaceResolution(str(Path(server_cwd).resolve()), "cwd")
+
+
 def resolve(
     explicit: str | None,
     roots: list[str],
@@ -43,13 +83,11 @@ def resolve(
     allow_cwd: bool,
     server_cwd: str | None = None,
 ) -> WorkspaceResolution:
-    cwd = server_cwd if server_cwd is not None else _pw.server_cwd()
-    res = _pw.resolve_workspace(explicit, roots, cwd)
-    if res.error_code is not None:
-        return WorkspaceResolution(None, None, res.error_code, res.error_detail)
+    cwd = server_cwd if server_cwd is not None else str(Path.cwd())
+    res = resolve_workspace(explicit, roots, cwd)
     if res.source == "cwd" and not allow_cwd:
         return WorkspaceResolution(None, None, "invalid_workspace_root", _NO_WORKSPACE)
-    return WorkspaceResolution(res.path, res.source)
+    return res
 
 
 def workspace_warning_for(source: str | None, cwd: str | None) -> str | None:
