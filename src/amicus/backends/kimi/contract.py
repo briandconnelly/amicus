@@ -1,6 +1,6 @@
 """Single source of truth for the external `kimi` (Kimi Code) CLI contract, ported from
 moonbridge `cli_contract.py` (verified by the sibling against 0.35.0 and 0.39.1) and
-re-verified against 0.41.0 by the captures in docs/kimi-help/0.41.0/.
+re-verified against 0.41.0 and 0.42.0 by the captures under docs/kimi-help/.
 
 `kimi -p` is NOT `codex exec`. Three differences drive the whole design:
 
@@ -93,9 +93,9 @@ HELP_GATED_FLAGS: dict[str, bool] = {MODEL_FLAG: True, SKILLS_DIR_FLAG: True}
 SANDBOX_READ_ONLY = "read-only"
 SANDBOX_WORKSPACE_WRITE = "workspace-write"
 
-# Advisory: a mismatch warns on amicus_backends, never blocks. (0, 41) is supported on the
-# evidence in docs/kimi-help/0.41.0/.
-SUPPORTED_VERSIONS = frozenset({(0, 35), (0, 39), (0, 41)})
+# Advisory: a mismatch warns on amicus_backends, never blocks. (0, 41) and (0, 42) are
+# supported on the evidence in docs/kimi-help/0.41.0/ and docs/kimi-help/0.42.0/.
+SUPPORTED_VERSIONS = frozenset({(0, 35), (0, 39), (0, 41), (0, 42)})
 
 # --- Models --------------------------------------------------------------------------------
 MODEL_SLUG_PATTERN = re.compile(r"^[A-Za-z0-9._/-]{1,128}$")

@@ -1,5 +1,5 @@
 """The Kimi CLI contract: derivations from the constants, the failure signatures, and the
-0.41.0 evidence rule (a flag the contract sends or refuses must appear in the capture)."""
+0.42.0 evidence rule (a flag the contract sends or refuses must appear in the capture)."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from pontonier.testing import conformance
 
 from amicus.backends.kimi import contract
 
-_DOCS_PATH = Path(__file__).parent.parent / "docs" / "kimi-help" / "0.41.0"
+_DOCS_PATH = Path(__file__).parent.parent / "docs" / "kimi-help" / "0.42.0"
 HELP = (_DOCS_PATH / "kimi-help.txt").read_text()
 VERSION = (_DOCS_PATH / "kimi-version.txt").read_text().strip()
 
@@ -57,7 +57,7 @@ def test_every_sent_or_refused_flag_is_in_the_captured_help(flag):
 def test_captured_version_is_a_supported_version():
     major, minor, _patch = VERSION.split(".")
     assert (int(major), int(minor)) in contract.SUPPORTED_VERSIONS
-    assert frozenset({(0, 35), (0, 39), (0, 41)}) == contract.SUPPORTED_VERSIONS
+    assert frozenset({(0, 35), (0, 39), (0, 41), (0, 42)}) == contract.SUPPORTED_VERSIONS
 
 
 @pytest.mark.parametrize(
