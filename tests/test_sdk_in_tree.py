@@ -5,7 +5,8 @@ a broken scan."""
 from __future__ import annotations
 
 import ast
-import importlib.util
+import subprocess
+import sys
 from pathlib import Path
 
 import amicus.sdk
@@ -45,10 +46,60 @@ def test_the_import_scan_detects_a_planted_import(tmp_path):
     assert _pontonier_imports(tmp_path) == ["src/planted.py:1", "src/planted.py:2"]
 
 
-def test_pontonier_is_not_installed():
-    """amicus runs without the pontonier distribution: nothing requires it any more, and
-    `uv sync` removes what nothing requires."""
-    assert importlib.util.find_spec("pontonier") is None
+_BLOCK_PONTONIER = "import sys\nsys.modules['pontonier'] = None\n"
+
+
+def _run_blocked(code: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, "-c", _BLOCK_PONTONIER + code],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=ROOT,
+    )
+
+
+def _walk_amicus_code() -> str:
+    return (
+        "import importlib, pkgutil\n"
+        "import amicus\n"
+        "\n"
+        "def _fail(name):\n"
+        "    raise ImportError(name)\n"
+        "\n"
+        "names = [m.name for m in\n"
+        "         pkgutil.walk_packages(amicus.__path__, 'amicus.', onerror=_fail)]\n"
+        "for name in names:\n"
+        "    importlib.import_module(name)\n"
+        "print(len(names))\n"
+    )
+
+
+def test_every_amicus_module_imports_with_pontonier_blocked():
+    """amicus runs without pontonier: every module imports with pontonier made unimportable,
+    whether or not an older environment still has the distribution installed (`uv run`
+    syncs inexactly, so an upgraded checkout can keep it)."""
+    proc = _run_blocked(_walk_amicus_code())
+    assert proc.returncode == 0, proc.stderr
+    assert int(proc.stdout.strip()) > 50  # the walk really found the package tree
+
+
+def test_the_pontonier_block_bites():
+    """Control for the test above: under the same block, importing pontonier fails."""
+    proc = _run_blocked("import pontonier.core\n")
+    assert proc.returncode != 0
+    assert "ModuleNotFoundError" in proc.stderr or "ImportError" in proc.stderr
+
+
+def test_the_sdk_core_modules_log_under_amicus_sdk():
+    """ADR 0029: 'the SDK's modules log on amicus.sdk.*.' Pin the actual logger names,
+    not just the claim: each module's module-level `logger` must be named after its own
+    `__name__`, and every one of those names must start with `amicus.sdk.`."""
+    from amicus.sdk.core import idempotency, jobs, runtime
+
+    for module in (jobs, runtime, idempotency):
+        assert module.logger.name == module.__name__
+        assert module.logger.name.startswith("amicus.sdk.")
 
 
 def test_the_sdk_root_names_its_origin_and_has_no_version_lookup():
