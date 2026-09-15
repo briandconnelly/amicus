@@ -10,7 +10,8 @@ from pathlib import Path
 import pytest
 from tests.sdk.conftest import run_git
 
-from amicus.sdk.core import gitdiff, gitproc, pathalias, worktree
+from amicus.orchestration import gitdiff, gitproc, worktree
+from amicus.sdk.core import pathalias
 
 
 def _git(cwd, *args):
@@ -490,7 +491,7 @@ def test_remove_survives_unneutralizable_filter_introduced_after_create(repo, tm
 def test_ensure_repo_with_head_raises_outside_repo(tmp_path):
     import pytest
 
-    from amicus.sdk.core import worktree
+    from amicus.orchestration import worktree
 
     with pytest.raises(worktree.NotAGitRepoError):
         worktree.ensure_repo_with_head(str(tmp_path), timeout=10)

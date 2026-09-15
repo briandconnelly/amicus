@@ -10,9 +10,9 @@ from tests.support import claudefixtures as cf
 
 from amicus.orchestration import review
 from amicus.orchestration import run as run_mod
+from amicus.orchestration.gitdiff import DiffResult, DiffSummary
 from amicus.request import RunSpec
 from amicus.schemas.codes import generalize_code
-from amicus.sdk.core.gitdiff import DiffResult, DiffSummary
 
 FIXTURE = cf.load_fixture()
 SECRET = "sk-" + "c" * 32

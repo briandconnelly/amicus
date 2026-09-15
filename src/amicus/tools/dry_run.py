@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 from fastmcp import Context
 
 from amicus.errors import error_envelope
-from amicus.orchestration import prompts, review
+from amicus.orchestration import prompts, review, worktree
 from amicus.orchestration.isolation import WORKTREE_PREFIX
 from amicus.schemas.envelope import Workspace, dump_success
 from amicus.schemas.params import (
@@ -38,7 +38,7 @@ from amicus.schemas.results import (
     DryRunResult,
     WorktreePlan,
 )
-from amicus.sdk.core import redaction, worktree
+from amicus.sdk.core import redaction
 from amicus.tools._guard import guard
 from amicus.tools._meta import annotations_for, lifecycle_meta, tool_deprecation
 from amicus.tools._prepare import deadline_advisory, prepare_run

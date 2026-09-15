@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from amicus.sdk.core import gitdiff, gitproc
+from amicus.orchestration import gitdiff, gitproc
 from amicus.sdk.core.pathalias import path_aliases, sanitize_prose
 from amicus.sdk.core.redaction import redact_text
 

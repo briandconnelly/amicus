@@ -19,7 +19,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, TypeVar, cast
 
-from amicus.sdk.core import gitproc, streamcap
+from amicus.orchestration import gitproc
+from amicus.sdk.core import streamcap
 from amicus.sdk.core.redaction import DiffRedactor
 
 if TYPE_CHECKING:

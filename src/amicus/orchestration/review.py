@@ -6,6 +6,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, get_args
 
 from amicus.errors import error_envelope
+from amicus.orchestration import gitdiff
 from amicus.schemas.envelope import ContextSummary, ErrorDetail, InvalidArgument, dump_success
 from amicus.schemas.results import (
     AdversarialReviewResult,
@@ -17,13 +18,13 @@ from amicus.schemas.results import (
     ReviewScope,
     Untracked,
 )
-from amicus.sdk.core import gitdiff, redaction
+from amicus.sdk.core import redaction
 
 if TYPE_CHECKING:  # pragma: no cover
+    from amicus.orchestration.gitdiff import DiffResult
     from amicus.plugin import BackendPlugin
     from amicus.request import RunSpec
     from amicus.schemas.envelope import Meta
-    from amicus.sdk.core.gitdiff import DiffResult
 
 _GITDIFF_ERRORS: dict[type, tuple[str, str | None]] = {
     gitdiff.InvalidScopeError: ("invalid_scope", "scope"),

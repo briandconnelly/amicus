@@ -8,8 +8,8 @@ import pytest
 from tests.support import fakeplugin
 
 from amicus.orchestration import review
+from amicus.orchestration.gitdiff import DiffResult, DiffSummary, InvalidUntrackedError
 from amicus.request import RunSpec, meta_for
-from amicus.sdk.core.gitdiff import DiffResult, DiffSummary, InvalidUntrackedError
 
 
 def _spec(cwd, **kw):

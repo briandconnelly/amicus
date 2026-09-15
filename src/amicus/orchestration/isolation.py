@@ -7,8 +7,9 @@ from __future__ import annotations
 import tempfile
 from typing import TYPE_CHECKING
 
+from amicus.orchestration import worktree
 from amicus.sdk.backend.contract import IsolationPolicy
-from amicus.sdk.core import pathalias, redaction, worktree
+from amicus.sdk.core import pathalias, redaction
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Callable

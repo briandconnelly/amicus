@@ -10,7 +10,8 @@ import time
 
 import pytest
 
-from amicus.sdk.core import gitproc, streamcap
+from amicus.orchestration import gitproc
+from amicus.sdk.core import streamcap
 
 _ENV = {"PATH": os.environ.get("PATH", "/usr/bin:/bin")}
 

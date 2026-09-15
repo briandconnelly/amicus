@@ -1,7 +1,7 @@
 """A bounded runner for a git subprocess whose stdout must be streamed rather than
 captured whole.
 
-CLI-agnostic; no parent-package imports (keeps ``_core`` extractable). It exists so a
+CLI-agnostic, and free of project config. It exists so a
 count over a repo-cardinality git listing (``ls-tree``, ``diff --numstat``,
 ``ls-files``) stays O(one line + one chunk) in memory regardless of how many entries
 the workspace has, instead of materializing the whole output via
