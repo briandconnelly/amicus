@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import re
 import tempfile
 from pathlib import Path
 
@@ -28,8 +29,13 @@ import pytest
 from tests.sdk.conftest import make_run
 from tests.sdk.test_contract import make_contract
 
-from amicus.sdk.backend import classify
-from amicus.sdk.backend.contract import FailureSignatures, IsolationPolicy, Limits, ModelCatalog
+from amicus.sdk.backend.contract import (
+    BackendContract,
+    FailureSignatures,
+    IsolationPolicy,
+    Limits,
+    ModelCatalog,
+)
 from amicus.sdk.backend.protocol import (
     AgentBackend,
     ClassifiedFailure,
@@ -51,6 +57,28 @@ def _jsonl(events: str) -> list[dict]:
             if isinstance(parsed, dict):
                 out.append(parsed)
     return out
+
+
+def _classify(contract: BackendContract, outcome: RunOutcome) -> ClassifiedFailure:
+    """The shared failure order a fake falls back to: binary missing, timeout, then the
+    contract's signature tables (drift, auth, rate limit, invalid model), then nonzero exit.
+    Each real backend classifies in its own ``cli`` module instead."""
+    run = outcome.run
+    b = contract.backend_id
+    if run.binary_missing:
+        return ClassifiedFailure(code=f"{b}_not_found", detail="sanitized")
+    if run.timed_out:
+        return ClassifiedFailure(code="timeout", detail="sanitized")
+    sigs = contract.failure_signatures
+    for patterns, code in (
+        (sigs.contract_drift, "cli_contract_changed"),
+        (sigs.auth, f"{b}_auth_required"),
+        (sigs.rate_limited, f"{b}_rate_limited"),
+        (sigs.invalid_model, "invalid_model"),
+    ):
+        if any(re.search(p, run.stderr or "") for p in patterns):
+            return ClassifiedFailure(code=code, detail="sanitized")
+    return ClassifiedFailure(code="nonzero_exit", detail="sanitized")
 
 
 # ------------------------------------------------------------------ CodexLike
@@ -114,7 +142,7 @@ class CodexLikeBackend:
         return ExecResult(answer=answer, structured=structured, usage=usage)
 
     def classify_failure(self, outcome: RunOutcome, request: RunRequest) -> ClassifiedFailure:
-        return classify.classify(CODEX_CONTRACT, outcome, request, detail="sanitized")
+        return _classify(CODEX_CONTRACT, outcome)
 
     def list_models(self) -> tuple[str, ...]:
         return ("model-a", "model-b")  # bundled fallback
@@ -207,7 +235,7 @@ class KimiLikeBackend:
             e.get("role") == "assistant" for e in _jsonl(outcome.events)
         ):
             return ClassifiedFailure(code="empty_response", detail="no assistant event")
-        return classify.classify(KIMI_CONTRACT, outcome, request, detail="sanitized")
+        return _classify(KIMI_CONTRACT, outcome)
 
     def list_models(self) -> tuple[str, ...]:
         return ("alias-1",)  # live probe result; authoritative for identifiers
@@ -261,17 +289,12 @@ class ClaudeLikeBackend:
 
     def classify_failure(self, outcome: RunOutcome, request: RunRequest) -> ClassifiedFailure:
         # Envelope-aware: the stdout JSON names failure states the stderr
-        # regexes cannot see. Hook first, shared skeleton as fallback.
-        def hook(o: RunOutcome, r: RunRequest) -> ClassifiedFailure | None:
-            with contextlib.suppress(json.JSONDecodeError):
-                envelope = json.loads(o.run.stdout)
-                if envelope.get("subtype") == "error_budget_exceeded":
-                    return ClassifiedFailure(code="nonzero_exit", detail="budget exceeded")
-            return None
-
-        return classify.classify(
-            CLAUDE_CONTRACT, outcome, request, detail="sanitized", backend_hook=hook
-        )
+        # regexes cannot see. Envelope first, shared order as fallback.
+        with contextlib.suppress(json.JSONDecodeError):
+            envelope = json.loads(outcome.run.stdout)
+            if envelope.get("subtype") == "error_budget_exceeded":
+                return ClassifiedFailure(code="nonzero_exit", detail="budget exceeded")
+        return _classify(CLAUDE_CONTRACT, outcome)
 
     def list_models(self) -> tuple[str, ...]:
         return ("static-model",)
