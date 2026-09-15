@@ -54,3 +54,5 @@ briandconnelly/pontonier#29 is already worked around in `src/amicus/jobs/polling
 `scripts/capture_codex_differentials.py` and `scripts/capture_kimi_differentials.py` keep importing pontonier, because they run inside a sibling's virtualenv and feed that sibling's own objects.
 
 AGENTS.md still says amicus is built on the pontonier SDK; it changes in a PR of its own (rule 9).
+
+`amicus.sdk` import paths are not yet stable for plugin authors, because #118 to #123 move its modules during the 0.x dissolution and #120 moves the conventions types a plugin imports.

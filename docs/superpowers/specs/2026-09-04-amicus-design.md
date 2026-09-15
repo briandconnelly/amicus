@@ -181,7 +181,7 @@ completion), `amicus://error-envelope`, `amicus://result-meta`, `amicus://params
 PLUGIN_API_VERSION = 2; ENTRY_POINT_GROUP = "amicus.backends"
 @dataclass(frozen=True) class OptionSpec: name, maps_to (RunRequest field), applies_to, default
 @dataclass(frozen=True) class BackendPlugin:
-    contract: BackendContract; backend: AgentBackend           # pontonier: facts + behavior
+    contract: BackendContract; backend: AgentBackend           # amicus.sdk: facts + behavior
     options: tuple[OptionSpec, ...]; status: StatusProbe; models: ModelCatalogReader
     binary: BinaryResolver; help_probe: HelpProbe; vocabulary: BackendErrorVocabulary
     env: EnvNamespace; effects: AnnotationEffects
