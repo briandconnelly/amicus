@@ -12,9 +12,8 @@ import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from pontonier.core import runtime
-
 from amicus.backends.codex import contract
+from amicus.sdk.core import runtime
 
 if TYPE_CHECKING:  # pragma: no cover
     from amicus.backends.codex.config import CodexConfig

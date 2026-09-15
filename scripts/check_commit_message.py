@@ -51,6 +51,7 @@ ALLOWED_SCOPES = (
     "jobs",
     "tasks",
     "backends",
+    "sdk",
     "packaging",
     "docs",
     "ci",

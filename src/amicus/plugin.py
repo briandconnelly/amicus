@@ -1,9 +1,9 @@
 """The backend plugin API: what a backend package hands amicus (pure data + protocols).
 
-A plugin bundles pontonier's frozen contract and adapter with the amicus-side facts the
+A plugin bundles the SDK's frozen contract and adapter with the amicus-side facts the
 server needs: option specs, a status probe, a model-catalog reader, a binary resolver,
 a help probe, the error vocabulary, an env namespace and the annotation effects. Outcome
-inspection is a pontonier capability on `backend` itself (OutcomeInspector), so the
+inspection is an SDK capability on `backend` itself (OutcomeInspector), so the
 plugin carries nothing extra for it. Third-party backends register an entry point in
 the `amicus.backends` group whose value is a BackendPlugin or a zero-argument factory.
 """
@@ -16,15 +16,14 @@ from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Mapping
 
-    from pontonier.backend.contract import BackendContract
-    from pontonier.backend.protocol import AgentBackend
-    from pontonier.conventions.annotations import AnnotationEffects
-    from pontonier.conventions.envelope import BackendErrorVocabulary, RepairRule
-    from pontonier.conventions.preflight import HelpProbe
-
     from amicus.config.envspec import EnvNamespace
+    from amicus.sdk.backend.contract import BackendContract
+    from amicus.sdk.backend.protocol import AgentBackend
+    from amicus.sdk.conventions.annotations import AnnotationEffects
+    from amicus.sdk.conventions.envelope import BackendErrorVocabulary, RepairRule
+    from amicus.sdk.conventions.preflight import HelpProbe
 
-PLUGIN_API_VERSION = 1
+PLUGIN_API_VERSION = 2
 ENTRY_POINT_GROUP = "amicus.backends"
 
 

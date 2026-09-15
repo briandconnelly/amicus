@@ -16,7 +16,7 @@ import re
 from dataclasses import dataclass
 from typing import Literal
 
-from pontonier.backend import contract as _pc
+from amicus.sdk.backend import contract as _pc
 
 CODEX_BIN = "codex"
 
@@ -367,7 +367,7 @@ def parse_retry_after_ms(*texts: str | None) -> int | None:
     return int(match.group(1)) * 1000
 
 
-# --- The pontonier contract -------------------------------------------------------------------
+# --- The SDK contract -------------------------------------------------------------------
 # Wire prose that would contradict this contract. The sibling-name canaries live in amicus's
 # own union (tests/test_surface_honesty.py); here only the mechanism claims.
 FORBIDDEN_SURFACE_PHRASES = ("applies the diff to your working tree", "--dangerously-bypass")

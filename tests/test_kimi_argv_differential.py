@@ -5,17 +5,17 @@ the binary token and the agent name aside."""
 from __future__ import annotations
 
 import pytest
-from pontonier.backend.protocol import RunRequest
-from pontonier.conventions.prompts import (
+from tests.support import kimifixtures as kf
+
+from amicus.backends.kimi import cli
+from amicus.schemas.structured import schema_instruction
+from amicus.sdk.backend.protocol import RunRequest
+from amicus.sdk.conventions.prompts import (
     build_consult_prompt,
     build_delegate_prompt,
     build_review_prompt,
     framings,
 )
-from tests.support import kimifixtures as kf
-
-from amicus.backends.kimi import cli
-from amicus.schemas.structured import schema_instruction
 
 SIBLING_HOST = "Claude Code"
 FIXTURE = kf.load_fixture()

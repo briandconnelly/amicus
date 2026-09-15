@@ -207,7 +207,7 @@ Branch on `review_status` for whether a review ran, and read `unknown` as "no ra
 
 **A finished job's `poll_after_ms` is null (#95, #101).**
 `amicus_job_status`, `amicus_job_cancel` and a replayed keyed `_async` handle report `poll_after_ms: null` on every terminal status; a replayed handle used to report `1000`.
-While a job runs the hint grows with its elapsed time to a ceiling of 30 s, not pontonier's 10 s.
+While a job runs the hint grows with its elapsed time to a ceiling of 30 s, not the 10 s cap the SDK's job store applies on its own.
 Poll only while `status` is `running`; a caller that read a non-null hint as "still running" waited one extra interval on every finished job.
 
 **The free discovery tools default to a summary (#46).**

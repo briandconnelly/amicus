@@ -2,6 +2,9 @@
 
 **Status:** Accepted (2026-09-13)
 
+**Note (M8, ADR 0029):** the separate `pontonier` logger this ADR names is gone.
+The SDK now logs under `amicus.sdk.*`, which `obs.configure` covers through the `amicus` logger.
+
 ## Context
 
 Issue #79 found that FastMCP logs a rejected `tools/call` on `fastmcp.server.server` with pydantic's error list, and that each error's `input` is the rejected value itself.

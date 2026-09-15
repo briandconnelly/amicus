@@ -3,7 +3,7 @@
 tasked runs (same or different amicus processes sharing AMICUS_STATE_DIR) racing this
 without a lock interleave and the later writer silently drops the earlier entry, which
 defeats the map's entire purpose (a client that loses its task id must still recover the
-job via amicus_job_list(task_id=...)). The lock mirrors pontonier's own approach to
+job via amicus_job_list(task_id=...)). The lock mirrors the SDK's own approach to
 cross-process coordination (an advisory ``flock`` on a lockfile, bounded by a timeout so
 a contended lock degrades to a raised OSError rather than hanging a worker) for
 consistency with ``lifecycle.py``'s idempotency locking, rather than an in-process
@@ -23,8 +23,8 @@ a root in every deployment, and a probe that treats "no such directory" as "stal
 prune an entry the instant it's written in any environment where the two roots diverge —
 turning a bookkeeping decoupling elsewhere in the codebase into a silent loss of the
 recovery guarantee this map exists to provide. Given ``amicus.jobs`` is free to import
-pontonier's job store (import-linter only forbids ``amicus.server``/``amicus.tools`` from
-this package) but pontonier's own store API requires a ``cwd`` for every existence check,
+the SDK's job store (import-linter only forbids ``amicus.server``/``amicus.tools`` from
+this package) but the SDK's own store API requires a ``cwd`` for every existence check,
 there is no coupling that is both correct and decoupled from the persisted shape. So this
 prunes by a bounded, oldest-first eviction instead: entries are written in insertion order
 (the JSON object key order, no longer alphabetically sorted) and, once the map holds more

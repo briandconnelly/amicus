@@ -9,8 +9,6 @@ import subprocess
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from pontonier.core import redaction, worktree
-
 from amicus.errors import error_envelope
 from amicus.orchestration import prompts
 from amicus.orchestration import workspace as ws
@@ -23,6 +21,7 @@ from amicus.schemas.params import (
     MIN_TIMEOUT_SECONDS,
     reasoning_effort_shape_error,
 )
+from amicus.sdk.core import redaction, worktree
 from amicus.tools import _resolve
 
 if TYPE_CHECKING:  # pragma: no cover

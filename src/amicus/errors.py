@@ -1,6 +1,6 @@
 """Construction and serialization of the error envelope (ADR 0005).
 
-pontonier's `repair_rules()` are the defaults, minted with a neutral vocabulary so the
+The SDK's `repair_rules()` are the defaults, minted with a neutral vocabulary so the
 four per-backend codes come out as `backend_*`; amicus-local codes and prose overrides
 sit on top; a plugin's `local_codes` are added and its `repair_overrides` win per code.
 `render_failure` turns a backend's ClassifiedFailure into the wire envelope, honoring the
@@ -11,7 +11,6 @@ from __future__ import annotations
 import dataclasses
 from typing import TYPE_CHECKING, Any
 
-from pontonier.conventions.envelope import BackendErrorVocabulary, RepairRule, repair_rules
 from pydantic import ValidationError
 
 from amicus.schemas.codes import BACKEND_IDS, ERROR_CODES, generalize_code
@@ -24,11 +23,11 @@ from amicus.schemas.envelope import (
     Repair,
     Usage,
 )
+from amicus.sdk.conventions.envelope import BackendErrorVocabulary, RepairRule, repair_rules
 
 if TYPE_CHECKING:  # pragma: no cover
-    from pontonier.backend.protocol import ClassifiedFailure
-
     from amicus.plugin import BackendPlugin
+    from amicus.sdk.backend.protocol import ClassifiedFailure
 
 NEUTRAL_VOCABULARY = BackendErrorVocabulary(
     backend_id="backend",

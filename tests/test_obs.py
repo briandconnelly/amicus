@@ -16,7 +16,7 @@ def test_configure_attaches_stderr_and_optional_file(tmp_path, clean_env):
     streams = [getattr(h, "stream", None) for h in logger.handlers]
     assert sys.stderr in streams and sys.stdout not in streams
     assert any(isinstance(h, logging.FileHandler) for h in logger.handlers)
-    assert logging.getLogger("pontonier").propagate is False
+    assert logging.getLogger("amicus.sdk").propagate is True
     obs.get_logger("amicus.x").debug("hello")
     for h in logger.handlers:
         h.flush()
@@ -29,3 +29,10 @@ def test_configure_is_idempotent_and_survives_a_bad_file(tmp_path, clean_env):
     assert not any(isinstance(h, logging.FileHandler) for h in logger.handlers)
     again = obs.configure(config.settings({"AMICUS_LOG_LEVEL": "ERROR"}))
     assert again is logger and logger.level != logging.ERROR
+
+
+def test_configure_leaves_no_pontonier_logger_tree(clean_env):
+    """M8: the SDK logs under `amicus.sdk`, so no second logger tree is configured."""
+    obs.configure(config.settings({}), force=True)
+    assert not hasattr(obs, "LIBRARY_LOGGER_NAME")
+    assert logging.getLogger("pontonier").handlers == []

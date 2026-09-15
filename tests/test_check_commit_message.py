@@ -43,3 +43,9 @@ def test_skills_scope_is_allowed():
     from scripts.check_commit_message import ALLOWED_SCOPES
 
     assert "skills" in ALLOWED_SCOPES
+
+
+def test_sdk_scope_is_allowed():
+    from scripts.check_commit_message import ALLOWED_SCOPES
+
+    assert "sdk" in ALLOWED_SCOPES

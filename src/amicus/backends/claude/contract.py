@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import re
 
-from pontonier.backend import contract as _pc
+from amicus.sdk.backend import contract as _pc
 
 CLAUDE_BIN = "claude"
 
@@ -220,7 +220,7 @@ def is_contract_drift(*texts: str | None) -> bool:
     return _any(_DRIFT_PATTERNS, texts)
 
 
-# --- The pontonier contract -----------------------------------------------------------------
+# --- The SDK contract -----------------------------------------------------------------
 CONTRACT = _pc.BackendContract(
     backend_id="claude",
     display_name="Claude Code",

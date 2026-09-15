@@ -22,7 +22,6 @@ classifiers = [
 ]
 dependencies = [
     "anyio>=4",
-    "pontonier==0.9.0",
     # Minor-line caps: fastmcp documents that breaking changes may land in minor releases.
     # Widening either cap is a deliberate upgrade PR, not a resolver decision.
     "fastmcp>=4.0,<4.1",
@@ -149,3 +148,38 @@ name = "tools never import the server module"
 type = "forbidden"
 source_modules = ["amicus.tools"]
 forbidden_modules = ["amicus.server"]
+
+[[tool.importlinter.contracts]]
+name = "the sdk never imports the rest of amicus"
+type = "forbidden"
+source_modules = ["amicus.sdk"]
+forbidden_modules = [
+    "amicus._worker",
+    "amicus.appstate",
+    "amicus.backends",
+    "amicus.compaction",
+    "amicus.config",
+    "amicus.errors",
+    "amicus.jobs",
+    "amicus.manifest",
+    "amicus.middleware",
+    "amicus.obs",
+    "amicus.orchestration",
+    "amicus.packaging",
+    "amicus.plugin",
+    "amicus.registry",
+    "amicus.request",
+    "amicus.result_format_snapshot",
+    "amicus.schemas",
+    "amicus.server",
+    "amicus.surface",
+    "amicus.tools",
+    "amicus.wire_shape_snapshot",
+]
+
+# Ported from pontonier's only contract: core never imports the rest of the sdk.
+[[tool.importlinter.contracts]]
+name = "sdk core is a leaf layer"
+type = "forbidden"
+source_modules = ["amicus.sdk.core"]
+forbidden_modules = ["amicus.sdk.backend", "amicus.sdk.conventions", "amicus.sdk.testing"]

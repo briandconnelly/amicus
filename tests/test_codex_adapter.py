@@ -6,14 +6,14 @@ import tomllib
 from pathlib import Path
 
 import pytest
-from pontonier.backend.protocol import AgentBackend, RunOutcome, RunRequest
-from pontonier.core import worktree
-from pontonier.core.runtime import CommandRun
-from pontonier.testing import conformance
 from tests.support import codexfixtures as cf
 
 from amicus.backends.codex import contract
 from amicus.schemas import instructions as ins
+from amicus.sdk.backend.protocol import AgentBackend, RunOutcome, RunRequest
+from amicus.sdk.core import worktree
+from amicus.sdk.core.runtime import CommandRun
+from amicus.sdk.testing import conformance
 
 
 def _req(**kw) -> RunRequest:

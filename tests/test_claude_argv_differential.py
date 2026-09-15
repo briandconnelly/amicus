@@ -5,10 +5,10 @@ VALUE aside; the guardrail text is compared separately with the host neutralized
 from __future__ import annotations
 
 import pytest
-from pontonier.backend.protocol import RunRequest
 from tests.support import claudefixtures as cf
 
 from amicus.backends.claude import adversarial
+from amicus.sdk.backend.protocol import RunRequest
 
 FIXTURE = cf.load_fixture()
 

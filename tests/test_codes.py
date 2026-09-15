@@ -4,10 +4,9 @@ from __future__ import annotations
 
 from typing import get_args
 
-from pontonier.backend.contract import BackendContract  # noqa: F401 - import smoke
-from pontonier.conventions import envelope as pe
-
 from amicus.schemas import codes, fingerprint
+from amicus.sdk.backend.contract import BackendContract  # noqa: F401 - import smoke
+from amicus.sdk.conventions import envelope as pe
 
 
 def test_backend_ids_are_the_v1_set_in_order():

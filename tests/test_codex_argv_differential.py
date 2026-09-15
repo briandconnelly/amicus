@@ -7,17 +7,17 @@ from __future__ import annotations
 import tomllib
 
 import pytest
-from pontonier.backend.protocol import RunRequest
-from pontonier.conventions.prompts import (
+from tests.support import codexfixtures as cf
+
+from amicus.backends.codex import contract
+from amicus.schemas import instructions as ins
+from amicus.sdk.backend.protocol import RunRequest
+from amicus.sdk.conventions.prompts import (
     build_consult_prompt,
     build_delegate_prompt,
     build_review_prompt,
     framings,
 )
-from tests.support import codexfixtures as cf
-
-from amicus.backends.codex import contract
-from amicus.schemas import instructions as ins
 
 SIBLING_HOST = "Claude Code"
 

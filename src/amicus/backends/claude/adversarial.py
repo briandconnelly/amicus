@@ -47,7 +47,7 @@ OUTPUT_GUARDRAILS = (
 
 
 def _short(host_name: str) -> str:
-    """ "Claude Code" reads as "Claude" mid-sentence, as pontonier's framings do it."""
+    """ "Claude Code" reads as "Claude" mid-sentence, as the SDK's framings do it."""
     return host_name.split(maxsplit=1)[0]
 
 

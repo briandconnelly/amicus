@@ -10,14 +10,14 @@ from amicus import plugin as p
 
 
 def test_constants():
-    assert p.PLUGIN_API_VERSION == 1
+    assert p.PLUGIN_API_VERSION == 2
     assert p.ENTRY_POINT_GROUP == "amicus.backends"
 
 
 def test_fake_plugin_is_a_complete_plugin():
     fp = fakeplugin.make_plugin()
     assert fp.backend_id == "fake"
-    assert fp.api_version == 1
+    assert fp.api_version == 2
     assert isinstance(fp.status, p.StatusProbe)
     assert isinstance(fp.models, p.ModelCatalogReader)
     assert isinstance(fp.binary, p.BinaryResolver)

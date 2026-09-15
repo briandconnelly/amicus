@@ -1,13 +1,9 @@
-"""The Codex backend plugin (M1): `plugin()` assembles the frozen pontonier contract, the
+"""The Codex backend plugin (M1): `plugin()` assembles the frozen SDK contract, the
 adapter, and the amicus-side facts from the AMICUS_CODEX_* environment."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
-
-from pontonier.conventions.annotations import AnnotationEffects
-from pontonier.conventions.envelope import BackendErrorVocabulary, RepairRule
-from pontonier.conventions.preflight import HelpProbe
 
 from amicus.backends.codex import config as codex_config
 from amicus.backends.codex import contract
@@ -17,6 +13,9 @@ from amicus.backends.codex.models import CodexModels
 from amicus.backends.codex.options import options_for
 from amicus.backends.codex.status import CodexStatus
 from amicus.plugin import BackendPlugin
+from amicus.sdk.conventions.annotations import AnnotationEffects
+from amicus.sdk.conventions.envelope import BackendErrorVocabulary, RepairRule
+from amicus.sdk.conventions.preflight import HelpProbe
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Mapping

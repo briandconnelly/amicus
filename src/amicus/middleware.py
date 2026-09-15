@@ -15,13 +15,13 @@ from fastmcp.tools import ToolResult
 from mcp import MCPError
 from mcp.types import INTERNAL_ERROR, INVALID_PARAMS
 from mcp.types.version import MODERN_PROTOCOL_VERSIONS
-from pontonier.core import redaction
 from pydantic import ValidationError
 
 from amicus import obs
 from amicus.errors import make_error, serialize_error, serialize_error_info
 from amicus.schemas.envelope import ErrorResult, InvalidArgument, Meta
 from amicus.schemas.fingerprint import JSON_SCHEMA_DIALECT
+from amicus.sdk.core import redaction
 
 if TYPE_CHECKING:  # pragma: no cover
     from fastmcp import FastMCP

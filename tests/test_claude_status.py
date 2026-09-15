@@ -3,10 +3,10 @@ API-key-ignored warning."""
 
 from __future__ import annotations
 
-from pontonier.conventions.preflight import FlagSupport
 from tests.support import claudefixtures as cf
 
 from amicus.backends.claude import cli, status
+from amicus.sdk.conventions.preflight import FlagSupport
 
 
 def _pin(monkeypatch, version="2.1.263 (Claude Code)", auth=True):

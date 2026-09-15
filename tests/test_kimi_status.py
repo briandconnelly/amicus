@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from pontonier.core.runtime import BINARY_NOT_FOUND, CommandRun
 from tests.support import kimifixtures as kf
 
 from amicus.backends.kimi import status as st
+from amicus.sdk.core.runtime import BINARY_NOT_FOUND, CommandRun
 
 HELP = (
     "  -p, --prompt <prompt>\n  --output-format <format>\n  --agent-file <path>\n"

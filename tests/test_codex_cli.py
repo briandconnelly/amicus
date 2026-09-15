@@ -5,13 +5,13 @@ from __future__ import annotations
 import tomllib
 
 import pytest
-from pontonier.conventions.preflight import FlagSupport
-from pontonier.core import worktree
-from pontonier.core.runtime import BINARY_NOT_FOUND, TIMED_OUT, CommandRun
 
 from amicus.backends.codex import cli, contract
 from amicus.backends.codex import config as cc
 from amicus.schemas import instructions as ins
+from amicus.sdk.conventions.preflight import FlagSupport
+from amicus.sdk.core import worktree
+from amicus.sdk.core.runtime import BINARY_NOT_FOUND, TIMED_OUT, CommandRun
 
 _ALL_FLAGS = FlagSupport(
     supported=frozenset(contract.ALWAYS_SEND_FLAGS | set(contract.HELP_GATED_FLAGS)),

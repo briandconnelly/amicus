@@ -6,11 +6,11 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from pontonier.backend.contract import IsolationPolicy
 from tests.support import fakeplugin
 
 from amicus.orchestration import isolation
 from amicus.request import RunSpec
+from amicus.sdk.backend.contract import IsolationPolicy
 
 
 def _git(cwd, *args):

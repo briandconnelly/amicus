@@ -65,7 +65,7 @@ def test_in_tree_ids_are_reserved_against_entry_points():
 @pytest.mark.parametrize(
     ("override", "reason"),
     [
-        ({"api_version": 2}, "api_version"),
+        ({"api_version": 1}, "api_version"),
         ({"contract": fakeplugin.make_contract("other")}, "id_mismatch"),
     ],
 )

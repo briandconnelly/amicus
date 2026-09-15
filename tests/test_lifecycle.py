@@ -11,7 +11,6 @@ import threading
 import time
 
 import pytest
-from pontonier.core import jobs as pjobs
 from tests.support import fakeplugin
 
 from amicus import config
@@ -20,6 +19,7 @@ from amicus.jobs.taskmap import TaskJobMap
 from amicus.request import RunSpec, meta_for
 from amicus.schemas.envelope import Meta, dump_success
 from amicus.schemas.results import ConsultResult, RawResponse
+from amicus.sdk.core import jobs as pjobs
 
 
 def _spec(cwd, **kw):
@@ -1161,7 +1161,7 @@ async def test_keyed_timeout_is_temporary_even_when_the_backend_says_timeout_is_
     """Claude's own `timeout` rule is non-temporary, and make_error drops retry_after_ms on a
     non-temporary error. The keyed wait's timeout is about a run that is still going, so it
     is temporary whatever the backend's rule says, and the poll hint survives."""
-    from pontonier.conventions.envelope import RepairRule
+    from amicus.sdk.conventions.envelope import RepairRule
 
     plugin = fakeplugin.make_plugin(
         repair_overrides={"timeout": RepairRule("start_new_job", None, False, "gone")}

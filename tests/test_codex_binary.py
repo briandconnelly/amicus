@@ -88,7 +88,7 @@ def test_wsl2_detected_from_proc_version_and_npm_candidate(monkeypatch, tmp_path
     monkeypatch.setattr(binary, "USR_LOCAL_BIN", tmp_path / "usr-local-absent")
     npm_prefix = tmp_path / "npm"
     exe = _executable((npm_prefix / "bin").mkdir(parents=True) or (npm_prefix / "bin" / "codex"))
-    from pontonier.core.runtime import CommandRun
+    from amicus.sdk.core.runtime import CommandRun
 
     monkeypatch.setattr(
         binary.runtime,

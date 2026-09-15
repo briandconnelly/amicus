@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import re
 
-from pontonier.backend import contract as _pc
+from amicus.sdk.backend import contract as _pc
 
 KIMI_BIN = "kimi"
 
@@ -226,7 +226,7 @@ def parse_retry_after_ms(*texts: str | None) -> int | None:
     return None
 
 
-# --- The pontonier contract -----------------------------------------------------------------
+# --- The SDK contract -----------------------------------------------------------------
 CONTRACT = _pc.BackendContract(
     backend_id="kimi",
     display_name="Kimi",

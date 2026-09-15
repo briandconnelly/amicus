@@ -11,11 +11,11 @@ from pathlib import Path
 import pytest
 from fastmcp import Client
 from jsonschema import Draft202012Validator
-from pontonier.core.jobs import DiscardOutcome, JobStore
 
 from amicus import config, server
 from amicus.jobs import delivery, lifecycle, lookup
 from amicus.registry import BackendRegistry
+from amicus.sdk.core.jobs import DiscardOutcome, JobStore
 
 
 @pytest.fixture

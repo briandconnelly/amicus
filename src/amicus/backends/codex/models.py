@@ -7,11 +7,10 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from pontonier.core import redaction
-from pontonier.core.jsoncache import read_bounded_json
-
 from amicus.backends.codex import contract
 from amicus.plugin import ModelEntry, ModelListing
+from amicus.sdk.core import redaction
+from amicus.sdk.core.jsoncache import read_bounded_json
 
 if TYPE_CHECKING:  # pragma: no cover
     from amicus.backends.codex.config import CodexConfig

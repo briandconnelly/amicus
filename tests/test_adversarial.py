@@ -7,7 +7,6 @@ import subprocess
 
 import pytest
 from fastmcp import Client
-from pontonier.backend.protocol import ExecResult
 from tests.support import codexfixtures as cxf
 from tests.support import fakeplugin
 
@@ -16,6 +15,7 @@ from amicus.orchestration import finalize, prompts
 from amicus.orchestration import run as run_mod
 from amicus.registry import BackendRegistry
 from amicus.request import INPUT_FIELDS, RunSpec
+from amicus.sdk.backend.protocol import ExecResult
 
 STRUCTURED = (
     '{"summary": "The plan ignores retries", "verdict": "concerns", "confidence": "high", '

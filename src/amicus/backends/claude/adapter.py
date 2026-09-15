@@ -1,4 +1,4 @@
-"""ClaudeBackend: the behavior half of the Claude contract on the pontonier lifecycle (ported
+"""ClaudeBackend: the behavior half of the Claude contract on the SDK lifecycle (ported
 from claude-in-codex `backend.py`, with the fixes the amicus spec names: the zero-exit
 envelope is an outcome inspection; usage carries the cache counters; timeout is not
 retryable; the caller's instructions ride stdin, never argv)."""
@@ -9,24 +9,22 @@ import contextlib
 import os
 from typing import TYPE_CHECKING
 
-from pontonier.backend.protocol import ClassifiedFailure, ExecResult, PreparedRun, RepairHint
-from pontonier.core import worktree
-
 from amicus.backends.claude import adversarial, cli, contract, normalize
 from amicus.backends.claude import config as claude_config
 from amicus.backends.claude.binary import BinaryNotFoundError
 from amicus.backends.claude.options import adversarial_config_mode
 from amicus.schemas import instructions
 from amicus.schemas.structured import schema_instruction
+from amicus.sdk.backend.protocol import ClassifiedFailure, ExecResult, PreparedRun, RepairHint
+from amicus.sdk.core import worktree
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import AsyncIterator, Callable
 
-    from pontonier.backend.protocol import RunOutcome, RunRequest
-    from pontonier.conventions.preflight import HelpProbe
-
     from amicus.backends.claude.binary import ClaudeBinary
     from amicus.backends.claude.config import ClaudeConfig
+    from amicus.sdk.backend.protocol import RunOutcome, RunRequest
+    from amicus.sdk.conventions.preflight import HelpProbe
 
 _INSTRUCTION_KINDS = frozenset({"consult", "review_changes"})
 PERMISSION_DENIED_NO_ANSWER_DETAIL = (

@@ -13,9 +13,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from urllib.parse import unquote, urlparse
 
-from pontonier.core import workspace as _pw
-
 from amicus.schemas.params import WORKSPACE_SCOPE
+from amicus.sdk.core import workspace as _pw
 
 if TYPE_CHECKING:  # pragma: no cover
     from amicus.schemas.envelope import RootsSource

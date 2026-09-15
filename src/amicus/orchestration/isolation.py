@@ -7,8 +7,8 @@ from __future__ import annotations
 import tempfile
 from typing import TYPE_CHECKING
 
-from pontonier.backend.contract import IsolationPolicy
-from pontonier.core import redaction, worktree
+from amicus.sdk.backend.contract import IsolationPolicy
+from amicus.sdk.core import redaction, worktree
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Callable

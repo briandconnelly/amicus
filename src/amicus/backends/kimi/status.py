@@ -4,17 +4,15 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from pontonier.conventions import preflight
-
 from amicus.backends.kimi import cli
 from amicus.backends.kimi.config import version_supported
 from amicus.plugin import StatusReport
+from amicus.sdk.conventions import preflight
 
 if TYPE_CHECKING:  # pragma: no cover
-    from pontonier.conventions.preflight import HelpProbe
-
     from amicus.backends.kimi.binary import KimiBinary
     from amicus.backends.kimi.config import KimiConfig
+    from amicus.sdk.conventions.preflight import HelpProbe
 
 VERSION_WARNING = (
     "The installed kimi version is outside the versions amicus was built against; paid "

@@ -285,11 +285,11 @@ async def test_timeout_is_not_retryable_and_points_at_a_new_job(
     """The first repair_overrides entry, through the loop in-process (the sync deadline floor
     is 10 s, so a real timed-out fake would make this suite slow; the differential's `timeout`
     case pins the code/temporary pair against the sibling, this pins amicus's repair)."""
-    from pontonier.core.runtime import TIMED_OUT
     from tests.support import claudefixtures as cf
 
     from amicus.orchestration import run as run_mod
     from amicus.request import RunSpec
+    from amicus.sdk.core.runtime import TIMED_OUT
 
     plugin, _ = cf.make_backend()
     monkeypatch.setattr(

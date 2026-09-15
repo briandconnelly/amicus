@@ -7,7 +7,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from fastmcp import Context
-from pontonier.core import redaction, worktree
 
 from amicus.errors import error_envelope
 from amicus.orchestration import prompts, review
@@ -39,6 +38,7 @@ from amicus.schemas.results import (
     DryRunResult,
     WorktreePlan,
 )
+from amicus.sdk.core import redaction, worktree
 from amicus.tools._guard import guard
 from amicus.tools._meta import annotations_for, lifecycle_meta, tool_deprecation
 from amicus.tools._prepare import deadline_advisory, prepare_run

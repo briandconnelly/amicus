@@ -6,13 +6,13 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from pontonier.backend.protocol import AgentBackend, OutcomeInspector, RunOutcome, RunRequest
-from pontonier.core.runtime import CommandRun
-from pontonier.testing import conformance
 from tests.support import kimifixtures as kf
 
 from amicus.backends.kimi import cli, contract
 from amicus.schemas import instructions as ins
+from amicus.sdk.backend.protocol import AgentBackend, OutcomeInspector, RunOutcome, RunRequest
+from amicus.sdk.core.runtime import CommandRun
+from amicus.sdk.testing import conformance
 
 STRUCTURED = '{"summary": "Looks fine", "verdict": "pass", "confidence": "high", "findings": []}'
 EVENTS = (

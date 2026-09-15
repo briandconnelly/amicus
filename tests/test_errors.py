@@ -7,14 +7,14 @@ from pathlib import Path
 
 import pytest
 from jsonschema import Draft202012Validator
-from pontonier.backend.protocol import ClassifiedFailure, RepairHint
-from pontonier.backend.protocol import Usage as PUsage
-from pontonier.conventions.envelope import RepairRule
 from tests.support import fakeplugin
 
 from amicus import errors
 from amicus.schemas.codes import ERROR_CODES
 from amicus.schemas.envelope import ErrorDetail, ErrorResult, InvalidArgument, Meta
+from amicus.sdk.backend.protocol import ClassifiedFailure, RepairHint
+from amicus.sdk.backend.protocol import Usage as PUsage
+from amicus.sdk.conventions.envelope import RepairRule
 
 
 def test_repair_table_covers_the_whole_catalog_and_no_more():

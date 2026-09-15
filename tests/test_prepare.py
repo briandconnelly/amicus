@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import subprocess
 
-from pontonier.core import worktree
 from tests.support import fakeplugin
 
 from amicus import config
 from amicus.plugin import OptionSpec
 from amicus.registry import BackendRegistry
+from amicus.sdk.core import worktree
 from amicus.tools import _prepare
 
 

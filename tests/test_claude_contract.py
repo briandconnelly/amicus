@@ -6,10 +6,10 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from pontonier.backend.contract import IsolationPolicy
-from pontonier.testing import conformance
 
 from amicus.backends.claude import contract
+from amicus.sdk.backend.contract import IsolationPolicy
+from amicus.sdk.testing import conformance
 
 _DOCS_PATH = Path(__file__).parent.parent / "docs" / "claude-help" / "2.1.263"
 HELP = (_DOCS_PATH / "claude-help.txt").read_text()

@@ -5,8 +5,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, get_args
 
-from pontonier.core import gitdiff, redaction
-
 from amicus.errors import error_envelope
 from amicus.schemas.envelope import ContextSummary, ErrorDetail, InvalidArgument, dump_success
 from amicus.schemas.results import (
@@ -19,13 +17,13 @@ from amicus.schemas.results import (
     ReviewScope,
     Untracked,
 )
+from amicus.sdk.core import gitdiff, redaction
 
 if TYPE_CHECKING:  # pragma: no cover
-    from pontonier.core.gitdiff import DiffResult
-
     from amicus.plugin import BackendPlugin
     from amicus.request import RunSpec
     from amicus.schemas.envelope import Meta
+    from amicus.sdk.core.gitdiff import DiffResult
 
 _GITDIFF_ERRORS: dict[type, tuple[str, str | None]] = {
     gitdiff.InvalidScopeError: ("invalid_scope", "scope"),

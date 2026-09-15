@@ -8,8 +8,6 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, Any
 
-from pontonier.core import redaction
-
 from amicus.errors import error_envelope
 from amicus.jobs.delivery import STATE_TO_ERROR
 from amicus.jobs.polling import poll_hint_ms
@@ -17,6 +15,7 @@ from amicus.jobs.taskmap import TaskJobMap
 from amicus.orchestration import workspace as ws
 from amicus.schemas.envelope import ErrorDetail, Meta, RootsSource, Workspace
 from amicus.schemas.results import JobStatus, JobSummary
+from amicus.sdk.core import redaction
 
 if TYPE_CHECKING:  # pragma: no cover
     from amicus.config import Settings

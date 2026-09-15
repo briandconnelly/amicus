@@ -1,5 +1,5 @@
 """Build the `kimi -p` invocation, stage the handshake files, run the free probes, and
-classify a failed run into a pontonier ClassifiedFailure (ported from moonbridge `kimi.py`).
+classify a failed run into an SDK ClassifiedFailure (ported from moonbridge `kimi.py`).
 
 Two guarantees live here:
 
@@ -21,17 +21,16 @@ import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from pontonier.backend.protocol import ClassifiedFailure, RepairHint
-from pontonier.conventions import preflight
-from pontonier.core import redaction, runtime
-
 from amicus.backends.kimi import contract, normalize
+from amicus.sdk.backend.protocol import ClassifiedFailure, RepairHint
+from amicus.sdk.conventions import preflight
+from amicus.sdk.core import redaction, runtime
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Callable
 
-    from pontonier.conventions.preflight import FlagSupport
-    from pontonier.core.runtime import CommandRun
+    from amicus.sdk.conventions.preflight import FlagSupport
+    from amicus.sdk.core.runtime import CommandRun
 
 
 def read_only_agent_document() -> str:
@@ -247,7 +246,7 @@ def classify_failure(
     reasoning_effort: str | None,
     sanitize: Callable[[str], str] | None,
 ) -> ClassifiedFailure:
-    """Map a non-success run into the shared taxonomy. Order (pontonier's shared one):
+    """Map a non-success run into the shared taxonomy. Order (the SDK's shared one):
     binary missing → timeout → drift → auth → rate limit → invalid model → nonzero_exit.
     There is no effort branch: kimi silently ignores an unrecognized effort, so a rejection
     never reaches here (the adapter refuses pre-spend). `sanitize` replaces the generic

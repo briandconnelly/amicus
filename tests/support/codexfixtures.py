@@ -7,12 +7,11 @@ import json
 import re
 from pathlib import Path
 
-from pontonier.conventions.preflight import FlagSupport, HelpProbe
-from pontonier.core.runtime import CommandRun
-
 from amicus.backends import codex as codex_pkg
 from amicus.backends.codex import contract
 from amicus.backends.codex.adapter import CodexBackend
+from amicus.sdk.conventions.preflight import FlagSupport, HelpProbe
+from amicus.sdk.core.runtime import CommandRun
 
 FIXTURE = json.loads(
     (Path(__file__).parent.parent / "fixtures" / "codex_differentials.json").read_text()

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from pontonier.conventions.fingerprint import canonical_digest
+from amicus.sdk.conventions.fingerprint import canonical_digest
 
 if TYPE_CHECKING:  # pragma: no cover
     from fastmcp import FastMCP
