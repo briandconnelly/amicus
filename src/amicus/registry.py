@@ -1,6 +1,6 @@
 """BackendRegistry: load enabled backends from in-tree factories and entry points.
 
-Never raises on a bad backend: an import error, a wrong api_version, an id mismatch, a
+Never raises on a bad backend: an import error, a wrong api_version, an id mismatch, an
 SDK conformance violation (`check_contract` AND `check_backend`) or a factory
 exception is recorded as UnavailableBackend and reported by amicus_backends."""
 
