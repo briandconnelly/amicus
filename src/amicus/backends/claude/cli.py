@@ -1,5 +1,5 @@
 """Build the `claude -p` invocation, scrub the child environment per config mode, run the
-free probes, and classify a failed or failure-shaped run into a pontonier ClassifiedFailure
+free probes, and classify a failed or failure-shaped run into an SDK ClassifiedFailure
 (ported from claude-in-codex `claude.py`/`config.py`).
 
 Two guarantees live here:

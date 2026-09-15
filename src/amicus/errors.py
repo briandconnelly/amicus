@@ -1,6 +1,6 @@
 """Construction and serialization of the error envelope (ADR 0005).
 
-pontonier's `repair_rules()` are the defaults, minted with a neutral vocabulary so the
+The SDK's `repair_rules()` are the defaults, minted with a neutral vocabulary so the
 four per-backend codes come out as `backend_*`; amicus-local codes and prose overrides
 sit on top; a plugin's `local_codes` are added and its `repair_overrides` win per code.
 `render_failure` turns a backend's ClassifiedFailure into the wire envelope, honoring the

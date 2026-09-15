@@ -1,4 +1,4 @@
-"""The Codex backend plugin (M1): `plugin()` assembles the frozen pontonier contract, the
+"""The Codex backend plugin (M1): `plugin()` assembles the frozen SDK contract, the
 adapter, and the amicus-side facts from the AMICUS_CODEX_* environment."""
 
 from __future__ import annotations

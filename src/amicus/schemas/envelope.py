@@ -18,7 +18,7 @@ from amicus.schemas.fingerprint import FINGERPRINT, JSON_SCHEMA_DIALECT
 
 WorkspaceSource = Literal["param", "roots", "cwd"]
 RootsSource = Literal["client", "not_negotiated", "probe_failed"]
-# A backend id on the wire is an open lowercase identifier (the same shape pontonier's
+# A backend id on the wire is an open lowercase identifier (the same shape the SDK's
 # BackendContract enforces), so a third-party plugin's id fits; the `backend` PARAMETER is
 # the v1 enum. Every result field named backend/id uses this alias.
 BackendRef = Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]*$", max_length=64)]

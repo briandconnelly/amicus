@@ -1,4 +1,4 @@
-"""ClaudeBackend: the behavior half of the Claude contract on the pontonier lifecycle (ported
+"""ClaudeBackend: the behavior half of the Claude contract on the SDK lifecycle (ported
 from claude-in-codex `backend.py`, with the fixes the amicus spec names: the zero-exit
 envelope is an outcome inspection; usage carries the cache counters; timeout is not
 retryable; the caller's instructions ride stdin, never argv)."""

@@ -1,9 +1,9 @@
 """The backend plugin API: what a backend package hands amicus (pure data + protocols).
 
-A plugin bundles pontonier's frozen contract and adapter with the amicus-side facts the
+A plugin bundles the SDK's frozen contract and adapter with the amicus-side facts the
 server needs: option specs, a status probe, a model-catalog reader, a binary resolver,
 a help probe, the error vocabulary, an env namespace and the annotation effects. Outcome
-inspection is a pontonier capability on `backend` itself (OutcomeInspector), so the
+inspection is an SDK capability on `backend` itself (OutcomeInspector), so the
 plugin carries nothing extra for it. Third-party backends register an entry point in
 the `amicus.backends` group whose value is a BackendPlugin or a zero-argument factory.
 """

@@ -1,4 +1,4 @@
-"""The Kimi backend plugin (M3): `plugin()` assembles the frozen pontonier contract, the
+"""The Kimi backend plugin (M3): `plugin()` assembles the frozen SDK contract, the
 adapter, and the amicus-side facts from the AMICUS_KIMI_* environment."""
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-"""Importable test kit for bridges built on pontonier.
+"""Importable test kit for backends built on amicus.sdk.
 
 Framework-agnostic by design: every check returns a list of violation strings
 (empty = pass) instead of asserting, so a consumer wires it into pytest with a

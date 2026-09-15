@@ -1,6 +1,6 @@
 """Closed value sets: backend ids, verbs, the error-code catalog, repair steps.
 
-The catalog is DERIVED from pontonier's shared taxonomy so it cannot drift from it:
+The catalog is DERIVED from the SDK's shared taxonomy so it cannot drift from it:
 universal codes, the four per-backend codes generalized to ``backend_*`` (the concrete
 backend rides ``error.backend``), the feature codes some v1 backend declares, and the
 amicus-local codes. A backend-LOCAL code (codex's ``user_config_rejected``; Claude's
@@ -20,7 +20,7 @@ BackendId = Literal["codex", "kimi", "claude"]
 VERBS: tuple[str, ...] = ("consult", "review_changes", "adversarial_review", "delegate")
 Verb = Literal["consult", "review_changes", "adversarial_review", "delegate"]
 
-# The four codes pontonier mints per backend, generalized so the catalog stays closed.
+# The four codes the SDK mints per backend, generalized so the catalog stays closed.
 _MINTED_SUFFIXES = ("_not_found", "_auth_required", "_auth_indeterminate", "_rate_limited")
 GENERALIZED_BACKEND_CODES = frozenset(f"backend{s}" for s in _MINTED_SUFFIXES)
 

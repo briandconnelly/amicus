@@ -1,4 +1,4 @@
-"""The Claude Code backend plugin (M4): `plugin()` assembles the frozen pontonier contract, the
+"""The Claude Code backend plugin (M4): `plugin()` assembles the frozen SDK contract, the
 adapter, and the amicus-side facts from the AMICUS_CLAUDE_* environment."""
 
 from __future__ import annotations

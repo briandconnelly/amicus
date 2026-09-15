@@ -1,4 +1,4 @@
-"""start / await / run_sync over pontonier's JobStore (ported from codex-in-claude
+"""start / await / run_sync over the SDK's JobStore (ported from codex-in-claude
 server.py's `_start_job`/`_await_job_result`/`_run_sync`; the keyed path lands here in M2;
 ADR 0008). The prompt inputs stream to the worker over stdin; only `RunSpec.public()` is
 persisted."""
@@ -83,13 +83,13 @@ _IDEM_MESSAGES: dict[str, str] = {
     ),
 }
 # Terminal keyed outcomes -> (code, retry_after_ms). Anything unexpected degrades to the
-# retryable in_progress so a new pontonier outcome can never become a silent success.
+# retryable in_progress so a new SDK outcome can never become a silent success.
 _IDEM_TERMINAL: dict[str, tuple[str, int | None]] = {
     "conflict": ("idempotency_conflict", None),
     "unavailable": ("idempotency_result_unavailable", None),
     "in_progress": ("idempotency_in_progress", IDEM_IN_PROGRESS_RETRY_MS),
 }
-# An unexpected pontonier outcome degrades to the retryable in_progress.
+# An unexpected SDK outcome degrades to the retryable in_progress.
 _IDEM_UNKNOWN_OUTCOME = _IDEM_TERMINAL["in_progress"]
 
 

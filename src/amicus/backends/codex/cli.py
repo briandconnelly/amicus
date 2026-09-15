@@ -1,5 +1,5 @@
-"""Build the `codex exec` argv, run the free probes, and classify a failed run into a
-pontonier ClassifiedFailure (ported from codex-in-claude `codex.py`)."""
+"""Build the `codex exec` argv, run the free probes, and classify a failed run into an
+SDK ClassifiedFailure (ported from codex-in-claude `codex.py`)."""
 
 from __future__ import annotations
 

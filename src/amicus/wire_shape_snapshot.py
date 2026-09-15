@@ -171,8 +171,8 @@ def _deliver(stored: dict[str, Any], name: str, detail: str) -> dict[str, Any]:
     return envelope
 
 
-# A four-minute-old running record, carrying pontonier's own capped hint for that age: the
-# pinned job_running retry_after_ms is amicus's ceiling, not pontonier's 10000 (#95).
+# A four-minute-old running record, carrying the SDK's own capped hint for that age: the
+# pinned job_running retry_after_ms is amicus's ceiling, not the SDK's 10000 (#95).
 _LONG_RUNNING_ELAPSED_MS = 240_000
 # result_format the chokepoint reads today; a stored record claiming a DIFFERENT value
 # (never None, never the current one) is what makes `_unreadable` report

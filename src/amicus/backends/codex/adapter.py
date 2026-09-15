@@ -1,4 +1,4 @@
-"""CodexBackend: the behavior half of the Codex contract on the pontonier lifecycle
+"""CodexBackend: the behavior half of the Codex contract on the SDK lifecycle
 (ported from codex-in-claude `backend.py`). Since the sibling's re-plumb this adapter IS
 the hot path; amicus runs it from `orchestration.run`."""
 

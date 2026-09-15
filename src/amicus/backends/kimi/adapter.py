@@ -1,4 +1,4 @@
-"""KimiBackend: the behavior half of the Kimi contract on the pontonier lifecycle (ported
+"""KimiBackend: the behavior half of the Kimi contract on the SDK lifecycle (ported
 from moonbridge `backend.py`, with the fixes the amicus spec names: the classifier gets the
 last message and the site sanitizer; finalize carries cache tokens; the pre-spend effort
 gate is the adapter's own; empty answers are an outcome inspection)."""

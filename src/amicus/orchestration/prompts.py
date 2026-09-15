@@ -1,4 +1,4 @@
-"""Host identity, the framings (pontonier's, byte-for-byte for a named host), the prompt
+"""Host identity, the framings (the SDK's, byte-for-byte for a named host), the prompt
 builders, and the strict structured-output schemas the model must satisfy."""
 
 from __future__ import annotations
@@ -53,7 +53,7 @@ ADVERSARIAL_STRUCTURED_CLAUSE = (
 
 
 def adversarial_framing(host_name: str) -> str:
-    """The fourth verb's framing: amicus's own (pontonier has none), host-named like the others."""
+    """The fourth verb's framing: amicus's own (the SDK has none), host-named like the others."""
     return (
         f"You are an adversarial critic giving {host_name} an independent second opinion as a "
         "different model.\n"

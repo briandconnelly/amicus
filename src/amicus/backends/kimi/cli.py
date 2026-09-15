@@ -1,5 +1,5 @@
 """Build the `kimi -p` invocation, stage the handshake files, run the free probes, and
-classify a failed run into a pontonier ClassifiedFailure (ported from moonbridge `kimi.py`).
+classify a failed run into an SDK ClassifiedFailure (ported from moonbridge `kimi.py`).
 
 Two guarantees live here:
 
@@ -246,7 +246,7 @@ def classify_failure(
     reasoning_effort: str | None,
     sanitize: Callable[[str], str] | None,
 ) -> ClassifiedFailure:
-    """Map a non-success run into the shared taxonomy. Order (pontonier's shared one):
+    """Map a non-success run into the shared taxonomy. Order (the SDK's shared one):
     binary missing → timeout → drift → auth → rate limit → invalid model → nonzero_exit.
     There is no effort branch: kimi silently ignores an unrecognized effort, so a rejection
     never reaches here (the adapter refuses pre-spend). `sanitize` replaces the generic

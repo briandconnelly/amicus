@@ -56,3 +56,45 @@ def test_the_sdk_root_names_its_origin_and_has_no_version_lookup():
     distribution for a version it no longer has."""
     assert not hasattr(amicus.sdk, "__version__")
     assert "185b16cd7a3c7cb86b07f2a8ca58d1527372aa1d" in (amicus.sdk.__doc__ or "")
+
+
+# The only lines under src/ that may name pontonier after M8 (spec §1, R5): the origin note in
+# the sdk's package root, a link into pontonier's repository, and the four defaults that keep
+# their literal until a follow-up renames them.
+_PONTONIER_DEFAULTS = frozenset(
+    {
+        'WORKTREE_PREFIX = "pontonier-worktree-"',
+        'identity_name: str = "pontonier"',
+        'identity_email: str = "pontonier@local"',
+        'return tempfile.mkdtemp(prefix="pontonier-nohooks-")',
+    }
+)
+
+
+def _unexplained_pontonier_lines(src: Path) -> list[str]:
+    hits: list[str] = []
+    for path in sorted(src.rglob("*.py")):
+        rel = path.relative_to(src).as_posix()
+        if rel == "amicus/sdk/__init__.py":
+            continue
+        for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if "pontonier" not in line.lower():
+                continue
+            if "briandconnelly/pontonier" in line or line.strip() in _PONTONIER_DEFAULTS:
+                continue
+            hits.append(f"{rel}:{n}")
+    return hits
+
+
+def test_src_names_pontonier_only_as_provenance_or_a_kept_default():
+    assert _unexplained_pontonier_lines(ROOT / "src") == []
+
+
+def test_the_prose_scan_detects_a_planted_mention(tmp_path):
+    planted = tmp_path / "amicus" / "x.py"
+    planted.parent.mkdir(parents=True)
+    planted.write_text(
+        '"""Built on Pontonier."""\nURL = "https://github.com/briandconnelly/pontonier"\n',
+        encoding="utf-8",
+    )
+    assert _unexplained_pontonier_lines(tmp_path) == ["amicus/x.py:1"]
