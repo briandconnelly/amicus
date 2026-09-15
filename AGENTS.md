@@ -55,8 +55,9 @@ The rules bind; the context after them explains and points elsewhere.
 
 ### What this is
 
-One MCP server for every second-opinion model: a verb-first tool surface with the backend as a parameter, built on FastMCP and the [pontonier](https://github.com/briandconnelly/pontonier) backend SDK.
+One MCP server for every second-opinion model: a verb-first tool surface with the backend as a parameter, built on FastMCP and its own in-tree backend SDK, `amicus.sdk`.
 The package is `amicus` under `src/`; each backend is a plugin under `src/amicus/backends/<id>/` behind the `BackendPlugin` seam in `src/amicus/plugin.py`.
+`amicus.sdk` (under `src/amicus/sdk/`) holds the backend protocol and contract, the job store, worktrees, diff gathering, redaction, the subprocess runtime, the error vocabulary and the conformance kit; it was copied from [pontonier](https://github.com/briandconnelly/pontonier) v0.9.0, and amicus no longer depends on pontonier (ADR 0029).
 Import boundaries between layers are enforced by the import-linter contracts in `pyproject.toml`.
 A backend's own prompt carriers (for Codex, the developer-instructions argv token and the stdin prompt) are disclosed on `amicus_backends`.
 
@@ -101,6 +102,7 @@ Those are held by the platform controls around the release — rule 21's ruleset
 ### Siblings
 
 The sibling checkouts named in rule 17 are read for porting, and their virtualenvs are used to capture differential fixtures (`scripts/capture_codex_differentials.py` runs inside codex-in-claude's).
+`~/projects/pontonier` is a sibling in the same sense: amicus no longer depends on it, its `v0.9.0` tag is where `amicus.sdk` came from, and it stays published only for the three older siblings until they are archived (ADR 0029).
 
 ### Local hooks
 
