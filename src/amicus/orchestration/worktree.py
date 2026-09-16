@@ -33,24 +33,26 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
 
 # mkdtemp prefix for the throwaway worktree's parent dir. Exposed so a job runner
-# can constrain its cleanup to this temp area (see jobs.JobStore cleanup_prefix).
-WORKTREE_PREFIX = "pontonier-worktree-"
+# can constrain its cleanup to this temp area (see the job store's cleanup_prefix).
+WORKTREE_PREFIX = "amicus-wt-"
 
 
 @dataclass(frozen=True)
 class WorktreeConfig:
     """Per-consumer worktree knobs that are visible outside the process.
 
-    Each bridge pins its own values so extraction into this library changes no
-    observable behavior: ``prefix`` names the temp parent dir (job runners
-    constrain cleanup to it), the identity pair signs the baseline commit
-    (git-visible in delegate worktree history), and ``extra_excludes`` appends
-    consumer-specific pathspecs (e.g. a handshake dir) to the built-in
-    build-artifact exclusions when capturing the diff."""
+    ``prefix`` names the temp parent dir (job runners constrain cleanup to
+    it), the identity pair signs the baseline commit (git-visible in delegate
+    worktree history), and ``extra_excludes`` appends consumer-specific
+    pathspecs (e.g. a handshake dir) to the built-in build-artifact exclusions
+    when capturing the diff.
+
+    The defaults are amicus's own values (#123), so ``DEFAULT_CONFIG`` is what
+    amicus runs with and nothing has to override it."""
 
     prefix: str = WORKTREE_PREFIX
-    identity_name: str = "pontonier"
-    identity_email: str = "pontonier@local"
+    identity_name: str = "amicus"
+    identity_email: str = "amicus@local"
     extra_excludes: tuple[str, ...] = ()
 
 
@@ -102,7 +104,7 @@ def _empty_hooks_dir() -> str:
     etc.) executes during worktree operations. Created once per process and left for
     the OS to reap — it holds nothing sensitive — and deliberately placed *outside*
     any worktree so the sandboxed agent cannot drop a hook file into it."""
-    return tempfile.mkdtemp(prefix="pontonier-nohooks-")
+    return tempfile.mkdtemp(prefix="amicus-nohooks-")
 
 
 # A configured filter driver's name (the ``<name>`` in ``[filter "<name>"]``) is
