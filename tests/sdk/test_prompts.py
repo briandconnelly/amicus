@@ -9,7 +9,7 @@ the model sees.
 
 from __future__ import annotations
 
-from amicus.sdk.conventions import prompts
+from amicus.orchestration import prompts
 
 # --- verbatim from moonbridge/src/moonbridge/prompts.py -------------------------------
 MOONBRIDGE_CONSULT_FRAMING = (

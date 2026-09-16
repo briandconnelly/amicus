@@ -8,14 +8,14 @@ import pytest
 from tests.support import kimifixtures as kf
 
 from amicus.backends.kimi import cli
-from amicus.schemas.structured import schema_instruction
-from amicus.sdk.backend.protocol import RunRequest
-from amicus.sdk.conventions.prompts import (
+from amicus.orchestration.prompts import (
     build_consult_prompt,
     build_delegate_prompt,
     build_review_prompt,
     framings,
 )
+from amicus.schemas.structured import schema_instruction
+from amicus.sdk.backend.protocol import RunRequest
 
 SIBLING_HOST = "Claude Code"
 FIXTURE = kf.load_fixture()
