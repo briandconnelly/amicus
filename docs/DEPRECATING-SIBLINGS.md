@@ -6,16 +6,19 @@ No agent executes this checklist; it exists so the maintainer does not have to r
 ## Ordering constraint
 
 Do not run any step in this checklist before amicus is actually published to `pypi.org`.
-As of 2026-09-08, `https://pypi.org/pypi/amicus/json` returns 404; amicus has been published to TestPyPI only, not to pypi.org.
-Every step below points a user at the `amicus` package or its README, so running it early sends users to a package that does not exist yet.
+Every step below points a user at the `amicus` package or its README, so running it earlier would have sent users to a package that did not exist.
+This constraint is satisfied, and has been since 0.1.0 was published to `pypi.org` on 2026-09-09.
+`https://pypi.org/pypi/amicus/json` returns HTTP 200 with `info.version` `0.3.0` and releases `0.1.0`, `0.2.0` and `0.3.0`, confirmed 2026-09-16.
+The constraint stays recorded so a future reader does not have to re-derive why the ordering existed.
+Nothing in this checklist is waiting on it.
 
 ## The three siblings
 
 amicus replaces `codex-in-claude`, `moonbridge`, and `claude-in-codex`.
 It does not deprecate `pontonier`: amicus carries pontonier's code as `amicus.sdk` and no longer depends on it (ADR 0029), but pontonier stays published, feature-frozen at 0.9.0, for these three siblings until they are archived.
 
-`codex-in-claude` and `claude-in-codex` are published by the maintainer on PyPI under those exact names: `GET https://pypi.org/pypi/codex-in-claude/json` and `GET https://pypi.org/pypi/claude-in-codex/json` both return HTTP 200 with `info.author` "Brian Connelly" and `info.project_urls.Repository` under `github.com/briandconnelly/`, confirmed 2026-09-08.
-`moonbridge` is not published by the maintainer under that name: PyPI's `moonbridge` package (latest `0.16.0`) belongs to an unrelated project, `info.author_email` "Phaedrus <hello@mistystep.io>" and `info.project_urls.Repository` `https://github.com/misty-step/moonbridge` — a name collision, not the maintainer's package.
+`codex-in-claude` and `claude-in-codex` are published by the maintainer on PyPI under those exact names: `GET https://pypi.org/pypi/codex-in-claude/json` and `GET https://pypi.org/pypi/claude-in-codex/json` both return HTTP 200 with `info.author` "Brian Connelly" and `info.project_urls.Repository` under `github.com/briandconnelly/`, confirmed 2026-09-16.
+`moonbridge` is not published by the maintainer under that name: PyPI's `moonbridge` package (latest `0.16.0`) belongs to an unrelated project, `info.author_email` "Phaedrus <hello@mistystep.io>" and `info.project_urls.Repository` `https://github.com/misty-step/moonbridge` — a name collision, not the maintainer's package, confirmed 2026-09-16.
 See the `moonbridge` section below for how users actually install `briandconnelly/moonbridge` today.
 
 ### `codex-in-claude`
@@ -63,4 +66,4 @@ Anyone who installed a sibling's plugin before this deprecation keeps working fr
 ## Where users are pointed instead
 
 Point every sibling's README, marketplace listing, and cross-link at the `amicus` package on PyPI and at this repository's `docs/MIGRATION.md`, which already maps each sibling's tools and environment variables to their amicus equivalents.
-Do this only after amicus's `pypi.org` listing exists, per the ordering constraint above.
+That listing exists, so the ordering constraint above no longer gates this.
