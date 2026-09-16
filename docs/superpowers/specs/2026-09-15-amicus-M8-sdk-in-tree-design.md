@@ -164,7 +164,7 @@ Not moved: pontonier's docs, scripts, README, CHANGELOG and `pyproject.toml`, an
   Each gets an amicus issue that cites it, except #30, which amicus #103 already tracks.
   The pontonier originals stay open for the siblings.
 - The other open pontonier issues are not mirrored.
-  #29 (the 10 s poll cap) is already worked around in `src/amicus/jobs/polling.py` (#95).
+  #29 (the 10 s poll cap) was worked around in `src/amicus/jobs/polling.py` (#95) and is moot from #118 on, since the store amicus raised to 30 s is its own.
   #5 to #8 are redaction test and matcher enhancements with no defect visible in amicus.
 
 ## 6. Sequencing and follow-ups

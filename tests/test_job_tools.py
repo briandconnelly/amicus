@@ -14,8 +14,8 @@ from jsonschema import Draft202012Validator
 
 from amicus import config, server
 from amicus.jobs import delivery, lifecycle, lookup
+from amicus.jobs.store import DiscardOutcome, JobStore
 from amicus.registry import BackendRegistry
-from amicus.sdk.core.jobs import DiscardOutcome, JobStore
 
 
 @pytest.fixture

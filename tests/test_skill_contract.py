@@ -285,14 +285,14 @@ def test_the_backend_reference_names_every_declared_feature():
 def test_the_polling_reference_states_the_hint_ceiling():
     # The hint grows with elapsed time only up to amicus's own ceiling (#95); a job that runs
     # for minutes is polled at the ceiling for most of its life, which the issue #84 reporter
-    # observed at pontonier's 10 s cap as "no back-off". Read from source so a change to the
+    # observed at the SDK's old 10 s cap as "no back-off". Read from source so a change to the
     # ceiling fails here until the skill follows it.
-    from amicus.jobs.polling import POLL_HINT_CAP_MS
+    from amicus.jobs.store import MAX_POLL_AFTER_MS
 
     polling = _SYNC_REF.partition("\n## Polling\n")[2].split("\n## ", 1)[0]
     assert polling, "sync-vs-async.md has no `## Polling` section"
     # Exact seconds, not floor-divided: a cap of 30500 ms must not still read as `30 s`.
-    assert f"`{POLL_HINT_CAP_MS / 1000:g} s`" in polling, "the poll hint's ceiling is unstated"
+    assert f"`{MAX_POLL_AFTER_MS / 1000:g} s`" in polling, "the poll hint's ceiling is unstated"
 
 
 def test_the_polling_recipe_fetches_a_terminal_handle_directly():

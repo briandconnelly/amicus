@@ -13,6 +13,7 @@ from typing import Any
 from amicus.errors import make_error, serialize_error
 from amicus.jobs import lifecycle, lookup
 from amicus.jobs.delivery import attach_consume_disposition, finished_job_envelope
+from amicus.jobs.store import DiscardOutcome
 from amicus.orchestration.workspace import workspace_warning_for
 from amicus.request import RunSpec
 from amicus.schemas.envelope import (
@@ -34,7 +35,6 @@ from amicus.schemas.results import (
     RawResponse,
     ReviewResult,
 )
-from amicus.sdk.core.jobs import DiscardOutcome
 
 _FINGERPRINT_SENTINEL = "<fingerprint>"
 _VERSION_SENTINEL = "0.0.0"
@@ -171,8 +171,9 @@ def _deliver(stored: dict[str, Any], name: str, detail: str) -> dict[str, Any]:
     return envelope
 
 
-# A four-minute-old running record, carrying the SDK's own capped hint for that age: the
-# pinned job_running retry_after_ms is amicus's ceiling, not the SDK's 10000 (#95).
+# A four-minute-old running record. It carries a stale 10000 hint, the value the store
+# wrote for such a job before #118 raised its ceiling; the pinned job_running
+# retry_after_ms is recomputed from elapsed_ms, so it is 30000 either way (#95).
 _LONG_RUNNING_ELAPSED_MS = 240_000
 # result_format the chokepoint reads today; a stored record claiming a DIFFERENT value
 # (never None, never the current one) is what makes `_unreadable` report

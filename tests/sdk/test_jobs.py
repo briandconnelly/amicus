@@ -1,4 +1,4 @@
-"""Tests for the generic disk-backed JobStore in _core/jobs.py.
+"""Tests for the generic disk-backed JobStore in amicus/jobs/store.py.
 
 These run without kimi/git: the spawned command is a tiny python snippet whose
 cwd is its own job dir, so writing ``result.json`` there mirrors what the real
@@ -14,8 +14,8 @@ from pathlib import Path
 
 import pytest
 
-from amicus.sdk.core import idempotency
-from amicus.sdk.core.jobs import DiscardOutcome, JobStore
+from amicus.jobs import idempotency
+from amicus.jobs.store import DiscardOutcome, JobStore
 
 # A snippet (run with cwd=job_dir) that writes the final envelope to result.json.
 _WRITE_DONE = "import json; open('result.json','w').write(json.dumps({'ok': True, 'tool': 't'}))"
@@ -171,20 +171,20 @@ def test_terminate_escalates_to_sigkill(tmp_path):
     code = "import signal, time; signal.signal(signal.SIGTERM, signal.SIG_IGN); time.sleep(30)"
     proc = subprocess.Popen([sys.executable, "-c", code], start_new_session=True)
     try:
-        assert jobs._is_running(proc.pid)
-        jobs._terminate_pid_tree(proc.pid, grace_seconds=0.0)  # grace=0 -> escalate now
-        assert not jobs._is_running(proc.pid)  # SIGKILL fallback reaped the survivor
+        assert job_store._is_running(proc.pid)
+        job_store._terminate_pid_tree(proc.pid, grace_seconds=0.0)  # grace=0 -> escalate now
+        assert not job_store._is_running(proc.pid)  # SIGKILL fallback reaped the survivor
     finally:
-        jobs._kill_pid_tree(proc.pid)
+        job_store._kill_pid_tree(proc.pid)
 
 
 def test_terminate_pid_tree_none_is_noop():
-    jobs._terminate_pid_tree(None, grace_seconds=1.0)  # must not raise
+    job_store._terminate_pid_tree(None, grace_seconds=1.0)  # must not raise
 
 
 def test_terminate_pid_tree_dead_pid_is_safe():
     # killpg on a long-dead pid raises ProcessLookupError; terminate must absorb it.
-    jobs._terminate_pid_tree(2**30, grace_seconds=0.1)  # must not raise
+    job_store._terminate_pid_tree(2**30, grace_seconds=0.1)  # must not raise
 
 
 def test_within_cleanup_root_requires_configured_root(tmp_path):
@@ -221,7 +221,7 @@ def test_cleanup_warns_when_removal_fails(tmp_path, monkeypatch):
     target = root / "wt-stuck"
     target.mkdir()
     store = _store(tmp_path, cleanup_root=root, cleanup_prefix="wt-")
-    monkeypatch.setattr(jobs.shutil, "rmtree", lambda *a, **k: None)  # removal no-ops
+    monkeypatch.setattr(job_store.shutil, "rmtree", lambda *a, **k: None)  # removal no-ops
     warnings = store._cleanup_external_paths([str(target)])
     assert target.is_dir()
     assert any(str(target) in w for w in warnings)
@@ -234,7 +234,7 @@ def test_cancel_surfaces_cleanup_warning(tmp_path, monkeypatch):
     cwd = str(tmp_path)
     job_id, _ = store.start(_declare_factory(str(root)), cwd, kind="k")
     wt = _declared_path(store, cwd, job_id)
-    monkeypatch.setattr(jobs.shutil, "rmtree", lambda *a, **k: None)  # removal fails
+    monkeypatch.setattr(job_store.shutil, "rmtree", lambda *a, **k: None)  # removal fails
     st = store.cancel(cwd, job_id)
     assert st["status"] == "cancelled"
     assert any(wt in w for w in st["cleanup_warnings"])  # leak named in the result
@@ -251,9 +251,9 @@ def test_cancel_preserves_result_completed_during_grace(tmp_path, monkeypatch):
     def fake_terminate(pid, grace_seconds, **kwargs):
         # Simulate the worker completing (writing result.json) before we kill it.
         (jd / "result.json").write_text('{"ok": true, "tool": "t"}')
-        jobs._kill_pid_tree(pid)
+        job_store._kill_pid_tree(pid)
 
-    monkeypatch.setattr(jobs, "_terminate_pid_tree", fake_terminate)
+    monkeypatch.setattr(job_store, "_terminate_pid_tree", fake_terminate)
     st = store.cancel(cwd, job_id)
     assert st["status"] == "done"  # completed result preserved, not overwritten
     assert st["result_available"] is True
@@ -268,10 +268,10 @@ def test_cancel_returns_none_if_record_removed_during_grace(tmp_path, monkeypatc
     jd = store._job_dir(cwd, job_id)
 
     def fake_terminate(pid, grace_seconds, **kwargs):
-        jobs._kill_pid_tree(pid)
+        job_store._kill_pid_tree(pid)
         store._rmtree(jd)  # record removed mid-cancel
 
-    monkeypatch.setattr(jobs, "_terminate_pid_tree", fake_terminate)
+    monkeypatch.setattr(job_store, "_terminate_pid_tree", fake_terminate)
     assert store.cancel(cwd, job_id) is None
 
 
@@ -283,7 +283,7 @@ def test_within_cleanup_root_refuses_on_resolve_error(tmp_path, monkeypatch):
     def boom(self, *a, **k):
         raise OSError("symlink loop")
 
-    monkeypatch.setattr(jobs.Path, "resolve", boom)
+    monkeypatch.setattr(job_store.Path, "resolve", boom)
     assert store._within_cleanup_root(str(root / "wt-x")) is False  # refuse, do not raise
 
 
@@ -517,7 +517,7 @@ def test_start_oserror_cleans_up(tmp_path):
 # --- defensive helpers / edge branches ---------------------------------------
 import os  # noqa: E402
 
-from amicus.sdk.core import jobs  # noqa: E402
+from amicus.jobs import store as job_store  # noqa: E402
 
 
 def test_start_reaps_worker_if_meta_write_fails(tmp_path, monkeypatch):
@@ -529,9 +529,9 @@ def test_start_reaps_worker_if_meta_write_fails(tmp_path, monkeypatch):
 
     def fake_terminate(pid, grace, **kwargs):
         reaped.append(pid)
-        jobs._kill_pid_tree(pid)  # library's portable kill+reap (win-safe, no zombie)
+        job_store._kill_pid_tree(pid)  # library's portable kill+reap (win-safe, no zombie)
 
-    monkeypatch.setattr(jobs, "_terminate_pid_tree", fake_terminate)
+    monkeypatch.setattr(job_store, "_terminate_pid_tree", fake_terminate)
     monkeypatch.setattr(
         JobStore, "_write_meta", lambda self, jd, meta: (_ for _ in ()).throw(OSError("disk full"))
     )
@@ -579,27 +579,27 @@ def test_start_cleans_external_paths_if_meta_write_fails(tmp_path, monkeypatch):
 
 
 def test_pid_alive_none_and_dead():
-    assert jobs._pid_alive(None) is False
+    assert job_store._pid_alive(None) is False
     # An almost-certainly-unused PID raises ProcessLookupError -> False.
-    assert jobs._pid_alive(2**30) is False
+    assert job_store._pid_alive(2**30) is False
 
 
 def test_pid_alive_self():
     # Our own PID is alive (and not reapable via kill(0)).
-    assert jobs._pid_alive(os.getpid()) is True
+    assert job_store._pid_alive(os.getpid()) is True
 
 
 def test_is_running_none_and_not_our_child():
-    assert jobs._is_running(None) is False
+    assert job_store._is_running(None) is False
     # os.getpid() is alive but not our child: waitpid raises ChildProcessError,
     # then the kill(0) liveness probe reports it alive.
-    assert jobs._is_running(os.getpid()) is True
+    assert job_store._is_running(os.getpid()) is True
     # A dead PID: waitpid raises ChildProcessError, liveness probe returns False.
-    assert jobs._is_running(2**30) is False
+    assert job_store._is_running(2**30) is False
 
 
 def test_kill_pid_tree_none_is_noop():
-    jobs._kill_pid_tree(None)  # must not raise
+    job_store._kill_pid_tree(None)  # must not raise
 
 
 # --- restart / PID-reuse hardening (#55) -------------------------------------
@@ -644,7 +644,7 @@ def test_unowned_live_pid_status_does_not_signal(tmp_path, monkeypatch):
     cwd = str(tmp_path)
     _persist_job(store, cwd, _JID, pid=os.getpid(), owner="other-instance")
     calls = []
-    monkeypatch.setattr(jobs, "_terminate_pid_tree", lambda *a, **k: calls.append(a))
+    monkeypatch.setattr(job_store, "_terminate_pid_tree", lambda *a, **k: calls.append(a))
     st = store.status(cwd, _JID)
     assert st["status"] != "running"  # not reported as the running worker
     assert calls == []  # and never signaled
@@ -662,7 +662,7 @@ def test_owned_child_no_lock_is_running(tmp_path):
         assert meta.get("owner")  # start() stamps the owner token
         assert store._job_running(jd, meta) is True
     finally:
-        jobs._kill_pid_tree(meta.get("pid"))
+        job_store._kill_pid_tree(meta.get("pid"))
 
 
 def test_ownership_is_per_process_not_per_store(tmp_path):
@@ -681,23 +681,23 @@ def test_ownership_is_per_process_not_per_store(tmp_path):
         assert store2._job_running(jd, meta) is True  # no lock yet, but it's our child
         assert store2.status(cwd, job_id)["status"] == "running"
     finally:
-        jobs._kill_pid_tree(meta.get("pid"))
+        job_store._kill_pid_tree(meta.get("pid"))
 
 
 def test_worker_lock_held_states(tmp_path):
     import fcntl
 
     lock = tmp_path / "worker.lock"
-    assert jobs._worker_lock_held(lock) is None  # missing file -> indeterminate
+    assert job_store._worker_lock_held(lock) is None  # missing file -> indeterminate
     lock.write_bytes(b"")
-    assert jobs._worker_lock_held(lock) is False  # created but unheld -> free
+    assert job_store._worker_lock_held(lock) is False  # created but unheld -> free
     fd = os.open(str(lock), os.O_RDONLY)
     try:
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        assert jobs._worker_lock_held(lock) is True  # held by a live fd -> alive
+        assert job_store._worker_lock_held(lock) is True  # held by a live fd -> alive
     finally:
         os.close(fd)
-    assert jobs._worker_lock_held(lock) is False  # released after close -> free
+    assert job_store._worker_lock_held(lock) is False  # released after close -> free
 
 
 def test_terminate_does_not_signal_when_predicate_reports_dead(monkeypatch):
@@ -705,9 +705,9 @@ def test_terminate_does_not_signal_when_predicate_reports_dead(monkeypatch):
     # is no longer (lock-)alive, neither SIGTERM nor SIGKILL is sent — so a PID reused
     # after the worker exits during the grace window is never signaled.
     calls = []
-    monkeypatch.setattr(jobs, "_signal_proc", lambda *a: calls.append(("term", *a)))
-    monkeypatch.setattr(jobs, "_kill_pid_tree", lambda *a: calls.append(("kill", *a)))
-    jobs._terminate_pid_tree(424242, grace_seconds=0.5, is_alive=lambda: False)
+    monkeypatch.setattr(job_store, "_signal_proc", lambda *a: calls.append(("term", *a)))
+    monkeypatch.setattr(job_store, "_kill_pid_tree", lambda *a: calls.append(("kill", *a)))
+    job_store._terminate_pid_tree(424242, grace_seconds=0.5, is_alive=lambda: False)
     assert calls == []
 
 
@@ -724,11 +724,11 @@ def test_timeout_grace_completion_prefers_result(tmp_path, monkeypatch):
         meta["deadline_epoch"] = time.time() - 1  # already overran
         store._write_meta(jd, meta)
         (jd / "result.json").write_text('{"ok": true, "tool": "t"}')
-        monkeypatch.setattr(jobs, "_terminate_pid_tree", lambda *a, **k: None)
+        monkeypatch.setattr(job_store, "_terminate_pid_tree", lambda *a, **k: None)
         st = store.status(cwd, job_id)
         assert st["status"] == "done"  # result preserved, not a timeout
     finally:
-        jobs._kill_pid_tree(pid)
+        job_store._kill_pid_tree(pid)
 
 
 def test_lock_held_marks_unowned_job_running(tmp_path):
@@ -842,7 +842,7 @@ def test_deadline_and_expiry_helpers(tmp_path):
 
 
 def test_poll_backoff_grows_and_is_bounded():
-    from amicus.sdk.core.jobs import (
+    from amicus.jobs.store import (
         DEFAULT_POLL_AFTER_MS,
         MAX_POLL_AFTER_MS,
         poll_backoff_ms,
@@ -862,7 +862,7 @@ def test_poll_backoff_grows_and_is_bounded():
 
 
 def test_status_running_poll_after_ms_grows(tmp_path):
-    from amicus.sdk.core.jobs import DEFAULT_POLL_AFTER_MS, MAX_POLL_AFTER_MS
+    from amicus.jobs.store import DEFAULT_POLL_AFTER_MS, MAX_POLL_AFTER_MS
 
     store = _store(tmp_path)
     # A running job ~6s in gets a grown poll hint, bounded by the cap.
@@ -899,7 +899,7 @@ def test_reap_and_list_skip_unparseable_meta(tmp_path):
 
 
 def test_activity_recorder_writes_counts_and_timestamp(tmp_path: Path):
-    rec = jobs.ActivityRecorder(tmp_path)
+    rec = job_store.ActivityRecorder(tmp_path)
     t = time.time()
     rec.record(t)
     rec.flush()
@@ -909,7 +909,7 @@ def test_activity_recorder_writes_counts_and_timestamp(tmp_path: Path):
 
 
 def test_activity_recorder_counts_monotonically_and_never_writes_raw_events(tmp_path: Path):
-    rec = jobs.ActivityRecorder(tmp_path)
+    rec = job_store.ActivityRecorder(tmp_path)
     for i in range(10):
         rec.record(1000.0 + i)
     rec.flush()
@@ -919,10 +919,10 @@ def test_activity_recorder_counts_monotonically_and_never_writes_raw_events(tmp_
 
 
 def test_status_dict_includes_activity_fields(tmp_path: Path):
-    store = jobs.JobStore(root=tmp_path, ttl_seconds=60, max_seconds=60, max_count=10)
+    store = job_store.JobStore(root=tmp_path, ttl_seconds=60, max_seconds=60, max_count=10)
     jid, _ = store.start(lambda jd: ["true"], cwd=str(tmp_path), kind="consult")
     jd = store._job_dir(str(tmp_path), jid)
-    rec = jobs.ActivityRecorder(jd)
+    rec = job_store.ActivityRecorder(jd)
     rec.record(time.time())
     rec.flush()
     status = store.status(str(tmp_path), jid)
@@ -933,7 +933,7 @@ def test_status_dict_includes_activity_fields(tmp_path: Path):
 
 
 def test_status_dict_activity_defaults_when_no_file(tmp_path: Path):
-    store = jobs.JobStore(root=tmp_path, ttl_seconds=60, max_seconds=60, max_count=10)
+    store = job_store.JobStore(root=tmp_path, ttl_seconds=60, max_seconds=60, max_count=10)
     jid, _ = store.start(lambda jd: ["true"], cwd=str(tmp_path), kind="consult")
     status = store.status(str(tmp_path), jid)
     assert status is not None
@@ -944,7 +944,7 @@ def test_status_dict_activity_defaults_when_no_file(tmp_path: Path):
 
 def test_read_activity_tolerates_corrupt_file(tmp_path: Path):
     (tmp_path / "activity.json").write_text("{not json")
-    assert jobs.JobStore._read_activity(tmp_path) == (0, None)
+    assert job_store.JobStore._read_activity(tmp_path) == (0, None)
 
 
 @pytest.mark.parametrize("bad", ["NaN", "Infinity", "-Infinity"])
@@ -952,12 +952,12 @@ def test_read_activity_degrades_nonfinite_epoch(tmp_path: Path, bad: str):
     # json.loads accepts NaN/Infinity by default; a non-finite epoch must degrade to
     # None (not crash datetime.fromtimestamp/int downstream). The count stays valid.
     (tmp_path / "activity.json").write_text(f'{{"events_seen": 1, "last_event_epoch": {bad}}}')
-    assert jobs.JobStore._read_activity(tmp_path) == (1, None)
+    assert job_store.JobStore._read_activity(tmp_path) == (1, None)
 
 
 def test_read_activity_degrades_negative_count(tmp_path: Path):
     (tmp_path / "activity.json").write_text('{"events_seen": -5, "last_event_epoch": 1000.0}')
-    assert jobs.JobStore._read_activity(tmp_path) == (0, 1000.0)
+    assert job_store.JobStore._read_activity(tmp_path) == (0, 1000.0)
 
 
 @pytest.mark.parametrize("bad", ["1e308", "-1e308", "1e18", "1e15"])
@@ -966,12 +966,12 @@ def test_read_activity_degrades_unrepresentable_epoch(tmp_path: Path, bad: str):
     # raises OverflowError/OSError/ValueError depending on the platform. Such an
     # epoch must degrade to None so status/list don't crash. The count stays valid.
     (tmp_path / "activity.json").write_text(f'{{"events_seen": 1, "last_event_epoch": {bad}}}')
-    assert jobs.JobStore._read_activity(tmp_path) == (1, None)
+    assert job_store.JobStore._read_activity(tmp_path) == (1, None)
 
 
 def test_status_survives_nonfinite_epoch(tmp_path: Path):
     # Regression: a corrupt activity.json with a non-finite epoch must not crash status.
-    store = jobs.JobStore(root=tmp_path, ttl_seconds=60, max_seconds=60, max_count=10)
+    store = job_store.JobStore(root=tmp_path, ttl_seconds=60, max_seconds=60, max_count=10)
     jid, _ = store.start(lambda jd: ["true"], cwd=str(tmp_path), kind="consult")
     jd = store._job_dir(str(tmp_path), jid)
     (jd / "activity.json").write_text('{"events_seen": 1, "last_event_epoch": NaN}')
@@ -985,7 +985,7 @@ def test_status_survives_nonfinite_epoch(tmp_path: Path):
 def test_status_survives_unrepresentable_epoch(tmp_path: Path):
     # Regression (#150): a finite-but-out-of-range epoch (e.g. 1e308) used to reach
     # datetime.fromtimestamp() and crash status/list with internal_error.
-    store = jobs.JobStore(root=tmp_path, ttl_seconds=60, max_seconds=60, max_count=10)
+    store = job_store.JobStore(root=tmp_path, ttl_seconds=60, max_seconds=60, max_count=10)
     jid, _ = store.start(lambda jd: ["true"], cwd=str(tmp_path), kind="consult")
     jd = store._job_dir(str(tmp_path), jid)
     (jd / "activity.json").write_text('{"events_seen": 1, "last_event_epoch": 1e308}')
@@ -1001,14 +1001,16 @@ def test_activity_recorder_end_to_end_into_job_store(tmp_path: Path):
     events_seen, last_event_at, and event_age_ms. (The consumer's worker drives the
     recorder from its event stream; here we drive it directly — the stream parsing
     is the consumer's to test.)"""
-    store = jobs.JobStore(root=tmp_path / "jobs", ttl_seconds=3600, max_seconds=60, max_count=10)
+    store = job_store.JobStore(
+        root=tmp_path / "jobs", ttl_seconds=3600, max_seconds=60, max_count=10
+    )
     cwd = str(tmp_path)
     # Use 'true' (a fast no-op) so the process exits quickly with no result.json;
     # the worker subprocess is NOT the point — we simulate the activity write directly.
     job_id, _ = store.start(lambda jd: ["true"], cwd=cwd, kind="delegate")
     jd = store._job_dir(cwd, job_id)
 
-    recorder = jobs.ActivityRecorder(jd)
+    recorder = job_store.ActivityRecorder(jd)
 
     # Two observed events (the consumer's observer filters non-events before recording).
     recorder.record(time.time())
@@ -1221,7 +1223,7 @@ def test_idempotent_process_lock_contention_degrades_to_in_progress(tmp_path):
     # rather than parking this worker on _LOCK indefinitely.
     import threading
 
-    from amicus.sdk.core import jobs as jobs_mod
+    from amicus.jobs import store as job_store
 
     store = _store(tmp_path)
     cwd = str(tmp_path)
@@ -1229,7 +1231,7 @@ def test_idempotent_process_lock_contention_degrades_to_in_progress(tmp_path):
     release = threading.Event()
 
     def hold_lock():
-        with jobs_mod._LOCK:
+        with job_store._LOCK:
             held.set()
             release.wait(5.0)
 
@@ -1274,7 +1276,7 @@ def test_idempotent_publish_failure_returns_running_job(tmp_path, monkeypatch, c
     # A publish() failure happens AFTER the paid worker is spawned. It must not be
     # reported as "failed to start" (false, and a retry would double-spend): the
     # caller gets the real running handle, and a same-key retry fails closed (#200).
-    from amicus.sdk.core import idempotency
+    from amicus.jobs import idempotency
 
     store = _store(tmp_path)
     cwd = str(tmp_path)
@@ -1407,9 +1409,9 @@ def test_result_ok_stamped_when_worker_completes_during_cancel_grace(tmp_path, m
 
     def fake_terminate(pid, grace_seconds, **kwargs):
         (jd / "result.json").write_text('{"ok": false, "tool": "t", "error": {"code": "x"}}')
-        jobs._kill_pid_tree(pid)
+        job_store._kill_pid_tree(pid)
 
-    monkeypatch.setattr(jobs, "_terminate_pid_tree", fake_terminate)
+    monkeypatch.setattr(job_store, "_terminate_pid_tree", fake_terminate)
     st = store.cancel(cwd, job_id)
     assert st["status"] == "done"  # completed result preserved, not masked as cancelled
     assert st["result_ok"] is False
@@ -1418,7 +1420,9 @@ def test_result_ok_stamped_when_worker_completes_during_cancel_grace(tmp_path, m
 def test_start_streams_stdin_text_without_persisting_it(tmp_path: Path):
     """stdin_text reaches the worker over a pipe and never lands in the record —
     the transport for bridges whose prompts must stay off disk and off argv."""
-    store = jobs.JobStore(root=tmp_path / "jobs", ttl_seconds=3600, max_seconds=60, max_count=10)
+    store = job_store.JobStore(
+        root=tmp_path / "jobs", ttl_seconds=3600, max_seconds=60, max_count=10
+    )
     cwd = str(tmp_path)
     secret = "the-secret-prompt-text"
     marker = tmp_path / "echoed.txt"
@@ -1440,7 +1444,9 @@ def test_start_streams_stdin_text_without_persisting_it(tmp_path: Path):
 
 
 def test_start_without_stdin_text_gives_worker_devnull(tmp_path: Path):
-    store = jobs.JobStore(root=tmp_path / "jobs", ttl_seconds=3600, max_seconds=60, max_count=10)
+    store = job_store.JobStore(
+        root=tmp_path / "jobs", ttl_seconds=3600, max_seconds=60, max_count=10
+    )
     cwd = str(tmp_path)
     marker = tmp_path / "read.txt"
     code = f"import sys, pathlib; pathlib.Path({str(marker)!r}).write_text(repr(sys.stdin.read()))"

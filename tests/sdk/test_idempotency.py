@@ -13,7 +13,7 @@ import time
 
 import pytest
 
-from amicus.sdk.core import idempotency as idem
+from amicus.jobs import idempotency as idem
 
 
 # --------------------------------------------------------------- pure helpers
