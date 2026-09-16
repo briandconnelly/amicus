@@ -82,6 +82,22 @@ def _never_spawn_real_claude(monkeypatch):
     monkeypatch.setenv("AMICUS_CLAUDE_BIN", NEVER_SPAWN_CLAUDE)
 
 
+# Every accepted spelling of AMICUS_LOG_FILE: the amicus name and its legacy aliases
+# (`config/__init__.py`). `_worker.main` calls `obs.configure` (#128), and several tests call
+# it in this process, so an exported value would have `obs.configure` OPEN a developer's real
+# log file here. `spawned_server_env` records the same incident for spawned subprocesses;
+# this is the in-process half, and it is a guard in the spirit of the three above.
+_LOG_FILE_ENV_NAMES = ("AMICUS_LOG_FILE", "CODEX_IN_CLAUDE_LOG_FILE", "MOONBRIDGE_LOG_FILE")
+
+
+@pytest.fixture(autouse=True)
+def _never_write_a_real_log_file(monkeypatch):
+    """No unit test writes to an ambient AMICUS_LOG_FILE. A test that wants one sets it
+    itself, after this fixture has run."""
+    for name in _LOG_FILE_ENV_NAMES:
+        monkeypatch.delenv(name, raising=False)
+
+
 # Every logger `obs.configure` changes: the dependency ones it takes over (issue #79) and
 # amicus's own, which it gives policy handlers and `propagate = False`.
 _CONFIGURED_LOGGER_STATE = (

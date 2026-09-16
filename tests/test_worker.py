@@ -12,7 +12,7 @@ import sys
 import threading
 
 import pytest
-from tests.conftest import ENV_PREFIXES
+from tests.conftest import spawned_server_env
 from tests.support import fakeplugin
 
 from amicus import _worker, obs
@@ -245,16 +245,15 @@ def _run_redirected(tmp_path, name, preamble, **extra_env):
     """Run a script with stdout AND stderr on one file, the way `JobStore.start` puts both
     on `stderr.log`, and return what was written.
 
-    The environment is pinned rather than inherited. An ambient `AMICUS_LOG_LEVEL=CRITICAL`
-    silences the ERROR record entirely, which would leave the marker absent for a reason
-    that has nothing to do with the policy — the "record itself never arrived" assertion
-    below is what catches that, and pinning the level is what keeps it from firing on a
-    developer's shell rather than on a defect."""
+    The environment comes from `spawned_server_env`, not from this process. An ambient
+    `AMICUS_LOG_LEVEL=CRITICAL` silences the ERROR record entirely, which would leave the
+    marker absent for a reason that has nothing to do with the policy — the "record itself
+    never arrived" assertion below is what catches that, and pinning the level is what keeps
+    it from firing on a developer's shell rather than on a defect. The helper is what strips
+    the legacy `*_LOG_FILE` aliases too, an incident its own docstring records."""
     script = tmp_path / f"{name}.py"
     script.write_text(_WORKER_LEAK_SCRIPT.format(preamble=preamble), encoding="utf-8")
-    env = {k: v for k, v in os.environ.items() if not k.startswith(ENV_PREFIXES)}
-    env["AMICUS_LOG_LEVEL"] = "INFO"
-    env.update(extra_env)
+    env = spawned_server_env() | {"AMICUS_LOG_LEVEL": "INFO"} | extra_env
     log = tmp_path / f"{name}.log"
     with log.open("w") as sink:
         subprocess.run(
