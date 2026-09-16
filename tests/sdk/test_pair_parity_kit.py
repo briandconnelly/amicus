@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from amicus.sdk.testing import pair_parity
+from tests.support import pair_parity
 
 SYNC = {
     "properties": {
