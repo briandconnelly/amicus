@@ -37,12 +37,13 @@ per-change, as its own lead says.
   where they end up, and this release leaves that move finished (#118–#123): `amicus.sdk`
   holds what a backend imports — the backend protocol and contract, the error vocabulary,
   annotations and preflight, the subprocess runtime, stream capping, redaction, path-alias
-  sanitizing, a bounded JSON reader and the conformance kit — while the job store, the git
-  layer, the fingerprint mechanics and the prompt framings live in the amicus package that
-  owns each. Of the pontonier-named literals the copy brought with it, one was visible
-  outside the code: the throwaway directory amicus creates to run git with its hooks
-  disabled is now named `amicus-nohooks-*` under the system temp dir, not
-  `pontonier-nohooks-*`. Nothing keys on that name.
+  sanitizing and a bounded JSON reader — plus the conformance kit, which is the one thing
+  there that a backend does not import: the registry imports it and runs it against a plugin
+  before it will use one. The job store, the git layer, the fingerprint mechanics and the
+  prompt framings live in the amicus package that owns each. Of the pontonier-named literals
+  the copy brought with it, one was visible outside the code: the throwaway directory amicus
+  creates to run git with its hooks disabled is now named `amicus-nohooks-*` under the system
+  temp dir, not `pontonier-nohooks-*`. Nothing keys on that name.
 
 ## [0.3.0] - 2026-09-15
 
