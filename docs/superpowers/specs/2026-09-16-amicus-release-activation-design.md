@@ -114,12 +114,19 @@ It can prove a necessary structural condition: that the `ref` names an existing,
 ### The release sequence keeps today's ordering
 
 The **order** of `docs/RELEASING.md`'s steps is unchanged, including the ancestry, `origin/main^2` and tree-identity checks that run **before** the tag is pushed.
-Three steps change in content rather than position.
+Four steps change in content rather than position.
 
 - **Step 2.** "Do **not** touch `.mcp.json`" inverts: the pin is a version literal again and moves with the others.
-- **Step 3.** Creating the annotated tag **locally** comes before running `check_release_state.py`, so the strict predicate — including that `.mcp.json`'s pinned tag exists — passes unmodified against a tag that exists only in this checkout.
-  The tag is pushed at step 6, unchanged, and only if every step 3 check passed.
-  A local tag is reversible; nothing in the checker needs a pre-tag exception.
+- **Step 3.** After the evidence run writes `.release-evidence/live-gates.json`, create the annotated tag **locally**, using exactly the command step 6 prescribes today: `git tag -a vX.Y.Z -F .release-evidence/live-gates.json --cleanup=verbatim <release-sha>`.
+  Then run `check_release_state.py --tag vX.Y.Z --commit <release-sha>`, so the strict predicate — including that `.mcp.json`'s pinned tag exists and that the tag carries a record naming the release commit — passes unmodified against a tag that exists only in this checkout.
+  Once it passes, record the tag **object** ID with `git rev-parse vX.Y.Z` — the annotated tag's own SHA, which covers its message, not the commit it points at.
+  A local tag is reversible, so nothing in the checker needs a pre-tag exception.
+  If step 3 must be redone because the branch gained a commit, delete the local tag with `git tag -d vX.Y.Z`, recreate it against the new tip, rerun the check, and record the new object ID.
+- **Step 6.** Stops creating the tag and only pushes the one step 3 created.
+  Before pushing, confirm `git rev-parse vX.Y.Z` still prints the object ID recorded at step 3.
+  Checking the peeled commit would not be enough: a tag deleted and recreated on the same commit with a different message, and so a different evidence record, peels to the same commit but is a different object.
+  Creating the tag again here would fail anyway: `git tag -a` on a name that already exists exits with `fatal: tag 'vX.Y.Z' already exists`.
+  Pushing the recorded object means the tag users receive is byte-for-byte the one the checker validated.
 - **Step 7.** The small `chore(release):` PR advances `marketplace.json`'s `ref` and `sha` instead of `.mcp.json`'s pin.
   Unlike the pin-move it replaces, this one reaches hosts, because the version at the new ref differs from the version at the old one.
 
@@ -159,9 +166,10 @@ The checker accepts `"./"` only while `pyproject.toml` declares a version no hig
 That key is read from the tree, not from git tags, which is what ADR 0015's rejected bootstrap exceptions got wrong: a `--no-tags` or shallow checkout cannot fake a declared version.
 No release after 0.4.0 can satisfy it.
 
-It does leave one gap, stated rather than hidden.
-Between the 0.4.0 pointer PR and the 0.5.0 release PR, the declared version is still `0.4.0`, so a commit reverting the entry to `"./"` would pass the checker.
-The activation monitor below catches that; the 0.5.0 release predicate rejects it outright.
+A version key alone would let a tree it should reject through.
+Between the 0.4.0 pointer PR and the 0.5.0 release PR the declared version is still `0.4.0`, so a PR reverting the entry to `"./"` would satisfy it; so would a PR that lowered the version literals back to `0.4.0` at any later point and restored `"./"`.
+The pull-request check therefore also compares against the base branch, under "Transition" below, and that comparison — not the version key — is what makes activation one-way.
+The version key's job is narrower: it lets the pre-activation state exist at all, and it stops a `"./"` tree from ever being released above 0.4.0.
 
 #### The one-time merge-to-tag window
 
@@ -189,16 +197,21 @@ For the 0.4.0 transition only, `docs/RELEASING.md` therefore extends rule 19's "
 One function validates the marketplace file, called from two places with different evidence available.
 Every rule below fails closed: a key, shape or value not listed is a failure, so an unknown future key fails rather than passing silently, and adding one means changing the checker in the same PR.
 
-**Shape, a fact of any checkout:**
+**Shape, a fact of any checkout.**
+Every object below has **exactly** the listed keys — none missing, none extra — and every value has the stated type and constraint.
+The file as it stands today passes every rule, so PR 1 needs no change to it.
 
-- `.claude-plugin/marketplace.json` has exactly one element in `plugins`, and `plugins[0].name` is `"amicus"`.
-- The keys of `plugins[0]` are a subset of `{name, description, source}`.
-  This excludes `version`, `strict` and every component-definition key, such as `skills` (which arm 6 showed an entry may carry) or `mcpServers`, without the checker having to enumerate or track them.
-- `plugins[0].source` is either the string `"./"`, accepted only under the pre-activation rule above, or an object whose keys are exactly `{source, url, ref, sha}`, where:
-  - `source` is `"url"`;
-  - `url` is `"https://github.com/briandconnelly/amicus.git"`;
-  - `ref` matches `^v\d+\.\d+\.\d+$`;
-  - `sha` matches `^[0-9a-f]{40}$`.
+| JSON path | keys, exactly | value constraints |
+| --- | --- | --- |
+| `$` (root) | `name`, `owner`, `plugins` | `name` is `"amicus"`; `plugins` is an array of exactly one element |
+| `$.owner` | `name`, `url` | each a non-empty string |
+| `$.plugins[0]` | `name`, `description`, `source` | `name` is `"amicus"`; `description` is a non-empty string |
+| `$.plugins[0].source` | — | the string `"./"` under the pre-activation rule, **or** the object below |
+| `$.plugins[0].source` as an object | `source`, `url`, `ref`, `sha` | `source` is `"url"`; `url` is `"https://github.com/briandconnelly/amicus.git"`; `ref` matches `^v\d+\.\d+\.\d+$`; `sha` matches `^[0-9a-f]{40}$` |
+
+`description` is required, but its text is not checked: it is catalog copy, arm 6 showed it is read from `main` regardless, and pinning it would make every wording change a checker change.
+The exact key set on `$.plugins[0]` excludes `version`, `strict` and every component-definition key, such as `skills` (which arm 6 showed an entry may carry) or `mcpServers`, without the checker having to enumerate or track them.
+PR 1's negative tests follow mechanically from the table: at each path, one test adding an unlisted key, one removing each listed key, and one violating each value constraint.
 
 **Consistency, facts that require the tags to be fetched:**
 
@@ -207,10 +220,31 @@ Every rule below fails closed: a key, shape or value not listed is a failure, so
 - At that commit, both `plugin.json` files and `.mcp.json` all name the version `ref` names.
   This is the check every tag since the bootstrap would fail, and it is what makes a ref safe to point at.
 
-**Ordering, which depends on what is being checked:**
+**Ordering, which depends on what is being checked.**
+Versions compare as three integers, never as strings, so `v0.10.0` is newer than `v0.9.0`.
 
 - In the release predicate, `ref` is strictly **older** than the version being released: the tagged release commit predates its own pointer PR.
 - In the pull-request check, `ref` is **no newer** than the declared version: equal after a pointer PR, older during a release.
+  That is an upper bound only, and it cannot stop a pointer moving backwards; the transition rules below do.
+
+**Transition, relative to the pull request's base branch.**
+Only the pull-request check has a base to compare against, and rule 8 routes every agent change to `main` through a pull request, so this is where rollback is stopped.
+The check reads the base's file with `git show <base-sha>:.claude-plugin/marketplace.json`, against the base commit the pull-request event names.
+Whether the maintainer can push to `main` without a pull request is not established: `docs/RELEASING.md` records that reading `main`'s branch protection returned 403 to the token available here.
+
+- Base source is the object form: head source must also be the object form.
+  Activation is one-way; `"./"` never returns once `main` has left it.
+- Both are the object form: head `ref` is no older than base `ref`.
+  A pointer may stay put or advance, never retreat.
+- Base source is `"./"`: head may keep `"./"`, subject to the pre-activation rule, or move to the object form.
+  This is the only transition the 0.4.0 pointer PR makes.
+
+These are required in addition to the no-newer bound, not instead of it.
+PR 1's negative tests include each rollback that motivated them: object form back to `"./"`; `v0.4.0` back to the internally consistent `v0.1.0`; and version literals lowered to `0.4.0` together with `"./"` restored.
+
+The release predicate has no base, so it cannot detect a regression by itself.
+It relies on the pull-request check having stopped one before the release commit existed.
+A push to `main` that bypasses pull requests bypasses this rule too, and only the monitor would notice.
 
 `.mcp.json` separately equals the version being released, replacing today's "names something no newer than this version", and both `plugin.json` files equal it as now.
 
@@ -218,8 +252,8 @@ Every rule below fails closed: a key, shape or value not listed is a failure, so
 
 - `scripts/check_release_state.py`, locally at step 3 and in the `verify` job on the tag.
   A local pass proves the shape and whatever tags this checkout has fetched; `verify` fetches full history and tags, so its pass covers the consistency checks against the remote as `actions/checkout` sees it.
-- A pull-request check that fetches tags and runs the same function with the no-newer ordering.
-  It validates the pointer PR before it merges, and it cannot block a release PR, because a release PR leaves the pointer at a valid earlier tag.
+- A pull-request check that fetches tags and the base commit, and runs the same function with the no-newer ordering plus the transition rules against the base.
+  It validates the pointer PR before it merges, and it cannot block a release PR, because a release PR leaves the pointer at a valid earlier tag and unchanged from its base.
 
 **What no pass establishes, and no document may describe as proven:**
 
@@ -235,15 +269,36 @@ The honesty posture of rules 20 and 23 extends to these unchanged: state what is
 Tagging and publishing does not expose a release to marketplace users; only the pointer PR does, and no check against an immutable tag can make a later commit happen.
 So this is a monitor, not an enforcement, and nothing may call it enforcement.
 
-A scheduled workflow — daily, on every `v*` tag push, and on manual dispatch — compares the highest `v*` tag `L` with the pointer on `main`:
+A scheduled workflow runs daily, on every completed `publish.yml` run, and on manual dispatch.
 
-- pointer equals `L`: **green**.
-- pointer is `"./"` and `L` is below `v0.4.0`: **green**, pre-activation.
-- pointer trails `L`, or is `"./"` with `L` at or above `v0.4.0`, and `L` was tagged **within the grace period**: **green**, release in progress.
-- the same, **beyond** the grace period: **red**, and it opens a tracked issue, or comments on the open one, naming `L`, the pointer and how long it has lagged.
+**Which releases count.**
+A tag is **eligible** when it matches `^v\d+\.\d+\.\d+$` exactly and the GitHub Actions API reports at least one `publish.yml` run with event `push`, `head_branch` equal to that tag, `status` `completed` and `conclusion` `success`.
+Pre-release tags, anything else matching `v*`, and tags with no successful publish run are never eligible.
 
-The grace period is 48 hours.
-A legitimate release therefore never turns anything red, so red keeps meaning something.
+"At least one successful run" is deliberate.
+`v0.3.0` has two runs — a `failure` at 15:20:32Z, when `verify` refused a tag carrying the wrong record, then a `success` at 15:25:38Z — and it is a normal published release.
+
+`L` is the highest eligible tag, comparing versions as three integers.
+
+**The clock.**
+The grace period runs from the completion time (`updated_at`) of the most recent successful publish run for `L`.
+It is recorded by GitHub rather than by whoever made the tag, which a tagger date is not.
+Run creation time would be wrong too: `v0.1.0`'s run was created at 04:33:20Z and completed at 14:33:34Z, ten hours spent waiting on the `pypi` environment's reviewer.
+
+**What it reports.**
+
+- Pointer equals `L`: **green**.
+- Pointer is `"./"` and `L` is below `v0.4.0`: **green**, pre-activation.
+- Pointer trails `L`, or is `"./"` with `L` at or above `v0.4.0`, within 48 hours of `L`'s clock: **green**, release in progress.
+- The same, beyond 48 hours: **red**, as an **activation lag**.
+  It opens a tracked issue, or comments on the open one, naming `L`, the pointer and how long it has lagged.
+- Separately, a stable `vX.Y.Z` tag **above** `L` that has no successful publish run and was pushed more than 48 hours ago is a **release incident**, reported in its own issue, never as an activation lag.
+  The pointer must not advance to such a tag, so reporting it as lag would demand the wrong fix.
+  It resolves either way it can: that tag publishes successfully and becomes `L`, or a higher version publishes and leaves it below `L`, which is the "release the next patch" recovery.
+  The 48 hours for an incident are measured from the tag's first publish run's creation time, the earliest GitHub-recorded event for it.
+  A stable tag above `L` with **no** publish run at all has no such clock, and is reported as an incident on the first monitor run that sees it: every `v*` push triggers `publish.yml`, so a tag with no run means that trigger did not fire.
+
+A legitimate release never turns anything red, so red keeps meaning something.
 It is not a pull-request gate, and a green run is evidence only that the pointer had caught up when it ran.
 
 While the pointer lags, users install release N-1, which after activation is a self-consistent, working snapshot.
@@ -315,10 +370,12 @@ Red after every legitimate release trains everyone to ignore it, and a later gre
 
 Three pull requests, because rule 9 keeps governance and `.github/` separate from ordinary work.
 
-1. **Design and checker.** This spec; a new ADR superseding 0015; `docs/RELEASING.md` steps 2, 3 and 7 and the 0.4.0 transition rule; and the marketplace validation function in `scripts/check_release_state.py` with its tests, including the pre-activation rule and a negative test for each fail-closed key.
+1. **Design and checker.** This spec; a new ADR superseding 0015; `docs/RELEASING.md` steps 2, 3, 6 and 7 and the 0.4.0 transition rule; and the marketplace validation function in `scripts/check_release_state.py` with its tests, including the pre-activation rule and a negative test for each fail-closed key.
    `.claude-plugin/marketplace.json` does not move here, and does not need to: its current `"./"` passes under the pre-activation rule.
 2. **Governance.** AGENTS.md rules 19 and 24, and the "Releases" section of its context notes.
 3. **Workflows.** The pull-request marketplace check and the scheduled activation monitor, under `.github/workflows/`, each `uses:` pinned by SHA per rule 14.
-   The monitor needs `issues: write`; nothing else it does needs more than `contents: read`.
+   The monitor needs `contents: read` to read `main`'s marketplace file and the tags, `actions: read` to list `publish.yml` runs, and `issues: write` to open or comment on its two issues, and nothing more.
+   It runs on `schedule`, on `workflow_run` for `publish.yml` with `types: [completed]`, and on `workflow_dispatch`; none of those is `pull_request_target`, which rule 15 forbids.
+   The pull-request check runs on `pull_request` with `contents: read`, fetching tags and the base commit.
 
 The pointer itself moves during the 0.4.0 release, as step 7 of the sequence, and in none of these three.
