@@ -15,11 +15,11 @@ from tests.support import fakeplugin
 
 from amicus import config
 from amicus.jobs import lifecycle, lookup
+from amicus.jobs import store as job_store
 from amicus.jobs.taskmap import TaskJobMap
 from amicus.request import RunSpec, meta_for
 from amicus.schemas.envelope import Meta, dump_success
 from amicus.schemas.results import ConsultResult, RawResponse
-from amicus.sdk.core import jobs as pjobs
 
 
 def _spec(cwd, **kw):
@@ -504,7 +504,7 @@ async def test_keyed_start_after_the_record_is_gone_is_unavailable(tmp_path, mon
     while store.status(str(tmp_path), first["job_id"])["status"] == "running":
         assert time.monotonic() < deadline
         await asyncio.sleep(0.05)
-    assert store.discard(str(tmp_path), first["job_id"]) is pjobs.DiscardOutcome.REMOVED
+    assert store.discard(str(tmp_path), first["job_id"]) is job_store.DiscardOutcome.REMOVED
     gone = await _start(store, spec, "k3")
     assert gone["ok"] is False and gone["error"]["code"] == "idempotency_result_unavailable"
     assert gone["error"]["repair"]["next_step"] == "use_new_idempotency_key"
@@ -832,7 +832,7 @@ async def test_keyed_run_sync_after_the_record_is_gone_is_unavailable(tmp_path, 
     monkeypatch.setattr(lifecycle, "worker_cmd", _fake_worker_cmd(_success(str(tmp_path))))
     spec = _spec(str(tmp_path))
     first = await _run_keyed(store, spec, "s3")
-    assert store.discard(str(tmp_path), first["meta"]["job_id"]) is pjobs.DiscardOutcome.REMOVED
+    assert store.discard(str(tmp_path), first["meta"]["job_id"]) is job_store.DiscardOutcome.REMOVED
     gone = await _run_keyed(store, spec, "s3")
     assert gone["ok"] is False and gone["error"]["code"] == "idempotency_result_unavailable"
     assert gone["error"]["repair"]["next_step"] == "use_new_idempotency_key"
@@ -957,8 +957,8 @@ async def test_keyed_await_timeout_leaves_the_shared_job_running(tmp_path, monke
 
 
 def _aged(store, elapsed_ms):
-    """store.status with the job's age moved: the real snapshot, carrying pontonier's own
-    capped hint for that age, so a site that echoes it instead of amicus's is caught."""
+    """store.status with the job's age moved: the real snapshot, with a stale hint pinned
+    over it, so a site that echoes the record instead of recomputing the hint is caught."""
     real = store.status
 
     def status(cwd, job_id):

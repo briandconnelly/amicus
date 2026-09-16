@@ -91,15 +91,22 @@ def test_the_pontonier_block_bites():
     assert "ModuleNotFoundError" in proc.stderr or "ImportError" in proc.stderr
 
 
-def test_the_sdk_core_modules_log_under_amicus_sdk():
+def test_each_module_logs_under_its_own_package():
     """ADR 0029: 'the SDK's modules log on amicus.sdk.*.' Pin the actual logger names,
     not just the claim: each module's module-level `logger` must be named after its own
-    `__name__`, and every one of those names must start with `amicus.sdk.`."""
-    from amicus.sdk.core import idempotency, jobs, runtime
+    `__name__`. ADR 0030 moved the job store and the idempotency index out of the sdk, so
+    their names now start with `amicus.jobs.` and the runtime's still starts with
+    `amicus.sdk.` — the point is that no module names a logger by hand."""
+    from amicus.jobs import idempotency, store
+    from amicus.sdk.core import runtime
 
-    for module in (jobs, runtime, idempotency):
+    for module, prefix in (
+        (store, "amicus.jobs."),
+        (idempotency, "amicus.jobs."),
+        (runtime, "amicus.sdk."),
+    ):
         assert module.logger.name == module.__name__
-        assert module.logger.name.startswith("amicus.sdk.")
+        assert module.logger.name.startswith(prefix)
 
 
 def test_the_sdk_root_names_its_origin_and_has_no_version_lookup():

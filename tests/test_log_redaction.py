@@ -181,7 +181,7 @@ def test_an_sdk_record_reaches_the_policy_handlers(logs):
     """The SDK's core modules log on `logging.getLogger(__name__)`, so their records come from
     `amicus.sdk.*`, a subtree of `amicus`, and reach the handlers `obs.configure` installs
     there by propagation. No second logger tree is configured for them."""
-    logs.logger_for("amicus.sdk.core.jobs").info("sdk record %s", "reached")
+    logs.logger_for("amicus.sdk.core.runtime").info("sdk record %s", "reached")
     for text in _both(logs):
         assert "sdk record reached" in text
 
@@ -191,7 +191,7 @@ def test_an_sdk_record_is_lost_when_its_subtree_stops_propagating(logs, monkeypa
     record reaches neither handler, so the positive result is evidence of propagation. INFO
     stays below `logging.lastResort`'s WARNING floor, so no fallback handler writes it."""
     monkeypatch.setattr(logging.getLogger("amicus.sdk"), "propagate", False)
-    logs.logger_for("amicus.sdk.core.jobs").info("sdk record %s", "reached")
+    logs.logger_for("amicus.sdk.core.runtime").info("sdk record %s", "reached")
     for text in _both(logs):
         assert "sdk record reached" not in text
 

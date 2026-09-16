@@ -235,10 +235,10 @@ def test_upgrade_section_names_the_always_present_meta_keys_exactly():
 
 
 def test_upgrade_section_states_the_poll_hint_ceiling():
-    from amicus.jobs.polling import POLL_HINT_CAP_MS
+    from amicus.jobs.store import MAX_POLL_AFTER_MS
 
     line = _line_containing(_upgrade_section(), "ceiling of")
-    assert f"ceiling of {POLL_HINT_CAP_MS // 1000} s" in line
+    assert f"ceiling of {MAX_POLL_AFTER_MS // 1000} s" in line
 
 
 def test_upgrade_section_states_the_current_result_format():

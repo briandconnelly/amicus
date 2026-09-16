@@ -1,4 +1,10 @@
-"""Shared pytest fixtures and helpers."""
+"""Shared pytest fixtures and helpers.
+
+This directory also holds the tests of modules ADR 0030 moved OUT of `amicus.sdk` — the
+git layer (#119), and the job store and its idempotency index (#118). They stay here for
+the autouse git isolation below, which they depend on and `tests/` does not provide, not
+because they still test the sdk. Redistributing the directory is its own pass.
+"""
 
 from __future__ import annotations
 
