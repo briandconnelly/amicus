@@ -57,7 +57,9 @@ The rules bind; the context after them explains and points elsewhere.
 
 One MCP server for every second-opinion model: a verb-first tool surface with the backend as a parameter, built on FastMCP and its own in-tree backend SDK, `amicus.sdk`.
 The package is `amicus` under `src/`; each backend is a plugin under `src/amicus/backends/<id>/` behind the `BackendPlugin` seam in `src/amicus/plugin.py`.
-`amicus.sdk` (under `src/amicus/sdk/`) holds the backend protocol and contract, the job store, worktrees, diff gathering, redaction, the subprocess runtime, the error vocabulary and the conformance kit; it was copied from [pontonier](https://github.com/briandconnelly/pontonier) v0.9.0, and amicus no longer depends on pontonier (ADR 0029).
+`amicus.sdk` (under `src/amicus/sdk/`) is the backend-facing layer: the backend protocol and contract, the error vocabulary, annotations and preflight, the subprocess runtime with stream capping, redaction, path-alias sanitizing and a bounded JSON reader, and the conformance kit a plugin must pass before the registry will use it.
+It was copied from [pontonier](https://github.com/briandconnelly/pontonier) v0.9.0, and amicus no longer depends on pontonier (ADR 0029).
+ADR 0030 holds it to that role, so what only the server uses lives in the amicus package that owns it: the job store is `amicus.jobs`, worktrees and diff gathering are `amicus.orchestration`, and the fingerprint mechanics are `amicus.schemas.fingerprint`.
 Import boundaries between layers are enforced by the import-linter contracts in `pyproject.toml`.
 A backend's own prompt carriers (for Codex, the developer-instructions argv token and the stdin prompt) are disclosed on `amicus_backends`.
 
