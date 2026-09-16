@@ -1,10 +1,13 @@
-"""The poll hint amicus hands a client for a running job (#95).
+"""The poll hint amicus hands a client for a running job (#95, #101).
 
-The SDK's JobStore caps its own hint at MAX_POLL_AFTER_MS = 10000, sized for a delegate that
-runs about twenty seconds, and takes no cap (briandconnelly/pontonier#29). amicus's
-jobs run for minutes, so every site that hands a client a hint computes it here: the status
-tool, the job_running repair, the keyed wait's timeout repair and a replayed start handle.
-The formula stays the SDK's own; only the ceiling is amicus's."""
+Every site that hands a client a hint computes it here — the status tool, the job_running
+repair, the keyed wait's timeout repair and a replayed start handle — so they agree on the
+one rule the store itself has no opinion about: a terminal job is not polled at all, so its
+hint is null rather than the flat base the record carries (#101).
+
+The ceiling is `store.MAX_POLL_AFTER_MS`, which amicus owns now that the store does (#118).
+Before that the store stopped at 10 s (briandconnelly/pontonier#29) and this module re-capped
+the hint on its way out."""
 
 from __future__ import annotations
 
@@ -12,18 +15,12 @@ from typing import Any
 
 from amicus.jobs.store import DEFAULT_POLL_AFTER_MS, poll_backoff_ms
 
-# "Wait about as long as it has already run", up to thirty seconds: a four-minute job is
-# polled about thirteen times instead of about twenty-eight, and a finished job is noticed at
-# most thirty seconds late. A sixty-second cap would save three of those polls and double that
-# delay; a status read is free, while the host waiting on it is not.
-POLL_HINT_CAP_MS = 30_000
-
 
 def poll_hint_ms(rec: dict[str, Any]) -> int | None:
     """The hint for a store status record: None unless the job is running."""
     if rec["status"] != "running":
         return None
-    return poll_backoff_ms(rec["elapsed_ms"], base=DEFAULT_POLL_AFTER_MS, cap=POLL_HINT_CAP_MS)
+    return poll_backoff_ms(rec["elapsed_ms"], base=DEFAULT_POLL_AFTER_MS)
 
 
 def job_status_arguments(job_id: str, workspace_root: str | None) -> dict[str, Any]:

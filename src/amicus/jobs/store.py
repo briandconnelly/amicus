@@ -97,9 +97,13 @@ _PROCESS_OWNER = uuid4().hex
 # Default poll/backoff interval (ms) a job advertises to clients. The single source
 # for this value; `jobs.polling` reads it to build the hint a tool result carries.
 DEFAULT_POLL_AFTER_MS = 1000
-# Upper bound for the growing poll backoff (ms). A delegate often runs ~20s, so the
-# hint ramps up to here rather than staying at the flat default and inviting ~20 polls.
-MAX_POLL_AFTER_MS = 10000
+# Upper bound for the growing poll backoff (ms): "wait about as long as it has already
+# run", up to thirty seconds. A four-minute job is polled about thirteen times instead of
+# about twenty-eight, and a finished job is noticed at most thirty seconds late. A
+# sixty-second cap would save three of those polls and double that delay; a status read is
+# free, while the host waiting on it is not. It was 10000 while the store was a copy of
+# briandconnelly/pontonier's, and amicus re-capped the hint on its way out (#95).
+MAX_POLL_AFTER_MS = 30_000
 # Min seconds between activity.json disk writes while a job runs; the first event
 # and the final flush always write. Keeps the hot path off the disk on every line.
 ACTIVITY_WRITE_THROTTLE_S = 0.5

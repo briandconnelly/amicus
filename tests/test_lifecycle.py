@@ -957,8 +957,8 @@ async def test_keyed_await_timeout_leaves_the_shared_job_running(tmp_path, monke
 
 
 def _aged(store, elapsed_ms):
-    """store.status with the job's age moved: the real snapshot, carrying pontonier's own
-    capped hint for that age, so a site that echoes it instead of amicus's is caught."""
+    """store.status with the job's age moved: the real snapshot, with a stale hint pinned
+    over it, so a site that echoes the record instead of recomputing the hint is caught."""
     real = store.status
 
     def status(cwd, job_id):

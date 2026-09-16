@@ -99,7 +99,7 @@ def test_done_error_is_validated_and_keeps_the_producer_version():
 
 
 def test_job_running_retry_follows_the_grown_poll_hint():
-    # retry_after_ms matches amicus_job_status's own hint, not pontonier's capped one (#95).
+    # retry_after_ms matches amicus_job_status's own hint, not the record's stale one (#95).
     rec = _rec("running", elapsed_ms=240_000, poll_after_ms=10000)
     env, delivered = delivery.finished_job_envelope(
         rec, None, _JOB, "consult", Meta(), "full", "/repo"
