@@ -82,8 +82,30 @@ def _never_spawn_real_claude(monkeypatch):
     monkeypatch.setenv("AMICUS_CLAUDE_BIN", NEVER_SPAWN_CLAUDE)
 
 
-# Loggers `obs.configure` changes besides its own (issue #79).
-_DEPENDENCY_LOGGER_STATE = ("fastmcp", "mcp", obs.FASTMCP_SERVER_LOGGER_NAME)
+# Every accepted spelling of AMICUS_LOG_FILE: the amicus name and its legacy aliases
+# (`config/__init__.py`). `_worker.main` calls `obs.configure` (#128), and several tests call
+# it in this process, so an exported value would have `obs.configure` OPEN a developer's real
+# log file here. `spawned_server_env` records the same incident for spawned subprocesses;
+# this is the in-process half, and it is a guard in the spirit of the three above.
+_LOG_FILE_ENV_NAMES = ("AMICUS_LOG_FILE", "CODEX_IN_CLAUDE_LOG_FILE", "MOONBRIDGE_LOG_FILE")
+
+
+@pytest.fixture(autouse=True)
+def _never_write_a_real_log_file(monkeypatch):
+    """No unit test writes to an ambient AMICUS_LOG_FILE. A test that wants one sets it
+    itself, after this fixture has run."""
+    for name in _LOG_FILE_ENV_NAMES:
+        monkeypatch.delenv(name, raising=False)
+
+
+# Every logger `obs.configure` changes: the dependency ones it takes over (issue #79) and
+# amicus's own, which it gives policy handlers and `propagate = False`.
+_CONFIGURED_LOGGER_STATE = (
+    obs.ROOT_LOGGER_NAME,
+    "fastmcp",
+    "mcp",
+    obs.FASTMCP_SERVER_LOGGER_NAME,
+)
 
 
 def _is_pytest_handler(handler: logging.Handler) -> bool:
@@ -92,17 +114,24 @@ def _is_pytest_handler(handler: logging.Handler) -> bool:
 
 @contextlib.contextmanager
 def restored_dependency_logging():
-    """Put back everything `obs.configure` changes outside its own loggers (issue #79): the
-    `fastmcp` and `mcp` loggers, the filter on `fastmcp.server.server`, FastMCP's own
+    """Put back everything `obs.configure` changes: the `amicus` logger, the `fastmcp` and
+    `mcp` loggers (issue #79), the filter on `fastmcp.server.server`, FastMCP's own
     `log_enabled` switch, and `obs._configured`, which records whether that takeover is in
     place. Restoring the loggers without the flag would leave `obs.configure()` returning
     early over a tree it no longer owns, so a later test would run with FastMCP's raw logging.
+
+    The `amicus` logger is here because of #128: `_worker.main` now calls `obs.configure`
+    itself, so an ordinary test that drives the worker installs the real policy handlers and
+    sets `propagate = False` on `amicus`. Left in place, that would send a later test's
+    `amicus.*` records to the real stderr and cut them off from the root logger. This is the
+    only reason it is restored — a test that configures on purpose still sees its own effect
+    for the duration of that test.
 
     pytest's own capture handlers are left alone in both directions: pytest adds and removes
     them per test phase, so one saved during setup is already gone by teardown, and putting
     it back would leave a stale capture handler attached for the rest of the session."""
     saved = []
-    for name in _DEPENDENCY_LOGGER_STATE:
+    for name in _CONFIGURED_LOGGER_STATE:
         target = logging.getLogger(name)
         handlers = [h for h in target.handlers if not _is_pytest_handler(h)]
         saved.append((target, target.level, target.propagate, handlers, target.filters[:]))

@@ -12,8 +12,11 @@ they mask *secrets* and control characters, which is a different question. So th
 withholds the whole category rather than guessing case by case, and it is enforced where
 output is produced rather than at each call site, because the call sites include the SDK's
 own: ``amicus.sdk.core.runtime`` logs ``("stdout capture failed: %s", exc, exc_info=True)``.
-That reaches these handlers only in a process that has called ``configure``: the job worker
-does not, so its records still fall through to ``logging.lastResort`` (#128).
+That reaches these handlers only in a process that has called ``configure``, and both
+processes that run amicus code do: the server in ``server.main``, and the job worker as the
+first thing ``_worker.main`` does, before even its argument checks (#128). The worker is the
+one that matters most here, because its stdout and stderr are both the job's own
+``stderr.log`` on disk.
 
 Closing it takes more than suppressing tracebacks, because ``logging`` will render an
 exception through several shapes that never look like one: as the message itself
@@ -460,7 +463,7 @@ def _own_dependency_loggers(formatter: logging.Formatter, level: int) -> None:
     FastMCP's `configure_logging` honours: that function removes every handler on
     `fastmcp` and installs its own, and `run(log_level=...)` reaches it through
     `temporary_log_level`."""
-    import fastmcp  # noqa: PLC0415 - only the server process configures logging
+    import fastmcp  # noqa: PLC0415 - deferred; the job worker configures too (#128)
 
     for name in DEPENDENCY_LOGGER_NAMES:
         target = logging.getLogger(name)

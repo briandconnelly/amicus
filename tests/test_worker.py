@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import signal
 import subprocess
@@ -11,9 +12,10 @@ import sys
 import threading
 
 import pytest
+from tests.conftest import spawned_server_env
 from tests.support import fakeplugin
 
-from amicus import _worker
+from amicus import _worker, obs
 from amicus.request import RunSpec
 
 _PUBLIC = dict(
@@ -209,3 +211,114 @@ def test_worker_subprocess_end_to_end_with_the_fake_codex(tmp_path, fake_codex):
     )
     assert "SECRET-QUESTION-42" in (tmp_path / "prompt.txt").read_text()
     assert "SECRET-QUESTION-42" not in (jd / "spec.json").read_text()
+
+
+# --- #128: the worker process installs the log policy ----------------------------------
+#
+# This process's stdout and stderr are both `<job_dir>/stderr.log` (`JobStore.start`), so a
+# record that reaches `logging.lastResort` is written to a file the job keeps. `lastResort`
+# renders an exception's own text and its traceback; the policy handlers `obs.configure`
+# installs render only its type and frame locations. Before this, the worker never called
+# `obs.configure`, so the SDK runtime's `logger.error("stdout capture failed: %s", exc,
+# exc_info=True)` (`sdk/core/runtime.py:317`) landed there verbatim.
+#
+# Assembled from fragments so the literal never appears on a source line of THIS file, which
+# a failure's own traceback would print. It does appear in the generated script below, which
+# is the point: the control's traceback renders that line and the marker with it.
+_LEAK_MARKER = "PROMPT" + "MARKER" + "128"
+
+_POLICY_HANDLERS = (obs.PolicyStreamHandler, obs.PolicyFileHandler)
+
+# What `amicus.sdk.core.runtime` logs on a capture failure, verbatim from runtime.py:317.
+_WORKER_LEAK_SCRIPT = f"""
+import logging
+{{preamble}}
+logger = logging.getLogger("amicus.sdk.core.runtime")
+try:
+    raise ValueError({_LEAK_MARKER!r})
+except ValueError as exc:
+    logger.error("stdout capture failed: %s", exc, exc_info=True)
+"""
+
+
+def _run_redirected(tmp_path, name, preamble, **extra_env):
+    """Run a script with stdout AND stderr on one file, the way `JobStore.start` puts both
+    on `stderr.log`, and return what was written.
+
+    The environment comes from `spawned_server_env`, not from this process. An ambient
+    `AMICUS_LOG_LEVEL=CRITICAL` silences the ERROR record entirely, which would leave the
+    marker absent for a reason that has nothing to do with the policy — the "record itself
+    never arrived" assertion below is what catches that, and pinning the level is what keeps
+    it from firing on a developer's shell rather than on a defect. The helper is what strips
+    the legacy `*_LOG_FILE` aliases too, an incident its own docstring records."""
+    script = tmp_path / f"{name}.py"
+    script.write_text(_WORKER_LEAK_SCRIPT.format(preamble=preamble), encoding="utf-8")
+    env = spawned_server_env() | {"AMICUS_LOG_LEVEL": "INFO"} | extra_env
+    log = tmp_path / f"{name}.log"
+    with log.open("w") as sink:
+        subprocess.run(
+            [sys.executable, str(script)],
+            stdout=sink,
+            stderr=sink,
+            cwd=tmp_path,
+            env=env,
+            check=False,
+        )
+    return log.read_text(encoding="utf-8")
+
+
+def test_the_worker_entry_keeps_exception_text_out_of_the_job_log(tmp_path):
+    """The real entry runs first, exactly as the worker process reaches it."""
+    output = _run_redirected(tmp_path, "worker", "from amicus import _worker\n_worker.main([])")
+    assert _LEAK_MARKER not in output, "the exception's own text reached the job's log"
+    assert "amicus.sdk.core.runtime" in output, "the record itself never arrived"
+    assert "Traceback (most recent call last)" not in output
+
+
+def test_without_the_worker_entry_the_same_record_dumps_it(tmp_path):
+    """Mutation control: the identical record, from a process that never configured — the
+    worker's own state before #128. If this does not leak, the assertion above proves
+    nothing about the policy."""
+    output = _run_redirected(tmp_path, "control", "")
+    assert _LEAK_MARKER in output, "control did not reproduce the leak; the test proves nothing"
+    assert "Traceback (most recent call last)" in output
+
+
+def test_the_policy_is_installed_before_the_first_early_return(monkeypatch):
+    """`main([])` returns 2 without reading a job dir, and the handlers are already on. The
+    worker process always makes the first `obs.configure` call, so the flag starts clear."""
+    monkeypatch.setattr(obs, "_configured", False)
+    amicus_log = logging.getLogger(obs.ROOT_LOGGER_NAME)
+    monkeypatch.setattr(amicus_log, "handlers", [])
+    monkeypatch.setattr(amicus_log, "propagate", True)
+    assert not [h for h in amicus_log.handlers if isinstance(h, _POLICY_HANDLERS)]
+
+    assert _worker.main([]) == 2
+
+    assert [h for h in amicus_log.handlers if isinstance(h, _POLICY_HANDLERS)]
+    assert amicus_log.propagate is False
+
+
+_REAL_ENTRY = "from amicus import _worker\n_worker.main([])"
+
+
+def test_an_absolute_log_file_is_honoured_and_gets_the_same_policy(tmp_path):
+    """`AMICUS_LOG_FILE` is inherited from the server, and the worker still writes to it —
+    through a `PolicyFileHandler`, so the exception's text is withheld there too."""
+    target = tmp_path / "amicus.log"
+    _run_redirected(tmp_path, "abs", _REAL_ENTRY, AMICUS_LOG_FILE=str(target))
+    assert target.exists(), "the worker ignored an absolute AMICUS_LOG_FILE"
+    written = target.read_text(encoding="utf-8")
+    assert "amicus.sdk.core.runtime" in written
+    assert _LEAK_MARKER not in written
+
+
+def test_a_relative_log_file_does_not_land_in_the_job_directory(tmp_path):
+    """`logging.FileHandler` resolves a relative path against the cwd, and the worker's cwd
+    is the job directory. Honouring it would put a different file in every job directory and
+    leave it there, so `_worker_settings` drops it; the server's own handler still has it."""
+    stray = tmp_path / "amicus.log"
+    output = _run_redirected(tmp_path, "rel", _REAL_ENTRY, AMICUS_LOG_FILE="amicus.log")
+    assert not stray.exists(), "a relative AMICUS_LOG_FILE was written into the job directory"
+    assert "amicus.sdk.core.runtime" in output, "dropping the file also lost the stderr record"
+    assert _LEAK_MARKER not in output

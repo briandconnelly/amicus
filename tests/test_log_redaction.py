@@ -4,7 +4,9 @@ notes, or a rendered traceback — reaches either handler `obs.configure` instal
 The guarantee is scoped and stated honestly. It covers the handlers this server owns, so
 it holds for every call site that logs through them, amicus's own and the SDK's alike
 (the SDK logs under `amicus.sdk`, and `obs.configure` attaches handlers to `amicus` and
-turns its propagation off). It is NOT a guarantee that no prompt input can ever be logged: a
+turns its propagation off). It holds in the job worker too, which calls `obs.configure`
+itself; `tests/test_worker.py` pins that end to end, because the worker's stderr is a file
+the job keeps (#128). It is NOT a guarantee that no prompt input can ever be logged: a
 call site that interpolates a prompt field itself (`log.error("failed: %s", question)`) still
 would, and nothing here stops it. What is structurally closed is the exception-text family,
 which is what carried prompt inputs into the log unnoticed (issue #39).
