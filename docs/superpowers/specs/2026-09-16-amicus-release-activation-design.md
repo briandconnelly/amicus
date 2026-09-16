@@ -35,7 +35,8 @@ That mismatch is the defect; the pin-move window is a symptom.
 
 ## What was established by probe
 
-An isolated `CLAUDE_CONFIG_DIR` and a local git marketplace, against **Claude Code 2.1.273** on macOS, with a `file://` remote.
+An isolated `CLAUDE_CONFIG_DIR` and a local git marketplace, against **Claude Code 2.1.273** on macOS.
+Arms 1 to 7 use a `file://` remote; arm 8 uses this repository's real https remote.
 Marker A, B and C are distinct contents in both a skill body and `.mcp.json`.
 
 | arm | setup | result |
@@ -48,6 +49,7 @@ Marker A, B and C are distinct contents in both a skill body and `.mcp.json`.
 | 5 | source `./`→`ref` whose version equals the cached one | **no-op**: "already at the latest version (0.3.0)", content unchanged |
 | 6 | entry declares `skills` at a path existing only on `main` | not loaded; `plugin details` reports only the tag's skill |
 | 7 | entry carries `ref: v1` with **`sha` of v2** | installs v2's content: **`sha` silently wins** |
+| 8 | entry pins this repository over **https** at `ref: v0.2.0` | installs `0.2.0`, the exact shape this design ships |
 
 Arms 2 and 4 are the positive control for arm 1's negative: the instrument can see a change, so "no change" is a finding rather than a dead probe.
 Arm 6 also showed the catalog **description** coming from `main` while the plugin body stayed pinned.
@@ -117,9 +119,20 @@ The first release under this design must carry a version never previously cached
 Pointing the ref at `v0.3.0` first would achieve nothing.
 Arm 5 showed that a source change to a ref whose version equals the cached version is a no-op, and every affected install is already keyed `0.3.0`.
 
-`v0.3.0` is also not a snapshot worth pointing at.
-`git show v0.3.0:.claude-plugin/plugin.json` says `0.3.0` while `git show v0.3.0:.mcp.json` pins `@v0.2.0`, so the tag freezes the mismatch rather than resolving it.
-The first internally consistent tag will be `v0.4.0`, whose `.mcp.json` names its own tag.
+No existing tag is a snapshot worth pointing at, either:
+
+| tag | `plugin.json` | `.mcp.json` | consistent |
+| --- | --- | --- | --- |
+| `v0.1.0` | 0.1.0 | `@v0.1.0` | yes |
+| `v0.2.0` | 0.2.0 | `@v0.1.0` | **no** |
+| `v0.3.0` | 0.3.0 | `@v0.2.0` | **no** |
+
+This is not an accident of one release.
+ADR 0015 required the pin to trail the version being released, so it guaranteed that every tag after the bootstrap would carry a server one release older than its own skills.
+`v0.1.0` is consistent only because the bootstrap had no earlier tag to name and pinned itself.
+Arm 8 installed `v0.2.0` over https and received exactly that skew: a directory keyed `0.2.0` whose `.mcp.json` launches `@v0.1.0`.
+
+The first internally consistent tag since the bootstrap will be `v0.4.0`, whose `.mcp.json` names its own tag.
 
 The same 0.4.0 bump is what repairs every currently stuck install, since `0.4.0` is a cache key none of them holds.
 
@@ -150,8 +163,9 @@ The existing honesty posture of rules 20 and 23 extends to these unchanged: stat
 
 ## What this design does not claim
 
-The probes cover **one host at one version** — Claude Code 2.1.273 — over a `file://` remote, with a whole-repo `url` source.
-An https remote is the shape 88 catalog entries already use, but this repository has not exercised it.
+The probes cover **one host at one version** — Claude Code 2.1.273 — with a whole-repo `url` source.
+Arm 8 exercised this repository's https remote for a fresh install only.
+Moving a ref, a same-version switch and the `sha` precedence were probed over `file://`, not https.
 
 Codex is not covered at all.
 `docs/host-captures/install-smoke/codex/0.153.4/notes.md` records that the Codex plugin loader was never exercised and `plugin.json` never read, and nothing here changes that.
