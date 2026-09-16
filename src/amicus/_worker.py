@@ -3,7 +3,14 @@
 Reads `<job_dir>/spec.json` (the public RunSpec half) and the input half from stdin,
 re-resolves the backend plugin by id, runs `orchestration.run.run_request`, and writes
 `<job_dir>/result.json` atomically. Import-light: never the FastMCP app. A crash still
-leaves a readable envelope; a SIGTERM (cancel/timeout) cancels cleanly and leaves none."""
+leaves a readable envelope; a SIGTERM (cancel/timeout) cancels cleanly and leaves none.
+
+`main` configures logging before anything else it does, including before the argument
+checks that return 2, because this process's stdout and stderr are both the job's own
+`stderr.log` (`jobs.store.JobStore.start`) and an unconfigured `amicus.*` logger falls
+through to `logging.lastResort`, which renders an exception's text and traceback straight
+into that file (#128). The policy handlers `obs.configure` installs are what withhold it,
+and they are only installed by calling it."""
 
 from __future__ import annotations
 
@@ -17,7 +24,7 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from amicus import obs
+from amicus import config, obs
 from amicus.errors import error_envelope
 from amicus.jobs.store import ActivityRecorder
 from amicus.orchestration.run import run_request
@@ -115,6 +122,8 @@ def _parse_stdin_inputs(raw_inputs: str) -> dict[str, Any]:
 
 
 def main(argv: list[str] | None = None, stdin_text: str | None = None) -> int:
+    # First, and before every early return below: see the module docstring (#128).
+    obs.configure(config.settings())
     args = argv if argv is not None else sys.argv[1:]
     if not args:
         return 2

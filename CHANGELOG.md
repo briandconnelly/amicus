@@ -44,6 +44,21 @@ per-change, as its own lead says.
   disabled is now named `amicus-nohooks-*` under the system temp dir, not
   `pontonier-nohooks-*`. Nothing keys on that name.
 
+### Fixed
+
+- **Security.** An exception's own text can no longer reach a background job's `stderr.log`
+  (#128). The job worker never called `obs.configure`, so nothing in that process installed
+  the handlers that withhold exception text, and an `amicus.*` record fell through to
+  `logging.lastResort` — which renders the exception's `str()` and a full traceback. The
+  worker's stdout and stderr are both `<job_dir>/stderr.log`, so that text was written to a
+  file the job keeps. The reachable call site is the SDK runtime's
+  `logger.error("stdout capture failed: %s", exc, exc_info=True)` on a capture failure, and
+  an exception raised inside a backend adapter can embed the prompt text that provoked it,
+  which AGENTS.md rule 18 forbids writing to a log. `_worker.main` now configures logging
+  before anything else it does, so such a record renders as the exception's type and its
+  frame locations, the same policy the server has always applied. Nothing about a job's
+  result, status or wire shape changes, and `FINGERPRINT` does not move.
+
 ## [0.3.0] - 2026-09-15
 
 Across this release the discovery surface moves `amicus/0.1/schema-13`, what 0.2.0 shipped, to

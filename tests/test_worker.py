@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import signal
 import subprocess
@@ -13,7 +14,7 @@ import threading
 import pytest
 from tests.support import fakeplugin
 
-from amicus import _worker
+from amicus import _worker, obs
 from amicus.request import RunSpec
 
 _PUBLIC = dict(
@@ -209,3 +210,75 @@ def test_worker_subprocess_end_to_end_with_the_fake_codex(tmp_path, fake_codex):
     )
     assert "SECRET-QUESTION-42" in (tmp_path / "prompt.txt").read_text()
     assert "SECRET-QUESTION-42" not in (jd / "spec.json").read_text()
+
+
+# --- #128: the worker process installs the log policy ----------------------------------
+#
+# This process's stdout and stderr are both `<job_dir>/stderr.log` (`JobStore.start`), so a
+# record that reaches `logging.lastResort` is written to a file the job keeps. `lastResort`
+# renders an exception's own text and its traceback; the policy handlers `obs.configure`
+# installs render only its type and frame locations. Before this, the worker never called
+# `obs.configure`, so the SDK runtime's `logger.error("stdout capture failed: %s", exc,
+# exc_info=True)` (`sdk/core/runtime.py:317`) landed there verbatim.
+#
+# Assembled from fragments so the literal never appears on a source line: a frame's source
+# line is not rendered, and this keeps the assertion from passing for that reason.
+_LEAK_MARKER = "PROMPT" + "MARKER" + "128"
+
+_POLICY_HANDLERS = (obs.PolicyStreamHandler, obs.PolicyFileHandler)
+
+# What `amicus.sdk.core.runtime` logs on a capture failure, verbatim from runtime.py:317.
+_WORKER_LEAK_SCRIPT = f"""
+import logging
+{{preamble}}
+logger = logging.getLogger("amicus.sdk.core.runtime")
+try:
+    raise ValueError({_LEAK_MARKER!r})
+except ValueError as exc:
+    logger.error("stdout capture failed: %s", exc, exc_info=True)
+"""
+
+
+def _run_redirected(tmp_path, name, preamble):
+    """Run a script with stdout AND stderr on one file, the way `JobStore.start` puts both
+    on `stderr.log`, and return what was written."""
+    script = tmp_path / f"{name}.py"
+    script.write_text(_WORKER_LEAK_SCRIPT.format(preamble=preamble), encoding="utf-8")
+    log = tmp_path / f"{name}.log"
+    with log.open("w") as sink:
+        subprocess.run(
+            [sys.executable, str(script)], stdout=sink, stderr=sink, cwd=tmp_path, check=False
+        )
+    return log.read_text(encoding="utf-8")
+
+
+def test_the_worker_entry_keeps_exception_text_out_of_the_job_log(tmp_path):
+    """The real entry runs first, exactly as the worker process reaches it."""
+    output = _run_redirected(tmp_path, "worker", "from amicus import _worker\n_worker.main([])")
+    assert _LEAK_MARKER not in output, "the exception's own text reached the job's log"
+    assert "amicus.sdk.core.runtime" in output, "the record itself never arrived"
+    assert "Traceback (most recent call last)" not in output
+
+
+def test_without_the_worker_entry_the_same_record_dumps_it(tmp_path):
+    """Mutation control: the identical record, from a process that never configured — the
+    worker's own state before #128. If this does not leak, the assertion above proves
+    nothing about the policy."""
+    output = _run_redirected(tmp_path, "control", "")
+    assert _LEAK_MARKER in output, "control did not reproduce the leak; the test proves nothing"
+    assert "Traceback (most recent call last)" in output
+
+
+def test_the_policy_is_installed_before_the_first_early_return(monkeypatch):
+    """`main([])` returns 2 without reading a job dir, and the handlers are already on. The
+    worker process always makes the first `obs.configure` call, so the flag starts clear."""
+    monkeypatch.setattr(obs, "_configured", False)
+    amicus_log = logging.getLogger(obs.ROOT_LOGGER_NAME)
+    monkeypatch.setattr(amicus_log, "handlers", [])
+    monkeypatch.setattr(amicus_log, "propagate", True)
+    assert not [h for h in amicus_log.handlers if isinstance(h, _POLICY_HANDLERS)]
+
+    assert _worker.main([]) == 2
+
+    assert [h for h in amicus_log.handlers if isinstance(h, _POLICY_HANDLERS)]
+    assert amicus_log.propagate is False
