@@ -1,10 +1,9 @@
-"""Disk-backed idempotency index for spend-committing runs (CLI-agnostic, _core).
+"""Disk-backed idempotency index for spend-committing runs (CLI-agnostic).
 
 A client passes an ``idempotency_key`` with a run; the index lets a retry after a
 transport drop **replay** an existing run instead of starting (and paying for) a
-duplicate. It sits beside the :class:`~amicus.sdk.core.jobs.JobStore` and is
-driven by it — stdlib only, and (like everything in ``_core``) it never imports from
-the parent package.
+duplicate. It sits beside the :class:`~amicus.jobs.store.JobStore` and is
+driven by it — stdlib only, and it imports nothing else from amicus.
 
 Dedup identity is (workspace, tool, argument-hash): the index lives in a per-workspace
 directory the store owns, entries are keyed by ``sha256([tool, key])``, and each entry
@@ -76,7 +75,7 @@ def _acquire_flock(fd: int, timeout: float | None) -> None:
     try:
         import fcntl  # noqa: PLC0415 - POSIX only, lazy like the job store's worker lock
     except ImportError:  # non-POSIX; server startup guard rejects non-POSIX platforms
-        return  # degrade to no cross-process lock (see _core/jobs.py worker-lock shim)
+        return  # degrade to no cross-process lock (see store.py's worker-lock shim)
 
     if timeout is None:
         fcntl.flock(fd, fcntl.LOCK_EX)

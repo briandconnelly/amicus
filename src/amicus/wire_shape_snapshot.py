@@ -13,6 +13,7 @@ from typing import Any
 from amicus.errors import make_error, serialize_error
 from amicus.jobs import lifecycle, lookup
 from amicus.jobs.delivery import attach_consume_disposition, finished_job_envelope
+from amicus.jobs.store import DiscardOutcome
 from amicus.orchestration.workspace import workspace_warning_for
 from amicus.request import RunSpec
 from amicus.schemas.envelope import (
@@ -34,7 +35,6 @@ from amicus.schemas.results import (
     RawResponse,
     ReviewResult,
 )
-from amicus.sdk.core.jobs import DiscardOutcome
 
 _FINGERPRINT_SENTINEL = "<fingerprint>"
 _VERSION_SENTINEL = "0.0.0"

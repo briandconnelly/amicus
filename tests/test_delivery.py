@@ -6,10 +6,10 @@ from typing import get_args
 
 from amicus.errors import error_envelope
 from amicus.jobs import delivery
+from amicus.jobs.store import DiscardOutcome as StoreDiscardOutcome
 from amicus.schemas.envelope import ConsumeDisposition, DiscardOutcome, Meta, dump_success
 from amicus.schemas.fingerprint import FINGERPRINT, RESULT_FORMAT
 from amicus.schemas.results import ConsultResult, RawResponse
-from amicus.sdk.core.jobs import DiscardOutcome as StoreDiscardOutcome
 
 _JOB = "0" * 32
 
