@@ -144,7 +144,7 @@ def test_create_sanitizes_worktree_path_in_worktree_add_failure(repo, monkeypatc
     monkeypatch.setattr(worktree.subprocess, "run", fake_run)
     with pytest.raises(worktree.WorktreeError) as ei:
         worktree.create(str(repo), timeout=30)
-    assert "pontonier-worktree-" not in str(ei.value)
+    assert worktree.WORKTREE_PREFIX not in str(ei.value)  # the live prefix, never a literal
 
 
 def test_create_cleans_parent_on_worktree_add_timeout(repo, monkeypatch):
@@ -560,7 +560,7 @@ def test_seed_commit_failure_sanitizes_worktree_path(repo, monkeypatch):
     _fail_git_on_with_path(monkeypatch, lambda args: "commit" in args)
     with pytest.raises(worktree.WorktreeError, match="baseline") as ei:
         worktree.create(str(repo), timeout=30)
-    assert "pontonier-worktree-" not in str(ei.value)
+    assert worktree.WORKTREE_PREFIX not in str(ei.value)  # the live prefix, never a literal
 
 
 def test_seed_add_failure_sanitizes_worktree_path(repo, monkeypatch):
@@ -568,7 +568,7 @@ def test_seed_add_failure_sanitizes_worktree_path(repo, monkeypatch):
     _fail_git_on_with_path(monkeypatch, lambda args: args[:2] == ["add", "-A"])
     with pytest.raises(worktree.WorktreeError, match="baseline") as ei:
         worktree.create(str(repo), timeout=30)
-    assert "pontonier-worktree-" not in str(ei.value)
+    assert worktree.WORKTREE_PREFIX not in str(ei.value)  # the live prefix, never a literal
 
 
 def test_seed_filter_driver_enumeration_failure_sanitized(repo, monkeypatch):
@@ -590,7 +590,7 @@ def test_seed_filter_driver_enumeration_failure_sanitized(repo, monkeypatch):
     monkeypatch.setattr(worktree.subprocess, "run", fake_run)
     with pytest.raises(worktree.WorktreeError, match="filter drivers") as ei:
         worktree.create(str(repo), timeout=30, on_parent=parents.append)
-    assert "pontonier-worktree-" not in str(ei.value)
+    assert worktree.WORKTREE_PREFIX not in str(ei.value)  # the live prefix, never a literal
 
 
 def test_seed_dirty_after_commit_raises(repo, monkeypatch):
