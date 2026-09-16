@@ -193,8 +193,7 @@ class ClassifiedFailure:
     ``temporary`` flag of the code's ``RepairRule``: the rule is the default for
     the code, and the backend saw the actual run (``timeout`` is temporary by
     rule, but Claude's is not retryable because a replay may double-charge).
-    The shared skeleton in ``classify`` leaves all three ``None``. ``details``
-    is the envelope's field-detail object (``{field, value, reason}``), redacted
+    ``details`` is the envelope's field-detail object (``{field, value, reason}``), redacted
     by the backend before it lands here.
 
     ``usage`` (0.9.0) carries whatever accounting the backend could still
