@@ -280,24 +280,20 @@ The self-healing of the one-time 0.4.0 window is reasoned, not probed.
 Arm 6 tested one shape of component injection, a relative path resolving against the plugin root.
 It did not test `strict: false` or absolute paths, so the closed key set above is a guard against shapes not probed rather than a restatement of what was.
 
-**Codex is probed for a fresh install and a re-add, and not for the passive upgrade path.**
+**Codex is probed for a fresh install, a re-add and the passive upgrade path.**
 Against Codex CLI 0.154.0, with an isolated `CODEX_HOME` whose control listed no marketplaces while the real one listed four:
 
 | arm | setup | result |
 | --- | --- | --- |
 | C1 | production shape at `v0.1.0` + peeled `sha`, fresh install | reads `.claude-plugin/marketplace.json`, parses the nested `url`, `ref` and `sha`, and installs the tag snapshot into `plugins/cache/<marketplace>/amicus/0.1.0` with both plugin manifests and the tag's `.mcp.json` |
 | C2 | pointer advanced to `v0.2.0`, then `codex plugin add` re-run | installs `0.2.0` and **removes** the `0.1.0` directory |
+| C3 | git marketplace served over local `http://`; pointer advanced upstream to `v0.2.0`; then **only** `codex plugin marketplace upgrade` | re-materializes to `0.2.0` with v0.2.0's `.mcp.json`; the control, an upgrade with nothing changed upstream, stays at `0.1.0` |
+| C4 | `briandconnelly/briandconnelly-plugins` over GitHub https, added at branch `feat/amicus` (`cwms` 0.6.0); configured ref moved to `main` (`cwms` 0.7.0); then **only** `marketplace upgrade` | re-materializes `cwms` from `0.6.0` to `0.7.0`; the control, an upgrade with the ref unchanged, stays at `0.6.0` |
 
-So this design does change what a Codex install resolves, and on the two paths probed it resolves the tag snapshot under a version-keyed cache, as Claude Code does.
-
-Not probed:
-
-- `codex plugin marketplace upgrade`, the passive path a git-marketplace user takes.
-  It applies only to git marketplaces, Codex rejects a `file://` source, and probing it needs a real remote repository.
-- The Codex counterpart of arm 5, so whether 0.4.0 repairs a stuck Codex install is inferred from the shared version-keyed cache, not observed.
-
-`docs/host-captures/install-smoke/codex/0.153.4/notes.md` predates these probes and describes 0.153.4, where the loader was not exercised.
-The 0.4.0 pointer PR should not merge until the passive upgrade path has been probed against a real git marketplace, or the maintainer has explicitly accepted that unknown.
+So on every path probed Codex resolves the tag snapshot under a version-keyed cache, and C3 shows a passive upgrade picks up a pointer advance that changes the version — the change 0.4.0 makes for every stuck install.
+C3 exercises the `ref` and `sha` pointer over a local `http://` git remote, because Codex rejects `file://`; C4 confirms the same passive upgrade over GitHub's https, read-only, by moving the configured ref between two existing branches.
+`upgrade` resolves the marketplace's configured ref with `git ls-remote`, which matches branch and tag names only, so a marketplace added at a commit SHA cannot be upgraded; the marketplace should be added tracking a branch, as it is today.
+The Codex counterpart of arm 5, a same-version change, was not probed, and nothing in this design depends on it.
 
 ## Alternatives rejected
 
@@ -326,7 +322,7 @@ Pointer lag leaves users on a working release and is fixed by the same human PR 
 
 - A host that resolves the plugin from the marketplace's own branch rather than the entry's `ref` and `sha`.
 - A host that stops honoring `sha` over `ref`, or stops keying its cache by the plugin version.
-- Codex's passive `marketplace upgrade`, once probed against a real git marketplace, not re-materializing a plugin whose pointer advanced to a new version.
+- A later Codex release whose passive `marketplace upgrade` stops re-materializing a plugin whose pointer advanced to a new version.
 - The repository admin bypass on the `v*` ruleset being removed, which would make the `sha` redundant rather than protective.
 - PyPI becoming the documented install channel, which would move `.mcp.json`'s pin off git tags and change what the consistency check reads.
 
