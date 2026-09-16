@@ -17,10 +17,11 @@ if TYPE_CHECKING:  # pragma: no cover
     from amicus.plugin import BackendPlugin
     from amicus.request import RunSpec
 
-WORKTREE_PREFIX = "amicus-wt-"
-WORKTREE_CONFIG = worktree.WorktreeConfig(
-    prefix=WORKTREE_PREFIX, identity_name="amicus", identity_email="amicus@local"
-)
+# The worktree module's own defaults are amicus's values since #123, so there is nothing
+# left to override here; these two names stay as the seam every other module reads the
+# policy through (the job store's cleanup guard, the dry-run plan, the sites below).
+WORKTREE_PREFIX = worktree.WORKTREE_PREFIX
+WORKTREE_CONFIG = worktree.DEFAULT_CONFIG
 
 # Stamped on meta.security_warnings when a consult runs outside a git repository under a
 # backend that isolates every tier. The site changes only the working directory: no

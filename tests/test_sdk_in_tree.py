@@ -110,18 +110,8 @@ def test_the_sdk_root_names_its_origin_and_has_no_version_lookup():
 
 
 # The only lines under src/ that may name pontonier after M8 (spec §1, R5): the origin note in
-# the sdk's package root, a link into pontonier's repository, and the four defaults that keep
-# their literal until a follow-up renames them.
-_PONTONIER_DEFAULTS = frozenset(
-    {
-        'WORKTREE_PREFIX = "pontonier-worktree-"',
-        'identity_name: str = "pontonier"',
-        'identity_email: str = "pontonier@local"',
-        'return tempfile.mkdtemp(prefix="pontonier-nohooks-")',
-    }
-)
-
-
+# the sdk's package root and a link into pontonier's repository. #123 renamed the four defaults
+# that used to be exempt, so no value under src/ carries a pontonier literal any more.
 def _unexplained_pontonier_lines(src: Path) -> list[str]:
     hits: list[str] = []
     for path in sorted(src.rglob("*.py")):
@@ -131,7 +121,7 @@ def _unexplained_pontonier_lines(src: Path) -> list[str]:
         for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
             if "pontonier" not in line.lower():
                 continue
-            if "briandconnelly/pontonier" in line or line.strip() in _PONTONIER_DEFAULTS:
+            if "briandconnelly/pontonier" in line:
                 continue
             hits.append(f"{rel}:{n}")
     return hits
@@ -149,3 +139,20 @@ def test_the_prose_scan_detects_a_planted_mention(tmp_path):
         encoding="utf-8",
     )
     assert _unexplained_pontonier_lines(tmp_path) == ["amicus/x.py:1"]
+
+
+def test_no_pontonier_named_value_reaches_the_filesystem():
+    """#123's end state, pinned as behaviour rather than as an absent grep hit. The worktree
+    prefix and the baseline identity were already amicus's, overridden at the isolation seam;
+    the empty-hooks temp dir was the one pontonier-named value that actually reached disk."""
+    from amicus.orchestration import isolation, worktree
+
+    assert worktree.WORKTREE_PREFIX == "amicus-wt-"
+    assert (worktree.DEFAULT_CONFIG.identity_name, worktree.DEFAULT_CONFIG.identity_email) == (
+        "amicus",
+        "amicus@local",
+    )
+    assert Path(worktree._empty_hooks_dir()).name.startswith("amicus-nohooks-")
+    # isolation no longer overrides: it reads the module's own defaults.
+    assert isolation.WORKTREE_PREFIX == worktree.WORKTREE_PREFIX
+    assert isolation.WORKTREE_CONFIG is worktree.DEFAULT_CONFIG

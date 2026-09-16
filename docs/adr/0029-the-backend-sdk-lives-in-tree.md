@@ -47,9 +47,9 @@ The separate `pontonier` logger is gone.
 The SDK's modules log on `amicus.sdk.*`, a subtree of `amicus`, so in a process that has called `obs.configure` their records reach the policy handlers it installs there; ADR 0023 carries a note.
 The job worker never calls `obs.configure`, so there an SDK record falls through to `logging.lastResort` and the worker's `stderr.log`, exactly as the `pontonier` logger's records did before M8; #128 tracks that.
 
-Four literal defaults in the worktree module still name pontonier: the worktree prefix, the git identity pair and the `pontonier-nohooks-` temporary-directory prefix.
-It was `amicus.sdk.core.worktree` when this ADR was accepted, and #119 moved it to `amicus.orchestration.worktree`.
-amicus passes its own prefix and identity, so only the last reaches the filesystem, and #123 retires all four.
+Four literal defaults in the worktree module named pontonier when this ADR was accepted: the worktree prefix, the git identity pair and the `pontonier-nohooks-` temporary-directory prefix.
+The module was `amicus.sdk.core.worktree` then; #119 moved it to `amicus.orchestration.worktree`, and #123 retired all four.
+amicus had been passing its own prefix and identity, so only the last of them had ever reached the filesystem.
 
 Five open pontonier issues describe behaviour amicus ships, and each has an amicus issue: briandconnelly/pontonier#27 is #124, #28 is #125, #31 is #126, #15 is #127, and #30 is #103.
 briandconnelly/pontonier#29 is already worked around in `src/amicus/jobs/polling.py` (#95), and #5 to #8 are redaction enhancements with no defect visible in amicus.
