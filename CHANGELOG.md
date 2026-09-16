@@ -29,13 +29,15 @@ per-change, as its own lead says.
   `amicus.sdk` instead of `pontonier` and declares plugin API version 2: `PLUGIN_API_VERSION`
   moved from 1 to 2, so the registry rejects a plugin that pins `api_version=1` (#115 covers
   one that leaves it unset). No release can enable a third-party backend yet, so no running
-  deployment is affected. SDK log records are now named `amicus.sdk.*` instead of
-  `pontonier.*` in stderr and `AMICUS_LOG_FILE`, since the log format prints the logger
-  name, which matters for an operator who filters logs by name. These `amicus.sdk` import
-  paths are not yet stable for a third-party backend. ADR 0030 settles where they end up:
-  `amicus.sdk` keeps what a backend imports, and the modules only the server uses move out of
-  it into the amicus packages that own them. That move is still under way — the git layer has
-  left (#119), and #118, #120 and #123 track the rest.
+  deployment is affected. SDK log records are no longer named `pontonier.*` in stderr and
+  `AMICUS_LOG_FILE`, since the log format prints the logger name, which matters for an
+  operator who filters logs by name: they are named `amicus.sdk.*`, except the job store and
+  its idempotency index, which are `amicus.jobs.store` and `amicus.jobs.idempotency`. These
+  `amicus.sdk` import paths are not yet stable for a third-party backend. ADR 0030 settles
+  where they end up: `amicus.sdk` keeps what a backend imports, and the modules only the
+  server uses move out of it into the amicus packages that own them. That move is still under
+  way — the git layer (#119) and the job store (#118) have left, and #120 and #123 track the
+  rest.
 
 ## [0.3.0] - 2026-09-15
 
