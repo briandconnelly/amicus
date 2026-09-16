@@ -116,29 +116,22 @@ def test_the_sdk_root_names_its_origin_and_has_no_version_lookup():
     assert "185b16cd7a3c7cb86b07f2a8ca58d1527372aa1d" in (amicus.sdk.__doc__ or "")
 
 
-# The only lines under src/ that may name pontonier after M8 (spec §1, R5): the origin note in
-# the sdk's package root, a link into pontonier's repository, and the four defaults that keep
-# their literal until a follow-up renames them.
-_PONTONIER_DEFAULTS = frozenset(
-    {
-        'WORKTREE_PREFIX = "pontonier-worktree-"',
-        'identity_name: str = "pontonier"',
-        'identity_email: str = "pontonier@local"',
-        'return tempfile.mkdtemp(prefix="pontonier-nohooks-")',
-    }
-)
+# The only lines under src/ that may name pontonier after M8 (spec §1, R5): a link into
+# pontonier's repository, and the sdk package root's origin note, which is recognized by the
+# tag commit it cites rather than by skipping that whole file — skipping it would exempt any
+# pontonier-named VALUE someone later put there. #123 renamed the four defaults that used to
+# be exempt, so no value under src/ carries a pontonier literal any more.
+_ORIGIN_COMMIT = "185b16cd7a3c7cb86b07f2a8ca58d1527372aa1d"
 
 
 def _unexplained_pontonier_lines(src: Path) -> list[str]:
     hits: list[str] = []
     for path in sorted(src.rglob("*.py")):
         rel = path.relative_to(src).as_posix()
-        if rel == "amicus/sdk/__init__.py":
-            continue
         for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
             if "pontonier" not in line.lower():
                 continue
-            if "briandconnelly/pontonier" in line or line.strip() in _PONTONIER_DEFAULTS:
+            if "briandconnelly/pontonier" in line or _ORIGIN_COMMIT in line:
                 continue
             hits.append(f"{rel}:{n}")
     return hits
@@ -156,3 +149,35 @@ def test_the_prose_scan_detects_a_planted_mention(tmp_path):
         encoding="utf-8",
     )
     assert _unexplained_pontonier_lines(tmp_path) == ["amicus/x.py:1"]
+
+
+def test_no_pontonier_named_value_reaches_the_filesystem(tmp_path, monkeypatch):
+    """#123's end state, pinned as behaviour rather than as an absent grep hit. The worktree
+    prefix and the baseline identity were already amicus's, overridden at the isolation seam;
+    the empty-hooks temp dir was the one pontonier-named value that actually reached disk."""
+    from amicus.orchestration import isolation, worktree
+
+    assert worktree.WORKTREE_PREFIX == "amicus-wt-"
+    assert (worktree.DEFAULT_CONFIG.identity_name, worktree.DEFAULT_CONFIG.identity_email) == (
+        "amicus",
+        "amicus@local",
+    )
+    # Read the prefix off the real mkdtemp call rather than letting it create (and leak)
+    # a directory: _empty_hooks_dir is lru_cached, so clear it either side to leave no
+    # tmp_path-backed answer behind for a later test.
+    seen: list[str] = []
+
+    def fake_mkdtemp(*, prefix: str) -> str:
+        seen.append(prefix)
+        return str(tmp_path)
+
+    worktree._empty_hooks_dir.cache_clear()
+    try:
+        monkeypatch.setattr(worktree.tempfile, "mkdtemp", fake_mkdtemp)
+        worktree._empty_hooks_dir()
+    finally:
+        worktree._empty_hooks_dir.cache_clear()
+    assert seen == ["amicus-nohooks-"]
+    # isolation no longer overrides: it reads the module's own defaults.
+    assert isolation.WORKTREE_PREFIX == worktree.WORKTREE_PREFIX
+    assert isolation.WORKTREE_CONFIG is worktree.DEFAULT_CONFIG

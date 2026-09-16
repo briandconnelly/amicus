@@ -136,7 +136,7 @@ backends/            __init__.py IN_TREE lazy factories; codex/, kimi/, claude/ 
 ```
 
 Import rules, enforced with import-linter: `backends/*` may import `amicus.plugin`, `amicus.config.envspec`, `amicus.schemas.codes` and `amicus.sdk`, never `tools`/`server`/`orchestration`; `orchestration`, `jobs`, `_worker` never import `server` or `tools`.
-The worktree prefix `amicus-wt-` is orchestration policy set by `isolation.py`, not a plugin choice (JobStore has one `cleanup_prefix`).
+The worktree prefix `amicus-wt-` is orchestration policy, not a plugin choice (the job store has one `cleanup_prefix`); it is the worktree module's own default, read through `isolation.py` (#123).
 
 ### Tool surface (19 tools, deterministic order)
 

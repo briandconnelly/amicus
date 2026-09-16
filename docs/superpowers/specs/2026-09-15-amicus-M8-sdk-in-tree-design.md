@@ -89,6 +89,7 @@ The second is four literal defaults in `core/worktree.py`: `WORKTREE_PREFIX = "p
 amicus passes its own prefix and identity (`src/amicus/orchestration/isolation.py:19-21`), so the first three never take effect.
 The nohooks prefix is not configurable and names a directory amicus really creates.
 Renaming any of the four changes behaviour, so all four wait for a follow-up.
+That follow-up was #123: the defaults are amicus's own values now, `isolation.py` no longer overrides anything, and the only hit left under `src/` is the first kind.
 
 Not moved: pontonier's docs, scripts, README, CHANGELOG and `pyproject.toml`, and its `tests/test_version.py`, which tests the lookup R4 removes.
 

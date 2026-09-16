@@ -26,9 +26,9 @@ def _init_repo(path: Path) -> None:
 
 def test_default_config_values():
     cfg = worktree.DEFAULT_CONFIG
-    assert cfg.prefix == worktree.WORKTREE_PREFIX == "pontonier-worktree-"
-    assert cfg.identity_name == "pontonier"
-    assert cfg.identity_email == "pontonier@local"
+    assert cfg.prefix == worktree.WORKTREE_PREFIX == "amicus-wt-"
+    assert cfg.identity_name == "amicus"
+    assert cfg.identity_email == "amicus@local"
     assert cfg.extra_excludes == ()
 
 
