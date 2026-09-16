@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from amicus.sdk.core import workspace
+from amicus.orchestration import workspace
 
 
 def test_resolve_explicit_param(tmp_path):

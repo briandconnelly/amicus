@@ -1256,7 +1256,7 @@ def sanitize_echo_prose(text: str | None) -> str:
     Both views are computed from the ORIGINAL text; neither is ever re-sanitized, so
     :func:`redact_text` does not need to be idempotent for this to hold.
 
-    ``worktree.sanitize_echo_prose`` deliberately does NOT share this policy — deleting a
+    ``pathalias.sanitize_echo_prose`` deliberately does NOT share this policy — deleting a
     line feed there destroys the delimiter its alias matching needs, disclosing a dead
     absolute path. See that function; the trade is different because the passes are."""
     if not text:

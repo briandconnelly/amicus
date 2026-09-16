@@ -11,7 +11,7 @@ from amicus.orchestration import finalize as fz
 from amicus.schemas.envelope import Meta
 from amicus.schemas.results import Coverage
 from amicus.sdk.backend.protocol import ExecResult, Usage
-from amicus.sdk.core import worktree
+from amicus.sdk.core import pathalias
 from amicus.sdk.core.runtime import CommandRun
 
 _COMPLETE = Coverage(status="complete")
@@ -158,7 +158,7 @@ def test_review_is_strict_and_folds_coverage():
 
 def test_delegate_relativizes_redacts_and_bounds(tmp_path):
     wt = str(tmp_path / "amicus-wt-x" / "tree")
-    aliases = worktree.path_aliases(wt)
+    aliases = pathalias.path_aliases(wt)
     message = f"Created [f.md]({wt}/f.md)."
     diff = "diff --git a/f.md b/f.md\n+x\n"
     meta = Meta()

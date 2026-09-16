@@ -11,7 +11,8 @@ from pathlib import Path
 import pytest
 from tests.sdk.conftest import run_git
 
-from amicus.sdk.core import gitdiff, streamcap
+from amicus.orchestration import gitdiff
+from amicus.sdk.core import streamcap
 from amicus.sdk.core.redaction import DiffRedactor
 
 

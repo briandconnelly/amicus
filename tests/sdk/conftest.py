@@ -7,7 +7,7 @@ import subprocess
 
 import pytest
 
-from amicus.sdk.core import gitdiff
+from amicus.orchestration import gitdiff
 from amicus.sdk.core.runtime import CommandRun
 
 # Git environment variables that redirect where git reads/writes its object store,

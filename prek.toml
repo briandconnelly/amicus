@@ -9,7 +9,7 @@ hooks = [
   { id = "end-of-file-fixer" },
   { id = "check-merge-conflict" },
   # M8 moves pontonier's suite verbatim; these two files carry synthetic keys as redaction fixtures.
-  { id = "detect-private-key", exclude = "^tests/sdk/test_(redaction|worktree)\\.py$" },
+  { id = "detect-private-key", exclude = "^tests/sdk/test_(pathalias|redaction)\\.py$" },
   { id = "check-added-large-files" },
   { id = "check-yaml" },
   { id = "check-toml" },

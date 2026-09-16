@@ -21,12 +21,12 @@ from amicus.sdk.core import runtime
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Callable
 
+    from amicus.orchestration.gitdiff import DiffResult
     from amicus.plugin import BackendPlugin
     from amicus.request import RunSpec
     from amicus.schemas.envelope import Meta
     from amicus.schemas.results import Coverage
     from amicus.sdk.backend.protocol import PreparedRun
-    from amicus.sdk.core.gitdiff import DiffResult
 
 MAX_ARTIFACT_BYTES = 1_000_000
 

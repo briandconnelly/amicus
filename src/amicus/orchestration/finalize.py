@@ -28,7 +28,7 @@ from amicus.schemas.results import (
     Severity,
 )
 from amicus.schemas.structured import classify_structured
-from amicus.sdk.core import redaction, worktree
+from amicus.sdk.core import pathalias, redaction
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Iterable
@@ -388,8 +388,8 @@ def delegate_result(
     apply_exec(meta, result)
     stat = _diffstat(diff)
     meta.context_summary = stat
-    last_message = worktree.sanitize_prose(result.answer or None, aliases)
-    summary_text = worktree.sanitize_echo_prose(result.answer or None, aliases)
+    last_message = pathalias.sanitize_prose(result.answer or None, aliases)
+    summary_text = pathalias.sanitize_echo_prose(result.answer or None, aliases)
     summary = (summary_text or "").strip() or "(the backend returned no summary)"
     if not diff.strip():
         summary = f"The backend made no changes. {summary}"

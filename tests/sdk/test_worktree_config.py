@@ -12,7 +12,7 @@ from pathlib import Path
 
 from tests.sdk.conftest import run_git
 
-from amicus.sdk.core import worktree
+from amicus.orchestration import worktree
 
 
 def _init_repo(path: Path) -> None:
