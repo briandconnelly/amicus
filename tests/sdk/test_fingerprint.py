@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from amicus.sdk.conventions import fingerprint
+from amicus.schemas import fingerprint
 
 FP = "some-bridge/0.1/schema-7"
 SURFACE = {"tools": ["a", "b"], "codes": ["x"]}

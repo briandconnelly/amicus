@@ -10,14 +10,14 @@ import pytest
 from tests.support import codexfixtures as cf
 
 from amicus.backends.codex import contract
-from amicus.schemas import instructions as ins
-from amicus.sdk.backend.protocol import RunRequest
-from amicus.sdk.conventions.prompts import (
+from amicus.orchestration.prompts import (
     build_consult_prompt,
     build_delegate_prompt,
     build_review_prompt,
     framings,
 )
+from amicus.schemas import instructions as ins
+from amicus.sdk.backend.protocol import RunRequest
 
 SIBLING_HOST = "Claude Code"
 

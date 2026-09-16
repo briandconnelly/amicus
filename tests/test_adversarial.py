@@ -85,7 +85,7 @@ def test_framing_for_uses_the_hook_when_the_plugin_has_one():
     )
     for verb in ("consult", "review_changes", "delegate"):
         assert prompts.framing_for(None, verb, "Codex") == getattr(
-            prompts._pp.framings("Codex"),
+            prompts.framings("Codex"),
             {"consult": "consult", "review_changes": "review", "delegate": "delegate"}[verb],
         )
 

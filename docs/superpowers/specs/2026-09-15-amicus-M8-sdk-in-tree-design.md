@@ -183,7 +183,8 @@ Two break the backend one: a backend may not import `amicus.orchestration` (#119
 The third breaks the sdk's own: `sdk.backend.protocol` needs `conventions.envelope`, and the sdk may not import `amicus.schemas`, which is where #120 would have put it.
 So `core.runtime`, `core.jsoncache`, `conventions.envelope` and `conventions.annotations` stay in `amicus.sdk`; `core.gitproc` moved to `amicus.orchestration` with the rest of the git layer; and `conventions.prompts` joined issue 3's scope.
 
-- Modules no issue names (`backend.protocol`, `backend.contract`, `core.redaction`, `core.gitproc`, `core.streamcap`, `conventions.preflight` and `conventions.prompts`) stay in `amicus.sdk` until an issue argues otherwise.
+- Modules no issue names (`backend.protocol`, `backend.contract`, `core.redaction`, `core.streamcap` and `conventions.preflight`) stay in `amicus.sdk` until an issue argues otherwise.
+  `core.gitproc` and `conventions.prompts` were on that list until ADR 0030 moved them with #119 and #120.
   `backend.protocol` and `backend.contract` are what a plugin imports, so moving either changes every plugin's imports again.
 - The only step in pontonier's repository is optional and the maintainer's: noting in its README that amicus no longer consumes it.
 

@@ -7,8 +7,8 @@ to the amicus package that owns it. Four layers: ``amicus.sdk.core`` (the subpro
 runtime, stream capping, redaction, path-alias sanitizing and a bounded JSON reader),
 ``amicus.sdk.backend`` (the backend protocol and contract, FROZEN at
 ``CONTRACT_API_VERSION = 1``: required members are stable, and new behavior lands as
-defaulted fields or optional capability protocols),
-``amicus.sdk.conventions`` (error vocabulary, annotations, fingerprint, preflight, prompt
-framings) and ``amicus.sdk.testing`` (the conformance kit, which the registry runs on every
-plugin it loads). ``amicus.sdk.core`` never imports the other three.
+defaulted fields or optional capability protocols), ``amicus.sdk.conventions`` (error
+vocabulary, annotations, preflight) and ``amicus.sdk.testing`` (the conformance kit, which
+the registry runs on every plugin it loads). ``amicus.sdk.core`` never imports the other
+three.
 """
