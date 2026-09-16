@@ -34,10 +34,15 @@ per-change, as its own lead says.
   operator who filters logs by name: they are named `amicus.sdk.*`, except the job store and
   its idempotency index, which are `amicus.jobs.store` and `amicus.jobs.idempotency`. These
   `amicus.sdk` import paths are not yet stable for a third-party backend. ADR 0030 settles
-  where they end up: `amicus.sdk` keeps what a backend imports, and the modules only the
-  server uses move out of it into the amicus packages that own them. That move is still under
-  way — the git layer (#119) and the job store (#118) have left, and #120 and #123 track the
-  rest.
+  where they end up, and this release leaves that move finished (#118–#123): `amicus.sdk`
+  holds what a backend imports — the backend protocol and contract, the error vocabulary,
+  annotations and preflight, the subprocess runtime, stream capping, redaction, path-alias
+  sanitizing, a bounded JSON reader and the conformance kit — while the job store, the git
+  layer, the fingerprint mechanics and the prompt framings live in the amicus package that
+  owns each. Of the pontonier-named literals the copy brought with it, one was visible
+  outside the code: the throwaway directory amicus creates to run git with its hooks
+  disabled is now named `amicus-nohooks-*` under the system temp dir, not
+  `pontonier-nohooks-*`. Nothing keys on that name.
 
 ## [0.3.0] - 2026-09-15
 
