@@ -109,7 +109,7 @@ Not moved: pontonier's docs, scripts, README, CHANGELOG and `pyproject.toml`, an
 - **Logging.**
   `obs.py` drops `LIBRARY_LOGGER_NAME` and its entry in `configure()`.
   An `amicus.sdk.*` logger descends from `amicus`, which stops propagation and carries the policy handlers, so in a process that has called `obs.configure` its records reach the same `PolicyStreamHandler`, `PolicyFileHandler` and `PolicyFormatter` that the separate `pontonier` logger had.
-  The job worker never calls `obs.configure`, before or after M8, so there SDK records fall through to `logging.lastResort` and the worker's `stderr.log`; #128 tracks that, and M8 leaves the routing as it was.
+  The job worker did not call `obs.configure`, before or after M8, so there SDK records fell through to `logging.lastResort` and the worker's `stderr.log`; M8 left the routing as it was, and #128 later changed it so the worker configures before anything else it does.
   The tests that name the `pontonier` logger (`tests/test_obs.py:19`, `tests/test_log_redaction.py:35` and `tests/test_fastmcp_argument_log.py:329`, `:337` and `:413`) instead show that a record logged on an `amicus.sdk.*` logger passes through the policy.
   Their mutation control sets `propagate = False` on `amicus.sdk` and watches them fail.
 - **Fingerprint and result format.**

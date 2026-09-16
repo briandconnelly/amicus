@@ -12,6 +12,7 @@ import sys
 import threading
 
 import pytest
+from tests.conftest import ENV_PREFIXES
 from tests.support import fakeplugin
 
 from amicus import _worker, obs
@@ -221,8 +222,9 @@ def test_worker_subprocess_end_to_end_with_the_fake_codex(tmp_path, fake_codex):
 # `obs.configure`, so the SDK runtime's `logger.error("stdout capture failed: %s", exc,
 # exc_info=True)` (`sdk/core/runtime.py:317`) landed there verbatim.
 #
-# Assembled from fragments so the literal never appears on a source line: a frame's source
-# line is not rendered, and this keeps the assertion from passing for that reason.
+# Assembled from fragments so the literal never appears on a source line of THIS file, which
+# a failure's own traceback would print. It does appear in the generated script below, which
+# is the point: the control's traceback renders that line and the marker with it.
 _LEAK_MARKER = "PROMPT" + "MARKER" + "128"
 
 _POLICY_HANDLERS = (obs.PolicyStreamHandler, obs.PolicyFileHandler)
@@ -239,15 +241,29 @@ except ValueError as exc:
 """
 
 
-def _run_redirected(tmp_path, name, preamble):
+def _run_redirected(tmp_path, name, preamble, **extra_env):
     """Run a script with stdout AND stderr on one file, the way `JobStore.start` puts both
-    on `stderr.log`, and return what was written."""
+    on `stderr.log`, and return what was written.
+
+    The environment is pinned rather than inherited. An ambient `AMICUS_LOG_LEVEL=CRITICAL`
+    silences the ERROR record entirely, which would leave the marker absent for a reason
+    that has nothing to do with the policy — the "record itself never arrived" assertion
+    below is what catches that, and pinning the level is what keeps it from firing on a
+    developer's shell rather than on a defect."""
     script = tmp_path / f"{name}.py"
     script.write_text(_WORKER_LEAK_SCRIPT.format(preamble=preamble), encoding="utf-8")
+    env = {k: v for k, v in os.environ.items() if not k.startswith(ENV_PREFIXES)}
+    env["AMICUS_LOG_LEVEL"] = "INFO"
+    env.update(extra_env)
     log = tmp_path / f"{name}.log"
     with log.open("w") as sink:
         subprocess.run(
-            [sys.executable, str(script)], stdout=sink, stderr=sink, cwd=tmp_path, check=False
+            [sys.executable, str(script)],
+            stdout=sink,
+            stderr=sink,
+            cwd=tmp_path,
+            env=env,
+            check=False,
         )
     return log.read_text(encoding="utf-8")
 
@@ -282,3 +298,28 @@ def test_the_policy_is_installed_before_the_first_early_return(monkeypatch):
 
     assert [h for h in amicus_log.handlers if isinstance(h, _POLICY_HANDLERS)]
     assert amicus_log.propagate is False
+
+
+_REAL_ENTRY = "from amicus import _worker\n_worker.main([])"
+
+
+def test_an_absolute_log_file_is_honoured_and_gets_the_same_policy(tmp_path):
+    """`AMICUS_LOG_FILE` is inherited from the server, and the worker still writes to it —
+    through a `PolicyFileHandler`, so the exception's text is withheld there too."""
+    target = tmp_path / "amicus.log"
+    _run_redirected(tmp_path, "abs", _REAL_ENTRY, AMICUS_LOG_FILE=str(target))
+    assert target.exists(), "the worker ignored an absolute AMICUS_LOG_FILE"
+    written = target.read_text(encoding="utf-8")
+    assert "amicus.sdk.core.runtime" in written
+    assert _LEAK_MARKER not in written
+
+
+def test_a_relative_log_file_does_not_land_in_the_job_directory(tmp_path):
+    """`logging.FileHandler` resolves a relative path against the cwd, and the worker's cwd
+    is the job directory. Honouring it would put a different file in every job directory and
+    leave it there, so `_worker_settings` drops it; the server's own handler still has it."""
+    stray = tmp_path / "amicus.log"
+    output = _run_redirected(tmp_path, "rel", _REAL_ENTRY, AMICUS_LOG_FILE="amicus.log")
+    assert not stray.exists(), "a relative AMICUS_LOG_FILE was written into the job directory"
+    assert "amicus.sdk.core.runtime" in output, "dropping the file also lost the stderr record"
+    assert _LEAK_MARKER not in output

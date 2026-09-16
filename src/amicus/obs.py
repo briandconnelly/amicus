@@ -463,7 +463,7 @@ def _own_dependency_loggers(formatter: logging.Formatter, level: int) -> None:
     FastMCP's `configure_logging` honours: that function removes every handler on
     `fastmcp` and installs its own, and `run(log_level=...)` reaches it through
     `temporary_log_level`."""
-    import fastmcp  # noqa: PLC0415 - only the server process configures logging
+    import fastmcp  # noqa: PLC0415 - deferred; the job worker configures too (#128)
 
     for name in DEPENDENCY_LOGGER_NAMES:
         target = logging.getLogger(name)

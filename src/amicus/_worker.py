@@ -10,12 +10,15 @@ checks that return 2, because this process's stdout and stderr are both the job'
 `stderr.log` (`jobs.store.JobStore.start`) and an unconfigured `amicus.*` logger falls
 through to `logging.lastResort`, which renders an exception's text and traceback straight
 into that file (#128). The policy handlers `obs.configure` installs are what withhold it,
-and they are only installed by calling it."""
+and they are only installed by calling it. "Import-light" survives that: `configure`
+imports the `fastmcp` package to take its logger over, which is a dependency this process
+already has, not the FastMCP app."""
 
 from __future__ import annotations
 
 import asyncio
 import contextlib
+import dataclasses
 import json
 import os
 import signal
@@ -35,6 +38,7 @@ from amicus.schemas.envelope import Meta
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Callable
 
+    from amicus.config import Settings
     from amicus.plugin import BackendPlugin
 
 _held_locks: list[int] = []
@@ -121,9 +125,23 @@ def _parse_stdin_inputs(raw_inputs: str) -> dict[str, Any]:
     return inputs
 
 
+def _worker_settings() -> Settings:
+    """The server's settings, minus a relative `AMICUS_LOG_FILE`.
+
+    `logging.FileHandler` resolves a relative path against the process's cwd, and this
+    process's cwd is the job directory (`JobStore.start` passes `cwd=str(jd)`). Honouring a
+    relative path here would put a differently-located log file inside every job directory
+    and leave it there, rather than adding to the one file the operator asked for. The
+    server's own handler still receives it, resolved against the server's cwd."""
+    settings = config.settings()
+    if settings.log_file and not Path(settings.log_file).is_absolute():
+        return dataclasses.replace(settings, log_file=None)
+    return settings
+
+
 def main(argv: list[str] | None = None, stdin_text: str | None = None) -> int:
     # First, and before every early return below: see the module docstring (#128).
-    obs.configure(config.settings())
+    obs.configure(_worker_settings())
     args = argv if argv is not None else sys.argv[1:]
     if not args:
         return 2

@@ -56,8 +56,14 @@ per-change, as its own lead says.
   an exception raised inside a backend adapter can embed the prompt text that provoked it,
   which AGENTS.md rule 18 forbids writing to a log. `_worker.main` now configures logging
   before anything else it does, so such a record renders as the exception's type and its
-  frame locations, the same policy the server has always applied. Nothing about a job's
-  result, status or wire shape changes, and `FINGERPRINT` does not move.
+  frame locations, the same policy the server has always applied. The worker inherits the
+  server's environment, so it honours the same `AMICUS_LOG_LEVEL` and `AMICUS_LOG_FILE` —
+  except a *relative* `AMICUS_LOG_FILE`, which it drops: `logging.FileHandler` resolves a
+  relative path against the process's cwd, and the worker's cwd is the job directory, so
+  honouring it would leave a differently-located log file inside every job directory instead
+  of adding to the one file the operator asked for. An absolute path is honoured, and the
+  server's own handler is unaffected either way. Nothing about a job's result, status or
+  wire shape changes, and `FINGERPRINT` does not move.
 
 ## [0.3.0] - 2026-09-15
 
