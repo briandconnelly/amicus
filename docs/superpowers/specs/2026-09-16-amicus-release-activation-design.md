@@ -119,14 +119,10 @@ Four steps change in content rather than position.
 - **Step 2.** "Do **not** touch `.mcp.json`" inverts: the pin is a version literal again and moves with the others.
 - **Step 3.** After the evidence run writes `.release-evidence/live-gates.json`, create the annotated tag **locally**, using exactly the command step 6 prescribes today: `git tag -a vX.Y.Z -F .release-evidence/live-gates.json --cleanup=verbatim <release-sha>`.
   Then run `check_release_state.py --tag vX.Y.Z --commit <release-sha>`, so the strict predicate — including that `.mcp.json`'s pinned tag exists and that the tag carries a record naming the release commit — passes unmodified against a tag that exists only in this checkout.
-  Once it passes, record the tag **object** ID with `git rev-parse vX.Y.Z` — the annotated tag's own SHA, which covers its message, not the commit it points at.
   A local tag is reversible, so nothing in the checker needs a pre-tag exception.
-  If step 3 must be redone because the branch gained a commit, delete the local tag with `git tag -d vX.Y.Z`, recreate it against the new tip, rerun the check, and record the new object ID.
-- **Step 6.** Stops creating the tag and only pushes the one step 3 created.
-  Before pushing, confirm `git rev-parse vX.Y.Z` still prints the object ID recorded at step 3.
-  Checking the peeled commit would not be enough: a tag deleted and recreated on the same commit with a different message, and so a different evidence record, peels to the same commit but is a different object.
-  Creating the tag again here would fail anyway: `git tag -a` on a name that already exists exits with `fatal: tag 'vX.Y.Z' already exists`.
-  Pushing the recorded object means the tag users receive is byte-for-byte the one the checker validated.
+  If step 3 must be redone because the branch gained a commit, delete the local tag with `git tag -d vX.Y.Z` and recreate it against the new tip.
+- **Step 6.** Stops creating the tag, which step 3 already did — `git tag -a` on an existing name fails with `fatal: tag 'vX.Y.Z' already exists`.
+  It reruns `check_release_state.py --tag vX.Y.Z --commit <release-sha>` immediately before `git push origin vX.Y.Z`, so the tag pushed is one that passed the checker as it stands.
 - **Step 7.** The small `chore(release):` PR advances `marketplace.json`'s `ref` and `sha` instead of `.mcp.json`'s pin.
   Unlike the pin-move it replaces, this one reaches hosts, because the version at the new ref differs from the version at the old one.
 
@@ -198,20 +194,20 @@ One function validates the marketplace file, called from two places with differe
 Every rule below fails closed: a key, shape or value not listed is a failure, so an unknown future key fails rather than passing silently, and adding one means changing the checker in the same PR.
 
 **Shape, a fact of any checkout.**
-Every object below has **exactly** the listed keys — none missing, none extra — and every value has the stated type and constraint.
+Strictness goes where it affects what executes: the plugin entry and its source have **exactly** the listed keys.
+The root and `owner` only need their required fields with the right types; other metadata there is allowed, because it cannot change which snapshot runs.
 The file as it stands today passes every rule, so PR 1 needs no change to it.
 
-| JSON path | keys, exactly | value constraints |
+| JSON path | keys | value constraints |
 | --- | --- | --- |
-| `$` (root) | `name`, `owner`, `plugins` | `name` is `"amicus"`; `plugins` is an array of exactly one element |
-| `$.owner` | `name`, `url` | each a non-empty string |
-| `$.plugins[0]` | `name`, `description`, `source` | `name` is `"amicus"`; `description` is a non-empty string |
+| `$` (root) | requires `name`, `plugins` | `name` is `"amicus"`; `plugins` is an array of exactly one element |
+| `$.plugins[0]` | exactly `name`, `description`, `source` | `name` is `"amicus"`; `description` is a non-empty string |
 | `$.plugins[0].source` | — | the string `"./"` under the pre-activation rule, **or** the object below |
-| `$.plugins[0].source` as an object | `source`, `url`, `ref`, `sha` | `source` is `"url"`; `url` is `"https://github.com/briandconnelly/amicus.git"`; `ref` matches `^v\d+\.\d+\.\d+$`; `sha` matches `^[0-9a-f]{40}$` |
+| `$.plugins[0].source` as an object | exactly `source`, `url`, `ref`, `sha` | `source` is `"url"`; `url` is `"https://github.com/briandconnelly/amicus.git"`; `ref` matches `^v\d+\.\d+\.\d+$`; `sha` matches `^[0-9a-f]{40}$` |
 
-`description` is required, but its text is not checked: it is catalog copy, arm 6 showed it is read from `main` regardless, and pinning it would make every wording change a checker change.
-The exact key set on `$.plugins[0]` excludes `version`, `strict` and every component-definition key, such as `skills` (which arm 6 showed an entry may carry) or `mcpServers`, without the checker having to enumerate or track them.
-PR 1's negative tests follow mechanically from the table: at each path, one test adding an unlisted key, one removing each listed key, and one violating each value constraint.
+The exact key set on the entry excludes `version`, `strict` and every component-definition key, such as `skills` (which arm 6 showed an entry may carry) or `mcpServers`, without enumerating them.
+`description`'s text is not checked: it is catalog copy, read from `main` regardless.
+Tests cover each class of rule with a representative case — an extra entry key, a missing source key, a malformed `ref` and `sha`, a wrong `url` — rather than every combination.
 
 **Consistency, facts that require the tags to be fetched:**
 
@@ -244,7 +240,7 @@ PR 1's negative tests include each rollback that motivated them: object form bac
 
 The release predicate has no base, so it cannot detect a regression by itself.
 It relies on the pull-request check having stopped one before the release commit existed.
-A push to `main` that bypasses pull requests bypasses this rule too, and only the monitor would notice.
+A push to `main` that bypasses pull requests bypasses this rule too, and nothing catches it; that gap is accepted.
 
 `.mcp.json` separately equals the version being released, replacing today's "names something no newer than this version", and both `plugin.json` files equal it as now.
 
@@ -252,7 +248,7 @@ A push to `main` that bypasses pull requests bypasses this rule too, and only th
 
 - `scripts/check_release_state.py`, locally at step 3 and in the `verify` job on the tag.
   A local pass proves the shape and whatever tags this checkout has fetched; `verify` fetches full history and tags, so its pass covers the consistency checks against the remote as `actions/checkout` sees it.
-- A pull-request check that fetches tags and the base commit, and runs the same function with the no-newer ordering plus the transition rules against the base.
+- A job in the existing `.github/workflows/test.yml` that fetches tags and the base commit, and runs the same function with the no-newer ordering plus the transition rules against the base.
   It validates the pointer PR before it merges, and it cannot block a release PR, because a release PR leaves the pointer at a valid earlier tag and unchanged from its base.
 
 **What no pass establishes, and no document may describe as proven:**
@@ -264,46 +260,14 @@ A push to `main` that bypasses pull requests bypasses this rule too, and only th
 
 The honesty posture of rules 20 and 23 extends to these unchanged: state what is machine-checked, and name the rest as assertion.
 
-### Activation is monitored, with escalation
+### Activation is a checklist item
 
 Tagging and publishing does not expose a release to marketplace users; only the pointer PR does, and no check against an immutable tag can make a later commit happen.
-So this is a monitor, not an enforcement, and nothing may call it enforcement.
+`docs/RELEASING.md` makes advancing the pointer an explicit post-publish step, and a release is not complete until it has merged.
 
-A scheduled workflow runs daily, on every completed `publish.yml` run, and on manual dispatch.
-
-**Which releases count.**
-A tag is **eligible** when it matches `^v\d+\.\d+\.\d+$` exactly and the GitHub Actions API reports at least one `publish.yml` run with event `push`, `head_branch` equal to that tag, `status` `completed` and `conclusion` `success`.
-Pre-release tags, anything else matching `v*`, and tags with no successful publish run are never eligible.
-
-"At least one successful run" is deliberate.
-`v0.3.0` has two runs — a `failure` at 15:20:32Z, when `verify` refused a tag carrying the wrong record, then a `success` at 15:25:38Z — and it is a normal published release.
-
-`L` is the highest eligible tag, comparing versions as three integers.
-
-**The clock.**
-The grace period runs from the completion time (`updated_at`) of the most recent successful publish run for `L`.
-It is recorded by GitHub rather than by whoever made the tag, which a tagger date is not.
-Run creation time would be wrong too: `v0.1.0`'s run was created at 04:33:20Z and completed at 14:33:34Z, ten hours spent waiting on the `pypi` environment's reviewer.
-
-**What it reports.**
-
-- Pointer equals `L`: **green**.
-- Pointer is `"./"` and `L` is below `v0.4.0`: **green**, pre-activation.
-- Pointer trails `L`, or is `"./"` with `L` at or above `v0.4.0`, within 48 hours of `L`'s clock: **green**, release in progress.
-- The same, beyond 48 hours: **red**, as an **activation lag**.
-  It opens a tracked issue, or comments on the open one, naming `L`, the pointer and how long it has lagged.
-- Separately, a stable `vX.Y.Z` tag **above** `L` that has no successful publish run and was pushed more than 48 hours ago is a **release incident**, reported in its own issue, never as an activation lag.
-  The pointer must not advance to such a tag, so reporting it as lag would demand the wrong fix.
-  It resolves either way it can: that tag publishes successfully and becomes `L`, or a higher version publishes and leaves it below `L`, which is the "release the next patch" recovery.
-  The 48 hours for an incident are measured from the tag's first publish run's creation time, the earliest GitHub-recorded event for it.
-  A stable tag above `L` with **no** publish run at all has no such clock, and is reported as an incident on the first monitor run that sees it: every `v*` push triggers `publish.yml`, so a tag with no run means that trigger did not fire.
-
-A legitimate release never turns anything red, so red keeps meaning something.
-It is not a pull-request gate, and a green run is evidence only that the pointer had caught up when it ran.
-
-While the pointer lags, users install release N-1, which after activation is a self-consistent, working snapshot.
-That is the degradation ADR 0015 intended.
-It resolves when a human merges the pointer PR, and the monitor exists to make sure one does.
+Until it does, users install release N-1, which after activation is a self-consistent, working snapshot.
+That is the degradation ADR 0015 intended, and it ends when the pointer PR merges.
+Nothing automated watches for a forgotten pointer PR; for a rarely released, single-maintainer project the checklist is proportionate.
 
 ## What this design does not claim
 
@@ -354,9 +318,9 @@ The ref-pinned entry achieves it within this repository, so a second repository 
 Observed on four `claude-plugins-official` plugins, which are cached under commit SHAs.
 It would make every commit to `main` re-materialize, which trades a stale install for a churning one, discards version identity in the catalog, and depends on host behavior more delicate than a documented `ref`.
 
-**An expected-red check on `main`.**
-An earlier draft asserted "pointer equals declared version" on every `main` push, red from each release merge until its pointer PR.
-Red after every legitimate release trains everyone to ignore it, and a later green commit does not repair the failed check it replaced.
+**An automated activation monitor.**
+Drafts specified a check on `main`, then a scheduled workflow with a grace period, publish-run correlation and issue escalation.
+Pointer lag leaves users on a working release and is fixed by the same human PR the checklist already requires, so the machinery cost more than the risk it removed.
 
 ## What would reopen this
 
@@ -373,9 +337,7 @@ Three pull requests, because rule 9 keeps governance and `.github/` separate fro
 1. **Design and checker.** This spec; a new ADR superseding 0015; `docs/RELEASING.md` steps 2, 3, 6 and 7 and the 0.4.0 transition rule; and the marketplace validation function in `scripts/check_release_state.py` with its tests, including the pre-activation rule and a negative test for each fail-closed key.
    `.claude-plugin/marketplace.json` does not move here, and does not need to: its current `"./"` passes under the pre-activation rule.
 2. **Governance.** AGENTS.md rules 19 and 24, and the "Releases" section of its context notes.
-3. **Workflows.** The pull-request marketplace check and the scheduled activation monitor, under `.github/workflows/`, each `uses:` pinned by SHA per rule 14.
-   The monitor needs `contents: read` to read `main`'s marketplace file and the tags, `actions: read` to list `publish.yml` runs, and `issues: write` to open or comment on its two issues, and nothing more.
-   It runs on `schedule`, on `workflow_run` for `publish.yml` with `types: [completed]`, and on `workflow_dispatch`; none of those is `pull_request_target`, which rule 15 forbids.
-   The pull-request check runs on `pull_request` with `contents: read`, fetching tags and the base commit.
+3. **Workflow.** One job added to the existing `.github/workflows/test.yml`, running the marketplace check on pull requests with tags and the base commit fetched, each new `uses:` pinned by SHA per rule 14.
+   It needs `contents: read` and nothing more.
 
 The pointer itself moves during the 0.4.0 release, as step 7 of the sequence, and in none of these three.
