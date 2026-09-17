@@ -13,6 +13,8 @@ def _probe_with(
     *,
     version="codex-cli 0.153.4\n",
     login_exit=0,
+    login_stdout="Logged in using ChatGPT",
+    login_stderr="",
     help_text=(
         "--sandbox --cd --json --output-last-message --skip-git-repo-check --ephemeral "
         "--ignore-user-config --ignore-rules --add-dir --output-schema --disable "
@@ -27,7 +29,7 @@ def _probe_with(
                 else CommandRun("", BINARY_NOT_FOUND, 127, 1, False)
             )
         if cmd[1:] == ["login", "status"]:
-            return CommandRun("Logged in using ChatGPT", "", login_exit, 1, False)
+            return CommandRun(login_stdout, login_stderr, login_exit, 1, False)
         return CommandRun(help_text, "", 0, 1, False)
 
     monkeypatch.setattr(st.cli.runtime, "run_sync_capture", fake)
@@ -68,6 +70,21 @@ def test_not_installed_and_bad_override(pinned_codex_bin, monkeypatch, tmp_path)
 
 
 def test_logged_out(pinned_codex_bin, monkeypatch):
-    _probe_with(monkeypatch, login_exit=1)
+    _probe_with(monkeypatch, login_exit=1, login_stdout="", login_stderr="Not logged in")
     rep = cf.make_backend()[0].status.probe()
     assert rep.installed and rep.authenticated is False
+
+
+def test_login_probe_failure_is_indeterminate_and_warns(pinned_codex_bin, monkeypatch):
+    _probe_with(
+        monkeypatch,
+        login_exit=1,
+        login_stdout="",
+        login_stderr="Error loading configuration: No such file or directory (os error 2)",
+    )
+    rep = cf.make_backend()[0].status.probe()
+    assert rep.installed and rep.authenticated is None
+    assert rep.warnings == (
+        "Codex login status probe failed: Error loading configuration: No such file or "
+        "directory (os error 2)",
+    )

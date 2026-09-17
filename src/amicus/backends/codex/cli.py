@@ -129,14 +129,27 @@ def codex_version(binary: str, timeout_seconds: int = 10) -> str | None:
 
 
 def login_status(binary: str, timeout_seconds: int = 10) -> tuple[bool | None, str | None]:
-    """(logged_in, non-identifying detail). None when the probe could not run."""
+    """(logged_in, status detail). None when the probe could not answer."""
     run = runtime.run_sync_capture(
         [binary, *contract.LOGIN_STATUS_ARGS], timeout_seconds=timeout_seconds
     )
     if run.binary_missing or run.timed_out:
         return None, None
     if run.exit_code != 0:
-        return False, "Codex reports no authenticated session; run `codex login`."
+        if contract.is_auth_failure(run.stdout, run.stderr):
+            return False, "Codex reports no authenticated session; run `codex login`."
+        diagnostic = next(
+            (
+                safe_echo(line.strip())
+                for text in (run.stderr, run.stdout)
+                for line in text.splitlines()
+                if line.strip()
+            ),
+            None,
+        )
+        if diagnostic:
+            return None, f"Codex login status probe failed: {diagnostic}"
+        return None, "Codex login status probe failed without diagnostic output."
     blob = f"{run.stdout}\n{run.stderr}".lower()
     if contract.LOGIN_METHOD_CHATGPT.lower() in blob:
         method = "ChatGPT"
