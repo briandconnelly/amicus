@@ -111,7 +111,7 @@ async def test_dry_run_fails_where_the_review_would(app, tmp_path, repo):
     assert body["ok"] is True and body["would_call_model"] is False
     assert body["backend_options"] == {
         "config_mode": "inherit",
-        "access": "toolless",
+        "access": "readonly",
         "max_budget_usd": 1.0,
     }
 
