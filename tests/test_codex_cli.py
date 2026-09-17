@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import tomllib
 
 import pytest
@@ -215,6 +216,34 @@ def test_classify_auth_drift_rate_limit_and_ordering():
             CommandRun("", "", 1, 1, False), events='{"type":"error","message":"401 unauthorized"}'
         ).code
         == "codex_auth_required"
+    )
+
+
+def test_classify_usage_limit_with_401_digits_is_rate_limited_not_auth():
+    # Issue #160. The event stream is codex-cli 0.154.0's, captured at a usage limit.
+    message = (
+        "You've hit your usage limit. Upgrade to Pro (https://chatgpt.com/explore/pro), visit "
+        "https://chatgpt.com/codex/settings/usage to purchase more credits or try again at "
+        "Sep 19th, 2026 8:37 AM."
+    )
+    events = "\n".join(
+        [
+            '{"type":"thread.started","thread_id":"01a0afc1-52ea-7432-babf-d6e9eeb0b7d8"}',
+            '{"type":"turn.started"}',
+            json.dumps({"type": "error", "message": message}),
+            json.dumps({"type": "turn.failed", "error": {"message": message}}),
+        ]
+    )
+    assert _classify(CommandRun(events, "", 1, 1, False), events=events).code == (
+        "codex_rate_limited"
+    )
+    json_401 = '{"type":"turn.failed","error":{"status":401}}'
+    assert _classify(CommandRun(json_401, "", 1, 1, False), events=json_401).code == (
+        "codex_auth_required"
+    )
+    noisy = events + '\n{"usage":{"input_tokens":14012}}'
+    assert _classify(CommandRun(noisy, "", 1, 1, False), events=noisy).code == (
+        "codex_rate_limited"
     )
 
 

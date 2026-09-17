@@ -135,6 +135,65 @@ def test_signature_predicates():
     assert not c.is_reasoning_effort_rejection("reasoning.effort ReasoningEffortParam")
 
 
+# Issue #160: the digits 401 inside a token count or an id must not read as "not
+# authenticated"; only an HTTP-status 401 or codex's own auth phrasings may.
+_USAGE_LIMIT_MESSAGE = (
+    "You've hit your usage limit. Upgrade to Pro (https://chatgpt.com/explore/pro), visit "
+    "https://chatgpt.com/codex/settings/usage to purchase more credits or try again at "
+    "Sep 19th, 2026 8:37 AM."
+)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        '{"usage":{"input_tokens":14012}}',
+        "request_id=a401bc",
+        "You have hit your usage limit (14010 tokens)",
+        "trace 7f-401-9c",
+        "src/app.py:401: warning",
+        '{"input_tokens":401}',
+        '{"status":4012}',
+        "status401; usage limit",
+        "http401",
+        "run codex loginhelper; usage limit",
+        _USAGE_LIMIT_MESSAGE,
+    ],
+)
+def test_auth_failure_ignores_401_digits_outside_an_http_status(text):
+    assert not c.is_auth_failure(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "HTTP 401 Unauthorized",
+        "unexpected status 401: {}",
+        "unexpected status 401 Unauthorized: token expired",
+        "http/1.1 401",
+        "status code: 401",
+        '{"type":"error","message":"401 unauthorized"}',
+        '{"status":401}',
+        '{"error": {"status_code": 401}}',
+        "Not logged in",
+        "HTTP/1.1 401",
+        "run codex login.",
+        "not authenticated; please run `codex login`",
+        "Your access token could not be refreshed. Please log out and sign in again.",
+        "Your authentication session could not be refreshed automatically. Please log out "
+        "and sign in again.",
+    ],
+)
+def test_auth_failure_matches_http_401_and_codex_auth_phrasings(text):
+    assert c.is_auth_failure(text)
+
+
+def test_declared_auth_signatures_agree_with_the_predicate():
+    compiled = c.CONTRACT.failure_signatures.compiled()["auth"]
+    for text in ("unexpected status 401: {}", "Not logged in", "request_id=a401bc"):
+        assert any(p.search(text) for p in compiled) is c.is_auth_failure(text)
+
+
 @pytest.mark.parametrize(
     ("text", "expected"),
     [

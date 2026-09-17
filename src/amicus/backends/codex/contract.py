@@ -312,14 +312,19 @@ CONTRACT_DRIFT_STDERR_PATTERNS = (
     "unknown feature flag",
 )
 
-AUTH_FAILURE_PATTERNS = (
-    "not logged in",
-    "not authenticated",
-    "please run `codex login`",
-    "please run codex login",
-    "run `codex login`",
-    "401",
-    "unauthorized",
+# Regexes, not substrings (issue #160): a bare "401" matched token counts and ids such as
+# `"input_tokens":14012`, so a usage limit read as "not authenticated". A 401 counts only in
+# an HTTP-status context (codex renders `unexpected status 401 ...`), or as a JSON
+# `status`/`status_code` value. The two refresh
+# phrasings are codex-cli 0.154.0's own.
+AUTH_FAILURE_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"\bnot logged in\b", re.I),
+    re.compile(r"\bnot authenticated\b", re.I),
+    re.compile(r"\brun `?codex login\b", re.I),
+    re.compile(r"\b(?:status(?: code)?|http(?:/\d(?:\.\d)?)?)[ \t:=]+401\b", re.I),
+    re.compile(r'"(?:status|status_code)"[ \t]*:[ \t]*"?401\b', re.I),
+    re.compile(r"\bunauthorized\b", re.I),
+    re.compile(r"\b(?:access token|authentication session) could not be refreshed\b", re.I),
 )
 
 RATE_LIMIT_PATTERNS = ("rate limit", "too many requests", "usage limit", "quota", "retry-after")
@@ -347,8 +352,8 @@ def is_reasoning_effort_rejection(*texts: str | None) -> bool:
 
 
 def is_auth_failure(*texts: str | None) -> bool:
-    blob = _blob(texts).lower()
-    return any(p in blob for p in AUTH_FAILURE_PATTERNS)
+    blob = _blob(texts)
+    return any(p.search(blob) for p in AUTH_FAILURE_PATTERNS)
 
 
 def is_rate_limited(*texts: str | None) -> bool:
@@ -400,7 +405,7 @@ CONTRACT = _pc.BackendContract(
     effort_validation="shape_only",
     usage_event_markers=USAGE_EVENT_MARKERS,
     failure_signatures=_pc.FailureSignatures(
-        auth=tuple(f"(?i){re.escape(p)}" for p in AUTH_FAILURE_PATTERNS),
+        auth=tuple(f"(?i){p.pattern}" for p in AUTH_FAILURE_PATTERNS),
         contract_drift=tuple(f"(?i){re.escape(p)}" for p in CONTRACT_DRIFT_STDERR_PATTERNS),
         rate_limited=tuple(f"(?i){re.escape(p)}" for p in RATE_LIMIT_PATTERNS),
     ),

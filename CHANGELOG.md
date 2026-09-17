@@ -106,6 +106,13 @@ per-change, as its own lead says.
   of adding to the one file the operator asked for. An absolute path is honoured, and the
   server's own handler is unaffected either way. Nothing about a job's result, status or
   wire shape changes, and `FINGERPRINT` does not move.
+- A `codex` run that hit its usage limit could fail as `backend_auth_required` instead of
+  `backend_rate_limited` (#160). The classifier checks authentication first and matched the bare
+  substring `401`, so any output carrying those digits, such as a token count of 14012, read as
+  "not authenticated". The repair then told the caller to log in again, and marked the failure
+  not temporary. A `401` now counts only as an HTTP status, and codex's own "could not be
+  refreshed" token failures are recognized as authentication failures. `FINGERPRINT` does not
+  move.
 
 ## [0.3.0] - 2026-09-15
 
