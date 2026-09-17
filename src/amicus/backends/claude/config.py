@@ -156,7 +156,9 @@ def load_config(environ: Mapping[str, str] | None = None) -> ClaudeConfig:
             # An empty value is unset to _choice, so it is unset here too.
             return resolved.source in ("env", "legacy") and bool(resolved.value)
         except EnvConflictError:
-            return True  # both names are set; get() has already chosen the current one
+            # Both names are set and disagree: get() keeps the current name's value, so this
+            # is explicit exactly when that value is, and an empty one stays unset.
+            return bool(get(name))
 
     return ClaudeConfig(
         bin_override=get(f"{PREFIX}BIN") or None,

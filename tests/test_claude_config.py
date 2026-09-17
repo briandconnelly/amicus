@@ -115,9 +115,18 @@ def test_access_explicit_tracks_whether_the_operator_set_access_at_all():
     """#116: review_changes defaults to readonly only while access is unset. A set value binds
     every verb, and an invalid one binds as its toolless fallback, so a mistyped restriction
     never loosens into the review default."""
-    unset = ({}, {"AMICUS_CLAUDE_ACCESS": ""}, {"AMICUS_CLAUDE_ACCESS": "${AMICUS_CLAUDE_ACCESS}"})
+    unset = (
+        {},
+        {"AMICUS_CLAUDE_ACCESS": ""},
+        {"AMICUS_CLAUDE_ACCESS": "${AMICUS_CLAUDE_ACCESS}"},
+        # The empty current name conflicts with the legacy one: a reported config error in
+        # which, as for every AMICUS_CLAUDE_* setting, the current name's value is kept.
+        {"AMICUS_CLAUDE_ACCESS": "", "CLAUDE_IN_CODEX_ACCESS": "toolless"},
+    )
     for environ in unset:
         assert cc.load_config(environ).access_explicit is False, environ
+    conflicted = cc.load_config({"AMICUS_CLAUDE_ACCESS": "", "CLAUDE_IN_CODEX_ACCESS": "toolless"})
+    assert conflicted.access == "toolless" and conflicted.errors
     explicit = (
         ({"AMICUS_CLAUDE_ACCESS": "toolless"}, "toolless"),
         ({"AMICUS_CLAUDE_ACCESS": "readonly"}, "readonly"),
