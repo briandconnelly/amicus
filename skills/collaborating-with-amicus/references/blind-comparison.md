@@ -3,7 +3,7 @@
 Use this pattern when two or more finalized candidate artifacts exist, nothing cheaper can tell
 them apart, and you want a backend that produced none of them to compare them. The comparison is
 a critique with a preference attached. It is not a verdict, not a score, and not a vote: the
-backend reads the candidates, it does not run them, and you own the decision.
+backend reads the candidates as text, and you own the decision.
 
 The case this pattern exists for is the one [independent attempt](independent-attempt.md) leaves
 open: when you wrote one of the candidates, your own synthesis is conflicted, and a reader with no
@@ -12,57 +12,73 @@ stake in either is the instrument that addresses that.
 ## Rules
 
 Cap declaration, call counting and synthesis are governed by SKILL.md → Binding rules → Spend and
-Composed workflows; the brief, `extra_context` and `instructions_append` by
+Composed workflows; the brief and the workspace-content prohibition on `instructions_append` by
 [active workflows](active-workflows.md) → Rules; backend identity claims by
-[choosing a backend](choosing-a-backend.md) → Rules. These are this file's own:
+[choosing a backend](choosing-a-backend.md) → Rules. One inherited rule is overridden here: the
+belief-disclosure rule in active workflows does not apply to the call fields of a blind
+comparison, as the blinding rule below states. These are this file's own:
 
 - **Compare only finalized candidates, and only when no cheaper discriminator exists.** Name the
   discriminators you considered — a test, this project's gate, a direct inspection — and why each
   cannot settle the question, before the call.
-- **Select a comparison backend that produced no candidate.** A backend that wrote one of them is
-  a candidate's author, whatever the label says.
+- **Exclude every backend that produced a candidate, and, when you produced one, the backend that
+  runs the model you are running as, where the host tells you which that is.** A backend that
+  wrote a candidate is its author whatever the label says.
 - **Record whether the comparison backend's model family is verified distinct from each
   candidate's author, and say `unverified` when it is not.** Backend IDs do not establish
   families.
-- **Blind the candidates.** Neutral labels, no authorship, no provenance, no marker of which one
-  you wrote or prefer, in any field of the call. Say in the report what you could not remove.
+- **Blind the candidates in every field of the call.** Neutral labels, no authorship, no
+  provenance, no marker of which one you wrote or prefer. This overrides the belief-disclosure
+  rule for the call fields only: record any prior preference of your own before the call, outside
+  every call field, and report it afterwards.
+- **Disclose in the report which candidate is yours, if any, and every marker you could not
+  remove.** The backend was not told; the reader of your report is.
 - **Fix the criteria before the call and carry them in `question`; carry the candidates in
   `extra_context`.** A criterion added after reading the result is a new comparison, not a
   reading of this one.
-- **Ask for a per-criterion comparison with reasons and one stated preference.** Never ask for,
-  and never report, a score, a grade, a rank order beyond the preference, or a probability.
+- **Route through `amicus_consult` or `amicus_consult_async` only.** No other verb takes
+  candidates as data.
+- **Omit `instructions_append`, or fix neutral output-shape guidance before the first call and
+  hold it byte-identical across both calls.**
+- **Ask for a per-criterion comparison with reasons, one stated preference, and the inspection
+  or experiment that would settle the largest disagreement.** Never ask for, and never report, a
+  score, a grade, a rank order beyond the preference, or a probability.
 - **Treat the preference as a finding.** Verify each reason it rests on against the candidates
   before it moves the decision; a reason you cannot trace to the candidates carries no weight,
   whatever the preference says.
 - **Disclose the presentation order with the result.** Report the comparison as
   position-controlled only after the order-swapped second call below.
-- **Take the second call only under a two-call cap declared before the first, with the brief
-  byte-identical except for candidate order.** Stop after it, whatever it says.
+- **Take the second call only under a two-call cap declared before the first, on the same
+  `backend`, `model`, `reasoning_effort` and `backend_options`, with the brief byte-identical
+  except for candidate order.** Stop after it, whatever it says.
+- **Report the second call as observed preference stability or instability under order, with
+  both sets of reasons preserved.** Never infer from it that the criteria failed, or that the
+  stable preference is correct.
 - **Never run this pattern as a vote across backends, as a substitute for a test that can
   discriminate, or in a loop with regeneration.**
 
 ## Order of work
 
-1. Declare the pattern and the cap. One call is the default; two only when position control
-   matters enough to pay for it, decided now.
-2. Confirm every candidate is finalized. A candidate that changes after the call was not the
-   one compared.
-3. Name the cheaper discriminators and why none applies. If one does, run it instead and stop.
-4. Choose the comparison backend from `amicus_backends`, excluding every candidate's author.
-   Record the family-diversity status as verified or `unverified`.
-5. Write the brief: the decision the comparison informs, the criteria a good candidate must
-   satisfy, the deliverable (per criterion, which candidate satisfies it better and why; one
-   overall preference; the inspection or experiment that would settle the largest disagreement),
-   and the presentation order you will use. This is fixed before the call.
-6. Blind the candidates. Give them neutral labels, strip authorship markers you can remove
-   without changing substance, and note what remains.
-7. Call `amicus_consult`, or `amicus_consult_async` when the candidates are large, with the
-   candidates in `extra_context`. Omit `instructions_append`, or fix neutral output-shape
-   guidance before the first call and hold it identical across both.
+Each step names the rule that governs it; the rules are the authoritative statement.
+
+1. Declare the pattern and the cap (SKILL.md → Spend). One call is the default; two only when
+   position control matters enough to pay for it, decided now.
+2. Confirm every candidate is finalized and name the cheaper discriminators and why none applies
+   (first rule). If one does, run it instead and stop.
+3. Choose the comparison backend from `amicus_backends`, applying the exclusion rule, and record
+   the family-diversity status.
+4. Record your own prior preference, if any, outside every call field (blinding rule).
+5. Write the brief: the decision the comparison informs, the criteria, the deliverable, and the
+   presentation order you will use (criteria and deliverable rules).
+6. Blind the candidates: neutral labels, authorship markers stripped where that does not change
+   substance, the remainder noted for the report (blinding and disclosure rules).
+7. Call the consult verb with the candidates in `extra_context` (routing rule), async when the
+   candidates are large ([sync vs async](sync-vs-async.md)).
 8. Read the result under SKILL.md → Binding rules → Results, including `findings_diagnostics`
    and `lists_diagnostics`.
 9. Verify the load-bearing reasons against the candidates, decide, and report with the order,
-   the diversity status, and any disagreement preserved.
+   the diversity status, your own authorship, and any disagreement preserved (finding and
+   disclosure rules).
 
 ## Why a preference and not a score
 
@@ -74,22 +90,34 @@ arrive as prose amicus does not parse, and the Results rules give it no standing
 lack.
 
 The same biases are why the pattern is blind. Blinding removes the backend's pointer to
-authorship; it does not remove yours. When one candidate is your own, say so in the report even
-though the backend was not told, and verify the reasons against that candidate with the same care
-as against the other.
+authorship; it does not remove yours, which is why the disclosure rule puts your authorship in the
+report the backend never sees. The belief-disclosure rule that governs an ordinary brief exists so
+a second opinion is not asked to endorse a conclusion; here the same end is served by withholding
+the conclusion from the call altogether, and the prior preference is kept where it can be compared
+with the result rather than where it can shape it.
+
+## What the backend does with the candidates
+
+The deliverable is a reading of the candidates as text. Nothing in this pattern bounds what the
+backend executes while it reads: `codex` runs a consult under a read-only sandbox, which bounds
+writes rather than execution, and `claude` defaults to no tools at all
+([choosing a backend](choosing-a-backend.md)). Whether anything ran is a fact of the result's own
+account of what it did, as [review–revise](review-revise.md) → What a critique is not explains,
+and not something this pattern can promise either way.
 
 ## The order-swapped second call
 
-Position bias is the one bias a second call can measure. The second call presents the candidates
-in reverse order and is otherwise byte-identical: same criteria, same labels swapped with their
-content, same `instructions_append` if any. `meta.instructions_append` carries a
-`{sha256, bytes}` fingerprint that checks that half, as [review–revise](review-revise.md)
-describes; the rest of the brief is your own bookkeeping.
+Position bias is the one bias a second call can measure, and only when everything else is held
+fixed: the same backend and resolved model and options, the same criteria, the same labels
+swapped with their content, the same `instructions_append` if any. `meta.instructions_append`
+carries a `{sha256, bytes}` fingerprint that checks that last half, as
+[review–revise](review-revise.md) describes; the rest of the brief is your own bookkeeping.
 
-The same preference under both orders is weak evidence that the preference is stable. Opposite
-preferences under the two orders are a finding in their own right: the criteria did not
-discriminate, and the decision rests on your verification rather than on either call. Neither
-outcome buys a third call.
+Two calls cannot separate order sensitivity from ordinary run-to-run variation, which is why the
+rule limits what the pair may be said to show. The same preference under both orders is weak
+evidence that the preference is stable under order; opposite preferences show that it is not, and
+leave the decision resting on your verification of the two sets of reasons. Neither outcome buys
+a third call.
 
 ## What this pattern is not
 

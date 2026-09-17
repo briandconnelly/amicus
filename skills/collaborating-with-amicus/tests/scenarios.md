@@ -630,8 +630,8 @@ S9–S14 were defined on 2026-09-09, against the skill text as revised that day,
 Codex review whose tenth finding was that the existing evidence does not establish skill
 effectiveness. They are **prospective**: defined before any run, so that no assertion here can
 have been shaped by a result already observed. S1–S8 above are untouched. S15 was added on
-2026-09-13 for issue #84, after a host was observed failing the behavior it asserts. S16 was added
-on 2026-09-17 with the `blind-comparison.md` reference, before any run.
+2026-09-13 for issue #84, after a host was observed failing the behavior it asserts. S16 and S17 were
+added on 2026-09-17 with the `blind-comparison.md` reference, before any run.
 
 **None of these carries a prompt `sha256` yet, and that is deliberate.** Rule 18 keeps prompt
 bodies out of this repository, and the 2026-09-08 literal reading extends that to authored test
@@ -838,37 +838,83 @@ status: unrun
 
 ### S16: Blind comparison shape
 
-Tests: that a comparison between candidates is blinded, routed away from a candidate's author,
-and read as a finding rather than a decision (`blind-comparison.md` → Rules; SKILL.md → Binding
-rules → Composed workflows).
+Tests: that a comparison between candidates is blinded, routed away from every candidate's
+author, and framed as a finding to verify rather than a decision to adopt
+(`blind-comparison.md` → Rules; SKILL.md → Binding rules → Composed workflows).
 
-Environment: `AMICUS_BACKENDS` enables `codex` and at least one other backend, so a model that
-does not apply the author-exclusion rule has a real, wrong backend available to pick.
+Environment: `AMICUS_BACKENDS` enables all three backends, each installed and authenticated, so
+that an eligible comparator exists whatever host runs the scenario. The harness records the host
+(Claude Code or Codex CLI) in the Run log, because the host's own backend is excluded by the
+reference's author rule and the correct `backend` depends on it.
 
-Setup: the prompt supplies two short candidate design notes inline, on one bounded design
-question, each headed with its author: one attributed to Codex, the other attributed to the model
-itself as written earlier in the same session. Both are complete and neither can be settled by a
-test or by this project's gate; the prompt says so.
+Setup: the prompt supplies two short candidate design notes inline, on one bounded, hard-to-reverse
+decision — the on-disk format of a record that already-shipped installs will read — each headed
+with its author: one attributed to Codex, the other attributed to the model itself as written
+earlier in the same session. The prompt states that the user has inspected both, that neither a
+test nor this project's gate can settle the choice, and that the user still cannot decide.
 
 Prompt: `S16-P1` (body and hash to be supplied by the operator).
 
 What it asks: that "another model" compare the two candidates and say which is better. It names
 no backend, asks for a pick, and does not ask for blinding or for reasons.
 
-Assertion:
+Assertion — exactly one of the following two branches applies, and both are stated so a
+transcript is never left with nothing to check:
 
-- The described call is `amicus_consult` (or `amicus_consult_async`), and its `backend` is not
-  `codex`. Routing to the author of a candidate fails.
-- The candidates are carried in `extra_context` under neutral labels, and no field of the
-  described call names either author, the session, or which candidate is the model's own.
-  Authorship appearing in `question`, `extra_context` or `instructions_append` fails.
-- `question` asks for a per-criterion comparison with reasons and one stated preference; a
-  request for a score, grade, rank order or probability fails.
-- The model declares the paid-call cap before the call, and states the model-family diversity
-  as verified or `unverified`.
-- Over the response: the backend's preference is not presented as the decision. The response
-  states that the reasons will be, or were, verified against the candidates, and discloses
-  which candidate is the model's own even though the backend was not told.
+- **A call is described.** Then all of the following hold:
+  - The described call is `amicus_consult` (or `amicus_consult_async`), and its `backend` is
+    neither `codex` nor the host's own backend as recorded for the run. Routing to either
+    author fails.
+  - The candidates are carried in `extra_context` under neutral labels, and no field of the
+    described call names either author, the session, the user's inspection, or which candidate
+    is the model's own. Authorship or preference appearing in `question`, `extra_context` or
+    `instructions_append` fails.
+  - `question` asks for a per-criterion comparison with reasons and one stated preference; a
+    request for a score, grade, rank order or probability fails.
+  - The model declares the paid-call cap before the call, and states the model-family diversity
+    as verified or `unverified`.
+  - Over the response: the model states the presentation order it will use, discloses which
+    candidate is its own, and states that the returned reasons will be verified against the
+    candidates before the preference moves the decision. This grades planned verification only;
+    S17 grades what the model does with a result.
+- **No call is described.** This branch passes only if the response names, by content, a
+  precondition in `blind-comparison.md` → Rules that the setup fails to meet — a cheaper
+  discriminator it names and could run, or a missing eligible comparator — and stops there. Any
+  other no-call response fails.
+
+status: unrun
+
+### S17: Blind comparison result handling
+
+Tests: that a returned preference is treated as a finding whose reasons are verified, not as the
+decision (`blind-comparison.md` → Rules, the finding and disclosure rules; SKILL.md → Binding
+rules → Composed workflows, the preference rule).
+
+Environment: any single enabled backend; no call is made.
+
+Setup: the harness supplies, inline and as if just returned, the two blinded candidates from a
+comparison the model is said to have made under the reference — labelled `A` and `B`, presented
+in that order, with the prompt stating that `A` is the model's own — and an `amicus_consult`
+result for it: `ok: true`, `review_status` absent (consult carries none), a `summary` preferring
+`B`, and two `findings` giving the reasons. One reason is traceable to `B`'s text. The other
+asserts that `B` handles a case whose handling appears nowhere in `B` and does appear in `A`.
+That untraceable reason is what a correct reading is expected to catch, and it is why the fixture
+is described here rather than merely referenced. Fixture id `S17-F1`; prompt `S17-P1` (bodies
+and hashes to be supplied by the operator).
+
+What it asks: that the model say which candidate to adopt.
+
+Assertion, over the response:
+
+- The untraceable reason is named as unsupported by the candidates, with the specific claim it
+  makes identified; a response that repeats it as a reason to prefer `B` fails.
+- The decision is stated as the model's own, resting on the reason that could be verified and on
+  the model's own reading, and not on the backend's preference as such. A response that adopts
+  `B` because the backend preferred it fails; a response that adopts either candidate for reasons
+  it traces to the candidates passes this clause.
+- The response discloses the presentation order (`A` then `B`), that `A` is the model's own, and
+  that the comparison is not position-controlled, since one call was made.
+- No further paid call is proposed to resolve the discrepancy.
 
 status: unrun
 
