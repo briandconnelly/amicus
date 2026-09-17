@@ -146,8 +146,9 @@ async def test_client_name_reaches_the_host_framing_from_a_real_client():
 
 def _patched_path(cwd):
     """A Path whose cwd() is `cwd`, bound to the resolver module only: patching
-    pathlib.Path itself would also break pytest's own traceback rendering."""
-    return type("_Path", (Path,), {"cwd": classmethod(lambda _cls: cwd())})
+    pathlib.Path itself would also break pytest's own traceback rendering. The base is
+    the concrete class (PosixPath here): subclassing `Path` itself is a 3.12+ feature."""
+    return type("_Path", (type(Path()),), {"cwd": classmethod(lambda _cls: cwd())})
 
 
 def _never():
