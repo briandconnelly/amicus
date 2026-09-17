@@ -213,8 +213,13 @@ Poll only while `status` is `running`; a caller that read a non-null hint as "st
 **The free discovery tools default to a summary (#46).**
 `amicus_capabilities(detail="contracts")` is rejected as `invalid_arguments`, and the default `amicus_backends` omits four disclosure fields; the "Discovery defaults are concise" section above has the replacement calls.
 
-**A job result stored by 0.2.0 is no longer readable (#65, #52).**
-`RESULT_FORMAT` moved from 4 to 6, so `amicus_job_result` and `amicus_job_consume_result` return `job_result_incompatible` for a record 0.2.0 wrote, rather than a result whose new fields would answer for a run that never measured them.
+**A review amicus cannot parse is delivered as `unstructured` (#139).**
+A review or critique whose answer is not one readable JSON object returned `invalid_json` or `schema_violation`; it now returns `ok: true` with `review_status: unstructured`, `verdict` and `confidence` `unknown`, and the whole answer in `raw_response.text` at `detail="full"`.
+Branch on `review_status` before reading the verdict, and read that text before paying for the same review again.
+Only an empty answer is still `invalid_json`.
+
+**A job result stored by 0.2.0 is no longer readable (#65, #52, #139).**
+`RESULT_FORMAT` moved from 4 to 7, so `amicus_job_result` and `amicus_job_consume_result` return `job_result_incompatible` for a record 0.2.0 wrote, rather than a result whose new fields would answer for a run that never measured them.
 Fetch or consume any stored result you still need before upgrading; the record itself stays until `AMICUS_JOB_TTL` or the per-workspace cap evicts it.
 
 **An empty `idempotency_key` is rejected (#66).**

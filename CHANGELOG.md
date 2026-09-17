@@ -47,6 +47,19 @@ per-change, as its own lead says.
 
 ### Fixed
 
+- **Breaking.** A review whose answer amicus cannot read as one JSON object is no longer
+  discarded (#139, ADR 0033). `amicus_review_changes` and `amicus_adversarial_review` used to
+  return `invalid_json` or `schema_violation`. They kept a 300-character preview of the answer,
+  lost the rest, and prescribed a retry that could fail the same way. They now return
+  `ok: true` with the new `review_status: unstructured`: `verdict` and `confidence` are
+  `unknown`, `findings` and the prose lists are empty with diagnostics saying nothing was
+  parsed, and the whole answer, redacted, is `raw_response.text`, at `detail="full"` on the call
+  or free from `amicus_job_result`. A caller that read the verdict after checking `ok` must now
+  handle this value. An answer that wraps exactly one object in a preamble, a fence or a
+  sign-off is now read as that object. A repeated key is still refused (#51). Only an empty
+  answer is still `invalid_json`, and `schema_violation` is no longer a review outcome.
+  `RESULT_FORMAT` moves to 7 and `FINGERPRINT` to `amicus/0.1/schema-31`.
+
 - A plugin install no longer runs an older release's server than its own skills (#117,
   ADR 0031, superseding ADR 0015). Hosts install the plugin into a directory keyed by
   `plugin.json`'s version and never re-read it until that version changes, so an install
