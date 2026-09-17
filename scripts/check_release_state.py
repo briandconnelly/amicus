@@ -88,6 +88,15 @@ _MCP_SOURCE_RE = re.compile(
     r"^git\+https://github\.com/briandconnelly/amicus\.git@v(?P<version>\d+\.\d+\.\d+)$"
 )
 
+MARKETPLACE_PATH = ".claude-plugin/marketplace.json"
+MARKETPLACE_URL = "https://github.com/briandconnelly/amicus.git"
+# Until a self-consistent release tag exists the entry must stay "./", so "./" is accepted up
+# to this version and never after it. Read from the tree, which a shallow checkout cannot fake.
+PRE_ACTIVATION_MAX = "0.4.0"
+_ENTRY_KEYS = frozenset({"name", "description", "source"})
+_POINTER_KEYS = frozenset({"source", "url", "ref", "sha"})
+_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+
 # A signature block, if the maintainer signs the tag, follows the message. Cut it off rather
 # than fail to parse: rule 20 does not require a signature, but it must not forbid one either.
 _SIGNATURE_RE = re.compile(r"^-----BEGIN (?:PGP|SSH) SIGNATURE-----$", re.MULTILINE)
@@ -128,7 +137,11 @@ def mcp_pin(repo_root: Path = REPO_ROOT) -> tuple[str | None, list[str]]:
     `vX.Y.Z`. `check_version_literals` bounds the version; `check_mcp_pin_tag_exists`
     proves the tag is real, where a checkout with tags is available.
     """
-    server = json.loads((repo_root / ".mcp.json").read_text(encoding="utf-8"))
+    return _pin_from_text((repo_root / ".mcp.json").read_text(encoding="utf-8"))
+
+
+def _pin_from_text(text: str) -> tuple[str | None, list[str]]:
+    server = json.loads(text)
     args = server["mcpServers"]["amicus"]["args"]
     if "--from" not in args:
         return None, [".mcp.json must install from an explicit `--from` source"]
@@ -233,12 +246,173 @@ def check_version_literals(version: str, *, repo_root: Path = REPO_ROOT) -> list
 
     pinned, pin_problems = mcp_pin(repo_root)
     problems += pin_problems
-    if pinned is not None and _parts(pinned) > _parts(version):
+    if pinned is not None and pinned != version:
         problems.append(
-            f".mcp.json pins v{pinned}, which is newer than the {version} being released; "
-            "the pin names an already-published release (ADR 0015) and so can never lead it"
+            f".mcp.json pins v{pinned}, expected v{version}: the pin names its own release, so "
+            "a host installing this tag runs the server its skills were written for"
         )
 
+    return problems
+
+
+def marketplace_source(
+    version: str, *, repo_root: Path = REPO_ROOT, text: str | None = None
+) -> tuple[str | dict | None, list[str]]:
+    """The marketplace entry's `source`, and every shape problem with the file.
+
+    The root is checked only for `name` and `plugins`, because nothing else there can change
+    which snapshot a host installs. The plugin entry and its source are closed: an unlisted
+    key there fails, since `version`, `strict` or a component key could change what runs.
+    `source` is either `"./"`, accepted only up to `PRE_ACTIVATION_MAX`, or a pointer at
+    this repository by `ref` and `sha`.
+    """
+    if text is None:
+        text = (repo_root / MARKETPLACE_PATH).read_text(encoding="utf-8")
+    data = json.loads(text)
+    if not isinstance(data, dict) or data.get("name") != "amicus":
+        return None, [f'{MARKETPLACE_PATH} must be an object whose `name` is "amicus"']
+    plugins = data.get("plugins")
+    if not isinstance(plugins, list) or len(plugins) != 1 or not isinstance(plugins[0], dict):
+        return None, [f"{MARKETPLACE_PATH} must list exactly one plugin"]
+    entry = plugins[0]
+    problems: list[str] = []
+    if set(entry) != _ENTRY_KEYS:
+        problems.append(
+            f"{MARKETPLACE_PATH}'s plugin entry has keys {sorted(entry)}, expected exactly "
+            f"{sorted(_ENTRY_KEYS)}"
+        )
+    if entry.get("name") != "amicus":
+        problems.append(f'{MARKETPLACE_PATH}\'s plugin entry must be named "amicus"')
+    if not isinstance(entry.get("description"), str) or not entry.get("description"):
+        problems.append(f"{MARKETPLACE_PATH}'s plugin entry needs a non-empty `description`")
+
+    source = entry.get("source")
+    if source == "./":
+        if _parts(version) > _parts(PRE_ACTIVATION_MAX):
+            problems.append(
+                f'{MARKETPLACE_PATH} still installs from "./" at {version}; after '
+                f"{PRE_ACTIVATION_MAX} the entry must pin a release tag by `ref` and `sha`"
+            )
+        return (None if problems else source), problems
+    if not isinstance(source, dict):
+        return None, [*problems, f'{MARKETPLACE_PATH}\'s `source` must be "./" or a pointer']
+    if set(source) != _POINTER_KEYS:
+        problems.append(
+            f"{MARKETPLACE_PATH}'s pointer has keys {sorted(source)}, expected exactly "
+            f"{sorted(_POINTER_KEYS)} (sha included)"
+        )
+    if source.get("source") != "url":
+        problems.append(f'{MARKETPLACE_PATH}\'s pointer `source` must be "url"')
+    if source.get("url") != MARKETPLACE_URL:
+        problems.append(f"{MARKETPLACE_PATH}'s pointer `url` must be {MARKETPLACE_URL}")
+    if not isinstance(source.get("ref"), str) or not TAG_RE.match(source["ref"]):
+        problems.append(f"{MARKETPLACE_PATH}'s pointer `ref` must be vX.Y.Z")
+    if not isinstance(source.get("sha"), str) or not _SHA_RE.match(source["sha"]):
+        problems.append(f"{MARKETPLACE_PATH}'s pointer `sha` must be 40 lowercase hex digits")
+    return (None if problems else source), problems
+
+
+def _pointer_version(source: str | dict) -> str | None:
+    """The version a well-formed pointer names, or None for the pre-activation `"./"`."""
+    if isinstance(source, dict) and isinstance(source.get("ref"), str):
+        match = TAG_RE.match(source["ref"])
+        return match.group("version") if match else None
+    return None
+
+
+def check_marketplace_consistency(
+    source: str | dict,
+    *,
+    repo_root: Path = REPO_ROOT,
+    git: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+) -> list[str]:
+    """The tag a pointer names exists, is annotated, is the pinned commit, and agrees with itself.
+
+    Needs the tags fetched. A tag whose `.mcp.json` names a different release than its
+    `plugin.json` files is exactly the skew every tag from 0.2.0 to 0.3.0 carries, and a host
+    installing it would run the wrong server, so it is rejected here rather than pointed at.
+    """
+    ref_version = _pointer_version(source)
+    if ref_version is None:
+        return []
+    assert isinstance(source, dict)
+    ref, sha = source["ref"], source["sha"]
+
+    def run(*args: str) -> subprocess.CompletedProcess[str]:
+        return git(["git", *args], cwd=repo_root, capture_output=True, text=True, check=False)
+
+    try:
+        kind = run("cat-file", "-t", f"refs/tags/{ref}")
+        if kind.returncode != 0:
+            return [f"{MARKETPLACE_PATH} points at {ref}, which does not exist in this checkout"]
+        if kind.stdout.strip() != "tag":
+            return [f"{MARKETPLACE_PATH} points at {ref}, which is not an annotated tag"]
+        peeled = run("rev-parse", f"refs/tags/{ref}^{{commit}}").stdout.strip()
+        if peeled != sha:
+            return [f"{MARKETPLACE_PATH}'s `sha` {sha} is not {ref}'s commit ({peeled})"]
+        problems: list[str] = []
+        for manifest in (".claude-plugin/plugin.json", ".codex-plugin/plugin.json"):
+            found = json.loads(run("show", f"refs/tags/{ref}:{manifest}").stdout).get("version")
+            if found != ref_version:
+                problems.append(f"{ref}'s {manifest} declares {found!r}, not {ref_version!r}")
+        pinned, _ = _pin_from_text(run("show", f"refs/tags/{ref}:.mcp.json").stdout)
+        if pinned != ref_version:
+            problems.append(
+                f"{ref}'s .mcp.json pins v{pinned}, not {ref}: a host installing that tag "
+                "would run another release's server"
+            )
+        return problems
+    except (OSError, ValueError) as exc:  # git missing, or a file at the tag is not readable
+        return [f"could not check {MARKETPLACE_PATH}'s pointer {ref}: {exc}"]
+
+
+def check_marketplace(
+    version: str,
+    *,
+    repo_root: Path = REPO_ROOT,
+    git: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+) -> list[str]:
+    """The release predicate's view of the pointer: well-formed, older than this release, sound.
+
+    The pointer advances only after a release is published, so on the tree being tagged it
+    must name an EARLIER release. That is a structural condition, not proof the named release
+    was published; publication stays a maintainer assertion.
+    """
+    source, problems = marketplace_source(version, repo_root=repo_root)
+    if source is None:
+        return problems
+    ref_version = _pointer_version(source)
+    if ref_version is not None and _parts(ref_version) >= _parts(version):
+        return [
+            f"{MARKETPLACE_PATH} points at v{ref_version}, which is not older than the "
+            f"{version} being released; the pointer advances only after publishing"
+        ]
+    return check_marketplace_consistency(source, repo_root=repo_root, git=git)
+
+
+def check_marketplace_transition(base: str | dict, head: str | dict, declared: str) -> list[str]:
+    """A pull request's pointer change: never ahead of the declared version, never backwards.
+
+    Activation is one-way (`"./"` never returns once `main` left it) and a pointer may stay or
+    advance but never retreat. The version key alone cannot stop either, because a PR could
+    lower the version literals and restore `"./"`, or move to an older consistent tag.
+    """
+    problems: list[str] = []
+    head_version, base_version = _pointer_version(head), _pointer_version(base)
+    if head_version is not None and _parts(head_version) > _parts(declared):
+        problems.append(
+            f"{MARKETPLACE_PATH} points at v{head_version}, ahead of the declared {declared}"
+        )
+    if base_version is not None and head_version is None:
+        problems.append(f'{MARKETPLACE_PATH} returns to "./" after activation, which is one-way')
+    if (
+        base_version is not None
+        and head_version is not None
+        and _parts(head_version) < _parts(base_version)
+    ):
+        problems.append(
+            f"{MARKETPLACE_PATH} moves its pointer back from v{base_version} to v{head_version}"
+        )
     return problems
 
 
@@ -541,6 +715,7 @@ def check_tree(
         *check_changelog(version, repo_root=repo_root),
         *check_lock(repo_root=repo_root, run=run),
         *check_mcp_pin_tag_exists(repo_root=repo_root, git=git),
+        *check_marketplace(version, repo_root=repo_root, git=git),
         *check_deprecations(version, repo_root=repo_root),
         *check_legacy_env(version, repo_root=repo_root),
     ]
@@ -660,7 +835,14 @@ def main(argv: list[str] | None = None, *, repo_root: Path = REPO_ROOT) -> int:
         help="the commit the tag must point at (GITHUB_SHA in the publish workflow)",
     )
     parser.add_argument("--summary", help="write a Markdown summary to this file")
+    parser.add_argument(
+        "--base",
+        help="pull-request mode: check only the marketplace pointer, against this base commit",
+    )
     args = parser.parse_args(argv)
+
+    if args.base:
+        return _main_pull_request(args.base, repo_root=repo_root)
 
     problems: list[str] = []
     tag_is_well_formed = False
@@ -705,6 +887,42 @@ def main(argv: list[str] | None = None, *, repo_root: Path = REPO_ROOT) -> int:
         return 1
 
     print(f"release predicate holds for {args.tag or version}.")
+    return 0
+
+
+def check_pull_request(
+    base: str,
+    *,
+    repo_root: Path = REPO_ROOT,
+    git: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+) -> list[str]:
+    """The pull-request job: the head tree's pointer, and its change from `base`.
+
+    Only the marketplace is checked. An ordinary pull request carries no dated changelog
+    section or release tag, so the rest of the release predicate does not apply to it.
+    """
+    declared = declared_version(repo_root)
+    head, problems = marketplace_source(declared, repo_root=repo_root)
+    if head is None:
+        return problems
+    problems = check_marketplace_consistency(head, repo_root=repo_root, git=git)
+    try:
+        base_text = _git("show", f"{base}:{MARKETPLACE_PATH}", repo_root=repo_root)
+        base_data = json.loads(base_text)
+        base_source = base_data["plugins"][0]["source"]
+    except (subprocess.CalledProcessError, ValueError, KeyError, IndexError, TypeError) as exc:
+        return [*problems, f"could not read {MARKETPLACE_PATH} at the base {base}: {exc}"]
+    return [*problems, *check_marketplace_transition(base_source, head, declared)]
+
+
+def _main_pull_request(base: str, *, repo_root: Path) -> int:
+    problems = check_pull_request(base, repo_root=repo_root)
+    if problems:
+        print("the marketplace pointer check does NOT hold:", file=sys.stderr)
+        for problem in problems:
+            print(f"  - {problem}", file=sys.stderr)
+        return 1
+    print("marketplace pointer check holds.")
     return 0
 
 

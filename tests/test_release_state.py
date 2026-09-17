@@ -40,6 +40,10 @@ _spec.loader.exec_module(release_state)
 VERSION = "1.2.3"
 COMMIT = "a" * 40
 BATCH = "b" * 32
+# The release the marketplace pointer names while VERSION is being released.
+PREVIOUS = "1.2.2"
+PREVIOUS_SHA = "c" * 40
+MARKETPLACE_URL = "https://github.com/briandconnelly/amicus.git"
 
 BACKENDS = ("codex", "kimi", "claude")
 
@@ -106,6 +110,45 @@ GLOBAL_ENV = EnvNamespace(
 """
 
 
+def _pointer(ref: str, sha: str) -> dict:
+    return {"source": "url", "url": MARKETPLACE_URL, "ref": ref, "sha": sha}
+
+
+def _marketplace(source) -> dict:
+    return {
+        "name": "amicus",
+        "owner": {"name": "someone", "url": "https://example.invalid"},
+        "plugins": [{"name": "amicus", "description": "a plugin", "source": source}],
+    }
+
+
+def _write_marketplace(repo: Path, source, *, data: dict | None = None) -> None:
+    body = data if data is not None else _marketplace(source)
+    (repo / ".claude-plugin" / "marketplace.json").write_text(
+        json.dumps(body) + "\n", encoding="utf-8"
+    )
+
+
+def _mcp_json(version: str) -> str:
+    return (
+        json.dumps(
+            {
+                "mcpServers": {
+                    "amicus": {
+                        "command": "uvx",
+                        "args": [
+                            "--from",
+                            f"git+https://github.com/briandconnelly/amicus.git@v{version}",
+                            "amicus-mcp",
+                        ],
+                    }
+                }
+            }
+        )
+        + "\n"
+    )
+
+
 @pytest.fixture
 def repo(tmp_path):
     """A minimal tree carrying every file the release predicate reads."""
@@ -123,24 +166,8 @@ def repo(tmp_path):
         (tmp_path / manifest).write_text(
             json.dumps({"name": "amicus", "version": VERSION}) + "\n", encoding="utf-8"
         )
-    (tmp_path / ".mcp.json").write_text(
-        json.dumps(
-            {
-                "mcpServers": {
-                    "amicus": {
-                        "command": "uvx",
-                        "args": [
-                            "--from",
-                            f"git+https://github.com/briandconnelly/amicus.git@v{VERSION}",
-                            "amicus-mcp",
-                        ],
-                    }
-                }
-            }
-        )
-        + "\n",
-        encoding="utf-8",
-    )
+    (tmp_path / ".mcp.json").write_text(_mcp_json(VERSION), encoding="utf-8")
+    _write_marketplace(tmp_path, _pointer(f"v{PREVIOUS}", PREVIOUS_SHA))
     (tmp_path / "CHANGELOG.md").write_text(CHANGELOG, encoding="utf-8")
     (tmp_path / "src" / "amicus" / "tools").mkdir()
     (tmp_path / release_state.DEPRECATIONS_PATH).write_text(DEPRECATIONS, encoding="utf-8")
@@ -168,6 +195,30 @@ def _tag_exists(*args, **kwargs):
     return subprocess.CompletedProcess(args=["git"], returncode=0, stdout="deadbeef\n")
 
 
+def _consistent_git(cmd, *args, **kwargs):
+    """Real-`git`-shaped answers for a release tree whose pointer names a consistent PREVIOUS.
+
+    Dispatches on the command, so a check that issues a command this fake does not expect
+    fails loudly rather than reading a canned success.
+    """
+
+    def ok(out: str = "") -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(args=cmd, returncode=0, stdout=out)
+
+    rest = cmd[1:]
+    if rest[:3] == ["rev-parse", "--verify", "--quiet"]:
+        return ok("deadbeef\n")
+    if rest[:2] == ["cat-file", "-t"]:
+        return ok("tag\n")
+    if rest[0] == "rev-parse" and rest[1].endswith("^{commit}"):
+        return ok(PREVIOUS_SHA + "\n")
+    if rest[0] == "show" and rest[1].endswith(":.mcp.json"):
+        return ok(_mcp_json(PREVIOUS))
+    if rest[0] == "show" and rest[1].endswith("plugin.json"):
+        return ok(json.dumps({"name": "amicus", "version": PREVIOUS}))
+    raise AssertionError(f"unexpected git command {cmd!r}")
+
+
 def _tag_missing(*args, **kwargs):
     """`git rev-parse --verify --quiet` on a ref that is not present: non-zero, no output."""
     return subprocess.CompletedProcess(args=["git"], returncode=1, stdout="")
@@ -178,7 +229,8 @@ def _tag_missing(*args, **kwargs):
 
 def test_the_unmodified_fixture_satisfies_the_tree_predicate(repo):
     """The instrument can report a pass. Every negative control below depends on this."""
-    assert release_state.check_tree(VERSION, repo_root=repo, run=_lock_ok, git=_tag_exists) == []
+    problems = release_state.check_tree(VERSION, repo_root=repo, run=_lock_ok, git=_consistent_git)
+    assert problems == []
 
 
 # --- version literals ------------------------------------------------------------------
@@ -215,14 +267,16 @@ def _repin(repo, source):
     path.write_text(json.dumps(data) + "\n", encoding="utf-8")
 
 
-def test_a_pin_trailing_the_release_is_accepted(repo):
-    """The steady state after the first release: releasing 1.2.3 with the pin still on 1.2.2.
+def test_a_pin_trailing_the_release_is_rejected(repo):
+    """`.mcp.json` names its own release again (the release-activation spec, #117).
 
-    This is the case the old `pin == version being released` equality wrongly rejected, and
-    the whole point of ADR 0015.
+    Under ADR 0015 a pin trailing the release was the intended state. A host installs the tag
+    snapshot, and a trailing pin makes that snapshot launch the previous release's server
+    under the new release's skills, so the pin is a rule-19 version literal again.
     """
     _repin(repo, "git+https://github.com/briandconnelly/amicus.git@v1.2.2")
-    assert release_state.check_version_literals(VERSION, repo_root=repo) == []
+    problems = release_state.check_version_literals(VERSION, repo_root=repo)
+    assert any("v1.2.2" in problem for problem in problems), problems
 
 
 def test_a_pin_leading_the_release_is_rejected(repo):
@@ -335,6 +389,147 @@ def test_a_later_release_pinned_to_its_own_unpushed_tag_is_rejected(repo):
     """
     problems = release_state.check_mcp_pin_tag_exists(repo_root=repo, git=_tag_missing)
     assert any(f"v{VERSION}" in problem for problem in problems), problems
+
+
+# --- marketplace pointer (the release-activation spec, #117) --------------------------------
+
+
+def _shape(repo, version=VERSION):
+    return release_state.marketplace_source(version, repo_root=repo)[1]
+
+
+def _entry(repo) -> dict:
+    return json.loads((repo / ".claude-plugin" / "marketplace.json").read_text(encoding="utf-8"))
+
+
+def test_the_fixture_pointer_passes_shape_ordering_and_consistency(repo):
+    """Positive control for this section: the fixture's v1.2.2 pointer is accepted."""
+    assert release_state.check_marketplace(VERSION, repo_root=repo, git=_consistent_git) == []
+
+
+def test_the_pre_activation_source_is_accepted_up_to_0_4_0(repo):
+    """Before the first consistent tag exists the entry must stay "./", so it is allowed."""
+    _write_marketplace(repo, "./")
+    assert _shape(repo, "0.3.0") == []
+    assert _shape(repo, "0.4.0") == []
+
+
+def test_the_pre_activation_source_is_rejected_after_0_4_0(repo):
+    """No release after 0.4.0 may install from main; this is what makes the exception expire."""
+    _write_marketplace(repo, "./")
+    assert any('"./"' in problem for problem in _shape(repo, "0.4.1")), _shape(repo, "0.4.1")
+    assert _shape(repo, VERSION)
+
+
+def test_the_pre_activation_versions_compare_numerically(repo):
+    """0.10.0 is after 0.4.0, which string comparison gets backwards."""
+    _write_marketplace(repo, "./")
+    assert _shape(repo, "0.10.0")
+
+
+def test_an_extra_key_on_the_plugin_entry_is_rejected(repo):
+    """The entry is closed: `version`, `strict` or a component key could change what runs."""
+    data = _entry(repo)
+    data["plugins"][0]["skills"] = ["./skills/"]
+    _write_marketplace(repo, None, data=data)
+    assert any("skills" in problem for problem in _shape(repo)), _shape(repo)
+
+
+def test_a_missing_sha_is_rejected(repo):
+    data = _entry(repo)
+    del data["plugins"][0]["source"]["sha"]
+    _write_marketplace(repo, None, data=data)
+    assert any("sha" in problem for problem in _shape(repo)), _shape(repo)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("ref", "1.2.2"),
+        ("ref", "v1.2"),
+        ("sha", "C" * 40),
+        ("sha", "c" * 39),
+        ("url", "https://github.com/someone-else/amicus.git"),
+        ("source", "git-subdir"),
+    ],
+)
+def test_a_malformed_pointer_value_is_rejected(repo, field, value):
+    data = _entry(repo)
+    data["plugins"][0]["source"][field] = value
+    _write_marketplace(repo, None, data=data)
+    assert any(field in problem for problem in _shape(repo)), _shape(repo)
+
+
+def test_unrelated_root_metadata_is_not_inspected(repo):
+    """Only `name` and `plugins` at the root can change which snapshot runs."""
+    data = _entry(repo)
+    data["owner"] = []
+    data["metadata"] = {"anything": True}
+    _write_marketplace(repo, None, data=data)
+    assert _shape(repo) == []
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda data: data.pop("plugins"),
+        lambda data: data["plugins"].append(dict(data["plugins"][0])),
+        lambda data: data.update(name="someone-else"),
+    ],
+    ids=["no-plugins", "two-plugins", "wrong-name"],
+)
+def test_a_root_that_does_not_name_exactly_one_amicus_plugin_is_rejected(repo, mutate):
+    data = _entry(repo)
+    mutate(data)
+    _write_marketplace(repo, None, data=data)
+    assert _shape(repo)
+
+
+def test_a_pointer_at_the_release_being_made_is_rejected(repo):
+    """The pointer advances only after publishing, so at tag time it must trail the release."""
+    _write_marketplace(repo, _pointer(f"v{VERSION}", PREVIOUS_SHA))
+    problems = release_state.check_marketplace(VERSION, repo_root=repo, git=_consistent_git)
+    assert any("older" in problem for problem in problems), problems
+
+
+def test_pointer_ordering_compares_numerically(repo):
+    """v1.2.10 is newer than the 1.2.3 being released, which string comparison gets backwards."""
+    _write_marketplace(repo, _pointer("v1.2.10", PREVIOUS_SHA))
+    problems = release_state.check_marketplace(VERSION, repo_root=repo, git=_consistent_git)
+    assert any("older" in problem for problem in problems), problems
+
+
+# One row per scenario the spec traces: a legitimate pull request must pass, a rollback or a
+# pointer ahead of the declared version must not. v0.1.0 is consistent, so R2 is caught ONLY
+# by the transition rule -- the reason that rule exists.
+_TRANSITIONS = [
+    ("ordinary PR, 0.3.0 lifetime", "./", "./", "0.3.0", True),
+    ("0.4.0 release PR", "./", "./", "0.4.0", True),
+    ("0.4.0 pointer PR", "./", "v0.4.0", "0.4.0", True),
+    ("ordinary PR, 0.4.0 lifetime", "v0.4.0", "v0.4.0", "0.4.0", True),
+    ("0.5.0 release PR", "v0.4.0", "v0.4.0", "0.5.0", True),
+    ("0.5.0 pointer PR", "v0.4.0", "v0.5.0", "0.5.0", True),
+    ("R1 object back to ./", "v0.4.0", "./", "0.4.0", False),
+    ("R2 v0.4.0 back to v0.1.0", "v0.4.0", "v0.1.0", "0.4.0", False),
+    ("R3 downgrade + ./", "v0.5.0", "./", "0.4.0", False),
+    ("R5 pointer ahead of declared", "v0.4.0", "v0.5.0", "0.4.0", False),
+]
+
+
+def _as_source(value: str):
+    return value if value == "./" else _pointer(value, PREVIOUS_SHA)
+
+
+@pytest.mark.parametrize(
+    ("base", "head", "declared", "allowed"),
+    [row[1:] for row in _TRANSITIONS],
+    ids=[row[0] for row in _TRANSITIONS],
+)
+def test_pull_request_transitions(base, head, declared, allowed):
+    problems = release_state.check_marketplace_transition(
+        _as_source(base), _as_source(head), declared
+    )
+    assert (problems == []) is allowed, problems
 
 
 def test_an_init_without_a_version_line_is_rejected(repo):
@@ -517,7 +712,7 @@ def _set_window(repo: Path, old: str, new: str) -> None:
 
 
 def _tree(repo: Path) -> list[str]:
-    return release_state.check_tree(VERSION, repo_root=repo, run=_lock_ok, git=_tag_exists)
+    return release_state.check_tree(VERSION, repo_root=repo, run=_lock_ok, git=_consistent_git)
 
 
 def test_a_deprecation_dated_after_the_release_is_rejected(repo):
@@ -767,9 +962,27 @@ def _git(repo: Path, *args: str) -> str:
     ).stdout.strip()
 
 
+def _set_release(repo: Path, version: str) -> None:
+    """Every rule-19 literal at `version`, `.mcp.json` pinning its own tag."""
+    (repo / "pyproject.toml").write_text(
+        f'[project]\nname = "amicus"\nversion = "{version}"\n', encoding="utf-8"
+    )
+    (repo / "src" / "amicus" / "__init__.py").write_text(
+        f'"""amicus."""\n\n__version__ = "{version}"\n', encoding="utf-8"
+    )
+    for manifest in (".claude-plugin/plugin.json", ".codex-plugin/plugin.json"):
+        (repo / manifest).write_text(
+            json.dumps({"name": "amicus", "version": version}) + "\n", encoding="utf-8"
+        )
+    (repo / ".mcp.json").write_text(_mcp_json(version), encoding="utf-8")
+
+
 @pytest.fixture
 def git_repo(repo, monkeypatch):
-    """The fixture tree, as a real git repository with one commit.
+    """The fixture tree as a real git repository: a consistent v1.2.2, then the 1.2.3 release.
+
+    v1.2.2 is a real annotated tag whose manifests and `.mcp.json` all name 1.2.2, so the
+    marketplace pointer on the release commit names something `git` can actually verify.
 
     `check_lock` is stubbed out for this layer only: the fixture has no `uv.lock`, and running
     a real resolver here would test uv rather than the tag handling these tests exist for.
@@ -778,6 +991,14 @@ def git_repo(repo, monkeypatch):
     _git(repo, "init", "-q", "-b", "main")
     _git(repo, "config", "user.email", "test@example.invalid")
     _git(repo, "config", "user.name", "test")
+    _set_release(repo, PREVIOUS)
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "previous release")
+    _git(repo, "tag", "-a", f"v{PREVIOUS}", "-m", "previous release")
+    previous_sha = _git(repo, "rev-parse", "HEAD")
+
+    _set_release(repo, VERSION)
+    _write_marketplace(repo, _pointer(f"v{PREVIOUS}", previous_sha))
     _git(repo, "add", "-A")
     _git(repo, "commit", "-q", "-m", "release commit")
     monkeypatch.setattr(release_state, "check_lock", lambda **kwargs: [])
@@ -851,15 +1072,96 @@ def test_main_rejects_a_tag_that_does_not_exist(git_repo, capsys):
 
 
 def test_main_checks_the_tree_alone_when_no_tag_is_given(git_repo):
-    """The form `docs/RELEASING.md` step 3 runs, before the release's own tag exists.
+    """The form `docs/RELEASING.md` step 3 runs: the release tag exists only locally.
 
-    Against REAL git, not a stub: the pin names the previous release (v1.2.2, created here),
-    which is the state ADR 0015 defines while 1.2.3 is being released. `git rev-parse` has to
-    actually find that tag for this to pass.
+    Against REAL git, not a stub. `.mcp.json` pins the release's own v1.2.3, which step 3
+    creates locally before checking, and the marketplace points at the real, consistent
+    v1.2.2. Both have to be found by `git` for this to pass.
     """
-    _git(git_repo, "tag", "-a", "v1.2.2", "-m", "previous release")
-    _repin(git_repo, "git+https://github.com/briandconnelly/amicus.git@v1.2.2")
+    head = _git(git_repo, "rev-parse", "HEAD")
+    _tag_annotated(git_repo, f"v{VERSION}", _record(commit=head))
     assert release_state.main([], repo_root=git_repo) == 0
+
+
+def _retag_previous(repo: Path, *, lightweight: bool = False, mcp_version: str = PREVIOUS) -> str:
+    """Replace v1.2.2 with a tag on a new commit, returning that commit's SHA."""
+    _git(repo, "tag", "-d", f"v{PREVIOUS}")
+    _git(repo, "checkout", "-q", "-b", "previous", "HEAD~1")
+    (repo / ".mcp.json").write_text(_mcp_json(mcp_version), encoding="utf-8")
+    _git(repo, "commit", "-q", "--allow-empty", "-am", "retagged previous")
+    if lightweight:
+        _git(repo, "tag", f"v{PREVIOUS}")
+    else:
+        _git(repo, "tag", "-a", f"v{PREVIOUS}", "-m", "retagged previous")
+    sha = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "checkout", "-q", "main")
+    return sha
+
+
+def _check_pointer(repo: Path, sha: str) -> list[str]:
+    _write_marketplace(repo, _pointer(f"v{PREVIOUS}", sha))
+    return release_state.check_marketplace(VERSION, repo_root=repo)
+
+
+def test_a_real_consistent_pointer_is_accepted(git_repo):
+    """Positive control for the real-git pointer checks below."""
+    previous_sha = _git(git_repo, "rev-parse", f"v{PREVIOUS}^{{commit}}")
+    assert _check_pointer(git_repo, previous_sha) == []
+
+
+def test_a_pointer_at_a_skewed_tag_is_rejected(git_repo):
+    """A tag whose .mcp.json names an earlier release, as every tag from v0.2.0 to v0.3.0 does."""
+    sha = _retag_previous(git_repo, mcp_version="1.2.1")
+    problems = _check_pointer(git_repo, sha)
+    assert any("would run another release's server" in problem for problem in problems), problems
+
+
+def test_a_sha_that_is_not_the_tag_s_commit_is_rejected(git_repo):
+    """A host serves `sha` over a disagreeing `ref` silently, so the two must match."""
+    problems = _check_pointer(git_repo, _git(git_repo, "rev-parse", "HEAD"))
+    assert any("is not v1.2.2's commit" in problem for problem in problems), problems
+
+
+def test_a_pointer_at_a_lightweight_tag_is_rejected(git_repo):
+    sha = _retag_previous(git_repo, lightweight=True)
+    problems = _check_pointer(git_repo, sha)
+    assert any("not an annotated tag" in problem for problem in problems), problems
+
+
+def test_a_pointer_at_a_missing_tag_is_rejected(git_repo):
+    previous_sha = _git(git_repo, "rev-parse", f"v{PREVIOUS}^{{commit}}")
+    _git(git_repo, "tag", "-d", f"v{PREVIOUS}")
+    problems = _check_pointer(git_repo, previous_sha)
+    assert any("does not exist in this checkout" in problem for problem in problems), problems
+
+
+def _commit_all(repo: Path, message: str) -> str:
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", message)
+    return _git(repo, "rev-parse", "HEAD")
+
+
+def test_base_mode_accepts_a_pointer_that_advances(git_repo):
+    """The pull-request job: head's pointer checked against the base commit it merges into."""
+    base = _git(git_repo, "rev-parse", "HEAD")
+    # Advance to a real, consistent v1.2.3 released from the base commit.
+    _tag_annotated(git_repo, f"v{VERSION}", _record(commit=base))
+    _write_marketplace(git_repo, _pointer(f"v{VERSION}", base))
+    _commit_all(git_repo, "pointer PR")
+    assert release_state.main(["--base", base], repo_root=git_repo) == 0
+
+
+def test_base_mode_rejects_a_pointer_that_retreats(git_repo, capsys):
+    """R2 against real git: back to an older tag that is itself perfectly consistent."""
+    base_head = _git(git_repo, "rev-parse", "HEAD")
+    _tag_annotated(git_repo, f"v{VERSION}", _record(commit=base_head))
+    _write_marketplace(git_repo, _pointer(f"v{VERSION}", base_head))
+    base = _commit_all(git_repo, "pointer PR")
+    previous_sha = _git(git_repo, "rev-parse", f"v{PREVIOUS}^{{commit}}")
+    _write_marketplace(git_repo, _pointer(f"v{PREVIOUS}", previous_sha))
+    _commit_all(git_repo, "rollback")
+    assert release_state.main(["--base", base], repo_root=git_repo) == 1
+    assert "moves its pointer back from v1.2.3 to v1.2.2" in capsys.readouterr().err
 
 
 def test_main_rejects_a_pin_whose_tag_is_absent_from_a_real_repository(git_repo, capsys):
