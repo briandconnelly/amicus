@@ -49,7 +49,9 @@ comparison, as the blinding rule below states. These are this file's own:
   before it moves the decision; a reason you cannot trace to the candidates carries no weight,
   whatever the preference says.
 - **Disclose the presentation order with the result.** Report the comparison as
-  position-controlled only after the order-swapped second call below.
+  position-controlled only for exactly two candidates and only after the order-swapped second
+  call below; with three or more candidates, report stability under the two observed orders and
+  nothing more, because one reversal leaves the middle positions where they were.
 - **Take the second call only under a two-call cap declared before the first, on the same
   `backend`, `model`, `reasoning_effort`, `backend_options` and `workspace_root`, with the
   brief byte-identical except for candidate order.** Stop after it, whatever it says.
@@ -58,6 +60,8 @@ comparison, as the blinding rule below states. These are this file's own:
   stable preference is correct.
 - **Never run this pattern as a vote across backends, as a substitute for a test that can
   discriminate, or in a loop with regeneration.**
+- **Never send a candidate you would not hand to the comparison backend's provider with its
+  author's name on it.** Blinding changes the label, not the exposure.
 
 ## Order of work
 
@@ -109,8 +113,8 @@ and not something this pattern can promise either way.
 
 ## The order-swapped second call
 
-Position bias is the one bias a second call can measure, and only when everything else is held
-fixed: the same backend, resolved model, options and workspace, the same criteria, the same labels
+Position bias is the one bias a second call can measure, and only for two candidates, since
+reversing three or more moves only the ends; and only when everything else is held fixed: the same backend, resolved model, options and workspace, the same criteria, the same labels
 swapped with their content, the same `instructions_append` if any. `meta.instructions_append`
 carries a `{sha256, bytes}` fingerprint that checks that last half, as
 [review–revise](review-revise.md) describes; the rest of the brief is your own bookkeeping.
@@ -140,6 +144,6 @@ a third call.
 ## Data exposure
 
 Every candidate reaches the comparison backend's provider raw, in `extra_context`, which
-redaction does not cover. Blinding is a change to what you send, not a protection applied to it;
-a candidate you would not hand to that provider with its author's name on it is one you should
-not hand over with a label instead.
+redaction does not cover. That is why the last rule above exists: blinding is a change to what
+you send, not a protection applied to it, and stripping an author's name removes nothing from
+the text that follows it.
