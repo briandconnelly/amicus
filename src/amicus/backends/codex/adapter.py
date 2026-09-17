@@ -164,7 +164,6 @@ class CodexBackend:
         effort = self._effort(request)
         return cli.classify_failure(
             outcome.run,
-            last_message=outcome.artifact_texts.get("last-message"),
             events=outcome.events or None,
             extra_args=self._config.extra_args,
             reasoning_effort=effort,

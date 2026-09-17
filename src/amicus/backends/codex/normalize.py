@@ -14,6 +14,7 @@ from amicus.sdk.backend.protocol import Usage
 __all__ = [
     "classify_structured",
     "extract_error_message",
+    "failure_diagnostics",
     "parse_event_metadata",
     "parse_structured",
 ]
@@ -45,12 +46,30 @@ def parse_event_metadata(events: str) -> tuple[Usage | None, str | None]:
     return usage, session_id
 
 
+def failure_diagnostics(text: str) -> str:
+    """Keep only backend failure events from JSONL, or plain startup diagnostics.
+
+    Once an event envelope exists, model items, tool output and malformed/truncated
+    lines cannot become fallback diagnostics, even if there is no failure event.
+    Keep the full failure envelopes so message-less HTTP statuses still classify.
+    """
+    has_events = False
+    failures: list[str] = []
+    for event in _events(text):
+        marker = event.get("type")
+        if not isinstance(marker, str):
+            continue
+        has_events = True
+        if marker in {"error", "turn.failed"}:
+            failures.append(json.dumps(event))
+    return "\n".join(failures) if has_events else text
+
+
 def extract_error_message(events: str) -> str | None:
     """The message of the last `error`/`turn.failed` event, unwrapped one JSON level."""
     found: str | None = None
     for event in _events(events):
-        marker = str(event.get("type") or "").lower()
-        if "error" not in marker and "failed" not in marker:
+        if event.get("type") not in ("error", "turn.failed"):
             continue
         message = event.get("message")
         if isinstance(event.get("error"), dict):

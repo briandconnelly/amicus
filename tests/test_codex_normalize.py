@@ -70,6 +70,32 @@ def test_extract_error_message_unwraps_nested_json():
     assert normalize.extract_error_message('{"type":"turn.completed"}') is None
 
 
+def test_failure_diagnostics_filters_non_errors_and_partial_lines():
+    failure = {"type": "turn.failed", "error": {"status": 401}}
+    stream = "\n".join(
+        [
+            '{"type":"item.completed","item":{"text":"Unauthorized"}}',
+            '{"type":"item.failed","message":"quota"}',
+            '{"type":null,"message":"not authenticated"}',
+            '{"type":"error","message":"connection closed"}',
+            json.dumps(failure),
+            '{"type":"item.completed","item":{"text":"not logged in',
+            "invalid value",
+        ]
+    )
+    diagnostics = normalize.failure_diagnostics(stream)
+    assert [json.loads(line) for line in diagnostics.splitlines()] == [
+        {"type": "error", "message": "connection closed"},
+        failure,
+    ]
+    assert normalize.extract_error_message(stream) == "connection closed"
+
+
+def test_failure_diagnostics_does_not_fall_back_when_events_have_no_error():
+    assert normalize.failure_diagnostics('{"type":"future.event","text":"quota"}') == ""
+    assert normalize.failure_diagnostics("not authenticated") == "not authenticated"
+
+
 def test_parse_structured_refuses_a_repeated_key_instead_of_keeping_the_last():
     # #51: ExecResult.structured feeds consult_result directly, so the codex parser must
     # refuse the object the shared classifier refuses rather than deliver the collapsed one.
