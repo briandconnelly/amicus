@@ -1,5 +1,5 @@
 {
-  "result_format": 6,
+  "result_format": 7,
   "schemas": {
     "AdversarialReviewResult": {
       "$defs": {
@@ -964,7 +964,8 @@
           "default": "completed",
           "enum": [
             "completed",
-            "not_run"
+            "not_run",
+            "unstructured"
           ],
           "title": "Review Status",
           "type": "string"
@@ -4515,7 +4516,8 @@
           "default": "completed",
           "enum": [
             "completed",
-            "not_run"
+            "not_run",
+            "unstructured"
           ],
           "title": "Review Status",
           "type": "string"

@@ -334,6 +334,93 @@
         "summary": "s",
         "tool": "amicus_review_changes",
         "verdict": "unknown"
+      },
+      "review_unstructured": {
+        "assumptions": [],
+        "confidence": "unknown",
+        "context_summary": null,
+        "coverage": {
+          "omission_reasons": [],
+          "redaction": null,
+          "status": "complete",
+          "untracked_files_detected": null,
+          "untracked_files_included": null,
+          "untracked_files_omitted": null
+        },
+        "findings": [],
+        "findings_diagnostics": {
+          "dropped": null,
+          "reasons": [
+            "missing_findings"
+          ]
+        },
+        "lists_diagnostics": {
+          "assumptions": {
+            "dropped": null,
+            "reasons": [
+              "missing_member"
+            ]
+          },
+          "next_steps": {
+            "dropped": null,
+            "reasons": [
+              "missing_member"
+            ]
+          },
+          "questions": {
+            "dropped": null,
+            "reasons": [
+              "missing_member"
+            ]
+          }
+        },
+        "meta": {
+          "backend": "codex",
+          "backend_details": {
+            "isolation": "inherit"
+          },
+          "command_exit_code": 0,
+          "compat_warnings": [],
+          "cwd": "/repo",
+          "elapsed_ms": 1,
+          "fingerprint": "<fingerprint>",
+          "instructions_append": {
+            "bytes": 5,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "job_id": "00000000000000000000000000000000",
+          "model": "a-model",
+          "reasoning_effort": "high",
+          "redacted_paths": [],
+          "request_id": "00000000000000000000000000000000",
+          "roots_source": "client",
+          "security_warnings": [],
+          "server_version": "0.0.0",
+          "session_id": "sess-1",
+          "timeout_seconds": 1,
+          "truncated": false,
+          "usage": {
+            "cache_creation_input_tokens": null,
+            "cached_input_tokens": 3,
+            "cost_usd": null,
+            "input_tokens": 1,
+            "output_tokens": 2,
+            "total_tokens": 6
+          },
+          "workspace_source": "param"
+        },
+        "next_steps": [],
+        "ok": true,
+        "questions": [],
+        "raw_response": {
+          "model": "a-model",
+          "session_id": "sess-1",
+          "text": "RAW MODEL TEXT"
+        },
+        "review_status": "unstructured",
+        "summary": "s",
+        "tool": "amicus_review_changes",
+        "verdict": "unknown"
       }
     },
     "summary": {
@@ -638,6 +725,93 @@
         "summary": "s",
         "tool": "amicus_review_changes",
         "verdict": "unknown"
+      },
+      "review_unstructured": {
+        "assumptions": [],
+        "confidence": "unknown",
+        "context_summary": null,
+        "coverage": {
+          "omission_reasons": [],
+          "redaction": null,
+          "status": "complete",
+          "untracked_files_detected": null,
+          "untracked_files_included": null,
+          "untracked_files_omitted": null
+        },
+        "findings": [],
+        "findings_diagnostics": {
+          "dropped": null,
+          "reasons": [
+            "missing_findings"
+          ]
+        },
+        "lists_diagnostics": {
+          "assumptions": {
+            "dropped": null,
+            "reasons": [
+              "missing_member"
+            ]
+          },
+          "next_steps": {
+            "dropped": null,
+            "reasons": [
+              "missing_member"
+            ]
+          },
+          "questions": {
+            "dropped": null,
+            "reasons": [
+              "missing_member"
+            ]
+          }
+        },
+        "meta": {
+          "backend": "codex",
+          "backend_details": {
+            "isolation": "inherit"
+          },
+          "command_exit_code": 0,
+          "compat_warnings": [],
+          "cwd": "/repo",
+          "elapsed_ms": 1,
+          "fingerprint": "<fingerprint>",
+          "instructions_append": {
+            "bytes": 5,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "job_id": "00000000000000000000000000000000",
+          "model": "a-model",
+          "reasoning_effort": "high",
+          "redacted_paths": [],
+          "request_id": "00000000000000000000000000000000",
+          "roots_source": "client",
+          "security_warnings": [],
+          "server_version": "0.0.0",
+          "session_id": "sess-1",
+          "timeout_seconds": 1,
+          "truncated": false,
+          "usage": {
+            "cache_creation_input_tokens": null,
+            "cached_input_tokens": 3,
+            "cost_usd": null,
+            "input_tokens": 1,
+            "output_tokens": 2,
+            "total_tokens": 6
+          },
+          "workspace_source": "param"
+        },
+        "next_steps": [],
+        "ok": true,
+        "questions": [],
+        "raw_response": {
+          "model": "a-model",
+          "session_id": "sess-1",
+          "text": null
+        },
+        "review_status": "unstructured",
+        "summary": "s",
+        "tool": "amicus_review_changes",
+        "verdict": "unknown"
       }
     }
   },
@@ -908,7 +1082,7 @@
       "error": {
         "backend": null,
         "code": "job_result_incompatible",
-        "message": "stored job result was written under a different result format (result_format 7; this release reads 6, producer server_version 0.0.0): stored under another result format",
+        "message": "stored job result was written under a different result format (result_format 8; this release reads 7, producer server_version 0.0.0): stored under another result format",
         "repair": {
           "alternative": "The stored result predates this server version; start a new job.",
           "next_step": "start_new_job"
@@ -1071,6 +1245,14 @@
       "idempotency_replayed",
       "job_kind",
       "task_id"
+    ],
+    "review_unstructured": [
+      "context_summary",
+      "idempotency_replayed",
+      "job_kind",
+      "task_id",
+      "truncation_hint",
+      "workspace_warning"
     ]
   }
 }

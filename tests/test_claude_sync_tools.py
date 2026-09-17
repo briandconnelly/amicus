@@ -529,3 +529,36 @@ async def test_dry_run_previews_the_review_without_spawning(app, tmp_path, repo)
     assert body["prompt_bytes"] > 0
     assert body["prompt_bytes"] >= len(adversarial.critic_stance("TestHost").encode("utf-8"))
     assert _runs(tmp_path) == []
+
+
+async def test_an_unreadable_review_is_delivered_and_its_text_recovered_from_the_job(
+    app, tmp_path, repo, monkeypatch
+):
+    """#139 end to end: tool-call prose instead of the review object (#116's failure) is an
+    `ok: true` unstructured review, its text stripped at detail=summary and returned whole,
+    free, by amicus_job_result at detail=full."""
+    answer = 'I\'ll read a.py first.\n<invoke name="Read"><parameter name="file_path">a.py'
+    monkeypatch.setenv("FAKE_CLAUDE_ANSWER", answer)
+    (repo / "a.py").write_text("x = 2\n")
+    async with Client(app) as c:
+        review = (
+            await c.call_tool(
+                "amicus_review_changes", {"backend": "claude", "workspace_root": str(repo)}
+            )
+        ).structured_content
+        stored = (
+            await c.call_tool(
+                "amicus_job_result",
+                {
+                    "job_id": review["meta"]["job_id"],
+                    "workspace_root": str(repo),
+                    "detail": "full",
+                },
+            )
+        ).structured_content
+    assert review["ok"] is True and review["review_status"] == "unstructured"
+    assert (review["verdict"], review["confidence"]) == ("unknown", "unknown")
+    assert review["raw_response"]["text"] is None and answer not in json.dumps(review)
+    assert stored["ok"] is True and stored["review_status"] == "unstructured"
+    assert stored["raw_response"]["text"] == answer
+    assert len(_runs(tmp_path)) == 1

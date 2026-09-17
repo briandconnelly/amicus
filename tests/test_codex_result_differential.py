@@ -25,6 +25,12 @@ KNOWN_TEMPORARY_DEVIATIONS: dict[str, tuple[bool, bool]] = {
 }
 
 
+# Cases where amicus delivers what the sibling discards (#139, ADR 0033): a non-empty review
+# answer that is not one readable object is `ok: true` with `review_status: unstructured`
+# and the whole answer in raw_response.text, where the sibling returns an error envelope.
+KNOWN_UNSTRUCTURED_DEVIATIONS = frozenset({"review_invalid_json", "review_non_object"})
+
+
 def _spec(kind, effort):
     return RunSpec(
         backend="codex",
@@ -67,13 +73,19 @@ async def test_envelope_projection_matches_the_sibling(pinned_codex_bin, monkeyp
             ),
         )
     ours = await run_mod.run_request(_spec(inp["kind"], inp.get("effort")), plugin)
-    assert ours["ok"] == theirs["ok"], ours
-    if theirs["ok"]:
+    if case in KNOWN_UNSTRUCTURED_DEVIATIONS:
+        assert theirs["ok"] is False and not theirs["message_has_secret"]
+        assert ours["ok"] is True and ours["review_status"] == "unstructured", ours
+        assert (ours["verdict"], ours["confidence"], ours["findings"]) == ("unknown", "unknown", [])
+        assert "sk-" + "c" * 32 not in str(ours)
+    elif theirs["ok"]:
+        assert ours["ok"] is True, ours
         for key in ("summary", "verdict", "confidence", "review_status"):
             if key in theirs:
                 assert ours[key] == theirs[key], key
         assert ours["findings"] == theirs["findings"]
     else:
+        assert ours["ok"] is False, ours
         assert generalize_code(theirs["error"]["code"], "codex") == ours["error"]["code"]
         expected_temporary = theirs["error"]["temporary"]
         if ours["error"]["code"] in KNOWN_TEMPORARY_DEVIATIONS:

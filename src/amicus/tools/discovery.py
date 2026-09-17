@@ -102,8 +102,9 @@ _REVIEW_CODES = [
     "invalid_paths",
     "not_a_git_repo",
     "git_unavailable",
+    # Only an empty answer: one that is not a readable object is delivered as
+    # review_status unstructured (#139), so schema_violation is no longer a review outcome.
     "invalid_json",
-    "schema_violation",
     "context_too_large",
 ]
 # Lifecycle codes a sync tool's amicus_job_result-shaped envelope can carry once

@@ -35,7 +35,9 @@ FINGERPRINT = "amicus/0.1/schema-30"
 # 6 (#52): consult, review and adversarial results gained lists_diagnostics. A 5 record's
 # defaulted null would assert that every prose list was carried intact by a run that never
 # measured it.
-RESULT_FORMAT: int = 6
+# 7 (#139): review_status gained `unstructured`. A 6 reader's closed enum REJECTS a 7 record
+# that carries it, which is the point: a 6 reader has no way to know that nothing was parsed.
+RESULT_FORMAT: int = 7
 
 JSON_SCHEMA_DIALECT = "https://json-schema.org/draft/2020-12/schema"
 PROTOCOL_REVISION = "2026-07-28"

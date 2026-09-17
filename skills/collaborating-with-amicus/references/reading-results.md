@@ -39,11 +39,22 @@ fetched envelope's own `ok`, not on the fetch having worked.
 
 ## Coverage: `ok: true` is not "it was reviewed"
 
-`review_status` is `completed` or `not_run`. **`not_run` means no reviewable changes were
+`review_status` is `completed`, `not_run` or `unstructured`. **`not_run` means no reviewable changes were
 gathered for the requested scope** — the review did not happen and no quota was spent, but the
 envelope is still `ok: true` with a `summary`. Treating that as a clean review is the single
 easiest way to report a passing review of nothing. When it happens, read the summary: it names
 how many untracked files were detected and omitted, and the remedy.
+
+**`unstructured` means the backend answered, but not with one JSON object amicus could read.**
+The review ran and was paid for, and nothing was parsed from it: `verdict` and `confidence` are
+`unknown`, `findings` and the prose lists are empty, and both diagnostics report every member
+missing. The answer itself is kept, not discarded: it is `raw_response.text`, delivered at
+`detail="full"` on the call and free from `amicus_job_result` for `meta.job_id` while the record
+exists. Read it before deciding anything or paying for the same review again; a prose answer
+often holds the review, and an identical retry can fail the same way. An answer that encloses
+one object in a preamble, a fence or a sign-off is read as that object and stays `completed`;
+one whose prose around the object contains a brace, or that holds two objects, is
+`unstructured` rather than guessed at. Only an empty answer is still an `invalid_json` error.
 
 When a review was not complete, the result's `coverage` object says so in fields you can branch
 on: `coverage.status` is `complete` or `partial`, and `coverage.omission_reasons` names why, in a
@@ -125,6 +136,8 @@ two next steps amicus could not carry.
 A consult answered in prose rather than the requested object parsed nothing: the answer is
 `summary`, and `findings_diagnostics` reports `missing_findings` while every member here
 reports `missing_member`. The empty lists on such a result are not the backend saying none.
+A `review_status: unstructured` review is the same case as that prose consult, except that its
+answer is `raw_response.text` rather than `summary`.
 A `review_status: not_run` result is the other way round: no backend ran at all, so there is no
 output to measure, both diagnostics are null, and `review_status` is the signal that says so.
 

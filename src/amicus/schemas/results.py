@@ -33,7 +33,7 @@ Detail = Literal["summary", "full"]
 CapabilitiesDetail = Literal["summary", "full"]
 JobState = Literal["running", "done", "failed", "cancelled", "timeout"]
 ToolStability = Literal["stable", "preview", "experimental"]
-ReviewStatus = Literal["completed", "not_run"]
+ReviewStatus = Literal["completed", "not_run", "unstructured"]
 # Why a backend finding did not reach the caller intact, in this fixed order. A fixed
 # vocabulary, never the omitted content: backend output can echo caller input (rule 18).
 FindingReason = Literal[
@@ -99,7 +99,8 @@ _REASONS_DESC = (
 _DIAGNOSTICS_DESC = (
     "What the backend reported that amicus could not carry intact; null when nothing "
     "deviated. Read this before acting on an empty or short `findings` list. On a "
-    "review_status of not_run no backend ran: this is null and review_status is the signal."
+    "review_status of not_run no backend ran: this is null and review_status is the signal. "
+    "On unstructured nothing was parsed, so it reports missing_findings."
 )
 _CONFIDENCE_DESC = (
     "How sure this review is. Usually the backend's own low|medium|high. amicus substitutes "
@@ -145,9 +146,15 @@ _LISTS_DESC = (
     "nothing lost. invalid_entry: an entry that was not a string or number, dropped whole. "
     "invalid_container: present but not a list. missing_member: the required member was "
     "absent. None of these touches the verdict or confidence. On a review_status of not_run "
-    "no backend ran: this is null and review_status is the signal."
+    "no backend ran: this is null and review_status is the signal. On unstructured nothing "
+    "was parsed, so every member reports missing_member."
 )
 publish.KEPT_DESCRIPTIONS.add(_LISTS_DESC)
+_REVIEW_STATUS_DESC = (
+    "unstructured: the answer was not one readable JSON object, so nothing was parsed; the "
+    "whole answer is raw_response.text (detail=full)."
+)
+publish.KEPT_DESCRIPTIONS.add(_REVIEW_STATUS_DESC)
 
 
 class ListDiagnostics(BaseModel):
@@ -313,7 +320,7 @@ class ReviewResult(_StructuredResult):
     tool: Literal["amicus_review_changes"] = "amicus_review_changes"
     verdict: Verdict
     confidence: Confidence = Field(description=_CONFIDENCE_DESC)
-    review_status: ReviewStatus = "completed"
+    review_status: ReviewStatus = Field(default="completed", description=_REVIEW_STATUS_DESC)
     context_summary: ContextSummary | None = None
     coverage: Coverage = Field(description=_COVERAGE_DESC)
 
@@ -322,7 +329,7 @@ class AdversarialReviewResult(_StructuredResult):
     tool: Literal["amicus_adversarial_review"] = "amicus_adversarial_review"
     verdict: Verdict
     confidence: Confidence = Field(description=_CONFIDENCE_DESC)
-    review_status: ReviewStatus = "completed"
+    review_status: ReviewStatus = Field(default="completed", description=_REVIEW_STATUS_DESC)
     context_summary: ContextSummary | None = None
     coverage: Coverage = Field(description=_COVERAGE_DESC)
 
