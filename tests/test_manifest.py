@@ -216,10 +216,11 @@ def test_result_body_is_the_exact_line_text_or_an_error():
 
 
 def test_measurement_env_strips_every_namespace_the_server_reads(monkeypatch):
-    """The CLI's default subprocess environment: `AMICUS_` and each legacy alias namespace
-    are stripped, so the profile decides the configuration and an exported legacy
-    `*_LOG_FILE` is not opened by the measurement. Positive control: the unrelated
-    variable survives, so an over-eager filter would fail here too."""
+    """The CLI's default subprocess environment: `AMICUS_` and each retired sibling
+    namespace are stripped, so the profile decides the configuration and an exported
+    retired name is neither opened (it no longer can be, #176) nor reported as stale by
+    the measurement. Positive control: the unrelated variable survives, so an over-eager
+    filter would fail here too."""
     monkeypatch.setenv("CODEX_IN_CLAUDE_LOG_FILE", "/nonexistent/amicus-test-leak.log")
     monkeypatch.setenv("MOONBRIDGE_LOG_FILE", "/nonexistent/amicus-test-leak.log")
     monkeypatch.setenv("CLAUDE_IN_CODEX_TIMEOUT_SECONDS", "1")

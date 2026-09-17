@@ -195,9 +195,9 @@ def _result_body(line: str, request_id: int) -> str:
 
 
 def measurement_env() -> dict[str, str]:
-    """This process's environment minus every namespace the server reads (`AMICUS_` and
-    the legacy aliases `config.ENV_PREFIXES` names), so the profile alone decides the
-    configuration and a developer's exported `*_LOG_FILE` is not opened by the
+    """This process's environment minus every namespace the server looks at (`AMICUS_` and
+    the retired sibling prefixes `config.ENV_PREFIXES` names), so the profile alone decides
+    the configuration and a developer's exported `*_LOG_FILE` is not opened by the
     measurement subprocess."""
     return {k: v for k, v in os.environ.items() if not k.startswith(config.ENV_PREFIXES)}
 

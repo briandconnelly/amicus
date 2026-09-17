@@ -1,4 +1,4 @@
-"""Codex-side configuration: the AMICUS_CODEX_* namespace (legacy CODEX_IN_CLAUDE_ shim),
+"""Codex-side configuration: the AMICUS_CODEX_* namespace (CODEX_IN_CLAUDE_ names retired in 0.4.0),
 the resolved CodexConfig, the operator extra-args allowlist, and the argv policy helpers
 (sandbox by kind, isolation flags, effort shape). Ported from codex-in-claude `config.py`."""
 
@@ -19,7 +19,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Mapping
 
 PREFIX = "AMICUS_CODEX_"
-_LEGACY = "CODEX_IN_CLAUDE_"
+_RETIRED = "CODEX_IN_CLAUDE_"  # not read; tombstones only (#176)
 
 ENV = EnvNamespace(
     prefix=PREFIX,
@@ -28,38 +28,38 @@ ENV = EnvNamespace(
             f"{PREFIX}BIN",
             "Explicit path to the codex executable; used exactly as given.",
             None,
-            (f"{_LEGACY}CODEX_BIN",),
+            removed=(f"{_RETIRED}CODEX_BIN",),
         ),
         EnvVar(
             f"{PREFIX}EXTRA_ARGS",
             "Operator-only extra global codex options (-c/--config, -p/--profile, "
             "--enable/--disable) added to every paid run; allowlisted, never echoed.",
             None,
-            (f"{_LEGACY}EXTRA_ARGS",),
+            removed=(f"{_RETIRED}EXTRA_ARGS",),
         ),
         EnvVar(
             f"{PREFIX}MODEL",
             "Default model slug when a call omits `model`.",
             None,
-            (f"{_LEGACY}MODEL",),
+            removed=(f"{_RETIRED}MODEL",),
         ),
         EnvVar(
             f"{PREFIX}REASONING_EFFORT",
             "Default reasoning effort when a call omits `reasoning_effort`.",
             None,
-            (f"{_LEGACY}REASONING_EFFORT",),
+            removed=(f"{_RETIRED}REASONING_EFFORT",),
         ),
         EnvVar(
             f"{PREFIX}ISOLATION",
             "Default backend_options.isolation: inherit | ignore-config | ignore-rules.",
             "inherit",
-            (f"{_LEGACY}ISOLATION",),
+            removed=(f"{_RETIRED}ISOLATION",),
         ),
         EnvVar(
             f"{PREFIX}SUPPORTED_VERSIONS",
             "Comma-separated codex major.minor versions treated as supported (advisory).",
             None,
-            (f"{_LEGACY}SUPPORTED_VERSIONS",),
+            removed=(f"{_RETIRED}SUPPORTED_VERSIONS",),
         ),
     ),
 )

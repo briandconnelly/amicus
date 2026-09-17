@@ -38,13 +38,20 @@ def test_clamps_and_bad_ints_warn(clean_env):
     assert any("AMICUS_TIMEOUT_SECONDS" in w for w in s.env_warnings)
 
 
-def test_legacy_shim_and_conflict_surface_in_settings(clean_env):
+def test_a_retired_sibling_name_is_reported_and_never_read(clean_env):
+    """Since 0.4.0 (#176) a sibling's name supplies nothing: the default applies, the
+    warning names the amicus name to set, and a disagreeing pair is not a conflict because
+    the old value is never compared."""
     s = config.settings({"CODEX_IN_CLAUDE_TIMEOUT_SECONDS": "120"})
-    assert s.timeout_seconds == 120
-    assert any("CODEX_IN_CLAUDE_TIMEOUT_SECONDS" in w for w in s.env_warnings)
+    assert s.timeout_seconds == 300
+    assert s.config_errors == ()
+    assert any(
+        "CODEX_IN_CLAUDE_TIMEOUT_SECONDS" in w and "AMICUS_TIMEOUT_SECONDS" in w
+        for w in s.env_warnings
+    )
     s = config.settings({"AMICUS_TIMEOUT_SECONDS": "120", "MOONBRIDGE_TIMEOUT_SECONDS": "60"})
-    assert s.timeout_seconds == 120  # the amicus value is used; the conflict is reported
-    assert any("MOONBRIDGE_TIMEOUT_SECONDS" in e for e in s.config_errors)
+    assert s.timeout_seconds == 120 and s.config_errors == ()
+    assert any("MOONBRIDGE_TIMEOUT_SECONDS" in w for w in s.env_warnings)
 
 
 def test_placeholder_is_reported_and_treated_as_unset(clean_env):
@@ -53,7 +60,9 @@ def test_placeholder_is_reported_and_treated_as_unset(clean_env):
     assert s.host_name == "Codex"
 
 
-def test_conflict_fallback_never_leaks_a_placeholder(clean_env):
+def test_a_placeholder_beside_retired_names_never_leaks_and_opens_nothing(clean_env):
+    """The retired `*_LOG_FILE` names once supplied the path a placeholder left unset (and
+    opened a developer's real log file from a test, see conftest); now they supply nothing."""
     s = config.settings(
         {
             "AMICUS_LOG_FILE": "${LOG_FILE}",
@@ -63,7 +72,8 @@ def test_conflict_fallback_never_leaks_a_placeholder(clean_env):
     )
     assert s.log_file is None
     assert s.placeholders == ("AMICUS_LOG_FILE",)
-    assert any("LOG_FILE" in e for e in s.config_errors)
+    assert s.config_errors == ()
+    assert any("CODEX_IN_CLAUDE_LOG_FILE, MOONBRIDGE_LOG_FILE are set" in w for w in s.env_warnings)
 
 
 def test_state_dir_override(clean_env):
@@ -97,7 +107,7 @@ def test_every_declared_var_has_a_description_and_is_documented():
         assert var.name.startswith("AMICUS_")
 
 
-def test_m1_run_knobs_have_defaults_floors_and_legacy_names(clean_env):
+def test_m1_run_knobs_have_defaults_floors_and_retired_names(clean_env):
     from amicus import config
 
     s = config.settings({})
@@ -118,6 +128,8 @@ def test_m1_run_knobs_have_defaults_floors_and_legacy_names(clean_env):
         1_000,
         1,
     )
-    legacy = config.settings({"CODEX_IN_CLAUDE_GIT_TIMEOUT_SECONDS": "7"})
-    assert legacy.git_timeout_seconds == 7
-    assert any("AMICUS_GIT_TIMEOUT_SECONDS read from legacy" in w for w in legacy.env_warnings)
+    retired = config.settings({"CODEX_IN_CLAUDE_GIT_TIMEOUT_SECONDS": "7"})
+    assert retired.git_timeout_seconds == 60
+    assert any(
+        "CODEX_IN_CLAUDE_GIT_TIMEOUT_SECONDS is set but not read" in w for w in retired.env_warnings
+    )

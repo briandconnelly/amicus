@@ -1,4 +1,4 @@
-"""Operator settings resolved from the AMICUS_* namespace (with the legacy shim)."""
+"""Operator settings resolved from the AMICUS_* namespace (with removed-name tombstones)."""
 
 from __future__ import annotations
 
@@ -27,14 +27,18 @@ DEFAULT_LOG_LEVEL = "WARNING"
 VALID_LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
 _TRUE = frozenset({"1", "true", "yes", "on"})
 
-_ALL_LEGACY = ("CODEX_IN_CLAUDE_", "MOONBRIDGE_", "CLAUDE_IN_CODEX_")
-# Every environment namespace this server reads: its own and the legacy aliases. Anything
-# that wants to give a spawned server a clean configuration strips exactly these.
-ENV_PREFIXES: tuple[str, ...] = ("AMICUS_", *_ALL_LEGACY)
+# The three siblings' prefixes. Not read since 0.4.0 (#176): each declaration below names
+# its former sibling names as `removed` tombstones, so a name still set is reported and its
+# value never used.
+_RETIRED_PREFIXES = ("CODEX_IN_CLAUDE_", "MOONBRIDGE_", "CLAUDE_IN_CODEX_")
+# Every environment namespace this server looks at: its own, read for values, and the
+# retired ones, inspected only for a stale name. Anything that wants to give a spawned
+# server a clean configuration strips exactly these.
+ENV_PREFIXES: tuple[str, ...] = ("AMICUS_", *_RETIRED_PREFIXES)
 
 
-def _legacy(suffix: str, *prefixes: str) -> tuple[str, ...]:
-    return tuple(f"{p}{suffix}" for p in (prefixes or _ALL_LEGACY))
+def _retired(suffix: str, *prefixes: str) -> tuple[str, ...]:
+    return tuple(f"{p}{suffix}" for p in (prefixes or _RETIRED_PREFIXES))
 
 
 GLOBAL_ENV = EnvNamespace(
@@ -47,50 +51,50 @@ GLOBAL_ENV = EnvNamespace(
             "AMICUS_TIMEOUT_SECONDS",
             "Default sync deadline (10-600).",
             str(DEFAULT_TIMEOUT_SECONDS),
-            _legacy("TIMEOUT_SECONDS"),
+            removed=_retired("TIMEOUT_SECONDS"),
         ),
         EnvVar(
             "AMICUS_MAX_INPUT_BYTES",
             "Byte budget applied independently to the caller-input sum and to the "
             "gathered diff (the diff is truncated on excess, not rejected).",
             str(DEFAULT_MAX_INPUT_BYTES),
-            _legacy("MAX_INPUT_BYTES"),
+            removed=_retired("MAX_INPUT_BYTES"),
         ),
         EnvVar(
             "AMICUS_JOB_TTL",
             "Seconds a terminal job record is retained.",
             str(DEFAULT_JOB_TTL_SECONDS),
-            _legacy("JOB_TTL"),
+            removed=_retired("JOB_TTL"),
         ),
         EnvVar(
             "AMICUS_JOB_MAX_SECONDS",
             "Background job wall-clock cap (60-7200).",
             str(DEFAULT_JOB_MAX_SECONDS),
-            _legacy("JOB_MAX_SECONDS"),
+            removed=_retired("JOB_MAX_SECONDS"),
         ),
         EnvVar(
             "AMICUS_JOB_MAX_COUNT",
             "Retained job records per workspace (1-1000).",
             str(DEFAULT_JOB_MAX_COUNT),
-            _legacy("JOB_MAX_COUNT"),
+            removed=_retired("JOB_MAX_COUNT"),
         ),
         EnvVar(
             "AMICUS_MAX_OUTPUT_BYTES",
             "Byte ceiling for a backend process's captured stdout+stderr (head+tail kept).",
             str(DEFAULT_MAX_OUTPUT_BYTES),
-            _legacy("MAX_OUTPUT_BYTES"),
+            removed=_retired("MAX_OUTPUT_BYTES"),
         ),
         EnvVar(
             "AMICUS_MAX_DELEGATE_DIFF_BYTES",
             "Byte cap for the diff a delegate returns inline (diffstat stays whole).",
             str(DEFAULT_MAX_DELEGATE_DIFF_BYTES),
-            _legacy("MAX_DELEGATE_DIFF_BYTES"),
+            removed=_retired("MAX_DELEGATE_DIFF_BYTES"),
         ),
         EnvVar(
             "AMICUS_GIT_TIMEOUT_SECONDS",
             "Per-git-command timeout for diff gathering and worktrees (1-3600).",
             str(DEFAULT_GIT_TIMEOUT_SECONDS),
-            _legacy("GIT_TIMEOUT_SECONDS"),
+            removed=_retired("GIT_TIMEOUT_SECONDS"),
         ),
         EnvVar(
             "AMICUS_STATE_DIR", "Directory for job records; default $XDG_CACHE_HOME/amicus/jobs."
@@ -99,13 +103,13 @@ GLOBAL_ENV = EnvNamespace(
             "AMICUS_LOG_LEVEL",
             "Diagnostic log level (stderr).",
             DEFAULT_LOG_LEVEL,
-            _legacy("LOG_LEVEL", "CODEX_IN_CLAUDE_", "MOONBRIDGE_"),
+            removed=_retired("LOG_LEVEL", "CODEX_IN_CLAUDE_", "MOONBRIDGE_"),
         ),
         EnvVar(
             "AMICUS_LOG_FILE",
             "Optional file mirroring the stderr log.",
             None,
-            _legacy("LOG_FILE", "CODEX_IN_CLAUDE_", "MOONBRIDGE_"),
+            removed=_retired("LOG_FILE", "CODEX_IN_CLAUDE_", "MOONBRIDGE_"),
         ),
         EnvVar("AMICUS_TASKS", "1 to register the paid sync tools with the tasks extension.", "0"),
         EnvVar(

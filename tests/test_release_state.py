@@ -926,7 +926,14 @@ def test_the_static_read_of_the_env_declarations_matches_the_runtime_declaration
     """Same reason as the deprecation table above: the script reads `EnvVar` calls with
     `ast`, so a declaration shape it misses must fail here, not pass the release predicate
     as an alias-free tree. Every declared name and whether it carries aliases must agree
-    with what amicus itself resolves at runtime."""
+    with what amicus itself resolves at runtime.
+
+    Since #176 no real declaration carries an alias, so this comparison has no alias-bearing
+    positive of its own: that the static read SEES an alias is proved by the synthetic
+    fixtures above (`test_the_static_read_sees_which_declarations_carry_legacy_names` and the
+    fail-closed cases), and this test's claim is narrowed to name-and-flag parity on the real
+    tree. A `removed` tombstone must not read as an alias: it is a keyword the reader does
+    not look at, which the last assertion pins."""
     from amicus import packaging
     from amicus.config.envspec import LEGACY_REMOVAL_VERSION
 
@@ -940,12 +947,15 @@ def test_the_static_read_of_the_env_declarations_matches_the_runtime_declaration
     # static read refuses to (see test_a_duplicate_name_cannot_hide_an_earlier_alias).
     assert len(runtime_names) == len(set(runtime_names)), "runtime declares a name twice"
     runtime = {var.name: bool(var.legacy) for var in runtime_vars}
-    assert any(runtime.values()), "known positive: no runtime alias would prove nothing here"
     assert declared == runtime
+    assert not any(runtime.values()), "no alias is declared since #176"
+    assert any(var.removed for var in runtime_vars), "the tombstones exist and are not aliases"
 
 
-def test_this_repository_s_declared_version_is_before_the_legacy_removal():
-    """The one legacy-window fact that holds on every commit, not only at a release."""
+def test_this_repository_s_tree_passes_the_legacy_release_predicate():
+    """The one legacy-window fact that holds on every commit, not only at a release. Before
+    0.4.0 it held because the version was before `LEGACY_REMOVAL_VERSION`; from #176 on it
+    holds because no declaration carries an alias, whatever the version."""
     repo_root = Path(__file__).resolve().parent.parent
     version = release_state.declared_version(repo_root)
     assert release_state.check_legacy_env(version, repo_root=repo_root) == []

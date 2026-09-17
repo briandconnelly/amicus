@@ -7,11 +7,12 @@ This guide covers the environment-variable renames, the tool-name mapping for ea
 ## Environment variables
 
 Every `AMICUS_*` name below is declared once in `src/amicus/config/envspec.py` (global) and each backend's `config.py` (per backend).
-A sibling's old name still works during the deprecation window: it is read only when the new `AMICUS_*` name is unset, and every such read logs a warning.
-Setting both the `AMICUS_*` name and a legacy name to different values is an error, not a silent override; two legacy names for the same setting that disagree is also an error.
-Legacy names are removed in `0.4.0`.
+A sibling's old name was read during a deprecation window that closed with `0.3.0`: it supplied the setting only when the new `AMICUS_*` name was unset, and every such read logged a warning.
+The sibling names were removed in `0.4.0` (#176): a sibling name is never read, and the `AMICUS_*` name's value or default applies.
+A sibling name that is still set is reported as a warning naming the `AMICUS_*` name to set, in `amicus_backends`' `env_warnings` for a global setting and in that backend's `status.warnings` for a backend setting.
+Its value is never compared with the `AMICUS_*` value, so the conflict error the window had is gone with it.
 
-| amicus name | legacy names | default |
+| amicus name | former sibling names (not read since 0.4.0) | default |
 | --- | --- | --- |
 | `AMICUS_BACKENDS` | — | — |
 | `AMICUS_TIMEOUT_SECONDS` | `CODEX_IN_CLAUDE_TIMEOUT_SECONDS`, `MOONBRIDGE_TIMEOUT_SECONDS`, `CLAUDE_IN_CODEX_TIMEOUT_SECONDS` | `300` |
@@ -49,8 +50,8 @@ Legacy names are removed in `0.4.0`.
 | `AMICUS_CLAUDE_MAX_BUDGET_USD` | `CLAUDE_IN_CODEX_MAX_BUDGET_USD` | `1.0` |
 | `AMICUS_CLAUDE_SUPPORTED_MAJORS` | `CLAUDE_IN_CODEX_SUPPORTED_MAJORS` | — |
 
-`AMICUS_KIMI_BIN` and `AMICUS_CLAUDE_BIN` have no legacy alias, because neither `moonbridge` nor `claude-in-codex` offered a CLI-path override to rename.
-`AMICUS_CODEX_BIN` does have one — `CODEX_IN_CLAUDE_CODEX_BIN`, as the table above shows — because `codex-in-claude` did.
+`AMICUS_KIMI_BIN` and `AMICUS_CLAUDE_BIN` have no sibling equivalent, because neither `moonbridge` nor `claude-in-codex` offered a CLI-path override to rename.
+`AMICUS_CODEX_BIN` had one — `CODEX_IN_CLAUDE_CODEX_BIN`, as the table above shows — because `codex-in-claude` did.
 `AMICUS_STATE_DIR`, `AMICUS_TASKS`, `AMICUS_TASKS_BACKEND_URL`, `AMICUS_HOST_NAME`, `AMICUS_ALLOW_CWD_WORKSPACE`, `AMICUS_BACKENDS`, `AMICUS_KIMI_BIN`, and `AMICUS_CLAUDE_BIN` are new in amicus and have no sibling equivalent.
 
 ## Tool-name mapping
@@ -178,10 +179,10 @@ Every backend's options (`isolation`, `config_mode`, `access`, `max_budget_usd`,
 A key that the selected backend does not accept is a validation error (`invalid_arguments`, `details.field = "backend_options.<key>"`), not a value that gets silently dropped the way an unrecognized sibling option might have been.
 Check `amicus_backends(backend=...)` or a tool's `amicus_review_changes_dry_run` echo to see which options apply to your chosen backend before spending.
 
-**Legacy environment names warn now and are removed in `0.4.0`.**
-Every sibling env var above is read automatically until then, but each read logs a warning naming the removal version.
-Setting the new `AMICUS_*` name and the old legacy name to different values is an error rather than a silent pick of one; the same is true if two legacy names for the same setting disagree with each other.
-Rename your environment before `0.4.0` ships to avoid a hard failure at that point.
+**Sibling environment names are not read since `0.4.0`.**
+Every sibling env var above was read, with a warning, through `0.3.0`; from `0.4.0` it supplies nothing, and the `AMICUS_*` name's value or default applies (#176).
+A sibling name that is still set is reported as a warning naming the `AMICUS_*` name to set, and it is never compared with that name's value, so the conflict error the window had is gone with it.
+There is no hard failure: a forgotten rename shows up only as the default taking effect, and as that warning.
 
 ### Discovery defaults are concise
 
@@ -190,6 +191,16 @@ Pass `detail="full"` to read them.
 A `null` there means no loaded plugin declares one.
 The `amicus://backends/{backend}` resource is always the full entry.
 `amicus_capabilities(detail="contracts")` is removed: pass `include_tool_details=false` for the same rowless payload, and `detail` now selects only how much each `tool_details` row carries (`summary` is `name`, `cost`, `stability`, `backends`; `full` adds the rest, including `error_codes`).
+
+## Upgrading from 0.3.0
+
+The change below is the one an operator of amicus 0.3.0 has to handle before running 0.4.0.
+`CHANGELOG.md`'s 0.4.0 section lists every user-visible change since 0.3.0, including the ones a caller has to handle.
+
+**Sibling environment names are no longer read (#176).**
+`CODEX_IN_CLAUDE_*`, `MOONBRIDGE_*` and `CLAUDE_IN_CODEX_*` supplied a setting through 0.3.0 when the `AMICUS_*` name was unset; from 0.4.0 they supply nothing.
+Rename each to the `AMICUS_*` name in the table above; a name left set is reported by `amicus_backends` and otherwise ignored.
+The settings where this matters most are the ones whose default is looser than what you had set, such as `CODEX_IN_CLAUDE_ISOLATION=ignore-rules` or `CLAUDE_IN_CODEX_CLAUDE_CONFIG=safe`, which now fall back to `inherit`.
 
 ## Upgrading from 0.2.0
 

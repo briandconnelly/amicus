@@ -19,9 +19,10 @@ from amicus.sdk.core.runtime import CommandRun
 # that sneaks in fails today as a hard AttributeError instead of on the next major.
 fastmcp.settings.mcp_camelcase_compat = False
 
-# The env prefixes this server reads: its own, and the three legacy prefixes the shim
-# consults. Stripped so tests see built-in defaults. One definition, the server's own, so
-# a namespace added there is stripped here without anyone remembering to.
+# The env prefixes this server looks at: its own, read for values, and the three retired
+# sibling prefixes, inspected only to report a stale name (#176). Stripped so tests see
+# built-in defaults and no ambient stale name shows up as a warning. One definition, the
+# server's own, so a namespace added there is stripped here without anyone remembering to.
 ENV_PREFIXES = config.ENV_PREFIXES
 
 NEVER_SPAWN_CODEX = "/nonexistent/amicus-test-codex"
@@ -82,12 +83,13 @@ def _never_spawn_real_claude(monkeypatch):
     monkeypatch.setenv("AMICUS_CLAUDE_BIN", NEVER_SPAWN_CLAUDE)
 
 
-# Every accepted spelling of AMICUS_LOG_FILE: the amicus name and its legacy aliases
-# (`config/__init__.py`). `_worker.main` calls `obs.configure` (#128), and several tests call
-# it in this process, so an exported value would have `obs.configure` OPEN a developer's real
-# log file here. `spawned_server_env` records the same incident for spawned subprocesses;
-# this is the in-process half, and it is a guard in the spirit of the three above.
-_LOG_FILE_ENV_NAMES = ("AMICUS_LOG_FILE", "CODEX_IN_CLAUDE_LOG_FILE", "MOONBRIDGE_LOG_FILE")
+# Every spelling that can open a log file: since #176 only the amicus name, because the
+# retired `CODEX_IN_CLAUDE_LOG_FILE` and `MOONBRIDGE_LOG_FILE` are tombstones whose value is
+# never read (`config/__init__.py`). `_worker.main` calls `obs.configure` (#128), and several
+# tests call it in this process, so an exported value would have `obs.configure` OPEN a
+# developer's real log file here. `spawned_server_env` records the same incident for spawned
+# subprocesses; this is the in-process half, and it is a guard in the spirit of the three above.
+_LOG_FILE_ENV_NAMES = ("AMICUS_LOG_FILE",)
 
 
 @pytest.fixture(autouse=True)
@@ -164,7 +166,7 @@ def _restore_dependency_logging():
 
 @pytest.fixture
 def clean_env(monkeypatch):
-    """Strip every amicus and legacy env var so tests see built-in defaults."""
+    """Strip every amicus and retired sibling env var so tests see built-in defaults."""
     for key in list(os.environ):
         if key.startswith(ENV_PREFIXES):
             monkeypatch.delenv(key, raising=False)
@@ -180,10 +182,12 @@ def spawned_server_env() -> dict[str, str]:
     guard's unusable backend binaries restored (the autouse fixtures monkeypatch THIS
     process, not a child).
 
-    `AMICUS_` alone is not enough. `CODEX_IN_CLAUDE_LOG_FILE` and `MOONBRIDGE_LOG_FILE` are
-    accepted legacy aliases for `AMICUS_LOG_FILE` (`config/__init__.py`), and `obs.configure`
-    opens that path — so a developer with one exported had these tests writing to their own
-    log file. Measured before the fix: the subprocess created it.
+    `AMICUS_` alone is not enough. `CODEX_IN_CLAUDE_LOG_FILE` and `MOONBRIDGE_LOG_FILE` were
+    accepted legacy aliases for `AMICUS_LOG_FILE` until 0.4.0, and `obs.configure` opens that
+    path — so a developer with one exported had these tests writing to their own log file.
+    Measured before the fix: the subprocess created it. Since #176 the retired names are
+    tombstones (`config/__init__.py`) whose value is never read, but one still set would
+    surface as a warning in any test that asserts the warnings are empty.
     """
     env = {k: v for k, v in os.environ.items() if not k.startswith(ENV_PREFIXES)}
     return env | {

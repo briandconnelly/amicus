@@ -250,7 +250,7 @@ def _run_redirected(tmp_path, name, preamble, **extra_env):
     marker absent for a reason that has nothing to do with the policy — the "record itself
     never arrived" assertion below is what catches that, and pinning the level is what keeps
     it from firing on a developer's shell rather than on a defect. The helper is what strips
-    the legacy `*_LOG_FILE` aliases too, an incident its own docstring records."""
+    the retired `*_LOG_FILE` names too, an incident its own docstring records."""
     script = tmp_path / f"{name}.py"
     script.write_text(_WORKER_LEAK_SCRIPT.format(preamble=preamble), encoding="utf-8")
     env = spawned_server_env() | {"AMICUS_LOG_LEVEL": "INFO"} | extra_env

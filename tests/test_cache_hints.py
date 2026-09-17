@@ -43,8 +43,9 @@ def _server_env() -> dict[str, str]:
 def test_the_spawned_server_env_is_as_clean_as_clean_env(monkeypatch):
     """The subprocess environment strips what `clean_env` strips.
 
-    Positive control on the instrument: a legacy alias is exported first, so a filter that
-    only handled `AMICUS_` would leave it visible here.
+    Positive control on the instrument: a retired sibling name is exported first, so a
+    filter that only handled `AMICUS_` would leave it visible here, where the server would
+    report it as a stale name (#176).
     """
     monkeypatch.setenv("CODEX_IN_CLAUDE_LOG_FILE", "/nonexistent/amicus-test-leak.log")
     monkeypatch.setenv("AMICUS_ALLOW_CWD_WORKSPACE", "1")

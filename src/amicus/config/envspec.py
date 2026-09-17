@@ -1,10 +1,12 @@
-"""Declared environment variables with a legacy-name shim.
+"""Declared environment variables with a legacy-name shim and removed-name tombstones.
 
 Every variable this server reads is declared once (name, description, default, legacy
-names). The shim reads a legacy name only when the amicus name is unset and reports it
-as a warning naming the removal version; a legacy value that disagrees with the amicus
-value, or two legacy values that disagree, is an error. `${VAR}` placeholders an MCP
-host failed to expand are detected and treated as unset.
+names, removed names). The shim reads a legacy name only when the amicus name is unset and
+reports it as a warning naming the removal version; a legacy value that disagrees with the
+amicus value, or two legacy values that disagree, is an error. A removed name is a
+tombstone: its presence is reported as a warning naming the amicus name, and its value is
+never read, so it can neither supply a setting nor conflict with one. `${VAR}` placeholders
+an MCP host failed to expand are detected and treated as unset.
 """
 
 from __future__ import annotations
@@ -18,11 +20,18 @@ if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Mapping
 
 # The release that drops every `EnvVar.legacy` alias. `scripts/check_release_state.py`
-# refuses to release at or past it while any alias is still declared, and docs/MIGRATION.md
-# states it (pinned by tests/test_migration_doc.py). Moved from 0.3.0 on 2026-09-14: 0.2.0,
-# the first release to warn on the aliases, shipped four days before 0.3.0 was cut, and one
-# warning-bearing release is too short a window for an operator-facing rename.
+# refuses to release at or past it while any alias is still declared. Moved from 0.3.0 on
+# 2026-09-14: 0.2.0, the first release to warn on the aliases, shipped four days before 0.3.0
+# was cut, and one warning-bearing release is too short a window for an operator-facing
+# rename. No declaration has carried an alias since #176, so this is the window for any
+# alias declared later: its author moves this version forward, and the guard holds it there.
 LEGACY_REMOVAL_VERSION = "0.4.0"
+
+# The release that stopped reading the three siblings' names (`CODEX_IN_CLAUDE_*`,
+# `MOONBRIDGE_*`, `CLAUDE_IN_CODEX_*`), now `EnvVar.removed` tombstones (#176). A fact of
+# history that never moves, so a tombstone warning quotes it rather than the window above,
+# which a later alias may move. docs/MIGRATION.md states it (tests/test_migration_doc.py).
+SIBLING_ALIASES_REMOVED_IN = "0.4.0"
 
 _PLACEHOLDER_RE = re.compile(r"^\$\{[A-Za-z_][A-Za-z0-9_]*\}$")
 
@@ -36,6 +45,12 @@ class EnvConflictError(ValueError):
     """Two names for one setting carry different values."""
 
 
+def _join(*warnings: str | None) -> str | None:
+    """One warning string from the parts that exist, or None when none does."""
+    present = [w for w in warnings if w]
+    return "; ".join(present) if present else None
+
+
 @dataclass(frozen=True)
 class EnvVar:
     name: str
@@ -43,6 +58,9 @@ class EnvVar:
     default: str | None = None
     legacy: tuple[str, ...] = ()
     secret: bool = False
+    # Former names whose values are never read; a set one is reported so an operator who
+    # kept a sibling's configuration learns which amicus name replaced it.
+    removed: tuple[str, ...] = ()
 
 
 Source = Literal["env", "legacy", "default", "unset"]
@@ -93,6 +111,15 @@ class EnvNamespace:
             own = None
         legacy = [(n, env[n]) for n in var.legacy if n in env and not is_env_placeholder(env[n])]
         distinct = {v for _, v in legacy}
+        # Presence only: a removed name's value is never read, so it is never compared.
+        stale = [n for n in var.removed if n in env and not is_env_placeholder(env[n])]
+        stale_warning = None
+        if stale:
+            verb = "is" if len(stale) == 1 else "are"
+            stale_warning = (
+                f"{', '.join(stale)} {verb} set but not read since "
+                f"{SIBLING_ALIASES_REMOVED_IN}; amicus reads {name}"
+            )
         if own is not None:
             if distinct - {own}:
                 names = ", ".join(n for n, v in legacy if v != own)
@@ -106,7 +133,7 @@ class EnvNamespace:
                     f"{', '.join(n for n, _ in legacy)} ignored: {name} is set "
                     f"(legacy names are removed in {LEGACY_REMOVAL_VERSION})"
                 )
-            return Resolved(name, own, "env", warning)
+            return Resolved(name, own, "env", _join(warning, stale_warning))
         if len(distinct) > 1:
             raise EnvConflictError(
                 f"legacy names for {name} disagree: {', '.join(n for n, _ in legacy)}"
@@ -117,12 +144,15 @@ class EnvNamespace:
                 name,
                 value,
                 "legacy",
-                f"{name} read from legacy {legacy_name}; rename it — legacy names are "
-                f"removed in {LEGACY_REMOVAL_VERSION}",
+                _join(
+                    f"{name} read from legacy {legacy_name}; rename it — legacy names are "
+                    f"removed in {LEGACY_REMOVAL_VERSION}",
+                    stale_warning,
+                ),
             )
         if var.default is not None:
-            return Resolved(name, var.default, "default")
-        return Resolved(name, None, "unset")
+            return Resolved(name, var.default, "default", stale_warning)
+        return Resolved(name, None, "unset", stale_warning)
 
     def report(self, environ: Mapping[str, str] | None = None) -> EnvReport:
         env = os.environ if environ is None else environ

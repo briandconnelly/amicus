@@ -17,16 +17,24 @@ def test_load_config_defaults(clean_env):
     assert cfg.warnings == () and cfg.errors == ()
 
 
-def test_load_config_reads_amicus_then_legacy_with_a_warning(clean_env):
+def test_load_config_reports_a_retired_name_and_never_reads_it(clean_env):
+    """#176: the CODEX_IN_CLAUDE_* names are tombstones since 0.4.0."""
+    names = {v.name: v for v in cc.ENV.vars}
+    assert all(v.legacy == () for v in names.values())
+    assert names["AMICUS_CODEX_BIN"].removed == ("CODEX_IN_CLAUDE_CODEX_BIN",)
+    assert names["AMICUS_CODEX_EXTRA_ARGS"].removed == ("CODEX_IN_CLAUDE_EXTRA_ARGS",)
     cfg = cc.load_config(
         {"CODEX_IN_CLAUDE_MODEL": "gpt-5.5", "AMICUS_CODEX_ISOLATION": "ignore-rules"}
     )
-    assert cfg.model == "gpt-5.5" and cfg.isolation == "ignore-rules"
+    assert cfg.model is None and cfg.isolation == "ignore-rules"
     assert any(
-        "AMICUS_CODEX_MODEL read from legacy CODEX_IN_CLAUDE_MODEL" in w for w in cfg.warnings
+        "CODEX_IN_CLAUDE_MODEL is set but not read" in w and "AMICUS_CODEX_MODEL" in w
+        for w in cfg.warnings
     )
-    conflict = cc.load_config({"AMICUS_CODEX_MODEL": "a", "CODEX_IN_CLAUDE_MODEL": "b"})
-    assert conflict.model == "a" and any("different values" in e for e in conflict.errors)
+    # A disagreeing pair is not a conflict: the retired value is never compared.
+    pair = cc.load_config({"AMICUS_CODEX_MODEL": "a", "CODEX_IN_CLAUDE_MODEL": "b"})
+    assert pair.model == "a" and pair.errors == ()
+    assert any("CODEX_IN_CLAUDE_MODEL" in w for w in pair.warnings)
 
 
 def test_invalid_isolation_default_falls_back_with_a_warning(clean_env):

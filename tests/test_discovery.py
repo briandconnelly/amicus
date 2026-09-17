@@ -228,7 +228,10 @@ async def test_backends_catalog_reports_enabled_available_and_unavailable():
     assert payload["unavailable"] == [
         {"id": "kimi", "reason": "import_failed", "detail": "no module amicus.backends.kimi"}
     ]
-    assert any("MOONBRIDGE_TIMEOUT_SECONDS" in w for w in payload["env_warnings"])
+    # A retired sibling name (#176) is reported in the top-level env_warnings, never read.
+    assert any(
+        "MOONBRIDGE_TIMEOUT_SECONDS is set but not read" in w for w in payload["env_warnings"]
+    )
     assert [b["id"] for b in only.structured_content["backends"]] == ["kimi"]
 
 

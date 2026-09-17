@@ -10,7 +10,7 @@ from fastmcp import Client
 from tests.support import fakeplugin
 
 from amicus import config, packaging, server
-from amicus.config.envspec import LEGACY_REMOVAL_VERSION
+from amicus.config.envspec import SIBLING_ALIASES_REMOVED_IN
 from amicus.registry import BackendRegistry
 from amicus.tools import TOOL_ORDER
 
@@ -60,7 +60,7 @@ def _reject_duplicate(seen: dict[str, object], name: str) -> None:
 
 
 def _table_rows(text: str | None = None) -> dict[str, set[str]]:
-    """Parse the env table: amicus name -> the legacy names it lists."""
+    """Parse the env table: amicus name -> the former sibling names it lists."""
     rows: dict[str, set[str]] = {}
     for line in (DOC.read_text() if text is None else text).splitlines():
         match = re.match(r"^\|\s*`(AMICUS_[A-Z0-9_]+)`\s*\|([^|]*)\|", line)
@@ -102,11 +102,15 @@ def test_no_invented_vars_in_the_table():
     assert set(_table_rows()) <= declared
 
 
-def test_legacy_names_match_the_declarations_exactly():
+def test_former_names_match_the_removed_tombstones_exactly():
+    """The table's second column is the former sibling name, kept so a sibling's user can
+    still find the amicus name; since #176 it is pinned to `EnvVar.removed`, and no
+    declaration may carry a `legacy` alias, which the same column would otherwise hide."""
     rows = _table_rows()
     for var in packaging.declared_vars():
-        assert rows[var.name] == set(var.legacy), (
-            f"{var.name}: doc lists {rows[var.name]}, declarations say {set(var.legacy)}"
+        assert var.legacy == (), f"{var.name} declares a legacy alias; the table cannot show it"
+        assert rows[var.name] == set(var.removed), (
+            f"{var.name}: doc lists {rows[var.name]}, declarations say {set(var.removed)}"
         )
 
 
@@ -126,7 +130,7 @@ def test_default_column_matches_the_declarations_exactly():
 
 
 def test_removal_version_is_stated():
-    assert LEGACY_REMOVAL_VERSION in DOC.read_text()
+    assert f"removed in `{SIBLING_ALIASES_REMOVED_IN}`" in DOC.read_text()
 
 
 def test_every_sibling_tool_prefix_is_mapped():
@@ -171,15 +175,17 @@ async def test_call_form_kwargs_are_real_tool_parameters():
 # The hand-written prose around the table is not covered by the table
 # assertions above, and shipped a claim that contradicted them: it said
 # `AMICUS_CODEX_BIN` had "no legacy alias" while the table two lines earlier, and the
-# declaration, both carry `CODEX_IN_CLAUDE_CODEX_BIN`.
-_NO_ALIAS_CLAIM_RE = re.compile(r"no legacy alias|no sibling equivalent")
+# declaration, both carry `CODEX_IN_CLAUDE_CODEX_BIN`. Since #176 the claim is that a
+# name never had a sibling equivalent, so it is checked against the tombstones too.
+_NO_ALIAS_CLAIM_RE = re.compile(r"no legacy alias|no sibling equivalent|no sibling name")
 
 
 def test_prose_no_alias_claims_agree_with_the_declarations():
-    """A prose sentence claiming a var has no legacy name must be true of the declaration.
+    """A prose sentence claiming a var never had a sibling name must be true of the
+    declaration, its `legacy` aliases and its `removed` tombstones alike.
 
     Only the negative claim is bound, and only per line. Rule 16 puts one sentence on one
-    line under `docs/`, so a line carrying "no legacy alias" or "no sibling equivalent"
+    line under `docs/`, so a line carrying "no sibling name" or "no sibling equivalent"
     is exactly one claim, and every `AMICUS_*` name written on it is inside that claim's
     scope. Positive prose ("`AMICUS_CODEX_BIN` does have one") is deliberately left to
     the table itself, which is already asserted to match every alias exactly; binding free-form
@@ -193,9 +199,9 @@ def test_prose_no_alias_claims_agree_with_the_declarations():
         for name in re.findall(r"`(AMICUS_[A-Z0-9_]+)`", line):
             assert name in declarations, f"prose names undeclared var {name}"
             checked.append(name)
-            assert not declarations[name].legacy, (
-                f"MIGRATION.md prose says {name} has no legacy alias, but the "
-                f"declaration carries {declarations[name].legacy}"
+            assert not declarations[name].legacy and not declarations[name].removed, (
+                f"MIGRATION.md prose says {name} never had a sibling name, but the "
+                f"declaration carries {declarations[name].legacy + declarations[name].removed}"
             )
     assert checked, (
         "known positive for the scan above: no prose no-alias claim was found at all, so "

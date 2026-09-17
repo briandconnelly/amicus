@@ -1,4 +1,4 @@
-"""Kimi-side configuration: the AMICUS_KIMI_* namespace (legacy MOONBRIDGE_ shim), the
+"""Kimi-side configuration: the AMICUS_KIMI_* namespace (MOONBRIDGE_ names retired in 0.4.0), the
 resolved KimiConfig, the refuse-all extra-args parser, isolation → skills dir, and version
 parsing. Ported from moonbridge `config.py`; tiers, sandbox defaults and WORKTREE_BASE are
 not ported (amicus has kinds, not tiers, and one worktree policy)."""
@@ -20,7 +20,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Mapping
 
 PREFIX = "AMICUS_KIMI_"
-_LEGACY = "MOONBRIDGE_"
+_RETIRED = "MOONBRIDGE_"  # not read; tombstones only (#176)
 
 ENV = EnvNamespace(
     prefix=PREFIX,
@@ -29,38 +29,37 @@ ENV = EnvNamespace(
             f"{PREFIX}BIN",
             "Explicit path to the kimi executable; used exactly as given.",
             None,
-            (),
         ),
         EnvVar(
             f"{PREFIX}EXTRA_ARGS",
             "Operator passthrough of extra kimi options. kimi exposes no option amicus can "
             "pass safely, so any value is refused and reported by amicus_backends.",
             None,
-            (f"{_LEGACY}EXTRA_ARGS",),
+            removed=(f"{_RETIRED}EXTRA_ARGS",),
         ),
         EnvVar(
             f"{PREFIX}MODEL",
             "Default model ALIAS (from kimi's config.toml) when a call omits `model`.",
             None,
-            (f"{_LEGACY}MODEL",),
+            removed=(f"{_RETIRED}MODEL",),
         ),
         EnvVar(
             f"{PREFIX}REASONING_EFFORT",
             "Default reasoning effort when a call omits `reasoning_effort`.",
             None,
-            (f"{_LEGACY}REASONING_EFFORT",),
+            removed=(f"{_RETIRED}REASONING_EFFORT",),
         ),
         EnvVar(
             f"{PREFIX}ISOLATION",
             "Default backend_options.isolation: inherit | ignore-skills.",
             "inherit",
-            (f"{_LEGACY}ISOLATION",),
+            removed=(f"{_RETIRED}ISOLATION",),
         ),
         EnvVar(
             f"{PREFIX}SUPPORTED_VERSIONS",
             "Comma-separated kimi major.minor versions treated as supported (advisory).",
             None,
-            (f"{_LEGACY}SUPPORTED_VERSIONS",),
+            removed=(f"{_RETIRED}SUPPORTED_VERSIONS",),
         ),
     ),
 )
