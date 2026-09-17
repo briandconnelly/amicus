@@ -246,19 +246,42 @@ def test_static_catalog_and_version_pins():
             '{"error":{"message":"usage limit; try again at Sep 19th, 2026 8:37 AM."}}',
             "Sep 19th, 2026 8:37 AM",
         ),
-        # Relative delays and plain limits carry no reset phrase.
+        # A zone, when codex ever prints one, is kept with the phrase.
+        ("usage limit; try again at 12:39 PM UTC.", "12:39 PM UTC"),
+        ("usage limit; try again at Sep 19th, 2026 8:37 AM PDT.", "Sep 19th, 2026 8:37 AM PDT"),
+        ("usage limit; try again at 08:37 +02:00.", "08:37 +02:00"),
+        # Relative delays, plain limits and non-clock wording carry no reset phrase.
         ("usage limit; try again in 5 seconds", None),
         ("usage limit reached", None),
+        ("usage limit; try again at noon.", None),
+        ("usage limit; try again at tomorrow morning.", None),
+        ("usage limit; try again at " + "x" * 500 + ".", None),
         ("rate limit; retry-after 9", None),
         (None, None),
     ],
 )
 def test_parse_usage_limit_reset(text, expected):
-    assert c.parse_usage_limit_reset(text) == expected
+    reset = c.parse_usage_limit_reset(text)
+    assert (reset.when if reset else None) == expected
+    if reset is not None:
+        assert len(reset.when) <= c.USAGE_LIMIT_RESET_MAX_CHARS
 
 
-def test_parse_usage_limit_reset_is_bounded_and_sanitized():
-    reset = c.parse_usage_limit_reset("try again at " + "x" * 500 + ".")
-    assert reset is not None and len(reset) <= c.USAGE_LIMIT_RESET_MAX_CHARS
+@pytest.mark.parametrize(
+    ("text", "zone_stated"),
+    [
+        ("try again at 12:39 PM.", False),
+        ("try again at Sep 19th, 2026 8:37 AM.", False),
+        ("try again at 12:39 PM UTC.", True),
+        ("try again at 12:39 PM GMT", True),
+        ("try again at 08:37 +02:00.", True),
+    ],
+)
+def test_parse_usage_limit_reset_reports_whether_a_zone_was_stated(text, zone_stated):
+    reset = c.parse_usage_limit_reset(text)
+    assert reset is not None and reset.zone_stated is zone_stated
+
+
+def test_parse_usage_limit_reset_is_sanitized():
     reset = c.parse_usage_limit_reset("try again at 1:00\x1b[31m PM.")
-    assert reset is not None and "\x1b" not in reset
+    assert reset is not None and "\x1b" not in reset.when

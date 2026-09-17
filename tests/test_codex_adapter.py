@@ -207,6 +207,8 @@ def test_classify_failure_ignores_last_message_artifact(pinned_codex_bin, diagno
             "Sep 19th, 2026 8:37 AM",
         ),
         ("You've hit your usage limit ... or try again at 12:39 PM.", None, "12:39 PM"),
+        ("usage limit; try again at 12:39 PM UTC.", None, "12:39 PM UTC"),
+        ("usage limit; try again at noon.", None, None),
         ("USAGE LIMIT reached", None, None),
         ("usage limit; try again in 2 hours", None, None),
         ("usage limit; try again in 5 seconds", 5000, None),
@@ -238,7 +240,10 @@ def test_usage_limit_retry_guidance_reaches_wire(pinned_codex_bin, source, messa
             assert reset in error["message"]
             assert reset in error["repair"]["alternative"]
             assert error["details"]["reason"] == f"codex reported the limit lifts at {reset}"
-            assert "time zone" in error["repair"]["alternative"]
+            # The zone caveat is stated only when the phrase names none (Copilot, PR #171).
+            zone_missing = "no time zone stated" in error["repair"]["alternative"]
+            assert zone_missing is ("UTC" not in reset)
+            assert ("no time zone stated" in error["message"]) is ("UTC" not in reset)
     else:
         assert error["repair"]["next_step"] == "retry_after_delay"
         assert reset is None
