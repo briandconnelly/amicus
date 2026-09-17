@@ -90,7 +90,8 @@ A `sha` is therefore real protection: it keeps serving the reviewed commit even 
 
 Arm 7 is why the pair is dangerous on its own: a `sha` that disagrees with its `ref` is served silently, while the human-readable field says otherwise.
 The release checker neutralizes that by requiring `sha` to equal `git rev-parse <ref>^{commit}` — the **peeled** commit, never the annotated tag object's own SHA.
-With that equality enforced, the two fields cannot disagree without failing a check.
+Whenever the checker runs, the two fields cannot disagree without failing it.
+Between runs they can: if the admin moves the tag after a pointer PR merges, `ref` and `sha` disagree without anything noticing, the committed `sha` keeps serving the reviewed commit, and the next checker run reports the mismatch.
 
 Both values are known when they are written, because the pointer only ever names a tag that already exists.
 
@@ -99,7 +100,8 @@ Both values are known when they are written, because the pointer only ever names
 The pin names its own tag and rejoins rule 19's list of version literals.
 On a tag — the copy users run once activation is complete — the pin names that same tag, so the server and the skills that call it always agree.
 
-After activation, `main` naming a tag that does not yet exist reaches no user, because nobody installs from `main`.
+After activation, `main` naming a tag that does not yet exist reaches no plugin user, because no plugin installs from `main`.
+It does reach someone copying README's "Any other MCP client" command between the release merge and the tag push: for those minutes the command fails, and it works unchanged once the tag exists.
 **Before** activation that is not true, and the transition section below deals with it.
 
 ### Rule 24 moves rather than dies
@@ -117,6 +119,7 @@ The **order** of `docs/RELEASING.md`'s steps is unchanged, including the ancestr
 Four steps change in content rather than position.
 
 - **Step 2.** "Do **not** touch `.mcp.json`" inverts: the pin is a version literal again and moves with the others.
+  README's "Any other MCP client" example moves in the same PR, because `tests/test_packaging.py::test_readme_example_mirrors_the_mcp_json_pin` requires it to equal `.mcp.json`'s pin.
 - **Step 3.** After the evidence run writes `.release-evidence/live-gates.json`, create the annotated tag **locally**, using exactly the command step 6 prescribes today: `git tag -a vX.Y.Z -F .release-evidence/live-gates.json --cleanup=verbatim <release-sha>`.
   Then run `check_release_state.py --tag vX.Y.Z --commit <release-sha>`, so the strict predicate — including that `.mcp.json`'s pinned tag exists and that the tag carries a record naming the release commit — passes unmodified against a tag that exists only in this checkout.
   A local tag is reversible, so nothing in the checker needs a pre-tag exception.
@@ -191,16 +194,16 @@ For the 0.4.0 transition only, `docs/RELEASING.md` therefore extends rule 19's "
 ### What the checks read, exactly
 
 One function validates the marketplace file, called from two places with different evidence available.
-Every rule below fails closed: a key, shape or value not listed is a failure, so an unknown future key fails rather than passing silently, and adding one means changing the checker in the same PR.
+The plugin entry and its source fail closed: a key, shape or value not listed for them is a failure, so an unknown future key there fails rather than passing silently, and adding one means changing the checker in the same PR.
 
 **Shape, a fact of any checkout.**
 Strictness goes where it affects what executes: the plugin entry and its source have **exactly** the listed keys.
-The root and `owner` only need their required fields with the right types; other metadata there is allowed, because it cannot change which snapshot runs.
+The root is checked only for the two keys below; any other root key, `owner` included, is allowed and not inspected, because none of them can change which snapshot runs.
 The file as it stands today passes every rule, so PR 1 needs no change to it.
 
 | JSON path | keys | value constraints |
 | --- | --- | --- |
-| `$` (root) | requires `name`, `plugins` | `name` is `"amicus"`; `plugins` is an array of exactly one element |
+| `$` (root) | requires `name` and `plugins`; others allowed | `name` is `"amicus"`; `plugins` is an array of exactly one element |
 | `$.plugins[0]` | exactly `name`, `description`, `source` | `name` is `"amicus"`; `description` is a non-empty string |
 | `$.plugins[0].source` | — | the string `"./"` under the pre-activation rule, **or** the object below |
 | `$.plugins[0].source` as an object | exactly `source`, `url`, `ref`, `sha` | `source` is `"url"`; `url` is `"https://github.com/briandconnelly/amicus.git"`; `ref` matches `^v\d+\.\d+\.\d+$`; `sha` matches `^[0-9a-f]{40}$` |
@@ -330,7 +333,8 @@ Pointer lag leaves users on a working release and is fixed by the same human PR 
 
 Three pull requests, because rule 9 keeps governance and `.github/` separate from ordinary work.
 
-1. **Design and checker.** This spec; a new ADR superseding 0015; `docs/RELEASING.md` steps 2, 3, 6 and 7 and the 0.4.0 transition rule; and the marketplace validation function in `scripts/check_release_state.py` with its tests, including the pre-activation rule and a negative test for each fail-closed key.
+1. **Design and checker.** This spec; a new ADR superseding 0015; `docs/RELEASING.md` steps 2, 3, 6 and 7 and the 0.4.0 transition rule; and the marketplace validation function in `scripts/check_release_state.py` with its tests, including the pre-activation rule and the representative negative cases above.
+   Two existing tests in `tests/test_packaging.py` encode ADR 0015's trailing pin and change with it: `test_mcp_json_installs_this_repo_at_a_published_release_tag` gains `pin == amicus.__version__`, which its docstring currently declines to assert, and `test_readme_example_mirrors_the_mcp_json_pin`'s docstring stops referring to a pin-move PR.
    `.claude-plugin/marketplace.json` does not move here, and does not need to: its current `"./"` passes under the pre-activation rule.
 2. **Governance.** AGENTS.md rules 19 and 24, and the "Releases" section of its context notes.
 3. **Workflow.** One job added to the existing `.github/workflows/test.yml`, running the marketplace check on pull requests with tags and the base commit fetched, each new `uses:` pinned by SHA per rule 14.
