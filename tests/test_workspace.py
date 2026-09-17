@@ -3,6 +3,7 @@ server cwd only under the operator opt-in, always disclosed."""
 
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 
 from mcp.types import ClientCapabilities, Implementation, InitializeRequestParams
@@ -141,3 +142,59 @@ async def test_client_name_reaches_the_host_framing_from_a_real_client():
         await c.call_tool("t", {})
     assert seen == ["claude-code"]
     assert prompts.host_display_name(seen[0], None) == prompts.HOST_DISPLAY_NAMES["claude-code"]
+
+
+def _patched_path(cwd):
+    """A Path whose cwd() is `cwd`, bound to the resolver module only: patching
+    pathlib.Path itself would also break pytest's own traceback rendering."""
+    return type("_Path", (Path,), {"cwd": classmethod(lambda _cls: cwd())})
+
+
+def _never():
+    raise AssertionError("Path.cwd() was consulted on a branch it cannot decide")
+
+
+def test_the_cwd_is_read_only_when_it_decides_the_outcome(tmp_path, monkeypatch):
+    """Issue #170: an explicit root, a client root and the refusal never consult the
+    process cwd, so a deleted cwd cannot fail a call that named its workspace."""
+    monkeypatch.setattr(ws, "Path", _patched_path(_never))
+    inside = tmp_path / "repo"
+    inside.mkdir()
+    assert ws.resolve(str(inside), [], allow_cwd=True).source == "param"
+    assert ws.resolve(str(inside), [str(tmp_path)], allow_cwd=True).source == "param"
+    assert (
+        ws.resolve(str(inside), ["/somewhere/else"], allow_cwd=True).error_code
+        == "workspace_outside_roots"
+    )
+    assert ws.resolve("relative/path", [], allow_cwd=True).error_code == "invalid_workspace_root"
+    assert (
+        ws.resolve(str(tmp_path / "missing"), [], allow_cwd=True).error_code
+        == "invalid_workspace_root"
+    )
+    assert ws.resolve(None, [str(tmp_path)], allow_cwd=True).source == "roots"
+    refused = ws.resolve(None, [], allow_cwd=False)
+    assert refused.error_code == "invalid_workspace_root" and WORKSPACE_SCOPE in (
+        refused.error_detail or ""
+    )
+    injected = ws.resolve(None, [], allow_cwd=True, server_cwd=str(tmp_path))
+    assert (injected.path, injected.source) == (str(tmp_path.resolve()), "cwd")
+
+
+def _gone():
+    raise FileNotFoundError(2, "No such file or directory")
+
+
+def test_a_deleted_cwd_is_reported_not_raised_when_the_cwd_is_needed(tmp_path, monkeypatch):
+    """Issue #170: the one branch that needs the cwd reports its absence as a
+    non-temporary invalid_workspace_root that names the two ways out, instead of raising
+    into the guard's retryable internal_error."""
+    monkeypatch.setattr(ws, "Path", _patched_path(_gone))
+    res = ws.resolve(None, [], allow_cwd=True)
+    assert (res.path, res.source, res.error_code) == (None, None, "invalid_workspace_root")
+    detail = res.error_detail or ""
+    assert "no longer exists" in detail and "workspace_root" in detail and "restart" in detail
+    assert WORKSPACE_SCOPE in detail
+    # Positive control on the instrument: the same call with a live cwd resolves from it.
+    monkeypatch.setattr(ws, "Path", _patched_path(lambda: tmp_path))
+    live = ws.resolve(None, [], allow_cwd=True)
+    assert (live.path, live.source) == (str(tmp_path.resolve()), "cwd")

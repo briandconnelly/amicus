@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+import tempfile
 import time
 from pathlib import Path
 
@@ -18,8 +20,9 @@ from amicus.jobs.store import DiscardOutcome, JobStore
 from amicus.registry import BackendRegistry
 
 
-@pytest.fixture
-def app(tmp_path, fake_codex, monkeypatch):
+def _make_app(tmp_path, fake_codex, monkeypatch, **env: str):
+    for key, value in env.items():
+        monkeypatch.setenv(key, value)
     monkeypatch.setenv("AMICUS_CODEX_BIN", str(fake_codex))
     monkeypatch.setenv("AMICUS_STATE_DIR", str(tmp_path / "state"))
     monkeypatch.setenv("FAKE_CODEX_ARGV_FILE", str(tmp_path / "argv.jsonl"))
@@ -37,6 +40,37 @@ def app(tmp_path, fake_codex, monkeypatch):
     return server.create_app(
         settings, BackendRegistry.load(settings.enabled_backends, entry_points=())
     )
+
+
+@pytest.fixture
+def app(tmp_path, fake_codex, monkeypatch):
+    return _make_app(tmp_path, fake_codex, monkeypatch)
+
+
+@pytest.fixture
+def cwd_app(tmp_path, fake_codex, monkeypatch):
+    """The same server with the operator opt-in that makes the process cwd a workspace."""
+    return _make_app(tmp_path, fake_codex, monkeypatch, AMICUS_ALLOW_CWD_WORKSPACE="1")
+
+
+@pytest.fixture
+def gone_cwd(tmp_path, monkeypatch):
+    """Issue #170: the server process's cwd is a directory that no longer exists, as
+    after the Claude Code worktree it was started in is removed. Requested AFTER `app`
+    so every other fixture is built from a live cwd; `tempfile`'s cached tempdir is
+    cleared so the first temp-dir use inside the test recomputes it under the gone cwd."""
+    saved = Path.cwd()
+    doomed = tmp_path / "doomed"
+    doomed.mkdir()
+    os.chdir(doomed)
+    doomed.rmdir()
+    with pytest.raises(FileNotFoundError):
+        Path.cwd()
+    monkeypatch.setattr(tempfile, "tempdir", None)
+    try:
+        yield
+    finally:
+        os.chdir(saved)
 
 
 @pytest.fixture
@@ -543,3 +577,63 @@ async def test_missing_after_a_failed_expiry_cleanup_still_answers_job_not_found
         )
         assert again.structured_content["error"]["code"] == "job_not_found"
         assert target.exists(), "a read reports not-found without the files being gone"
+
+
+async def test_an_explicit_root_survives_a_deleted_server_cwd(app, store, tmp_path, gone_cwd):
+    """Issue #170: with the process cwd gone, every job tool and a paid call that named
+    its workspace still work; before the fix each raised FileNotFoundError into the
+    guard's retryable internal_error, which sent the caller into a retry loop."""
+    ws = {"workspace_root": str(tmp_path)}
+    async with Client(app) as c:
+        listed = (await c.call_tool("amicus_job_list", ws)).structured_content
+        assert listed["ok"] is True and listed["jobs"] == []
+        missing = await c.call_tool(
+            "amicus_job_status", {"job_id": "a" * 32, **ws}, raise_on_error=False
+        )
+        assert missing.structured_content["error"]["code"] == "job_not_found"
+        job_id = await _start(c, tmp_path)
+        await _wait_done(store, tmp_path, job_id)
+        result = (
+            await c.call_tool("amicus_job_result", {"job_id": job_id, **ws})
+        ).structured_content
+        assert result["ok"] is True and result["tool"] == "amicus_consult"
+        # A synchronous paid call prepares the backend in the server process itself, so
+        # its temp files and the spawn happen under the deleted cwd.
+        sync = (
+            await c.call_tool("amicus_consult", {"backend": "codex", "question": "why?", **ws})
+        ).structured_content
+        assert sync["ok"] is True and sync["meta"]["cwd"] == str(tmp_path)
+
+
+async def test_a_needed_but_deleted_cwd_is_a_workspace_error_not_internal(
+    cwd_app, tmp_path, gone_cwd
+):
+    """Issue #170: under AMICUS_ALLOW_CWD_WORKSPACE=1 with no root named, the deleted cwd
+    is the workspace the call would use. That is reported as a non-temporary
+    invalid_workspace_root with no repair (no call can mint the directory) on both the
+    job path and the paid path, and no backend runs."""
+    async with Client(cwd_app) as c:
+        for tool, args in (
+            ("amicus_job_list", {}),
+            ("amicus_consult", {"backend": "codex", "question": "why?"}),
+        ):
+            res = await c.call_tool(tool, args, raise_on_error=False)
+            assert res.is_error, tool
+            err = res.structured_content["error"]
+            assert err["code"] == "invalid_workspace_root", tool
+            assert err["temporary"] is False and "repair" not in err, tool
+            assert err["details"]["field"] == "workspace_root", tool
+            assert "no longer exists" in err["message"] and "restart" in err["message"], tool
+    assert not (tmp_path / "argv.jsonl").exists(), "the fake codex was spawned"
+
+
+async def test_a_live_cwd_still_resolves_under_the_opt_in(cwd_app, tmp_path, monkeypatch):
+    """Positive control for the test above: the same server and call, from a cwd that
+    exists, resolves the workspace from it and says so."""
+    live = tmp_path / "live"
+    live.mkdir()
+    monkeypatch.chdir(live)
+    async with Client(cwd_app) as c:
+        listed = (await c.call_tool("amicus_job_list", {})).structured_content
+    assert listed["ok"] is True and listed["meta"]["workspace_source"] == "cwd"
+    assert listed["meta"]["cwd"] == str(live.resolve()) and listed["meta"]["workspace_warning"]
