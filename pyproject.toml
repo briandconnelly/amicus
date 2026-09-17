@@ -23,7 +23,8 @@ classifiers = [
 dependencies = [
     "anyio>=4",
     # Minor-line caps: fastmcp documents that breaking changes may land in minor releases.
-    # Widening either cap is a deliberate upgrade PR, not a resolver decision.
+    # Widening either cap is a hand-written upgrade PR, not a resolver decision:
+    # .github/dependabot.yml ignores minor and major updates to both packages.
     "fastmcp>=4.0,<4.1",
     "mcp>=2.1,<2.3",
     "pydantic>=2",
