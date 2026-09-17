@@ -38,7 +38,7 @@ _NO_WORKSPACE = (
 )
 # The cwd branch was reached and the process cwd is gone (deleted under the running
 # server). No call can mint the directory, so like _NO_WORKSPACE this carries no repair;
-# the message names the two ways out.
+# the message names the ways out.
 _CWD_GONE = (
     "the server's working directory no longer exists, so AMICUS_ALLOW_CWD_WORKSPACE has "
     f"nothing to fall back to; pass workspace_root (an absolute directory) {WORKSPACE_SCOPE}, "

@@ -187,7 +187,7 @@ def _gone():
 
 def test_a_deleted_cwd_is_reported_not_raised_when_the_cwd_is_needed(tmp_path, monkeypatch):
     """Issue #170: the one branch that needs the cwd reports its absence as a
-    non-temporary invalid_workspace_root that names the two ways out, instead of raising
+    non-temporary invalid_workspace_root that names the ways out, instead of raising
     into the guard's retryable internal_error."""
     monkeypatch.setattr(ws, "Path", _patched_path(_gone))
     res = ws.resolve(None, [], allow_cwd=True)
