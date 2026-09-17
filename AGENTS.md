@@ -33,8 +33,8 @@ The rules bind; the context after them explains and points elsewhere.
     Prompt text that a test or capture script assembles entirely from its own literals is exempt, including the `build_*_prompt` output committed in `tests/fixtures/*_differentials.json`; it stays verbatim, because a differential must show what changed and a hash cannot.
     No exemption reaches text that was copied, derived or replayed from a prompt anyone sent: that stays bound however it is later stored or relabelled.
 19. Release in two PRs: the work lands with the version literals untouched, then a `chore(release):` PR moves them together and rolls `## [Unreleased]` in `CHANGELOG.md` into a dated section.
-    The literals are `pyproject.toml`, `src/amicus/__init__.py`, `.claude-plugin/plugin.json` and `.codex-plugin/plugin.json`.
-    `.mcp.json`'s pin is NOT one of them; rule 24 governs it, and a release must not touch it.
+    The literals are `pyproject.toml`, `src/amicus/__init__.py`, `.claude-plugin/plugin.json`, `.codex-plugin/plugin.json` and `.mcp.json`'s `--from` pin, which names the tag of the release being made; README's "Any other MCP client" example moves with that pin.
+    `.claude-plugin/marketplace.json`'s pointer is NOT one of them; rule 24 governs it, and a release must not touch it.
     `uv.lock` mirrors the version rather than declaring it: regenerate it in that same PR with `uv lock`, or the `uv lock --check` hook fails.
     Only the maintainer merges that PR, and only the maintainer pushes the tag.
     Push the matching tag before any other work follows that merge: until it exists, `main` declares a version that has no release.
@@ -47,9 +47,10 @@ The rules bind; the context after them explains and points elsewhere.
     Never move a release check into the `pypi` job: GitHub holds every step of an environment job behind that environment's required reviewer, so a check placed there runs only after the approval it exists to inform.
 23. Never describe the rule-20 record, in any document or output, as proof that the live gates ran.
     It is the maintainer's assertion, machine-checked for shape and for naming the tagged commit; the runs happen on the maintainer's machine and the record is written there.
-24. `.mcp.json`'s `--from` pin names a release that is already published, never the one being released, and it may never name a version newer than the one the tree declares.
-    A release PR under rule 19 leaves it untouched; move it to the new tag in its own `chore(release):` PR after that tag is published and its install has been checked.
+24. `.claude-plugin/marketplace.json`'s plugin entry names a release that is already published, by `ref` and a `sha` equal to that tag's peeled commit, never the one being released, and it may never name a version newer than the one the tree declares.
+    A release PR under rule 19 leaves it untouched; advance it to the new tag in its own `chore(release):` PR after that tag is published and its install has been checked, and a release is not complete until that PR merges.
     That PR is not a release: it needs no rule-20 evidence, because it moves a pointer to a tag that already exists.
+    Until the 0.4.0 pointer PR merges the entry's `source` is `"./"`; for 0.4.0 only, nothing else merges to `main` between the release PR and that pointer PR.
 
 ## Context
 
@@ -79,12 +80,14 @@ The README's "Where things are" table indexes the rest.
 
 ### Releases
 
-`.mcp.json` pins `git+https://github.com/briandconnelly/amicus.git@v{version}`, and that pin is what a fresh plugin install actually fetches: users add this repository as a marketplace, so the manifest they read is the one on `main`.
-Rule 24 therefore keeps it naming a release that is already published rather than the one being released.
-A manifest on `main` cannot name an artifact that only exists after `main` has moved, and pinning the version under release meant every release broke a fresh install for the interval between the release merge and the tag push.
-Rule 24 removes that interval rather than shortening it.
-Two facts decided the shape, and both were established by probe rather than argued: a commit SHA resolves over the same git transport a tag does, so the install path can be rehearsed before any tag exists; and `uvx` reuses a cached tool environment without querying any index, so the version in the requirement string is what makes an existing user pick up a new release — which is why an unpinned source was rejected rather than adopted.
-0.1.0 was the bootstrap, tagged and published on 2026-09-09; it named the tag it created because no earlier release existed, and that case cannot recur.
+Users add this repository as a plugin marketplace, and a host copies the plugin into a directory keyed by `plugin.json`'s version, re-reading it only when that version changes.
+ADR 0031 is shaped by that fact, established by probe on Claude Code and Codex, and it supersedes ADR 0015, which had assumed a host re-reads `.mcp.json`.
+Under ADR 0015 the pin trailed the release, so an install taken before the pin-move PR, or anywhere mid-cycle, kept running an older server than its own skills (issue #117).
+So `.mcp.json` names its own release, and from 0.4.0 the marketplace entry pins a published tag by `ref` and `sha`, so hosts install that self-consistent tag snapshot rather than `main`.
+Until the 0.4.0 pointer PR merges, the entry is still `"./"` and hosts install `main`, which is why rule 24 bars anything else from merging during that one transition.
+Rule 24's invariant, that the pointer users follow names an already-published release, moved with it from `.mcp.json` to the marketplace entry.
+`sha` is required because a host serves `sha` over a disagreeing `ref` without complaint, and the `v*` ruleset's admin bypass means a tag can be moved.
+`uvx` reuses a cached tool environment without querying any index, so the version in `.mcp.json`'s requirement string is still what makes an existing install pick up a new server.
 Rule 20 is a local pre-tag gate rather than a CI job: hosted runners have no authenticated `codex`, `kimi` or `claude`, so the evidence is recorded on the maintainer's machine against the exact commit to be tagged.
 That evidence is an honest-mistake guard, not an attestation; it is a local file its author can write by hand.
 Rule 21 covers creation as well as update and deletion because pushing a `v*` tag is by itself what triggers `.github/workflows/publish.yml`: an identity that can create one can publish a release without rules 19 and 20 ever being satisfied, and a moved tag silently changes what users install under a version they already trust.
