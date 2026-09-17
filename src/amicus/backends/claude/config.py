@@ -58,7 +58,8 @@ ENV = EnvNamespace(
         ),
         EnvVar(
             f"{PREFIX}MAX_BUDGET_USD",
-            "Default backend_options.max_budget_usd (0.01-5.00), a best-effort stop threshold.",
+            "Default backend_options.max_budget_usd (0.01-5.00), a best-effort stop threshold "
+            "checked between model calls.",
             f"{contract.DEFAULT_MAX_BUDGET_USD}",
             (f"{_LEGACY}MAX_BUDGET_USD",),
         ),

@@ -48,8 +48,13 @@ TIMEOUT_REPAIR = (
 )
 BUDGET_REPAIR = (
     "Before making another call, raise backend_options.max_budget_usd (up to 5.00) or narrow "
-    "the prompt/context (for reviews, a smaller scope or fewer paths). For small prompts try at "
-    "least 0.10-0.20; a lower best-effort budget can spend and still stop before a useful answer."
+    "the prompt/context (for reviews, a smaller scope or fewer paths). claude checks the "
+    "threshold only between model calls: a threshold below the cost of one call spends that "
+    "call and still returns no answer, and any retry spends again."
+)
+BUDGET_DETAIL = (
+    "claude stopped at the max-budget threshold. It checks the threshold only between model "
+    "calls, so the estimated cost can exceed it: a stop threshold, not a ceiling (#158)."
 )
 PERMISSION_REPAIR = (
     "Use backend_options.access='toolless', or 'readonly' when Claude must read files itself "
@@ -300,10 +305,7 @@ def classify_envelope(
     if contract.is_budget_stop(structured):
         return ClassifiedFailure(
             code="budget_exceeded",
-            detail=(
-                "claude reached the max-budget stop threshold "
-                "(a best-effort limit, not a hard cap)."
-            ),
+            detail=BUDGET_DETAIL,
             retryable=False,
             details={"field": "backend_options.max_budget_usd"},
             repair=_hint("reduce_input", BUDGET_REPAIR),
@@ -374,10 +376,7 @@ def classify_failure(
     if contract.is_budget_stop(blob):
         return ClassifiedFailure(
             code="budget_exceeded",
-            detail=(
-                "claude reached the max-budget stop threshold "
-                "(a best-effort limit, not a hard cap)."
-            ),
+            detail=BUDGET_DETAIL,
             retryable=False,
             details={"field": "backend_options.max_budget_usd"},
             repair=_hint("reduce_input", BUDGET_REPAIR),
