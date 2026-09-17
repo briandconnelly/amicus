@@ -16,3 +16,4 @@ The server cwd is used only under `AMICUS_ALLOW_CWD_WORKSPACE=1`, and then the r
 
 - Sessionless (2026-07-28) clients must pass `workspace_root`; the parameter description says so.
 - M1 implements the resolver (orchestration/workspace.py) and the handshake-era roots probe; a sessionless client without workspace_root receives invalid_workspace_root with zero spend.
+- The server cwd is read only on the branch that would use it (issue #170): an explicit or client root never consults it, so a cwd deleted under the running server cannot fail a call that named its workspace, and when that branch is reached and the cwd is gone the call fails as invalid_workspace_root rather than a retryable internal_error.

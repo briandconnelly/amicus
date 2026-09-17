@@ -58,6 +58,17 @@ per-change, as its own lead says.
 
 ### Fixed
 
+- Every tool that resolves a workspace no longer fails as a retryable `internal_error`
+  (`FileNotFoundError`) when the server process's working directory has been deleted under
+  it, as happens when the Claude Code worktree the server was started in is removed (#170).
+  The resolver now reads the process cwd only on the one branch where it decides the
+  outcome (no `workspace_root`, no client root, and `AMICUS_ALLOW_CWD_WORKSPACE=1`), so a
+  call that names its workspace never consults it. When that branch is reached and the cwd
+  is gone, the call fails as a non-temporary `invalid_workspace_root` whose message says to
+  pass `workspace_root`, configure an MCP root, or restart the server from an existing
+  directory, instead of a `retry_then_report` repair that could never succeed. No error
+  code was added and `FINGERPRINT` does not move.
+
 - Codex usage-limit failures without a parseable relative delay now report
   `retry_after_ms: null` with an `inspect_and_retry` repair instead of inventing a
   60-second delay for a reset that may be days away (#165). When codex states the reset
