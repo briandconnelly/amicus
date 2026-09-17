@@ -52,9 +52,10 @@ BUDGET_REPAIR = (
     "threshold only between model calls: a threshold below the cost of one call spends that "
     "call and still returns no answer, and any retry spends again."
 )
+# The stop is checked between model calls, never inside one (#158; docs/claude-help/2.1.274).
 BUDGET_DETAIL = (
     "claude stopped at the max-budget threshold. It checks the threshold only between model "
-    "calls, so the estimated cost can exceed it: a stop threshold, not a ceiling (#158)."
+    "calls, so the estimated cost can exceed it: a stop threshold, not a ceiling."
 )
 PERMISSION_REPAIR = (
     "Use backend_options.access='toolless', or 'readonly' when Claude must read files itself "

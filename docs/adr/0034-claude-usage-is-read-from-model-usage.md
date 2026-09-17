@@ -17,7 +17,7 @@ The binary's own result schema describes the top-level block as "main agent loop
 
 A field comes from one block, never from both.
 When `modelUsage` is in use, a field that any one entry does not state as an integer is `None`: a sum over the entries that do state it would read as a whole-run total, and the top-level block's number counts a different scope.
-An entry that is not an object at all is a model whose counts cannot be read, so every count is `None` while `modelUsage` stays the source.
+Once `modelUsage` is in use, a non-object entry beside the object-shaped ones is a model whose counts cannot be read, so every count is `None` rather than a sum over the rest; when no entry is an object, `modelUsage` is not in use and the top-level block is read.
 When the top-level block is in use, its explicit zeros are zeros; the CLI reported them, and a nonzero cost alone does not prove a particular counter wrong.
 `total_tokens` stays `None`, as before, because claude's input count excludes cached tokens.
 
