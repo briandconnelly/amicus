@@ -1,6 +1,6 @@
 # Release activation: the marketplace pointer decides what users run
 
-**Status:** Proposed (2026-09-16).
+**Status:** Accepted (2026-09-16), recorded as ADR 0031.
 **Issue:** #117.
 **Supersedes on acceptance:** ADR 0015, and AGENTS.md rule 24 in its current form.
 
@@ -334,7 +334,7 @@ Pointer lag leaves users on a working release and is fixed by the same human PR 
 Three pull requests, because rule 9 keeps governance and `.github/` separate from ordinary work.
 
 1. **Design and checker.** This spec; a new ADR superseding 0015; `docs/RELEASING.md` steps 2, 3, 6 and 7 and the 0.4.0 transition rule; and the marketplace validation function in `scripts/check_release_state.py` with its tests, including the pre-activation rule and the representative negative cases above.
-   Two existing tests in `tests/test_packaging.py` encode ADR 0015's trailing pin and change with it: `test_mcp_json_installs_this_repo_at_a_published_release_tag` gains `pin == amicus.__version__`, which its docstring currently declines to assert, and `test_readme_example_mirrors_the_mcp_json_pin`'s docstring stops referring to a pin-move PR.
+   Two existing tests in `tests/test_packaging.py` encode ADR 0015's trailing pin and change with it: `test_mcp_json_installs_this_repo_at_a_published_release_tag` becomes `test_mcp_json_installs_this_repo_at_its_own_release_tag` and gains `pin == amicus.__version__`, which its docstring had declined to assert, and `test_readme_example_mirrors_the_mcp_json_pin`'s docstring stops referring to a pin-move PR.
    `.claude-plugin/marketplace.json` does not move here, and does not need to: its current `"./"` passes under the pre-activation rule.
 2. **Governance.** AGENTS.md rules 19 and 24, and the "Releases" section of its context notes.
 3. **Workflow.** One job added to the existing `.github/workflows/test.yml`, running the marketplace check on pull requests with tags and the base commit fetched, each new `uses:` pinned by SHA per rule 14.

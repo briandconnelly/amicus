@@ -88,8 +88,8 @@ Second, its "Status and known limits" section must not claim anything the releas
 Rules 19 and 20 together shape this sequence, and a future maintainer should not "simplify" it back.
 Rule 20 requires the live-gate evidence to cover the exact commit being tagged.
 Rule 19 requires the tag push to be the only work that follows the PR C merge, so that `main`'s version literals and the published tag agree without a gap.
-Since ADR 0015 that promptness is no longer about a broken install path: `.mcp.json` pins the newest **already-published** release, so `main` never sends a fresh install to a tag that does not exist.
-The single exception was the first release, which had no earlier tag to name; 0.1.0 was tagged and published on 2026-09-09, which closed that window permanently.
+Since ADR 0031, `.mcp.json` pins the release being made, and plugin users install the tag the marketplace pointer names rather than `main`, so promptness no longer protects plugin installs.
+It still matters for two readers of `main`: someone copying README's "Any other MCP client" command, whose pin names a tag that does not exist until it is pushed, and, for the 0.4.0 transition only, every plugin user, because until step 7 merges `main` is still the install source.
 The tag does not have to point at `main`'s head; it has to point at the commit the evidence covers.
 An ordinary merge commit keeps the PR C branch tip in `main`'s history as one of the merge commit's two parents, so tagging that branch tip is legitimate, and it is exactly the commit the evidence names — no fast-forward or branch-protection change is required to satisfy both rules.
 The tag therefore deliberately points at a commit that is in `main`'s history but is not `main`'s head, and the checks in step 5 below prove the two commits' trees are identical.
@@ -102,9 +102,9 @@ The tag therefore deliberately points at a commit that is in `main`'s history bu
    0.1.0 predates this convention and is dated `2026-09-08`, its local date; it was tagged on 2026-09-09 UTC, and that section is left as it shipped rather than rewritten.
    Change no version literal unless the version itself is changing.
    The literals are `pyproject.toml`, `src/amicus/__init__.py` and both `plugin.json` files.
-   Do **not** touch `.mcp.json`: per ADR 0015 its pin names an already-published release, so during this PR it correctly trails the version being released by one, and step 7 moves it after the tag exists.
-   0.1.0 was the bootstrap: no literal moved, and its `@v0.1.0` pin named the tag that release itself created, because no earlier release existed.
-   That case is closed and does not recur.
+   Move `.mcp.json`'s pin to `vX.Y.Z` with the other literals: per ADR 0031 it names the release being made, so a host installing this tag runs this release's server.
+   Move README's "Any other MCP client" example to the same pin in this PR; `tests/test_packaging.py::test_readme_example_mirrors_the_mcp_json_pin` fails if the two differ.
+   Do **not** touch `.claude-plugin/marketplace.json`: its pointer names the previous release until step 7 advances it.
    Regenerate `uv.lock` with `uv lock` in this same PR, per AGENTS.md rule 19 — `uv.lock` mirrors the version rather than declaring it, and `prek.toml`'s `uv-lock-check` hook runs `uv lock --check` whenever `pyproject.toml` changes, so a release PR that skips this fails its own hook.
 3. Check out the PR C branch tip (not `main`) into a clean tree and confirm `git status --porcelain` is empty.
    Record the branch tip's SHA; call it the release commit, and note it well — it is the commit that gets tagged, and it will not be `main`'s head after the next step.
@@ -114,7 +114,15 @@ The tag therefore deliberately points at a commit that is in `main`'s history bu
    The script itself forces `AMICUS_REQUIRE_LIVE=1` into each backend's subprocess environment, so prefixing the command with it is optional; its own usage string documents `AMICUS_REQUIRE_LIVE=1 uv run python scripts/record_live_gate_evidence.py`, and either form runs the same live gates.
    This spends real quota on all three backends and requires the maintainer's authorization in the session where it runs.
    Run `AMICUS_RELEASE_CHECK=1 uv run pytest tests/test_release_evidence.py -v --no-cov` and confirm the freshness assertion passes.
-   Run `uv run python scripts/check_release_state.py` and confirm it prints `release predicate holds`.
+   Create the annotated tag **locally**, exactly as it will be pushed, so the checker can verify the pin and the tag before anything leaves this machine:
+
+   ```sh
+   git tag -a vX.Y.Z -F .release-evidence/live-gates.json --cleanup=verbatim <release-sha>
+   ```
+
+   Run `uv run python scripts/check_release_state.py --tag vX.Y.Z --commit <release-sha>` and confirm it prints `release predicate holds for vX.Y.Z`.
+   It needs the local tag: `.mcp.json` pins `vX.Y.Z`, and the checker requires that tag to exist, with no pre-tag exception.
+   If this step must be redone because the branch gained a commit, delete the local tag with `git tag -d vX.Y.Z` first, then recreate it against the new tip.
    That is the same tree check the `verify` job will run after the tag is pushed, so a failure here is a failure you would otherwise discover with an immutable tag already in place.
    Rehearse the real install path against the release commit, which is the check that used to be impossible before the tag existed:
 
@@ -146,10 +154,12 @@ The tag therefore deliberately points at a commit that is in `main`'s history bu
    If it instead succeeds but prints a different SHA, the merge was an ordinary merge commit but of a branch tip the recorded evidence does not cover — the PR C branch gained a commit after step 3 was run — and the release must stop for that reason instead; do not diagnose this case as a squash or rebase.
    Run `git diff --stat <release-sha> origin/main`.
    It must print nothing, which is what proves the tree the tag will point at and the tree `main` now holds are identical; any output means something else merged in between, and the release must stop.
-6. Push the tag pointing at the release commit, not at `main`'s head, as an **annotated** tag whose message is the evidence record verbatim:
+6. Push the annotated tag step 3 created, which points at the release commit rather than `main`'s head and whose message is the evidence record verbatim.
+   Do not create it again: `git tag -a` on a name that already exists fails with `fatal: tag 'vX.Y.Z' already exists`.
+   Rerun the checker against it immediately before pushing:
 
    ```sh
-   git tag -a vX.Y.Z -F .release-evidence/live-gates.json --cleanup=verbatim <release-sha>
+   uv run python scripts/check_release_state.py --tag vX.Y.Z --commit <release-sha>
    git push origin vX.Y.Z
    ```
 
@@ -157,15 +167,15 @@ The tag therefore deliberately points at a commit that is in `main`'s history bu
    `--cleanup=verbatim` keeps the JSON byte-for-byte; the default cleanup would also parse, but exactness is free here.
    Confirm before pushing that `git cat-file -t vX.Y.Z` prints `tag` (not `commit`, which would mean a lightweight tag) and that `git tag -l --format='%(contents)' vX.Y.Z | python -c 'import json,sys; json.load(sys.stdin)'` exits 0.
    Nothing but step 5's read-only checks happens between step 4 and step 6.
-7. Once the publish has completed and the post-tag checks below have passed, open a small `chore(release):` PR that moves `.mcp.json`'s pin to `vX.Y.Z`.
+7. Once the publish has completed and the post-tag checks below have passed, open a small `chore(release):` PR that advances `.claude-plugin/marketplace.json`'s pointer to the new tag.
+   A release is not complete until this PR merges: tagging and publishing expose it to no plugin user, because hosts install the tag the pointer names.
+   Set `ref` to `vX.Y.Z` and `sha` to `git rev-parse vX.Y.Z^{commit}` — the peeled commit, not the tag object — then run `uv run python scripts/check_release_state.py --base origin/main` and confirm it prints `marketplace pointer check holds.`
+   It is not a release under rule 19 and needs no live-gate evidence: it moves a pointer to a tag that is already published.
+   Unlike ADR 0015's pin-move it replaces, it reaches installed plugins, because the version at the new tag differs from the one they hold.
 
-   This is the pin-move PR that ADR 0015 makes part of every release, and it is deliberately *after* the tag rather than before it: the pin names a release that already exists, so moving it earlier would be the very thing ADR 0015 removes.
-   It is not a release under rule 19, and it needs no live-gate evidence — it moves a pointer to a tag that is already published.
-   The pin lives in **two** places, and both move in this PR: `.mcp.json`'s `--from` source, and the mirrored example under README's "Any other MCP client".
-   `tests/test_packaging.py::test_readme_example_mirrors_the_mcp_json_pin` binds them, so moving only one fails the gate rather than shipping a README that advertises the previous release.
-   Until it merges, `main` sends a fresh install to the previous release, which works.
-   That is the intended degradation, so do not treat it as an outage or rush the PR through without its checks.
-   This step did not apply to 0.1.0, whose pin already reads `@v0.1.0` for the bootstrap reason above; 0.2.0 is the first release to perform it.
+   **The 0.4.0 transition.**
+   Until this step first merges for 0.4.0, the entry's `source` is `"./"` and plugin users install `main` directly.
+   For that release only, this PR replaces `"./"` with the pointer, and nothing else merges to `main` between PR C and this PR: an install from `main` in that interval is keyed `0.4.0`, and the pointer PR, also `0.4.0`, will not replace it.
 
 A maintainer who instead wants the tag to be `main`'s own head has a permitted alternative: a direct fast-forward push of the PR C branch to `main` (`git checkout main && git merge --ff-only <pr-branch> && git push origin main`) achieves that, if this repository's branch protection allows a direct push to `main`.
 This runbook cannot say whether it does: `gh api repos/briandconnelly/amicus/branches/main/protection` returned `403 Resource not accessible by integration` to the token available while writing it, so that setting is unverified here, and this document does not assert it either way.
@@ -208,7 +218,7 @@ They confirm the release actually landed; they are not a pre-tag gate.
    Assert `serverInfo.name == "amicus"` and the expected version in the reply.
    The fresh `UV_CACHE_DIR` is part of the command, not a note beside it: a warm cache answers without resolving anything, so a copy-pasted command without it can pass while proving nothing.
    Step 3's rehearsal already proved transport, build and handshake against the release commit's SHA, so what this adds is narrow but real — that the tag *ref* resolves, which is all that separated the rehearsal from the thing itself.
-   This is what step 7's pin-move PR is waiting on: do not move the pin to a tag whose install you have not just run.
+   This is what step 7's pointer PR is waiting on: do not point the marketplace at a tag whose install you have not just run.
 3. Run a negative control: the same command against a version that does not exist must fail.
    Without it, a warm cache or a silently-substituted binary would make check 2 pass no matter what.
 

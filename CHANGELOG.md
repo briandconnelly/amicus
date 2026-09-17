@@ -47,6 +47,19 @@ per-change, as its own lead says.
 
 ### Fixed
 
+- A plugin install no longer runs an older release's server than its own skills (#117,
+  ADR 0031, superseding ADR 0015). Hosts install the plugin into a directory keyed by
+  `plugin.json`'s version and never re-read it until that version changes, so an install
+  taken while `.mcp.json` still named the previous release -- as ADR 0015 required between a
+  release and its pin-move PR -- kept launching that previous server, and any install taken
+  mid-cycle froze `main`'s newest skills against it. `.mcp.json` now names its own release,
+  and the marketplace entry will pin a published release tag by `ref` and `sha` from 0.4.0,
+  so hosts install a consistent tag snapshot rather than `main`. Installs already stuck
+  recover when 0.4.0's version change reaches them. `scripts/check_release_state.py` checks
+  the pointer's shape, that it trails the release and is consistent at its tag, and gains a
+  `--base` pull-request mode; `docs/RELEASING.md` now creates the release tag locally before
+  checking and advances the pointer after publishing.
+
 - **Security.** An exception's own text can no longer reach a background job's `stderr.log`
   (#128). The job worker never called `obs.configure`, so nothing in that process installed
   the handlers that withhold exception text, and an `amicus.*` record fell through to
