@@ -199,17 +199,22 @@ def test_classify_failure_ignores_last_message_artifact(pinned_codex_bin, diagno
 
 @pytest.mark.parametrize("source", ["stderr", "error", "turn.failed"])
 @pytest.mark.parametrize(
-    ("message", "delay"),
+    ("message", "delay", "reset"),
     [
-        ("You've hit your usage limit. Try again at Sep 19th, 2026 8:37 AM.", None),
-        ("USAGE LIMIT reached", None),
-        ("usage limit; try again in 2 hours", None),
-        ("usage limit; try again in 5 seconds", 5000),
-        ("usage limit; Retry-After: 0", 0),
-        ("rate limit reached", 60000),
+        (
+            "You've hit your usage limit. Try again at Sep 19th, 2026 8:37 AM.",
+            None,
+            "Sep 19th, 2026 8:37 AM",
+        ),
+        ("You've hit your usage limit ... or try again at 12:39 PM.", None, "12:39 PM"),
+        ("USAGE LIMIT reached", None, None),
+        ("usage limit; try again in 2 hours", None, None),
+        ("usage limit; try again in 5 seconds", 5000, None),
+        ("usage limit; Retry-After: 0", 0, None),
+        ("rate limit reached", 60000, None),
     ],
 )
-def test_usage_limit_retry_guidance_reaches_wire(pinned_codex_bin, source, message, delay):
+def test_usage_limit_retry_guidance_reaches_wire(pinned_codex_bin, source, message, delay, reset):
     plugin, backend = cf.make_backend()
     event = {"type": source, "error": {"message": message}}
     stdout = json.dumps(event) if source != "stderr" else ""
@@ -223,10 +228,20 @@ def test_usage_limit_retry_guidance_reaches_wire(pinned_codex_bin, source, messa
     assert error["retry_after_ms"] == delay
     if delay is None:
         assert error["repair"]["next_step"] == "inspect_and_retry"
-        assert "reset time" in error["repair"]["alternative"]
         assert "Do not automatically retry" in error["repair"]["alternative"]
+        if reset is None:
+            assert "reset time" in error["repair"]["alternative"]
+            assert "details" not in error
+        else:
+            # The reset phrase codex printed is the only place the caller can learn the
+            # delay, so it rides the message, the repair and details.reason verbatim.
+            assert reset in error["message"]
+            assert reset in error["repair"]["alternative"]
+            assert error["details"]["reason"] == f"codex reported the limit lifts at {reset}"
+            assert "time zone" in error["repair"]["alternative"]
     else:
         assert error["repair"]["next_step"] == "retry_after_delay"
+        assert reset is None
 
 
 def test_list_models_auth_probe_and_scrub_env(pinned_codex_bin, monkeypatch):

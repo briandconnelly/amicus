@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from amicus.sdk.backend import contract as _pc
+from amicus.sdk.core import redaction
 
 CODEX_BIN = "codex"
 
@@ -375,6 +376,28 @@ def parse_retry_after_ms(*texts: str | None) -> int | None:
 def is_usage_limit(*texts: str | None) -> bool:
     """A plan usage limit may reset days later; no short backoff can be assumed."""
     return "usage limit" in _blob(texts).lower()
+
+
+# codex-cli 0.154.0 states a usage-limit reset as a clock time with no zone,
+# either `try again at Sep 19th, 2026 8:37 AM.` or `try again at 12:39 PM.` (both captured
+# 2026-09-17). The phrase is echoed, not parsed: without a zone it cannot become a delay.
+USAGE_LIMIT_RESET_MAX_CHARS = 64
+# The phrase ends at a sentence period, a line end, or the closing quote/brace of the
+# JSON event it was read from (diagnostics carry the raw event lines).
+_USAGE_LIMIT_RESET_PATTERN = re.compile(
+    r"try\s+again\s+at\s+(?P<when>[^\n\"}\]]+?)\s*(?:\.(?=[\s\"}\]]|$)|(?=[\"}\]])|$)",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+
+def parse_usage_limit_reset(*texts: str | None) -> str | None:
+    """The reset phrase codex printed after `try again at`, sanitized and bounded, else
+    None. Relative delays (`try again in ...`) belong to :func:`parse_retry_after_ms`."""
+    match = _USAGE_LIMIT_RESET_PATTERN.search(_blob(texts))
+    if match is None:
+        return None
+    when = redaction.sanitize_echo(match.group("when")).strip()
+    return when[:USAGE_LIMIT_RESET_MAX_CHARS] or None
 
 
 # --- The SDK contract -------------------------------------------------------------------

@@ -225,3 +225,40 @@ def test_static_catalog_and_version_pins():
     assert not c.MODEL_SLUG_PATTERN.match("-bad")
     assert {(0, 153), (0, 154)} <= c.SUPPORTED_VERSIONS
     assert c.RATE_LIMIT_DEFAULT_BACKOFF_MS == 60_000
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        # codex-cli 0.154.0's two observed shapes (2026-09-17): date+time and time only.
+        (
+            "You've hit your usage limit. Upgrade to Pro (https://chatgpt.com/explore/pro), "
+            "visit https://chatgpt.com/codex/settings/usage to purchase more credits or try "
+            "again at Sep 19th, 2026 8:37 AM.",
+            "Sep 19th, 2026 8:37 AM",
+        ),
+        ("usage limit ... or try again at 12:39 PM.", "12:39 PM"),
+        ("usage limit; try again at 12:39 PM", "12:39 PM"),
+        ("usage limit; try again at 12:39 PM\nmore", "12:39 PM"),
+        # Diagnostics carry the raw JSON event line, so the phrase ends in `."}}`.
+        ('{"type":"error","message":"usage limit or try again at 12:39 PM."}', "12:39 PM"),
+        (
+            '{"error":{"message":"usage limit; try again at Sep 19th, 2026 8:37 AM."}}',
+            "Sep 19th, 2026 8:37 AM",
+        ),
+        # Relative delays and plain limits carry no reset phrase.
+        ("usage limit; try again in 5 seconds", None),
+        ("usage limit reached", None),
+        ("rate limit; retry-after 9", None),
+        (None, None),
+    ],
+)
+def test_parse_usage_limit_reset(text, expected):
+    assert c.parse_usage_limit_reset(text) == expected
+
+
+def test_parse_usage_limit_reset_is_bounded_and_sanitized():
+    reset = c.parse_usage_limit_reset("try again at " + "x" * 500 + ".")
+    assert reset is not None and len(reset) <= c.USAGE_LIMIT_RESET_MAX_CHARS
+    reset = c.parse_usage_limit_reset("try again at 1:00\x1b[31m PM.")
+    assert reset is not None and "\x1b" not in reset

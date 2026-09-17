@@ -48,9 +48,13 @@ per-change, as its own lead says.
 ### Fixed
 
 - Codex usage-limit failures without a parseable relative delay now report
-  `retry_after_ms: null` and direct callers to check the reset time before retrying (#165).
-  They no longer invent a 60-second delay for a reset that may be days away.
-  Explicit relative delays and the fallback for ordinary rate limits are unchanged.
+  `retry_after_ms: null` with an `inspect_and_retry` repair instead of inventing a
+  60-second delay for a reset that may be days away (#165). When codex states the reset
+  as a clock time (`try again at Sep 19th, 2026 8:37 AM.` or `try again at 12:39 PM.`),
+  that phrase is echoed in `error.message`, `error.details.reason` and the repair, marked
+  as a clock time with no time zone stated, so the caller can read the reset it must wait
+  for. Explicit relative delays and the 60-second fallback for ordinary rate limits are
+  unchanged.
 
 - Codex failure classification now reads backend error events and stderr instead of
   matching authentication, contract-drift and rate-limit terms in model answers or tool
