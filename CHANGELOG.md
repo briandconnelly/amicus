@@ -56,6 +56,25 @@ per-change, as its own lead says.
   creates to run git with its hooks disabled is now named `amicus-nohooks-*` under the system
   temp dir, not `pontonier-nohooks-*`. Nothing keys on that name.
 
+### Removed
+
+- **Breaking.** The three siblings' environment names — `CODEX_IN_CLAUDE_*`, `MOONBRIDGE_*`
+  and `CLAUDE_IN_CODEX_*` — are no longer read (#176), as 0.3.0's warnings and
+  `docs/MIGRATION.md` said they would not be from 0.4.0. An operator who still sets one gets
+  the `AMICUS_*` default instead of the value, which for `CODEX_IN_CLAUDE_ISOLATION` or
+  `CLAUDE_IN_CODEX_CLAUDE_CONFIG` is looser than what was set. Each former name is now a
+  tombstone on the `AMICUS_*` declaration that replaced it: a name still set is reported by
+  `amicus_backends`, in `env_warnings` for a global setting and in the backend's
+  `status.warnings` for a backend one (so only while that backend is enabled and loaded),
+  naming the `AMICUS_*` name to set; its value is never read, not even to recognise a
+  placeholder, so it neither supplies the setting nor conflicts with the `AMICUS_*` value,
+  and the conflict error of the window is gone with it. The tombstones have no removal window: they
+  are the migration table's data and a diagnostic, not a compatibility path. The shim itself
+  (`EnvVar.legacy`) and the release guard that refuses a release at or past
+  `LEGACY_REMOVAL_VERSION` while an alias is declared both stay, so a later rename gets the
+  same window. `FINGERPRINT` moves to `schema-34` only because the `amicus_backends`
+  description no longer says "legacy-env warnings"; no schema changes.
+
 ### Fixed
 
 - **Surface.** A Claude budget stop no longer reports `input_tokens: 0` and

@@ -142,7 +142,7 @@ The worktree prefix `amicus-wt-` is orchestration policy, not a plugin choice (t
 
 Paid, sync (`task=True` when tasks enabled): `amicus_consult`, `amicus_review_changes`, `amicus_delegate` (feature `delegate`), `amicus_adversarial_review` (feature `adversarial_review`).
 Async twins: the four `_async` variants (drop `timeout_seconds`/`detail`; `idempotency_key` is on both since ADR 0020).
-Free: `amicus_review_changes_dry_run` (and, last in the group, its deprecated alias `amicus_dry_run`, ADR 0028), `amicus_delegate_dry_run`, `amicus_backends` (catalog + readiness probe + option applicability + legacy-env warnings; optional `backend` filter; replaces per-backend `*_status`), `amicus_models(backend)`, `amicus_capabilities` (error catalog, schemas on request, fingerprint + surface digest, annotation policy).
+Free: `amicus_review_changes_dry_run` (and, last in the group, its deprecated alias `amicus_dry_run`, ADR 0028), `amicus_delegate_dry_run`, `amicus_backends` (catalog + readiness probe + option applicability + env warnings, including a retired sibling name still set; optional `backend` filter; replaces per-backend `*_status`), `amicus_models(backend)`, `amicus_capabilities` (error catalog, schemas on request, fingerprint + surface digest, annotation policy).
 Jobs: `amicus_job_status`, `amicus_job_result`, `amicus_job_consume_result`, `amicus_job_cancel`, `amicus_job_list` (all backends; `backend` and `task_id` filters; a consume that delivers a stored envelope reports its discard outcome in `meta.consume`, ADR 0022).
 Codex `transfer` deferred.
 
@@ -274,10 +274,12 @@ defaults, `plugin.repair_overrides` win per code, backend-local codes are preser
 ### Config
 
 `AMICUS_*` global and `AMICUS_<ID>_*` per-backend namespaces declared by `EnvNamespace`.
-Legacy shim: legacy name read only when the amicus name is unset; conflict is an error;
-every legacy read is a warning in `amicus_backends` with a removal version. `.mcp.json`
-`env_vars` generated from declarations plus vendor auth variables. `docs/MIGRATION.md`
-asserted equal to declarations by a test. `${VAR}` placeholder check kept.
+Legacy shim: legacy name read only when the amicus name is unset; conflict is an error; every legacy read is a warning in `amicus_backends` with a removal version.
+Since 0.4.0 no declaration carries an alias (#176): each former sibling name is a `removed` tombstone whose value is never read, with no removal window of its own.
+A tombstone still set is reported in `amicus_backends`, in `env_warnings` for a global setting and in the backend's `status.warnings` for a backend setting, so a backend's tombstone is reported only while that backend is enabled and loaded.
+`.mcp.json` `env_vars` generated from declarations plus vendor auth variables.
+`docs/MIGRATION.md` asserted equal to declarations by a test.
+`${VAR}` placeholder check kept.
 
 ### Testing architecture
 

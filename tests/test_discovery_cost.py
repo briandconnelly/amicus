@@ -163,6 +163,12 @@ the estimated cost can exceed it". A recorded budget stop carried the cost 4.972
 threshold on one tiny call, and a caller who reads the field as a cap budgets on it; the
 sentence that prevents that has to be on the wire, since the field is where it is read. It states
 the mechanism and no overshoot bound.
+
+The schema-33 -> schema-34 move (-7 bytes on every profile: all 116316 -> 116309) is the
+`amicus_backends` description saying "env warnings" where it said "legacy-env warnings" (#176):
+the sibling env names are no longer read, so there is no legacy-env warning to name, and the
+retired-name warning the tombstones add is an env warning like any other. Nothing else on the
+wire moves. MEASURED and BUDGET both move down by the 7 bytes, so the budget keeps no headroom.
 """
 
 from __future__ import annotations
@@ -172,7 +178,7 @@ from tests.conftest import spawned_server_env
 
 from amicus import manifest
 
-MEASURED: dict[str, int] = {"all": 116316, "codex-kimi": 116324, "claude": 116316}
+MEASURED: dict[str, int] = {"all": 116309, "codex-kimi": 116317, "claude": 116309}
 # The budget is a literal, not MEASURED rounded up to the next kilobyte as it was until
 # 2026-09-14. The rounding left up to 1 KB of growth per bucket that no PR had to own, and
 # this file records three such accumulations (448 and 12 bytes in the paragraphs above, and
@@ -180,7 +186,7 @@ MEASURED: dict[str, int] = {"all": 116316, "codex-kimi": 116324, "claude": 11631
 # #94 that landed after it), each noticed only when the next deliberate raise re-measured.
 # Any growth now fails until a PR raises BUDGET and says why; a shrink passes and shows as
 # drift against MEASURED. Raising one means re-measuring and moving both.
-BUDGET: dict[str, int] = {"all": 116316, "codex-kimi": 116324, "claude": 116316}
+BUDGET: dict[str, int] = {"all": 116309, "codex-kimi": 116317, "claude": 116309}
 
 
 @pytest.mark.parametrize("profile", sorted(manifest.PROFILES))

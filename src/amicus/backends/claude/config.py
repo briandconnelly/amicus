@@ -1,7 +1,8 @@
-"""Claude-side configuration: the AMICUS_CLAUDE_* namespace (legacy CLAUDE_IN_CODEX_ shim),
-the resolved ClaudeConfig, version parsing, the API-key presence check and the workspace hook
-scan. Ported from claude-in-codex `config.py`; the timeout/input/git/job knobs are not
-ported (the global AMICUS_* settings cover them) and there is no extra-args channel."""
+"""Claude-side configuration: the AMICUS_CLAUDE_* namespace (the CLAUDE_IN_CODEX_ names are
+retired since 0.4.0), the resolved ClaudeConfig, version parsing, the API-key presence check
+and the workspace hook scan. Ported from claude-in-codex `config.py`; the timeout/input/git/job
+knobs are not ported (the global AMICUS_* settings cover them) and there is no extra-args
+channel."""
 
 from __future__ import annotations
 
@@ -17,7 +18,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Mapping
 
 PREFIX = "AMICUS_CLAUDE_"
-_LEGACY = "CLAUDE_IN_CODEX_"
+_RETIRED = "CLAUDE_IN_CODEX_"  # not read; tombstones only (#176)
 
 ENV = EnvNamespace(
     prefix=PREFIX,
@@ -26,7 +27,6 @@ ENV = EnvNamespace(
             f"{PREFIX}BIN",
             "Explicit path to the claude executable; used exactly as given.",
             None,
-            (),
         ),
         EnvVar(
             f"{PREFIX}CONFIG_MODE",
@@ -34,40 +34,40 @@ ENV = EnvNamespace(
             "Adversarial reviews default to safe even when inherit/scoped is configured, "
             "or bare when bare is configured. Explicit per-call config_mode overrides apply.",
             contract.DEFAULT_CONFIG_MODE,
-            (f"{_LEGACY}CLAUDE_CONFIG",),
+            removed=(f"{_RETIRED}CLAUDE_CONFIG",),
         ),
         EnvVar(
             f"{PREFIX}ACCESS",
             "Default backend_options.access: toolless | readonly. Unset, reviews default to "
             "readonly and other verbs to toolless; set, it applies to every verb.",
             contract.DEFAULT_ACCESS,
-            (f"{_LEGACY}ACCESS",),
+            removed=(f"{_RETIRED}ACCESS",),
         ),
         EnvVar(
             f"{PREFIX}MODEL",
             "Default model slug when a call omits `model`.",
             None,
-            (f"{_LEGACY}MODEL",),
+            removed=(f"{_RETIRED}MODEL",),
         ),
         EnvVar(
             f"{PREFIX}REASONING_EFFORT",
             "Default reasoning effort when a call omits `reasoning_effort`: "
             "low | medium | high | xhigh | max.",
             contract.DEFAULT_EFFORT,
-            (f"{_LEGACY}EFFORT",),
+            removed=(f"{_RETIRED}EFFORT",),
         ),
         EnvVar(
             f"{PREFIX}MAX_BUDGET_USD",
             "Default backend_options.max_budget_usd (0.01-5.00), a best-effort stop threshold "
             "checked between model calls.",
             f"{contract.DEFAULT_MAX_BUDGET_USD}",
-            (f"{_LEGACY}MAX_BUDGET_USD",),
+            removed=(f"{_RETIRED}MAX_BUDGET_USD",),
         ),
         EnvVar(
             f"{PREFIX}SUPPORTED_MAJORS",
             "Comma-separated claude major versions treated as supported (advisory).",
             None,
-            (f"{_LEGACY}SUPPORTED_MAJORS",),
+            removed=(f"{_RETIRED}SUPPORTED_MAJORS",),
         ),
     ),
 )
@@ -86,7 +86,7 @@ class ClaudeConfig:
     supported_majors: frozenset[int]
     warnings: tuple[str, ...] = ()
     errors: tuple[str, ...] = ()
-    # Whether the operator set AMICUS_CLAUDE_ACCESS (or its legacy name) at all. An invalid
+    # Whether the operator set AMICUS_CLAUDE_ACCESS at all. An invalid
     # value counts: _choice falls back to toolless with a warning, and that fallback binds
     # every verb, so a mistyped restriction never loosens into the review default.
     access_explicit: bool = False

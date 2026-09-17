@@ -48,7 +48,9 @@ def test_unsupported_version_missing_flags_and_bad_extra_args_warn(pinned_kimi_b
     rep = plugin.status.probe()
     joined = "\n".join(rep.warnings)
     assert rep.installed and st.VERSION_WARNING in joined and "--agent-file" in joined
-    assert "AMICUS_KIMI_EXTRA_ARGS is invalid" in joined and "read from legacy" in joined
+    assert "AMICUS_KIMI_EXTRA_ARGS is invalid" in joined
+    # A retired sibling name reaches the backend's status warnings (#176).
+    assert "MOONBRIDGE_MODEL is set but not read" in joined
 
 
 def test_not_installed_bad_override_and_no_provider(pinned_kimi_bin, monkeypatch, tmp_path):

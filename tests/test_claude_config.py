@@ -1,4 +1,4 @@
-"""AMICUS_CLAUDE_* resolution: defaults, the legacy shim, degradations, the key check, hooks."""
+"""AMICUS_CLAUDE_* resolution: defaults, retired names, degradations, the key check, hooks."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ def test_defaults_when_nothing_is_set():
     assert cfg.warnings == () and cfg.errors == ()
 
 
-def test_declared_variables_and_legacy_twins():
+def test_declared_variables_and_retired_twins():
     names = {v.name: v for v in cc.ENV.vars}
     assert set(names) == {
         "AMICUS_CLAUDE_BIN",
@@ -26,24 +26,30 @@ def test_declared_variables_and_legacy_twins():
         "AMICUS_CLAUDE_MAX_BUDGET_USD",
         "AMICUS_CLAUDE_SUPPORTED_MAJORS",
     }
-    assert names["AMICUS_CLAUDE_BIN"].legacy == ()
-    assert names["AMICUS_CLAUDE_CONFIG_MODE"].legacy == ("CLAUDE_IN_CODEX_CLAUDE_CONFIG",)
-    assert names["AMICUS_CLAUDE_REASONING_EFFORT"].legacy == ("CLAUDE_IN_CODEX_EFFORT",)
-    assert names["AMICUS_CLAUDE_MAX_BUDGET_USD"].legacy == ("CLAUDE_IN_CODEX_MAX_BUDGET_USD",)
+    assert all(v.legacy == () for v in names.values())
+    assert names["AMICUS_CLAUDE_BIN"].removed == ()
+    assert names["AMICUS_CLAUDE_CONFIG_MODE"].removed == ("CLAUDE_IN_CODEX_CLAUDE_CONFIG",)
+    assert names["AMICUS_CLAUDE_REASONING_EFFORT"].removed == ("CLAUDE_IN_CODEX_EFFORT",)
+    assert names["AMICUS_CLAUDE_MAX_BUDGET_USD"].removed == ("CLAUDE_IN_CODEX_MAX_BUDGET_USD",)
     assert "EXTRA_ARGS" not in " ".join(names)
 
 
-def test_legacy_value_is_read_when_the_amicus_name_is_unset_and_warns():
+def test_a_retired_name_is_reported_and_never_read():
+    """#176: the CLAUDE_IN_CODEX_* names are tombstones since 0.4.0. The defaults apply,
+    which for ACCESS and CONFIG_MODE means the sibling's stricter setting is NOT carried
+    over silently: the warning is what tells the operator."""
     cfg = cc.load_config(
         {"CLAUDE_IN_CODEX_CLAUDE_CONFIG": "safe", "CLAUDE_IN_CODEX_ACCESS": "readonly"}
     )
-    assert cfg.config_mode == "safe" and cfg.access == "readonly"
-    assert any("CLAUDE_IN_CODEX_CLAUDE_CONFIG" in w for w in cfg.warnings)
-
-
-def test_conflicting_legacy_and_amicus_values_are_an_error_and_the_amicus_value_wins():
-    cfg = cc.load_config({"AMICUS_CLAUDE_MODEL": "opus", "CLAUDE_IN_CODEX_MODEL": "sonnet"})
-    assert cfg.model == "opus" and any("AMICUS_CLAUDE_MODEL" in e for e in cfg.errors)
+    assert cfg.config_mode == "inherit" and cfg.access == "toolless" and cfg.errors == ()
+    assert any(
+        "CLAUDE_IN_CODEX_CLAUDE_CONFIG is set but not read" in w
+        and "AMICUS_CLAUDE_CONFIG_MODE" in w
+        for w in cfg.warnings
+    )
+    assert any("CLAUDE_IN_CODEX_ACCESS is set but not read" in w for w in cfg.warnings)
+    pair = cc.load_config({"AMICUS_CLAUDE_MODEL": "opus", "CLAUDE_IN_CODEX_MODEL": "sonnet"})
+    assert pair.model == "opus" and pair.errors == ()
 
 
 def test_invalid_values_degrade_to_the_default_with_a_warning():
@@ -119,19 +125,16 @@ def test_access_explicit_tracks_whether_the_operator_set_access_at_all():
         {},
         {"AMICUS_CLAUDE_ACCESS": ""},
         {"AMICUS_CLAUDE_ACCESS": "${AMICUS_CLAUDE_ACCESS}"},
-        # The empty current name conflicts with the legacy one: a reported config error in
-        # which, as for every AMICUS_CLAUDE_* setting, the current name's value is kept.
+        # The retired name is a tombstone (#176): it neither sets ACCESS nor makes it explicit.
+        {"CLAUDE_IN_CODEX_ACCESS": "toolless"},
         {"AMICUS_CLAUDE_ACCESS": "", "CLAUDE_IN_CODEX_ACCESS": "toolless"},
     )
     for environ in unset:
         assert cc.load_config(environ).access_explicit is False, environ
-    conflicted = cc.load_config({"AMICUS_CLAUDE_ACCESS": "", "CLAUDE_IN_CODEX_ACCESS": "toolless"})
-    assert conflicted.access == "toolless" and conflicted.errors
     explicit = (
         ({"AMICUS_CLAUDE_ACCESS": "toolless"}, "toolless"),
         ({"AMICUS_CLAUDE_ACCESS": "readonly"}, "readonly"),
         ({"AMICUS_CLAUDE_ACCESS": "tooless"}, "toolless"),
-        ({"CLAUDE_IN_CODEX_ACCESS": "toolless"}, "toolless"),
         ({"AMICUS_CLAUDE_ACCESS": "toolless", "CLAUDE_IN_CODEX_ACCESS": "readonly"}, "toolless"),
     )
     for environ, access in explicit:

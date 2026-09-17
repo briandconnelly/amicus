@@ -21,9 +21,9 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 # sha256 of each profile's canonical manifest JSON; regenerate per the failure message.
 EXPECTED_MANIFEST_HASH: dict[str, str] = {
-    "all": "ab9ddd8d72cc10a24e9ff74e5220478e3e8c88fd7ac0d4cb1a01938eb202b7f1",
-    "codex-kimi": "3b275c2eab06b1018fea62cfb054d56116b775f72500565da1f1a6eb09d800e6",
-    "claude": "d07a0b1de4f61c8c75ae4ad91b2df926e5324222ef8e0d2cb0ccbd83ae37e515",
+    "all": "49b3001107f43a66798ec782382f3840b85cb79641e9a2ca23133d5ab9712722",
+    "codex-kimi": "8077e76d62f5b063687d013b2eb64b2552d7a89b72ef8910a5af2eb5239b5cd9",
+    "claude": "3cfb11a9f7768bfcb8743cd03f058607b74adac95d570ab9cc2a535e202c406f",
 }
 
 _CACHING_SPEC_LIST_METHODS = (
@@ -216,10 +216,11 @@ def test_result_body_is_the_exact_line_text_or_an_error():
 
 
 def test_measurement_env_strips_every_namespace_the_server_reads(monkeypatch):
-    """The CLI's default subprocess environment: `AMICUS_` and each legacy alias namespace
-    are stripped, so the profile decides the configuration and an exported legacy
-    `*_LOG_FILE` is not opened by the measurement. Positive control: the unrelated
-    variable survives, so an over-eager filter would fail here too."""
+    """The CLI's default subprocess environment: `AMICUS_` and each retired sibling
+    namespace are stripped, so the profile decides the configuration and an exported
+    retired name is neither opened (it no longer can be, #176) nor reported as stale by
+    the measurement. Positive control: the unrelated variable survives, so an over-eager
+    filter would fail here too."""
     monkeypatch.setenv("CODEX_IN_CLAUDE_LOG_FILE", "/nonexistent/amicus-test-leak.log")
     monkeypatch.setenv("MOONBRIDGE_LOG_FILE", "/nonexistent/amicus-test-leak.log")
     monkeypatch.setenv("CLAUDE_IN_CODEX_TIMEOUT_SECONDS", "1")

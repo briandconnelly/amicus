@@ -1,5 +1,6 @@
 """Env declarations with a legacy shim: amicus name wins, legacy is read only when the
-amicus name is unset (with a warning), a conflict is an error."""
+amicus name is unset (with a warning), a conflict is an error. A `removed` name is a
+tombstone: its presence is reported, its value is never read."""
 
 from __future__ import annotations
 
@@ -17,6 +18,20 @@ NS = es.EnvNamespace(
             legacy=("CODEX_IN_CLAUDE_TIMEOUT_SECONDS", "MOONBRIDGE_TIMEOUT_SECONDS"),
         ),
         es.EnvVar("AMICUS_MODEL", "model", legacy=()),
+        es.EnvVar(
+            "AMICUS_ISOLATION",
+            "isolation",
+            default="inherit",
+            removed=("CODEX_IN_CLAUDE_ISOLATION", "MOONBRIDGE_ISOLATION"),
+        ),
+        # A later rename's shape: a live alias and a sibling tombstone on one declaration.
+        es.EnvVar(
+            "AMICUS_LOG_LEVEL",
+            "level",
+            default="WARNING",
+            legacy=("AMICUS_LOGLEVEL",),
+            removed=("MOONBRIDGE_LOG_LEVEL",),
+        ),
     ),
 )
 
@@ -26,7 +41,12 @@ def test_namespace_validates_its_shape():
         es.EnvNamespace(prefix="amicus_", vars=())
     with pytest.raises(ValueError, match="must start with"):
         es.EnvNamespace(prefix="AMICUS_", vars=(es.EnvVar("OTHER_X", "d"),))
-    assert NS.names() == ("AMICUS_TIMEOUT_SECONDS", "AMICUS_MODEL")
+    assert NS.names() == (
+        "AMICUS_TIMEOUT_SECONDS",
+        "AMICUS_MODEL",
+        "AMICUS_ISOLATION",
+        "AMICUS_LOG_LEVEL",
+    )
 
 
 def test_amicus_name_wins_and_default_applies():
@@ -91,3 +111,98 @@ def test_report_collects_warnings_errors_and_placeholders():
     assert rep.warnings == []
     rep = NS.report({"MOONBRIDGE_TIMEOUT_SECONDS": "45"})
     assert len(rep.warnings) == 1 and rep.errors == []
+
+
+# --- tombstones: a removed name is reported, never read ------------------------------------
+
+
+def test_a_removed_name_is_never_read_and_its_presence_is_a_warning():
+    r = NS.resolve("AMICUS_ISOLATION", {"CODEX_IN_CLAUDE_ISOLATION": "ignore-rules"})
+    # The default applies: the old value is not consulted, however different it is.
+    assert (r.value, r.source) == ("inherit", "default")
+    assert r.warning is not None
+    assert "CODEX_IN_CLAUDE_ISOLATION" in r.warning and "AMICUS_ISOLATION" in r.warning
+    assert es.SIBLING_ALIASES_REMOVED_IN in r.warning
+
+
+def test_the_tombstone_warning_quotes_the_fixed_version_not_the_guard_window(monkeypatch):
+    """Both literals are "0.4.0" today, so a warning built from the wrong one reads the
+    same; the guard window is moved to a distinct value here so that the warning's source
+    is observable (a Copilot review found the same-value form of this check could not fail)."""
+    monkeypatch.setattr(es, "LEGACY_REMOVAL_VERSION", "9.9.9")
+    r = NS.resolve("AMICUS_ISOLATION", {"CODEX_IN_CLAUDE_ISOLATION": "ignore-rules"})
+    assert r.warning and es.SIBLING_ALIASES_REMOVED_IN in r.warning
+    assert "9.9.9" not in r.warning
+    # Positive control on the patch: the shim's own warning does read the moved window.
+    shim = NS.resolve("AMICUS_TIMEOUT_SECONDS", {"MOONBRIDGE_TIMEOUT_SECONDS": "45"})
+    assert shim.warning and "9.9.9" in shim.warning
+
+
+def test_a_removed_name_beside_the_amicus_name_is_not_a_conflict():
+    r = NS.resolve(
+        "AMICUS_ISOLATION",
+        {"AMICUS_ISOLATION": "inherit", "CODEX_IN_CLAUDE_ISOLATION": "ignore-rules"},
+    )
+    assert (r.value, r.source) == ("inherit", "env")
+    assert r.warning and "CODEX_IN_CLAUDE_ISOLATION" in r.warning
+    two = NS.resolve(
+        "AMICUS_ISOLATION",
+        {"CODEX_IN_CLAUDE_ISOLATION": "a", "MOONBRIDGE_ISOLATION": "b"},
+    )
+    # Two disagreeing removed names are not a conflict either: neither value is read.
+    assert (two.value, two.source) == ("inherit", "default")
+    assert two.warning and "CODEX_IN_CLAUDE_ISOLATION" in two.warning
+    assert "MOONBRIDGE_ISOLATION" in two.warning
+
+
+def test_a_removed_name_holding_a_placeholder_is_still_reported():
+    """Presence only: the value is never read, not even to recognise a placeholder, and an
+    unexpanded `${...}` in a retired name is still a configuration that names it."""
+    r = NS.resolve("AMICUS_ISOLATION", {"CODEX_IN_CLAUDE_ISOLATION": "${ISOLATION}"})
+    assert (r.value, r.source) == ("inherit", "default")
+    assert r.warning and "CODEX_IN_CLAUDE_ISOLATION is set but not read" in r.warning
+    # And the public report does not classify it as a placeholder either: only names that
+    # are read get that check.
+    rep = NS.report({"CODEX_IN_CLAUDE_ISOLATION": "${ISOLATION}"})
+    assert rep.placeholders == [] and rep.errors == []
+    assert any("CODEX_IN_CLAUDE_ISOLATION is set but not read" in w for w in rep.warnings)
+
+
+def test_a_tombstone_survives_a_conflict_on_the_same_declaration():
+    """`resolve` raises on a conflict between names that are read, so `report` carries the
+    tombstone warning itself; a later rename that leaves a sibling tombstone beside a live
+    alias must not lose the diagnostic to the error."""
+    for environ in (
+        {"AMICUS_LOG_LEVEL": "INFO", "AMICUS_LOGLEVEL": "DEBUG", "MOONBRIDGE_LOG_LEVEL": "x"},
+        {"AMICUS_LOGLEVEL": "DEBUG", "MOONBRIDGE_LOG_LEVEL": "x"},
+    ):
+        rep = NS.report(environ)
+        assert any("MOONBRIDGE_LOG_LEVEL is set but not read" in w for w in rep.warnings), environ
+    with pytest.raises(es.EnvConflictError):
+        NS.resolve("AMICUS_LOG_LEVEL", {"AMICUS_LOG_LEVEL": "INFO", "AMICUS_LOGLEVEL": "DEBUG"})
+    conflicted = NS.report(
+        {"AMICUS_LOG_LEVEL": "INFO", "AMICUS_LOGLEVEL": "DEBUG", "MOONBRIDGE_LOG_LEVEL": "x"}
+    )
+    assert len(conflicted.errors) == 1 and "AMICUS_LOG_LEVEL" in conflicted.errors[0]
+    # And on the no-conflict path the two warnings ride one Resolved, joined.
+    r = NS.resolve("AMICUS_LOG_LEVEL", {"AMICUS_LOGLEVEL": "DEBUG", "MOONBRIDGE_LOG_LEVEL": "x"})
+    assert (r.value, r.source) == ("DEBUG", "legacy")
+    assert r.warning and "read from legacy AMICUS_LOGLEVEL" in r.warning
+    assert "MOONBRIDGE_LOG_LEVEL is set but not read" in r.warning
+
+
+def test_report_carries_a_removed_name_warning_beside_the_others():
+    rep = NS.report({"MOONBRIDGE_TIMEOUT_SECONDS": "45", "MOONBRIDGE_ISOLATION": "x"})
+    assert rep.errors == [] and rep.placeholders == []
+    assert len(rep.warnings) == 2, rep.warnings
+    assert any("MOONBRIDGE_ISOLATION" in w and "not read" in w for w in rep.warnings)
+
+
+def test_the_removal_release_is_a_fixed_version_literal():
+    """`SIBLING_ALIASES_REMOVED_IN` is history and `LEGACY_REMOVAL_VERSION` is the guard's
+    window for any alias declared later; a tombstone warning must quote the first, which
+    never moves, so moving the second cannot make an old warning false."""
+    import re
+
+    assert re.fullmatch(r"\d+\.\d+\.\d+", es.SIBLING_ALIASES_REMOVED_IN)
+    assert es.SIBLING_ALIASES_REMOVED_IN == "0.4.0"

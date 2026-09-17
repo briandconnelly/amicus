@@ -57,7 +57,9 @@ def test_unsupported_version_missing_flags_and_bad_extra_args_warn(pinned_codex_
     assert rep.installed and rep.authenticated is True
     joined = "\n".join(rep.warnings)
     assert st.VERSION_WARNING in joined and "--sandbox" in joined
-    assert "AMICUS_CODEX_EXTRA_ARGS is invalid" in joined and "read from legacy" in joined
+    assert "AMICUS_CODEX_EXTRA_ARGS is invalid" in joined
+    # A retired sibling name reaches the backend's status warnings (#176).
+    assert "CODEX_IN_CLAUDE_MODEL is set but not read" in joined
 
 
 def test_not_installed_and_bad_override(pinned_codex_bin, monkeypatch, tmp_path):

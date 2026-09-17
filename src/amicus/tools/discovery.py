@@ -642,7 +642,7 @@ def register(
             f"{FREE_MARKER} Every known backend with enabled/available state, an installed/"
             "authenticated probe for the available ones, declared features, the backend_options "
             "each accepts with allowed values and annotation effects; plus why an enabled "
-            "backend is unavailable, legacy-env warnings and config errors. detail=full adds "
+            "backend is unavailable, env warnings and config errors. detail=full adds "
             "each backend's egress, prompt carriers, read-only honesty and implicit-context "
             "disclosures; summary (default) names them in omitted_fields instead. Run "
             "detail=full before the first paid call; summary is enough for a readiness re-check."
