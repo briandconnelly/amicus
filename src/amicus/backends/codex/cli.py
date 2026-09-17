@@ -296,7 +296,6 @@ def _extra_args_drift_match(extra: ExtraArgs, *texts: str | None) -> list[str] |
 def classify_failure(
     run: CommandRun,
     *,
-    last_message: str | None,
     events: str | None,
     extra_args: ExtraArgs,
     reasoning_effort: str | None,
@@ -323,7 +322,9 @@ def classify_failure(
                 ),
             )
         return ClassifiedFailure(code="timeout", detail="codex exceeded the timeout.")
-    event_error = normalize.extract_error_message(events) if events else None
+    # stdout/last_message contain model prose and tool output, not just diagnostics.
+    diagnostics = normalize.failure_diagnostics(events or run.stdout)
+    event_error = normalize.extract_error_message(diagnostics)
     strict = contract.parse_strict_config_rejection(run.stderr)
     if strict is not None:
         return _strict_config_failure(strict, extra_args)
@@ -361,14 +362,14 @@ def classify_failure(
             extra=extra_args,
             plugin_config_keys=plugin_config_keys,
         )
-    if contract.is_auth_failure(run.stderr, run.stdout, last_message, event_error):
+    if contract.is_auth_failure(run.stderr, diagnostics, event_error):
         return ClassifiedFailure(code="codex_auth_required", detail="codex is not authenticated.")
-    if contract.is_contract_drift(run.stderr, run.stdout, event_error):
-        matched = _extra_args_drift_match(extra_args, run.stderr, run.stdout, event_error)
+    if contract.is_contract_drift(run.stderr, diagnostics, event_error):
+        matched = _extra_args_drift_match(extra_args, run.stderr, diagnostics, event_error)
         if matched is not None and contract.is_reasoning_effort_rejection(*matched):
             return _extra_args_rejected(matched)
         if reasoning_effort is not None and contract.is_reasoning_effort_rejection(
-            run.stderr, run.stdout, event_error
+            run.stderr, diagnostics, event_error
         ):
             return ClassifiedFailure(
                 code="invalid_reasoning_effort",
@@ -382,10 +383,8 @@ def classify_failure(
         if matched is not None and not (plugin_owns_dash_c and set(matched) <= {"-c"}):
             return _extra_args_rejected(matched)
         return _contract_changed()
-    if contract.is_rate_limited(run.stderr, run.stdout, last_message, event_error):
-        retry_after = contract.parse_retry_after_ms(
-            run.stderr, run.stdout, last_message, event_error
-        )
+    if contract.is_rate_limited(run.stderr, diagnostics, event_error):
+        retry_after = contract.parse_retry_after_ms(run.stderr, diagnostics, event_error)
         if retry_after is None:
             retry_after = contract.RATE_LIMIT_DEFAULT_BACKOFF_MS
         return ClassifiedFailure(

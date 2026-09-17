@@ -181,6 +181,19 @@ def test_classify_failure_uses_the_request_shape_and_aliases(pinned_codex_bin, t
     )
 
 
+@pytest.mark.parametrize("diagnostic", ["", "connection closed", "usage limit"])
+def test_classify_failure_ignores_last_message_artifact(pinned_codex_bin, diagnostic):
+    _, backend = cf.make_backend()
+    outcome = RunOutcome(
+        run=CommandRun("", diagnostic, 1, 5, False),
+        artifact_texts={"last-message": "Unauthorized; invalid value; quota; Retry-After: 123"},
+    )
+    out = backend.classify_failure(outcome, _req())
+    assert out.code == ("codex_rate_limited" if diagnostic == "usage limit" else "nonzero_exit")
+    if diagnostic == "usage limit":
+        assert out.retry_after_ms == contract.RATE_LIMIT_DEFAULT_BACKOFF_MS
+
+
 def test_list_models_auth_probe_and_scrub_env(pinned_codex_bin, monkeypatch):
     from amicus.backends.codex import adapter
 

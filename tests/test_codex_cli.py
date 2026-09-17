@@ -174,7 +174,6 @@ def test_version_display_bounds_and_sanitizes():
 
 def _classify(run, **kw):
     base = dict(
-        last_message=None,
         events=None,
         extra_args=cc.ExtraArgs(),
         reasoning_effort=None,
@@ -255,6 +254,83 @@ def test_classify_nonzero_generic_sanitizes_before_truncating():
     )
     out = _classify(CommandRun("", "boom\x1b[31m", 1, 1, False, capture_failed=True))
     assert "\x1b" not in out.detail and "capture failed" in out.detail
+
+
+@pytest.mark.parametrize("explicit_events", [False, True])
+@pytest.mark.parametrize("marker", ["error", "turn.failed", None])
+@pytest.mark.parametrize("prose", ["Unauthorized", "invalid value", "quota", "Retry-After: 123"])
+@pytest.mark.parametrize(
+    ("diagnostic", "expected", "retry_after"),
+    [
+        ("connection closed", "nonzero_exit", None),
+        ("usage limit; Retry-After: 9", "codex_rate_limited", 9000),
+        ("usage limit", "codex_rate_limited", contract.RATE_LIMIT_DEFAULT_BACKOFF_MS),
+        ("unexpected argument '--zap' found", "cli_contract_changed", None),
+        ("not authenticated", "codex_auth_required", None),
+    ],
+)
+def test_classify_ignores_model_and_tool_text(
+    explicit_events, marker, prose, diagnostic, expected, retry_after
+):
+    items = [
+        {"type": "item.completed", "item": {"type": "agent_message", "text": prose}},
+        {
+            "type": "item.completed",
+            "item": {"type": "command_execution", "aggregated_output": prose},
+        },
+        {"type": "item.failed", "message": prose},
+    ]
+    if marker:
+        items.append({"type": marker, "error": {"message": diagnostic}})
+    stream = "\n".join(json.dumps(item) for item in items)
+    out = _classify(
+        CommandRun(stream, "" if marker else diagnostic, 1, 1, False),
+        events=stream if explicit_events else None,
+    )
+    assert out.code == expected
+    assert out.retry_after_ms == retry_after
+
+
+def test_classify_preserves_effort_and_extra_arg_attribution_from_error_events():
+    message = "unexpected argument '--profile' found"
+    stream = json.dumps({"type": "error", "message": message})
+    out = _classify(
+        CommandRun(stream, "", 1, 1, False),
+        extra_args=cc.parse_extra_args("--profile work"),
+    )
+    assert out.code == "extra_args_rejected"
+    nested = json.dumps(
+        {
+            "error": {
+                "message": (
+                    "[reasoning.effort] [ReasoningEffortParam] [invalid_enum_value] invalid value"
+                )
+            }
+        }
+    )
+    stream = json.dumps({"type": "turn.failed", "error": {"message": nested}})
+    out = _classify(CommandRun(stream, "", 1, 1, False), reasoning_effort="high")
+    assert out.code == "invalid_reasoning_effort"
+
+
+def test_classify_does_not_fall_back_to_model_text_without_a_diagnostic():
+    stream = '{"type":"item.completed","item":{"type":"agent_message","text":"quota"}}'
+    out = _classify(CommandRun(stream, "", 1, 1, False))
+    assert out.code == "nonzero_exit"
+
+
+@pytest.mark.parametrize(
+    ("stdout", "expected"),
+    [
+        ("not logged in", "codex_auth_required"),
+        ("usage limit", "codex_rate_limited"),
+        ("unexpected argument '--zap' found", "cli_contract_changed"),
+        ('{"type":"turn.failed","error":{"status":401}}', "codex_auth_required"),
+        ('{"type":"error","message":"HTTP/2 401"}', "codex_auth_required"),
+    ],
+)
+def test_classify_preserves_backend_diagnostics(stdout, expected):
+    assert _classify(CommandRun(stdout, "", 1, 1, False)).code == expected
 
 
 def test_classify_sanitize_relativizes_worktree_paths(tmp_path):
