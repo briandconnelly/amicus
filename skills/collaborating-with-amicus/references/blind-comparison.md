@@ -36,8 +36,10 @@ comparison, as the blinding rule below states. These are this file's own:
 - **Fix the criteria before the call and carry them in `question`; carry the candidates in
   `extra_context`.** A criterion added after reading the result is a new comparison, not a
   reading of this one.
-- **Route through `amicus_consult` or `amicus_consult_async` only.** No other verb takes
-  candidates as data.
+- **Route through `amicus_consult` or `amicus_consult_async` only.** Review and adversarial
+  calls accept `extra_context` too, but their results carry a `verdict` and `confidence` that
+  would stand beside the preference as a rating, and the adversarial critic is instructed to
+  attack, not to compare.
 - **Omit `instructions_append`, or fix neutral output-shape guidance before the first call and
   hold it byte-identical across both calls.**
 - **Ask for a per-criterion comparison with reasons, one stated preference, and the inspection
@@ -49,8 +51,8 @@ comparison, as the blinding rule below states. These are this file's own:
 - **Disclose the presentation order with the result.** Report the comparison as
   position-controlled only after the order-swapped second call below.
 - **Take the second call only under a two-call cap declared before the first, on the same
-  `backend`, `model`, `reasoning_effort` and `backend_options`, with the brief byte-identical
-  except for candidate order.** Stop after it, whatever it says.
+  `backend`, `model`, `reasoning_effort`, `backend_options` and `workspace_root`, with the
+  brief byte-identical except for candidate order.** Stop after it, whatever it says.
 - **Report the second call as observed preference stability or instability under order, with
   both sets of reasons preserved.** Never infer from it that the criteria failed, or that the
   stable preference is correct.
@@ -108,7 +110,7 @@ and not something this pattern can promise either way.
 ## The order-swapped second call
 
 Position bias is the one bias a second call can measure, and only when everything else is held
-fixed: the same backend and resolved model and options, the same criteria, the same labels
+fixed: the same backend, resolved model, options and workspace, the same criteria, the same labels
 swapped with their content, the same `instructions_append` if any. `meta.instructions_append`
 carries a `{sha256, bytes}` fingerprint that checks that last half, as
 [review–revise](review-revise.md) describes; the rest of the brief is your own bookkeeping.
