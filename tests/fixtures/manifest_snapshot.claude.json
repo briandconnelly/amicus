@@ -1565,7 +1565,7 @@
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-32",
+                "default": "amicus/0.1/schema-33",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -2037,7 +2037,7 @@
         "description": "Full semantics for parameters whose tools/list description is a compressed summary. Each entry's `summary` ships inline; `full` is the authoritative contract.",
         "params": {
           "backend_options": {
-            "full": "A key the selected backend does not accept, or a value it does not accept for a key it does, fails pre-spend as invalid_arguments naming backend_options.<key>. isolation — codex: inherit|ignore-config|ignore-rules (drop $CODEX_HOME config, then also execpolicy rules); kimi: inherit|ignore-skills. config_mode — claude: inherit|scoped|safe|bare (how much of the user's Claude config the run inherits). Claude adversarial_review defaults to safe (bare when AMICUS_CLAUDE_CONFIG_MODE=bare); other verbs use the configured default. Explicit config_mode overrides are honored. Discovery reports default_by_verb when verbs differ, with default null. access — claude: toolless|readonly; review_changes defaults to readonly and other verbs to toolless unless AMICUS_CLAUDE_ACCESS is set, which then applies to every verb. max_budget_usd — claude: per-call best-effort spend cap in USD, 0.01–5.00. Unset keys take the backend's defaults; amicus_review_changes_dry_run echoes review_changes values.",
+            "full": "A key the selected backend does not accept, or a value it does not accept for a key it does, fails pre-spend as invalid_arguments naming backend_options.<key>. isolation — codex: inherit|ignore-config|ignore-rules (drop $CODEX_HOME config, then also execpolicy rules); kimi: inherit|ignore-skills. config_mode — claude: inherit|scoped|safe|bare (how much of the user's Claude config the run inherits). Claude adversarial_review defaults to safe (bare when AMICUS_CLAUDE_CONFIG_MODE=bare); other verbs use the configured default. Explicit config_mode overrides are honored. Discovery reports default_by_verb when verbs differ, with default null. access — claude: toolless|readonly; review_changes defaults to readonly and other verbs to toolless unless AMICUS_CLAUDE_ACCESS is set, which then applies to every verb. max_budget_usd — claude: per-call stop threshold in USD, 0.01–5.00, checked only between model calls, so the estimated cost can exceed it. Unset keys take the backend's defaults; amicus_review_changes_dry_run echoes review_changes values.",
             "summary": "One closed object of backend knobs: isolation (codex, kimi); config_mode, access, max_budget_usd (claude). A key or value the selected backend rejects fails pre-spend. Values: amicus://params."
           },
           "extra_context": {
@@ -2136,7 +2136,7 @@
       "description": "Full semantics for parameters whose inline description is a compressed summary.",
       "mimeType": "application/json",
       "name": "amicus-params",
-      "size": 6097,
+      "size": 6161,
       "title": "amicus parameter contracts",
       "uri": "amicus://params"
     },
@@ -2477,7 +2477,7 @@
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-32",
+            "default": "amicus/0.1/schema-33",
             "title": "Fingerprint",
             "type": "string"
           },
@@ -2802,7 +2802,7 @@
                         "type": "null"
                       }
                     ],
-                    "description": "claude only: per-call best-effort spend cap in USD, 0.01–5.00. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
+                    "description": "claude only: per-call stop threshold in USD, 0.01–5.00, checked only between model calls, so the estimated cost can exceed it. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
                   }
                 },
                 "type": "object"
@@ -3599,7 +3599,7 @@
                         "type": "null"
                       }
                     ],
-                    "description": "claude only: per-call best-effort spend cap in USD, 0.01–5.00. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
+                    "description": "claude only: per-call stop threshold in USD, 0.01–5.00, checked only between model calls, so the estimated cost can exceed it. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
                   }
                 },
                 "type": "object"
@@ -4663,7 +4663,7 @@
                         "type": "null"
                       }
                     ],
-                    "description": "claude only: per-call best-effort spend cap in USD, 0.01–5.00. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
+                    "description": "claude only: per-call stop threshold in USD, 0.01–5.00, checked only between model calls, so the estimated cost can exceed it. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
                   }
                 },
                 "type": "object"
@@ -5232,7 +5232,7 @@
                         "type": "null"
                       }
                     ],
-                    "description": "claude only: per-call best-effort spend cap in USD, 0.01–5.00. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
+                    "description": "claude only: per-call stop threshold in USD, 0.01–5.00, checked only between model calls, so the estimated cost can exceed it. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
                   }
                 },
                 "type": "object"
@@ -5572,7 +5572,7 @@
                         "type": "null"
                       }
                     ],
-                    "description": "claude only: per-call best-effort spend cap in USD, 0.01–5.00. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
+                    "description": "claude only: per-call stop threshold in USD, 0.01–5.00, checked only between model calls, so the estimated cost can exceed it. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
                   }
                 },
                 "type": "object"
@@ -6006,7 +6006,7 @@
                         "type": "null"
                       }
                     ],
-                    "description": "claude only: per-call best-effort spend cap in USD, 0.01–5.00. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
+                    "description": "claude only: per-call stop threshold in USD, 0.01–5.00, checked only between model calls, so the estimated cost can exceed it. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
                   }
                 },
                 "type": "object"
@@ -6322,7 +6322,7 @@
                         "type": "null"
                       }
                     ],
-                    "description": "claude only: per-call best-effort spend cap in USD, 0.01–5.00. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
+                    "description": "claude only: per-call stop threshold in USD, 0.01–5.00, checked only between model calls, so the estimated cost can exceed it. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
                   }
                 },
                 "type": "object"
@@ -6631,7 +6631,7 @@
                         "type": "null"
                       }
                     ],
-                    "description": "claude only: per-call best-effort spend cap in USD, 0.01–5.00. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
+                    "description": "claude only: per-call stop threshold in USD, 0.01–5.00, checked only between model calls, so the estimated cost can exceed it. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
                   }
                 },
                 "type": "object"
@@ -8269,7 +8269,7 @@
                         "type": "null"
                       }
                     ],
-                    "description": "claude only: per-call best-effort spend cap in USD, 0.01–5.00. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
+                    "description": "claude only: per-call stop threshold in USD, 0.01–5.00, checked only between model calls, so the estimated cost can exceed it. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
                   }
                 },
                 "type": "object"
@@ -9055,7 +9055,7 @@
                         "type": "null"
                       }
                     ],
-                    "description": "claude only: per-call best-effort spend cap in USD, 0.01–5.00. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
+                    "description": "claude only: per-call stop threshold in USD, 0.01–5.00, checked only between model calls, so the estimated cost can exceed it. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
                   }
                 },
                 "type": "object"
@@ -9460,7 +9460,7 @@
                         "type": "null"
                       }
                     ],
-                    "description": "claude only: per-call best-effort spend cap in USD, 0.01–5.00. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
+                    "description": "claude only: per-call stop threshold in USD, 0.01–5.00, checked only between model calls, so the estimated cost can exceed it. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
                   }
                 },
                 "type": "object"
