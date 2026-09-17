@@ -1,6 +1,7 @@
 # ADR 0015: `.mcp.json` pins an already-published release, not the version being released
 
-**Status:** Accepted (2026-09-09, immediately after the 0.1.0 release)
+**Status:** Superseded by [ADR 0031](0031-the-marketplace-pointer-decides-what-users-run.md) (2026-09-16).
+Accepted 2026-09-09, immediately after the 0.1.0 release; its assumption that a plugin host re-reads `.mcp.json` did not hold (#117).
 
 ## Context
 

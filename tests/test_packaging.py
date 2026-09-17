@@ -161,7 +161,7 @@ def test_mcp_json_invokes_the_console_script():
     assert server["args"][-1] == "amicus-mcp"
 
 
-def test_mcp_json_installs_this_repo_at_a_published_release_tag():
+def test_mcp_json_installs_this_repo_at_its_own_release_tag():
     """The `--from` source was asserted by nothing, and could not have been.
 
     The slow smoke below substitutes any `git+` argument for a locally built wheel
@@ -171,13 +171,10 @@ def test_mcp_json_installs_this_repo_at_a_published_release_tag():
     confirmed by mutation. That is the one field a user installing from the committed
     manifest actually fetches, so pin its shape: this repo, over git, at some `vX.Y.Z`.
 
-    What this does NOT assert is `pin == amicus.__version__`. Per ADR 0015 the pin names
-    an ALREADY-PUBLISHED release, not the version this tree declares, because the
-    manifest a fresh install reads lives on `main` and cannot name a tag that does not
-    exist yet. Between releases the two are equal; from the release PR until the pin-move
-    PR the pin trails by one, and that state is correct rather than a literal left behind.
-    The pin must never LEAD the declared version, though -- that would send users to a
-    release that has not happened, which is the bug ADR 0015 fixes.
+    It also asserts `pin == amicus.__version__`. ADR 0015 had the pin trail the declared
+    version, but a plugin host installs the release TAG, and a trailing pin makes that
+    snapshot launch the previous release's server under this release's skills -- issue #117.
+    The pin is therefore a rule-19 version literal again, naming its own release.
     """
     args = _read(".mcp.json")["mcpServers"]["amicus"]["args"]
     assert "--from" in args, "the manifest must install from an explicit source"
@@ -189,12 +186,9 @@ def test_mcp_json_installs_this_repo_at_a_published_release_tag():
     )
     assert match, f"unexpected --from source {source!r}"
 
-    def parts(version: str) -> tuple[int, ...]:
-        return tuple(int(piece) for piece in version.split("."))
-
-    assert parts(match.group(1)) <= parts(amicus.__version__), (
-        f".mcp.json pins v{match.group(1)}, which is newer than the declared "
-        f"{amicus.__version__}; the pin names an already-published release and cannot lead it"
+    assert match.group(1) == amicus.__version__, (
+        f".mcp.json pins v{match.group(1)} but this tree declares {amicus.__version__}; the pin "
+        "names its own release (docs/RELEASING.md step 2)"
     )
 
 
@@ -203,14 +197,12 @@ def test_readme_example_mirrors_the_mcp_json_pin():
 
     The example exists to tell a user with some other client to run what the manifest runs,
     so a stale one advertises the PREVIOUS release under a heading that promises parity.
-    Nothing bound the two: `docs/RELEASING.md` step 7 said the pin-move PR touches
-    `.mcp.json` "and nothing else", and moving only that file left this file green -- which
-    is how README kept `@v0.1.0` while the manifest moved on. Binding them here makes the
-    runbook's claim checkable instead of a convention someone has to remember.
+    Nothing once bound the two, which is how README kept `@v0.1.0` while the manifest moved
+    on. Binding them here makes the runbook's claim checkable instead of a convention
+    someone has to remember: `docs/RELEASING.md` step 2 moves both.
 
-    This asserts the two agree, never what version they name: the pin trails the declared
-    version between a release PR and its pin-move PR, and
-    `test_mcp_json_installs_this_repo_at_a_published_release_tag` is what bounds it.
+    This asserts the two agree, never what version they name;
+    `test_mcp_json_installs_this_repo_at_its_own_release_tag` pins that.
     """
     args = _read(".mcp.json")["mcpServers"]["amicus"]["args"]
     source = args[args.index("--from") + 1]
@@ -220,8 +212,8 @@ def test_readme_example_mirrors_the_mcp_json_pin():
     )
     assert pins, "README no longer shows the install source; drop this test or update it"
     assert pins == {source}, (
-        f"README pins {sorted(pins)} but .mcp.json pins {source!r}; the pin-move PR must "
-        "move both (docs/RELEASING.md step 7)"
+        f"README pins {sorted(pins)} but .mcp.json pins {source!r}; the release PR must "
+        "move both (docs/RELEASING.md step 2)"
     )
 
 
@@ -298,8 +290,8 @@ async def test_the_committed_manifest_command_starts_a_real_server(tmp_path):
     the command line's shape offline and in a few seconds, without a network fetch.
 
     It deliberately does not resolve the pinned source. That is not the same limitation it
-    used to be: under ADR 0015 the pin names an already-published tag, so `check_release_state`
-    can and does prove the tag exists, and `docs/RELEASING.md` step 3 rehearses the real git
+    used to be: the pin names the release's own tag, `check_release_state` proves that tag
+    exists, and `docs/RELEASING.md` step 3 rehearses the real git
     transport pre-tag by substituting the release commit's SHA — verified to resolve. What
     remains unproven here is only that a resolvable ref is reachable from THIS test, which is
     a deliberate trade for a fast, offline, hermetic check.
