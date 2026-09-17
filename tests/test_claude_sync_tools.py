@@ -166,6 +166,7 @@ async def test_review_and_adversarial_end_to_end(app, tmp_path, repo, monkeypatc
         )
     rb = review.structured_content
     assert rb["ok"] is True and rb["review_status"] == "completed" and rb["verdict"] == "unknown"
+    assert rb["meta"]["backend_details"]["access"] == "readonly"
     assert "focused" in rb["summary"] and rb["meta"]["context_summary"]["files_changed"] == 1
     cb = critique.structured_content
     assert cb["ok"] is True and cb["tool"] == "amicus_adversarial_review"
@@ -180,7 +181,10 @@ async def test_review_and_adversarial_end_to_end(app, tmp_path, repo, monkeypatc
     argvs = [r["argv"] for r in _runs(tmp_path)]
     assert len(argvs) == 3 and all("Ship without retries." not in " ".join(a) for a in argvs)
     assert "--safe-mode" not in argvs[0]
+    assert argvs[0][argvs[0].index("--tools") + 1] == "Read,Grep,Glob"
+    assert adversarial.OUTPUT_GUARDRAILS in argvs[0][argvs[0].index("--append-system-prompt") + 1]
     for argv, body in zip(argvs[1:], (cb, pb), strict=True):
+        assert argv[argv.index("--tools") + 1] == ""
         assert "--safe-mode" in argv
         assert body["meta"]["backend_details"]["config_mode"] == "safe"
         assert adversarial.OUTPUT_GUARDRAILS in argv[argv.index("--append-system-prompt") + 1]
@@ -391,6 +395,64 @@ async def test_configured_defaults_discovery_and_tool_execution(
         assert ("--safe-mode" in run["argv"]) == (mode == "safe")
         assert ("--bare" in run["argv"]) == (mode == "bare")
         assert ("--setting-sources" in run["argv"]) == (mode == "scoped")
+
+
+@pytest.mark.parametrize("configured", [None, "toolless", "readonly"])
+async def test_review_access_default_and_operator_override(
+    tmp_path, fake_claude, repo, monkeypatch, configured
+):
+    """#116: a toolless review wrote tool-call markup instead of its JSON, so an unset access
+    resolves to readonly for review_changes only; a set AMICUS_CLAUDE_ACCESS binds every verb.
+    Discovery, the dry run, the argv and backend_details must all agree."""
+    monkeypatch.setenv("AMICUS_CLAUDE_BIN", str(fake_claude))
+    monkeypatch.setenv("AMICUS_STATE_DIR", str(tmp_path / "state"))
+    monkeypatch.setenv("FAKE_CLAUDE_ARGV_FILE", str(tmp_path / "argv.jsonl"))
+    monkeypatch.setenv("FAKE_CLAUDE_PROMPT_FILE", str(tmp_path / "prompt.txt"))
+    if configured is None:
+        monkeypatch.delenv("AMICUS_CLAUDE_ACCESS", raising=False)
+    else:
+        monkeypatch.setenv("AMICUS_CLAUDE_ACCESS", configured)
+    configured_app = server.create_app(
+        config.settings(), BackendRegistry.load(("claude",), entry_points=())
+    )
+    (repo / "a.py").write_text("x = 2\n")
+    review_expected = configured or "readonly"
+    other_expected = configured or "toolless"
+    async with Client(configured_app) as c:
+        catalog = (await c.call_tool("amicus_backends", {"backend": "claude"})).structured_content
+        preview = (
+            await c.call_tool(
+                "amicus_review_changes_dry_run", {"backend": "claude", "workspace_root": str(repo)}
+            )
+        ).structured_content
+        review = (
+            await c.call_tool(
+                "amicus_review_changes", {"backend": "claude", "workspace_root": str(repo)}
+            )
+        ).structured_content
+        consult = (
+            await c.call_tool(
+                "amicus_consult",
+                {"backend": "claude", "question": "why?", "workspace_root": str(repo)},
+            )
+        ).structured_content
+    option = next(o for o in catalog["backends"][0]["options"] if o["name"] == "access")
+    if configured is None:
+        assert option["default"] is None
+        assert option["default_by_verb"] == {
+            "consult": "toolless",
+            "review_changes": "readonly",
+            "adversarial_review": "toolless",
+        }
+    else:
+        assert option["default"] == configured and option["default_by_verb"] is None
+    assert preview["backend_options"]["access"] == review_expected
+    assert review["ok"] and review["meta"]["backend_details"]["access"] == review_expected
+    assert consult["ok"] and consult["meta"]["backend_details"]["access"] == other_expected
+    tools = {"toolless": "", "readonly": "Read,Grep,Glob"}
+    review_argv, consult_argv = (r["argv"] for r in _runs(tmp_path))
+    assert review_argv[review_argv.index("--tools") + 1] == tools[review_expected]
+    assert consult_argv[consult_argv.index("--tools") + 1] == tools[other_expected]
 
 
 async def test_bare_without_a_key_is_refused_pre_spend(app, tmp_path):

@@ -46,14 +46,27 @@ def test_options_carry_defaults_and_applicability(pinned_claude_bin):
     )
     by_name = {o.name: o for o in plugin.options}
     assert set(by_name) == {"config_mode", "access", "max_budget_usd", "model", "reasoning_effort"}
-    assert by_name["config_mode"].default == "safe" and by_name["access"].default == "toolless"
+    assert by_name["config_mode"].default == "safe"
     assert by_name["max_budget_usd"].default == 0.5 and by_name["model"].default == "opus"
     assert by_name["reasoning_effort"].default == "xhigh"
+    access = {
+        verb: o.default for o in plugin.options if o.name == "access" for verb in o.applies_to
+    }
+    assert access == {
+        "consult": "toolless",
+        "review_changes": "readonly",
+        "adversarial_review": "toolless",
+    }
     for spec in plugin.options:
         if spec.name == "config_mode":
             assert spec.applies_to in (
                 frozenset({"consult", "review_changes"}),
                 frozenset({"adversarial_review"}),
+            )
+        elif spec.name == "access":
+            assert spec.applies_to in (
+                frozenset({"consult", "adversarial_review"}),
+                frozenset({"review_changes"}),
             )
         else:
             assert spec.applies_to == frozenset({"consult", "review_changes", "adversarial_review"})

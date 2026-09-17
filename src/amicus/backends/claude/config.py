@@ -38,7 +38,8 @@ ENV = EnvNamespace(
         ),
         EnvVar(
             f"{PREFIX}ACCESS",
-            "Default backend_options.access: toolless | readonly.",
+            "Default backend_options.access: toolless | readonly. Unset, reviews default to "
+            "readonly and other verbs to toolless; set, it applies to every verb.",
             contract.DEFAULT_ACCESS,
             (f"{_LEGACY}ACCESS",),
         ),
@@ -84,6 +85,10 @@ class ClaudeConfig:
     supported_majors: frozenset[int]
     warnings: tuple[str, ...] = ()
     errors: tuple[str, ...] = ()
+    # Whether the operator set AMICUS_CLAUDE_ACCESS (or its legacy name) at all. An invalid
+    # value counts: _choice falls back to toolless with a warning, and that fallback binds
+    # every verb, so a mistyped restriction never loosens into the review default.
+    access_explicit: bool = False
 
 
 def _choice(
@@ -145,6 +150,14 @@ def load_config(environ: Mapping[str, str] | None = None) -> ClaudeConfig:
                 own = None
             return own if own is not None else ENV.var(name).default
 
+    def is_set(name: str) -> bool:
+        try:
+            resolved = ENV.resolve(name, environ)
+            # An empty value is unset to _choice, so it is unset here too.
+            return resolved.source in ("env", "legacy") and bool(resolved.value)
+        except EnvConflictError:
+            return True  # both names are set; get() has already chosen the current one
+
     return ClaudeConfig(
         bin_override=get(f"{PREFIX}BIN") or None,
         config_mode=_choice(
@@ -161,6 +174,7 @@ def load_config(environ: Mapping[str, str] | None = None) -> ClaudeConfig:
             contract.DEFAULT_ACCESS,
             warnings,
         ),
+        access_explicit=is_set(f"{PREFIX}ACCESS"),
         model=get(f"{PREFIX}MODEL") or None,
         reasoning_effort=_choice(
             f"{PREFIX}REASONING_EFFORT",

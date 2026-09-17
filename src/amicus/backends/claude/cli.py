@@ -52,8 +52,9 @@ BUDGET_REPAIR = (
     "least 0.10-0.20; a lower best-effort budget can spend and still stop before a useful answer."
 )
 PERMISSION_REPAIR = (
-    "Use backend_options.access='toolless' (the default), or 'readonly' when Claude must read "
-    "files itself; a denied tool is never granted by amicus."
+    "Use backend_options.access='toolless', or 'readonly' when Claude must read files itself "
+    "(the default for amicus_review_changes unless AMICUS_CLAUDE_ACCESS is set); a denied tool "
+    "is never granted by amicus."
 )
 DRIFT_DETAIL = (
     "claude rejected a flag or value amicus sent — its CLI contract likely changed for your "

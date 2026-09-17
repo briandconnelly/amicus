@@ -44,6 +44,43 @@ async def test_adversarial_config_resolution(pinned_claude_bin, monkeypatch, con
         assert "why?" not in system
 
 
+@pytest.mark.parametrize(
+    ("environ", "kind", "explicit", "expected"),
+    [
+        ({}, "review_changes", None, "readonly"),
+        ({}, "consult", None, "toolless"),
+        ({}, "adversarial_review", None, "toolless"),
+        ({}, "review_changes", "toolless", "toolless"),
+        ({"AMICUS_CLAUDE_ACCESS": "toolless"}, "review_changes", None, "toolless"),
+        ({"AMICUS_CLAUDE_ACCESS": "readonly"}, "consult", None, "readonly"),
+    ],
+)
+async def test_access_resolution_for_a_direct_adapter_caller(
+    pinned_claude_bin, environ, kind, explicit, expected
+):
+    """#116: the adapter resolves an omitted access the way the published defaults do, so a
+    caller that skips the tool layer cannot run a toolless review by accident."""
+    _, backend = cf.make_backend(environ)
+    async with backend.prepare(_req(kind=kind, access=explicit)) as prepared:
+        tools = prepared.argv[prepared.argv.index("--tools") + 1]
+    assert tools == {"toolless": "", "readonly": "Read,Grep,Glob"}[expected]
+
+
+@pytest.mark.parametrize("kind", ["consult", "review_changes"])
+async def test_structured_review_carries_output_guardrails_and_consult_does_not(
+    pinned_claude_bin, kind
+):
+    """#116: a review is a structured verdict like a critique, so it is told not to simulate
+    tool calls; a consult's prose answer is itself a valid result and keeps its prompt."""
+    _, backend = cf.make_backend()
+    async with backend.prepare(_req(kind=kind, schema={"type": "object"})) as prepared:
+        system = prepared.argv[prepared.argv.index("--append-system-prompt") + 1]
+    expected = adversarial.CRITIC_GUARDRAILS
+    if kind == "review_changes":
+        expected += adversarial.OUTPUT_GUARDRAILS
+    assert system == expected
+
+
 async def test_adversarial_without_schema_omits_schema_guardrails(pinned_claude_bin):
     _, backend = cf.make_backend()
     async with backend.prepare(_req(kind="adversarial_review")) as prepared:

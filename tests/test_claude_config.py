@@ -9,6 +9,7 @@ def test_defaults_when_nothing_is_set():
     cfg = cc.load_config({})
     assert cfg.bin_override is None and cfg.model is None
     assert cfg.config_mode == "inherit" and cfg.access == "toolless"
+    assert cfg.access_explicit is False
     assert cfg.reasoning_effort == "xhigh" and cfg.max_budget_usd == 1.0
     assert cfg.supported_majors == frozenset({2})
     assert cfg.warnings == () and cfg.errors == ()
@@ -108,3 +109,22 @@ def test_hook_scan_is_advisory_and_mode_aware(tmp_path):
     assert cc.hook_security_warnings(str(tmp_path), "safe") == []
     assert cc.hook_security_warnings(str(tmp_path), "bare") == []
     assert cc.hook_security_warnings(str(tmp_path / "missing"), "inherit") == []
+
+
+def test_access_explicit_tracks_whether_the_operator_set_access_at_all():
+    """#116: review_changes defaults to readonly only while access is unset. A set value binds
+    every verb, and an invalid one binds as its toolless fallback, so a mistyped restriction
+    never loosens into the review default."""
+    unset = ({}, {"AMICUS_CLAUDE_ACCESS": ""}, {"AMICUS_CLAUDE_ACCESS": "${AMICUS_CLAUDE_ACCESS}"})
+    for environ in unset:
+        assert cc.load_config(environ).access_explicit is False, environ
+    explicit = (
+        ({"AMICUS_CLAUDE_ACCESS": "toolless"}, "toolless"),
+        ({"AMICUS_CLAUDE_ACCESS": "readonly"}, "readonly"),
+        ({"AMICUS_CLAUDE_ACCESS": "tooless"}, "toolless"),
+        ({"CLAUDE_IN_CODEX_ACCESS": "toolless"}, "toolless"),
+        ({"AMICUS_CLAUDE_ACCESS": "toolless", "CLAUDE_IN_CODEX_ACCESS": "readonly"}, "toolless"),
+    )
+    for environ, access in explicit:
+        cfg = cc.load_config(environ)
+        assert cfg.access_explicit is True and cfg.access == access, environ

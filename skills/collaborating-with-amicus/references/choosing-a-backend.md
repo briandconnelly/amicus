@@ -65,11 +65,15 @@ task, and one default surprises people:
 | --- | --- | --- |
 | `codex` | Yes — under codex's `--sandbox read-only` OS sandbox | read-only sandbox |
 | `kimi` | Yes — a generated agent profile grants `Read`, `Glob`, `Grep` and no shell or write tool | read-only profile |
-| `claude` | **Only if you ask.** `access="toolless"` is the default and grants **no tools at all** | `access="toolless"`, `config_mode="inherit"` |
+| `claude` | **Reviews only, by default.** `amicus_review_changes` defaults to `access="readonly"` (`Read`, `Grep`, `Glob`); consult and adversarial review default to `access="toolless"`, which grants **no tools at all** | `access="readonly"` for reviews and `"toolless"` otherwise, `config_mode="inherit"` |
 
 **A `claude` consult told to "look at the file and tell me what's wrong" has, by default, no
 tool with which to look.** Either supply the evidence inline (`question`, `extra_context`) or pass
 `backend_options: {"access": "readonly"}` deliberately — which grants `Read`, `Grep`, `Glob`.
+
+An operator who sets `AMICUS_CLAUDE_ACCESS` sets the default for every verb, reviews included,
+so read the resolved value on `amicus_backends` (`default` or `default_by_verb`) rather than
+assuming a review can read the repository.
 
 `toolless` is not isolation. It removes the model's tools; it does not stop the CLI loading
 context on its own. Under the default `config_mode="inherit"` (and under `scoped`) claude still
