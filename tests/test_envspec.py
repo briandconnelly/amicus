@@ -24,6 +24,14 @@ NS = es.EnvNamespace(
             default="inherit",
             removed=("CODEX_IN_CLAUDE_ISOLATION", "MOONBRIDGE_ISOLATION"),
         ),
+        # A later rename's shape: a live alias and a sibling tombstone on one declaration.
+        es.EnvVar(
+            "AMICUS_LOG_LEVEL",
+            "level",
+            default="WARNING",
+            legacy=("AMICUS_LOGLEVEL",),
+            removed=("MOONBRIDGE_LOG_LEVEL",),
+        ),
     ),
 )
 
@@ -33,7 +41,12 @@ def test_namespace_validates_its_shape():
         es.EnvNamespace(prefix="amicus_", vars=())
     with pytest.raises(ValueError, match="must start with"):
         es.EnvNamespace(prefix="AMICUS_", vars=(es.EnvVar("OTHER_X", "d"),))
-    assert NS.names() == ("AMICUS_TIMEOUT_SECONDS", "AMICUS_MODEL", "AMICUS_ISOLATION")
+    assert NS.names() == (
+        "AMICUS_TIMEOUT_SECONDS",
+        "AMICUS_MODEL",
+        "AMICUS_ISOLATION",
+        "AMICUS_LOG_LEVEL",
+    )
 
 
 def test_amicus_name_wins_and_default_applies():
@@ -131,15 +144,41 @@ def test_a_removed_name_beside_the_amicus_name_is_not_a_conflict():
     assert "MOONBRIDGE_ISOLATION" in two.warning
 
 
-def test_a_removed_name_holding_a_placeholder_is_unset():
+def test_a_removed_name_holding_a_placeholder_is_still_reported():
+    """Presence only: the value is never read, not even to recognise a placeholder, and an
+    unexpanded `${...}` in a retired name is still a configuration that names it."""
     r = NS.resolve("AMICUS_ISOLATION", {"CODEX_IN_CLAUDE_ISOLATION": "${ISOLATION}"})
-    assert (r.value, r.source, r.warning) == ("inherit", "default", None)
+    assert (r.value, r.source) == ("inherit", "default")
+    assert r.warning and "CODEX_IN_CLAUDE_ISOLATION is set but not read" in r.warning
+
+
+def test_a_tombstone_survives_a_conflict_on_the_same_declaration():
+    """`resolve` raises on a conflict between names that are read, so `report` carries the
+    tombstone warning itself; a later rename that leaves a sibling tombstone beside a live
+    alias must not lose the diagnostic to the error."""
+    for environ in (
+        {"AMICUS_LOG_LEVEL": "INFO", "AMICUS_LOGLEVEL": "DEBUG", "MOONBRIDGE_LOG_LEVEL": "x"},
+        {"AMICUS_LOGLEVEL": "DEBUG", "MOONBRIDGE_LOG_LEVEL": "x"},
+    ):
+        rep = NS.report(environ)
+        assert any("MOONBRIDGE_LOG_LEVEL is set but not read" in w for w in rep.warnings), environ
+    with pytest.raises(es.EnvConflictError):
+        NS.resolve("AMICUS_LOG_LEVEL", {"AMICUS_LOG_LEVEL": "INFO", "AMICUS_LOGLEVEL": "DEBUG"})
+    conflicted = NS.report(
+        {"AMICUS_LOG_LEVEL": "INFO", "AMICUS_LOGLEVEL": "DEBUG", "MOONBRIDGE_LOG_LEVEL": "x"}
+    )
+    assert len(conflicted.errors) == 1 and "AMICUS_LOG_LEVEL" in conflicted.errors[0]
+    # And on the no-conflict path the two warnings ride one Resolved, joined.
+    r = NS.resolve("AMICUS_LOG_LEVEL", {"AMICUS_LOGLEVEL": "DEBUG", "MOONBRIDGE_LOG_LEVEL": "x"})
+    assert (r.value, r.source) == ("DEBUG", "legacy")
+    assert r.warning and "read from legacy AMICUS_LOGLEVEL" in r.warning
+    assert "MOONBRIDGE_LOG_LEVEL is set but not read" in r.warning
 
 
 def test_report_carries_a_removed_name_warning_beside_the_others():
     rep = NS.report({"MOONBRIDGE_TIMEOUT_SECONDS": "45", "MOONBRIDGE_ISOLATION": "x"})
     assert rep.errors == [] and rep.placeholders == []
-    assert len(rep.warnings) == 2
+    assert len(rep.warnings) == 2, rep.warnings
     assert any("MOONBRIDGE_ISOLATION" in w and "not read" in w for w in rep.warnings)
 
 

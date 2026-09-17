@@ -9,8 +9,9 @@ This guide covers the environment-variable renames, the tool-name mapping for ea
 Every `AMICUS_*` name below is declared once in `src/amicus/config/envspec.py` (global) and each backend's `config.py` (per backend).
 A sibling's old name was read during a deprecation window that closed with `0.3.0`: it supplied the setting only when the new `AMICUS_*` name was unset, and every such read logged a warning.
 The sibling names were removed in `0.4.0` (#176): a sibling name is never read, and the `AMICUS_*` name's value or default applies.
-A sibling name that is still set is reported as a warning naming the `AMICUS_*` name to set, in `amicus_backends`' `env_warnings` for a global setting and in that backend's `status.warnings` for a backend setting.
-Its value is never compared with the `AMICUS_*` value, so the conflict error the window had is gone with it.
+A sibling name that is still set is reported as a warning naming the `AMICUS_*` name to set: in `amicus_backends`' `env_warnings` for a global setting, and in that backend's `status.warnings` for a backend setting, which exists only while that backend is enabled and loaded.
+A stale name for a backend that is not enabled affects nothing and is not reported.
+Its value is never read, not even to recognise an unexpanded `${...}` placeholder, so it is never compared with the `AMICUS_*` value and the conflict error the window had is gone with it.
 
 | amicus name | former sibling names (not read since 0.4.0) | default |
 | --- | --- | --- |
@@ -199,7 +200,7 @@ The change below is the one an operator of amicus 0.3.0 has to handle before run
 
 **Sibling environment names are no longer read (#176).**
 `CODEX_IN_CLAUDE_*`, `MOONBRIDGE_*` and `CLAUDE_IN_CODEX_*` supplied a setting through 0.3.0 when the `AMICUS_*` name was unset; from 0.4.0 they supply nothing.
-Rename each to the `AMICUS_*` name in the table above; a name left set is reported by `amicus_backends` and otherwise ignored.
+Rename each to the `AMICUS_*` name in the table above; a name left set is reported by `amicus_backends`, for a backend setting only while that backend is enabled, and otherwise ignored.
 The settings where this matters most are the ones whose default is looser than what you had set, such as `CODEX_IN_CLAUDE_ISOLATION=ignore-rules` or `CLAUDE_IN_CODEX_CLAUDE_CONFIG=safe`, which now fall back to `inherit`.
 
 ## Upgrading from 0.2.0

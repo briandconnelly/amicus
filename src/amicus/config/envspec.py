@@ -5,8 +5,9 @@ names, removed names). The shim reads a legacy name only when the amicus name is
 reports it as a warning naming the removal version; a legacy value that disagrees with the
 amicus value, or two legacy values that disagree, is an error. A removed name is a
 tombstone: its presence is reported as a warning naming the amicus name, and its value is
-never read, so it can neither supply a setting nor conflict with one. `${VAR}` placeholders
-an MCP host failed to expand are detected and treated as unset.
+never read, not even to see whether it is a placeholder, so it can neither supply a setting
+nor conflict with one. `${VAR}` placeholders an MCP host failed to expand are detected on
+the names that are read and treated as unset.
 """
 
 from __future__ import annotations
@@ -111,15 +112,7 @@ class EnvNamespace:
             own = None
         legacy = [(n, env[n]) for n in var.legacy if n in env and not is_env_placeholder(env[n])]
         distinct = {v for _, v in legacy}
-        # Presence only: a removed name's value is never read, so it is never compared.
-        stale = [n for n in var.removed if n in env and not is_env_placeholder(env[n])]
-        stale_warning = None
-        if stale:
-            verb = "is" if len(stale) == 1 else "are"
-            stale_warning = (
-                f"{', '.join(stale)} {verb} set but not read since "
-                f"{SIBLING_ALIASES_REMOVED_IN}; amicus reads {name}"
-            )
+        stale_warning = self._stale_warning(var, env)
         if own is not None:
             if distinct - {own}:
                 names = ", ".join(n for n, v in legacy if v != own)
@@ -154,6 +147,20 @@ class EnvNamespace:
             return Resolved(name, var.default, "default", stale_warning)
         return Resolved(name, None, "unset", stale_warning)
 
+    @staticmethod
+    def _stale_warning(var: EnvVar, env: Mapping[str, str]) -> str | None:
+        """The tombstone warning for `var`, from key presence alone: a removed name's value
+        is never read, so an unexpanded placeholder in one is still a name the operator's
+        configuration sets, and is reported."""
+        stale = [n for n in var.removed if n in env]
+        if not stale:
+            return None
+        verb = "is" if len(stale) == 1 else "are"
+        return (
+            f"{', '.join(stale)} {verb} set but not read since "
+            f"{SIBLING_ALIASES_REMOVED_IN}; amicus reads {var.name}"
+        )
+
     def report(self, environ: Mapping[str, str] | None = None) -> EnvReport:
         env = os.environ if environ is None else environ
         rep = EnvReport()
@@ -164,6 +171,11 @@ class EnvNamespace:
                 resolved = self.resolve(var.name, env)
             except EnvConflictError as exc:
                 rep.errors.append(str(exc))
+                # The conflict is between names that are read; a tombstone beside them is
+                # still reported, since resolve() raised before it could carry the warning.
+                stale = self._stale_warning(var, env)
+                if stale:
+                    rep.warnings.append(stale)
                 continue
             if resolved.warning:
                 rep.warnings.append(resolved.warning)

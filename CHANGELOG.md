@@ -65,9 +65,10 @@ per-change, as its own lead says.
   `CLAUDE_IN_CODEX_CLAUDE_CONFIG` is looser than what was set. Each former name is now a
   tombstone on the `AMICUS_*` declaration that replaced it: a name still set is reported by
   `amicus_backends`, in `env_warnings` for a global setting and in the backend's
-  `status.warnings` for a backend one, naming the `AMICUS_*` name to set; its value is never
-  read, so it neither supplies the setting nor conflicts with the `AMICUS_*` value, and the
-  conflict error of the window is gone with it. The tombstones have no removal window: they
+  `status.warnings` for a backend one (so only while that backend is enabled and loaded),
+  naming the `AMICUS_*` name to set; its value is never read, not even to recognise a
+  placeholder, so it neither supplies the setting nor conflicts with the `AMICUS_*` value,
+  and the conflict error of the window is gone with it. The tombstones have no removal window: they
   are the migration table's data and a diagnostic, not a compatibility path. The shim itself
   (`EnvVar.legacy`) and the release guard that refuses a release at or past
   `LEGACY_REMOVAL_VERSION` while an alias is declared both stay, so a later rename gets the

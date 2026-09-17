@@ -235,6 +235,35 @@ async def test_backends_catalog_reports_enabled_available_and_unavailable():
     assert [b["id"] for b in only.structured_content["backends"]] == ["kimi"]
 
 
+async def test_a_backend_tombstone_is_reported_only_through_that_backend_s_status():
+    """A retired BACKEND name reaches `status.warnings` of the backend that owns it, so it is
+    reported only while that backend is enabled and loaded; a stale name for a backend that
+    is not enabled affects nothing, and the payload says nothing about it. docs/MIGRATION.md
+    states exactly this, so a future top-level scan must change that sentence too."""
+    from amicus.backends import codex
+
+    environ = {
+        "AMICUS_BACKENDS": "codex",
+        "CODEX_IN_CLAUDE_ISOLATION": "ignore-rules",
+        "MOONBRIDGE_MODEL": "k3",
+        "AMICUS_CODEX_BIN": "/nonexistent/amicus-test-codex",
+    }
+    settings = config.settings(environ)
+    # The real codex plugin, from the same environ (its status probe is what carries the
+    # backend's config warnings); kimi is not enabled, so no kimi plugin exists at all.
+    registry = BackendRegistry({"codex": codex.plugin(environ)}, {})
+    async with Client(server.create_app(settings, registry)) as c:
+        res = await c.call_tool("amicus_backends", {})
+    payload = res.structured_content
+    by_id = {b["id"]: b for b in payload["backends"]}
+    codex_warnings = "\n".join(by_id["codex"]["status"]["warnings"])
+    assert "CODEX_IN_CLAUDE_ISOLATION is set but not read" in codex_warnings
+    assert "AMICUS_CODEX_ISOLATION" in codex_warnings
+    assert not any("CODEX_IN_CLAUDE_ISOLATION" in w for w in payload["env_warnings"])
+    assert by_id["kimi"]["status"] is None and not by_id["kimi"]["enabled"]
+    assert "MOONBRIDGE_MODEL" not in json.dumps(payload)
+
+
 async def test_backends_status_probe_failure_is_a_warning_not_a_crash():
     class Boom:
         def probe(self):
