@@ -83,7 +83,8 @@ The README's "Where things are" table indexes the rest.
 Users add this repository as a plugin marketplace, and a host copies the plugin into a directory keyed by `plugin.json`'s version, re-reading it only when that version changes.
 ADR 0031 is shaped by that fact, established by probe on Claude Code and Codex, and it supersedes ADR 0015, which had assumed a host re-reads `.mcp.json`.
 Under ADR 0015 the pin trailed the release, so an install taken before the pin-move PR, or anywhere mid-cycle, kept running an older server than its own skills (issue #117).
-So `.mcp.json` names its own release, and the marketplace entry pins a published tag by `ref` and `sha`: hosts install that self-consistent tag snapshot rather than `main`.
+So `.mcp.json` names its own release, and from 0.4.0 the marketplace entry pins a published tag by `ref` and `sha`, so hosts install that self-consistent tag snapshot rather than `main`.
+Until the 0.4.0 pointer PR merges, the entry is still `"./"` and hosts install `main`, which is why rule 24 bars anything else from merging during that one transition.
 Rule 24's invariant, that the pointer users follow names an already-published release, moved with it from `.mcp.json` to the marketplace entry.
 `sha` is required because a host serves `sha` over a disagreeing `ref` without complaint, and the `v*` ruleset's admin bypass means a tag can be moved.
 `uvx` reuses a cached tool environment without querying any index, so the version in `.mcp.json`'s requirement string is still what makes an existing install pick up a new server.
