@@ -63,11 +63,13 @@ def gone_cwd(tmp_path, monkeypatch):
     doomed = tmp_path / "doomed"
     doomed.mkdir()
     os.chdir(doomed)
-    doomed.rmdir()
-    with pytest.raises(FileNotFoundError):
-        Path.cwd()
-    monkeypatch.setattr(tempfile, "tempdir", None)
     try:
+        # Everything after the chdir is inside the finally, so a failure here cannot
+        # leave the rest of the session in a deleted directory.
+        doomed.rmdir()
+        with pytest.raises(FileNotFoundError):
+            Path.cwd()
+        monkeypatch.setattr(tempfile, "tempdir", None)
         yield
     finally:
         os.chdir(saved)
