@@ -274,35 +274,65 @@ def consult_result(result: ExecResult, meta: Meta) -> dict[str, Any]:
     )
 
 
+# The fixed summary of a review whose answer amicus could not read as the requested object.
+# Fixed text, never a digest of the answer: the answer itself is raw_response.text.
+UNSTRUCTURED_SUMMARY = (
+    "The backend answered, but not with one JSON object amicus could read, so nothing was "
+    "parsed from it: verdict and confidence are unknown and findings is empty. Its whole "
+    "answer is raw_response.text, returned at detail=full (on this call, or free from "
+    "amicus_job_result for meta.job_id); read it as unverified prose."
+)
+
+
 def _parse_reviewed(
     result: ExecResult, meta: Meta, coverage: Coverage, plugin: BackendPlugin, noun: str
 ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
-    """Strict about SHAPE, lenient about FIELDS: exit-0 output that is not JSON, or not a
-    JSON object, is a hard invalid_json/schema_violation error, never a prose downgrade.
-    A JSON object that clears that bar but deviates field-by-field is coerced instead —
-    each machine enum falls to its own honest floor, so a malformed object can never be
-    delivered as a `pass`. This deliberately mirrors codex-in-claude, whose normalize.py
-    says a missing verdict "defaults to unknown, which is honest, so it is intentionally
-    accepted". Confidence answers to the same principle (issue #53): `low` is the lowest
-    rating a backend can REPORT, so defaulting to it would manufacture a claim; `unknown`
-    declines to make one. The folds downstream may still state `low` on their own basis.
-    Returns (error_envelope, None) or (None, model fields)."""
+    """Strict about SHAPE, lenient about FIELDS, and never discarding an answer. An empty
+    answer is a hard invalid_json error: there is nothing to deliver. A non-empty answer
+    that is not one readable JSON object is delivered, not discarded (#139): as
+    `review_status: unstructured`, with the verdict and confidence unknown, nothing parsed,
+    and the whole answer in raw_response.text. A JSON object that clears the shape bar but
+    deviates field-by-field is coerced instead: each machine enum falls to its own honest
+    floor, so a malformed object can never be delivered as a `pass`. This deliberately
+    mirrors codex-in-claude, whose normalize.py says a missing verdict "defaults to unknown,
+    which is honest, so it is intentionally accepted". Confidence answers to the same
+    principle (issue #53): `low` is the lowest rating a backend can REPORT, so defaulting to
+    it would manufacture a claim; `unknown` declines to make one. The folds downstream may
+    still state `low` on their own basis. Returns (error_envelope, None) or (None, model
+    fields)."""
     apply_exec(meta, result)
-    status, parsed = classify_structured(result.answer)
-    if status != "ok":
-        preview = redaction.sanitize_echo_prose(result.answer).strip()[:300]
-        tail = f" Raw output preview: {preview}" if preview else ""
+    if not (result.answer or "").strip():
         return (
             error_envelope(
-                status,
-                "the backend exited 0 but did not return one unambiguous schema-valid JSON "
-                f"object for the {noun} (the output schema appears to have been ignored, or "
-                f"the object repeats a key).{tail}",
+                "invalid_json",
+                f"the backend exited 0 but amicus read no answer for the {noun}: it returned "
+                "none, or an answer file amicus refuses to read (not a regular file, or over "
+                "the artifact cap).",
                 meta,
                 plugin=plugin,
             ),
             None,
         )
+    status, parsed = classify_structured(result.answer, enclosed=True)
+    if status != "ok":
+        # Nothing was parsed, so no finding or prose list was carried, and both diagnostics
+        # say so rather than a null claiming the backend reported none (#38, #52).
+        findings, diagnostics = coerce_findings(ABSENT)
+        lists, lists_diagnostics = coerce_prose_lists({})
+        return None, {
+            "summary": UNSTRUCTURED_SUMMARY,
+            "verdict": "unknown",
+            "confidence": "unknown",
+            "review_status": "unstructured",
+            "context_summary": meta.context_summary,
+            "coverage": coverage,
+            "findings": findings,
+            "findings_diagnostics": diagnostics,
+            "lists_diagnostics": lists_diagnostics,
+            **lists,
+            "raw_response": _raw(result, meta),
+            "meta": meta,
+        }
     s = cast("dict[str, Any]", _sanitize_structured(cast("dict", parsed)))
     findings, diagnostics = coerce_findings(s.get("findings", ABSENT))
     verdict, confidence, summary = review_mod.apply_coverage(

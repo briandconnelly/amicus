@@ -31,7 +31,10 @@ from amicus.schemas.results import (
     ConsultResult,
     Coverage,
     DelegateResult,
+    FindingsDiagnostics,
     JobListResult,
+    ListDiagnostics,
+    ListsDiagnostics,
     RawResponse,
     ReviewResult,
 )
@@ -116,6 +119,25 @@ def _stored_envelopes() -> dict[str, dict[str, Any]]:
                 ),
             )
         ),
+        # A review whose answer could not be read (#139): nothing parsed, both diagnostics
+        # non-null, and the answer itself only in raw_response.text.
+        "review_unstructured": dump_success(
+            ReviewResult(
+                summary="s",
+                verdict="unknown",
+                confidence="unknown",
+                review_status="unstructured",
+                coverage=Coverage(status="complete"),
+                findings_diagnostics=FindingsDiagnostics(reasons=["missing_findings"]),
+                lists_diagnostics=ListsDiagnostics(
+                    questions=ListDiagnostics(reasons=["missing_member"]),
+                    assumptions=ListDiagnostics(reasons=["missing_member"]),
+                    next_steps=ListDiagnostics(reasons=["missing_member"]),
+                ),
+                raw_response=_raw(),
+                meta=_populated(),
+            )
+        ),
         # The states the branch review cannot hold at once: a cwd-resolved workspace and a
         # truncated diff, so every producible optional is populated SOMEWHERE.
         "review_commit_truncated": dump_success(
@@ -147,6 +169,7 @@ _KIND_BY_NAME = {
     "consult": "consult",
     "review": "review_changes",
     "adversarial": "adversarial_review",
+    "review_unstructured": "review_changes",
     "review_commit_truncated": "review_changes",
     "delegate_no_changes": "delegate",
 }

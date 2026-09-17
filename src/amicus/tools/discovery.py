@@ -95,6 +95,9 @@ _COMMON_PAID_CODES = [
     "api_key_missing",
     "internal_error",
 ]
+# Kimi's inspector reports a zero-exit run with no answer as empty_response on every verb it
+# runs, so only a tool that can select kimi lists it; adversarial review is claude-only.
+_KIMI_PAID_CODES = ["empty_response"]
 _REVIEW_CODES = [
     "invalid_scope",
     "invalid_base",
@@ -102,8 +105,9 @@ _REVIEW_CODES = [
     "invalid_paths",
     "not_a_git_repo",
     "git_unavailable",
+    # Only an empty answer: one that is not a readable object is delivered as
+    # review_status unstructured (#139), so schema_violation is no longer a review outcome.
     "invalid_json",
-    "schema_violation",
     "context_too_large",
 ]
 # Lifecycle codes a sync tool's amicus_job_result-shaped envelope can carry once
@@ -129,7 +133,9 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
             "pasted inline."
         ),
         "returns": "summary, findings, questions, next_steps, raw_response (detail=full) and meta.",
-        "error_codes": _COMMON_PAID_CODES + _SYNC_LIFECYCLE_CODES + _IDEMPOTENCY_CODES,
+        "error_codes": (
+            _COMMON_PAID_CODES + _KIMI_PAID_CODES + _SYNC_LIFECYCLE_CODES + _IDEMPOTENCY_CODES
+        ),
     },
     "amicus_consult_async": {
         "cost": "active",
@@ -138,17 +144,23 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
         "returns": (
             "job_id, status, poll_after_ms, expires_at, follow_up; result via amicus_job_result."
         ),
-        "error_codes": _COMMON_PAID_CODES + _IDEMPOTENCY_CODES,
+        "error_codes": _COMMON_PAID_CODES + _KIMI_PAID_CODES + _IDEMPOTENCY_CODES,
     },
     "amicus_review_changes": {
         "cost": "active",
         "backends": list(BACKEND_IDS),
         "use_when": "A structured review of changes that live in git.",
         "returns": (
-            "verdict, confidence, findings, review_status, coverage, context_summary and meta."
+            "verdict, confidence, findings, review_status, coverage, context_summary, "
+            "raw_response (detail=full; the whole answer when review_status is unstructured) "
+            "and meta."
         ),
         "error_codes": (
-            _COMMON_PAID_CODES + _REVIEW_CODES_EMITTED + _SYNC_LIFECYCLE_CODES + _IDEMPOTENCY_CODES
+            _COMMON_PAID_CODES
+            + _KIMI_PAID_CODES
+            + _REVIEW_CODES_EMITTED
+            + _SYNC_LIFECYCLE_CODES
+            + _IDEMPOTENCY_CODES
         ),
     },
     "amicus_review_changes_async": {
@@ -156,7 +168,7 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
         "backends": list(BACKEND_IDS),
         "use_when": "A multi-file or whole-branch review that may exceed the sync deadline.",
         "returns": "a job handle; result via amicus_job_result.",
-        "error_codes": _COMMON_PAID_CODES + _REVIEW_CODES + _IDEMPOTENCY_CODES,
+        "error_codes": _COMMON_PAID_CODES + _KIMI_PAID_CODES + _REVIEW_CODES + _IDEMPOTENCY_CODES,
     },
     "amicus_delegate": {
         "cost": "active",
@@ -168,6 +180,7 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
         "returns": "diff, diffstat, summary and meta.",
         "error_codes": [
             *_COMMON_PAID_CODES,
+            *_KIMI_PAID_CODES,
             "not_a_git_repo",
             "git_unavailable",
             "worktree_error",
@@ -182,6 +195,7 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
         "returns": "a job handle; result via amicus_job_result.",
         "error_codes": [
             *_COMMON_PAID_CODES,
+            *_KIMI_PAID_CODES,
             "not_a_git_repo",
             "git_unavailable",
             "worktree_error",
@@ -192,7 +206,10 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
         "cost": "active",
         "backends": ["claude"],
         "use_when": "A fixed critic attacking a plan, claim or decision before you commit to it.",
-        "returns": "verdict, confidence, findings, review_status, coverage and meta.",
+        "returns": (
+            "verdict, confidence, findings, review_status, coverage, raw_response (detail=full; "
+            "the whole answer when review_status is unstructured) and meta."
+        ),
         "error_codes": _COMMON_PAID_CODES + _REVIEW_CODES + _IDEMPOTENCY_CODES,
     },
     "amicus_adversarial_review_async": {

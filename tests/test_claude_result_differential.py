@@ -8,7 +8,7 @@ from __future__ import annotations
 import pytest
 from tests.support import claudefixtures as cf
 
-from amicus.orchestration import review
+from amicus.orchestration import finalize, review
 from amicus.orchestration import run as run_mod
 from amicus.orchestration.gitdiff import DiffResult, DiffSummary
 from amicus.request import RunSpec
@@ -24,9 +24,14 @@ KNOWN_DEVIATIONS: dict[str, dict[str, object]] = {
     # Decision 3: rate limits are minted, not degraded to a retryable nonzero_exit.
     "zero_exit_rate_limited": {"code": "backend_rate_limited", "temporary": True},
     "zero_exit_is_error_subtype_success": {"code": "backend_rate_limited", "temporary": True},
-    # The strict review path (ADR 0007/0009): exit-0 prose on a review is invalid_json, never
-    # a verdict=unknown success.
-    "review_prose": {"ok": False, "code": "invalid_json"},
+    # Exit-0 prose on a review is delivered like the sibling's success (#139, ADR 0033), but
+    # as `review_status: unstructured` with amicus's fixed summary and the absence of a
+    # rating, where the sibling summarizes with the prose itself and rates it low.
+    "review_prose": {
+        "summary": finalize.UNSTRUCTURED_SUMMARY,
+        "confidence": "unknown",
+        "review_status": "unstructured",
+    },
     # pontonier's shared table defaults a PROCESS nonzero_exit to temporary=True (M1/M3 kept
     # it); the sibling's classifier says False. Zero-exit envelope errors are False on both.
     "nonzero_secret": {"temporary": True},
@@ -91,8 +96,10 @@ async def test_envelope_projection_matches_the_sibling(
     expected_ok = deviation.get("ok", theirs["ok"])
     assert ours["ok"] == expected_ok, ours
     if expected_ok:
-        for key in ("summary", "verdict", "confidence"):
-            if key in theirs:
+        for key in ("summary", "verdict", "confidence", "review_status"):
+            if key in deviation:
+                assert ours[key] == deviation[key], key
+            elif key in theirs:
                 assert ours[key] == theirs[key], key
         assert len(ours["findings"]) == theirs["findings_count"]
         assert ours["meta"].get("session_id") == theirs["session_id"]

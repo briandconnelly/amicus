@@ -148,7 +148,7 @@
     ],
     "protocol_revision": "2026-07-28",
     "resource_error_carrier": "JSON-RPC error; the envelope (machine_code/human_message/backend/temporary/retry_after_ms/repair/resource_uri/request_id) is in error.data. Classify by error.data.machine_code: the numeric is era-bound (-32002 on a 2025-11-25 connection, -32602 on 2026-07-28; -32603 for a read failure on both).",
-    "result_format": 6,
+    "result_format": 7,
     "result_meta_resource": "amicus://result-meta",
     "scope": [
       "Second opinions, git-change reviews, adversarial critiques and delegated diffs from Codex, Kimi or Claude Code, selected per call.",
@@ -192,6 +192,7 @@
           "api_key_invalid",
           "api_key_missing",
           "internal_error",
+          "empty_response",
           "job_failed",
           "job_cancelled",
           "job_timeout",
@@ -250,6 +251,7 @@
           "api_key_invalid",
           "api_key_missing",
           "internal_error",
+          "empty_response",
           "idempotency_conflict",
           "idempotency_in_progress",
           "idempotency_result_unavailable"
@@ -302,6 +304,7 @@
           "api_key_invalid",
           "api_key_missing",
           "internal_error",
+          "empty_response",
           "invalid_scope",
           "invalid_base",
           "invalid_commit",
@@ -309,7 +312,6 @@
           "not_a_git_repo",
           "git_unavailable",
           "invalid_json",
-          "schema_violation",
           "job_failed",
           "job_cancelled",
           "job_timeout",
@@ -339,7 +341,7 @@
         "required_params": [
           "backend"
         ],
-        "returns": "verdict, confidence, findings, review_status, coverage, context_summary and meta.",
+        "returns": "verdict, confidence, findings, review_status, coverage, context_summary, raw_response (detail=full; the whole answer when review_status is unstructured) and meta.",
         "stability": null,
         "use_when": "A structured review of changes that live in git."
       },
@@ -373,6 +375,7 @@
           "api_key_invalid",
           "api_key_missing",
           "internal_error",
+          "empty_response",
           "invalid_scope",
           "invalid_base",
           "invalid_commit",
@@ -380,7 +383,6 @@
           "not_a_git_repo",
           "git_unavailable",
           "invalid_json",
-          "schema_violation",
           "context_too_large",
           "idempotency_conflict",
           "idempotency_in_progress",
@@ -438,6 +440,7 @@
           "api_key_invalid",
           "api_key_missing",
           "internal_error",
+          "empty_response",
           "not_a_git_repo",
           "git_unavailable",
           "worktree_error",
@@ -496,6 +499,7 @@
           "api_key_invalid",
           "api_key_missing",
           "internal_error",
+          "empty_response",
           "not_a_git_repo",
           "git_unavailable",
           "worktree_error",
@@ -554,7 +558,6 @@
           "not_a_git_repo",
           "git_unavailable",
           "invalid_json",
-          "schema_violation",
           "context_too_large",
           "idempotency_conflict",
           "idempotency_in_progress",
@@ -582,7 +585,7 @@
           "backend",
           "target"
         ],
-        "returns": "verdict, confidence, findings, review_status, coverage and meta.",
+        "returns": "verdict, confidence, findings, review_status, coverage, raw_response (detail=full; the whole answer when review_status is unstructured) and meta.",
         "stability": null,
         "use_when": "A fixed critic attacking a plan, claim or decision before you commit to it."
       },
@@ -621,7 +624,6 @@
           "not_a_git_repo",
           "git_unavailable",
           "invalid_json",
-          "schema_violation",
           "context_too_large",
           "idempotency_conflict",
           "idempotency_in_progress",
@@ -1563,7 +1565,7 @@
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-31",
+                "default": "amicus/0.1/schema-32",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -2475,7 +2477,7 @@
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-31",
+            "default": "amicus/0.1/schema-32",
             "title": "Fingerprint",
             "type": "string"
           },
@@ -3237,7 +3239,7 @@
                     "type": "null"
                   }
                 ],
-                "description": "What the backend reported that amicus could not carry intact; null when nothing deviated. Read this before acting on an empty or short `findings` list. On a review_status of not_run no backend ran: this is null and review_status is the signal."
+                "description": "What the backend reported that amicus could not carry intact; null when nothing deviated. Read this before acting on an empty or short `findings` list. On a review_status of not_run no backend ran: this is null and review_status is the signal. On unstructured nothing was parsed, so it reports missing_findings."
               },
               "lists_diagnostics": {
                 "anyOf": [
@@ -3371,7 +3373,7 @@
                     "type": "null"
                   }
                 ],
-                "description": "What the backend put in `questions`, `assumptions` or `next_steps` that amicus could not carry intact; null when all three were clean, and a null member is a clean list. Per member, `dropped` counts entries dropped whole (null: the member could not be read at all) and `reasons` says why. number_stringified: a number delivered as its string, nothing lost. invalid_entry: an entry that was not a string or number, dropped whole. invalid_container: present but not a list. missing_member: the required member was absent. None of these touches the verdict or confidence. On a review_status of not_run no backend ran: this is null and review_status is the signal."
+                "description": "What the backend put in `questions`, `assumptions` or `next_steps` that amicus could not carry intact; null when all three were clean, and a null member is a clean list. Per member, `dropped` counts entries dropped whole (null: the member could not be read at all) and `reasons` says why. number_stringified: a number delivered as its string, nothing lost. invalid_entry: an entry that was not a string or number, dropped whole. invalid_container: present but not a list. missing_member: the required member was absent. None of these touches the verdict or confidence. On a review_status of not_run no backend ran: this is null and review_status is the signal. On unstructured nothing was parsed, so every member reports missing_member."
               },
               "meta": {
                 "description": "Result metadata; schema at amicus://result-meta",
@@ -3437,9 +3439,11 @@
                 ]
               },
               "review_status": {
+                "description": "unstructured: the answer was not one readable JSON object, so nothing was parsed; the whole answer is raw_response.text (detail=full).",
                 "enum": [
                   "completed",
-                  "not_run"
+                  "not_run",
+                  "unstructured"
                 ],
                 "type": "string"
               },
@@ -4889,7 +4893,7 @@
                     "type": "null"
                   }
                 ],
-                "description": "What the backend reported that amicus could not carry intact; null when nothing deviated. Read this before acting on an empty or short `findings` list. On a review_status of not_run no backend ran: this is null and review_status is the signal."
+                "description": "What the backend reported that amicus could not carry intact; null when nothing deviated. Read this before acting on an empty or short `findings` list. On a review_status of not_run no backend ran: this is null and review_status is the signal. On unstructured nothing was parsed, so it reports missing_findings."
               },
               "lists_diagnostics": {
                 "anyOf": [
@@ -5023,7 +5027,7 @@
                     "type": "null"
                   }
                 ],
-                "description": "What the backend put in `questions`, `assumptions` or `next_steps` that amicus could not carry intact; null when all three were clean, and a null member is a clean list. Per member, `dropped` counts entries dropped whole (null: the member could not be read at all) and `reasons` says why. number_stringified: a number delivered as its string, nothing lost. invalid_entry: an entry that was not a string or number, dropped whole. invalid_container: present but not a list. missing_member: the required member was absent. None of these touches the verdict or confidence. On a review_status of not_run no backend ran: this is null and review_status is the signal."
+                "description": "What the backend put in `questions`, `assumptions` or `next_steps` that amicus could not carry intact; null when all three were clean, and a null member is a clean list. Per member, `dropped` counts entries dropped whole (null: the member could not be read at all) and `reasons` says why. number_stringified: a number delivered as its string, nothing lost. invalid_entry: an entry that was not a string or number, dropped whole. invalid_container: present but not a list. missing_member: the required member was absent. None of these touches the verdict or confidence. On a review_status of not_run no backend ran: this is null and review_status is the signal. On unstructured nothing was parsed, so every member reports missing_member."
               },
               "meta": {
                 "description": "Result metadata; schema at amicus://result-meta",
@@ -5796,7 +5800,7 @@
                     "type": "null"
                   }
                 ],
-                "description": "What the backend reported that amicus could not carry intact; null when nothing deviated. Read this before acting on an empty or short `findings` list. On a review_status of not_run no backend ran: this is null and review_status is the signal."
+                "description": "What the backend reported that amicus could not carry intact; null when nothing deviated. Read this before acting on an empty or short `findings` list. On a review_status of not_run no backend ran: this is null and review_status is the signal. On unstructured nothing was parsed, so it reports missing_findings."
               },
               "meta": {
                 "description": "Result metadata; schema at amicus://result-meta",
@@ -8691,7 +8695,7 @@
                     "type": "null"
                   }
                 ],
-                "description": "What the backend reported that amicus could not carry intact; null when nothing deviated. Read this before acting on an empty or short `findings` list. On a review_status of not_run no backend ran: this is null and review_status is the signal."
+                "description": "What the backend reported that amicus could not carry intact; null when nothing deviated. Read this before acting on an empty or short `findings` list. On a review_status of not_run no backend ran: this is null and review_status is the signal. On unstructured nothing was parsed, so it reports missing_findings."
               },
               "lists_diagnostics": {
                 "anyOf": [
@@ -8825,7 +8829,7 @@
                     "type": "null"
                   }
                 ],
-                "description": "What the backend put in `questions`, `assumptions` or `next_steps` that amicus could not carry intact; null when all three were clean, and a null member is a clean list. Per member, `dropped` counts entries dropped whole (null: the member could not be read at all) and `reasons` says why. number_stringified: a number delivered as its string, nothing lost. invalid_entry: an entry that was not a string or number, dropped whole. invalid_container: present but not a list. missing_member: the required member was absent. None of these touches the verdict or confidence. On a review_status of not_run no backend ran: this is null and review_status is the signal."
+                "description": "What the backend put in `questions`, `assumptions` or `next_steps` that amicus could not carry intact; null when all three were clean, and a null member is a clean list. Per member, `dropped` counts entries dropped whole (null: the member could not be read at all) and `reasons` says why. number_stringified: a number delivered as its string, nothing lost. invalid_entry: an entry that was not a string or number, dropped whole. invalid_container: present but not a list. missing_member: the required member was absent. None of these touches the verdict or confidence. On a review_status of not_run no backend ran: this is null and review_status is the signal. On unstructured nothing was parsed, so every member reports missing_member."
               },
               "meta": {
                 "description": "Result metadata; schema at amicus://result-meta",
@@ -8891,9 +8895,11 @@
                 ]
               },
               "review_status": {
+                "description": "unstructured: the answer was not one readable JSON object, so nothing was parsed; the whole answer is raw_response.text (detail=full).",
                 "enum": [
                   "completed",
-                  "not_run"
+                  "not_run",
+                  "unstructured"
                 ],
                 "type": "string"
               },

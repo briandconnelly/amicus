@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 
+import pytest
 from tests.support import fakeplugin
 
 from amicus.orchestration import finalize as fz
@@ -82,18 +83,19 @@ def test_consult_structured_and_prose_and_sanitization():
     assert empty["summary"] == "(the backend returned no message)"
 
 
-def test_review_with_a_repeated_findings_key_is_invalid_json_not_an_empty_pass():
+def test_review_with_a_repeated_findings_key_is_unstructured_not_an_empty_pass():
     # #51: the duplicate collapses inside json.loads, before coerce_findings can measure
-    # loss, so the only honest outcome is the hard invalid_json error the strict path
-    # already returns for unparseable output - never a `pass` carrying no findings.
+    # loss, so the object is never read as a review - never a `pass` carrying no findings.
+    # #139: the answer is still delivered, unparsed, rather than discarded as an error.
     plugin = fakeplugin.make_plugin()
     payload = _structured()
     head = json.dumps(payload)[:-1]
     answer = head + ',"findings":[]}'
     assert json.loads(answer)["findings"] == []  # the collapse this test guards against
     out = fz.review_result(ExecResult(answer=answer), Meta(), _COMPLETE, plugin)
-    assert out["ok"] is False and out["error"]["code"] == "invalid_json"
-    assert "repeats a key" in out["error"]["message"]
+    assert out["ok"] is True and out["review_status"] == "unstructured"
+    assert (out["verdict"], out["confidence"], out["findings"]) == ("unknown", "unknown", [])
+    assert out["raw_response"]["text"] == answer
 
 
 def test_consult_with_a_repeated_key_takes_the_prose_path():
@@ -112,21 +114,71 @@ def test_consult_with_a_repeated_key_takes_the_prose_path():
     assert out["findings_diagnostics"] == {"dropped": None, "reasons": ["missing_findings"]}
 
 
-def test_review_is_strict_and_folds_coverage():
+_UNSTRUCTURED_LISTS = {
+    key: {"dropped": None, "reasons": ["missing_member"]}
+    for key in ("questions", "assumptions", "next_steps")
+}
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "prose",
+        "[1]",
+        '"a string"',
+        '{"summary": "truncated',
+        '{"summary":"a"} and {"summary":"b"}',
+        'I\'ll read cache.py first.\n<invoke name="Read"><parameter name="file_path">',
+    ],
+)
+@pytest.mark.parametrize("verb", ["review", "adversarial"])
+def test_an_unreadable_answer_is_delivered_unstructured_not_discarded(answer, verb):
+    """#139: a non-empty answer amicus cannot read as one object is delivered whole in
+    raw_response.text, with nothing parsed and every diagnostic saying so, instead of an
+    error that kept a 300-character preview and a retry hint that could not succeed."""
     plugin = fakeplugin.make_plugin()
-    out = fz.review_result(ExecResult(answer="prose"), Meta(), _COMPLETE, plugin)
-    assert (
-        out["ok"] is False
-        and out["error"]["code"] == "invalid_json"
-        and "prose" in out["error"]["message"]
-    )
-    out = fz.review_result(ExecResult(answer="[1]"), Meta(), _COMPLETE, plugin)
-    assert out["error"]["code"] == "schema_violation"
+    build = fz.review_result if verb == "review" else fz.adversarial_result
+    out = build(ExecResult(answer=answer), Meta(), _TRUNCATED, plugin)
+    assert out["ok"] is True and out["review_status"] == "unstructured"
+    assert out["summary"] == fz.UNSTRUCTURED_SUMMARY
+    assert (out["verdict"], out["confidence"]) == ("unknown", "unknown")
+    assert out["coverage"]["omission_reasons"] == ["truncated"]
+    assert out["findings"] == [] and out["questions"] == out["next_steps"] == []
+    assert out["findings_diagnostics"] == {"dropped": None, "reasons": ["missing_findings"]}
+    assert out["lists_diagnostics"] == _UNSTRUCTURED_LISTS
+    assert out["raw_response"]["text"] == answer
+
+
+def test_an_unstructured_answer_is_redacted_whole_and_never_truncated():
+    plugin = fakeplugin.make_plugin()
     secret = "sk-" + "d" * 32
     out = fz.review_result(ExecResult(answer=f"prose token={secret}"), Meta(), _COMPLETE, plugin)
-    assert secret not in str(out)
+    assert out["review_status"] == "unstructured" and secret not in json.dumps(out)
     out = fz.review_result(ExecResult(answer="z" * 5000), Meta(), _COMPLETE, plugin)
-    assert out["error"]["message"].count("z") <= 300
+    assert out["raw_response"]["text"] == "z" * 5000
+
+
+@pytest.mark.parametrize("answer", ["", "  \n", None])
+def test_an_empty_answer_is_still_invalid_json(answer):
+    plugin = fakeplugin.make_plugin()
+    out = fz.review_result(ExecResult(answer=answer), Meta(), _COMPLETE, plugin)
+    assert out["ok"] is False and out["error"]["code"] == "invalid_json"
+    assert "read no answer for the review" in out["error"]["message"]
+
+
+def test_an_object_enclosed_in_prose_is_read_as_the_review():
+    """#139: prose or a fence around the one object no longer costs the review."""
+    plugin = fakeplugin.make_plugin()
+    payload = _structured()
+    answer = f"Here is my review:\n```json\n{json.dumps(payload)}\n```\nThanks."
+    out = fz.review_result(ExecResult(answer=answer), Meta(), _COMPLETE, plugin)
+    assert out["ok"] is True and out["review_status"] == "completed"
+    assert out["verdict"] == payload["verdict"] and len(out["findings"]) == 1
+    assert out["raw_response"]["text"] == answer
+
+
+def test_review_folds_coverage():
+    plugin = fakeplugin.make_plugin()
     payload = _structured()
     ok = fz.review_result(
         ExecResult(answer=json.dumps(payload), structured=payload), Meta(), _COMPLETE, plugin
@@ -741,3 +793,15 @@ def test_delegate_does_not_carry_lists_diagnostics():
         ExecResult(answer="ok"), Meta(), diff="", aliases=(), max_diff_bytes=10
     )
     assert "lists_diagnostics" not in out
+
+
+def test_a_consult_that_wraps_an_object_in_prose_keeps_the_whole_answer():
+    """ADR 0033 is scoped to reviews: a consult's prose is its result (ADR 0024), so a
+    backend's parse_structured does not narrow it to the object inside it."""
+    from amicus.backends.codex import normalize as codex_normalize
+
+    answer = 'Here is the config you asked about:\n{"summary": "s"}\nUse it as-is.'
+    structured = codex_normalize.parse_structured(answer)
+    assert structured is None
+    out = fz.consult_result(ExecResult(answer=answer, structured=structured), Meta())
+    assert out["ok"] is True and out["summary"] == answer

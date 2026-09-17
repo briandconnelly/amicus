@@ -154,8 +154,15 @@ async def test_adversarial_without_a_scope_but_with_a_focus_is_partial(monkeypat
     assert out["coverage"]["untracked_files_detected"] is None
 
 
-async def test_adversarial_prose_is_invalid_json_not_a_pass(monkeypatch):
+async def test_adversarial_prose_is_unstructured_not_a_pass(monkeypatch):
     monkeypatch.setattr(run_mod.runtime, "run_async", cxf.scripted_run_async(stdout="I disagree."))
+    out = await run_mod.run_request(_spec(), _plugin())
+    assert out["ok"] is True and out["review_status"] == "unstructured"
+    assert out["verdict"] == "unknown" and out["raw_response"]["text"] == "I disagree."
+
+
+async def test_adversarial_empty_answer_is_invalid_json(monkeypatch):
+    monkeypatch.setattr(run_mod.runtime, "run_async", cxf.scripted_run_async(stdout=""))
     out = await run_mod.run_request(_spec(), _plugin())
     assert out["ok"] is False and out["error"]["code"] == "invalid_json"
     assert "critique" in out["error"]["message"]
