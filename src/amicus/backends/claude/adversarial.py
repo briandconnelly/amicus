@@ -34,6 +34,11 @@ CRITIC_GUARDRAILS = (
 # an unknown verb's framing alone.
 CRITIC_VERBS = frozenset({"consult", "review_changes", "adversarial_review"})
 
+# The verbs whose structured runs carry OUTPUT_GUARDRAILS. A review joined the critique when
+# a toolless review was seen writing tool-call markup as its answer (#116); consult is left
+# out because its prose answer is itself a valid result.
+SCHEMA_GUARDED_VERBS = frozenset({"review_changes", "adversarial_review"})
+
 # Constant server-owned text only; the schema and all caller material remain on stdin.
 OUTPUT_GUARDRAILS = (
     "\nReturn only a JSON object conforming to the required output schema in the request. "

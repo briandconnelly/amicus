@@ -81,6 +81,10 @@ API_KEY_ENV = "ANTHROPIC_API_KEY"
 
 ACCESS_MODES = ("toolless", "readonly")
 DEFAULT_ACCESS = "toolless"
+# A review judges a diff against the files around it, and a toolless Claude asked to do that
+# writes tool-call markup as prose instead of the review (#116), so review_changes defaults to
+# readonly unless the operator set AMICUS_CLAUDE_ACCESS, which then binds every verb.
+REVIEW_DEFAULT_ACCESS = "readonly"
 # --tools is the PRIMARY allowlist; --disallowed-tools is defense in depth. Never widen
 # READONLY_TOOLS to a write or shell tool.
 READONLY_TOOLS = "Read,Grep,Glob"

@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 from amicus.backends.claude import adversarial, cli, contract, normalize
 from amicus.backends.claude import config as claude_config
 from amicus.backends.claude.binary import BinaryNotFoundError
-from amicus.backends.claude.options import adversarial_config_mode
+from amicus.backends.claude.options import adversarial_config_mode, review_access
 from amicus.schemas import instructions
 from amicus.schemas.structured import schema_instruction
 from amicus.sdk.backend.protocol import ClassifiedFailure, ExecResult, PreparedRun, RepairHint
@@ -47,7 +47,12 @@ class ClaudeBackend:
         return self._config.config_mode
 
     def _access(self, request: RunRequest) -> str:
-        return request.access or self._config.access
+        # Exact-None precedence: an explicit "" is the caller's value, and validation refuses it.
+        if request.access is not None:
+            return request.access
+        if request.kind == "review_changes":
+            return review_access(self._config)
+        return self._config.access
 
     def _model(self, request: RunRequest) -> str | None:
         return request.model or self._config.model
@@ -179,7 +184,7 @@ class ClaudeBackend:
             access=self._access(request),
             system_prompt=(
                 adversarial.CRITIC_GUARDRAILS + adversarial.OUTPUT_GUARDRAILS
-                if request.kind == "adversarial_review" and request.schema is not None
+                if request.kind in adversarial.SCHEMA_GUARDED_VERBS and request.schema is not None
                 else adversarial.CRITIC_GUARDRAILS
             ),
             max_budget_usd=self._budget(request),

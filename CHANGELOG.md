@@ -47,6 +47,19 @@ per-change, as its own lead says.
 
 ### Fixed
 
+- **Surface.** `amicus_review_changes` on the `claude` backend now defaults to
+  `backend_options.access = "readonly"` (#116, ADR 0032). On the previous `toolless` default a
+  review had no tool to read the code it was judging, and answered with tool-call markup
+  instead of the review: amicus reported `invalid_json`, or under the default
+  `config_mode = "inherit"` ran to the budget stop. A Claude review that omits `access` can now
+  read files with `Read`, `Grep` and `Glob`, inside and outside the workspace, which bypasses
+  diff redaction; pass `access: "toolless"` to keep the old behaviour for one call.
+  `amicus_consult` and `amicus_adversarial_review` still default to `toolless`, and setting
+  `AMICUS_CLAUDE_ACCESS` sets the default for every verb, reviews included. A structured Claude
+  review also now carries the output guardrails adversarial reviews already had, telling the
+  model never to simulate a tool call. `amicus_backends` reports `access` under
+  `default_by_verb`. `FINGERPRINT` moves to `amicus/0.1/schema-31`.
+
 - A plugin install no longer runs an older release's server than its own skills (#117,
   ADR 0031, superseding ADR 0015). Hosts install the plugin into a directory keyed by
   `plugin.json`'s version and never re-read it until that version changes, so an install
