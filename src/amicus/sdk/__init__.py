@@ -8,7 +8,7 @@ runtime, stream capping, redaction, path-alias sanitizing and a bounded JSON rea
 ``amicus.sdk.backend`` (the backend protocol and contract, FROZEN at
 ``CONTRACT_API_VERSION = 1``: required members are stable, and new behavior lands as
 defaulted fields or optional capability protocols), ``amicus.sdk.conventions`` (error
-vocabulary, annotations, preflight) and ``amicus.sdk.testing`` (the conformance kit, which
-the registry runs on every plugin it loads). ``amicus.sdk.core`` never imports the other
-three.
+vocabulary, annotations, preflight) and ``amicus.sdk.testing`` (the conformance kit a
+plugin must pass before the registry will use it). ``amicus.sdk.core`` never imports the
+other three.
 """

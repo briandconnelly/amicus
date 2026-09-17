@@ -4,6 +4,7 @@
 
 **Note (M8, ADR 0029):** the separate `pontonier` logger this ADR names is gone.
 The SDK now logs under `amicus.sdk.*`, which `obs.configure` covers through the `amicus` logger.
+The Decision's log-file sentence and the Consequences' fall-through sentence no longer name it (#148); the Context keeps it, because it describes the tree this ADR was written against.
 
 ## Context
 
@@ -45,7 +46,7 @@ The handler carries the floor as well, because FastMCP clamps `fastmcp.server.co
 
 **Neither logger is written to `AMICUS_LOG_FILE`.**
 The value policy passes a message string through unchanged, and both libraries build some messages with f-strings.
-Routing them to disk would copy records that today reach only stderr, so the file keeps carrying amicus's and pontonier's records alone.
+Routing them to disk would copy records that today reach only stderr, so the file keeps carrying amicus's records alone.
 
 ## Consequences
 
@@ -53,7 +54,7 @@ FastMCP's INFO log lines no longer reach stderr.
 Its startup banner is printed to stderr rather than logged, so it still appears, once, before any request arrives.
 The takeover does not make every dependency record safe: a message either library preformats with an f-string is still written as it stands, because the value policy cannot tell where a string came from.
 The one such record known to carry prompt text is the one rewritten above.
-Loggers outside `amicus`, `pontonier`, `fastmcp` and `mcp` still fall through to `logging.lastResort`.
+Loggers outside `amicus`, `fastmcp` and `mcp` still fall through to `logging.lastResort`.
 `tests/test_fastmcp_argument_log.py` reads a real stdio server's stderr and log file at WARNING and DEBUG, with a positive control for each.
 
 ## Audited versions
