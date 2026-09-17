@@ -37,6 +37,8 @@ It would also keep a result that holds the backend's whole answer behind `ok: fa
 
 **Only an empty answer is still an error.**
 It stays `invalid_json` with the shared table's `retry_then_report`, which is honest there: an empty answer is the case a retry can plausibly change.
+Kimi detects an empty answer before a result is built and reports it as `empty_response`, with the same repair; that code was emitted but missing from every paid tool's `error_codes`, and is now listed.
+An answer file amicus refuses to read, because it is not a regular file or exceeds the artifact cap, also reaches this path as empty, so the message says amicus read no answer rather than that the backend returned none.
 `schema_violation` is no longer a review outcome and leaves the review tools' `error_codes`.
 That also settles #116's point about a deterministic `invalid_json`: the deterministic cases now reach the caller as `unstructured`, carrying no retry advice.
 

@@ -163,7 +163,7 @@ def test_an_empty_answer_is_still_invalid_json(answer):
     plugin = fakeplugin.make_plugin()
     out = fz.review_result(ExecResult(answer=answer), Meta(), _COMPLETE, plugin)
     assert out["ok"] is False and out["error"]["code"] == "invalid_json"
-    assert "returned no answer for the review" in out["error"]["message"]
+    assert "read no answer for the review" in out["error"]["message"]
 
 
 def test_an_object_enclosed_in_prose_is_read_as_the_review():

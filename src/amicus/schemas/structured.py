@@ -46,9 +46,14 @@ def _enclosed_object(text: str) -> dict | None:
     start inside a larger object, so a lone finding of a truncated answer is never promoted
     to the answer, and two objects never parse as one. A `{` in the prose before the object
     or a `}` after it lands inside the span and refuses it; a `}` before or a `{` after lies
-    outside and is ignored with the rest of the prose. A repeated key still refuses (#51)."""
+    outside and is ignored with the rest of the prose. A `[` before and a `]` after refuse it
+    too, since they may wrap it in an array. A repeated key still refuses (#51)."""
     start, end = text.find("{"), text.rfind("}")
     if start == -1 or end <= start:
+        return None
+    # An array can hold an object with no `{` before it, so a `[` before the span and a `]`
+    # after it may be a structural wrapper: `[{...}]` is not an object answer, and is refused.
+    if "[" in text[:start] and "]" in text[end + 1 :]:
         return None
     try:
         parsed = _loads(text[start : end + 1])

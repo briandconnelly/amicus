@@ -90,6 +90,7 @@ _COMMON_PAID_CODES = [
     "extra_args_rejected",
     "user_config_rejected",
     "budget_exceeded",
+    "empty_response",
     "claude_permission_error",
     "api_key_invalid",
     "api_key_missing",
@@ -146,7 +147,9 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
         "backends": list(BACKEND_IDS),
         "use_when": "A structured review of changes that live in git.",
         "returns": (
-            "verdict, confidence, findings, review_status, coverage, context_summary and meta."
+            "verdict, confidence, findings, review_status, coverage, context_summary, "
+            "raw_response (detail=full; the whole answer when review_status is unstructured) "
+            "and meta."
         ),
         "error_codes": (
             _COMMON_PAID_CODES + _REVIEW_CODES_EMITTED + _SYNC_LIFECYCLE_CODES + _IDEMPOTENCY_CODES
@@ -193,7 +196,10 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
         "cost": "active",
         "backends": ["claude"],
         "use_when": "A fixed critic attacking a plan, claim or decision before you commit to it.",
-        "returns": "verdict, confidence, findings, review_status, coverage and meta.",
+        "returns": (
+            "verdict, confidence, findings, review_status, coverage, raw_response (detail=full; "
+            "the whole answer when review_status is unstructured) and meta."
+        ),
         "error_codes": _COMMON_PAID_CODES + _REVIEW_CODES + _IDEMPOTENCY_CODES,
     },
     "amicus_adversarial_review_async": {

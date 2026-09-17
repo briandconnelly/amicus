@@ -55,7 +55,8 @@ often holds the review, and an identical retry can fail the same way. An answer 
 one object in a preamble, a fence or a sign-off is read as that object and stays `completed`;
 one that holds two objects, or whose preamble has a `{` or sign-off a `}`, is `unstructured`
 rather than guessed at. That reading is for reviews only: a consult answered in prose keeps its
-whole answer in `summary`. Only an empty answer is still an `invalid_json` error.
+whole answer in `summary`. Only an empty answer is still an error: `invalid_json`, or `empty_response` on `kimi`, which
+detects it before a result is built.
 
 When a review was not complete, the result's `coverage` object says so in fields you can branch
 on: `coverage.status` is `complete` or `partial`, and `coverage.omission_reasons` names why, in a

@@ -305,7 +305,9 @@ def _parse_reviewed(
         return (
             error_envelope(
                 "invalid_json",
-                f"the backend exited 0 but returned no answer for the {noun}.",
+                f"the backend exited 0 but amicus read no answer for the {noun}: it returned "
+                "none, or an answer file amicus refuses to read (not a regular file, or over "
+                "the artifact cap).",
                 meta,
                 plugin=plugin,
             ),

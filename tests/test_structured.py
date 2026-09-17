@@ -94,3 +94,18 @@ def test_the_enclosed_read_is_opt_in_so_a_consult_keeps_its_prose():
 
 def test_an_enclosed_non_object_is_not_read():
     assert classify_structured("Answer: [1, 2]", enclosed=True) == ("invalid_json", None)
+
+
+def test_an_object_inside_an_array_wrapper_is_refused():
+    # An array holds its first object with no `{` before it, so the span alone cannot tell a
+    # wrapper from prose: a `[` before and a `]` after refuse the read.
+    for text in (
+        'Review: [{"summary":"s"}]',
+        '[1, {"summary":"s"}]',
+        'See [a] {"summary":"s"} [b]',
+    ):
+        # A whole array is schema_violation, an array in prose invalid_json: never "ok".
+        assert classify_structured(text, enclosed=True)[0] != "ok", text
+    # A bracket on one side only cannot wrap the object.
+    for text in ('See [1] below:\n{"summary":"s"}', '{"summary":"s"}\n[1] above'):
+        assert classify_structured(text, enclosed=True) == ("ok", {"summary": "s"}), text

@@ -116,7 +116,8 @@ obligations live in the reference each route names, under that file's own `Rules
   intact, with `dropped: null` when the member could not be read at all. Nothing in it moves
   the verdict or confidence. On `review_status: not_run` no backend ran, so it is null and
   `review_status` is the signal. Delegate results do not carry the field.
-- **On `review_status: unstructured`, read `raw_response.text` before concluding or paying again.**
+- **On `review_status: unstructured`, fetch and read `raw_response.text` at `detail="full"` before
+  concluding or paying again.**
   The backend answered, but not with one object amicus could read, so nothing was parsed: the
   verdict and confidence are `unknown`, and the empty `findings` and prose lists are not the
   backend saying none. The text arrives at `detail="full"`, on the call or free from

@@ -216,7 +216,7 @@ Poll only while `status` is `running`; a caller that read a non-null hint as "st
 **A review amicus cannot parse is delivered as `unstructured` (#139).**
 A review or critique whose answer is not one readable JSON object returned `invalid_json` or `schema_violation`; it now returns `ok: true` with `review_status: unstructured`, `verdict` and `confidence` `unknown`, and the whole answer in `raw_response.text` at `detail="full"`.
 Branch on `review_status` before reading the verdict, and read that text before paying for the same review again.
-Only an empty answer is still `invalid_json`.
+Only an empty answer is still an error: `invalid_json`, or `empty_response` on Kimi, which detects it first.
 
 **A job result stored by 0.2.0 is no longer readable (#65, #52, #139).**
 `RESULT_FORMAT` moved from 4 to 7, so `amicus_job_result` and `amicus_job_consume_result` return `job_result_incompatible` for a record 0.2.0 wrote, rather than a result whose new fields would answer for a run that never measured them.
