@@ -259,7 +259,12 @@ def test_finalize_reads_the_envelope_and_hook_warnings(pinned_claude_bin, tmp_pa
     assert result.structured is not None and result.structured["verdict"] == "concerns"
     assert result.session_id == "sess-golden-1"
     assert result.usage is not None and result.usage.cost_usd == 0.0123
-    assert (result.usage.cached_input_tokens, result.usage.cache_creation_input_tokens) == (10, 5)
+    assert (result.usage.input_tokens, result.usage.output_tokens) == (100, 50)
+    # Read from modelUsage, which this older envelope records without cache keys (#158).
+    assert (result.usage.cached_input_tokens, result.usage.cache_creation_input_tokens) == (
+        None,
+        None,
+    )
     assert result.warnings == ()
     (tmp_path / ".claude").mkdir()
     (tmp_path / ".claude" / "settings.json").write_text('{"hooks": {}}')

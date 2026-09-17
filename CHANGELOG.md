@@ -58,6 +58,23 @@ per-change, as its own lead says.
 
 ### Fixed
 
+- **Surface.** A Claude budget stop no longer reports `input_tokens: 0` and
+  `output_tokens: 0` beside a nonzero `cost_usd` (#158). claude prints its top-level `usage`
+  block zeroed on that envelope while `modelUsage` carries the real counts, and its own
+  result schema names `modelUsage` as the accounting field, so `meta.usage` now comes from
+  `modelUsage` (summed across models) whenever at least one of its entries is an object,
+  and from the top-level block only when none is (ADR 0034). A field is read from one
+  block, never both: once `modelUsage` is in use, a field any one entry leaves out is
+  `null`, and a non-object entry beside an object one makes every count `null`. So an older
+  envelope whose `modelUsage` has no cache keys now reports `cached_input_tokens` and
+  `cache_creation_input_tokens` as `null` where it used to copy the block's numbers.
+  `budget_exceeded`'s message and repair, the `max_budget_usd` option description and the
+  `AMICUS_CLAUDE_MAX_BUDGET_USD` description now say claude checks the threshold only
+  between model calls, so one call can carry the estimated cost past it; none states an
+  overshoot bound, and the repair no longer suggests a 0.10-0.20 floor it had no evidence
+  for. The recorded 2.1.274 budget-stop envelope is `tests/fixtures/claude_budget_stop_envelope.json`,
+  documented in `docs/claude-help/2.1.274/`. `RESULT_FORMAT` does not move.
+
 - Every tool that resolves a workspace no longer fails as a retryable `internal_error`
   (`FileNotFoundError`) when the server process's working directory has been deleted under
   it, as happens when the Claude Code worktree the server was started in is removed (#170).

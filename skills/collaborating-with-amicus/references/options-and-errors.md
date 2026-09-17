@@ -96,7 +96,9 @@ Some codes exist only for one backend and are preserved verbatim rather than gen
 `user_config_rejected` (codex — the user's own CLI config carries something the installed CLI
 refuses at startup; zero spend), and `budget_exceeded`, `claude_permission_error`,
 `api_key_invalid`, `api_key_missing` (claude). `budget_exceeded` is the one to read carefully: the
-best-effort spend cap stopped the run, and it **may already have spent**.
+best-effort spend threshold stopped the run, and it **may already have spent**. claude checks the
+threshold only between model calls, so `meta.usage.cost_usd` can exceed `max_budget_usd`; read
+the threshold as a stop, never as a ceiling.
 
 `feature_unsupported` means the backend does not declare the verb — a delegate routed to `claude`,
 for example. `amicus_backends`' `features` list answers that for free, before the call.

@@ -43,28 +43,77 @@ def _int(blob: dict[str, Any], name: str) -> int | None:
     return None
 
 
+# Usage field -> key under each `modelUsage` entry, and -> key in the top-level `usage` block.
+_MODEL_USAGE_KEYS = {
+    "input_tokens": "inputTokens",
+    "output_tokens": "outputTokens",
+    "cached_input_tokens": "cacheReadInputTokens",
+    "cache_creation_input_tokens": "cacheCreationInputTokens",
+}
+_USAGE_BLOCK_KEYS = {
+    "input_tokens": "input_tokens",
+    "output_tokens": "output_tokens",
+    "cached_input_tokens": "cache_read_input_tokens",
+    "cache_creation_input_tokens": "cache_creation_input_tokens",
+}
+
+
+def _model_entries(env: dict[str, Any]) -> tuple[list[dict[str, Any]], bool]:
+    """The dict-shaped entries under `modelUsage`, and whether every entry was one. A
+    non-dict entry beside dict-shaped ones is a model whose counts cannot be read, so a
+    total over the rest would be partial."""
+    raw = env.get("modelUsage")
+    if not isinstance(raw, dict):
+        return [], True
+    entries = [entry for entry in raw.values() if isinstance(entry, dict)]
+    return entries, len(entries) == len(raw)
+
+
+def _sum_across(entries: list[dict[str, Any]], name: str) -> int | None:
+    """The sum over every entry, or None as soon as one entry does not state an int: a partial
+    sum would read as a whole-run total."""
+    total = 0
+    for entry in entries:
+        value = _int(entry, name)
+        if value is None:
+            return None
+        total += value
+    return total
+
+
 def extract_usage(env: dict[str, Any]) -> Usage | None:
-    """Usage with Claude's cache counters mapped onto the shared fields; None when the
-    envelope reports neither tokens nor cost. total_tokens is left None: Claude's input
-    count excludes cached tokens, so a sum would be a claim the envelope does not make."""
-    raw = env.get("usage")
-    blob = raw if isinstance(raw, dict) else {}
+    """Usage from `modelUsage` when the envelope has a dict-shaped entry under it, else from
+    the top-level `usage` block; None when the envelope reports neither tokens nor cost.
+
+    claude's result schema (2.1.274) calls the top-level block "main agent loop only ...
+    prefer modelUsage for token/cost accounting", and a budget stop prints that block zeroed
+    beside a nonzero `total_cost_usd` while `modelUsage` carries the real counts (#158,
+    `tests/fixtures/claude_budget_stop_envelope.json`). The two blocks count different
+    scopes, so a field comes from one of them, never from both: a `modelUsage` field one
+    entry leaves out, or one whose sibling entry is not a dict, is None rather than the
+    block's number or a sum over the rest. Cost is `total_cost_usd`, the
+    cumulative estimate that covers the same calls as `modelUsage`. total_tokens is left
+    None: Claude's input count excludes cached tokens, so a sum would be a claim the
+    envelope does not make."""
     cost_raw = env.get("total_cost_usd")
     cost = (
         float(cost_raw)
         if isinstance(cost_raw, (int, float)) and not isinstance(cost_raw, bool)
         else None
     )
-    if not blob and cost is None:
-        return None
-    return Usage(
-        input_tokens=_int(blob, "input_tokens"),
-        output_tokens=_int(blob, "output_tokens"),
-        total_tokens=None,
-        cost_usd=cost,
-        cached_input_tokens=_int(blob, "cache_read_input_tokens"),
-        cache_creation_input_tokens=_int(blob, "cache_creation_input_tokens"),
-    )
+    entries, complete = _model_entries(env)
+    if entries:
+        counts = {
+            field: _sum_across(entries, key) if complete else None
+            for field, key in _MODEL_USAGE_KEYS.items()
+        }
+    else:
+        raw = env.get("usage")
+        blob = raw if isinstance(raw, dict) else {}
+        if not blob and cost is None:
+            return None
+        counts = {field: _int(blob, key) for field, key in _USAGE_BLOCK_KEYS.items()}
+    return Usage(total_tokens=None, cost_usd=cost, **counts)
 
 
 def extract_session_id(env: dict[str, Any]) -> str | None:

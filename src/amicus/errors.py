@@ -68,8 +68,10 @@ _LOCAL_RULES: dict[str, RepairRule] = {
         "reduce_input",
         None,
         False,
-        "The backend stopped at its best-effort spend cap; raise backend_options.max_budget_usd "
-        "or narrow the request, then retry (a retry spends again).",
+        "The backend stopped at its best-effort spend threshold, which it checks only between "
+        "model calls, so the estimated cost can exceed it; raise "
+        "backend_options.max_budget_usd or narrow the request, then retry (a retry spends "
+        "again).",
     ),
     "claude_permission_error": RepairRule(
         "correct_arguments",

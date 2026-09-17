@@ -256,7 +256,8 @@ PARAMETER_CONTRACTS: dict[str, ParamContract] = {
             "differ, with default null. access — claude: toolless|readonly; review_changes "
             "defaults to readonly and other verbs to toolless unless AMICUS_CLAUDE_ACCESS is "
             "set, which then applies to every verb. max_budget_usd "
-            "— claude: per-call best-effort spend cap in USD, 0.01–5.00. Unset keys "  # noqa: RUF001
+            "— claude: per-call stop threshold in USD, 0.01–5.00, checked only between "  # noqa: RUF001
+            "model calls, so the estimated cost can exceed it. Unset keys "
             "take the backend's defaults; amicus_review_changes_dry_run echoes review_changes "
             "values."
         ),
