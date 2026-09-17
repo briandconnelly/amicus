@@ -67,6 +67,15 @@ async def test_access_resolution_for_a_direct_adapter_caller(
 
 
 @pytest.mark.parametrize("kind", ["consult", "review_changes"])
+def test_an_explicit_empty_access_is_refused_not_read_as_omitted(pinned_claude_bin, kind):
+    """An empty access is the caller's value, not an omission, so it is refused pre-spend
+    rather than resolved to the review default."""
+    _, backend = cf.make_backend()
+    failure = backend.validate_request(_req(kind=kind, access=""))
+    assert failure is not None and failure.details == {"field": "backend_options.access"}
+
+
+@pytest.mark.parametrize("kind", ["consult", "review_changes"])
 async def test_structured_review_carries_output_guardrails_and_consult_does_not(
     pinned_claude_bin, kind
 ):

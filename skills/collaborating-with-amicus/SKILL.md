@@ -187,7 +187,8 @@ deployment; it says nothing about which to prefer for a task. A backend can be e
 not be ready, which is why the discovery rules turn on `status` rather than on `enabled`.
 
 Feature support differs per backend in v1, and so does what each backend can *read* — `claude`
-defaults to no tools at all. A backend ID is also not a model family: Kimi routes to whatever
+defaults to no tools at all except in a review, which defaults to read-only tools unless the
+operator set `AMICUS_CLAUDE_ACCESS`. A backend ID is also not a model family: Kimi routes to whatever
 OpenAI-compatible provider its `config.toml` names. All three are in
 [choosing a backend](references/choosing-a-backend.md).
 

@@ -47,7 +47,8 @@ class ClaudeBackend:
         return self._config.config_mode
 
     def _access(self, request: RunRequest) -> str:
-        if request.access:
+        # Exact-None precedence: an explicit "" is the caller's value, and validation refuses it.
+        if request.access is not None:
             return request.access
         if request.kind == "review_changes":
             return review_access(self._config)
