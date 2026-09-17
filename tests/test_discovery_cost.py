@@ -169,6 +169,14 @@ The schema-33 -> schema-34 move (-7 bytes on every profile: all 116316 -> 116309
 the sibling env names are no longer read, so there is no legacy-env warning to name, and the
 retired-name warning the tombstones add is an env warning like any other. Nothing else on the
 wire moves. MEASURED and BUDGET both move down by the 7 bytes, so the budget keeps no headroom.
+
+The schema-34 -> schema-35 raise (+2168 bytes on every profile: all 116309 -> 118477) is the
+retention disclosure of #163 (ADR 0035): 220 bytes of `tools/_resolve.RECORD_RETENTION` on each
+of the eight paid tools, sync and async, saying the job record keeps the backend's whole answer,
+secret-redacted and able to quote the caller's inputs, whatever `detail` delivered it, and what
+removes it; plus 68 bytes on each of the six `detail` parameters saying `detail` shapes delivery
+only. The record has kept the answer since M2; what was missing was the sentence where the spend
+is. MEASURED and BUDGET both move by the 2168 bytes, so the budget keeps no headroom.
 """
 
 from __future__ import annotations
@@ -178,7 +186,7 @@ from tests.conftest import spawned_server_env
 
 from amicus import manifest
 
-MEASURED: dict[str, int] = {"all": 116309, "codex-kimi": 116317, "claude": 116309}
+MEASURED: dict[str, int] = {"all": 118477, "codex-kimi": 118485, "claude": 118477}
 # The budget is a literal, not MEASURED rounded up to the next kilobyte as it was until
 # 2026-09-14. The rounding left up to 1 KB of growth per bucket that no PR had to own, and
 # this file records three such accumulations (448 and 12 bytes in the paragraphs above, and
@@ -186,7 +194,7 @@ MEASURED: dict[str, int] = {"all": 116309, "codex-kimi": 116317, "claude": 11630
 # #94 that landed after it), each noticed only when the next deliberate raise re-measured.
 # Any growth now fails until a PR raises BUDGET and says why; a shrink passes and shows as
 # drift against MEASURED. Raising one means re-measuring and moving both.
-BUDGET: dict[str, int] = {"all": 116309, "codex-kimi": 116317, "claude": 116309}
+BUDGET: dict[str, int] = {"all": 118477, "codex-kimi": 118485, "claude": 118477}
 
 
 @pytest.mark.parametrize("profile", sorted(manifest.PROFILES))

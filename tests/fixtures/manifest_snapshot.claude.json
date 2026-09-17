@@ -1565,7 +1565,7 @@
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-34",
+                "default": "amicus/0.1/schema-35",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -2477,7 +2477,7 @@
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-34",
+            "default": "amicus/0.1/schema-35",
             "title": "Fingerprint",
             "type": "string"
           },
@@ -2722,7 +2722,7 @@
         "openWorldHint": true,
         "readOnlyHint": false
       },
-      "description": "PAID — spends the selected backend's quota on every new call. A fixed adversarial critic on `backend` attacks `target` (a plan, claim or decision) using `evidence` and an optionally attached git diff; the critic stance is the product, so there is no instructions_append. Claude only in v1 (feature adversarial_review). Egress: sends target, evidence, extra_context and the redacted diff raw to the backend's provider. An attached scope that gathers nothing returns review_status=not_run with no spend. Recorded as a job (meta.job_id).",
+      "description": "PAID — spends the selected backend's quota on every new call. A fixed adversarial critic on `backend` attacks `target` (a plan, claim or decision) using `evidence` and an optionally attached git diff; the critic stance is the product, so there is no instructions_append. Claude only in v1 (feature adversarial_review). Egress: sends target, evidence, extra_context and the redacted diff raw to the backend's provider. An attached scope that gathers nothing returns review_status=not_run with no spend. Recorded as a job (meta.job_id). The job record keeps the whole answer — secret-redacted, and it can quote your inputs — whatever `detail` delivered, until AMICUS_JOB_TTL (default 24h), the per-workspace cap or amicus_job_consume_result removes it.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
@@ -2841,7 +2841,7 @@
           },
           "detail": {
             "default": "summary",
-            "description": "summary (default) omits raw_response.text; full includes it. Same shape either way.",
+            "description": "summary (default) omits raw_response.text; full includes it. Same shape either way. Delivery only: the job record keeps the text whichever you ask for.",
             "enum": [
               "full",
               "summary"
@@ -3519,7 +3519,7 @@
         "openWorldHint": true,
         "readOnlyHint": false
       },
-      "description": "PAID — spends the selected backend's quota on every new call. Async twin of amicus_adversarial_review: returns a job handle; poll amicus_job_status while status is running, then read amicus_job_result. Same egress and feature gate.",
+      "description": "PAID — spends the selected backend's quota on every new call. Async twin of amicus_adversarial_review: returns a job handle; poll amicus_job_status while status is running, then read amicus_job_result. Same egress and feature gate. The job record keeps the whole answer — secret-redacted, and it can quote your inputs — whatever `detail` delivered, until AMICUS_JOB_TTL (default 24h), the per-workspace cap or amicus_job_consume_result removes it.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
@@ -4583,7 +4583,7 @@
         "openWorldHint": true,
         "readOnlyHint": false
       },
-      "description": "PAID — spends the selected backend's quota on every new call. Read-only second opinion or Q&A from `backend` on a question, design, or a diff you paste inline; use amicus_review_changes when the diff is in git. Egress: sends question, extra_context and instructions_append raw to the backend's provider; the backend can read files outside the workspace. Recorded as a job (meta.job_id). Prefer amicus_consult_async for a high-effort or broad repo-grounded consult that can exceed the deadline.",
+      "description": "PAID — spends the selected backend's quota on every new call. Read-only second opinion or Q&A from `backend` on a question, design, or a diff you paste inline; use amicus_review_changes when the diff is in git. Egress: sends question, extra_context and instructions_append raw to the backend's provider; the backend can read files outside the workspace. Recorded as a job (meta.job_id). The job record keeps the whole answer — secret-redacted, and it can quote your inputs — whatever `detail` delivered, until AMICUS_JOB_TTL (default 24h), the per-workspace cap or amicus_job_consume_result removes it. Prefer amicus_consult_async for a high-effort or broad repo-grounded consult that can exceed the deadline.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
@@ -4676,7 +4676,7 @@
           },
           "detail": {
             "default": "summary",
-            "description": "summary (default) omits raw_response.text; full includes it. Same shape either way.",
+            "description": "summary (default) omits raw_response.text; full includes it. Same shape either way. Delivery only: the job record keeps the text whichever you ask for.",
             "enum": [
               "full",
               "summary"
@@ -5152,7 +5152,7 @@
         "openWorldHint": true,
         "readOnlyHint": false
       },
-      "description": "PAID — spends the selected backend's quota on every new call. Async twin of amicus_consult: returns a job handle immediately; poll amicus_job_status while status is running, then read amicus_job_result. Egress: sends question, extra_context and instructions_append raw to the backend's provider; the backend can read files outside the workspace. Starting a job commits to spend. Deadline: AMICUS_JOB_MAX_SECONDS (default 1800s).",
+      "description": "PAID — spends the selected backend's quota on every new call. Async twin of amicus_consult: returns a job handle immediately; poll amicus_job_status while status is running, then read amicus_job_result. Egress: sends question, extra_context and instructions_append raw to the backend's provider; the backend can read files outside the workspace. Starting a job commits to spend. The job record keeps the whole answer — secret-redacted, and it can quote your inputs — whatever `detail` delivered, until AMICUS_JOB_TTL (default 24h), the per-workspace cap or amicus_job_consume_result removes it. Deadline: AMICUS_JOB_MAX_SECONDS (default 1800s).",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
@@ -5492,7 +5492,7 @@
         "openWorldHint": true,
         "readOnlyHint": false
       },
-      "description": "PAID — spends the selected backend's quota on every new call. `backend` implements `task` in a throwaway git worktree seeded from tracked state and returns the diff — never applied to your working tree. Codex and Kimi in v1 (feature delegate); Claude stays review-only. Egress: sends task raw to the backend's provider; a backend sandbox may also write the OS temp roots, which are neither in the diff nor cleaned up. Recorded as a job (meta.job_id).",
+      "description": "PAID — spends the selected backend's quota on every new call. `backend` implements `task` in a throwaway git worktree seeded from tracked state and returns the diff — never applied to your working tree. Codex and Kimi in v1 (feature delegate); Claude stays review-only. Egress: sends task raw to the backend's provider; a backend sandbox may also write the OS temp roots, which are neither in the diff nor cleaned up. Recorded as a job (meta.job_id). The job record keeps the whole answer — secret-redacted, and it can quote your inputs — whatever `detail` delivered, until AMICUS_JOB_TTL (default 24h), the per-workspace cap or amicus_job_consume_result removes it.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
@@ -5585,7 +5585,7 @@
           },
           "detail": {
             "default": "summary",
-            "description": "summary (default) omits raw_response.text; full includes it. Same shape either way.",
+            "description": "summary (default) omits raw_response.text; full includes it. Same shape either way. Delivery only: the job record keeps the text whichever you ask for.",
             "enum": [
               "full",
               "summary"
@@ -5926,7 +5926,7 @@
         "openWorldHint": true,
         "readOnlyHint": false
       },
-      "description": "PAID — spends the selected backend's quota on every new call. Async twin of amicus_delegate: returns a job handle; poll amicus_job_status while status is running, then read amicus_job_result. Same egress and feature gate. Starting a job commits to spend. Deadline: AMICUS_JOB_MAX_SECONDS (default 1800s).",
+      "description": "PAID — spends the selected backend's quota on every new call. Async twin of amicus_delegate: returns a job handle; poll amicus_job_status while status is running, then read amicus_job_result. Same egress and feature gate. Starting a job commits to spend. The job record keeps the whole answer — secret-redacted, and it can quote your inputs — whatever `detail` delivered, until AMICUS_JOB_TTL (default 24h), the per-workspace cap or amicus_job_consume_result removes it. Deadline: AMICUS_JOB_MAX_SECONDS (default 1800s).",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
@@ -7321,7 +7321,7 @@
         "properties": {
           "detail": {
             "default": "summary",
-            "description": "summary (default) omits raw_response.text; full includes it. Same shape either way.",
+            "description": "summary (default) omits raw_response.text; full includes it. Same shape either way. Delivery only: the job record keeps the text whichever you ask for.",
             "enum": [
               "full",
               "summary"
@@ -7703,7 +7703,7 @@
         "properties": {
           "detail": {
             "default": "summary",
-            "description": "summary (default) omits raw_response.text; full includes it. Same shape either way.",
+            "description": "summary (default) omits raw_response.text; full includes it. Same shape either way. Delivery only: the job record keeps the text whichever you ask for.",
             "enum": [
               "full",
               "summary"
@@ -8189,7 +8189,7 @@
         "openWorldHint": true,
         "readOnlyHint": false
       },
-      "description": "PAID — spends the selected backend's quota on every new call. Structured review by `backend` of changes gathered from git — working_tree, branch, or commit — with verdict, confidence and findings. Egress: sends the bounded, secret-redacted diff plus raw extra_context and instructions_append to the backend's provider. An empty scope returns review_status=not_run with no spend. Recorded as a job (meta.job_id).",
+      "description": "PAID — spends the selected backend's quota on every new call. Structured review by `backend` of changes gathered from git — working_tree, branch, or commit — with verdict, confidence and findings. Egress: sends the bounded, secret-redacted diff plus raw extra_context and instructions_append to the backend's provider. An empty scope returns review_status=not_run with no spend. Recorded as a job (meta.job_id). The job record keeps the whole answer — secret-redacted, and it can quote your inputs — whatever `detail` delivered, until AMICUS_JOB_TTL (default 24h), the per-workspace cap or amicus_job_consume_result removes it.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
@@ -8308,7 +8308,7 @@
           },
           "detail": {
             "default": "summary",
-            "description": "summary (default) omits raw_response.text; full includes it. Same shape either way.",
+            "description": "summary (default) omits raw_response.text; full includes it. Same shape either way. Delivery only: the job record keeps the text whichever you ask for.",
             "enum": [
               "full",
               "summary"
@@ -8975,7 +8975,7 @@
         "openWorldHint": true,
         "readOnlyHint": false
       },
-      "description": "PAID — spends the selected backend's quota on every new call. Async twin of amicus_review_changes: returns a job handle; poll amicus_job_status while status is running, then read amicus_job_result. Same egress. Starting a job commits to spend. Deadline: AMICUS_JOB_MAX_SECONDS (default 1800s).",
+      "description": "PAID — spends the selected backend's quota on every new call. Async twin of amicus_review_changes: returns a job handle; poll amicus_job_status while status is running, then read amicus_job_result. Same egress. Starting a job commits to spend. The job record keeps the whole answer — secret-redacted, and it can quote your inputs — whatever `detail` delivered, until AMICUS_JOB_TTL (default 24h), the per-workspace cap or amicus_job_consume_result removes it. Deadline: AMICUS_JOB_MAX_SECONDS (default 1800s).",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
