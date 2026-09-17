@@ -1,6 +1,6 @@
 ---
 name: collaborating-with-amicus
-description: Use whenever this agent should call another model through amicus, or should answer a question about which models amicus can reach — a second opinion, a code review, an adversarial review, a delegated implementation, an independent two-model attempt, a declared review–revise pass, or a check of which backends are enabled, installed and authenticated. Trigger on "ask another model", "get a second opinion", "have Codex/Kimi/Claude review this", "delegate this", "have both models attempt this", "run review–revise", "which models can I use", "is Codex/Kimi/Claude available", "what does amicus support", "check backend status", on any amicus_* tool result or approval prompt you need to interpret, and at decision points: choosing a hard-to-reverse approach, after two failed fixes, before declaring risky work complete.
+description: Use whenever this agent should call another model through amicus, or should answer a question about which models amicus can reach — a second opinion, a code review, an adversarial review, a delegated implementation, an independent two-model attempt, a declared review–revise pass, a blind comparison of finalized candidates, or a check of which backends are enabled, installed and authenticated. Trigger on "ask another model", "get a second opinion", "have Codex/Kimi/Claude review this", "delegate this", "have both models attempt this", "run review–revise", "compare these two", "which of these is better", "have another model pick", "which models can I use", "is Codex/Kimi/Claude available", "what does amicus support", "check backend status", on any amicus_* tool result or approval prompt you need to interpret, and at decision points: choosing a hard-to-reverse approach, after two failed fixes, before declaring risky work complete.
 ---
 
 # Collaborating with amicus
@@ -38,6 +38,7 @@ statement — this list is a map, not a second copy.
 | Which backend to pick, and what evidence it can actually inspect | `amicus_backends` (free) | [choosing a backend](references/choosing-a-backend.md) |
 | You and one backend attempt the same problem independently, then you synthesize | independent attempt | [independent attempt](references/independent-attempt.md) |
 | You draft, a backend critiques, you revise | declared review–revise | [review–revise](references/review-revise.md) |
+| Two or more finalized candidates, nothing cheaper tells them apart, and a backend that wrote none of them compares them | blind comparison | [blind comparison](references/blind-comparison.md) |
 | Preview a review's or delegate's scope, size, and resolved options before spending | `amicus_review_changes_dry_run` / `amicus_delegate_dry_run` (free) | [active workflows](references/active-workflows.md) |
 | Model slugs and reasoning-effort sets before overriding `model` or `reasoning_effort` | `amicus_models` (free) | — |
 | Full tool inventory, fingerprint, and error catalog | `amicus_capabilities` (free) | — |
@@ -166,12 +167,14 @@ obligations live in the reference each route names, under that file's own `Rules
 
 ### Composed workflows
 
-- **Select an independent attempt or a review–revise pass only when the user asked for it or the
-  task declares it**, and the decision is hard to reverse, load-bearing, or security-sensitive.
-  Otherwise make one call or none.
+- **Select an independent attempt, a review–revise pass or a blind comparison only when the user
+  asked for it or the task declares it**, and the decision is hard to reverse, load-bearing, or
+  security-sensitive. Otherwise make one call or none.
 - **Count paid calls across the whole workflow, not per backend.**
 - **Preserve disagreement in a synthesis.** Never tally votes, average confidence labels, or
   spend a call to manufacture agreement.
+- **Never let a backend's stated preference between candidates stand in for the decision.** It
+  is a finding whose reasons you verify — see [blind comparison](references/blind-comparison.md).
 - **Never ask a backend to invoke another agent** unless the user asked for that architecture.
 
 ## Semantics

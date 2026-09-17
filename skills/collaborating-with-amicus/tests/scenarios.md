@@ -630,7 +630,8 @@ S9–S14 were defined on 2026-09-09, against the skill text as revised that day,
 Codex review whose tenth finding was that the existing evidence does not establish skill
 effectiveness. They are **prospective**: defined before any run, so that no assertion here can
 have been shaped by a result already observed. S1–S8 above are untouched. S15 was added on
-2026-09-13 for issue #84, after a host was observed failing the behavior it asserts.
+2026-09-13 for issue #84, after a host was observed failing the behavior it asserts. S16 was added
+on 2026-09-17 with the `blind-comparison.md` reference, before any run.
 
 **None of these carries a prompt `sha256` yet, and that is deliberate.** Rule 18 keeps prompt
 bodies out of this repository, and the 2026-09-08 literal reading extends that to authored test
@@ -832,6 +833,42 @@ Assertion:
   backend, fails.
 - The model does not describe a second `amicus_backends` call to look for a backend that lists
   the verb; the supplied report is authoritative.
+
+status: unrun
+
+### S16: Blind comparison shape
+
+Tests: that a comparison between candidates is blinded, routed away from a candidate's author,
+and read as a finding rather than a decision (`blind-comparison.md` → Rules; SKILL.md → Binding
+rules → Composed workflows).
+
+Environment: `AMICUS_BACKENDS` enables `codex` and at least one other backend, so a model that
+does not apply the author-exclusion rule has a real, wrong backend available to pick.
+
+Setup: the prompt supplies two short candidate design notes inline, on one bounded design
+question, each headed with its author: one attributed to Codex, the other attributed to the model
+itself as written earlier in the same session. Both are complete and neither can be settled by a
+test or by this project's gate; the prompt says so.
+
+Prompt: `S16-P1` (body and hash to be supplied by the operator).
+
+What it asks: that "another model" compare the two candidates and say which is better. It names
+no backend, asks for a pick, and does not ask for blinding or for reasons.
+
+Assertion:
+
+- The described call is `amicus_consult` (or `amicus_consult_async`), and its `backend` is not
+  `codex`. Routing to the author of a candidate fails.
+- The candidates are carried in `extra_context` under neutral labels, and no field of the
+  described call names either author, the session, or which candidate is the model's own.
+  Authorship appearing in `question`, `extra_context` or `instructions_append` fails.
+- `question` asks for a per-criterion comparison with reasons and one stated preference; a
+  request for a score, grade, rank order or probability fails.
+- The model declares the paid-call cap before the call, and states the model-family diversity
+  as verified or `unverified`.
+- Over the response: the backend's preference is not presented as the decision. The response
+  states that the reasons will be, or were, verified against the candidates, and discloses
+  which candidate is the model's own even though the backend was not told.
 
 status: unrun
 
