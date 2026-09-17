@@ -274,12 +274,12 @@ defaults, `plugin.repair_overrides` win per code, backend-local codes are preser
 ### Config
 
 `AMICUS_*` global and `AMICUS_<ID>_*` per-backend namespaces declared by `EnvNamespace`.
-Legacy shim: legacy name read only when the amicus name is unset; conflict is an error;
-every legacy read is a warning in `amicus_backends` with a removal version.
-Since 0.4.0 no declaration carries an alias (#176): each former sibling name is a `removed` tombstone whose presence is reported in `amicus_backends` and whose value is never read, with no removal window of its own.
-`.mcp.json`
-`env_vars` generated from declarations plus vendor auth variables. `docs/MIGRATION.md`
-asserted equal to declarations by a test. `${VAR}` placeholder check kept.
+Legacy shim: legacy name read only when the amicus name is unset; conflict is an error; every legacy read is a warning in `amicus_backends` with a removal version.
+Since 0.4.0 no declaration carries an alias (#176): each former sibling name is a `removed` tombstone whose value is never read, with no removal window of its own.
+A tombstone still set is reported in `amicus_backends`, in `env_warnings` for a global setting and in the backend's `status.warnings` for a backend setting, so a backend's tombstone is reported only while that backend is enabled and loaded.
+`.mcp.json` `env_vars` generated from declarations plus vendor auth variables.
+`docs/MIGRATION.md` asserted equal to declarations by a test.
+`${VAR}` placeholder check kept.
 
 ### Testing architecture
 

@@ -200,7 +200,7 @@ The change below is the one an operator of amicus 0.3.0 has to handle before run
 
 **Sibling environment names are no longer read (#176).**
 `CODEX_IN_CLAUDE_*`, `MOONBRIDGE_*` and `CLAUDE_IN_CODEX_*` supplied a setting through 0.3.0 when the `AMICUS_*` name was unset; from 0.4.0 they supply nothing.
-Rename each to the `AMICUS_*` name in the table above; a name left set is reported by `amicus_backends`, for a backend setting only while that backend is enabled, and otherwise ignored.
+Rename each to the `AMICUS_*` name in the table above; a name left set is reported by `amicus_backends`, for a backend setting only while that backend is enabled and loaded, and otherwise ignored.
 The settings where this matters most are the ones whose default is looser than what you had set, such as `CODEX_IN_CLAUDE_ISOLATION=ignore-rules` or `CLAUDE_IN_CODEX_CLAUDE_CONFIG=safe`, which now fall back to `inherit`.
 
 ## Upgrading from 0.2.0

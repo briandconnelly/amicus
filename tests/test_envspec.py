@@ -123,8 +123,19 @@ def test_a_removed_name_is_never_read_and_its_presence_is_a_warning():
     assert r.warning is not None
     assert "CODEX_IN_CLAUDE_ISOLATION" in r.warning and "AMICUS_ISOLATION" in r.warning
     assert es.SIBLING_ALIASES_REMOVED_IN in r.warning
-    # The warning names the removal release, not the guard's (movable) window version.
-    assert es.LEGACY_REMOVAL_VERSION not in r.warning.replace(es.SIBLING_ALIASES_REMOVED_IN, "")
+
+
+def test_the_tombstone_warning_quotes_the_fixed_version_not_the_guard_window(monkeypatch):
+    """Both literals are "0.4.0" today, so a warning built from the wrong one reads the
+    same; the guard window is moved to a distinct value here so that the warning's source
+    is observable (a Copilot review found the same-value form of this check could not fail)."""
+    monkeypatch.setattr(es, "LEGACY_REMOVAL_VERSION", "9.9.9")
+    r = NS.resolve("AMICUS_ISOLATION", {"CODEX_IN_CLAUDE_ISOLATION": "ignore-rules"})
+    assert r.warning and es.SIBLING_ALIASES_REMOVED_IN in r.warning
+    assert "9.9.9" not in r.warning
+    # Positive control on the patch: the shim's own warning does read the moved window.
+    shim = NS.resolve("AMICUS_TIMEOUT_SECONDS", {"MOONBRIDGE_TIMEOUT_SECONDS": "45"})
+    assert shim.warning and "9.9.9" in shim.warning
 
 
 def test_a_removed_name_beside_the_amicus_name_is_not_a_conflict():
@@ -150,6 +161,11 @@ def test_a_removed_name_holding_a_placeholder_is_still_reported():
     r = NS.resolve("AMICUS_ISOLATION", {"CODEX_IN_CLAUDE_ISOLATION": "${ISOLATION}"})
     assert (r.value, r.source) == ("inherit", "default")
     assert r.warning and "CODEX_IN_CLAUDE_ISOLATION is set but not read" in r.warning
+    # And the public report does not classify it as a placeholder either: only names that
+    # are read get that check.
+    rep = NS.report({"CODEX_IN_CLAUDE_ISOLATION": "${ISOLATION}"})
+    assert rep.placeholders == [] and rep.errors == []
+    assert any("CODEX_IN_CLAUDE_ISOLATION is set but not read" in w for w in rep.warnings)
 
 
 def test_a_tombstone_survives_a_conflict_on_the_same_declaration():
