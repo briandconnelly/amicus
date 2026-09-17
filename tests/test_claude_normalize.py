@@ -142,6 +142,23 @@ def test_usage_never_reports_a_partial_model_sum_or_mixes_in_the_main_loop_block
     assert usage.input_tokens is None and usage.output_tokens == 57
     assert usage.cached_input_tokens is None and usage.cache_creation_input_tokens is None
     assert usage.cost_usd == 0.01
+    # A sibling entry that is not a dict is a model whose counts cannot be read: modelUsage
+    # stays the source (the block is still not consulted) and every count is None.
+    mixed = normalize.extract_usage(
+        json.loads(
+            _env(
+                total_cost_usd=0.01,
+                usage={"input_tokens": 100, "output_tokens": 50},
+                modelUsage={"claude-a": {"inputTokens": 100, "outputTokens": 50}, "b": "x"},
+            )
+        )
+    )
+    assert mixed is not None and mixed.cost_usd == 0.01
+    assert (mixed.input_tokens, mixed.output_tokens, mixed.cached_input_tokens) == (
+        None,
+        None,
+        None,
+    )
 
 
 def test_usage_falls_back_to_the_main_loop_block_only_without_a_usable_model_entry():

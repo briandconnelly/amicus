@@ -37,8 +37,8 @@ LOCAL_CODES = frozenset(
         # Codex-local (M1): the user's own CLI config carries a key or value the installed
         # CLI refuses at startup; zero spend. Preserved verbatim, never generalized.
         "user_config_rejected",
-        # Claude-local (M4), all preserved verbatim: the best-effort spend cap stopped the run
-        # (a zero-exit envelope; MAY have spent) ...
+        # Claude-local (M4), all preserved verbatim: the best-effort spend threshold stopped
+        # the run (a failure envelope on either exit code; MAY have spent, past the threshold) ...
         "budget_exceeded",
         # ... a tool call was denied under the access allowlist and nothing usable came back ...
         "claude_permission_error",

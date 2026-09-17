@@ -58,11 +58,15 @@ _USAGE_BLOCK_KEYS = {
 }
 
 
-def _model_entries(env: dict[str, Any]) -> list[dict[str, Any]]:
+def _model_entries(env: dict[str, Any]) -> tuple[list[dict[str, Any]], bool]:
+    """The dict-shaped entries under `modelUsage`, and whether every entry was one. A
+    non-dict entry beside dict-shaped ones is a model whose counts cannot be read, so a
+    total over the rest would be partial."""
     raw = env.get("modelUsage")
     if not isinstance(raw, dict):
-        return []
-    return [entry for entry in raw.values() if isinstance(entry, dict)]
+        return [], True
+    entries = [entry for entry in raw.values() if isinstance(entry, dict)]
+    return entries, len(entries) == len(raw)
 
 
 def _sum_across(entries: list[dict[str, Any]], name: str) -> int | None:
@@ -86,7 +90,8 @@ def extract_usage(env: dict[str, Any]) -> Usage | None:
     beside a nonzero `total_cost_usd` while `modelUsage` carries the real counts (#158,
     `tests/fixtures/claude_budget_stop_envelope.json`). The two blocks count different
     scopes, so a field comes from one of them, never from both: a `modelUsage` field one
-    entry leaves out is None rather than the block's number. Cost is `total_cost_usd`, the
+    entry leaves out, or one whose sibling entry is not a dict, is None rather than the
+    block's number or a sum over the rest. Cost is `total_cost_usd`, the
     cumulative estimate that covers the same calls as `modelUsage`. total_tokens is left
     None: Claude's input count excludes cached tokens, so a sum would be a claim the
     envelope does not make."""
@@ -96,9 +101,12 @@ def extract_usage(env: dict[str, Any]) -> Usage | None:
         if isinstance(cost_raw, (int, float)) and not isinstance(cost_raw, bool)
         else None
     )
-    entries = _model_entries(env)
+    entries, complete = _model_entries(env)
     if entries:
-        counts = {field: _sum_across(entries, key) for field, key in _MODEL_USAGE_KEYS.items()}
+        counts = {
+            field: _sum_across(entries, key) if complete else None
+            for field, key in _MODEL_USAGE_KEYS.items()
+        }
     else:
         raw = env.get("usage")
         blob = raw if isinstance(raw, dict) else {}

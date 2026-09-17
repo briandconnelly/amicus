@@ -112,11 +112,10 @@ def test_budget_stop_zeroes_the_main_loop_block_beside_a_nonzero_cost():
     assert BUDGET_STOP["subtype"] == "error_max_budget_usd" and BUDGET_STOP["is_error"] is True
 
 
-@pytest.mark.parametrize("exit_code", [1, 0])
-def test_budget_stop_through_the_classifier(exit_code):
-    """claude 2.1.274 exits 1 on the stop; the zero-exit route the older capture took (#73)
-    reads the same envelope."""
-    run = CommandRun(cf.BUDGET_STOP, "", exit_code, 1432, False)
+def test_budget_stop_through_the_classifier():
+    """claude 2.1.274 exits 1 on the stop, which is classify_failure's route; the zero-exit
+    route (#73) is inspect_outcome's, covered through the loop below."""
+    run = CommandRun(cf.BUDGET_STOP, "", 1, 1432, False)
     failure = cli.classify_failure(run, config_mode="safe", sanitize=None)
     assert failure.code == "budget_exceeded" and failure.retryable is False
     assert failure.details == {"field": "backend_options.max_budget_usd"}
@@ -126,10 +125,15 @@ def test_budget_stop_through_the_classifier(exit_code):
     assert failure.usage.cost_usd == BUDGET_STOP["total_cost_usd"]
 
 
-async def test_budget_stop_through_the_loop(pinned_claude_bin, monkeypatch, tmp_path):
+@pytest.mark.parametrize("exit_code", [1, 0])
+async def test_budget_stop_through_the_loop(pinned_claude_bin, monkeypatch, tmp_path, exit_code):
+    """Both production routes: exit 1 (classify_failure, claude 2.1.274) and exit 0
+    (inspect_outcome -> classify_envelope, the #73 capture) deliver the same usage."""
     plugin, _ = cf.make_backend()
     monkeypatch.setattr(
-        run_mod.runtime, "run_async", cf.scripted_run_async(stdout=cf.BUDGET_STOP, exit_code=1)
+        run_mod.runtime,
+        "run_async",
+        cf.scripted_run_async(stdout=cf.BUDGET_STOP, exit_code=exit_code),
     )
     spec = RunSpec(
         backend="claude",
@@ -147,7 +151,7 @@ async def test_budget_stop_through_the_loop(pinned_claude_bin, monkeypatch, tmp_
     assert out["ok"] is False
     assert out["error"]["code"] == "budget_exceeded" and out["error"]["temporary"] is False
     meta = out["meta"]
-    assert meta["command_exit_code"] == 1 and meta["session_id"] == "sess-budget-1"
+    assert meta["command_exit_code"] == exit_code and meta["session_id"] == "sess-budget-1"
     usage = meta["usage"]
     assert (usage["input_tokens"], usage["output_tokens"]) == (4707, 53)
     assert (usage["cached_input_tokens"], usage["cache_creation_input_tokens"]) == (0, 0)
