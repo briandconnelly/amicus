@@ -219,7 +219,9 @@ stream and passes a sanitizer built from `request.sanitize_aliases` into
 One `JobStore` under `AMICUS_STATE_DIR`; `extra.backend` tags every record; the
 idempotency arg hash includes `backend`. `RunSpec` splits into a public half
 (`spec.json`) and an input half streamed over `stdin_text`, so amicus itself never
-persists the prompt in the job record or on the worker's argv; each backend's own
+persists the prompt input in the job record or on the worker's argv.
+The backend's answer is kept there whole even where it quotes an input (ADR 0035).
+Each backend's own
 carriers (Kimi handshake file, Codex/Claude system-prompt argv) are disclosed per
 backend. `_worker.py` re-resolves the plugin by id and runs the same loop. Sync tools
 keep codex-in-claude's model; `meta.job_id` is always stamped. `task=True` wraps the

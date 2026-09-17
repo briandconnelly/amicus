@@ -351,7 +351,8 @@ DetailParam = Annotated[
     Detail,
     Field(
         description=(
-            "summary (default) omits raw_response.text; full includes it. Same shape either way."
+            "summary (default) omits raw_response.text; full includes it. Same shape either way. "
+            "Delivery only: the job record keeps the text whichever you ask for."
         )
     ),
 ]

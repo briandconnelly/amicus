@@ -324,3 +324,43 @@ def test_the_unreadable_done_instrument_can_fail():
     olds = [_SUPERSEDED_TERMINAL_CONSUME[n] for n in _UNREADABLE_DONE_SURFACES]
     for old in [*olds, discovery_before_review]:
         assert _UNREADABLE_DONE_CLAUSE not in _plain(old)
+
+
+# Issue #163 / ADR 0035: the job record keeps the backend's whole answer whatever `detail`
+# delivered it, and the answer can quote the caller's inputs. That is disclosed where the
+# spend is — on every paid tool, sync and async — and on the `detail` parameter itself.
+_PAID_TOOLS: frozenset[str] = frozenset(
+    {
+        "amicus_consult",
+        "amicus_consult_async",
+        "amicus_review_changes",
+        "amicus_review_changes_async",
+        "amicus_adversarial_review",
+        "amicus_adversarial_review_async",
+        "amicus_delegate",
+        "amicus_delegate_async",
+    }
+)
+
+
+def test_every_paid_tool_discloses_record_retention(wire):
+    from amicus.tools._resolve import PAID_MARKER, RECORD_RETENTION
+
+    paid = {t["name"]: t["description"] for t in wire["tools"] if PAID_MARKER in t["description"]}
+    assert set(paid) == _PAID_TOOLS
+    assert RECORD_RETENTION.startswith("The job record keeps the whole answer")
+    for name, description in paid.items():
+        assert RECORD_RETENTION in description, name
+
+
+def test_detail_says_it_shapes_delivery_only(wire):
+    carriers = {
+        t["name"]: t["inputSchema"]["properties"]["detail"]["description"]
+        for t in wire["tools"]
+        if "detail" in t["inputSchema"].get("properties", {})
+    }
+    assert {"amicus_consult", "amicus_job_result"} <= carriers.keys()
+    for name, description in carriers.items():
+        if name in ("amicus_backends", "amicus_capabilities"):
+            continue  # a discovery detail, not a delivery one
+        assert "Delivery only: the job record keeps the text" in description, name

@@ -1,7 +1,8 @@
 """RunSpec: the one serializable description of a paid run, split into a PUBLIC half
 (spec.json in the job record) and an INPUT half that only ever travels over the worker's
-stdin, so amicus itself never persists a prompt. The keyed-dedup identity (ADR 0008) is
-the public half minus per-connection fields plus a digest of the input half."""
+stdin, so amicus itself never persists a prompt input. The backend's answer, which can quote
+one, is kept whole on the record as result.json (ADR 0035). The keyed-dedup identity (ADR
+0008) is the public half minus per-connection fields plus a digest of the input half."""
 
 from __future__ import annotations
 

@@ -49,13 +49,14 @@ _REVIEW_DESC = (
     "working_tree, branch, or commit — with verdict, confidence and findings. Egress: "
     "sends the bounded, secret-redacted diff plus raw extra_context and "
     "instructions_append to the backend's provider. An empty scope returns "
-    "review_status=not_run with no spend. Recorded as a job (meta.job_id)."
+    f"review_status=not_run with no spend. Recorded as a job (meta.job_id). "
+    f"{_resolve.RECORD_RETENTION}"
 )
 _REVIEW_ASYNC_DESC = (
     f"{_resolve.PAID_MARKER} Async twin of amicus_review_changes: returns a job handle; "
     "poll amicus_job_status while status is running, then read amicus_job_result. Same "
-    "egress. Starting a job commits to spend. Deadline: AMICUS_JOB_MAX_SECONDS (default "
-    "1800s)."
+    f"egress. Starting a job commits to spend. {_resolve.RECORD_RETENTION} Deadline: "
+    "AMICUS_JOB_MAX_SECONDS (default 1800s)."
 )
 _ADV_DESC = (
     f"{_resolve.PAID_MARKER} A fixed adversarial critic on `backend` attacks `target` (a "
@@ -63,12 +64,13 @@ _ADV_DESC = (
     "critic stance is the product, so there is no instructions_append. Claude only in v1 "
     "(feature adversarial_review). Egress: sends target, evidence, extra_context and the "
     "redacted diff raw to the backend's provider. An attached scope that gathers nothing "
-    "returns review_status=not_run with no spend. Recorded as a job (meta.job_id)."
+    f"returns review_status=not_run with no spend. Recorded as a job (meta.job_id). "
+    f"{_resolve.RECORD_RETENTION}"
 )
 _ADV_ASYNC_DESC = (
     f"{_resolve.PAID_MARKER} Async twin of amicus_adversarial_review: returns a job "
     "handle; poll amicus_job_status while status is running, then read amicus_job_result. "
-    "Same egress and feature gate."
+    f"Same egress and feature gate. {_resolve.RECORD_RETENTION}"
 )
 
 

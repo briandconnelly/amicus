@@ -33,6 +33,14 @@ per-change, as its own lead says.
 
 ### Changed
 
+- Every paid tool, sync and async, and the `detail` parameter now disclose that the job record
+  keeps the backend's whole answer whatever `detail` delivered it, that the answer can quote the
+  caller's inputs, and what removes it: `AMICUS_JOB_TTL`, the per-workspace cap or
+  `amicus_job_consume_result` (#163, ADR 0035). The README's Safety section and the skill's
+  retention paragraph say the same. Nothing stored or delivered changes: the record has kept the
+  answer since M2, and the decision recorded is that rule 18 binds the inputs amicus writes,
+  not the answer a backend returns. **Surface**: `FINGERPRINT` moves to schema-35 for the
+  description text.
 - amicus no longer depends on `pontonier`. Its backend SDK is now part of amicus, as
   `amicus.sdk` (#13, ADR 0029): the same code as pontonier 0.9.0, copied from its `v0.9.0`
   tag with the imports rewritten. Nothing on the wire or in a stored job result changes, and
