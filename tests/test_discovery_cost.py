@@ -146,7 +146,7 @@ and amicus_job_status's gains 53, so that every instruction to wait on the hint 
 only while the job runs. The 12 bytes between the last MEASURED and 113730 predate this change:
 they accumulated on main inside the old budget.
 
-The schema-30 -> schema-31 raise (+832 bytes on every profile: all 114780 -> 115612) delivers a
+The schema-31 -> schema-32 raise (+832 bytes on every profile: all 114780 -> 115612) delivers a
 review whose answer amicus could not read instead of discarding it (#139). It adds the
 `unstructured` value to `review_status` and says what it means where a caller reads that field
 and the diagnostics beside it, on amicus_review_changes and amicus_adversarial_review. About 530
