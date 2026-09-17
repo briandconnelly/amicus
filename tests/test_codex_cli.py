@@ -149,9 +149,34 @@ def test_codex_version_and_login_status(monkeypatch):
     monkeypatch.setattr(
         cli.runtime,
         "run_sync_capture",
-        lambda cmd, timeout_seconds, **k: CommandRun("", "", 1, 1, False),
+        lambda cmd, timeout_seconds, **k: CommandRun("", "Not logged in", 1, 1, False),
     )
     assert cli.login_status("/CODEX")[0] is False
+    monkeypatch.setattr(
+        cli.runtime,
+        "run_sync_capture",
+        lambda cmd, timeout_seconds, **k: CommandRun(
+            "",
+            "Error loading configuration: No such file or directory (os error 2)\nignored",
+            1,
+            1,
+            False,
+        ),
+    )
+    assert cli.login_status("/CODEX") == (
+        None,
+        "Codex login status probe failed: Error loading configuration: No such file or "
+        "directory (os error 2)",
+    )
+    monkeypatch.setattr(
+        cli.runtime,
+        "run_sync_capture",
+        lambda cmd, timeout_seconds, **k: CommandRun("", "", 1, 1, False),
+    )
+    assert cli.login_status("/CODEX") == (
+        None,
+        "Codex login status probe failed without diagnostic output.",
+    )
     monkeypatch.setattr(
         cli.runtime,
         "run_sync_capture",

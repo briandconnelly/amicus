@@ -37,7 +37,9 @@ class CodexStatus:
         version = cli.codex_version(binary)
         if version is None:
             return StatusReport(installed=False, warnings=tuple(warnings))
-        authenticated, _detail = cli.login_status(binary)
+        authenticated, auth_detail = cli.login_status(binary)
+        if authenticated is None and auth_detail is not None:
+            warnings.append(auth_detail)
         if version_supported(version, self._config) is False:
             warnings.append(VERSION_WARNING)
         fs = self._help_probe.flag_support(force=True)
