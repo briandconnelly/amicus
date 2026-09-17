@@ -53,8 +53,9 @@ missing. The answer itself is kept, not discarded: it is `raw_response.text`, de
 exists. Read it before deciding anything or paying for the same review again; a prose answer
 often holds the review, and an identical retry can fail the same way. An answer that encloses
 one object in a preamble, a fence or a sign-off is read as that object and stays `completed`;
-one whose prose around the object contains a brace, or that holds two objects, is
-`unstructured` rather than guessed at. Only an empty answer is still an `invalid_json` error.
+one that holds two objects, or whose preamble has a `{` or sign-off a `}`, is `unstructured`
+rather than guessed at. That reading is for reviews only: a consult answered in prose keeps its
+whole answer in `summary`. Only an empty answer is still an `invalid_json` error.
 
 When a review was not complete, the result's `coverage` object says so in fields you can branch
 on: `coverage.status` is `complete` or `partial`, and `coverage.omission_reasons` names why, in a

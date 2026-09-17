@@ -793,3 +793,15 @@ def test_delegate_does_not_carry_lists_diagnostics():
         ExecResult(answer="ok"), Meta(), diff="", aliases=(), max_diff_bytes=10
     )
     assert "lists_diagnostics" not in out
+
+
+def test_a_consult_that_wraps_an_object_in_prose_keeps_the_whole_answer():
+    """ADR 0033 is scoped to reviews: a consult's prose is its result (ADR 0024), so a
+    backend's parse_structured does not narrow it to the object inside it."""
+    from amicus.backends.codex import normalize as codex_normalize
+
+    answer = 'Here is the config you asked about:\n{"summary": "s"}\nUse it as-is.'
+    structured = codex_normalize.parse_structured(answer)
+    assert structured is None
+    out = fz.consult_result(ExecResult(answer=answer, structured=structured), Meta())
+    assert out["ok"] is True and out["summary"] == answer

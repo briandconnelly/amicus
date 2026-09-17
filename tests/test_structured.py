@@ -51,32 +51,46 @@ def test_one_object_enclosed_in_prose_is_read():
         '{"summary":"s"}\nLet me know if you need more.',
         'Review:\n```json\n{"summary":"s"}\n```\nDone.',
     ):
-        assert classify_structured(text) == ("ok", {"summary": "s"}), text
+        assert classify_structured(text, enclosed=True) == ("ok", {"summary": "s"}), text
 
 
 def test_a_truncated_answer_never_promotes_a_nested_object():
     # The outer object never closes, so the span from the first `{` is unparseable; a
     # complete finding inside it must not be read as the whole answer.
     text = f'{{"summary":"s","findings":[{_FINDING}'
-    assert classify_structured(text) == ("invalid_json", None)
+    assert classify_structured(text, enclosed=True) == ("invalid_json", None)
     text = f'Sure.\n{{"summary":"s","findings":[{_FINDING}]'
-    assert classify_structured(text) == ("invalid_json", None)
+    assert classify_structured(text, enclosed=True) == ("invalid_json", None)
 
 
 def test_two_enclosed_objects_are_not_read_as_one():
     text = 'First {"summary":"a"} then {"summary":"b"}'
-    assert classify_structured(text) == ("invalid_json", None)
+    assert classify_structured(text, enclosed=True) == ("invalid_json", None)
 
 
 def test_a_repeated_key_is_refused_inside_prose_too():
     text = 'Here:\n{"summary":"a","summary":"b"}\nDone.'
-    assert classify_structured(text) == ("invalid_json", None)
+    assert classify_structured(text, enclosed=True) == ("invalid_json", None)
 
 
 def test_a_brace_in_the_surrounding_prose_is_refused_not_guessed_around():
-    text = '{"summary":"s"}\nNote: set {timeout} higher.'
-    assert classify_structured(text) == ("invalid_json", None)
+    # A `}` after the object, or a `{` before it, lands inside the span.
+    for text in ('{"summary":"s"}\nNote: set {timeout} higher.', 'Use {x}: {"summary":"s"}'):
+        assert classify_structured(text, enclosed=True) == ("invalid_json", None), text
+
+
+def test_a_brace_outside_the_span_is_ignored_with_the_prose():
+    # A `}` before the first `{`, or a `{` after the last `}`, is outside the span: the
+    # object read is still the one complete object the answer holds.
+    for text in ('} done {"summary":"s"}', '{"summary":"s"} trailing {'):
+        assert classify_structured(text, enclosed=True) == ("ok", {"summary": "s"}), text
+
+
+def test_the_enclosed_read_is_opt_in_so_a_consult_keeps_its_prose():
+    # ADR 0024: a consult answered in prose is delivered whole in summary. Only the review
+    # path narrows an answer to an object inside it.
+    assert classify_structured('Here:\n{"summary":"s"}') == ("invalid_json", None)
 
 
 def test_an_enclosed_non_object_is_not_read():
-    assert classify_structured("Answer: [1, 2]") == ("invalid_json", None)
+    assert classify_structured("Answer: [1, 2]", enclosed=True) == ("invalid_json", None)

@@ -143,8 +143,8 @@ Consult and review-changes calls still use the configured default, and an explic
 This also applies when the operator explicitly configures `inherit` or `scoped`; use a per-call override to opt an adversarial review into inherited configuration.
 `amicus_backends` reports structured `default_by_verb` values and a null common `default` when the verbs differ; each call's `meta.backend_details.config_mode` reports its resolved mode.
 `amicus_review_changes_dry_run` previews review-changes defaults, not adversarial-review defaults.
-If an explicitly inherited configuration produces `invalid_json` or `schema_violation`, change `backend_options.config_mode` to `safe` before making another paid call.
-An invalid JSON response alone does not establish config displacement, so the error is not automatically reclassified as a permanent configuration failure.
+If an explicitly inherited configuration produces `review_status: unstructured`, read `raw_response.text`, then change `backend_options.config_mode` to `safe` before making another paid call.
+An unreadable answer alone does not establish config displacement, so it is not reported as a configuration failure.
 
 `idempotency_key` is accepted on the sync tools as well as the `_async` twins, as on both siblings (#66; before this it was async-only, and this guide did not say so).
 A keyed sync call behaves as the siblings' did: a duplicate awaits the existing run and returns its result marked `meta.idempotency_replayed`, a transient keyed outcome is waited on for about a second before it is surfaced, and a keyed wait that times out or is cancelled leaves the run going and points at `amicus_job_status`.

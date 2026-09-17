@@ -311,7 +311,7 @@ def _parse_reviewed(
             ),
             None,
         )
-    status, parsed = classify_structured(result.answer)
+    status, parsed = classify_structured(result.answer, enclosed=True)
     if status != "ok":
         # Nothing was parsed, so no finding or prose list was carried, and both diagnostics
         # say so rather than a null claiming the backend reported none (#38, #52).

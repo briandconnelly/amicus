@@ -41,10 +41,13 @@ It stays `invalid_json` with the shared table's `retry_then_report`, which is ho
 That also settles #116's point about a deterministic `invalid_json`: the deterministic cases now reach the caller as `unstructured`, carrying no retry advice.
 
 **An answer that encloses exactly one object is read as that object.**
-When the answer is not JSON as a whole, `classify_structured` parses the span from its first `{` to its last `}`.
-Nothing outside that span can contain a brace, so the span can never start inside a larger object: a truncated answer cannot have one of its complete findings promoted to the whole review.
+When the answer is not JSON as a whole, the review path asks `classify_structured` to parse the span from its first `{` to its last `}`.
+Because the span starts at the first `{`, it can never start inside a larger object: a truncated answer cannot have one of its complete findings promoted to the whole review.
 Two objects never parse as one.
-Prose around the object that itself contains a brace makes the span unparseable, and the answer is `unstructured` rather than guessed at.
+A `{` in the prose before the object, or a `}` after it, falls inside the span and makes it unparseable, so the answer is `unstructured` rather than guessed at.
+A `}` before the object or a `{` after it falls outside the span and is ignored with the rest of the prose, since the object read is still the one complete object the answer holds.
+Consult does not take this path.
+A consult's prose answer is itself its result and is delivered whole in `summary` (ADR 0024), so narrowing it to an object found inside it would change that contract; the backends' `parse_structured` stays whole-answer only.
 The repeated-key refusal of #51 applies inside the span too, so #139's proposal to keep the last value of a repeated key is not adopted: that is exactly the silent collapse #51 exists to prevent.
 The prose outside an accepted object is not reported anywhere but `raw_response.text`.
 
