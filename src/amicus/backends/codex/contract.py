@@ -372,6 +372,11 @@ def parse_retry_after_ms(*texts: str | None) -> int | None:
     return int(match.group(1)) * 1000
 
 
+def is_usage_limit(*texts: str | None) -> bool:
+    """A plan usage limit may reset days later; no short backoff can be assumed."""
+    return "usage limit" in _blob(texts).lower()
+
+
 # --- The SDK contract -------------------------------------------------------------------
 # Wire prose that would contradict this contract. The sibling-name canaries live in amicus's
 # own union (tests/test_surface_honesty.py); here only the mechanism claims.

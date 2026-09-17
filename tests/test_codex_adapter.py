@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import json
 import tomllib
 from pathlib import Path
 
 import pytest
 from tests.support import codexfixtures as cf
 
+from amicus import errors
 from amicus.backends.codex import contract
 from amicus.schemas import instructions as ins
+from amicus.schemas.envelope import Meta
 from amicus.sdk.backend.protocol import AgentBackend, RunOutcome, RunRequest
 from amicus.sdk.core import pathalias
 from amicus.sdk.core.runtime import CommandRun
@@ -191,7 +194,39 @@ def test_classify_failure_ignores_last_message_artifact(pinned_codex_bin, diagno
     out = backend.classify_failure(outcome, _req())
     assert out.code == ("codex_rate_limited" if diagnostic == "usage limit" else "nonzero_exit")
     if diagnostic == "usage limit":
-        assert out.retry_after_ms == contract.RATE_LIMIT_DEFAULT_BACKOFF_MS
+        assert out.retry_after_ms is None
+
+
+@pytest.mark.parametrize("source", ["stderr", "error", "turn.failed"])
+@pytest.mark.parametrize(
+    ("message", "delay"),
+    [
+        ("You've hit your usage limit. Try again at Sep 19th, 2026 8:37 AM.", None),
+        ("USAGE LIMIT reached", None),
+        ("usage limit; try again in 2 hours", None),
+        ("usage limit; try again in 5 seconds", 5000),
+        ("usage limit; Retry-After: 0", 0),
+        ("rate limit reached", 60000),
+    ],
+)
+def test_usage_limit_retry_guidance_reaches_wire(pinned_codex_bin, source, message, delay):
+    plugin, backend = cf.make_backend()
+    event = {"type": source, "error": {"message": message}}
+    stdout = json.dumps(event) if source != "stderr" else ""
+    stderr = message if source == "stderr" else ""
+    failure = backend.classify_failure(
+        RunOutcome(run=CommandRun(stdout, stderr, 1, 5, False)), _req()
+    )
+    error = errors.render_failure(plugin, failure, Meta())["error"]
+    assert error["code"] == "backend_rate_limited"
+    assert error["temporary"] is True
+    assert error["retry_after_ms"] == delay
+    if delay is None:
+        assert error["repair"]["next_step"] == "inspect_and_retry"
+        assert "reset time" in error["repair"]["alternative"]
+        assert "Do not automatically retry" in error["repair"]["alternative"]
+    else:
+        assert error["repair"]["next_step"] == "retry_after_delay"
 
 
 def test_list_models_auth_probe_and_scrub_env(pinned_codex_bin, monkeypatch):

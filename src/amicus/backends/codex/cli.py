@@ -385,6 +385,19 @@ def classify_failure(
         return _contract_changed()
     if contract.is_rate_limited(run.stderr, diagnostics, event_error):
         retry_after = contract.parse_retry_after_ms(run.stderr, diagnostics, event_error)
+        if retry_after is None and contract.is_usage_limit(run.stderr, diagnostics, event_error):
+            return ClassifiedFailure(
+                code="codex_rate_limited",
+                detail="codex hit a usage limit; the retry delay is unknown.",
+                repair=RepairHint(
+                    next_step="inspect_and_retry",
+                    alternative=(
+                        "Check Codex's usage-limit message or account usage settings for the "
+                        "reset time, then retry once quota is available. Do not automatically "
+                        "retry on a short timer; amicus could not determine the delay."
+                    ),
+                ),
+            )
         if retry_after is None:
             retry_after = contract.RATE_LIMIT_DEFAULT_BACKOFF_MS
         return ClassifiedFailure(

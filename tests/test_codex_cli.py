@@ -264,7 +264,7 @@ def test_classify_nonzero_generic_sanitizes_before_truncating():
     [
         ("connection closed", "nonzero_exit", None),
         ("usage limit; Retry-After: 9", "codex_rate_limited", 9000),
-        ("usage limit", "codex_rate_limited", contract.RATE_LIMIT_DEFAULT_BACKOFF_MS),
+        ("usage limit", "codex_rate_limited", None),
         ("unexpected argument '--zap' found", "cli_contract_changed", None),
         ("not authenticated", "codex_auth_required", None),
     ],
