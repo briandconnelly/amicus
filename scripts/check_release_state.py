@@ -6,8 +6,9 @@ question, and the difference matters more than the code:
 
 1. **Release-state coherence** (`check_tree`). Every version literal AGENTS.md rule 19 names
    agrees with the version being released, `CHANGELOG.md` has exactly one dated section for
-   that version with `## [Unreleased]` above it, `uv.lock` is current, and `.mcp.json`'s pin
-   names a tag no newer than this release that resolves IN THIS CHECKOUT, every tool
+   that version with `## [Unreleased]` above it, `uv.lock` is current, `.mcp.json`'s pin
+   names this release's tag and that tag resolves IN THIS CHECKOUT, the marketplace pointer
+   is well formed, older than this release and consistent at its tag, every tool
    deprecation window (`DEPRECATED_TOOLS` in `src/amicus/tools/_meta.py`) contains this
    release, and no `EnvVar` still declares a legacy name once this release reaches
    `LEGACY_REMOVAL_VERSION` (`src/amicus/config/envspec.py`). These are facts of
@@ -20,12 +21,12 @@ question, and the difference matters more than the code:
    `verify` job checks out from GitHub with `fetch-depth: 0`, so the tags it sees are the
    remote's. Read a local pass as "my checkout has it", and the CI pass as "GitHub has it".
 
-   `.mcp.json`'s pin is deliberately NOT one of the version literals. Per ADR 0015 it names
-   an ALREADY-PUBLISHED release rather than the one being released, because the
-   manifest a fresh install reads lives on `main` and so cannot name an artifact that does
-   not exist yet. What replaced the old equality is `check_mcp_pin_tag_exists`, which is
-   worth more: the equality was true by construction on any tree a release PR had touched,
-   whereas the tag either exists or it does not.
+   `.mcp.json`'s pin IS a version literal: it names the release being made, because a
+   plugin host installs the release tag and must launch that release's server (#117).
+   Before its tag is pushed, the release tag exists only locally, which `docs/RELEASING.md`
+   step 3 creates before running this. `check_marketplace` covers the marketplace pointer,
+   which names an EARLIER, internally consistent release: that pointer, not `.mcp.json`, is
+   what decides which snapshot a host installs, and it advances only after publishing.
 
 2. **The live-gate assertion** (`check_tag`). AGENTS.md rule 20's evidence record, carried in
    the annotated tag's own message. A green result here proves only that a well-formed record
@@ -57,6 +58,9 @@ Usage:
     # In the publish workflow: tree, tag object and the evidence it carries.
     uv run python scripts/check_release_state.py --tag v1.2.3 --commit "$GITHUB_SHA" \
         --summary "$GITHUB_STEP_SUMMARY"
+
+    # On a pull request: only the marketplace pointer, and its change from the base.
+    uv run python scripts/check_release_state.py --base "$BASE_SHA"
 
 Exits 0 when every check passes, 1 otherwise, printing each problem.
 
@@ -131,11 +135,9 @@ def _parts(version: str) -> tuple[int, ...]:
 def mcp_pin(repo_root: Path = REPO_ROOT) -> tuple[str | None, list[str]]:
     """The version `.mcp.json`'s `--from` source pins, and any problem with that source.
 
-    Per ADR 0015 this is NOT a rule-19 version literal: the manifest a fresh install reads
-    lives on `main`, so it names an ALREADY-PUBLISHED release rather than the one
-    being released. What is checkable here is its shape — this repo, over git, at some
-    `vX.Y.Z`. `check_version_literals` bounds the version; `check_mcp_pin_tag_exists`
-    proves the tag is real, where a checkout with tags is available.
+    This is its shape — this repo, over git, at some `vX.Y.Z`. `check_version_literals`
+    requires the version to be the one being released; `check_mcp_pin_tag_exists` proves
+    the tag is real, where a checkout with tags is available.
     """
     return _pin_from_text((repo_root / ".mcp.json").read_text(encoding="utf-8"))
 
@@ -169,23 +171,12 @@ def check_mcp_pin_tag_exists(
 ) -> list[str]:
     """The tag `.mcp.json` sends users to must actually exist. No exceptions.
 
-    This is the check ADR 0015 gained in exchange for the equality it dropped, and it is worth
-    more: the old `pin == version being released` was true by construction on any tree a
-    release PR had touched, while this one is a fact about the world.
-
-    There is deliberately no bootstrap exception. Two earlier attempts had one and both were
-    unsound. Keying it on `pin == version being released` was too broad: a later release whose
-    pin was mistakenly bumped would satisfy it, skip this check, and restore the very window
-    ADR 0015 removes — and the publish workflow would not catch that either, because by then
-    the tag has been pushed and does exist. Keying it on "this repository has no `v*` tags"
-    was no better, because `git tag -l` sees only locally fetched tags: a `--no-tags` or
-    shallow checkout is indistinguishable from a repository that has never released, and the
-    pre-tag runbook step does not fetch before running this.
-
-    The exception is also moot. 0.1.0 was tagged and published on 2026-09-09, so this
-    repository can never legitimately bootstrap again, and the only way into that branch now
-    would be a checkout too incomplete to trust. Requiring the tag unconditionally turns that
-    case into a loud, actionable failure — fetch your tags — instead of a silent pass.
+    The pin names the release being made, so before the push this passes only because
+    `docs/RELEASING.md` step 3 creates the annotated tag locally first. That keeps this check
+    unconditional: there is deliberately no pre-tag exception, because an exception keyed on
+    `git tag -l` would read a `--no-tags` or shallow checkout as a repository with no releases.
+    Requiring the tag turns that case into a loud, actionable failure — create the local tag,
+    or fetch your tags — instead of a silent pass.
 
     A tagless checkout therefore FAILS here rather than passing, which is the intended
     behaviour and why `publish.yml` sets `fetch-depth: 0`.
@@ -215,14 +206,14 @@ def check_mcp_pin_tag_exists(
 
 
 def check_version_literals(version: str, *, repo_root: Path = REPO_ROOT) -> list[str]:
-    """Every rule-19 literal must equal `version`, and `.mcp.json`'s pin must not exceed it.
+    """Every rule-19 literal, `.mcp.json`'s pin included, must equal `version`.
 
     `tests/test_packaging.py` already asserts these agree with each other on every PR. This
     checks them against the version actually being released, on the tagged tree, in the
     workflow that publishes — which is the part CI never ran, because `ci.yml` triggers on
     pushes to `main` and on pull requests, never on a tag.
 
-    `.mcp.json` is deliberately not among the literals; see `mcp_pin` and ADR 0015.
+    `.mcp.json` is among them: it pins this release's own tag (#117).
     """
     problems: list[str] = []
 
@@ -801,10 +792,11 @@ def _write_summary(path: Path, *, tag: str | None, version: str, problems: list[
         lines.append("section and `uv.lock` agree with this tag, on this tree.")
         lines.append("")
         lines.append(
-            "**Install manifest: PASSED.** `.mcp.json` pins an already-published release "
-            "tag that resolves in this checkout and does not lead this version, so `main` "
-            "is not sending fresh installs at a tag that does not exist (ADR 0015). This "
-            "checkout is GitHub's, fetched with full tags, so the tag really is on the remote."
+            "**Install manifest: PASSED.** `.mcp.json` pins this release's own tag, and the "
+            "marketplace pointer names an earlier tag whose manifests and `.mcp.json` all "
+            "agree. This checkout is GitHub's, fetched with full tags, so both tags really "
+            "are on the remote. Users do not receive this release until the pointer PR "
+            "advances the marketplace after publishing."
         )
         if tag:
             lines.append("")

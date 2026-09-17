@@ -252,11 +252,10 @@ def test_a_literal_left_behind_is_rejected(repo, path, mutate):
     assert any(path.split("/")[-1] in problem or path in problem for problem in problems), problems
 
 
-# --- the .mcp.json pin (ADR 0015) --------------------------------------------------------
+# --- the .mcp.json pin ----------------------------------------------------------------------
 #
-# The pin is NOT a version literal: it names an ALREADY-PUBLISHED release, so it
-# trails the version being released rather than equalling it. What is checked is that it has
-# the right shape, that it never LEADS the release, and that the tag it names is real.
+# The pin is a version literal naming the release being made (#117). What is checked is that
+# it has the right shape, equals the release, and that the tag it names is real.
 
 
 def _repin(repo, source):
@@ -352,8 +351,8 @@ def test_a_manifest_with_no_from_argument_is_rejected(repo):
 
 
 def test_a_pin_naming_a_tag_that_does_not_exist_is_rejected(repo):
-    """The check ADR 0015 bought with the equality it sold. `_tag_missing` is the whole point:
-    a manifest sending users to a ref that is not there must not pass."""
+    """`_tag_missing` is the whole point: a manifest sending users to a ref that is not there
+    must not pass."""
     _repin(repo, "git+https://github.com/briandconnelly/amicus.git@v1.2.2")
     problems = release_state.check_mcp_pin_tag_exists(repo_root=repo, git=_tag_missing)
     assert any("v1.2.2" in problem for problem in problems), problems
@@ -380,12 +379,11 @@ def test_a_tagless_checkout_fails_rather_than_being_treated_as_a_first_release(r
 
 
 def test_a_later_release_pinned_to_its_own_unpushed_tag_is_rejected(repo):
-    """The defect Copilot found in round 1, kept as a permanent control.
+    """The pin names its own release, so the check needs that tag to exist -- no exception.
 
-    Releasing 1.2.3 with the pin mistakenly bumped to v1.2.3 before that tag exists is exactly
-    the unresolvable window ADR 0015 removes. Under the original `pinned == version` exception
-    this passed here AND in the publish workflow -- where the tag has since been pushed and so
-    does exist -- meaning nothing caught it.
+    `docs/RELEASING.md` step 3 creates the annotated tag locally before running the checker,
+    which is what lets this pass before the push. Without it, the release is refused here
+    rather than tagged and published against a manifest nothing verified.
     """
     problems = release_state.check_mcp_pin_tag_exists(repo_root=repo, git=_tag_missing)
     assert any(f"v{VERSION}" in problem for problem in problems), problems
