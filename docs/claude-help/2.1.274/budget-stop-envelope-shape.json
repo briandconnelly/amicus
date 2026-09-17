@@ -1,0 +1,52 @@
+{
+  "top_level_keys": [
+    "duration_api_ms",
+    "duration_ms",
+    "errors",
+    "fast_mode_disabled_reason",
+    "fast_mode_state",
+    "is_error",
+    "modelUsage",
+    "num_turns",
+    "permission_denials",
+    "queued_turn_count",
+    "result_index",
+    "session_id",
+    "stop_reason",
+    "subagent_stats",
+    "subtype",
+    "terminal_reason",
+    "total_cost_usd",
+    "type",
+    "usage",
+    "uuid"
+  ],
+  "usage_keys": [
+    "cache_creation",
+    "cache_creation_input_tokens",
+    "cache_read_input_tokens",
+    "inference_geo",
+    "input_tokens",
+    "iterations",
+    "output_tokens",
+    "output_tokens_details",
+    "server_tool_use",
+    "service_tier",
+    "speed"
+  ],
+  "modelUsage_inner_keys": [
+    "cacheCreationInputTokens",
+    "cacheReadInputTokens",
+    "canonicalModel",
+    "contextWindow",
+    "costBasis",
+    "costUSD",
+    "inputTokens",
+    "maxOutputTokens",
+    "outputTokens",
+    "provider",
+    "thinkingTokens",
+    "webSearchRequests"
+  ],
+  "note": "Key names of the budget-stop envelope claude 2.1.274 printed for a one-turn toolless run stopped by --max-budget-usd; the envelope itself, with its session id and uuid masked, is tests/fixtures/claude_budget_stop_envelope.json. It carries no prompt text."
+}

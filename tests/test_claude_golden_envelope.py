@@ -7,14 +7,17 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 from tests.support import claudefixtures as cf
 
+from amicus.backends.claude import cli
 from amicus.orchestration import run as run_mod
 from amicus.request import RunSpec
 from amicus.sdk.backend.protocol import RunOutcome, RunRequest
 from amicus.sdk.core.runtime import CommandRun
 
 GOLDEN = json.loads(cf.GOLDEN)
+BUDGET_STOP = json.loads(cf.BUDGET_STOP)
 
 
 def test_golden_keys_are_the_documented_shape():
@@ -39,7 +42,12 @@ def test_golden_through_the_adapter(pinned_claude_bin):
     assert result.session_id == "sess-golden-1"
     assert result.usage is not None
     assert (result.usage.input_tokens, result.usage.output_tokens) == (100, 50)
-    assert (result.usage.cached_input_tokens, result.usage.cache_creation_input_tokens) == (10, 5)
+    # This older envelope's modelUsage has no cache keys, and usage is read from one block
+    # only (#158): the main-loop block's cache counters are not mixed in.
+    assert (result.usage.cached_input_tokens, result.usage.cache_creation_input_tokens) == (
+        None,
+        None,
+    )
     assert result.usage.cost_usd == 0.0123
 
 
@@ -62,8 +70,9 @@ async def test_golden_through_the_loop(pinned_claude_bin, monkeypatch, tmp_path)
     assert out["ok"] is True and out["summary"] == "Off-by-one in add()"
     meta = out["meta"]
     assert meta["session_id"] == "sess-golden-1" and meta["usage"]["cost_usd"] == 0.0123
-    assert meta["usage"]["cached_input_tokens"] == 10
-    assert meta["usage"]["cache_creation_input_tokens"] == 5
+    assert (meta["usage"]["input_tokens"], meta["usage"]["output_tokens"]) == (100, 50)
+    assert meta["usage"]["cached_input_tokens"] is None  # no cache keys under modelUsage
+    assert meta["usage"]["cache_creation_input_tokens"] is None
     assert meta["command_exit_code"] == 0
     # The sibling's finding shape (risk/recommendation) is not amicus's (evidence/suggestion),
     # and ADR 0010 declines to map one onto the other rather than half-mapping it. What the
@@ -77,3 +86,69 @@ async def test_golden_through_the_loop(pinned_claude_bin, monkeypatch, tmp_path)
     assert out["findings"][0]["evidence"] == "return a - b"
     assert out["findings"][0]["suggestion"] is None, "risk/recommendation are not half-mapped"
     assert out["findings_diagnostics"] == {"dropped": 0, "reasons": ["extra_fields_omitted"]}
+
+
+# --- The budget-stop envelope (#158) ------------------------------------------------------
+# Recorded on claude 2.1.274 with a $0.001 threshold, below amicus's 0.01 floor, so these
+# replay the envelope through amicus rather than reproduce the stop end to end.
+
+
+def test_budget_stop_keys_are_the_documented_shape():
+    shape = json.loads(Path("docs/claude-help/2.1.274/budget-stop-envelope-shape.json").read_text())
+    assert sorted(BUDGET_STOP) == shape["top_level_keys"]
+    assert sorted(BUDGET_STOP["usage"]) == shape["usage_keys"]
+    (entry,) = BUDGET_STOP["modelUsage"].values()
+    assert sorted(entry) == shape["modelUsage_inner_keys"]
+    assert "result" not in BUDGET_STOP, "a budget stop carries no answer, so no prompt echo"
+
+
+def test_budget_stop_zeroes_the_main_loop_block_beside_a_nonzero_cost():
+    """What #158 reported, pinned on the recording so the precedence rule keeps its reason."""
+    block = BUDGET_STOP["usage"]
+    assert (block["input_tokens"], block["output_tokens"]) == (0, 0)
+    assert BUDGET_STOP["total_cost_usd"] > 0
+    (entry,) = BUDGET_STOP["modelUsage"].values()
+    assert entry["inputTokens"] > 0 and entry["costUSD"] == BUDGET_STOP["total_cost_usd"]
+    assert BUDGET_STOP["subtype"] == "error_max_budget_usd" and BUDGET_STOP["is_error"] is True
+
+
+@pytest.mark.parametrize("exit_code", [1, 0])
+def test_budget_stop_through_the_classifier(exit_code):
+    """claude 2.1.274 exits 1 on the stop; the zero-exit route the older capture took (#73)
+    reads the same envelope."""
+    run = CommandRun(cf.BUDGET_STOP, "", exit_code, 1432, False)
+    failure = cli.classify_failure(run, config_mode="safe", sanitize=None)
+    assert failure.code == "budget_exceeded" and failure.retryable is False
+    assert failure.details == {"field": "backend_options.max_budget_usd"}
+    assert failure.usage is not None
+    assert (failure.usage.input_tokens, failure.usage.output_tokens) == (4707, 53)
+    assert (failure.usage.cached_input_tokens, failure.usage.cache_creation_input_tokens) == (0, 0)
+    assert failure.usage.cost_usd == BUDGET_STOP["total_cost_usd"]
+
+
+async def test_budget_stop_through_the_loop(pinned_claude_bin, monkeypatch, tmp_path):
+    plugin, _ = cf.make_backend()
+    monkeypatch.setattr(
+        run_mod.runtime, "run_async", cf.scripted_run_async(stdout=cf.BUDGET_STOP, exit_code=1)
+    )
+    spec = RunSpec(
+        backend="claude",
+        kind="consult",
+        tool="amicus_consult",
+        cwd=str(tmp_path),
+        workspace_source="param",
+        roots_source="client",
+        host_name="Codex",
+        timeout_seconds=60,
+        options={"config_mode": "safe", "access": "toolless", "max_budget_usd": 0.01},
+        question="q",
+    )
+    out = await run_mod.run_request(spec, plugin)
+    assert out["ok"] is False
+    assert out["error"]["code"] == "budget_exceeded" and out["error"]["temporary"] is False
+    meta = out["meta"]
+    assert meta["command_exit_code"] == 1 and meta["session_id"] == "sess-budget-1"
+    usage = meta["usage"]
+    assert (usage["input_tokens"], usage["output_tokens"]) == (4707, 53)
+    assert (usage["cached_input_tokens"], usage["cache_creation_input_tokens"]) == (0, 0)
+    assert usage["cost_usd"] == BUDGET_STOP["total_cost_usd"]

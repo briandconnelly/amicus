@@ -23,6 +23,10 @@ NO_MODEL = FlagSupport(
 )
 _FIXTURES = Path(__file__).parent.parent / "fixtures"
 GOLDEN = (_FIXTURES / "claude_golden_envelope.json").read_text()
+# The envelope claude 2.1.274 printed when --max-budget-usd stopped a one-turn toolless run
+# (#158): a zeroed top-level `usage` beside a nonzero cost, with the real counts under
+# `modelUsage`. Session id and uuid masked; it carries no prompt text.
+BUDGET_STOP = (_FIXTURES / "claude_budget_stop_envelope.json").read_text()
 STRUCTURED = json.dumps(
     {
         "summary": "Looks fine",

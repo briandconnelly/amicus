@@ -84,3 +84,90 @@ def test_structured_answer_parses_a_json_object_or_nothing():
     assert normalize.parse_structured("prose") is None
     assert normalize.parse_structured("[1]") is None
     assert normalize.parse_structured(None) is None
+
+
+def test_usage_prefers_model_usage_and_sums_it_across_models():
+    """claude's own result schema names `modelUsage` as the accounting field and calls the
+    top-level `usage` block main-loop-only; a budget stop zeroes the block beside a nonzero
+    cost (#158). The conflicting top-level counts here are ignored, not merged."""
+    env = json.loads(
+        _env(
+            total_cost_usd=0.03,
+            usage={
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "cache_read_input_tokens": 0,
+                "cache_creation_input_tokens": 0,
+            },
+            modelUsage={
+                "claude-a": {
+                    "inputTokens": 4000,
+                    "outputTokens": 50,
+                    "cacheReadInputTokens": 300,
+                    "cacheCreationInputTokens": 20,
+                    "costUSD": 0.02,
+                },
+                "claude-b": {
+                    "inputTokens": 700,
+                    "outputTokens": 3,
+                    "cacheReadInputTokens": 10,
+                    "cacheCreationInputTokens": 1,
+                    "costUSD": 0.01,
+                },
+            },
+        )
+    )
+    usage = normalize.extract_usage(env)
+    assert usage is not None
+    assert (usage.input_tokens, usage.output_tokens) == (4700, 53)
+    assert (usage.cached_input_tokens, usage.cache_creation_input_tokens) == (310, 21)
+    assert usage.cost_usd == 0.03 and usage.total_tokens is None
+
+
+def test_usage_never_reports_a_partial_model_sum_or_mixes_in_the_main_loop_block():
+    """A field one model entry leaves out is None, never the sum of the entries that state it,
+    and never the top-level block's number: the two blocks count different scopes."""
+    env = json.loads(
+        _env(
+            total_cost_usd=0.01,
+            usage={"input_tokens": 100, "output_tokens": 50, "cache_read_input_tokens": 10},
+            modelUsage={
+                "claude-a": {"inputTokens": 100, "outputTokens": 50},
+                "claude-b": {"outputTokens": 7},
+            },
+        )
+    )
+    usage = normalize.extract_usage(env)
+    assert usage is not None
+    assert usage.input_tokens is None and usage.output_tokens == 57
+    assert usage.cached_input_tokens is None and usage.cache_creation_input_tokens is None
+    assert usage.cost_usd == 0.01
+
+
+def test_usage_falls_back_to_the_main_loop_block_only_without_a_usable_model_entry():
+    """No dict-shaped model entry at all: the top-level block is read as before, and an
+    explicit zero there is a zero, not a missing value."""
+    block = {"input_tokens": 0, "output_tokens": 0, "cache_read_input_tokens": 4}
+    for unusable in ("nope", [], {}, {"claude-a": "x"}, {"claude-a": 3}, None):
+        usage = normalize.extract_usage(json.loads(_env(usage=block, modelUsage=unusable)))
+        assert usage is not None, unusable
+        assert (usage.input_tokens, usage.output_tokens) == (0, 0), unusable
+        assert usage.cached_input_tokens == 4, unusable
+    # A dict-shaped entry is usable even when its values are not ints: they read as None
+    # rather than handing the field back to the block (bool is not an int here either).
+    weird = normalize.extract_usage(
+        json.loads(
+            _env(
+                usage=block,
+                modelUsage={"claude-a": {"inputTokens": True, "outputTokens": "5"}},
+            )
+        )
+    )
+    assert weird is not None
+    assert (weird.input_tokens, weird.output_tokens, weird.cached_input_tokens) == (
+        None,
+        None,
+        None,
+    )
+    assert normalize.extract_usage(json.loads(_env(modelUsage={"claude-a": {}}))) is not None
+    assert normalize.extract_usage(json.loads(_env(modelUsage={}))) is None
