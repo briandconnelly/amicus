@@ -314,13 +314,15 @@ CONTRACT_DRIFT_STDERR_PATTERNS = (
 
 # Regexes, not substrings (issue #160): a bare "401" matched token counts and ids such as
 # `"input_tokens":14012`, so a usage limit read as "not authenticated". A 401 counts only in
-# an HTTP-status context (codex renders `unexpected status 401 ...`). The two refresh
+# an HTTP-status context (codex renders `unexpected status 401 ...`), or as a JSON
+# `status`/`status_code` value. The two refresh
 # phrasings are codex-cli 0.154.0's own.
 AUTH_FAILURE_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"\bnot logged in\b", re.I),
     re.compile(r"\bnot authenticated\b", re.I),
     re.compile(r"\brun `?codex login`?", re.I),
     re.compile(r"\b(?:status(?: code)?|http(?:/\d(?:\.\d)?)?)[ \t:=]*401\b", re.I),
+    re.compile(r'"(?:status|status_code)"[ \t]*:[ \t]*"?401\b', re.I),
     re.compile(r"\bunauthorized\b", re.I),
     re.compile(r"\b(?:access token|authentication session) could not be refreshed\b", re.I),
 )

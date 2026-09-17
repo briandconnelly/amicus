@@ -237,6 +237,10 @@ def test_classify_usage_limit_with_401_digits_is_rate_limited_not_auth():
     assert _classify(CommandRun(events, "", 1, 1, False), events=events).code == (
         "codex_rate_limited"
     )
+    json_401 = '{"type":"turn.failed","error":{"status":401}}'
+    assert _classify(CommandRun(json_401, "", 1, 1, False), events=json_401).code == (
+        "codex_auth_required"
+    )
     noisy = events + '\n{"usage":{"input_tokens":14012}}'
     assert _classify(CommandRun(noisy, "", 1, 1, False), events=noisy).code == (
         "codex_rate_limited"
