@@ -313,10 +313,41 @@ def test_classify_preserves_effort_and_extra_arg_attribution_from_error_events()
     assert out.code == "invalid_reasoning_effort"
 
 
-def test_classify_does_not_fall_back_to_model_text_without_a_diagnostic():
-    stream = '{"type":"item.completed","item":{"type":"agent_message","text":"quota"}}'
-    out = _classify(CommandRun(stream, "", 1, 1, False))
+@pytest.mark.parametrize("explicit_events", [False, True])
+@pytest.mark.parametrize("item_type", ["agent_message", "command_execution"])
+def test_classify_does_not_fall_back_to_model_text_without_a_diagnostic(explicit_events, item_type):
+    item = {"type": item_type}
+    item["text" if item_type == "agent_message" else "aggregated_output"] = "quota discussion"
+    stream = json.dumps({"type": "item.completed", "item": item})
+    captured = []
+
+    def sanitize(text):
+        captured.append(text)
+        return text
+
+    out = _classify(
+        CommandRun(stream, "", 1, 1, False),
+        events=stream if explicit_events else None,
+        sanitize=sanitize,
+    )
     assert out.code == "nonzero_exit"
+    assert "quota discussion" not in out.detail
+    assert "item.completed" not in out.detail
+    assert captured == [""]
+
+
+@pytest.mark.parametrize(
+    "diagnostic",
+    ["connection closed", '{"type":"turn.failed","error":{"status":500}}'],
+)
+def test_generic_failure_retains_backend_diagnostics(diagnostic):
+    out = _classify(CommandRun(diagnostic, "", 1, 1, False))
+    assert out.code == "nonzero_exit"
+    detail = out.detail.removeprefix("codex exited 1: ")
+    if diagnostic.startswith("{"):
+        assert json.loads(detail) == json.loads(diagnostic)
+    else:
+        assert detail == diagnostic
 
 
 @pytest.mark.parametrize(

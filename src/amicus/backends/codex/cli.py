@@ -392,7 +392,7 @@ def classify_failure(
             detail="codex hit a usage/rate limit.",
             retry_after_ms=retry_after,
         )
-    raw = (event_error or run.stderr or run.stdout).strip()
+    raw = (event_error or run.stderr or diagnostics).strip()
     detail = (sanitize(raw) if sanitize is not None else redaction.sanitize_echo_prose(raw))[:300]
     message = f"codex exited {run.exit_code}: {detail}"
     if run.capture_failed:

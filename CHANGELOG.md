@@ -50,6 +50,8 @@ per-change, as its own lead says.
 - Codex failure classification now reads backend error events and stderr instead of
   matching authentication, contract-drift and rate-limit terms in model answers or tool
   output (#166). Model prose can no longer override the backend's diagnosis or retry delay.
+  Generic failure details also exclude model and tool items, preventing that text from
+  being copied into a background job's stored error.
   Plain-text startup diagnostics and error events containing only an HTTP status remain
   supported. Neither `FINGERPRINT` nor `RESULT_FORMAT` moves.
 
