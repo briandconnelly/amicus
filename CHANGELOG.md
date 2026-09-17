@@ -20,6 +20,17 @@ per-change, as its own lead says.
 
 ## [Unreleased]
 
+### Added
+
+- The `collaborating-with-amicus` skill gains a blind-comparison workflow
+  (`references/blind-comparison.md`): two or more finalized candidates, compared by a backend
+  that wrote none of them, blinded, against criteria fixed before the call, returning
+  per-criterion reasons and one preference the host verifies as a finding rather than a score it
+  adopts. A new
+  root rule says a backend's stated preference never stands in for the decision, and scenarios
+  S16 and S17 are defined prospectively. No tool or server surface changes and `FINGERPRINT` does not
+  move.
+
 ### Changed
 
 - amicus no longer depends on `pontonier`. Its backend SDK is now part of amicus, as
