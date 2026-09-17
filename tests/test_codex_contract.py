@@ -154,6 +154,9 @@ _USAGE_LIMIT_MESSAGE = (
         "src/app.py:401: warning",
         '{"input_tokens":401}',
         '{"status":4012}',
+        "status401; usage limit",
+        "http401",
+        "run codex loginhelper; usage limit",
         _USAGE_LIMIT_MESSAGE,
     ],
 )
@@ -173,6 +176,8 @@ def test_auth_failure_ignores_401_digits_outside_an_http_status(text):
         '{"status":401}',
         '{"error": {"status_code": 401}}',
         "Not logged in",
+        "HTTP/1.1 401",
+        "run codex login.",
         "not authenticated; please run `codex login`",
         "Your access token could not be refreshed. Please log out and sign in again.",
         "Your authentication session could not be refreshed automatically. Please log out "
