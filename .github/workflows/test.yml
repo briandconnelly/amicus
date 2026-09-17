@@ -37,3 +37,20 @@ jobs:
         run: uv run lint-imports
       - name: Test (95% coverage floor)
         run: uv run pytest
+
+  marketplace-pointer:
+    name: marketplace pointer
+    # Only a pull request has a base to compare the pointer against.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # Full history and tags: the pointer's tag is checked, and the base commit is read.
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+      - name: The marketplace pointer is consistent and never moves backwards
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: uv run python scripts/check_release_state.py --base "$BASE_SHA"
