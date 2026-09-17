@@ -117,11 +117,8 @@ obligations live in the reference each route names, under that file's own `Rules
   the verdict or confidence. On `review_status: not_run` no backend ran, so it is null and
   `review_status` is the signal. Delegate results do not carry the field.
 - **On `review_status: unstructured`, fetch and read `raw_response.text` at `detail="full"` before
-  concluding or paying again.**
-  The backend answered, but not with one object amicus could read, so nothing was parsed: the
-  verdict and confidence are `unknown`, and the empty `findings` and prose lists are not the
-  backend saying none. The text arrives at `detail="full"`, on the call or free from
-  `amicus_job_result`, and is an unverified claim like any other output.
+  concluding or paying again.** Its empty `findings` and prose lists are not the backend saying
+  none.
 - **Never read `confidence: "unknown"` as a low rating.** It means no rating exists: either
   no backend ran (`review_status: not_run`), or the backend supplied none amicus could read
   and amicus did not substitute `low`.
@@ -254,6 +251,11 @@ Consult, review, delegate, and adversarial-review results share `summary`, `find
 adversarial results carry `verdict`, `confidence`, `review_status`, and `coverage`; only delegate
 carries `diff` and `diffstat`. `amicus_review_changes_dry_run` carries the same `coverage` the
 paid review would.
+
+`review_status: unstructured` means the backend answered, but not with one object amicus could
+read, so nothing was parsed: `verdict` and `confidence` are `unknown`. The whole answer is
+`raw_response.text`, returned at `detail="full"` on the call or free from `amicus_job_result`,
+and it is an unverified claim like any other output.
 
 `findings_diagnostics` is null when nothing deviated, and otherwise names what was lost — the
 rule for reading it is under [Results](#results), and

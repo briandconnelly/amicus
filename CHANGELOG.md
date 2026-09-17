@@ -59,7 +59,8 @@ per-change, as its own lead says.
   sign-off is now read as that object. A repeated key is still refused (#51). Only an empty
   answer is still an error (`invalid_json`, or `empty_response` on Kimi), and
   `schema_violation` is no longer a review outcome. `empty_response`, which Kimi already
-  returned for an empty answer on any paid tool, is now listed in their `error_codes`.
+  returned for an empty answer, is now listed in the `error_codes` of every paid tool that can
+  select Kimi.
   `RESULT_FORMAT` moves to 7 and `FINGERPRINT` to `amicus/0.1/schema-31`.
 
 - A plugin install no longer runs an older release's server than its own skills (#117,

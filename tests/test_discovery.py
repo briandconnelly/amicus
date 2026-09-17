@@ -427,3 +427,16 @@ def test_sync_paid_tools_advertise_the_idempotency_codes():
         async_codes = set(discovery.TOOL_DETAILS[async_name]["error_codes"])
         assert set(discovery._IDEMPOTENCY_CODES) <= sync_codes, sync_name
         assert set(discovery._IDEMPOTENCY_CODES) <= async_codes, async_name
+
+
+def test_empty_response_is_listed_exactly_where_kimi_can_run_the_tool():
+    """Kimi's inspector emits empty_response on every paid verb it runs; a tool no kimi call
+    can reach (claude-only adversarial review, the free tools) must not promise it."""
+    from amicus.tools.discovery import TOOL_DETAILS
+
+    paid = {n: r for n, r in TOOL_DETAILS.items() if r["cost"] == "active"}
+    assert paid, "no paid tools found: the instrument is broken"
+    for name, row in paid.items():
+        assert ("empty_response" in row["error_codes"]) == ("kimi" in row["backends"]), name
+    free = [r for r in TOOL_DETAILS.values() if r["cost"] != "active" and "error_codes" in r]
+    assert all("empty_response" not in r["error_codes"] for r in free)
