@@ -225,3 +225,63 @@ def test_static_catalog_and_version_pins():
     assert not c.MODEL_SLUG_PATTERN.match("-bad")
     assert {(0, 153), (0, 154)} <= c.SUPPORTED_VERSIONS
     assert c.RATE_LIMIT_DEFAULT_BACKOFF_MS == 60_000
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        # codex-cli 0.154.0's two observed shapes (2026-09-17): date+time and time only.
+        (
+            "You've hit your usage limit. Upgrade to Pro (https://chatgpt.com/explore/pro), "
+            "visit https://chatgpt.com/codex/settings/usage to purchase more credits or try "
+            "again at Sep 19th, 2026 8:37 AM.",
+            "Sep 19th, 2026 8:37 AM",
+        ),
+        ("usage limit ... or try again at 12:39 PM.", "12:39 PM"),
+        ("usage limit; try again at 12:39 PM", "12:39 PM"),
+        ("usage limit; try again at 12:39 PM\nmore", "12:39 PM"),
+        # Diagnostics carry the raw JSON event line, so the phrase ends in `."}}`.
+        ('{"type":"error","message":"usage limit or try again at 12:39 PM."}', "12:39 PM"),
+        (
+            '{"error":{"message":"usage limit; try again at Sep 19th, 2026 8:37 AM."}}',
+            "Sep 19th, 2026 8:37 AM",
+        ),
+        # A zone, when codex ever prints one, is kept with the phrase.
+        ("usage limit; try again at 12:39 PM UTC.", "12:39 PM UTC"),
+        ("usage limit; try again at Sep 19th, 2026 8:37 AM PDT.", "Sep 19th, 2026 8:37 AM PDT"),
+        ("usage limit; try again at 08:37 +02:00.", "08:37 +02:00"),
+        # Relative delays, plain limits and non-clock wording carry no reset phrase.
+        ("usage limit; try again in 5 seconds", None),
+        ("usage limit reached", None),
+        ("usage limit; try again at noon.", None),
+        ("usage limit; try again at tomorrow morning.", None),
+        ("usage limit; try again at " + "x" * 500 + ".", None),
+        ("rate limit; retry-after 9", None),
+        (None, None),
+    ],
+)
+def test_parse_usage_limit_reset(text, expected):
+    reset = c.parse_usage_limit_reset(text)
+    assert (reset.when if reset else None) == expected
+    if reset is not None:
+        assert len(reset.when) <= c.USAGE_LIMIT_RESET_MAX_CHARS
+
+
+@pytest.mark.parametrize(
+    ("text", "zone_stated"),
+    [
+        ("try again at 12:39 PM.", False),
+        ("try again at Sep 19th, 2026 8:37 AM.", False),
+        ("try again at 12:39 PM UTC.", True),
+        ("try again at 12:39 PM GMT", True),
+        ("try again at 08:37 +02:00.", True),
+    ],
+)
+def test_parse_usage_limit_reset_reports_whether_a_zone_was_stated(text, zone_stated):
+    reset = c.parse_usage_limit_reset(text)
+    assert reset is not None and reset.zone_stated is zone_stated
+
+
+def test_parse_usage_limit_reset_is_sanitized():
+    reset = c.parse_usage_limit_reset("try again at 1:00\x1b[31m PM.")
+    assert reset is not None and "\x1b" not in reset.when

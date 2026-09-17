@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from amicus.sdk.backend import contract as _pc
+from amicus.sdk.core import redaction
 
 CODEX_BIN = "codex"
 
@@ -370,6 +371,54 @@ def parse_retry_after_ms(*texts: str | None) -> int | None:
     if match is None or (match.group(2) or "").lower() not in _SECOND_UNITS:
         return None
     return int(match.group(1)) * 1000
+
+
+def is_usage_limit(*texts: str | None) -> bool:
+    """A plan usage limit may reset days later; no short backoff can be assumed."""
+    return "usage limit" in _blob(texts).lower()
+
+
+# codex-cli 0.154.0 states a usage-limit reset as a clock time with no zone, either
+# `try again at Sep 19th, 2026 8:37 AM.` or `try again at 12:39 PM.` (both captured
+# 2026-09-17). The phrase is echoed, not parsed into a delay: without a zone it cannot
+# become one. Only a clock-time shape matches, so wording such as `try again at noon.`
+# falls back to the generic guidance instead of being labelled a clock time; a zone
+# suffix, should codex ever print one, is kept and reported as stated.
+USAGE_LIMIT_RESET_MAX_CHARS = 64
+_RESET_DATE = r"(?:[A-Za-z]{3,9}\.?\s+\d{1,2}(?:st|nd|rd|th)?,?\s+(?:\d{4}\s+)?)?"
+_RESET_CLOCK = r"\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AaPp]\.?[Mm])?"
+_RESET_ZONE = r"(?:[ \t]*(?-i:UTC|GMT|Z|[A-Z]{2,5}|[+-]\d{2}:?\d{2})\b)?"
+_USAGE_LIMIT_RESET_PATTERN = re.compile(
+    r"try\s+again\s+at\s+(?P<when>"
+    + _RESET_DATE
+    + _RESET_CLOCK
+    + r")(?P<zone>"
+    + _RESET_ZONE
+    + r")",
+    re.IGNORECASE,
+)
+
+
+@dataclass(frozen=True)
+class UsageLimitReset:
+    """The reset phrase codex printed after `try again at`, sanitized and bounded, and
+    whether it named a time zone (codex-cli 0.154.0 never has)."""
+
+    when: str
+    zone_stated: bool
+
+
+def parse_usage_limit_reset(*texts: str | None) -> UsageLimitReset | None:
+    """The clock-time reset phrase after `try again at`, else None. Relative delays
+    (`try again in ...`) belong to :func:`parse_retry_after_ms`."""
+    match = _USAGE_LIMIT_RESET_PATTERN.search(_blob(texts))
+    if match is None:
+        return None
+    zone = match.group("zone").strip()
+    when = redaction.sanitize_echo(f"{match.group('when').strip()} {zone}".strip())
+    if not when:
+        return None
+    return UsageLimitReset(when=when[:USAGE_LIMIT_RESET_MAX_CHARS], zone_stated=bool(zone))
 
 
 # --- The SDK contract -------------------------------------------------------------------

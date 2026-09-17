@@ -293,6 +293,41 @@ def _extra_args_drift_match(extra: ExtraArgs, *texts: str | None) -> list[str] |
     return matched or None
 
 
+def _usage_limit_failure(reset: contract.UsageLimitReset | None) -> ClassifiedFailure:
+    """A plan usage limit with no relative delay: never a guessed backoff (#165). codex
+    states the reset as a clock time, so it is echoed for the caller to read rather than
+    converted into retry_after_ms; the zone caveat is stated only when the phrase names
+    none."""
+    if reset is None:
+        return ClassifiedFailure(
+            code="codex_rate_limited",
+            detail="codex hit a usage limit; the retry delay is unknown.",
+            repair=RepairHint(
+                next_step="inspect_and_retry",
+                alternative=(
+                    "Check Codex's usage-limit message or account usage settings for the "
+                    "reset time, then retry once quota is available. Do not automatically "
+                    "retry on a short timer; amicus could not determine the delay."
+                ),
+            ),
+        )
+    lifts = f"codex reported the limit lifts at {reset.when}"
+    caveat = "" if reset.zone_stated else " (a clock time with no time zone stated)"
+    return ClassifiedFailure(
+        code="codex_rate_limited",
+        detail=f"codex hit a usage limit; {lifts}{caveat}, so the retry delay is unknown.",
+        details={"reason": lifts},
+        repair=RepairHint(
+            next_step="inspect_and_retry",
+            alternative=(
+                f"Codex reported the limit lifts at {reset.when}{caveat}; confirm it against "
+                "account usage settings, then retry once quota is available. Do not "
+                "automatically retry on a short timer; amicus could not determine the delay."
+            ),
+        ),
+    )
+
+
 def classify_failure(
     run: CommandRun,
     *,
@@ -385,6 +420,10 @@ def classify_failure(
         return _contract_changed()
     if contract.is_rate_limited(run.stderr, diagnostics, event_error):
         retry_after = contract.parse_retry_after_ms(run.stderr, diagnostics, event_error)
+        if retry_after is None and contract.is_usage_limit(run.stderr, diagnostics, event_error):
+            return _usage_limit_failure(
+                contract.parse_usage_limit_reset(run.stderr, diagnostics, event_error)
+            )
         if retry_after is None:
             retry_after = contract.RATE_LIMIT_DEFAULT_BACKOFF_MS
         return ClassifiedFailure(
