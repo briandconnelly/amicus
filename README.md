@@ -44,7 +44,7 @@ The plugins launch the server from a published release tag, pinned in
   "mcpServers": {
     "amicus": {
       "command": "uvx",
-      "args": ["--from", "git+https://github.com/briandconnelly/amicus.git@v0.3.0", "amicus-mcp"]
+      "args": ["--from", "git+https://github.com/briandconnelly/amicus.git@v0.4.0", "amicus-mcp"]
     }
   }
 }
@@ -85,7 +85,9 @@ anything.
 
 ## The tools
 
-Nineteen tools, in five groups, one of them a deprecated alias. Everything paid has a free way to inspect it first.
+Nineteen tools, in five groups, one of them a deprecated alias. Discovery, previews and job
+management are free; the verbs and their background twins invoke the selected backend and spend
+its quota.
 
 | Group | Tools |
 | --- | --- |
@@ -103,13 +105,10 @@ Not every backend does everything:
 | `delegate` | yes | yes | no |
 | `adversarial_review` | no | no | yes |
 
-A `no` is amicus's routing decision, not a claim about the model. `delegate` is absent on Claude
-by a deliberate review-only policy. `adversarial_review` is scoped to Claude for v1, but the verb
-is amicus's own: the prompt it builds and the result shape it returns are amicus's for any
-backend, and what Claude contributes is a critic stance layered on top. So nothing about
-Codex or Kimi stops either from reviewing adversarially — ask them through `consult` or
-`review_changes` and supply the adversarial stance yourself. What the verb adds is that stance
-fixed, plus its `target` and `evidence` carriers.
+A `no` is amicus's routing policy, not a model limitation. Claude is review-only, and the
+dedicated adversarial-review verb is scoped to Claude. To ask Codex or Kimi for an adversarial
+review, use `consult` or `review_changes` and supply the stance yourself; the dedicated verb adds
+a fixed critic stance and the `target` and `evidence` inputs.
 
 Asking a backend for something it does not support returns a `feature_unsupported` error naming
 the backend and the feature, rather than failing obscurely.
@@ -137,12 +136,10 @@ reasoning effort, and binary path (`AMICUS_CODEX_MODEL`, `AMICUS_KIMI_REASONING_
 `AMICUS_CLAUDE_BIN`, and so on), and there are limits for timeouts, job retention and payload
 sizes. The full list is the `env_vars` array in [`.mcp.json`](.mcp.json).
 
-Logging goes to stderr, and `AMICUS_LOG_FILE` mirrors amicus's own records to a file. The
-`fastmcp` and `mcp` libraries' records also reach stderr, but never below WARNING whatever
-`AMICUS_LOG_LEVEL` says, never the file, and with every unaudited FastMCP server record
-reduced to its level, logger and exception type. That is deliberate (ADR 0023): those
-libraries can log a caller's prompt text, so a FastMCP-side failure is diagnosed from the
-exception type and frames rather than its message.
+Logging goes to stderr, and `AMICUS_LOG_FILE` mirrors amicus's own records to a file. To reduce
+the risk of prompt text leaking through dependency logs, `fastmcp` and `mcp` records are limited
+to WARNING or higher on stderr, reduced to non-message diagnostics, and never written to that
+file (ADR 0023).
 
 ## Coming from codex-in-claude, moonbridge, or claude-in-codex
 
@@ -151,20 +148,16 @@ the new ones.
 
 ## Status and known limits
 
-0.3.0 is the current release, and it is a breaking one: the discovery surface moved from
-`amicus/0.1/schema-13` to `amicus/0.1/schema-30` and stored job results from `RESULT_FORMAT` 4 to
-`6`, so a job result 0.2.0 stored cannot be read after upgrading.
-[`docs/MIGRATION.md`](docs/MIGRATION.md#upgrading-from-020) walks through what a caller written
-against 0.2.0 has to change, and [`CHANGELOG.md`](CHANGELOG.md) lists everything that moved. The
-server's wire contract is exercised by the test suite and by host captures against Claude Code and
-Codex, but:
+0.4.0 is the current release, and it is a breaking one: sibling environment names are no longer
+read, and an unreadable review is now delivered as `review_status: unstructured` instead of an
+error. The discovery surface moved from `amicus/0.1/schema-30` to `amicus/0.1/schema-35` and stored
+job results from `RESULT_FORMAT` 6 to `7`, so a job result 0.3.0 stored cannot be read after
+upgrading. [`docs/MIGRATION.md`](docs/MIGRATION.md#upgrading-from-030) explains how to upgrade,
+and [`CHANGELOG.md`](CHANGELOG.md) lists every user-visible change.
 
-- Two router-skill evaluation scenarios are unresolved — S6 (diff-safety wording) and S7 (approval
-  friction) — recorded in [`docs/adr/0012-m6-packaging-decisions.md`](docs/adr/0012-m6-packaging-decisions.md).
-  Neither is a defect in the server's wire contract.
-- A third-party backend distribution loads through the `amicus.backends` entry-point group, but
-  cannot yet be enabled or called: `AMICUS_BACKENDS` and the `backend` parameter accept only the
-  in-tree ids.
+One known limit: a third-party backend distribution can load through the `amicus.backends`
+entry-point group, but cannot yet be enabled or called. `AMICUS_BACKENDS` and the `backend`
+parameter accept only the three in-tree ids.
 
 ## Development
 
