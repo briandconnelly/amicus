@@ -20,7 +20,7 @@ per-change, as its own lead says.
 
 ## [Unreleased]
 
-## [0.4.0] - 2026-09-17
+## [0.4.0] - 2026-09-18
 
 Across this release the discovery surface moves `amicus/0.1/schema-30`, what 0.3.0 shipped, to
 `amicus/0.1/schema-35`, and stored job results move `RESULT_FORMAT` 6 to 7, so a job result 0.3.0
