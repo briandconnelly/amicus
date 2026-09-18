@@ -21,17 +21,20 @@ All three read the clause as reaching an echo as written, since every answer is 
 **A backend's answer is output, not a prompt input, and rule 18 does not reach it even where it quotes or paraphrases one.**
 The rule exists to stop amicus itself from making extra copies of caller-supplied text in places with worse visibility or retention than the disclosed carrier: a log, argv, `spec.json`, a committed artifact.
 The job record is not such a place.
-The answer is what the caller paid for and was told is recorded as a job; it sits in a user-only directory under `AMICUS_STATE_DIR`, expires under `AMICUS_JOB_TTL` or the per-workspace cap, and `amicus_job_consume_result` discards it on read, reporting `delete_failed` when it cannot.
+The answer is what the caller paid for and was told is recorded as a job; it sits in a user-only directory under `AMICUS_STATE_DIR`, expires under `AMICUS_JOB_TTL` or is evicted by the per-workspace cap, and `amicus_job_consume_result` discards it on read, reporting `delete_failed` when it cannot.
+There is no daemon: an expired record is removed when a later job call touches it or lists the workspace, so an expired answer can stay on disk until then.
 An echoed input has already transited the disclosed egress, and storing what came back adds no observer beyond the record the caller asked to exist.
 
 **The exception is narrow: amicus keeps the answer only as the job's `result.json`.**
+That file is written through a `result.json.tmp` staging file in the same directory, which a crash between the write and the rename can leave behind; removal deletes the whole job directory, so both go together.
 The result amicus builds from the answer is covered the same way: its parsed fields and, for a delegate, the diff amicus captures from the worktree, which a task can shape as directly as an answer can.
 It still goes to no log, no argv and no other file, so `obs.py`'s exception-text policy, the fixed `FindingReason` vocabulary and the hashed host captures stay as they are.
 What the repository commits of an answer stays bound wherever the answer repeats a prompt anyone sent.
 Rule 18 is amended in its own governance PR to say both things, and its "copied, derived or replayed" clause now names its subject: amicus itself, or anyone working in this repository.
 
 **The retention is disclosed where the spend is.**
-Every paid tool description, sync and async, carries one sentence (`tools/_resolve.RECORD_RETENTION`): the record keeps the whole answer, secret-redacted and able to quote the caller's inputs, whatever `detail` delivered, until `AMICUS_JOB_TTL`, the cap or consume removes it.
+Every paid tool description, sync and async, carries one sentence (`tools/_resolve.RECORD_RETENTION`): the record keeps the whole answer, best-effort secret-redacted and able to quote the caller's inputs, whatever `detail` delivered, until it expires, the cap evicts it or consume removes it.
+The redaction is named as best-effort because `redact_text` recognizes only its inline secret patterns and says it is not a guarantee.
 The `detail` parameter says it shapes delivery only.
 The README's Safety section and the skill's retention paragraph say the same.
 The sentence names the whole answer rather than `raw_response.text`, because a prose consult's answer is stored in `summary` too.

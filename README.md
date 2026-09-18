@@ -125,9 +125,10 @@ the backend and the feature, rather than failing obscurely.
 - **Your prompts go to whichever provider you selected**, through that provider's own CLI. Each
   backend discloses how it carries your text — visible on `amicus_backends`.
 - **A paid call's whole answer stays on disk** in the job record under `AMICUS_STATE_DIR`,
-  whatever `detail` delivered it, until `AMICUS_JOB_TTL` (default 24h), the per-workspace cap or
-  `amicus_job_consume_result` removes it, and it can quote what you sent. Your inputs themselves
-  are never written there ([ADR 0035](docs/adr/0035-a-backend-answer-is-kept-on-the-job-record.md)).
+  whatever `detail` delivered it and after only best-effort secret redaction, until it expires
+  (`AMICUS_JOB_TTL`, default 24h; an expired record is removed on a later job call, not by a
+  daemon), the per-workspace cap evicts it or `amicus_job_consume_result` removes it. It can
+  quote what you sent. Your inputs themselves are never written there ([ADR 0035](docs/adr/0035-a-backend-answer-is-kept-on-the-job-record.md)).
 
 ## Configuration
 

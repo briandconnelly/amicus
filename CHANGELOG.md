@@ -35,8 +35,9 @@ per-change, as its own lead says.
 
 - Every paid tool, sync and async, and the `detail` parameter now disclose that the job record
   keeps the backend's whole answer whatever `detail` delivered it, that the answer can quote the
-  caller's inputs, and what removes it: `AMICUS_JOB_TTL`, the per-workspace cap or
-  `amicus_job_consume_result` (#163, ADR 0035). The README's Safety section and the skill's
+  caller's inputs, and what ends it: expiry under `AMICUS_JOB_TTL` (an expired record is removed
+  on a later job call, not by a daemon), the per-workspace cap or `amicus_job_consume_result`
+  (#163, ADR 0035). The README's Safety section and the skill's
   retention paragraph say the same. Nothing stored or delivered changes: the record has kept the
   answer since M2, and the decision recorded is that rule 18 binds the inputs amicus writes,
   not the answer a backend returns. **Surface**: `FINGERPRINT` moves to schema-35 for the

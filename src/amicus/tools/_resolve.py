@@ -21,9 +21,10 @@ FREE_MARKER = "Free — no model call."
 # where the spend is: the record keeps the answer whatever `detail` delivered it, and an
 # answer can quote the caller's inputs (ADR 0035).
 RECORD_RETENTION = (
-    "The job record keeps the whole answer — secret-redacted, and it can quote your inputs — "
-    "whatever `detail` delivered, until AMICUS_JOB_TTL (default 24h), the per-workspace cap "
-    "or amicus_job_consume_result removes it."
+    "The job record keeps the whole answer — best-effort secret-redacted, and it can quote "
+    "your inputs — whatever `detail` delivered, until it expires (AMICUS_JOB_TTL, default "
+    "24h; an expired record is removed on a later job call, not by a daemon), the "
+    "per-workspace cap evicts it or amicus_job_consume_result removes it."
 )
 FEATURE_FOR_VERB: dict[str, str] = {
     "delegate": "delegate",
