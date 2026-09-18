@@ -21,10 +21,11 @@ All three read the clause as reaching an echo as written, since every answer is 
 **A backend's answer is output, not a prompt input, and rule 18 does not reach it even where it quotes or paraphrases one.**
 The rule exists to stop amicus itself from making extra copies of caller-supplied text in places with worse visibility or retention than the disclosed carrier: a log, argv, `spec.json`, a committed artifact.
 The job record is not such a place.
-The answer is what the caller paid for and was told is recorded as a job; it sits in a user-only directory under `AMICUS_STATE_DIR`, expires under `AMICUS_JOB_TTL` or the per-workspace cap, and `amicus_job_consume_result` deletes it on read.
+The answer is what the caller paid for and was told is recorded as a job; it sits in a user-only directory under `AMICUS_STATE_DIR`, expires under `AMICUS_JOB_TTL` or the per-workspace cap, and `amicus_job_consume_result` discards it on read, reporting `delete_failed` when it cannot.
 An echoed input has already transited the disclosed egress, and storing what came back adds no observer beyond the record the caller asked to exist.
 
 **The exception is narrow: amicus keeps the answer only as the job's `result.json`.**
+The result amicus builds from the answer is covered the same way: its parsed fields and, for a delegate, the diff amicus captures from the worktree, which a task can shape as directly as an answer can.
 It still goes to no log, no argv and no other file, so `obs.py`'s exception-text policy, the fixed `FindingReason` vocabulary and the hashed host captures stay as they are.
 What the repository commits of an answer stays bound wherever the answer repeats a prompt anyone sent.
 Rule 18 is amended in its own governance PR to say both things, and its "copied, derived or replayed" clause now names its subject: amicus itself, or anyone working in this repository.

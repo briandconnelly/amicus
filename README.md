@@ -127,7 +127,7 @@ the backend and the feature, rather than failing obscurely.
 - **A paid call's whole answer stays on disk** in the job record under `AMICUS_STATE_DIR`,
   whatever `detail` delivered it, until `AMICUS_JOB_TTL` (default 24h), the per-workspace cap or
   `amicus_job_consume_result` removes it, and it can quote what you sent. Your inputs themselves
-  are never written there (ADR 0035).
+  are never written there ([ADR 0035](docs/adr/0035-a-backend-answer-is-kept-on-the-job-record.md)).
 
 ## Configuration
 

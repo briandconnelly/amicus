@@ -96,8 +96,9 @@ async def test_consult_end_to_end(app, tmp_path):
 
 
 async def test_an_echoed_input_reaches_disk_only_on_the_job_record(app, tmp_path, monkeypatch):
-    """ADR 0035 (#163): the backend's answer is kept whole on result.json even where it quotes
-    an input, and no other file of the job record carries it; the input itself is in none."""
+    """ADR 0035 (#163): the question carries two markers and the backend echoes one. The
+    echoed one is kept whole on result.json and in no other file of the job record; the one
+    the backend did not repeat, standing for the input itself, is in none."""
     answer_marker = "ECHOMARKER-7f3a1c"
     question_marker = "ASKMARKER-2b9e4d"
     monkeypatch.setenv("FAKE_CODEX_ANSWER", f"The answer quotes {answer_marker} back at you.")
@@ -106,7 +107,7 @@ async def test_an_echoed_input_reaches_disk_only_on_the_job_record(app, tmp_path
             "amicus_consult",
             {
                 "backend": "codex",
-                "question": f"what about {question_marker}?",
+                "question": f"what about {answer_marker} and {question_marker}?",
                 "workspace_root": str(tmp_path),
             },
         )
