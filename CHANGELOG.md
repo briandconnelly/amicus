@@ -20,6 +20,14 @@ per-change, as its own lead says.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-17
+
+Across this release the discovery surface moves `amicus/0.1/schema-30`, what 0.3.0 shipped, to
+`amicus/0.1/schema-35`, and stored job results move `RESULT_FORMAT` 6 to 7, so a job result 0.3.0
+stored cannot be delivered after upgrading. The entries labelled **Breaking** are the changes a
+caller or operator using 0.3.0 has to handle, and `docs/MIGRATION.md` ("Upgrading from 0.3.0")
+walks through each.
+
 ### Added
 
 - The `collaborating-with-amicus` skill gains a blind-comparison workflow
@@ -711,7 +719,8 @@ per-change rather than net, so they also name intermediate states that no releas
 - The tagged publish path to pypi.org has never run. Only the TestPyPI dispatch path has been exercised.
 - Eval scenario S6 in `skills/collaborating-with-amicus/tests/scenarios.md` passed on one run (status: `pass`, validated by that run alone); an M7 follow-up run against the current skill text did not isolate the still-open F3 finding, so F3 remains open. S7 (real-host approval friction) has failed both of its recorded runs (status: `fail`); an M7 zero-spend recheck reached neither a pass nor a fail and is recorded as inconclusive, so it does not move S7's status. See their `status` fields and ADR 0012.
 
-[Unreleased]: https://github.com/briandconnelly/amicus/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/briandconnelly/amicus/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/briandconnelly/amicus/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/briandconnelly/amicus/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/briandconnelly/amicus/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/briandconnelly/amicus/releases/tag/v0.1.0

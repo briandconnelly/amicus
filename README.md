@@ -44,7 +44,7 @@ The plugins launch the server from a published release tag, pinned in
   "mcpServers": {
     "amicus": {
       "command": "uvx",
-      "args": ["--from", "git+https://github.com/briandconnelly/amicus.git@v0.3.0", "amicus-mcp"]
+      "args": ["--from", "git+https://github.com/briandconnelly/amicus.git@v0.4.0", "amicus-mcp"]
     }
   }
 }
@@ -151,13 +151,14 @@ the new ones.
 
 ## Status and known limits
 
-0.3.0 is the current release, and it is a breaking one: the discovery surface moved from
-`amicus/0.1/schema-13` to `amicus/0.1/schema-30` and stored job results from `RESULT_FORMAT` 4 to
-`6`, so a job result 0.2.0 stored cannot be read after upgrading.
-[`docs/MIGRATION.md`](docs/MIGRATION.md#upgrading-from-020) walks through what a caller written
-against 0.2.0 has to change, and [`CHANGELOG.md`](CHANGELOG.md) lists everything that moved. The
-server's wire contract is exercised by the test suite and by host captures against Claude Code and
-Codex, but:
+0.4.0 is the current release, and it is a breaking one: sibling environment names are no longer
+read, and an unreadable review is now delivered as `review_status: unstructured` instead of an
+error. The discovery surface moved from `amicus/0.1/schema-30` to `amicus/0.1/schema-35` and stored
+job results from `RESULT_FORMAT` 6 to `7`, so a job result 0.3.0 stored cannot be read after
+upgrading. [`docs/MIGRATION.md`](docs/MIGRATION.md#upgrading-from-030) walks through what an
+operator or caller using 0.3.0 has to change, and [`CHANGELOG.md`](CHANGELOG.md) lists everything
+that moved. The server's wire contract is exercised by the test suite and by host captures against
+Claude Code and Codex, but:
 
 - Two router-skill evaluation scenarios are unresolved — S6 (diff-safety wording) and S7 (approval
   friction) — recorded in [`docs/adr/0012-m6-packaging-decisions.md`](docs/adr/0012-m6-packaging-decisions.md).

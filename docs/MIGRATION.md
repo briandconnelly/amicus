@@ -195,13 +195,22 @@ The `amicus://backends/{backend}` resource is always the full entry.
 
 ## Upgrading from 0.3.0
 
-The change below is the one an operator of amicus 0.3.0 has to handle before running 0.4.0.
-`CHANGELOG.md`'s 0.4.0 section lists every user-visible change since 0.3.0, including the ones a caller has to handle.
+The changes below are the ones an operator or caller using amicus 0.3.0 has to handle before running 0.4.0.
+`CHANGELOG.md`'s 0.4.0 section lists every user-visible change since 0.3.0, including the ones that require no migration.
 
 **Sibling environment names are no longer read (#176).**
 `CODEX_IN_CLAUDE_*`, `MOONBRIDGE_*` and `CLAUDE_IN_CODEX_*` supplied a setting through 0.3.0 when the `AMICUS_*` name was unset; from 0.4.0 they supply nothing.
 Rename each to the `AMICUS_*` name in the table above; a name left set is reported by `amicus_backends`, for a backend setting only while that backend is enabled and loaded, and otherwise ignored.
 The settings where this matters most are the ones whose default is looser than what you had set, such as `CODEX_IN_CLAUDE_ISOLATION=ignore-rules` or `CLAUDE_IN_CODEX_CLAUDE_CONFIG=safe`, which now fall back to `inherit`.
+
+**A review amicus cannot parse is delivered as `unstructured` (#139).**
+A review or critique whose answer is not one readable JSON object returned `invalid_json` or `schema_violation`; it now returns `ok: true` with `review_status: unstructured`, `verdict` and `confidence` set to `unknown`, and the whole answer in `raw_response.text` at `detail="full"`.
+Branch on `review_status` before reading the verdict, and read that text before paying for the same review again.
+Only an empty answer is still an error: `invalid_json`, or `empty_response` on Kimi, which detects it first.
+
+**A job result stored by 0.3.0 is no longer readable (#139).**
+`RESULT_FORMAT` moved from 6 to 7 for the unstructured review result, so `amicus_job_result` and `amicus_job_consume_result` return `job_result_incompatible` for a record 0.3.0 wrote rather than manufacturing the new shape for an older run.
+Fetch or consume any stored result you still need before upgrading; the record itself stays until `AMICUS_JOB_TTL` or the per-workspace cap evicts it.
 
 ## Upgrading from 0.2.0
 
