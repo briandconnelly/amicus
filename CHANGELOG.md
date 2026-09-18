@@ -34,10 +34,8 @@ walks through each.
   (`references/blind-comparison.md`): two or more finalized candidates, compared by a backend
   that wrote none of them, blinded, against criteria fixed before the call, returning
   per-criterion reasons and one preference the host verifies as a finding rather than a score it
-  adopts. A new
-  root rule says a backend's stated preference never stands in for the decision, and scenarios
-  S16 and S17 are defined prospectively. No tool or server surface changes and `FINGERPRINT` does not
-  move.
+  adopts. A new root rule says a backend's stated preference never stands in for the decision.
+  No tool or server surface changes and `FINGERPRINT` does not move.
 
 ### Changed
 
@@ -45,11 +43,9 @@ walks through each.
   keeps the backend's whole answer whatever `detail` delivered it, that the answer can quote the
   caller's inputs, and what ends it: expiry under `AMICUS_JOB_TTL` (an expired record is removed
   on a later job call, not by a daemon), the per-workspace cap or `amicus_job_consume_result`
-  (#163, ADR 0035). The README's Safety section and the skill's
-  retention paragraph say the same. Nothing stored or delivered changes: the record has kept the
-  answer since M2, and the decision recorded is that rule 18 binds the inputs amicus writes,
-  not the answer a backend returns. **Surface**: `FINGERPRINT` moves to schema-35 for the
-  description text.
+  (#163, ADR 0035). Nothing stored or delivered changes: the record has kept the answer since M2,
+  and the decision recorded is that rule 18 binds the inputs amicus writes, not the answer a
+  backend returns. **Surface**: `FINGERPRINT` moves to schema-35 for the description text.
 - amicus no longer depends on `pontonier`. Its backend SDK is now part of amicus, as
   `amicus.sdk` (#13, ADR 0029): the same code as pontonier 0.9.0, copied from its `v0.9.0`
   tag with the imports rewritten. Nothing on the wire or in a stored job result changes, and
@@ -140,6 +136,11 @@ walks through each.
   Plain-text startup diagnostics and error events containing only an HTTP status remain
   supported. Neither `FINGERPRINT` nor `RESULT_FORMAT` moves.
 
+- `amicus_backends` no longer reports `authenticated: false` whenever the Codex login-status
+  probe exits nonzero (#169). Only a recognized authentication failure reports `false`; a
+  configuration error or other probe failure reports `authenticated: null` and adds a sanitized
+  diagnostic to the backend's warnings. `FINGERPRINT` does not move.
+
 - **Surface.** `amicus_review_changes` on the `claude` backend now defaults to
   `backend_options.access = "readonly"` (#116, ADR 0032). On the previous `toolless` default a
   review had no tool to read the code it was judging, and answered with tool-call markup
@@ -168,18 +169,13 @@ walks through each.
   select Kimi.
   `RESULT_FORMAT` moves to 7 and `FINGERPRINT` to `amicus/0.1/schema-32`.
 
-- A plugin install no longer runs an older release's server than its own skills (#117,
-  ADR 0031, superseding ADR 0015). Hosts install the plugin into a directory keyed by
-  `plugin.json`'s version and never re-read it until that version changes, so an install
-  taken while `.mcp.json` still named the previous release -- as ADR 0015 required between a
-  release and its pin-move PR -- kept launching that previous server, and any install taken
-  mid-cycle froze `main`'s newest skills against it. `.mcp.json` now names its own release,
-  and the marketplace entry will pin a published release tag by `ref` and `sha` from 0.4.0,
-  so hosts install a consistent tag snapshot rather than `main`. Installs already stuck
-  recover when 0.4.0's version change reaches them. `scripts/check_release_state.py` checks
-  the pointer's shape, that it trails the release and is consistent at its tag, and gains a
-  `--base` pull-request mode; `docs/RELEASING.md` now creates the release tag locally before
-  checking and advances the pointer after publishing.
+- A plugin install no longer runs an older release's server than its bundled skills (#117,
+  ADR 0031, superseding ADR 0015). Hosts key an installed plugin by `plugin.json`'s version and
+  do not re-read it until that version changes, so a plugin whose `.mcp.json` named the previous
+  release kept launching that older server. `.mcp.json` now names its own release, and after
+  0.4.0 is published the marketplace entry pins that tag by `ref` and `sha`, so the installed
+  skills and server come from one release snapshot. Installs already stuck on an older server
+  recover when the 0.4.0 version change reaches them.
 
 - **Security.** An exception's own text can no longer reach a background job's `stderr.log`
   (#128). The job worker never called `obs.configure`, so nothing in that process installed
