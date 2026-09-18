@@ -92,3 +92,8 @@ support (where the host tracks a `task_id` rather than the raw tool response) is
 Job records expire after `AMICUS_JOB_TTL` (default 24h), and a per-workspace cap evicts the oldest
 terminal records first. An `amicus_job_list` result carries its own `truncated` and
 `truncation_hint` when the listing itself was cut.
+
+A record keeps the backend's whole answer, whatever `detail` delivered it, which is what makes
+`amicus_job_result(detail="full")` free later. That answer can quote your inputs, and only
+expiry (an expired record is removed on a later job call, not by a daemon), eviction under the
+per-workspace cap or `amicus_job_consume_result` removes it.

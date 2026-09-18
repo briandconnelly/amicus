@@ -39,14 +39,16 @@ _EGRESS = (
 _DESC = (
     f"{_resolve.PAID_MARKER} Read-only second opinion or Q&A from `backend` on a question, "
     "design, or a diff you paste inline; use amicus_review_changes when the diff is in "
-    f"git. {_EGRESS} Recorded as a job (meta.job_id). Prefer amicus_consult_async for a "
+    f"git. {_EGRESS} Recorded as a job (meta.job_id). {_resolve.RECORD_RETENTION} Prefer "
+    "amicus_consult_async for a "
     "high-effort or broad repo-grounded consult that can exceed the deadline."
 )
 _ASYNC_DESC = (
     f"{_resolve.PAID_MARKER} Async twin of amicus_consult: returns a job handle "
     "immediately; poll amicus_job_status while status is running, then read "
     f"amicus_job_result. {_EGRESS} Starting a "
-    "job commits to spend. Deadline: AMICUS_JOB_MAX_SECONDS (default 1800s)."
+    f"job commits to spend. {_resolve.RECORD_RETENTION} Deadline: AMICUS_JOB_MAX_SECONDS "
+    "(default 1800s)."
 )
 
 

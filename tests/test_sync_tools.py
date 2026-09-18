@@ -95,6 +95,33 @@ async def test_consult_end_to_end(app, tmp_path):
     assert "why?" not in (store._job_dir(str(tmp_path.resolve()), job_id) / "spec.json").read_text()
 
 
+async def test_an_echoed_input_reaches_disk_only_on_the_job_record(app, tmp_path, monkeypatch):
+    """ADR 0035 (#163): the question carries two markers and the backend echoes one. The
+    echoed one is kept whole on result.json and in no other file of the job record; the one
+    the backend did not repeat, standing for the input itself, is in none."""
+    answer_marker = "ECHOMARKER-7f3a1c"
+    question_marker = "ASKMARKER-2b9e4d"
+    monkeypatch.setenv("FAKE_CODEX_ANSWER", f"The answer quotes {answer_marker} back at you.")
+    async with Client(app) as c:
+        res = await c.call_tool(
+            "amicus_consult",
+            {
+                "backend": "codex",
+                "question": f"what about {answer_marker} and {question_marker}?",
+                "workspace_root": str(tmp_path),
+            },
+        )
+        body = res.structured_content
+        assert body["ok"] is True and body["raw_response"]["text"] is None
+        job_id = body["meta"]["job_id"]
+    store = lifecycle.job_store(config.settings())
+    job_dir = store._job_dir(str(tmp_path.resolve()), job_id)
+    files = {p.name: p.read_text(errors="replace") for p in job_dir.iterdir() if p.is_file()}
+    assert {"result.json", "spec.json", "meta.json", "stderr.log"} <= files.keys()
+    assert {name for name, text in files.items() if answer_marker in text} == {"result.json"}
+    assert {name for name, text in files.items() if question_marker in text} == set()
+
+
 async def test_consult_failure_is_classified_and_recorded(app, tmp_path, monkeypatch):
     monkeypatch.setenv("FAKE_CODEX_EXIT", "1")
     monkeypatch.setenv("FAKE_CODEX_STDERR", "Error: not logged in; run `codex login`")

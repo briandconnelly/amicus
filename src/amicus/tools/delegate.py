@@ -36,13 +36,13 @@ _DESC = (
     "tree. Codex and Kimi in v1 (feature delegate); Claude stays review-only. Egress: "
     "sends task raw to the backend's provider; a backend sandbox may also write the OS "
     "temp roots, which are neither in the diff nor cleaned up. Recorded as a job "
-    "(meta.job_id)."
+    f"(meta.job_id). {_resolve.RECORD_RETENTION}"
 )
 _ASYNC_DESC = (
     f"{_resolve.PAID_MARKER} Async twin of amicus_delegate: returns a job handle; poll "
     "amicus_job_status while status is running, then read amicus_job_result. Same egress "
-    "and feature gate. Starting a job commits to spend. Deadline: AMICUS_JOB_MAX_SECONDS "
-    "(default 1800s)."
+    f"and feature gate. Starting a job commits to spend. {_resolve.RECORD_RETENTION} "
+    "Deadline: AMICUS_JOB_MAX_SECONDS (default 1800s)."
 )
 
 
