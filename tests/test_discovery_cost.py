@@ -178,6 +178,13 @@ it, and what ends it (expiry, removed lazily on a later job call; the cap; consu
 bytes on each of the six `detail` parameters saying `detail` shapes delivery only. The record
 has kept the answer since M2; what was missing was the sentence where the spend is. MEASURED
 and BUDGET both move by the 2976 bytes, so the budget keeps no headroom.
+
+The schema-35 -> schema-36 raise (+888 bytes, 119285 -> 120173 on "all") is #140's new
+`findings_diagnostics` reason, `backend_artifact_reference_removed`: the enum value and one
+sentence of `_REASONS_DESC`, inlined once per tool that carries findings, sync and async. A
+first draft cost 1344; the sentence was cut to what a caller needs (what was cleared, that
+nothing openable was lost) and a second mention in `dropped`'s description was removed.
+MEASURED and BUDGET both move by the 888 bytes, so the budget keeps no headroom.
 """
 
 from __future__ import annotations
@@ -187,7 +194,7 @@ from tests.conftest import spawned_server_env
 
 from amicus import manifest
 
-MEASURED: dict[str, int] = {"all": 119285, "codex-kimi": 119293, "claude": 119285}
+MEASURED: dict[str, int] = {"all": 120173, "codex-kimi": 120181, "claude": 120173}
 # The budget is a literal, not MEASURED rounded up to the next kilobyte as it was until
 # 2026-09-14. The rounding left up to 1 KB of growth per bucket that no PR had to own, and
 # this file records three such accumulations (448 and 12 bytes in the paragraphs above, and
@@ -195,7 +202,7 @@ MEASURED: dict[str, int] = {"all": 119285, "codex-kimi": 119293, "claude": 11928
 # #94 that landed after it), each noticed only when the next deliberate raise re-measured.
 # Any growth now fails until a PR raises BUDGET and says why; a shrink passes and shows as
 # drift against MEASURED. Raising one means re-measuring and moving both.
-BUDGET: dict[str, int] = {"all": 119285, "codex-kimi": 119293, "claude": 119285}
+BUDGET: dict[str, int] = {"all": 120173, "codex-kimi": 120181, "claude": 120173}
 
 
 @pytest.mark.parametrize("profile", sorted(manifest.PROFILES))

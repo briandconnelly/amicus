@@ -149,7 +149,7 @@
     ],
     "protocol_revision": "2026-07-28",
     "resource_error_carrier": "JSON-RPC error; the envelope (machine_code/human_message/backend/temporary/retry_after_ms/repair/resource_uri/request_id) is in error.data. Classify by error.data.machine_code: the numeric is era-bound (-32002 on a 2025-11-25 connection, -32602 on 2026-07-28; -32603 for a read failure on both).",
-    "result_format": 7,
+    "result_format": 8,
     "result_meta_resource": "amicus://result-meta",
     "scope": [
       "Second opinions, git-change reviews, adversarial critiques and delegated diffs from Codex, Kimi or Claude Code, selected per call.",
@@ -1566,7 +1566,7 @@
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-35",
+                "default": "amicus/0.1/schema-36",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -2478,7 +2478,7 @@
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-35",
+            "default": "amicus/0.1/schema-36",
             "title": "Fingerprint",
             "type": "string"
           },
@@ -3220,9 +3220,10 @@
                         "description": "Whole findings entries that could not be represented. 0 does NOT mean nothing was lost: `extra_fields_omitted` reports content dropped from a finding that survived. null means the count is unknowable because the findings member could not be read at all. Read `reasons`, never this count alone."
                       },
                       "reasons": {
-                        "description": "Why findings did not reach you intact. severity_normalized: case/space only, finding intact. extra_fields_omitted: unrecognized keys and their content are gone, the rest of the finding survives. invalid_entry: an entry was dropped whole. invalid_container: the findings member was present but not a list. missing_findings: the required findings member was absent. The last three also stop a `pass` verdict from standing, which is delivered as unknown/low instead.",
+                        "description": "Why findings did not reach you intact. severity_normalized: case/space only, finding intact. extra_fields_omitted: unrecognized keys and their content are gone, the rest of the finding survives. backend_artifact_reference_removed: the finding cited an amicus temp file; its text names a placeholder and a `file` naming it is null with its `line`. Nothing you could open was lost. invalid_entry: an entry was dropped whole. invalid_container: the findings member was present but not a list. missing_findings: the required findings member was absent. The last three also stop a `pass` verdict from standing, which is delivered as unknown/low instead.",
                         "items": {
                           "enum": [
+                            "backend_artifact_reference_removed",
                             "extra_fields_omitted",
                             "invalid_container",
                             "invalid_entry",
@@ -4874,9 +4875,10 @@
                         "description": "Whole findings entries that could not be represented. 0 does NOT mean nothing was lost: `extra_fields_omitted` reports content dropped from a finding that survived. null means the count is unknowable because the findings member could not be read at all. Read `reasons`, never this count alone."
                       },
                       "reasons": {
-                        "description": "Why findings did not reach you intact. severity_normalized: case/space only, finding intact. extra_fields_omitted: unrecognized keys and their content are gone, the rest of the finding survives. invalid_entry: an entry was dropped whole. invalid_container: the findings member was present but not a list. missing_findings: the required findings member was absent. The last three also stop a `pass` verdict from standing, which is delivered as unknown/low instead.",
+                        "description": "Why findings did not reach you intact. severity_normalized: case/space only, finding intact. extra_fields_omitted: unrecognized keys and their content are gone, the rest of the finding survives. backend_artifact_reference_removed: the finding cited an amicus temp file; its text names a placeholder and a `file` naming it is null with its `line`. Nothing you could open was lost. invalid_entry: an entry was dropped whole. invalid_container: the findings member was present but not a list. missing_findings: the required findings member was absent. The last three also stop a `pass` verdict from standing, which is delivered as unknown/low instead.",
                         "items": {
                           "enum": [
+                            "backend_artifact_reference_removed",
                             "extra_fields_omitted",
                             "invalid_container",
                             "invalid_entry",
@@ -5781,9 +5783,10 @@
                         "description": "Whole findings entries that could not be represented. 0 does NOT mean nothing was lost: `extra_fields_omitted` reports content dropped from a finding that survived. null means the count is unknowable because the findings member could not be read at all. Read `reasons`, never this count alone."
                       },
                       "reasons": {
-                        "description": "Why findings did not reach you intact. severity_normalized: case/space only, finding intact. extra_fields_omitted: unrecognized keys and their content are gone, the rest of the finding survives. invalid_entry: an entry was dropped whole. invalid_container: the findings member was present but not a list. missing_findings: the required findings member was absent. The last three also stop a `pass` verdict from standing, which is delivered as unknown/low instead.",
+                        "description": "Why findings did not reach you intact. severity_normalized: case/space only, finding intact. extra_fields_omitted: unrecognized keys and their content are gone, the rest of the finding survives. backend_artifact_reference_removed: the finding cited an amicus temp file; its text names a placeholder and a `file` naming it is null with its `line`. Nothing you could open was lost. invalid_entry: an entry was dropped whole. invalid_container: the findings member was present but not a list. missing_findings: the required findings member was absent. The last three also stop a `pass` verdict from standing, which is delivered as unknown/low instead.",
                         "items": {
                           "enum": [
+                            "backend_artifact_reference_removed",
                             "extra_fields_omitted",
                             "invalid_container",
                             "invalid_entry",
@@ -8676,9 +8679,10 @@
                         "description": "Whole findings entries that could not be represented. 0 does NOT mean nothing was lost: `extra_fields_omitted` reports content dropped from a finding that survived. null means the count is unknowable because the findings member could not be read at all. Read `reasons`, never this count alone."
                       },
                       "reasons": {
-                        "description": "Why findings did not reach you intact. severity_normalized: case/space only, finding intact. extra_fields_omitted: unrecognized keys and their content are gone, the rest of the finding survives. invalid_entry: an entry was dropped whole. invalid_container: the findings member was present but not a list. missing_findings: the required findings member was absent. The last three also stop a `pass` verdict from standing, which is delivered as unknown/low instead.",
+                        "description": "Why findings did not reach you intact. severity_normalized: case/space only, finding intact. extra_fields_omitted: unrecognized keys and their content are gone, the rest of the finding survives. backend_artifact_reference_removed: the finding cited an amicus temp file; its text names a placeholder and a `file` naming it is null with its `line`. Nothing you could open was lost. invalid_entry: an entry was dropped whole. invalid_container: the findings member was present but not a list. missing_findings: the required findings member was absent. The last three also stop a `pass` verdict from standing, which is delivered as unknown/low instead.",
                         "items": {
                           "enum": [
+                            "backend_artifact_reference_removed",
                             "extra_fields_omitted",
                             "invalid_container",
                             "invalid_entry",
