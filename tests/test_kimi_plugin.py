@@ -33,8 +33,11 @@ def test_carriers_disclose_kimis_own_session_store(pinned_kimi_bin):
     carriers = " ".join(plugin.carriers.split())
     assert "its own session files" in carriers and "outside amicus's job store" in carriers
     assert "does not delete them" in carriers
+    # Naming a control is not saying it misses the store: all three must sit in the one
+    # sentence whose predicate confines them to amicus's own records.
+    [scoped] = [s for s in carriers.split(". ") if "apply only to amicus's job records" in s]
     for control in ("AMICUS_JOB_TTL", "AMICUS_JOB_MAX_COUNT", "amicus_job_consume_result"):
-        assert control in carriers, f"{control} must be named as not removing them"
+        assert control in scoped, f"{control} must be named as not removing them"
 
 
 def test_read_only_is_scoped_to_the_agents_tools_not_the_cli(pinned_kimi_bin):

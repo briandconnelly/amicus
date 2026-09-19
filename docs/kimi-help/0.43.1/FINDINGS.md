@@ -20,9 +20,10 @@ The behavioural findings carried from moonbridge's 0.39.1 probes, listed in `doc
 
 ## Session persistence (#179, probed 2026-09-19 at zero spend)
 
-The kimi CLI keeps every run in its own session store, `~/.kimi-code/sessions/wd_<workdir>_<hash>/session_<uuid>/`, holding `state.json`, `logs/kimi-code.log`, `agents/main/file-history` and `agents/main/wire.jsonl`.
+The kimi CLI writes session files of its own, which can hold the whole prompt and any answer produced, to its session store, `~/.kimi-code/sessions/wd_<workdir>_<hash>/session_<uuid>/`, holding `state.json`, `logs/kimi-code.log`, `agents/main/file-history` and `agents/main/wire.jsonl`.
 A `wire.jsonl` written on 2026-09-17 under a `wd_amicus-wt-*` directory, which is the name of an amicus delegate worktree, holds four `"role": "user"` records and two `"role": "assistant"` records.
 Its contents were counted, not copied here, because rule 18 binds them.
+That is one completed run; a failed or cancelled run was not observed, so nothing here says what such a run leaves behind.
 
 No suppression mechanism was found, and the claim is scoped to what was looked at:
 
