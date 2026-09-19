@@ -55,8 +55,9 @@ often holds the review, and an identical retry can fail the same way. An answer 
 one object in a preamble, a fence or a sign-off is read as that object and stays `completed`;
 one that holds two objects, or whose preamble has a `{` or sign-off a `}`, is `unstructured`
 rather than guessed at. That reading is for reviews only: a consult answered in prose keeps its
-whole answer in `summary`. Only an empty answer is still an error: `invalid_json`, or `empty_response` on `kimi`, which
-detects it before a result is built.
+whole answer in `summary`. Two cases are still errors, because in both amicus has no answer to
+deliver: an empty one (`invalid_json`, or `empty_response` on `kimi`, which detects it before a
+result is built) and one amicus refused to read (`answer_unavailable`).
 
 `answer_unavailable` is a different fact from either: the backend **did** answer, and amicus
 refused to read the file it answered in. `error.details.reason` says why — `artifact_oversize`

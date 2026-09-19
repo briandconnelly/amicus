@@ -476,3 +476,49 @@ def test_answer_unavailable_is_amicus_own_code_not_an_sdk_universal_one():
     assert "answer_unavailable" not in envelope.UNIVERSAL_CODES
     rule = repair_table(None)["answer_unavailable"]
     assert rule.next_step == "reduce_input" and rule.temporary is False
+
+
+@pytest.mark.parametrize("where", ["open", "fstat", "read"])
+def test_a_file_that_cannot_be_read_is_unreadable_never_absent(tmp_path, monkeypatch, where):
+    """An OSError that is not ELOOP or ENOENT, at any of the three calls. Mapping it back to
+    an absent file would turn a refusal into "the backend wrote nothing" again (#162)."""
+    import errno
+    import os
+
+    from amicus.sdk.backend.protocol import PreparedRun
+
+    path = tmp_path / "answer.md"
+    path.write_text("an answer")
+    real = getattr(os, where)
+
+    def failing(*args, **kwargs):
+        if where == "open" and args[0] != str(path):
+            return real(*args, **kwargs)
+        raise OSError(errno.EIO, "injected")
+
+    monkeypatch.setattr(run_mod.os, where, failing)
+    prepared = PreparedRun(
+        argv=("x",), env={}, cwd=str(tmp_path), artifact_paths={"answer": str(path)}
+    )
+    texts, refused = run_mod._read_artifacts(prepared)
+    assert texts == {} and refused == {"answer": run_mod.Refusal("unreadable")}
+
+
+def test_each_refusal_has_its_own_wire_reason_and_repair():
+    from amicus.request import meta_for
+
+    want = {
+        "oversize": ("artifact_oversize", "reduce_input"),
+        "not_regular_file": ("artifact_not_regular", "inspect_and_retry"),
+        "unreadable": ("artifact_unreadable", "inspect_and_retry"),
+    }
+    assert set(want) == set(run_mod._REFUSAL_WIRE), "a new refusal needs a wire shape"
+    for reason, (token, step) in want.items():
+        out = run_mod._answer_unavailable(
+            run_mod.Refusal(reason, 7), meta_for(_spec()), fakeplugin.make_plugin()
+        )
+        err = out["error"]
+        assert err["code"] == "answer_unavailable" and err["temporary"] is False
+        assert err["details"]["reason"] == token and err["repair"]["next_step"] == step
+        sized = reason == "oversize"
+        assert (err.get("actual_bytes") == 7) is sized and ("limit_bytes" in err) is sized

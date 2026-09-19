@@ -378,8 +378,9 @@ async def test_a_refused_answer_file_with_no_stream_is_not_an_empty_response(
     err = res.structured_content["error"]
     assert err["code"] == "answer_unavailable" and err["backend"] == "kimi"
     assert err["details"]["reason"] == "artifact_not_regular"
-    # Control: the same run with a readable file and no stream is the ordinary empty case.
-    monkeypatch.setenv("FAKE_KIMI_ANSWER", "")
+    # Control: the same run with a READABLE EMPTY file and no stream is the ordinary empty
+    # case. The fake writes the file itself; an unset answer would leave it absent instead.
+    monkeypatch.setenv("FAKE_KIMI_ANSWER_MODE", "empty")
     async with Client(app) as c:
         res = await c.call_tool(
             "amicus_delegate",

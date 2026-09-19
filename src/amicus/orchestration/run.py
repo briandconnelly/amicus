@@ -68,8 +68,9 @@ _REFUSAL_WIRE: dict[str, tuple[str, str, str | None]] = {
     ),
 }
 ANSWER_REFUSED_WARNING = (
-    "amicus refused to read the backend's answer file (see ADR 0009); what is delivered "
-    "comes from the backend's other output, not from that file."
+    "amicus refused to read the backend's answer file (see ADR 0009). Nothing delivered comes "
+    "from that file: it comes from the backend's other output, or, for a delegate with no "
+    "readable summary, from the diff captured in the worktree."
 )
 DELEGATE_SUMMARY_UNAVAILABLE = (
     "The backend's summary could not be read: amicus refused its answer file. The diff was "
