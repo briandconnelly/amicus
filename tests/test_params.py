@@ -179,6 +179,13 @@ def test_the_idempotency_summary_scopes_the_key_as_the_code_does():
     from amicus.jobs import idempotency
 
     assert list(inspect.signature(idempotency.key_digest).parameters) == ["tool", "key"]
+    # ...and backend really is one of the arguments compared, not merely absent from the key.
+    import dataclasses
+
+    from amicus.request import IDENTITY_EXCLUDE, RunSpec
+
+    assert "backend" in {f.name for f in dataclasses.fields(RunSpec)}
+    assert "backend" not in IDENTITY_EXCLUDE
     contract = p.PARAMETER_CONTRACTS["idempotency_key"]
     summary = " ".join(contract.summary.split())
     assert "scoped to this tool + workspace" in summary

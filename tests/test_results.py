@@ -130,9 +130,9 @@ def test_coverage_rejects_an_internally_inconsistent_disclosure():
 
 
 def test_job_started_follow_up_is_narrowed_to_the_one_action_it_carries():
-    """Every async start hands back "poll amicus_job_status"; the schema says only that,
-    instead of inlining the whole RepairStep enum on four tools (#41). `Repair` itself,
-    which the error envelope uses, still spans the enum."""
+    """A handle's follow_up is one of two narrowed actions, poll or fetch, and the schema
+    says only those, instead of inlining the whole RepairStep enum on four tools (#41).
+    `Repair` itself, which the error envelope uses, still spans the enum."""
     schema = r.JOB_STARTED_SCHEMA
     # Two correlated variants, never two independently widened literals: a running handle
     # polls, a terminal one fetches (#103), and no mismatched step/tool pair is admitted.

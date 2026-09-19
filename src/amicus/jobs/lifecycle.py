@@ -36,9 +36,11 @@ SYNC_AWAIT_GRACE_S = 30
 SYNC_PROGRESS_THROTTLE_S = 1.0
 SYNC_PROGRESS_REPORT_TIMEOUT_S = 5.0
 
-# The waiting instruction every async start hands back. Kept beside the repair table's
-# job_running prose (errors.py) and amicus_job_result's description: all three describe
-# one lifecycle, and tests/test_surface_honesty.py holds them to it.
+# The waiting instruction a RUNNING handle carries, which every fresh async start is; a
+# terminal one, which a replayed keyed start can return, carries FETCH_FOLLOW_UP below
+# (#103). Kept beside the repair table's job_running prose (errors.py) and
+# amicus_job_result's description: all describe one lifecycle, and
+# tests/test_surface_honesty.py holds them to it.
 POLL_FOLLOW_UP = (
     "Poll amicus_job_status with these arguments while status is running, honoring "
     "poll_after_ms. On any terminal status, call amicus_job_result for the stored result "

@@ -1273,3 +1273,30 @@ async def test_keyed_start_cancelled_mid_thread_records_nothing_without_a_task(
         await task
     await asyncio.sleep(0.4)
     assert task_map.entries() == {}
+
+
+@pytest.mark.parametrize("status", ["done", "failed", "cancelled", "timeout"])
+def test_every_terminal_status_is_fetched_and_only_running_is_polled(status):
+    """`amicus_job_result` returns the stored result for `done` and the terminal error for
+    the other three, so fetching is right for all four (#103). The replay test above
+    reaches only `done`; this pins the rest, and that the set is complete."""
+    from typing import get_args
+
+    from amicus.schemas.results import JobStarted
+
+    statuses = set(get_args(JobStarted.model_fields["status"].annotation))
+    assert statuses == {"running", "done", "failed", "cancelled", "timeout"}, (
+        "a new handle status needs a follow_up decision"
+    )
+    args = {"job_id": "j", "workspace_root": "/w"}
+    terminal = lifecycle._follow_up(status, args)
+    assert (terminal.next_step, terminal.tool) == ("fetch_job_result", "amicus_job_result")
+    assert terminal.arguments == args
+    running = lifecycle._follow_up("running", args)
+    assert (running.next_step, running.tool) == ("poll_job_status", "amicus_job_status")
+
+
+def test_the_fetch_instruction_never_tells_a_caller_to_poll():
+    text = lifecycle.FETCH_FOLLOW_UP
+    assert "amicus_job_result" in text and "do not poll" in text
+    assert "amicus_job_status" not in text and "result_available" not in text

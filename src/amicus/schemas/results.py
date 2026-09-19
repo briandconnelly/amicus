@@ -347,9 +347,10 @@ class DelegateResult(_ModelResult):
 
 
 class JobFollowUp(BaseModel):
-    """The one follow-up an async start ever hands back: poll the job. The same shape as
-    `Repair`, narrowed to that one action, so the four async tools' output schemas do not
-    each inline the whole RepairStep enum for a field that has a single value (#41)."""
+    """The follow-up on a RUNNING handle, which every fresh async start is: poll the job.
+    The same shape as `Repair`, narrowed to that one action, so the four async tools' output
+    schemas do not each inline the whole RepairStep enum (#41). A terminal handle carries
+    `JobResultFollowUp` instead (#103)."""
 
     model_config = ConfigDict(extra="forbid")
     # No defaults: a default would drop the field from the schema's `required`, and the
