@@ -197,6 +197,9 @@ async def run_request(
             # `finalize` tolerate an empty or malformed answer, so calling it unconditionally
             # is safe.
             result = plugin.backend.finalize(outcome, request)
+            # The staged files are gone, but their paths are still here, and an answer
+            # that cites one must not reach the result or the job record (#140).
+            result = finalize.scrub_artifact_references(result, prepared.artifacts)
             finalize.apply_exec(meta, result)
             failure = inspect_outcome(plugin.backend, outcome, request)
             if failure is None and (run.exit_code != 0 or run.binary_missing or run.timed_out):

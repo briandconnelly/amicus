@@ -5,7 +5,8 @@ Probes: `--version` prints `0.41.0`; `--help` lists every flag the contract send
 refuses; `provider list --json` prints FAKE_KIMI_PROVIDERS (default: one provider and one
 alias `k3` declaring low/medium/high). A `--prompt` run parses the pointer: it copies the
 handshake prompt file to FAKE_KIMI_PROMPT_FILE, writes FAKE_KIMI_ANSWER (default: a
-structured review/consult JSON) to the answer file the pointer names (write tier only),
+structured review/consult JSON, with any `{PROMPT_PATH}` replaced by the handshake prompt's
+path) to the answer file the pointer names (write tier only),
 optionally writes FAKE_KIMI_WRITE (a relative path) under cwd, prints FAKE_KIMI_EVENTS
 (default: a version line, an assistant line carrying the answer, a resume hint) to stdout
 and FAKE_KIMI_STDERR to stderr, sleeps FAKE_KIMI_SLEEP seconds, and exits FAKE_KIMI_EXIT
@@ -95,6 +96,9 @@ def main(argv: list[str]) -> int:
             Path(prompt_match.group(1)).read_text(encoding="utf-8"), encoding="utf-8"
         )
     answer = os.environ.get("FAKE_KIMI_ANSWER", _DEFAULT_ANSWER)
+    if prompt_match:
+        # Lets a test make the model "cite" the handshake file, as a real kimi did (#140).
+        answer = answer.replace("{PROMPT_PATH}", prompt_match.group(1))
     answer_match = _ANSWER_POINTER.search(pointer)
     if answer_match and answer:
         Path(answer_match.group(1)).write_text(answer, encoding="utf-8")

@@ -97,13 +97,15 @@ lost, and otherwise carries a `dropped` count and reasons from a fixed vocabular
 | --- | --- |
 | `severity_normalized` | A severity differed only in case or surrounding space. The finding is intact. |
 | `extra_fields_omitted` | The backend added keys amicus's `Finding` has no home for. Every field amicus recognizes survives; whatever those extra keys said does not. |
+| `backend_artifact_reference_removed` | The finding cited one of amicus's own temporary files (Kimi is handed its prompt as one). The path is replaced by `[amicus temporary file]` in the finding's text, and a `file` naming it is cleared together with its `line`. The finding is intact, and no location you could have opened was lost: treat it as a finding about what you sent, not about a file. |
 | `invalid_entry` | An entry could not be represented at all and was dropped. Its content is not in the result. |
 | `invalid_container` | The `findings` member was present but was not a list. Nothing could be read from it. |
 | `missing_findings` | The `findings` member was absent. The output schema requires it, so this is not the backend saying "none". |
 
 **`dropped` counts whole entries, and `dropped: null` is not `dropped: 0`.** `0` says no entry
 was dropped — it is not a promise that nothing was lost, because `extra_fields_omitted` reports
-content that went with keys amicus has no home for, and that is reported at `dropped: 0`. `null`
+content that went with keys amicus has no home for, and that is reported at `dropped: 0`, as is
+`backend_artifact_reference_removed`. `null`
 says amicus could not assess the list at all, so the count is unknowable. Never read `null` as
 "none": read the reasons, not the count alone.
 

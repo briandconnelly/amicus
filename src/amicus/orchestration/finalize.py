@@ -6,6 +6,7 @@ the model wrote them so a control-split value degrades rather than being repaire
 from __future__ import annotations
 
 import dataclasses
+import os
 from typing import TYPE_CHECKING, Any, cast, get_args
 
 from pydantic import ValidationError
@@ -124,6 +125,62 @@ def _normalize_severity(item: dict) -> tuple[dict, bool]:
     return {**item, "severity": normalized}, True
 
 
+# What a reference to one of amicus's own staged temp files becomes (#140). Kimi is handed its
+# prompt as a file, so its answer can cite `<tmp>/amicus-kimi-handshake-XXXX/prompt.md:28`: a
+# path deleted before the caller reads the result, a line number into amicus's framing, and
+# the handshake location besides.
+ARTIFACT_PLACEHOLDER = "[amicus temporary file]"
+
+
+def _artifact_refs(artifacts: tuple[str, ...]) -> tuple[str, ...]:
+    """The run's own staged paths, as written and as resolved (macOS reports a temp file
+    under /private/var as readily as /var), longest first so a nested path wins."""
+    refs = {p for a in artifacts if a for p in (a, os.path.realpath(a))}
+    return tuple(sorted(refs, key=len, reverse=True))
+
+
+def _scrub(value: object, refs: tuple[str, ...]) -> object:
+    if isinstance(value, str):
+        for ref in refs:
+            value = value.replace(ref, ARTIFACT_PLACEHOLDER)
+        return value
+    if isinstance(value, list):
+        return [_scrub(v, refs) for v in value]
+    if isinstance(value, dict):
+        return {k: _scrub(v, refs) for k, v in value.items()}
+    return value
+
+
+def scrub_artifact_references(result: ExecResult, artifacts: tuple[str, ...]) -> ExecResult:
+    """Replace every reference to this run's staged temp files, in the answer and in the
+    parsed object alike, before anything is built or stored from either.
+
+    EXACT paths only, the ones `PreparedRun.artifacts` names: a prefix or temp-root
+    heuristic would also clear a real workspace location that merely looks like one, which
+    costs the caller more than a leaked dead path does. `coerce_findings` then turns a
+    placeholder in a finding into a cleared anchor and a disclosed reason."""
+    refs = _artifact_refs(artifacts)
+    if not refs:
+        return result
+    structured = result.structured
+    return dataclasses.replace(
+        result,
+        answer=cast("str", _scrub(result.answer, refs)),
+        structured=cast("dict", _scrub(structured, refs)) if structured is not None else None,
+    )
+
+
+def _clear_artifact_anchor(item: dict) -> tuple[dict, bool]:
+    """A finding that named a staged temp file: its prose keeps the placeholder, and an
+    anchor made of one is cleared whole, since a `line` without its `file` points nowhere."""
+    if not any(isinstance(v, str) and ARTIFACT_PLACEHOLDER in v for v in item.values()):
+        return item, False
+    file = item.get("file")
+    if isinstance(file, str) and ARTIFACT_PLACEHOLDER in file:
+        return {**item, "file": None, "line": None}, True
+    return item, True
+
+
 def coerce_findings(raw: object) -> tuple[list[Finding], FindingsDiagnostics | None]:
     """The backend's findings list, plus what could not be carried from it (issue #38).
 
@@ -150,6 +207,9 @@ def coerce_findings(raw: object) -> tuple[list[Finding], FindingsDiagnostics | N
         candidate, normalized = _normalize_severity(item)
         if normalized:
             seen.add("severity_normalized")
+        candidate, scrubbed = _clear_artifact_anchor(candidate)
+        if scrubbed:
+            seen.add("backend_artifact_reference_removed")
         known = {k: v for k, v in candidate.items() if k in _FINDING_FIELDS}
         if len(known) != len(candidate):
             # An unknown key (`category`, `cwe`) is an ordinary backend addition; losing

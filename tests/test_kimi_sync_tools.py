@@ -107,6 +107,55 @@ async def test_consult_end_to_end_in_a_repo(app, tmp_path, repo):
     assert listed.strip().count("\n") == 0
 
 
+async def test_a_finding_citing_the_handshake_prompt_is_delivered_without_it(
+    app, tmp_path, repo, monkeypatch
+):
+    """#140, end to end: the fake cites the REAL handshake path of its own run, in a
+    finding's anchor, its prose, and the summary. None of it reaches the caller or the
+    stored record, and the cleared anchor is disclosed."""
+    monkeypatch.setenv(
+        "FAKE_KIMI_ANSWER",
+        json.dumps(
+            {
+                "summary": "see {PROMPT_PATH}",
+                "findings": [
+                    {
+                        "title": "TEXT D is false",
+                        "severity": "high",
+                        "file": "{PROMPT_PATH}",
+                        "line": 28,
+                        "evidence": "at {PROMPT_PATH}:28",
+                    }
+                ],
+                "questions": [],
+                "assumptions": [],
+                "next_steps": [],
+            }
+        ),
+    )
+    async with Client(app) as c:
+        res = await c.call_tool(
+            "amicus_consult",
+            {"backend": "kimi", "question": "why?", "workspace_root": str(repo), "detail": "full"},
+        )
+    body = res.structured_content
+    assert body["ok"] is True
+    [finding] = body["findings"]
+    assert finding["title"] == "TEXT D is false" and finding["severity"] == "high"
+    assert finding.get("file") is None and finding.get("line") is None
+    assert body["findings_diagnostics"] == {
+        "dropped": 0,
+        "reasons": ["backend_artifact_reference_removed"],
+    }
+    # Control: the fake really did substitute a path, so its absence below means something.
+    assert "[amicus temporary file]" in body["summary"]
+    delivered = json.dumps(body)
+    assert "amicus-kimi-handshake-" not in delivered and "prompt.md" not in delivered
+    store = lifecycle.job_store(config.settings())
+    _, payload = store.result_payload(str(repo.resolve()), body["meta"]["job_id"])
+    assert "amicus-kimi-handshake-" not in json.dumps(payload), "scrubbed before it is stored"
+
+
 async def test_consult_outside_a_repo_runs_in_an_empty_dir_with_a_warning(app, tmp_path):
     async with Client(app) as c:
         res = await c.call_tool(

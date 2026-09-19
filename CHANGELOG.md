@@ -33,6 +33,19 @@ per-change, as its own lead says.
 
 ### Fixed
 
+- **Breaking.** A finding that cited one of amicus's own temporary files no longer carries it.
+  Kimi is handed its prompt as a file, so a finding could come back with `file` set to
+  `<tmp>/amicus-kimi-handshake-…/prompt.md` and `line` set to an offset into amicus's framing:
+  a path deleted before the result is read, and a line into nothing the caller supplied. Every
+  reference to a run's own staged files is now replaced by `[amicus temporary file]`, in the
+  summary, the prose lists, a finding's text and `raw_response.text`, before the result is
+  built or stored; a `file` that named one is null together with its `line`; and
+  `findings_diagnostics.reasons` reports `backend_artifact_reference_removed` at `dropped: 0`.
+  It never moves a verdict. Only the run's exact staged paths match, so a workspace file that
+  merely looks like one is untouched. `FINGERPRINT` moves to schema-36 for the new reason, and
+  `RESULT_FORMAT` moves 7 to 8, so a job result 0.4.0 stored is `job_result_incompatible`
+  after upgrading: fetch it first (`docs/MIGRATION.md`, "Upgrading from 0.4.0") (#140).
+
 - The codex live gate, whose passing run is part of the evidence a release is tagged on, could
   pass on a codex version amicus had never checked: it asserted only the `codex-cli` prefix, as
   0.3.0's run on 0.154.0 showed. It now requires the installed minor to be in the built-in

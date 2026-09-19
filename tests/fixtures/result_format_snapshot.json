@@ -1,5 +1,5 @@
 {
-  "result_format": 7,
+  "result_format": 8,
   "schemas": {
     "AdversarialReviewResult": {
       "$defs": {
@@ -295,6 +295,7 @@
                 "enum": [
                   "severity_normalized",
                   "extra_fields_omitted",
+                  "backend_artifact_reference_removed",
                   "invalid_entry",
                   "invalid_container",
                   "missing_findings"
@@ -1213,6 +1214,7 @@
                 "enum": [
                   "severity_normalized",
                   "extra_fields_omitted",
+                  "backend_artifact_reference_removed",
                   "invalid_entry",
                   "invalid_container",
                   "missing_findings"
@@ -2057,6 +2059,7 @@
                 "enum": [
                   "severity_normalized",
                   "extra_fields_omitted",
+                  "backend_artifact_reference_removed",
                   "invalid_entry",
                   "invalid_container",
                   "missing_findings"
@@ -3847,6 +3850,7 @@
                 "enum": [
                   "severity_normalized",
                   "extra_fields_omitted",
+                  "backend_artifact_reference_removed",
                   "invalid_entry",
                   "invalid_container",
                   "missing_findings"
