@@ -33,6 +33,7 @@ because only you hold the directory they need: fix what `error.details` names.
 | `correct_arguments` / `use_allowed_value` | Fix the call. `invalid_arguments[].allowed_values` names the accepted set. |
 | `authenticate` / `install_backend` | The backend is not ready. `amicus_backends` reports the same thing for free. |
 | `poll_job_status` / `list_jobs` | The work exists; find or wait for it rather than starting another. |
+| `fetch_job_result` | The job is already terminal: call `amicus_job_result`, do not poll. A replayed keyed `_async` handle carries it. |
 | `start_new_job` | The prior job is unrecoverable; a new one is the correct action. |
 | `reduce_input` | Make the next attempt smaller. It is a recovery action, **not** a statement about spend — `budget_exceeded` maps here and may already have spent. Read `error.code`. |
 | `retry_after_delay` | Transient; honor `retry_after_ms` when present. |
@@ -44,8 +45,9 @@ costs nothing. Reaching a backend is what spends.
 
 ## `idempotency_key`
 
-An optional dedup key on every paid tool, sync and `_async`, scoped to **this tool + backend +
-workspace**.
+An optional dedup key on every paid tool, sync and `_async`, scoped to **this tool + workspace**.
+`backend` is not part of the scope: it is one of the arguments that must match, so the same key
+on another backend is a conflict, not a second run.
 
 - Same key, same arguments → the prior run is replayed with **no new spend**; an `_async` call
   returns the same `job_id`, a sync call awaits that run and returns its result.
