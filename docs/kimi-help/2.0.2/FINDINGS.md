@@ -32,7 +32,8 @@ On 2.0.2:
 - `kimi session list --all --json` returns the 127 sessions that were under `~/.kimi-code/sessions` before the upgrade, each with a `sessionDir`, so 2.0.2 reads the same store at the same place.
   Their contents were counted, not read, because rule 18 binds them.
 
-So no documented or observed way to avoid the session-store carrier was found on 2.0.2, which is the condition rule 18 sets, and the 0.43.1 findings stand.
+So no documented or observed way to avoid the session-store carrier was found on 2.0.2, which is the condition rule 18 sets.
+That is a statement about what was looked for and not found; it is not an observation that the carrier behaves as it did on 0.43.1.
 What this did not do is watch 2.0.2 WRITE a session, since a run that creates one spends quota; that it still does is inferred from the store, the subcommand and the help all being unchanged.
 
 ## What is not established here
