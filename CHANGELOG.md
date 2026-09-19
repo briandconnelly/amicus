@@ -20,6 +20,17 @@ per-change, as its own lead says.
 
 ## [Unreleased]
 
+### Changed
+
+- codex-cli 0.155 is a supported version, so `amicus_backends` no longer warns on it. It was
+  checked against 0.154.0 at zero spend: `--help`, `exec --help`, `exec review --help` and
+  `login --help` are byte-identical, the unknown-feature error and the logged-out `login status`
+  line are unchanged, both features amicus disables on every run are still `stable`, the cached
+  model list is the same seven slugs in the same order, the tool list sent to `gpt-5.5` is
+  identical with and without those disables, and the four config keys amicus pins with `-c` are
+  accepted under `--strict-config` while an unknown key is still rejected in the form amicus
+  parses. No paid call was part of the check (#187).
+
 ### Fixed
 
 - Kimi's `carriers` disclosure on `amicus_backends(detail="full")` now names the kimi CLI's own
