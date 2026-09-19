@@ -56,7 +56,8 @@ HELP_CACHE_TTL_SECONDS = 300
 READ_ONLY_AGENT_TOOLS = ("Read", "Glob", "Grep")
 READ_ONLY_AGENT_NAME = "amicus-readonly"
 READ_ONLY_CONFIDENTIALITY_LIMIT = (
-    "Read-only means Kimi cannot MODIFY anything — it has no shell or write tool. It does "
+    "Read-only means the Kimi agent has no shell or write tool; it does not stop the kimi "
+    "CLI itself from writing its own session files (see `carriers`). It does "
     "NOT mean Kimi can only see the workspace: its Read tool accepts absolute paths, so a "
     "prompt-injected repository could make it read other files on this machine and send "
     "them to your configured Kimi provider. Do not point it at a workspace whose contents "

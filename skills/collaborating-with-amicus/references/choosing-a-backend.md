@@ -97,7 +97,7 @@ backend's own choice, and `carriers` on `amicus_backends(detail="full")` is auth
 | --- | --- | --- | --- |
 | `codex` | stdin | **argv**, as the `-c developer_instructions` override | Visible to any local process listing for the run's duration — never put a secret here |
 | `claude` | stdin | stdin | argv carries only fixed text and flags |
-| `kimi` | a file in a private temp dir outside the workspace; argv carries only its path | same file | Nothing you type rides argv, but the text is briefly on local disk; amicus removes the directory when the run ends |
+| `kimi` | a file in a private temp dir outside the workspace; argv carries only its path | same file | Nothing you type rides argv. amicus removes its temp directory when the run ends, but the kimi CLI also keeps the whole prompt and answer in its own session store (by default `~/.kimi-code/sessions`), which amicus does not delete and which job expiry, the per-workspace cap and `amicus_job_consume_result` never touch — send nothing you would not leave on this machine's disk |
 
 Each backend also loads context you did not supply — `AGENTS.md`, skills, and on `claude` under
 `inherit`/`scoped`, workspace hooks that run outside the tool allowlist. `implicit_context` on

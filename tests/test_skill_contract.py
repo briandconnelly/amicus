@@ -358,3 +358,12 @@ def test_the_disclosure_rules_name_the_full_detail_level():
         assert f"`{field}`" in reports, f"the reference must name `{field}`"
     assert "disclosed on amicus_backends(detail=full)" in INSTRUCTIONS
     assert "pass detail=full on that first read" in INSTRUCTIONS
+
+
+def test_the_carrier_table_names_kimis_session_store():
+    """The kimi row said the text is only briefly on local disk. The kimi CLI also keeps it
+    in its own session store, which amicus never removes (#179), so the row must say so
+    rather than leave the handshake cleanup standing as the whole story."""
+    [row] = [line for line in _BACKENDS_REF.splitlines() if line.startswith("| `kimi` | a file")]
+    assert "session store" in row and "amicus does not delete" in row
+    assert "briefly on local disk" not in row

@@ -42,7 +42,14 @@ CARRIERS = (
     "leading caller-instructions section) is written to a private handshake file under a "
     "temp dir outside the workspace; argv carries only a short pointer naming that file's "
     "path, the stream-json output flag and, for consult and review, the path of the "
-    "generated read-only agent profile. Nothing you type rides argv, and kimi ignores stdin."
+    "generated read-only agent profile. Nothing you type rides argv, and kimi ignores stdin. "
+    "Separately, the kimi CLI (observed on Kimi Code 0.43.1) writes its own session files "
+    "under its home directory (by default ~/.kimi-code/sessions), outside amicus's job "
+    "store; they can hold the whole prompt and any answer produced, and amicus found no "
+    "documented way to switch that off. Amicus does not delete them, whether the run "
+    "succeeds, fails or is cancelled, and does not control how long kimi keeps them: "
+    "AMICUS_JOB_TTL, the per-workspace job cap (AMICUS_JOB_MAX_COUNT) and "
+    "amicus_job_consume_result apply only to amicus's job records."
 )
 
 

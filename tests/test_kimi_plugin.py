@@ -24,6 +24,29 @@ def test_registry_loads_the_in_tree_kimi_plugin(pinned_kimi_bin):
     assert "instructions_append" in plugin.carriers and "stdin" in plugin.carriers
 
 
+def test_carriers_disclose_kimis_own_session_store(pinned_kimi_bin):
+    """Rule 18 exempts a native carrier only where CARRIERS discloses it (#179). The kimi
+    CLI keeps the prompt and answer in its own session store, which nothing amicus owns
+    reaches, so every retention control a caller might assume covers it is named as not
+    covering it."""
+    plugin, _ = kf.make_backend({})
+    carriers = " ".join(plugin.carriers.split())
+    assert "its own session files" in carriers and "outside amicus's job store" in carriers
+    assert "does not delete them" in carriers
+    for control in ("AMICUS_JOB_TTL", "AMICUS_JOB_MAX_COUNT", "amicus_job_consume_result"):
+        assert control in carriers, f"{control} must be named as not removing them"
+
+
+def test_read_only_is_scoped_to_the_agents_tools_not_the_cli(pinned_kimi_bin):
+    """The read-only profile removes the agent's shell and write tools; the kimi CLI still
+    writes its own session files, so "cannot MODIFY anything" overclaimed (#179)."""
+    statement = contract.READ_ONLY_CONFIDENTIALITY_LIMIT
+    assert "cannot MODIFY anything" not in statement
+    assert "no shell or write tool" in statement
+    assert "session files" in statement and "`carriers`" in statement
+    assert "absolute paths" in statement, "the read-boundary warning must survive"
+
+
 def test_options_carry_defaults_and_applicability(pinned_kimi_bin):
     plugin, _ = kf.make_backend(
         {"AMICUS_KIMI_ISOLATION": "ignore-skills", "AMICUS_KIMI_MODEL": "m"}
