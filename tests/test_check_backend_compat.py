@@ -172,9 +172,11 @@ def test_help_that_could_not_be_read_is_a_failure_not_a_clean_run(fakes, tmp_pat
     blank = compat.check_backend("kimi", tmp_path, latest=_no_network, help_text="")
     assert blank.help_ok is False and blank.missing_flags == []
     assert any("--help" in p and "could not be read" in p for p in compat.problems(blank))
+    # A help command that exits nonzero is not trusted even though it printed its usual
+    # text: a CLI that prints usage on an argument error does exactly that.
     fakes.setenv("FAKE_KIMI_HELP_EXIT", "3")
     failing = compat.check_backend("kimi", tmp_path, latest=_no_network)
-    assert failing.help_ok is False
+    assert failing.help_ok is False and failing.declared == frozenset()
     assert any("could not be read" in p for p in compat.problems(failing))
 
 
