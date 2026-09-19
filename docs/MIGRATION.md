@@ -193,6 +193,21 @@ A `null` there means no loaded plugin declares one.
 The `amicus://backends/{backend}` resource is always the full entry.
 `amicus_capabilities(detail="contracts")` is removed: pass `include_tool_details=false` for the same rowless payload, and `detail` now selects only how much each `tool_details` row carries (`summary` is `name`, `cost`, `stability`, `backends`; `full` adds the rest, including `error_codes`).
 
+## Upgrading from 0.4.0
+
+The changes below are the ones an operator or caller using amicus 0.4.0 has to handle before running the next release.
+`CHANGELOG.md`'s `[Unreleased]` section lists every user-visible change since 0.4.0, including the ones that require no migration.
+
+**A job result stored by 0.4.0 is no longer readable (#140).**
+`RESULT_FORMAT` moved from 7 to 8 because `findings_diagnostics.reasons` gained `backend_artifact_reference_removed`, a value a 0.4.0 reader's closed enum rejects.
+`amicus_job_result` and `amicus_job_consume_result` return `job_result_incompatible` for a record 0.4.0 wrote.
+Fetch or consume any stored result you still need before upgrading; the record itself stays until `AMICUS_JOB_TTL` or the per-workspace cap evicts it.
+
+**A finding that cited one of amicus's own temporary files no longer carries it (#140).**
+On Kimi, which is handed its prompt as a file, a finding could come back with `file` set to that temporary path and `line` set to an offset into amicus's framing.
+Such a `file` is now null together with its `line`, the path is replaced by `[amicus temporary file]` wherever the answer's text named it, and `findings_diagnostics.reasons` says `backend_artifact_reference_removed` at `dropped: 0`.
+A caller that treated any non-null `findings_diagnostics` as loss should read the reason: this one loses nothing a caller could have opened.
+
 ## Upgrading from 0.3.0
 
 The changes below are the ones an operator or caller using amicus 0.3.0 has to handle before running 0.4.0.
@@ -240,7 +255,7 @@ Branch on `review_status` before reading the verdict, and read that text before 
 Only an empty answer is still an error: `invalid_json`, or `empty_response` on Kimi, which detects it first.
 
 **A job result stored by 0.2.0 is no longer readable (#65, #52, #139).**
-`RESULT_FORMAT` moved from 4 to 7, so `amicus_job_result` and `amicus_job_consume_result` return `job_result_incompatible` for a record 0.2.0 wrote, rather than a result whose new fields would answer for a run that never measured them.
+`RESULT_FORMAT` moved from 4 to 8, so `amicus_job_result` and `amicus_job_consume_result` return `job_result_incompatible` for a record 0.2.0 wrote, rather than a result whose new fields would answer for a run that never measured them.
 Fetch or consume any stored result you still need before upgrading; the record itself stays until `AMICUS_JOB_TTL` or the per-workspace cap evicts it.
 
 **An empty `idempotency_key` is rejected (#66).**

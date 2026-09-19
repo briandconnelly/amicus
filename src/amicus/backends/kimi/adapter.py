@@ -204,6 +204,7 @@ class KimiBackend:
                 # Only the answer file is an artifact the loop reads back; the prompt and
                 # agent files are inputs, and the loop's reader is the hardened one.
                 artifact_paths={"answer": paths["answer"]} if "answer" in paths else {},
+                staging_dir=handshake_dir,
                 dropped_flags=tuple(dropped),
             )
         finally:

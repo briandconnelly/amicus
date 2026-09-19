@@ -92,6 +92,12 @@ class PreparedRun:
     # When both fields are set they must agree: `artifacts` enumerates exactly the
     # values here (it remains the cleanup/enumeration view).
     artifact_paths: dict[str, str] = field(default_factory=dict)
+    # A directory the backend created for THIS run alone and removes on exit, when it has
+    # one (Kimi's handshake dir). The consumer treats every path beneath it as run-owned,
+    # listed in `artifacts` or not, so a model that cites the directory or a sibling file
+    # is handled like one that cites a listed artifact. Never a shared directory: a temp
+    # root or a job directory here would make the consumer rewrite paths it does not own.
+    staging_dir: str | None = None
 
 
 @dataclass(frozen=True)

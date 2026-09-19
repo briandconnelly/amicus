@@ -197,23 +197,31 @@ async def run_request(
             # `finalize` tolerate an empty or malformed answer, so calling it unconditionally
             # is safe.
             result = plugin.backend.finalize(outcome, request)
+            # The staged files are gone, but their paths are still here, and neither an
+            # answer nor a failure that cites one may reach the result or the job record (#140).
+            refs = finalize.artifact_refs(prepared.artifacts, prepared.staging_dir)
             finalize.apply_exec(meta, result)
             failure = inspect_outcome(plugin.backend, outcome, request)
             if failure is None and (run.exit_code != 0 or run.binary_missing or run.timed_out):
                 failure = plugin.backend.classify_failure(outcome, request)
             if failure is not None:
-                return render_failure(plugin, failure, meta)
+                return render_failure(plugin, finalize.scrub_failure(failure, refs), meta)
             diff = site.capture_diff() if spec.kind == "delegate" else None
             aliases = site.aliases
     except SiteError as exc:
         return _site_error(exc, meta, plugin)
 
     if spec.kind == "review_changes":
-        return finalize.review_result(result, meta, coverage, plugin)
+        return finalize.review_result(result, meta, coverage, plugin, refs)
     if spec.kind == "adversarial_review":
-        return finalize.adversarial_result(result, meta, coverage, plugin)
+        return finalize.adversarial_result(result, meta, coverage, plugin, refs)
     if spec.kind == "consult":
-        return finalize.consult_result(result, meta)
+        return finalize.consult_result(result, meta, refs)
     return finalize.delegate_result(
-        result, meta, diff=diff or "", aliases=aliases, max_diff_bytes=spec.max_diff_bytes
+        result,
+        meta,
+        diff=diff or "",
+        aliases=aliases,
+        max_diff_bytes=spec.max_diff_bytes,
+        refs=refs,
     )

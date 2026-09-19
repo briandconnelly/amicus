@@ -39,6 +39,7 @@ ReviewStatus = Literal["completed", "not_run", "unstructured"]
 FindingReason = Literal[
     "severity_normalized",
     "extra_fields_omitted",
+    "backend_artifact_reference_removed",
     "invalid_entry",
     "invalid_container",
     "missing_findings",
@@ -91,7 +92,9 @@ _DROPPED_DESC = (
 _REASONS_DESC = (
     "Why findings did not reach you intact. severity_normalized: case/space only, finding "
     "intact. extra_fields_omitted: unrecognized keys and their content are gone, the rest "
-    "of the finding survives. invalid_entry: an entry was dropped whole. "
+    "of the finding survives. backend_artifact_reference_removed: the finding cited an "
+    "amicus temp file; its text names a placeholder and a `file` naming it is null with its "
+    "`line`. Nothing you could open was lost. invalid_entry: an entry was dropped whole. "
     "invalid_container: the findings member was present but not a list. missing_findings: "
     "the required findings member was absent. The last three also stop a `pass` verdict "
     "from standing, which is delivered as unknown/low instead."
