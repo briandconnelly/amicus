@@ -1,7 +1,7 @@
 """Single source of truth for the external `codex` CLI contract (ported from
-codex-in-claude `cli_contract.py`, verified against codex-cli 0.152.0/0.153.x; 0.154.0 is
-checked zero-spend only: `--help`, `features list`, the stderr grammars and the model-facing
-tool catalog).
+codex-in-claude `cli_contract.py`, verified against codex-cli 0.152.0/0.153.x; 0.154.0 and
+0.155.1 are checked zero-spend only: `--help`, `features list`, the stderr grammars and the
+model-facing tool catalog).
 
 Every assumption amicus makes about the `codex` CLI — subcommands, flags, sandbox values,
 config keys it pins, the event/result extraction surface, and the stderr phrasings that
@@ -275,8 +275,8 @@ MODELS_CACHE_FILENAME = "models_cache.json"
 MODELS_CACHE_MAX_BYTES = 1_000_000
 MODELS_CACHE_MAX_ENTRIES = 256
 MODEL_SLUG_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
-# Bundled fallback, copied from codex-cli 0.154.0's cache in priority order (the same slug set
-# `codex debug models` reports from its bundled catalog).
+# Bundled fallback, copied from codex-cli 0.154.0's cache in priority order; 0.155.1's cache
+# holds the same seven slugs in the same order.
 KNOWN_MODEL_SLUGS: tuple[str, ...] = (
     "gpt-6-astra",
     "gpt-reserve",
@@ -290,7 +290,7 @@ KNOWN_MODEL_SLUGS: tuple[str, ...] = (
 HELP_CACHE_TTL_SECONDS = 300
 
 # Advisory: a mismatch warns on amicus_backends, never blocks.
-SUPPORTED_VERSIONS = frozenset({(0, 152), (0, 153), (0, 154)})
+SUPPORTED_VERSIONS = frozenset({(0, 152), (0, 153), (0, 154), (0, 155)})
 
 # --- Result / event extraction surface -----------------------------------------------------
 USAGE_EVENT_MARKERS = ("token_count", "usage")

@@ -210,7 +210,8 @@ def test_parse_retry_after_ms(text, expected):
 
 
 def test_static_catalog_and_version_pins():
-    # Pinned exactly (codex-cli 0.154.0's catalog, priority order) so a removal or reorder fails.
+    # Pinned exactly (codex-cli 0.154.0's cache, unchanged in 0.155.1's, priority order) so a
+    # removal or reorder fails.
     assert c.KNOWN_MODEL_SLUGS == (
         "gpt-6-astra",
         "gpt-reserve",
@@ -223,7 +224,7 @@ def test_static_catalog_and_version_pins():
     assert all(c.MODEL_SLUG_PATTERN.match(s) for s in c.KNOWN_MODEL_SLUGS)
     assert c.MODEL_SLUG_PATTERN.match("gpt-5.4-mini")
     assert not c.MODEL_SLUG_PATTERN.match("-bad")
-    assert {(0, 153), (0, 154)} <= c.SUPPORTED_VERSIONS
+    assert {(0, 153), (0, 154), (0, 155)} <= c.SUPPORTED_VERSIONS
     assert c.RATE_LIMIT_DEFAULT_BACKOFF_MS == 60_000
 
 
