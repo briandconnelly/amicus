@@ -8,9 +8,10 @@ The kimi live gate requires the installed version to equal the newest supported 
 ## The version jump
 
 Kimi Code went from 0.43.1 to 2.0.2 in one upgrade.
-amicus has never seen a 1.x, and nothing here establishes whether one shipped.
+No 1.x shipped: the project's GitHub releases (`MoonshotAI/kimi-code`) run 0.43.0, 0.43.1, 2.0.0, 2.0.1, 2.0.2, published 2026-09-14 to 2026-09-19.
 PyPI's `kimi-cli` is a different distribution, and its 1.50.0 says nothing about Kimi Code.
-So `SUPPORTED_VERSIONS` gains `(2, 0)` and no `(1, *)`: amicus claims what it looked at.
+So `SUPPORTED_VERSIONS` gains `(2, 0)` and no `(1, *)`.
+The major number overstates the change: 2.0.0's only "Major Changes" entry is a `/desktop` slash command and an `install-app` subcommand that open the desktop app's page.
 
 ## What the captures show
 
@@ -32,9 +33,27 @@ On 2.0.2:
 - `kimi session list --all --json` returns the 127 sessions that were under `~/.kimi-code/sessions` before the upgrade, each with a `sessionDir`, so 2.0.2 reads the same store at the same place.
   Their contents were counted, not read, because rule 18 binds them.
 
+`docs/RELEASING.md` also requires the release notes since the previous amicus release, because a setting documented only there would not show in any of those probes.
+All 49 entries of the 2.0.0, 2.0.1 and 2.0.2 notes were read, and searched for sessions, persistence, history, transcripts, prompt mode and tools, after confirming the search finds an entry known to be there.
+None adds a flag, setting or environment variable that stops a session being kept, moves the store, or hands kimi its prompt without a file.
+Two entries concern the store without changing that: 2.0.1 compacts the session index when entries point to deleted sessions, and fixes "deleting or archiving a session sometimes never finishing", so deletion exists somewhere in the product, while `kimi session` on the command line still offers `list` only.
+Deleting afterwards is not avoiding the carrier, and no non-interactive route to it was found.
+
 So no documented or observed way to avoid the session-store carrier was found on 2.0.2, which is the condition rule 18 sets.
 That is a statement about what was looked for and not found; it is not an observation that the carrier behaves as it did on 0.43.1.
 What this did not do is watch 2.0.2 WRITE a session, since a run that creates one spends quota; that it still does is inferred from the store, the subcommand and the help all being unchanged.
+
+## Release-note entries that bear on what amicus relies on
+
+None changes a flag or a file amicus uses, and each is behaviour only a prompt can exercise, so they are listed for whoever reads the live gate's result.
+
+- 2.0.1: "Remove the system-prompt rule that forbade all file access outside the working directory."
+  amicus's `readonly_honesty` for kimi already says its Read tool accepts absolute paths and that no workspace is a read boundary, so the disclosure stays true and the model is now less discouraged from doing it.
+- 2.0.2: "The agent no longer assumes the current working directory is the project root."
+  amicus runs kimi with the worktree or workspace as its cwd.
+- 2.0.1: "Fix `kimi -p` exiting early and cancelling the active turn when a cron task fires."
+  `-p` is the mode amicus uses.
+- 2.0.1: "Stop workspace file watchers from scanning an unbounded project root, and add `[watch] enabled` / `KIMI_CODE_WATCH` to disable watching entirely."
 
 ## What is not established here
 

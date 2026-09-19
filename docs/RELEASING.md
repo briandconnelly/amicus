@@ -91,7 +91,8 @@ Do this last among the preconditions, immediately before the evidence run in the
 First bring each CLI to its latest release on the machine that will record the evidence.
 `codex` and `claude` are npm packages, so `npm view @openai/codex version` and `npm view @anthropic-ai/claude-code version` name the latest and the usual npm upgrade installs it.
 `kimi` is Kimi Code, which updates itself: run `kimi upgrade`.
-Its latest version cannot be read from outside the CLI, and PyPI's `kimi-cli` is a different distribution whose version says nothing about it.
+It is also published to npm, so `npm view @moonshot-ai/kimi-code version` names its latest; PyPI's `kimi-cli` is a different distribution whose version says nothing about it.
+Expect a major version number to mean less than it says: 0.43.1 was followed directly by 2.0.0, whose only major change was a command that opens the desktop app's page.
 
 Then run the mechanical half, which spends nothing: it runs `--version`, `--help` and each backend's free login probe, and sends no prompt.
 
@@ -104,8 +105,7 @@ A `FAIL` line names what is wrong: a CLI that is not installed or not authentica
 It fails closed: help that cannot be read, or a latest release that cannot be looked up, is a failure rather than a pass, and `--offline` exists to say out loud that the lookup was skipped, which is not good enough for a release.
 A flag counts only where `--help` declares it as an option, never where another option's description happens to name it.
 `FLAGS DIFFER` is not by itself a failure, since upstream adds flags constantly, but every removed flag must be looked up in that backend's `contract.py` before going on.
-`latest unknown` is expected for kimi, whose latest release cannot be read from outside the CLI, and does not fail the check; that is why `kimi upgrade` comes first.
-For codex and claude it does fail the check, because npm can answer and did not.
+`latest unknown` fails the check for every backend, because all three are on npm and it means the lookup failed rather than that the version matched.
 
 When a CLI's version has no capture of its own, commit one with the change that adds support for it, so the next release has something to compare against.
 
@@ -118,7 +118,7 @@ Adding a minor to a backend's `SUPPORTED_VERSIONS` is its own PR, made the way #
 
 The script cannot do the other half, which AGENTS.md rule 18 requires before every release: the carrier re-check.
 Rule 18 exempts a backend's native prompt carrier only where no documented or observed way to avoid it has been found on the CLI release being validated.
-For each of the three versions the script printed, read that CLI's `--help` and its release notes since the previous amicus release for anything that would avoid a listed carrier: a flag or setting that stops kimi keeping a session, a way to hand kimi its prompt without a file, or a codex channel for developer instructions other than `-c` on argv.
+For each of the three versions the script printed, read that CLI's `--help` and its release notes since the previous amicus release (for kimi, the GitHub releases of `MoonshotAI/kimi-code`) for anything that would avoid a listed carrier: a flag or setting that stops kimi keeping a session, a way to hand kimi its prompt without a file, or a codex channel for developer instructions other than `-c` on argv.
 If one has appeared, the exemption no longer holds for that carrier, and using the new mechanism is a change to make before this release rather than after it.
 If none has, say so in the release PR, naming the three versions, so the next reader can see the looking was done and on what.
 The probe that stands behind kimi's session store, and what it did not test, is `docs/kimi-help/0.43.1/FINDINGS.md`.

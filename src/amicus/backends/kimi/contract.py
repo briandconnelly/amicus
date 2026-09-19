@@ -1,6 +1,8 @@
 """Single source of truth for the external `kimi` (Kimi Code) CLI contract, ported from
 moonbridge `cli_contract.py` (verified by the sibling against 0.35.0 and 0.39.1) and
-re-verified against 0.41.0, 0.42.0, 0.43.1 and 2.0.2 by the captures under docs/kimi-help/.
+re-verified against 0.41.0, 0.42.0 and 0.43.1 by the captures under docs/kimi-help/. 2.0.2 is
+checked for its CLI SURFACE only (help, provider-list shape, the session subcommand, release
+notes); what needs a prompt is listed as unchecked in docs/kimi-help/2.0.2/FINDINGS.md.
 
 `kimi -p` is NOT `codex exec`. Three differences drive the whole design:
 
