@@ -107,3 +107,19 @@ def test_the_reason_merges_in_declaration_order_and_never_folds_the_verdict():
     assert _REASON not in review._REPRESENTATION_LOSS, (
         "the finding survives and no caller-addressable location was lost, so a pass stands"
     )
+
+
+def test_the_resolved_spelling_of_a_staged_path_is_covered_too(tmp_path):
+    """macOS hands out temp paths under /var that resolve under /private/var, and a backend
+    may cite either. The artifact is named through a symlink here; the answer uses the
+    resolved path, which differs as a string."""
+    real = tmp_path / "real"
+    real.mkdir()
+    (real / "prompt.md").write_text("x")
+    link = tmp_path / "link"
+    link.symlink_to(real)
+    staged, cited = str(link / "prompt.md"), str(real / "prompt.md")
+    assert staged != cited
+    result = _scrubbed(_answer({"title": "t", "file": cited, "line": 2}), (staged,))
+    findings, diagnostics = finalize.coerce_findings(result.structured["findings"])
+    assert findings[0].file is None and diagnostics is not None
