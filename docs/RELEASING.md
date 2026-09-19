@@ -83,6 +83,43 @@ Check two things by reading the file.
 First, its install section must not still carry the pre-release note saying amicus is unpublished and that the instructions work from the first tagged release onward — once you are releasing, that sentence is false and must be removed in the release PR.
 Second, its "Status and known limits" section must not claim anything the release contradicts, in particular the line stating amicus has never been published to PyPI.
 
+### The backend CLIs are current and checked
+
+A release vouches for the `codex`, `kimi` and `claude` that are installed when its rule-20 evidence is recorded, and those CLIs release far more often than amicus does.
+Do this last among the preconditions, immediately before the evidence run in the release sequence, because a check done a week earlier describes CLIs that have since moved.
+
+First bring each CLI to its latest release on the machine that will record the evidence.
+`codex` and `claude` are npm packages, so `npm view @openai/codex version` and `npm view @anthropic-ai/claude-code version` name the latest and the usual npm upgrade installs it.
+`kimi` is Kimi Code, which updates itself: run `kimi upgrade`.
+Its latest version cannot be read from outside the CLI, and PyPI's `kimi-cli` is a different distribution whose version says nothing about it.
+
+Then run the mechanical half, which spends nothing: it runs `--version`, `--help` and each backend's free login probe, and sends no prompt.
+
+```sh
+uv run python scripts/check_backend_compat.py
+```
+
+Yes is exit status 0, with each backend reported as installed and authenticated, no `FAIL` line, and `same flags` against its newest committed capture.
+A `FAIL` line names what is wrong: a CLI that is not installed, a warning `amicus_backends` would raise (an installed version outside the contract's supported set, or a flag amicus always sends that `--help` no longer lists), or an installed version behind the latest release npm reports.
+`FLAGS DIFFER` is not by itself a failure, since upstream adds flags constantly, but every removed flag must be looked up in that backend's `contract.py` before going on.
+`latest unknown` is expected for kimi and is a failure for nothing; it is why `kimi upgrade` comes first.
+
+When a CLI's version has no capture of its own, commit one with the change that adds support for it, so the next release has something to compare against.
+
+```sh
+uv run python scripts/check_backend_compat.py --write
+```
+
+Adding a minor to a backend's `SUPPORTED_VERSIONS` is its own PR, made the way #112 and #194 were: a zero-spend comparison against the previous minor, recorded in the PR.
+`tests/test_codex_contract.py`, `tests/test_kimi_contract.py` and `tests/test_claude_contract.py` then hold every committed capture to the flags the contract sends.
+
+The script cannot do the other half, which AGENTS.md rule 18 requires before every release: the carrier re-check.
+Rule 18 exempts a backend's native prompt carrier only where no documented or observed way to avoid it has been found on the CLI release being validated.
+For each of the three versions the script printed, read that CLI's `--help` and its release notes since the previous amicus release for anything that would avoid a listed carrier: a flag or setting that stops kimi keeping a session, a way to hand kimi its prompt without a file, or a codex channel for developer instructions other than `-c` on argv.
+If one has appeared, the exemption no longer holds for that carrier, and using the new mechanism is a change to make before this release rather than after it.
+If none has, say so in the release PR, naming the three versions, so the next reader can see the looking was done and on what.
+The probe that stands behind kimi's session store, and what it did not test, is `docs/kimi-help/0.43.1/FINDINGS.md`.
+
 ## The release sequence
 
 Rules 19 and 20 together shape this sequence, and a future maintainer should not "simplify" it back.
@@ -110,6 +147,7 @@ The tag therefore deliberately points at a commit that is in `main`'s history bu
    Record the branch tip's SHA; call it the release commit, and note it well — it is the commit that gets tagged, and it will not be `main`'s head after the next step.
    If the PR C branch gains any commit after this point — an "Update branch" click, or a review pushing a change — this step must be redone from the new tip: the evidence would otherwise cover a commit that is no longer what step 4 actually merges.
    The evidence run below spends real quota on all three backends; a maintainer who has to redo this step must not reuse the earlier record, even though re-spending that quota is tempting.
+   Immediately before it, run the backend-CLI precondition above, `uv run python scripts/check_backend_compat.py` and the rule-18 carrier re-check, because the evidence vouches for exactly the CLI versions installed at this moment.
    Run `uv run python scripts/record_live_gate_evidence.py`.
    The script itself forces `AMICUS_REQUIRE_LIVE=1` into each backend's subprocess environment, so prefixing the command with it is optional; its own usage string documents `AMICUS_REQUIRE_LIVE=1 uv run python scripts/record_live_gate_evidence.py`, and either form runs the same live gates.
    This spends real quota on all three backends and requires the maintainer's authorization in the session where it runs.
