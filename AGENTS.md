@@ -29,7 +29,7 @@ The rules bind; the context after them explains and points elsewhere.
 17. Never edit a sibling checkout (`~/projects/codex-in-claude`, `~/projects/moonbridge`, `~/projects/claude-in-codex`, `~/projects/pontonier`).
 18. Never write a prompt input — every field in `INPUT_FIELDS` (`src/amicus/request.py`): `question`, `task`, `extra_context`, `instructions_append`, `focus`, `target`, `evidence` — to disk, to a worker's argv or to a log; it travels over the worker's stdin.
     This binds amicus's own handling and everything it commits, including host captures and eval prompt bodies, which are recorded as an id and a `sha256` instead.
-    A backend's own native carrier is exempt where that backend offers no alternative and the carrier is disclosed in its `CARRIERS` string and surfaced on `amicus_backends`; the two that exist today are Kimi's handshake file, because kimi ignores stdin, and Codex's `-c developer_instructions` argv token.
+    A backend's own native carrier is exempt where that backend offers no alternative and the carrier is disclosed in its `CARRIERS` string and surfaced on `amicus_backends`; the three that exist today are Kimi's handshake file, because kimi ignores stdin; the kimi CLI's own session store, which the CLI rather than amicus writes and which outlives the run, no documented or observed way to switch it off having been found in 0.43.1 (`docs/kimi-help/0.43.1/FINDINGS.md`); and Codex's `-c developer_instructions` argv token.
     Prompt text that a test or capture script assembles entirely from its own literals is exempt, including the `build_*_prompt` output committed in `tests/fixtures/*_differentials.json`; it stays verbatim, because a differential must show what changed and a hash cannot.
     No exemption reaches text that amicus itself, or anyone working in this repository, copies, derives or replays from a prompt anyone sent: that stays bound however it is later stored or relabelled.
     A backend's answer, and the result amicus builds from it — its parsed fields and, for a delegate, the diff captured from the worktree — is output, not a prompt input, even where it quotes or paraphrases one: amicus keeps it only on the job record (`result.json`, written through a staging file in the same directory), under the job retention the tool surface discloses (`AMICUS_JOB_TTL`, the per-workspace cap, `amicus_job_consume_result`), and writes it to no log, argv or other file; what this repository commits of an answer stays bound by the sentence before this one wherever the answer repeats a prompt anyone sent.
@@ -63,7 +63,7 @@ The package is `amicus` under `src/`; each backend is a plugin under `src/amicus
 It was copied from [pontonier](https://github.com/briandconnelly/pontonier) v0.9.0, and amicus no longer depends on pontonier (ADR 0029).
 ADR 0030 holds it to that role, so what only the server uses lives in the amicus package that owns it: the job store is `amicus.jobs`, worktrees and diff gathering are `amicus.orchestration`, and the fingerprint mechanics are `amicus.schemas.fingerprint`.
 Import boundaries between layers are enforced by the import-linter contracts in `pyproject.toml`.
-A backend's own prompt carriers (for Codex, the developer-instructions argv token and the stdin prompt) are disclosed on `amicus_backends`.
+A backend's own prompt carriers (for Codex, the developer-instructions argv token and the stdin prompt; for Kimi, the handshake file and the CLI's own session store) are disclosed on `amicus_backends`.
 
 ### The gate
 
