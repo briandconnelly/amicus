@@ -1574,7 +1574,7 @@
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-37",
+                "default": "amicus/0.1/schema-38",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -1828,6 +1828,7 @@
                   "authenticate",
                   "correct_arguments",
                   "correct_config",
+                  "fetch_job_result",
                   "init_git_repo",
                   "inspect_and_retry",
                   "install_backend",
@@ -2055,7 +2056,7 @@
           },
           "idempotency_key": {
             "full": "Reusing the key on the same tool with the same effective execution arguments (backend, model, reasoning_effort, backend_options, scope and the prompt inputs; on a sync tool timeout_seconds only bounds the wait and `detail` only shapes delivery, so either may differ) replays the existing run instead of paying for a duplicate: an _async call returns the same job_id; a sync call awaits that run and returns its result. A keyed sync run gets the job deadline (AMICUS_JOB_MAX_SECONDS), as an _async run does, and timeout_seconds bounds how long the call waits for it. A keyed sync wait that hits that bound or is cancelled leaves the run going, and its `timeout` repair points at amicus_job_status for that job; under the tasks extension a keyed task's job likewise survives tasks/cancel. Sync and _async are separate tools and never share a key. Reuse with different arguments is refused (idempotency_conflict); a key whose prior result was consumed or evicted is idempotency_result_unavailable; a still-publishing reservation is idempotency_in_progress (retry; a sync call waits about a second for it first). A completed result stays replayable while its job record lives (its TTL). meta.idempotency_replayed=true marks a replayed (unpaid) response. An empty key is rejected.",
-            "summary": "Dedup key scoped to this tool + backend + workspace: reusing it with identical args replays the prior result unpaid; different args are refused. Lifecycle: amicus://params."
+            "summary": "Dedup key scoped to this tool + workspace: reusing it with identical args (backend included) replays the prior result unpaid; different args are refused. Lifecycle: amicus://params."
           },
           "instructions_append": {
             "full": "Appended BEHIND this server's always-leading framing (codex: developer_instructions on argv; claude and kimi: a leading section of the stdin/handshake prompt). Normalized once (stripped; blank means omitted); refused pre-spend as invalid_arguments when over 4096 bytes, when it carries a NUL, another C0 control (tab/LF/CR excepted), DEL, or a lone surrogate, or when it contains one of the server's framing marker lines. It grants no tools. The backend is instructed not to let it determine a verdict; compliance is behavioral, not mechanical, and non-compliance may be silent. Each backend's carrier (argv or handshake file) is disclosed on amicus_backends. Never put secrets here; result envelopes report only a fingerprint of the text.",
@@ -2132,7 +2133,7 @@
       "description": "The full ErrorResult schema; tool outputSchemas carry only an opaque error branch.",
       "mimeType": "application/schema+json",
       "name": "amicus-error-envelope",
-      "size": 14739,
+      "size": 14759,
       "title": "amicus error envelope schema",
       "uri": "amicus://error-envelope"
     },
@@ -2145,7 +2146,7 @@
       "description": "Full semantics for parameters whose inline description is a compressed summary.",
       "mimeType": "application/json",
       "name": "amicus-params",
-      "size": 6161,
+      "size": 6170,
       "title": "amicus parameter contracts",
       "uri": "amicus://params"
     },
@@ -2486,7 +2487,7 @@
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-37",
+            "default": "amicus/0.1/schema-38",
             "title": "Fingerprint",
             "type": "string"
           },
@@ -2902,7 +2903,7 @@
                 "type": "null"
               }
             ],
-            "description": "Dedup key scoped to this tool + backend + workspace: reusing it with identical args replays the prior result unpaid; different args are refused. Lifecycle: amicus://params."
+            "description": "Dedup key scoped to this tool + workspace: reusing it with identical args (backend included) replays the prior result unpaid; different args are refused. Lifecycle: amicus://params."
           },
           "model": {
             "anyOf": [
@@ -3691,7 +3692,7 @@
                 "type": "null"
               }
             ],
-            "description": "Dedup key scoped to this tool + backend + workspace: reusing it with identical args replays the prior result unpaid; different args are refused. Lifecycle: amicus://params."
+            "description": "Dedup key scoped to this tool + workspace: reusing it with identical args (backend included) replays the prior result unpaid; different args are refused. Lifecycle: amicus://params."
           },
           "model": {
             "anyOf": [
@@ -3807,37 +3808,74 @@
                 ]
               },
               "follow_up": {
-                "additionalProperties": false,
-                "properties": {
-                  "alternative": {
-                    "anyOf": [
-                      {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "alternative": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "arguments": {
+                        "additionalProperties": true,
+                        "type": "object"
+                      },
+                      "next_step": {
+                        "const": "poll_job_status",
                         "type": "string"
                       },
-                      {
-                        "type": "null"
+                      "tool": {
+                        "const": "amicus_job_status",
+                        "type": "string"
                       }
-                    ]
-                  },
-                  "arguments": {
-                    "additionalProperties": true,
+                    },
+                    "required": [
+                      "arguments",
+                      "next_step",
+                      "tool"
+                    ],
                     "type": "object"
                   },
-                  "next_step": {
-                    "const": "poll_job_status",
-                    "type": "string"
-                  },
-                  "tool": {
-                    "const": "amicus_job_status",
-                    "type": "string"
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "alternative": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "arguments": {
+                        "additionalProperties": true,
+                        "type": "object"
+                      },
+                      "next_step": {
+                        "const": "fetch_job_result",
+                        "type": "string"
+                      },
+                      "tool": {
+                        "const": "amicus_job_result",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "arguments",
+                      "next_step",
+                      "tool"
+                    ],
+                    "type": "object"
                   }
-                },
-                "required": [
-                  "arguments",
-                  "next_step",
-                  "tool"
-                ],
-                "type": "object"
+                ]
               },
               "job_id": {
                 "type": "string"
@@ -4715,7 +4753,7 @@
                 "type": "null"
               }
             ],
-            "description": "Dedup key scoped to this tool + backend + workspace: reusing it with identical args replays the prior result unpaid; different args are refused. Lifecycle: amicus://params."
+            "description": "Dedup key scoped to this tool + workspace: reusing it with identical args (backend included) replays the prior result unpaid; different args are refused. Lifecycle: amicus://params."
           },
           "instructions_append": {
             "anyOf": [
@@ -5276,7 +5314,7 @@
                 "type": "null"
               }
             ],
-            "description": "Dedup key scoped to this tool + backend + workspace: reusing it with identical args replays the prior result unpaid; different args are refused. Lifecycle: amicus://params."
+            "description": "Dedup key scoped to this tool + workspace: reusing it with identical args (backend included) replays the prior result unpaid; different args are refused. Lifecycle: amicus://params."
           },
           "instructions_append": {
             "anyOf": [
@@ -5363,37 +5401,74 @@
                 ]
               },
               "follow_up": {
-                "additionalProperties": false,
-                "properties": {
-                  "alternative": {
-                    "anyOf": [
-                      {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "alternative": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "arguments": {
+                        "additionalProperties": true,
+                        "type": "object"
+                      },
+                      "next_step": {
+                        "const": "poll_job_status",
                         "type": "string"
                       },
-                      {
-                        "type": "null"
+                      "tool": {
+                        "const": "amicus_job_status",
+                        "type": "string"
                       }
-                    ]
-                  },
-                  "arguments": {
-                    "additionalProperties": true,
+                    },
+                    "required": [
+                      "arguments",
+                      "next_step",
+                      "tool"
+                    ],
                     "type": "object"
                   },
-                  "next_step": {
-                    "const": "poll_job_status",
-                    "type": "string"
-                  },
-                  "tool": {
-                    "const": "amicus_job_status",
-                    "type": "string"
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "alternative": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "arguments": {
+                        "additionalProperties": true,
+                        "type": "object"
+                      },
+                      "next_step": {
+                        "const": "fetch_job_result",
+                        "type": "string"
+                      },
+                      "tool": {
+                        "const": "amicus_job_result",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "arguments",
+                      "next_step",
+                      "tool"
+                    ],
+                    "type": "object"
                   }
-                },
-                "required": [
-                  "arguments",
-                  "next_step",
-                  "tool"
-                ],
-                "type": "object"
+                ]
               },
               "job_id": {
                 "type": "string"
@@ -5614,7 +5689,7 @@
                 "type": "null"
               }
             ],
-            "description": "Dedup key scoped to this tool + backend + workspace: reusing it with identical args replays the prior result unpaid; different args are refused. Lifecycle: amicus://params."
+            "description": "Dedup key scoped to this tool + workspace: reusing it with identical args (backend included) replays the prior result unpaid; different args are refused. Lifecycle: amicus://params."
           },
           "model": {
             "anyOf": [
@@ -6040,7 +6115,7 @@
                 "type": "null"
               }
             ],
-            "description": "Dedup key scoped to this tool + backend + workspace: reusing it with identical args replays the prior result unpaid; different args are refused. Lifecycle: amicus://params."
+            "description": "Dedup key scoped to this tool + workspace: reusing it with identical args (backend included) replays the prior result unpaid; different args are refused. Lifecycle: amicus://params."
           },
           "model": {
             "anyOf": [
@@ -6116,37 +6191,74 @@
                 ]
               },
               "follow_up": {
-                "additionalProperties": false,
-                "properties": {
-                  "alternative": {
-                    "anyOf": [
-                      {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "alternative": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "arguments": {
+                        "additionalProperties": true,
+                        "type": "object"
+                      },
+                      "next_step": {
+                        "const": "poll_job_status",
                         "type": "string"
                       },
-                      {
-                        "type": "null"
+                      "tool": {
+                        "const": "amicus_job_status",
+                        "type": "string"
                       }
-                    ]
-                  },
-                  "arguments": {
-                    "additionalProperties": true,
+                    },
+                    "required": [
+                      "arguments",
+                      "next_step",
+                      "tool"
+                    ],
                     "type": "object"
                   },
-                  "next_step": {
-                    "const": "poll_job_status",
-                    "type": "string"
-                  },
-                  "tool": {
-                    "const": "amicus_job_status",
-                    "type": "string"
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "alternative": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "arguments": {
+                        "additionalProperties": true,
+                        "type": "object"
+                      },
+                      "next_step": {
+                        "const": "fetch_job_result",
+                        "type": "string"
+                      },
+                      "tool": {
+                        "const": "amicus_job_result",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "arguments",
+                      "next_step",
+                      "tool"
+                    ],
+                    "type": "object"
                   }
-                },
-                "required": [
-                  "arguments",
-                  "next_step",
-                  "tool"
-                ],
-                "type": "object"
+                ]
               },
               "job_id": {
                 "type": "string"
@@ -8361,7 +8473,7 @@
                 "type": "null"
               }
             ],
-            "description": "Dedup key scoped to this tool + backend + workspace: reusing it with identical args replays the prior result unpaid; different args are refused. Lifecycle: amicus://params."
+            "description": "Dedup key scoped to this tool + workspace: reusing it with identical args (backend included) replays the prior result unpaid; different args are refused. Lifecycle: amicus://params."
           },
           "instructions_append": {
             "anyOf": [
@@ -9139,7 +9251,7 @@
                 "type": "null"
               }
             ],
-            "description": "Dedup key scoped to this tool + backend + workspace: reusing it with identical args replays the prior result unpaid; different args are refused. Lifecycle: amicus://params."
+            "description": "Dedup key scoped to this tool + workspace: reusing it with identical args (backend included) replays the prior result unpaid; different args are refused. Lifecycle: amicus://params."
           },
           "instructions_append": {
             "anyOf": [
@@ -9255,37 +9367,74 @@
                 ]
               },
               "follow_up": {
-                "additionalProperties": false,
-                "properties": {
-                  "alternative": {
-                    "anyOf": [
-                      {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "alternative": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "arguments": {
+                        "additionalProperties": true,
+                        "type": "object"
+                      },
+                      "next_step": {
+                        "const": "poll_job_status",
                         "type": "string"
                       },
-                      {
-                        "type": "null"
+                      "tool": {
+                        "const": "amicus_job_status",
+                        "type": "string"
                       }
-                    ]
-                  },
-                  "arguments": {
-                    "additionalProperties": true,
+                    },
+                    "required": [
+                      "arguments",
+                      "next_step",
+                      "tool"
+                    ],
                     "type": "object"
                   },
-                  "next_step": {
-                    "const": "poll_job_status",
-                    "type": "string"
-                  },
-                  "tool": {
-                    "const": "amicus_job_status",
-                    "type": "string"
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "alternative": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "arguments": {
+                        "additionalProperties": true,
+                        "type": "object"
+                      },
+                      "next_step": {
+                        "const": "fetch_job_result",
+                        "type": "string"
+                      },
+                      "tool": {
+                        "const": "amicus_job_result",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "arguments",
+                      "next_step",
+                      "tool"
+                    ],
+                    "type": "object"
                   }
-                },
-                "required": [
-                  "arguments",
-                  "next_step",
-                  "tool"
-                ],
-                "type": "object"
+                ]
               },
               "job_id": {
                 "type": "string"
