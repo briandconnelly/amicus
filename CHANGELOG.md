@@ -33,6 +33,11 @@ per-change, as its own lead says.
 
 ### Fixed
 
+- The codex live gate, whose passing run is part of the evidence a release is tagged on, could
+  pass on a codex version amicus had never checked: it asserted only the `codex-cli` prefix, as
+  0.3.0's run on 0.154.0 showed. It now requires the installed minor to be in the built-in
+  `SUPPORTED_VERSIONS` and `amicus_backends` to report no warnings, so neither an ambient
+  `AMICUS_CODEX_SUPPORTED_VERSIONS` nor an unparseable version string can vouch for one (#113).
 - Kimi's `carriers` disclosure on `amicus_backends(detail="full")` now names the kimi CLI's own
   session store (observed under `~/.kimi-code/sessions`), whose files can hold the whole prompt and
   any answer produced. amicus does not delete it, and `AMICUS_JOB_TTL`, the per-workspace cap and
