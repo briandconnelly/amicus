@@ -195,6 +195,14 @@ mismatched step/tool pair, so that is the floor. #178's corrected `idempotency_k
 9 bytes longer on each of the eight paid tools (72). schema-37 itself moved nothing here:
 error codes do not ride tools/list.
 MEASURED and BUDGET both move by the 1456 bytes, so the budget keeps no headroom.
+
+The schema-38 -> schema-39 DROP (-9076 bytes, 121629 -> 112553 on "all") is #204: the
+deprecated `amicus_dry_run` alias is removed at the end of its window. It carried the review
+preview's whole input schema and outputSchema a second time, plus its deprecation marker and
+the deprecation sentence at the head of its description, which is the temporary cost the
+schema-27 paragraph above said would come back at removal (ADR 0028). Measured on the wire,
+not computed. MEASURED and BUDGET both move down by the 9076 bytes, so the budget keeps no
+headroom.
 """
 
 from __future__ import annotations
@@ -204,7 +212,7 @@ from tests.conftest import spawned_server_env
 
 from amicus import manifest
 
-MEASURED: dict[str, int] = {"all": 121629, "codex-kimi": 121637, "claude": 121629}
+MEASURED: dict[str, int] = {"all": 112553, "codex-kimi": 112561, "claude": 112553}
 # The budget is a literal, not MEASURED rounded up to the next kilobyte as it was until
 # 2026-09-14. The rounding left up to 1 KB of growth per bucket that no PR had to own, and
 # this file records three such accumulations (448 and 12 bytes in the paragraphs above, and
@@ -212,7 +220,7 @@ MEASURED: dict[str, int] = {"all": 121629, "codex-kimi": 121637, "claude": 12162
 # #94 that landed after it), each noticed only when the next deliberate raise re-measured.
 # Any growth now fails until a PR raises BUDGET and says why; a shrink passes and shows as
 # drift against MEASURED. Raising one means re-measuring and moving both.
-BUDGET: dict[str, int] = {"all": 121629, "codex-kimi": 121637, "claude": 121629}
+BUDGET: dict[str, int] = {"all": 112553, "codex-kimi": 112561, "claude": 112553}
 
 
 @pytest.mark.parametrize("profile", sorted(manifest.PROFILES))
