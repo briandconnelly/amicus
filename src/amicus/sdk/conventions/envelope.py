@@ -147,6 +147,7 @@ UNIVERSAL_CODES = frozenset(
         "resource_not_found",
         "invalid_json",
         "schema_violation",
+        "answer_unavailable",
         "cli_contract_changed",
         "extra_args_rejected",
         "job_not_found",
@@ -244,6 +245,13 @@ def repair_rules(
         ),
         "input_too_large": RepairRule(
             "reduce_input", None, False, "Shorten the input below the byte limit and retry."
+        ),
+        "answer_unavailable": RepairRule(
+            "reduce_input",
+            None,
+            False,
+            "The backend answered, but amicus would not read its answer file. Narrow the task "
+            "or ask for a shorter answer; the identical call is likely to end the same way.",
         ),
         "context_too_large": RepairRule(
             "reduce_input",

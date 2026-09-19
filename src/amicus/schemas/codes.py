@@ -53,6 +53,7 @@ ERROR_CODES: tuple[str, ...] = tuple(
     sorted(_pe.UNIVERSAL_CODES | GENERALIZED_BACKEND_CODES | _FEATURE_CODES | LOCAL_CODES)
 )
 ErrorCode = Literal[
+    "answer_unavailable",
     "api_key_invalid",
     "api_key_missing",
     "backend_auth_indeterminate",

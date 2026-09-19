@@ -98,6 +98,10 @@ class PreparedRun:
     # is handled like one that cites a listed artifact. Never a shared directory: a temp
     # root or a job directory here would make the consumer rewrite paths it does not own.
     staging_dir: str | None = None
+    # The names in `artifact_paths` that carry the ANSWER, as opposed to an input staged
+    # beside it (Codex lists its output schema there too). A consumer that refuses to read
+    # one of these has refused the answer; refusing any other artifact says nothing about it.
+    answer_artifacts: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

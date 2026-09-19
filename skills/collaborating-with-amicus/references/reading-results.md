@@ -58,6 +58,14 @@ rather than guessed at. That reading is for reviews only: a consult answered in 
 whole answer in `summary`. Only an empty answer is still an error: `invalid_json`, or `empty_response` on `kimi`, which
 detects it before a result is built.
 
+`answer_unavailable` is a different fact from either: the backend **did** answer, and amicus
+refused to read the file it answered in. `error.details.reason` says why — `artifact_oversize`
+(over the read limit, with `limit_bytes` and, when known, `actual_bytes`), `artifact_not_regular`
+(a symlink, FIFO or device) or `artifact_unreadable`. It is not temporary, so never repeat the
+identical call: for oversize, narrow the task or ask for a shorter answer. A delegate whose
+summary file was refused but whose diff was captured still comes back `ok: true`, with the diff,
+a summary saying the backend's own could not be read, and a `meta.security_warnings` entry.
+
 When a review was not complete, the result's `coverage` object says so in fields you can branch
 on: `coverage.status` is `complete` or `partial`, and `coverage.omission_reasons` names why, in a
 fixed order from a fixed vocabulary. The reasons do not all mean that something was withheld:

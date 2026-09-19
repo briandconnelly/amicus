@@ -307,7 +307,12 @@ def test_artifact_reads_are_hardened(tmp_path):
     assert texts == {"normal": "hello"}
     # A refusal is amicus declining a file that IS there (#162). An absent file and an empty
     # one are the backend writing nothing, which is a different fact and not a refusal.
-    assert refused == {"link": "not_regular_file", "big": "oversize", "fifo": "not_regular_file"}
+    assert {name: r.reason for name, r in refused.items()} == {
+        "link": "not_regular_file",
+        "big": "oversize",
+        "fifo": "not_regular_file",
+    }
+    assert refused["big"].size == run_mod.MAX_ARTIFACT_BYTES + 1 and refused["link"].size is None
 
 
 def test_a_file_at_the_cap_is_read_and_one_byte_over_is_refused(tmp_path):
@@ -323,7 +328,8 @@ def test_a_file_at_the_cap_is_read_and_one_byte_over_is_refused(tmp_path):
         artifact_paths={"at": str(at_cap), "over": str(over)},
     )
     texts, refused = run_mod._read_artifacts(prepared)
-    assert len(texts["at"]) == run_mod.MAX_ARTIFACT_BYTES and refused == {"over": "oversize"}
+    assert len(texts["at"]) == run_mod.MAX_ARTIFACT_BYTES
+    assert refused == {"over": run_mod.Refusal("oversize", run_mod.MAX_ARTIFACT_BYTES + 1)}
 
 
 def test_a_short_read_does_not_deliver_a_partial_artifact(tmp_path, monkeypatch):
@@ -365,4 +371,5 @@ def test_a_file_that_grows_past_the_cap_after_fstat_is_refused(tmp_path, monkeyp
     prepared = PreparedRun(
         argv=("x",), env={}, cwd=str(tmp_path), artifact_paths={"answer": str(path)}
     )
-    assert run_mod._read_artifacts(prepared) == ({}, {"answer": "oversize"})
+    # Its size was never learned: fstat lied, and the read stopped one byte past the cap.
+    assert run_mod._read_artifacts(prepared) == ({}, {"answer": run_mod.Refusal("oversize")})
