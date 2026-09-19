@@ -1,7 +1,9 @@
 """Single source of truth for the external `codex` CLI contract (ported from
-codex-in-claude `cli_contract.py`, verified against codex-cli 0.152.0/0.153.x; 0.154.0 and
-0.155.1 are checked zero-spend only: `--help`, `features list`, the stderr grammars and the
-model-facing tool catalog).
+codex-in-claude `cli_contract.py`, verified against codex-cli 0.152.0/0.153.x; 0.154.0 is
+checked zero-spend only: `--help`, `features list`, the stderr grammars and the model-facing
+tool catalog; 0.155.1 likewise, but narrower: `--help`, the rows of `features list` amicus
+sends, the unknown-feature and strict-config grammars, the four `-c` pins under
+`--strict-config`, and gpt-5.5's tool catalog).
 
 Every assumption amicus makes about the `codex` CLI — subcommands, flags, sandbox values,
 config keys it pins, the event/result extraction surface, and the stderr phrasings that

@@ -26,8 +26,10 @@ per-change, as its own lead says.
   checked against 0.154.0 at zero spend: `--help`, `exec --help`, `exec review --help` and
   `login --help` are byte-identical, the unknown-feature error and the logged-out `login status`
   line are unchanged, both features amicus disables on every run are still `stable`, the cached
-  model list is the same seven slugs in the same order, and the tool list sent to `gpt-5.5` is
-  identical with and without those disables. No paid call was part of the check (#187).
+  model list is the same seven slugs in the same order, the tool list sent to `gpt-5.5` is
+  identical with and without those disables, and the four config keys amicus pins with `-c` are
+  accepted under `--strict-config` while an unknown key is still rejected in the form amicus
+  parses. No paid call was part of the check (#187).
 
 ### Fixed
 
