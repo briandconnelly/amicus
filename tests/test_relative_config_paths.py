@@ -54,13 +54,40 @@ def test_a_relative_bin_override_is_refused_even_where_it_resolves(
     assert "absolute path" in (getattr(binary, resolver)(relative).override_error() or "")
 
 
-def test_a_relative_state_dir_is_a_config_error_and_the_default_is_used(clean_env):
-    default = config.settings({}).state_dir
+def test_a_relative_state_dir_is_fatal_not_a_silent_move_to_the_default(clean_env):
+    """An operator who named a directory chose where whole answers are kept. Falling back
+    to the default would persist them somewhere they did not choose, and only a client that
+    reads `config_errors` would ever know, so the error is fatal as well as reported."""
     s = config.settings({"AMICUS_STATE_DIR": "relative-secret-name/jobs"})
-    assert s.state_dir == default and s.state_dir.is_absolute()
     [error] = s.config_errors
+    assert s.fatal_errors == (error,)
     assert "AMICUS_STATE_DIR" in error and "absolute path" in error
     assert "relative-secret-name" not in error, "the value is never echoed"
+    assert s.state_dir.is_absolute(), "whatever an embedder does, no cwd-relative store"
+
+
+def test_main_refuses_to_start_on_a_relative_state_dir(clean_env, monkeypatch, capsys):
+    from amicus import server
+
+    started = []
+
+    class FakeApp:
+        def run(self):
+            started.append("run")
+
+    monkeypatch.setattr(server, "create_app", lambda *a, **k: FakeApp())
+    # Control: with an absolute directory main() reaches the transport loop.
+    monkeypatch.setenv("AMICUS_STATE_DIR", "/nonexistent/amicus-test-state")
+    server.main()
+    assert started == ["run"]
+
+    monkeypatch.setenv("AMICUS_STATE_DIR", "relative-secret-name/jobs")
+    with pytest.raises(SystemExit) as exc:
+        server.main()
+    assert exc.value.code == 1 and started == ["run"], "the app must never run"
+    err = capsys.readouterr().err
+    assert "AMICUS_STATE_DIR" in err and "absolute path" in err
+    assert "relative-secret-name" not in err
 
 
 def test_an_absolute_or_home_relative_state_dir_is_accepted(clean_env, tmp_path):
@@ -74,6 +101,10 @@ def test_a_relative_xdg_cache_home_is_ignored_as_the_xdg_spec_requires(clean_env
     be ignored. Control: an absolute one is honoured, so the variable is being read."""
     honoured = config.settings({"XDG_CACHE_HOME": str(tmp_path)})
     assert honoured.state_dir == tmp_path / "amicus" / "jobs"
-    ignored = config.settings({"XDG_CACHE_HOME": "relative-cache"})
-    assert ignored.state_dir == config.settings({}).state_dir
-    assert ignored.state_dir.is_absolute() and ignored.config_errors == ()
+    default = config.settings({}).state_dir
+    # `~/cache` is relative as written; the spec tests the value itself, and nothing in it
+    # asks for shell-style tilde expansion, so it is ignored rather than expanded.
+    for raw in ("relative-cache", "~/cache", "~nosuchuser/cache", "", "   "):
+        ignored = config.settings({"XDG_CACHE_HOME": raw})
+        assert ignored.state_dir == default, raw
+        assert ignored.state_dir.is_absolute() and ignored.config_errors == ()

@@ -149,6 +149,8 @@ class Settings:
     env_warnings: tuple[str, ...]
     config_errors: tuple[str, ...]
     placeholders: tuple[str, ...]
+    # The subset of config_errors with no safe default: `server.main` refuses to start.
+    fatal_errors: tuple[str, ...] = ()
 
 
 def _bounded_int(
@@ -201,8 +203,11 @@ def settings(environ: Mapping[str, str] | None = None) -> Settings:
             return own if own is not None else GLOBAL_ENV.var(name).default
 
     # A relative directory would name one place to the server and another to a job worker,
-    # which runs with cwd=<job_dir>, so it is refused rather than anchored (#173). The
-    # value is operator-controlled and unbounded, so the error names the variable only.
+    # which runs with cwd=<job_dir>, so it is refused rather than anchored (#173). It is
+    # fatal, not defaulted: the operator chose where whole answers are kept, and the default
+    # is somewhere they did not choose. The value is operator-controlled and unbounded, so
+    # the error names the variable only.
+    fatal: list[str] = []
     state_dir = None
     state_raw = get("AMICUS_STATE_DIR")
     if state_raw:
@@ -210,13 +215,15 @@ def settings(environ: Mapping[str, str] | None = None) -> Settings:
         if candidate.is_absolute():
             state_dir = candidate
         else:
-            errors.append(
-                "AMICUS_STATE_DIR must be an absolute path (or start with ~); the relative "
-                "value is ignored and the default job directory is used"
+            fatal.append(
+                "AMICUS_STATE_DIR must be an absolute path (or start with ~); amicus will "
+                "not start with a relative one, and will not fall back to the default"
             )
+            errors.extend(fatal)
     if state_dir is None:
-        # XDG Base Directory: a relative $XDG_CACHE_HOME is invalid and must be ignored.
-        base = Path(env.get("XDG_CACHE_HOME") or "").expanduser()
+        # XDG Base Directory: a $XDG_CACHE_HOME that is not absolute AS WRITTEN is invalid
+        # and must be ignored, so it is tested before, and instead of, any ~ expansion.
+        base = Path(env.get("XDG_CACHE_HOME") or "")
         cache = base if base.is_absolute() else Path.home() / ".cache"
         state_dir = cache / "amicus" / "jobs"
     level = (get("AMICUS_LOG_LEVEL") or DEFAULT_LOG_LEVEL).strip().upper()
@@ -290,5 +297,6 @@ def settings(environ: Mapping[str, str] | None = None) -> Settings:
         allow_cwd_workspace=(get("AMICUS_ALLOW_CWD_WORKSPACE") or "0").strip().lower() in _TRUE,
         env_warnings=tuple(warnings),
         config_errors=tuple(errors),
+        fatal_errors=tuple(fatal),
         placeholders=tuple(report.placeholders),
     )

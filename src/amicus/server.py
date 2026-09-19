@@ -277,6 +277,10 @@ def main() -> None:
     """Console-script entrypoint: run the MCP server over stdio, failing legibly."""
     _enforce_posix_platform()
     settings = config.settings()
+    if settings.fatal_errors:
+        for problem in settings.fatal_errors:
+            sys.stderr.write(f"amicus cannot start: {problem}.\n")
+        raise SystemExit(1)
     log = obs.configure(settings)
     _install_signal_logging(log)
     log.info("amicus %s starting (stdio)", __version__)

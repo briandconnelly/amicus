@@ -31,11 +31,13 @@ per-change, as its own lead says.
 - A relative `AMICUS_STATE_DIR`, `AMICUS_CODEX_BIN`, `AMICUS_KIMI_BIN` or `AMICUS_CLAUDE_BIN` is
   now refused instead of being resolved against the process's working directory. The server and
   each job worker resolve configuration separately, and a worker runs from its job directory, so
-  a relative value named one place to the server and another to the worker. A relative state
-  directory is reported under `config_errors` on `amicus_backends` and the default directory is
-  used; a relative binary override makes that backend report the override as unusable, as a
-  missing file already did. Absolute values and `~` are unchanged. A relative `$XDG_CACHE_HOME`
-  is ignored, as the XDG Base Directory specification requires (#173).
+  a relative value named one place to the server and another to the worker. With a relative
+  state directory the server now refuses to start, naming the variable on stderr: falling back
+  to the default would keep whole answers somewhere the operator did not choose. A relative
+  binary override makes that backend report the override as unusable, as a missing file already
+  did. Absolute values and `~` are unchanged. A `$XDG_CACHE_HOME` that is not absolute as
+  written, `~/cache` included, is ignored, as the XDG Base Directory specification requires
+  (#173).
 - `config.settings()` no longer documents itself as never raising: it never raises on a
   malformed or conflicting setting, and an unresolvable home directory is a startup failure
   (#147).
