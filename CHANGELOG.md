@@ -20,14 +20,13 @@ per-change, as its own lead says.
 
 ## [Unreleased]
 
-### Removed
+## [0.5.0] - 2026-09-20
 
-- **Breaking.** `amicus_dry_run`, the deprecated alias of `amicus_review_changes_dry_run`, is
-  removed. It was deprecated in 0.3.0 (#98) with a marker in its lifecycle `_meta`, on its
-  `amicus_capabilities` row and at the head of its description, each naming 0.5.0, and ADR 0028
-  removes a tool at the end of its window. Call `amicus_review_changes_dry_run` with the same
-  arguments. The server now lists 18 tools, and no tool carries a deprecation marker; the
-  mechanism and `amicus_capabilities.deprecation_policy` stay (#204).
+Across this release the discovery surface moves `amicus/0.1/schema-35`, what 0.4.0 shipped, to
+`amicus/0.1/schema-39`, and stored job results move `RESULT_FORMAT` 7 to 9, so a job result 0.4.0
+stored cannot be delivered after upgrading. The entries labelled **Breaking** are the changes a
+caller or operator using 0.4.0 has to handle, and `docs/MIGRATION.md` ("Upgrading from 0.4.0")
+walks through each. It was checked against codex-cli 0.155, Kimi Code 2.0 and Claude Code 2.1.278.
 
 ### Changed
 
@@ -56,6 +55,15 @@ per-change, as its own lead says.
   accepted under `--strict-config` while an unknown key is still rejected in the form amicus
   parses. No paid call was part of the check (#187).
 
+### Removed
+
+- **Breaking.** `amicus_dry_run`, the deprecated alias of `amicus_review_changes_dry_run`, is
+  removed. It was deprecated in 0.3.0 (#98) with a marker in its lifecycle `_meta`, on its
+  `amicus_capabilities` row and at the head of its description, each naming 0.5.0, and ADR 0028
+  removes a tool at the end of its window. Call `amicus_review_changes_dry_run` with the same
+  arguments. The server now lists 18 tools, and no tool carries a deprecation marker; the
+  mechanism and `amicus_capabilities.deprecation_policy` stay (#204).
+
 ### Fixed
 
 - **Surface.** A replayed keyed `_async` call can hand back a job that is already terminal, and
@@ -83,10 +91,10 @@ per-change, as its own lead says.
   standing in only for a clean exit diagnosed as empty. A Kimi run whose stream carried the
   answer, captured whole, is delivered with a `meta.security_warnings` entry. A delegate with no
   such answer keeps its captured diff, with amicus's own summary saying the backend's could not
-  be read and `raw_response.text` left null. An absent or empty file is unchanged: that is the backend saying nothing. The
-  reader also now reads to the end of the file, where one short `read` could have delivered a
-  prefix as the whole answer. `FINGERPRINT` moves to schema-37 for the new code, and
-  `RESULT_FORMAT` moves 8 to 9 (#162).
+  be read and `raw_response.text` left null. An absent or empty file is unchanged: that is the
+  backend saying nothing. The reader also now reads to the end of the file, where one short
+  `read` could have delivered a prefix as the whole answer. The new error code is one of the two changes that move
+  `RESULT_FORMAT` in this release, since an older reader's closed set of codes rejects it (#162).
 - **Breaking.** A finding that cited one of amicus's own temporary files no longer carries it.
   Kimi is handed its prompt as a file, so a finding could come back with `file` set to
   `<tmp>/amicus-kimi-handshake-…/prompt.md` and `line` set to an offset into amicus's framing:
@@ -101,9 +109,9 @@ per-change, as its own lead says.
   A JSON answer is judged by what it decodes to, object keys included, whatever spelling it
   used; an answer that is prose around a JSON fragment is never decoded, so there the `\/` and
   `\u002f` spellings of a separator are recognised and a path spelled wholly in `\uXXXX` is
-  not (#207). `FINGERPRINT` moves to schema-36 for the new reason, and
-  `RESULT_FORMAT` moves 7 to 8, so a job result 0.4.0 stored is `job_result_incompatible`
-  after upgrading: fetch it first (`docs/MIGRATION.md`, "Upgrading from 0.4.0") (#140).
+  not (#207). The new reason is the other change that moves `RESULT_FORMAT`, so a job result
+  0.4.0 stored is `job_result_incompatible` after upgrading: fetch it first
+  (`docs/MIGRATION.md`, "Upgrading from 0.4.0") (#140).
 
 - The codex live gate, whose passing run is part of the evidence a release is tagged on, could
   pass on a codex version amicus had never checked: it asserted only the `codex-cli` prefix, as
@@ -826,7 +834,8 @@ per-change rather than net, so they also name intermediate states that no releas
 - The tagged publish path to pypi.org has never run. Only the TestPyPI dispatch path has been exercised.
 - Eval scenario S6 in `skills/collaborating-with-amicus/tests/scenarios.md` passed on one run (status: `pass`, validated by that run alone); an M7 follow-up run against the current skill text did not isolate the still-open F3 finding, so F3 remains open. S7 (real-host approval friction) has failed both of its recorded runs (status: `fail`); an M7 zero-spend recheck reached neither a pass nor a fail and is recorded as inconclusive, so it does not move S7's status. See their `status` fields and ADR 0012.
 
-[Unreleased]: https://github.com/briandconnelly/amicus/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/briandconnelly/amicus/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/briandconnelly/amicus/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/briandconnelly/amicus/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/briandconnelly/amicus/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/briandconnelly/amicus/compare/v0.1.0...v0.2.0
