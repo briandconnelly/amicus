@@ -6,6 +6,7 @@ jobs run exactly this."""
 
 from __future__ import annotations
 
+import errno
 import os
 from stat import S_ISREG
 from typing import TYPE_CHECKING, Any
@@ -31,34 +32,59 @@ if TYPE_CHECKING:  # pragma: no cover
 MAX_ARTIFACT_BYTES = 1_000_000
 
 
-def _read_bounded(path: str) -> str:
-    """An artifact, or "" if it is anything but a plain small regular file. A delegate's
-    answer file is written by a full-tool agent, so its path is model-controlled at read
-    time: O_NOFOLLOW rejects a substituted symlink, O_NONBLOCK keeps a FIFO from blocking
-    before fstat can reject it, and the cap bounds memory (ADR 0009)."""
+# Why amicus declined an artifact that WAS there (#162). An absent file is not here: the
+# backend wrote nothing, which is a different fact from amicus refusing what it wrote.
+REFUSED_OVERSIZE = "oversize"
+REFUSED_NOT_REGULAR = "not_regular_file"
+REFUSED_UNREADABLE = "unreadable"
+
+
+def _read_bounded(path: str) -> tuple[str, str | None]:
+    """(text, refusal): an artifact's text, or "" with why amicus would not read it. A
+    delegate's answer file is written by a full-tool agent, so its path is model-controlled
+    at read time: O_NOFOLLOW rejects a substituted symlink, O_NONBLOCK keeps a FIFO from
+    blocking before fstat can reject it, and the cap bounds memory (ADR 0009)."""
     try:
         fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-    except OSError:
-        return ""
+    except FileNotFoundError:
+        return "", None
+    except OSError as exc:
+        # ELOOP is what O_NOFOLLOW raises for a symlink at the final component.
+        return "", REFUSED_NOT_REGULAR if exc.errno == errno.ELOOP else REFUSED_UNREADABLE
     try:
         st = os.fstat(fd)
-        if not S_ISREG(st.st_mode) or st.st_size > MAX_ARTIFACT_BYTES:
-            return ""
-        raw = os.read(fd, MAX_ARTIFACT_BYTES)
+        if not S_ISREG(st.st_mode):
+            return "", REFUSED_NOT_REGULAR
+        if st.st_size > MAX_ARTIFACT_BYTES:
+            return "", REFUSED_OVERSIZE
+        # `os.read` may return short, and the file can grow after fstat, so the size check
+        # above is an early exit and this loop is the bound: one byte past the cap is
+        # enough to know, and never more than that is held.
+        chunks: list[bytes] = []
+        remaining = MAX_ARTIFACT_BYTES + 1
+        while remaining > 0 and (chunk := os.read(fd, remaining)):
+            chunks.append(chunk)
+            remaining -= len(chunk)
     except OSError:
-        return ""
+        return "", REFUSED_UNREADABLE
     finally:
         os.close(fd)
-    return raw.decode("utf-8", "replace")
+    if remaining <= 0:
+        return "", REFUSED_OVERSIZE
+    return b"".join(chunks).decode("utf-8", "replace"), None
 
 
-def _read_artifacts(prepared: PreparedRun) -> dict[str, str]:
+def _read_artifacts(prepared: PreparedRun) -> tuple[dict[str, str], dict[str, str]]:
+    """(texts, refused): the artifacts that had text, and the ones amicus declined, by name."""
     texts: dict[str, str] = {}
+    refused: dict[str, str] = {}
     for name, path in prepared.artifact_paths.items():
-        text = _read_bounded(path)
-        if text:
+        text, refusal = _read_bounded(path)
+        if refusal is not None:
+            refused[name] = refusal
+        elif text:
             texts[name] = text
-    return texts
+    return texts, refused
 
 
 def _site_error(exc: SiteError, meta: Any, plugin: BackendPlugin) -> dict[str, Any]:
@@ -183,7 +209,8 @@ async def run_request(
                     orphan_marker=prepared.orphan_marker,
                 )
                 # Inside the context on purpose: staging is torn down on exit.
-                artifact_texts = _read_artifacts(prepared)
+                # The refusals are not acted on yet: how one surfaces is #162's open half.
+                artifact_texts, _refused = _read_artifacts(prepared)
             if plugin.contract.needs_orphan_sweep and prepared.orphan_marker:
                 runtime.sweep_orphans(prepared.orphan_marker)
             outcome = RunOutcome(run=run, events=run.stdout, artifact_texts=artifact_texts)

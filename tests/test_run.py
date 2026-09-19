@@ -303,4 +303,66 @@ def test_artifact_reads_are_hardened(tmp_path):
             "missing": str(tmp_path / "missing"),
         },
     )
-    assert run_mod._read_artifacts(prepared) == {"normal": "hello"}
+    texts, refused = run_mod._read_artifacts(prepared)
+    assert texts == {"normal": "hello"}
+    # A refusal is amicus declining a file that IS there (#162). An absent file and an empty
+    # one are the backend writing nothing, which is a different fact and not a refusal.
+    assert refused == {"link": "not_regular_file", "big": "oversize", "fifo": "not_regular_file"}
+
+
+def test_a_file_at_the_cap_is_read_and_one_byte_over_is_refused(tmp_path):
+    from amicus.sdk.backend.protocol import PreparedRun
+
+    at_cap, over = tmp_path / "at", tmp_path / "over"
+    at_cap.write_bytes(b"x" * run_mod.MAX_ARTIFACT_BYTES)
+    over.write_bytes(b"x" * (run_mod.MAX_ARTIFACT_BYTES + 1))
+    prepared = PreparedRun(
+        argv=("x",),
+        env={},
+        cwd=str(tmp_path),
+        artifact_paths={"at": str(at_cap), "over": str(over)},
+    )
+    texts, refused = run_mod._read_artifacts(prepared)
+    assert len(texts["at"]) == run_mod.MAX_ARTIFACT_BYTES and refused == {"over": "oversize"}
+
+
+def test_a_short_read_does_not_deliver_a_partial_artifact(tmp_path, monkeypatch):
+    """`os.read` may return fewer bytes than asked for. One call could hand back a prefix
+    of the answer as if it were the whole of it, with nothing to say so (#162)."""
+    import os
+
+    from amicus.sdk.backend.protocol import PreparedRun
+
+    body = "0123456789" * 50
+    path = tmp_path / "answer.md"
+    path.write_text(body)
+    real_read = os.read
+    monkeypatch.setattr(run_mod.os, "read", lambda fd, n: real_read(fd, min(n, 7)))
+    prepared = PreparedRun(
+        argv=("x",), env={}, cwd=str(tmp_path), artifact_paths={"answer": str(path)}
+    )
+    texts, refused = run_mod._read_artifacts(prepared)
+    assert texts == {"answer": body} and refused == {}
+
+
+def test_a_file_that_grows_past_the_cap_after_fstat_is_refused(tmp_path, monkeypatch):
+    """The size check is an early exit, not the bound: a file can grow between fstat and
+    read, and the read itself has to notice."""
+    import os
+
+    from amicus.sdk.backend.protocol import PreparedRun
+
+    monkeypatch.setattr(run_mod, "MAX_ARTIFACT_BYTES", 10)
+    path = tmp_path / "answer.md"
+    path.write_text("x" * 11)
+    real_fstat = os.fstat
+
+    class Small:
+        def __init__(self, st):
+            self.st_mode, self.st_size = st.st_mode, 5
+
+    monkeypatch.setattr(run_mod.os, "fstat", lambda fd: Small(real_fstat(fd)))
+    prepared = PreparedRun(
+        argv=("x",), env={}, cwd=str(tmp_path), artifact_paths={"answer": str(path)}
+    )
+    assert run_mod._read_artifacts(prepared) == ({}, {"answer": "oversize"})
