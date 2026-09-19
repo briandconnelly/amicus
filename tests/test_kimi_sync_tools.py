@@ -118,6 +118,9 @@ async def test_a_finding_citing_the_handshake_prompt_is_delivered_without_it(
         json.dumps(
             {
                 "summary": "see {PROMPT_PATH}",
+                # The directory and an unlisted sibling: only the adapter's declared
+                # staging_dir covers these, since `artifacts` names neither.
+                "next_steps": ["ls {PROMPT_DIR}", "read {PROMPT_DIR}/notes.md"],
                 "findings": [
                     {
                         "title": "TEXT D is false",
@@ -129,7 +132,6 @@ async def test_a_finding_citing_the_handshake_prompt_is_delivered_without_it(
                 ],
                 "questions": [],
                 "assumptions": [],
-                "next_steps": [],
             }
         ),
     )
@@ -149,6 +151,7 @@ async def test_a_finding_citing_the_handshake_prompt_is_delivered_without_it(
     }
     # Control: the fake really did substitute a path, so its absence below means something.
     assert "[amicus temporary file]" in body["summary"]
+    assert body["next_steps"] == ["ls [amicus temporary file]", "read [amicus temporary file]"]
     delivered = json.dumps(body)
     assert "amicus-kimi-handshake-" not in delivered and "prompt.md" not in delivered
     store = lifecycle.job_store(config.settings())
