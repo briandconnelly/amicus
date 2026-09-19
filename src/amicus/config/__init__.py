@@ -97,7 +97,8 @@ GLOBAL_ENV = EnvNamespace(
             removed=_retired("GIT_TIMEOUT_SECONDS"),
         ),
         EnvVar(
-            "AMICUS_STATE_DIR", "Directory for job records; default $XDG_CACHE_HOME/amicus/jobs."
+            "AMICUS_STATE_DIR",
+            "Absolute directory for job records; default $XDG_CACHE_HOME/amicus/jobs.",
         ),
         EnvVar(
             "AMICUS_LOG_LEVEL",
@@ -179,8 +180,10 @@ def _profile(raw: str | None, errors: list[str]) -> tuple[str, ...]:
 
 
 def settings(environ: Mapping[str, str] | None = None) -> Settings:
-    """Resolve every setting once. Never raises: problems ride `env_warnings`,
-    `config_errors` and `placeholders` so `amicus_backends` can report them."""
+    """Resolve every setting once. Never raises on a malformed or conflicting setting:
+    those ride `env_warnings`, `config_errors` and `placeholders` so `amicus_backends` can
+    report them. A home directory that cannot be resolved is not that kind of problem and
+    does raise (`Path.home`/`expanduser`, RuntimeError), as a startup failure (#147)."""
     report = GLOBAL_ENV.report(environ)
     warnings = list(report.warnings)
     errors = list(report.errors)
@@ -197,14 +200,25 @@ def settings(environ: Mapping[str, str] | None = None) -> Settings:
                 own = None
             return own if own is not None else GLOBAL_ENV.var(name).default
 
+    # A relative directory would name one place to the server and another to a job worker,
+    # which runs with cwd=<job_dir>, so it is refused rather than anchored (#173). The
+    # value is operator-controlled and unbounded, so the error names the variable only.
+    state_dir = None
     state_raw = get("AMICUS_STATE_DIR")
     if state_raw:
-        state_dir = Path(state_raw).expanduser()
-    else:
-        base = env.get("XDG_CACHE_HOME")
-        state_dir = (
-            (Path(base).expanduser() if base else Path.home() / ".cache") / "amicus" / "jobs"
-        )
+        candidate = Path(state_raw).expanduser()
+        if candidate.is_absolute():
+            state_dir = candidate
+        else:
+            errors.append(
+                "AMICUS_STATE_DIR must be an absolute path (or start with ~); the relative "
+                "value is ignored and the default job directory is used"
+            )
+    if state_dir is None:
+        # XDG Base Directory: a relative $XDG_CACHE_HOME is invalid and must be ignored.
+        base = Path(env.get("XDG_CACHE_HOME") or "").expanduser()
+        cache = base if base.is_absolute() else Path.home() / ".cache"
+        state_dir = cache / "amicus" / "jobs"
     level = (get("AMICUS_LOG_LEVEL") or DEFAULT_LOG_LEVEL).strip().upper()
     return Settings(
         enabled_backends=_profile(get("AMICUS_BACKENDS"), errors),

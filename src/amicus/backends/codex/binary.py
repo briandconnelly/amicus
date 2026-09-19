@@ -88,6 +88,14 @@ def codex_bin(config: CodexConfig) -> str:
     """The token to spawn. Raises BinaryNotFoundError for an unusable override; the
     message names the env var and never its value (operator-controlled, unbounded)."""
     if config.bin_override:
+        # A relative override names one file to the server and another to a job worker,
+        # which runs with cwd=<job_dir>; refuse it rather than resolve it twice (#173).
+        if not Path(config.bin_override).is_absolute():
+            raise BinaryNotFoundError(
+                f"{ENV_VAR} is set, but it is not an absolute path. A relative value, or a "
+                "bare command name, would resolve against whichever directory the process "
+                "happens to be in."
+            )
         if not _is_executable_file(Path(config.bin_override)):
             raise BinaryNotFoundError(
                 f"{ENV_VAR} is set, but it does not name an executable file on disk "
