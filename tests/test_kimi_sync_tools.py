@@ -233,6 +233,7 @@ async def test_discovery_tools_read_the_fake(app, tmp_path, repo):
     assert {o["name"] for o in entry["options"]} == {"isolation"}
     assert entry["options"][0]["allowed_values"] == ["inherit", "ignore-skills"]
     assert "handshake" in entry["carriers"] and "Kimi provider" in entry["egress"]
+    assert "session files" in entry["carriers"] and "session files" in entry["readonly_honesty"]
     body = models.structured_content
     assert body["source"] == "live" and [m["slug"] for m in body["models"]] == ["k3"]
     assert body["models"][0]["supported_reasoning_efforts"] == ["low", "medium", "high"]

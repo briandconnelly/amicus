@@ -51,3 +51,4 @@ The boundary is checked by carrier, not by semantic derivation: `tests/test_sync
 Statements that were overbroad under the exception are narrowed to the input half: `request.py`'s module docstring and the design spec's "Jobs and tasks" section.
 `FINGERPRINT` moves to schema-35 for the description text; `RESULT_FORMAT` does not move, since nothing stored changes.
 Kimi's own session log, which keeps the full prompt and answer outside amicus's retention, is a separate disclosure gap filed as #179.
+That gap was closed by disclosure, not deletion: Kimi's `CARRIERS` and read-only statement now name the session store, and `docs/kimi-help/0.43.1/FINDINGS.md` records why amicus does not remove it.

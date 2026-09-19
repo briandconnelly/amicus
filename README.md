@@ -128,6 +128,10 @@ the backend and the feature, rather than failing obscurely.
   (`AMICUS_JOB_TTL`, default 24h; an expired record is removed on a later job call, not by a
   daemon), the per-workspace cap evicts it or `amicus_job_consume_result` removes it. It can
   quote what you sent. Your inputs themselves are never written there ([ADR 0035](docs/adr/0035-a-backend-answer-is-kept-on-the-job-record.md)).
+- **Kimi keeps its own copy.** The kimi CLI writes its own session files (observed under
+  `~/.kimi-code/sessions`), which can hold the whole prompt and any answer produced. amicus found
+  no documented way to switch that off and does not delete them, and none of the retention controls above reach it; Codex and Claude
+  run with their session persistence disabled.
 
 ## Configuration
 

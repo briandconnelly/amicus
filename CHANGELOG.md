@@ -20,6 +20,15 @@ per-change, as its own lead says.
 
 ## [Unreleased]
 
+### Fixed
+
+- Kimi's `carriers` disclosure on `amicus_backends(detail="full")` now names the kimi CLI's own
+  session store (observed under `~/.kimi-code/sessions`), whose files can hold the whole prompt and
+  any answer produced. amicus does not delete it, and `AMICUS_JOB_TTL`, the per-workspace cap and
+  `amicus_job_consume_result` never reach it. Kimi's `readonly_honesty` no longer says Kimi
+  "cannot MODIFY anything": read-only removes the agent's shell and write tools, not the CLI's
+  own session files. Nothing about what is written changed; only what is said about it (#179).
+
 ## [0.4.0] - 2026-09-18
 
 Across this release the discovery surface moves `amicus/0.1/schema-30`, what 0.3.0 shipped, to
