@@ -30,6 +30,8 @@ _FEATURE_CODES = _pe.feature_codes(frozenset({"model_validation", "empty_respons
 
 LOCAL_CODES = frozenset(
     {
+        # amicus's own orchestration refused to read the file a backend answered in (#162).
+        "answer_unavailable",
         # The registry recorded the backend as unavailable (import, conformance, config).
         "backend_unavailable",
         # The backend does not declare the feature this verb needs (e.g. claude+delegate).
@@ -53,6 +55,7 @@ ERROR_CODES: tuple[str, ...] = tuple(
     sorted(_pe.UNIVERSAL_CODES | GENERALIZED_BACKEND_CODES | _FEATURE_CODES | LOCAL_CODES)
 )
 ErrorCode = Literal[
+    "answer_unavailable",
     "api_key_invalid",
     "api_key_missing",
     "backend_auth_indeterminate",

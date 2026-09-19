@@ -108,8 +108,19 @@ def main(argv: list[str]) -> int:
         answer = answer.replace("{PROMPT_DIR}", str(Path(path).parent))
         stderr = stderr.replace("{PROMPT_PATH}", path) if stderr else stderr
     answer_match = _ANSWER_POINTER.search(pointer)
-    if answer_match and answer:
-        Path(answer_match.group(1)).write_text(answer, encoding="utf-8")
+    mode = os.environ.get("FAKE_KIMI_ANSWER_MODE")
+    if answer_match and mode == "empty":
+        # A readable file with nothing in it: the backend saying nothing, not a refusal.
+        Path(answer_match.group(1)).write_text("", encoding="utf-8")
+    elif answer_match and answer:
+        target = Path(answer_match.group(1))
+        if mode == "symlink":
+            # An answer file amicus must refuse to read (#162, ADR 0009).
+            real = target.with_name(target.name + ".real")
+            real.write_text(answer, encoding="utf-8")
+            target.symlink_to(real)
+        else:
+            target.write_text(answer, encoding="utf-8")
     write = os.environ.get("FAKE_KIMI_WRITE")
     if write:
         (Path.cwd() / write).write_text("written by fake kimi\n", encoding="utf-8")

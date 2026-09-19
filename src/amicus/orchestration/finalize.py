@@ -437,8 +437,7 @@ def _parse_reviewed(
             error_envelope(
                 "invalid_json",
                 f"the backend exited 0 but amicus read no answer for the {noun}: it returned "
-                "none, or an answer file amicus refuses to read (not a regular file, or over "
-                "the artifact cap).",
+                "none. (An answer file amicus refuses to read is answer_unavailable instead.)",
                 meta,
                 plugin=plugin,
             ),
@@ -555,14 +554,20 @@ def delegate_result(
     aliases: tuple[str, ...],
     max_diff_bytes: int,
     refs: ArtifactRefs = NO_ARTIFACTS,
+    summary_override: str | None = None,
 ) -> dict[str, Any]:
+    """`summary_override` is amicus's own account, given when the backend's answer could
+    not be read (#162). It becomes the summary and nothing else: `raw_response.text` is the
+    backend's words, so it stays null rather than carry amicus's."""
     apply_exec(meta, result)
     stat = _diffstat(diff)
     meta.context_summary = stat
     answer = scrub_answer(result.answer, refs) if result.answer else None
     last_message = pathalias.sanitize_prose(answer, aliases)
     summary_text = pathalias.sanitize_echo_prose(answer, aliases)
-    summary = (summary_text or "").strip() or "(the backend returned no summary)"
+    summary = (
+        summary_override or (summary_text or "").strip() or "(the backend returned no summary)"
+    )
     if not diff.strip():
         summary = f"The backend made no changes. {summary}"
         bounded = ""

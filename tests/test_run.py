@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import json
 import subprocess
 from pathlib import Path
 
@@ -303,4 +304,262 @@ def test_artifact_reads_are_hardened(tmp_path):
             "missing": str(tmp_path / "missing"),
         },
     )
-    assert run_mod._read_artifacts(prepared) == {"normal": "hello"}
+    texts, refused = run_mod._read_artifacts(prepared)
+    assert texts == {"normal": "hello"}
+    # A refusal is amicus declining a file that IS there (#162). An absent file and an empty
+    # one are the backend writing nothing, which is a different fact and not a refusal.
+    assert {name: r.reason for name, r in refused.items()} == {
+        "link": "not_regular_file",
+        "big": "oversize",
+        "fifo": "not_regular_file",
+    }
+    assert refused["big"].size == run_mod.MAX_ARTIFACT_BYTES + 1 and refused["link"].size is None
+
+
+def test_a_file_at_the_cap_is_read_and_one_byte_over_is_refused(tmp_path):
+    from amicus.sdk.backend.protocol import PreparedRun
+
+    at_cap, over = tmp_path / "at", tmp_path / "over"
+    at_cap.write_bytes(b"x" * run_mod.MAX_ARTIFACT_BYTES)
+    over.write_bytes(b"x" * (run_mod.MAX_ARTIFACT_BYTES + 1))
+    prepared = PreparedRun(
+        argv=("x",),
+        env={},
+        cwd=str(tmp_path),
+        artifact_paths={"at": str(at_cap), "over": str(over)},
+    )
+    texts, refused = run_mod._read_artifacts(prepared)
+    assert len(texts["at"]) == run_mod.MAX_ARTIFACT_BYTES
+    assert refused == {"over": run_mod.Refusal("oversize", run_mod.MAX_ARTIFACT_BYTES + 1)}
+
+
+def test_a_short_read_does_not_deliver_a_partial_artifact(tmp_path, monkeypatch):
+    """`os.read` may return fewer bytes than asked for. One call could hand back a prefix
+    of the answer as if it were the whole of it, with nothing to say so (#162)."""
+    import os
+
+    from amicus.sdk.backend.protocol import PreparedRun
+
+    body = "0123456789" * 50
+    path = tmp_path / "answer.md"
+    path.write_text(body)
+    real_read = os.read
+    monkeypatch.setattr(run_mod.os, "read", lambda fd, n: real_read(fd, min(n, 7)))
+    prepared = PreparedRun(
+        argv=("x",), env={}, cwd=str(tmp_path), artifact_paths={"answer": str(path)}
+    )
+    texts, refused = run_mod._read_artifacts(prepared)
+    assert texts == {"answer": body} and refused == {}
+
+
+def test_a_file_that_grows_past_the_cap_after_fstat_is_refused(tmp_path, monkeypatch):
+    """The size check is an early exit, not the bound: a file can grow between fstat and
+    read, and the read itself has to notice."""
+    import os
+
+    from amicus.sdk.backend.protocol import PreparedRun
+
+    monkeypatch.setattr(run_mod, "MAX_ARTIFACT_BYTES", 10)
+    path = tmp_path / "answer.md"
+    path.write_text("x" * 11)
+    real_fstat = os.fstat
+
+    class Small:
+        def __init__(self, st):
+            self.st_mode, self.st_size = st.st_mode, 5
+
+    monkeypatch.setattr(run_mod.os, "fstat", lambda fd: Small(real_fstat(fd)))
+    prepared = PreparedRun(
+        argv=("x",), env={}, cwd=str(tmp_path), artifact_paths={"answer": str(path)}
+    )
+    # Its size was never learned: fstat lied, and the read stopped one byte past the cap.
+    assert run_mod._read_artifacts(prepared) == ({}, {"answer": run_mod.Refusal("oversize")})
+
+
+def test_only_a_refused_answer_artifact_is_a_refused_answer(tmp_path):
+    """Codex lists its input schema in `artifact_paths` beside the answer. A refused schema
+    with an absent answer is the backend writing nothing, not amicus refusing an answer."""
+    from amicus.sdk.backend.protocol import PreparedRun
+
+    big = tmp_path / "schema.json"
+    big.write_bytes(b"x" * (run_mod.MAX_ARTIFACT_BYTES + 1))
+    prepared = PreparedRun(
+        argv=("x",),
+        env={},
+        cwd=str(tmp_path),
+        artifact_paths={"last-message": str(tmp_path / "absent"), "schema": str(big)},
+        answer_artifacts=("last-message",),
+    )
+    _, refused = run_mod._read_artifacts(prepared)
+    assert set(refused) == {"schema"}, "control: something WAS refused"
+    assert run_mod._answer_refusal(prepared, refused) is None
+    swapped = PreparedRun(
+        argv=("x",),
+        env={},
+        cwd=str(tmp_path),
+        artifact_paths=prepared.artifact_paths,
+        answer_artifacts=("schema",),
+    )
+    assert run_mod._answer_refusal(swapped, refused) == refused["schema"]
+
+
+# --- #162: what a refused answer artifact may and may not override -------------------------
+
+
+def _refusing(base, tmp_path):
+    """`base` with an answer artifact amicus will refuse (a symlink), answering on stdout."""
+    import contextlib
+
+    from amicus.sdk.backend.protocol import PreparedRun
+
+    real = tmp_path / "answer.real"
+    real.write_text("from the file")
+    link = tmp_path / "answer.md"
+    link.symlink_to(real)
+
+    class Refusing(base):
+        def prepare(self, request):
+            @contextlib.asynccontextmanager
+            async def _cm():
+                yield PreparedRun(
+                    argv=("fake",),
+                    env={},
+                    cwd=request.cwd,
+                    stdin_text=request.prompt,
+                    artifact_paths={"answer": str(link)},
+                    answer_artifacts=("answer",),
+                )
+
+            return _cm()
+
+    return fakeplugin.make_plugin(backend=Refusing())
+
+
+async def test_a_refusal_never_hides_an_inspectors_own_failure(monkeypatch, tmp_path):
+    """Only the empty-answer diagnosis is explained by a refusal. Any other failure an
+    inspector reports on a clean exit (auth, a rate limit, a budget stop) is its own fact."""
+    monkeypatch.setattr(run_mod.runtime, "run_async", cf.scripted_run_async(stdout="INSPECT_FAIL"))
+    out = await run_mod.run_request(_spec(), _refusing(fakeplugin.InspectingBackend, tmp_path))
+    assert out["ok"] is False and out["error"]["code"] == "nonzero_exit"
+    assert "inspector said no" in out["error"]["message"]
+
+
+@pytest.mark.parametrize("flag", ["output_truncated", "capture_failed"])
+async def test_a_stream_that_was_not_captured_whole_is_no_substitute(monkeypatch, tmp_path, flag):
+    """With the answer file refused, the stream is the only answer left, and a truncated or
+    failed capture may have lost the true final message while an earlier one still parses."""
+    import dataclasses
+
+    scripted = cf.scripted_run_async(stdout="an earlier message")
+
+    async def damaged(*args, **kwargs):
+        return dataclasses.replace(await scripted(*args, **kwargs), **{flag: True})
+
+    plugin = _refusing(fakeplugin.FakeBackend, tmp_path)
+    monkeypatch.setattr(run_mod.runtime, "run_async", damaged)
+    out = await run_mod.run_request(_spec(), plugin)
+    assert out["ok"] is False and out["error"]["code"] == "answer_unavailable"
+    # Control: the same run captured whole IS delivered, with the warning.
+    monkeypatch.setattr(run_mod.runtime, "run_async", scripted)
+    ok = await run_mod.run_request(_spec(), plugin)
+    assert ok["ok"] is True and ok["summary"] == "an earlier message"
+    assert run_mod.ANSWER_REFUSED_WARNING in ok["meta"]["security_warnings"]
+
+
+def test_answer_unavailable_is_amicus_own_code_not_an_sdk_universal_one():
+    """The SDK's universal set is the intersection every bridge emits. This code comes from
+    amicus's own orchestration, for answer-file backends only (ADR 0030)."""
+    from amicus.errors import repair_table
+    from amicus.schemas import codes
+    from amicus.sdk.conventions import envelope
+
+    assert "answer_unavailable" in codes.LOCAL_CODES
+    assert "answer_unavailable" not in envelope.UNIVERSAL_CODES
+    rule = repair_table(None)["answer_unavailable"]
+    assert rule.next_step == "reduce_input" and rule.temporary is False
+
+
+@pytest.mark.parametrize("where", ["open", "fstat", "read"])
+def test_a_file_that_cannot_be_read_is_unreadable_never_absent(tmp_path, monkeypatch, where):
+    """An OSError that is not ELOOP or ENOENT, at any of the three calls. Mapping it back to
+    an absent file would turn a refusal into "the backend wrote nothing" again (#162)."""
+    import errno
+    import os
+
+    from amicus.sdk.backend.protocol import PreparedRun
+
+    path = tmp_path / "answer.md"
+    path.write_text("an answer")
+    real = getattr(os, where)
+
+    def failing(*args, **kwargs):
+        if where == "open" and args[0] != str(path):
+            return real(*args, **kwargs)
+        raise OSError(errno.EIO, "injected")
+
+    monkeypatch.setattr(run_mod.os, where, failing)
+    prepared = PreparedRun(
+        argv=("x",), env={}, cwd=str(tmp_path), artifact_paths={"answer": str(path)}
+    )
+    texts, refused = run_mod._read_artifacts(prepared)
+    assert texts == {} and refused == {"answer": run_mod.Refusal("unreadable")}
+
+
+def test_each_refusal_has_its_own_wire_reason_and_repair():
+    from amicus.request import meta_for
+
+    want = {
+        "oversize": ("artifact_oversize", "reduce_input"),
+        "not_regular_file": ("artifact_not_regular", "inspect_and_retry"),
+        "unreadable": ("artifact_unreadable", "inspect_and_retry"),
+    }
+    assert set(want) == set(run_mod._REFUSAL_WIRE), "a new refusal needs a wire shape"
+    for reason, (token, step) in want.items():
+        out = run_mod._answer_unavailable(
+            run_mod.Refusal(reason, 7), meta_for(_spec()), fakeplugin.make_plugin()
+        )
+        err = out["error"]
+        assert err["code"] == "answer_unavailable" and err["temporary"] is False
+        assert err["details"]["reason"] == token and err["repair"]["next_step"] == step
+        sized = reason == "oversize"
+        assert (err.get("actual_bytes") == 7) is sized and ("limit_bytes" in err) is sized
+
+
+@pytest.mark.parametrize(
+    ("code", "transient"),
+    [("EMFILE", True), ("ENFILE", True), ("ENOMEM", True), ("EACCES", False), ("EIO", False)],
+)
+def test_an_unreadable_file_is_temporary_only_when_the_cause_is(
+    tmp_path, monkeypatch, code, transient
+):
+    """Descriptor or memory exhaustion passes, so the identical call may succeed later; a
+    permission or I/O error does not. The errno decides and never reaches the wire."""
+    import errno
+    import os
+
+    from amicus.request import meta_for
+    from amicus.sdk.backend.protocol import PreparedRun
+
+    path = tmp_path / "answer.md"
+    path.write_text("an answer")
+    real_open = os.open
+
+    def failing(target, *args, **kwargs):
+        if target != str(path):
+            return real_open(target, *args, **kwargs)
+        raise OSError(getattr(errno, code), "injected")
+
+    monkeypatch.setattr(run_mod.os, "open", failing)
+    prepared = PreparedRun(
+        argv=("x",), env={}, cwd=str(tmp_path), artifact_paths={"answer": str(path)}
+    )
+    _, refused = run_mod._read_artifacts(prepared)
+    assert refused["answer"].reason == "unreadable" and refused["answer"].transient is transient
+    out = run_mod._answer_unavailable(
+        refused["answer"], meta_for(_spec()), fakeplugin.make_plugin()
+    )
+    err = out["error"]
+    assert err["details"]["reason"] == "artifact_unreadable"
+    assert err["temporary"] is transient
+    assert err["repair"]["next_step"] == ("retry_after_delay" if transient else "inspect_and_retry")
+    assert code not in json.dumps(out) and "injected" not in json.dumps(out)

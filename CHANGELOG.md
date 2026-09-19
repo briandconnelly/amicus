@@ -33,6 +33,22 @@ per-change, as its own lead says.
 
 ### Fixed
 
+- **Breaking.** An answer file amicus refuses to read is no longer delivered as an empty answer.
+  The bounded reader accepts only a regular file within 1,000,000 bytes (ADR 0009), and a file
+  it refused was indistinguishable from a backend that wrote nothing: a Codex review came back
+  `invalid_json`, and a Codex consult came back `ok: true` with "(the backend returned no
+  message)". Both are now the new error `answer_unavailable`, with `error.details.reason` one of
+  `artifact_oversize` (carrying `limit_bytes` and, when known, `actual_bytes`),
+  `artifact_not_regular` or `artifact_unreadable`, never the path. It is temporary only for an
+  unreadable file whose cause passes (descriptor or memory exhaustion); oversize repairs with
+  `reduce_input`. Every other failure is still reported as itself, a refusal
+  standing in only for a clean exit diagnosed as empty. A Kimi run whose stream carried the
+  answer, captured whole, is delivered with a `meta.security_warnings` entry. A delegate with no
+  such answer keeps its captured diff, with amicus's own summary saying the backend's could not
+  be read and `raw_response.text` left null. An absent or empty file is unchanged: that is the backend saying nothing. The
+  reader also now reads to the end of the file, where one short `read` could have delivered a
+  prefix as the whole answer. `FINGERPRINT` moves to schema-37 for the new code, and
+  `RESULT_FORMAT` moves 8 to 9 (#162).
 - **Breaking.** A finding that cited one of amicus's own temporary files no longer carries it.
   Kimi is handed its prompt as a file, so a finding could come back with `file` set to
   `<tmp>/amicus-kimi-handshake-…/prompt.md` and `line` set to an offset into amicus's framing:

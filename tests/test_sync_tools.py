@@ -27,6 +27,8 @@ def app(tmp_path, fake_codex, monkeypatch):
         "FAKE_CODEX_ANSWER",
         "FAKE_CODEX_WRITE",
         "FAKE_CODEX_EVENTS",
+        "FAKE_CODEX_ANSWER_MODE",
+        "FAKE_CODEX_ANSWER_BYTES",
     ):
         monkeypatch.delenv(key, raising=False)
     monkeypatch.setattr(lifecycle, "SYNC_POLL_INTERVAL_S", 0.02)
@@ -358,3 +360,133 @@ async def test_sync_and_async_keys_are_separate_identities(app, tmp_path):
         handle = (await c.call_tool("amicus_consult_async", args)).structured_content
     assert handle["ok"] is True and handle["job_id"] != first["meta"]["job_id"]
     assert "idempotency_replayed" not in handle["meta"]  # dropped on the wire (#47)
+
+
+# --- #162: an answer file amicus refuses to read is not an empty answer ---------------------
+
+
+def _oversize(monkeypatch):
+    from amicus.orchestration import run as run_mod
+
+    monkeypatch.setenv("FAKE_CODEX_ANSWER_MODE", "oversize")
+    monkeypatch.setenv("FAKE_CODEX_ANSWER_BYTES", str(run_mod.MAX_ARTIFACT_BYTES + 1))
+    return run_mod.MAX_ARTIFACT_BYTES
+
+
+async def test_a_consult_whose_answer_file_is_over_the_cap_is_an_error_not_no_message(
+    app, tmp_path, monkeypatch
+):
+    """It used to be `ok: true` with "(the backend returned no message)": a refusal
+    delivered as the backend having had nothing to say."""
+    cap = _oversize(monkeypatch)
+    async with Client(app) as c:
+        res = await c.call_tool(
+            "amicus_consult",
+            {"backend": "codex", "question": "q", "workspace_root": str(tmp_path)},
+            raise_on_error=False,
+        )
+    body = res.structured_content
+    assert body["ok"] is False, body.get("summary")
+    err = body["error"]
+    assert err["code"] == "answer_unavailable" and err["backend"] == "codex"
+    assert err["details"]["reason"] == "artifact_oversize"
+    assert err["limit_bytes"] == cap and err["actual_bytes"] == cap + 1
+    assert err["temporary"] is False, "the identical call would produce the same answer"
+    assert err["repair"]["next_step"] == "reduce_input"
+    assert body["meta"]["session_id"], "the run happened, and its accounting is kept"
+
+
+async def test_a_review_in_the_same_state_is_not_invalid_json(app, repo, monkeypatch):
+    _oversize(monkeypatch)
+    (repo / "a.py").write_text("x = 2\n")
+    async with Client(app) as c:
+        res = await c.call_tool(
+            "amicus_review_changes",
+            {"backend": "codex", "workspace_root": str(repo)},
+            raise_on_error=False,
+        )
+    err = res.structured_content["error"]
+    assert err["code"] == "answer_unavailable" and err["details"]["reason"] == "artifact_oversize"
+
+
+async def test_a_symlinked_answer_file_is_refused_by_name_without_its_path(
+    app, tmp_path, monkeypatch
+):
+    monkeypatch.setenv("FAKE_CODEX_ANSWER_MODE", "symlink")
+    async with Client(app) as c:
+        res = await c.call_tool(
+            "amicus_consult",
+            {"backend": "codex", "question": "q", "workspace_root": str(tmp_path)},
+            raise_on_error=False,
+        )
+    body = res.structured_content
+    err = body["error"]
+    assert err["code"] == "answer_unavailable"
+    assert err["details"]["reason"] == "artifact_not_regular"
+    assert err["repair"]["next_step"] == "inspect_and_retry" and err["temporary"] is False
+    assert err.get("actual_bytes") is None
+    assert "last-message" not in json.dumps(body) and ".real" not in json.dumps(body)
+
+
+async def test_an_absent_answer_file_is_the_backend_saying_nothing_not_a_refusal(
+    app, tmp_path, monkeypatch
+):
+    """The control: nothing was refused, so this keeps its old meaning."""
+    monkeypatch.setenv("FAKE_CODEX_ANSWER_MODE", "absent")
+    async with Client(app) as c:
+        res = await c.call_tool(
+            "amicus_consult", {"backend": "codex", "question": "q", "workspace_root": str(tmp_path)}
+        )
+    body = res.structured_content
+    assert body["ok"] is True and body["summary"] == "(the backend returned no message)"
+
+
+async def test_a_failed_run_is_reported_as_its_failure_not_as_the_refusal(
+    app, tmp_path, monkeypatch
+):
+    _oversize(monkeypatch)
+    monkeypatch.setenv("FAKE_CODEX_EXIT", "1")
+    monkeypatch.setenv("FAKE_CODEX_STDERR", "boom")
+    async with Client(app) as c:
+        res = await c.call_tool(
+            "amicus_consult",
+            {"backend": "codex", "question": "q", "workspace_root": str(tmp_path)},
+            raise_on_error=False,
+        )
+    assert res.structured_content["error"]["code"] == "nonzero_exit"
+
+
+async def test_a_delegate_keeps_its_diff_when_only_the_summary_was_refused(app, repo, monkeypatch):
+    """The diff is captured from the worktree, not from the answer file, so it is still the
+    honest primary result; what is missing is said, not hidden behind an error."""
+    _oversize(monkeypatch)
+    monkeypatch.setenv("FAKE_CODEX_WRITE", "a.py")
+    async with Client(app) as c:
+        res = await c.call_tool(
+            "amicus_delegate",
+            {
+                "backend": "codex",
+                "task": "edit a.py",
+                "workspace_root": str(repo),
+                "detail": "full",
+            },
+        )
+    body = res.structured_content
+    assert body["ok"] is True and "+changed" in body["diff"]
+    assert "could not be read" in body["summary"] and "oversize" not in body["summary"].lower()
+    # The summary is amicus's, so it is not passed off as the backend's own words, and it
+    # makes no claim about the diff, which `meta.truncated` and `redacted_paths` describe.
+    assert (body.get("raw_response") or {}).get("text") is None
+    assert "complete" not in body["summary"]
+    assert any("answer file" in w for w in body["meta"]["security_warnings"])
+
+
+async def test_a_delegate_with_no_diff_and_no_answer_is_an_error(app, repo, monkeypatch):
+    _oversize(monkeypatch)
+    async with Client(app) as c:
+        res = await c.call_tool(
+            "amicus_delegate",
+            {"backend": "codex", "task": "edit a.py", "workspace_root": str(repo)},
+            raise_on_error=False,
+        )
+    assert res.structured_content["error"]["code"] == "answer_unavailable"

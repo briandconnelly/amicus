@@ -43,6 +43,13 @@ NEUTRAL_VOCABULARY = BackendErrorVocabulary(
 _FEATURES = frozenset({"model_validation", "empty_response_detection"})
 
 _LOCAL_RULES: dict[str, RepairRule] = {
+    "answer_unavailable": RepairRule(
+        "reduce_input",
+        None,
+        False,
+        "The backend answered, but amicus would not read its answer file. Narrow the task or "
+        "ask for a shorter answer; the identical call is likely to end the same way.",
+    ),
     "backend_unavailable": RepairRule(
         "inspect_and_retry",
         "amicus_backends",

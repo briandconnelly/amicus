@@ -198,8 +198,8 @@ The `amicus://backends/{backend}` resource is always the full entry.
 The changes below are the ones an operator or caller using amicus 0.4.0 has to handle before running the next release.
 `CHANGELOG.md`'s `[Unreleased]` section lists every user-visible change since 0.4.0, including the ones that require no migration.
 
-**A job result stored by 0.4.0 is no longer readable (#140).**
-`RESULT_FORMAT` moved from 7 to 8 because `findings_diagnostics.reasons` gained `backend_artifact_reference_removed`, a value a 0.4.0 reader's closed enum rejects.
+**A job result stored by 0.4.0 is no longer readable (#140, #162).**
+`RESULT_FORMAT` moved from 7 to 9: to 8 because `findings_diagnostics.reasons` gained `backend_artifact_reference_removed`, and to 9 because `error.code` gained `answer_unavailable`, each a value a 0.4.0 reader's closed enum rejects.
 `amicus_job_result` and `amicus_job_consume_result` return `job_result_incompatible` for a record 0.4.0 wrote.
 Fetch or consume any stored result you still need before upgrading; the record itself stays until `AMICUS_JOB_TTL` or the per-workspace cap evicts it.
 
@@ -207,6 +207,13 @@ Fetch or consume any stored result you still need before upgrading; the record i
 On Kimi, which is handed its prompt as a file, a finding could come back with `file` set to that temporary path and `line` set to an offset into amicus's framing.
 Such a `file` is now null together with its `line`, the path is replaced by `[amicus temporary file]` wherever the answer's text named it, and `findings_diagnostics.reasons` says `backend_artifact_reference_removed` at `dropped: 0`.
 A caller that treated any non-null `findings_diagnostics` as loss should read the reason: this one loses nothing a caller could have opened.
+
+**An answer file amicus refuses to read is `answer_unavailable`, not an empty answer (#162).**
+amicus reads a backend's answer file only if it is a regular file within a 1,000,000-byte limit.
+A refused file used to be indistinguishable from a backend that wrote nothing: a Codex review returned `invalid_json`, and a Codex consult returned `ok: true` with the summary "(the backend returned no message)".
+Both now return `answer_unavailable` with `error.details.reason` set to `artifact_oversize`, `artifact_not_regular` or `artifact_unreadable`; it is temporary only for an unreadable file whose cause passes, such as descriptor exhaustion, and for oversize its repair is `reduce_input`.
+A caller that treated "(the backend returned no message)" as the backend having nothing to say should branch on `ok` first, as it always should have.
+A delegate whose summary file was refused, and which has no other whole answer from the backend, is still `ok: true` when its diff was captured, with the diff and a `meta.security_warnings` entry.
 
 ## Upgrading from 0.3.0
 
@@ -221,7 +228,7 @@ The settings where this matters most are the ones whose default is looser than w
 **A review amicus cannot parse is delivered as `unstructured` (#139).**
 A review or critique whose answer is not one readable JSON object returned `invalid_json` or `schema_violation`; it now returns `ok: true` with `review_status: unstructured`, `verdict` and `confidence` set to `unknown`, and the whole answer in `raw_response.text` at `detail="full"`.
 Branch on `review_status` before reading the verdict, and read that text before paying for the same review again.
-Only an empty answer is still an error: `invalid_json`, or `empty_response` on Kimi, which detects it first.
+Only an answer amicus could not read at all is still an error: `invalid_json` for an empty one, or `empty_response` on Kimi, which detects it first, and, from the release after 0.4.0, `answer_unavailable` for an answer file amicus refuses to read (see "Upgrading from 0.4.0").
 
 **A job result stored by 0.3.0 is no longer readable (#139).**
 `RESULT_FORMAT` moved from 6 to 7 for the unstructured review result, so `amicus_job_result` and `amicus_job_consume_result` return `job_result_incompatible` for a record 0.3.0 wrote rather than manufacturing the new shape for an older run.
@@ -252,10 +259,10 @@ Poll only while `status` is `running`; a caller that read a non-null hint as "st
 **A review amicus cannot parse is delivered as `unstructured` (#139).**
 A review or critique whose answer is not one readable JSON object returned `invalid_json` or `schema_violation`; it now returns `ok: true` with `review_status: unstructured`, `verdict` and `confidence` `unknown`, and the whole answer in `raw_response.text` at `detail="full"`.
 Branch on `review_status` before reading the verdict, and read that text before paying for the same review again.
-Only an empty answer is still an error: `invalid_json`, or `empty_response` on Kimi, which detects it first.
+Only an answer amicus could not read at all is still an error: `invalid_json` for an empty one, or `empty_response` on Kimi, which detects it first, and, from the release after 0.4.0, `answer_unavailable` for an answer file amicus refuses to read (see "Upgrading from 0.4.0").
 
 **A job result stored by 0.2.0 is no longer readable (#65, #52, #139).**
-`RESULT_FORMAT` moved from 4 to 8, so `amicus_job_result` and `amicus_job_consume_result` return `job_result_incompatible` for a record 0.2.0 wrote, rather than a result whose new fields would answer for a run that never measured them.
+`RESULT_FORMAT` moved from 4 to 9, so `amicus_job_result` and `amicus_job_consume_result` return `job_result_incompatible` for a record 0.2.0 wrote, rather than a result whose new fields would answer for a run that never measured them.
 Fetch or consume any stored result you still need before upgrading; the record itself stays until `AMICUS_JOB_TTL` or the per-workspace cap evicts it.
 
 **An empty `idempotency_key` is rejected (#66).**

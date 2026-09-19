@@ -18,6 +18,7 @@
       "claude"
     ],
     "error_codes": [
+      "answer_unavailable",
       "api_key_invalid",
       "api_key_missing",
       "backend_auth_indeterminate",
@@ -150,7 +151,7 @@
     ],
     "protocol_revision": "2026-07-28",
     "resource_error_carrier": "JSON-RPC error; the envelope (machine_code/human_message/backend/temporary/retry_after_ms/repair/resource_uri/request_id) is in error.data. Classify by error.data.machine_code: the numeric is era-bound (-32002 on a 2025-11-25 connection, -32602 on 2026-07-28; -32603 for a read failure on both).",
-    "result_format": 8,
+    "result_format": 9,
     "result_meta_resource": "amicus://result-meta",
     "scope": [
       "Second opinions, git-change reviews, adversarial critiques and delegated diffs from Codex, Kimi or Claude Code, selected per call.",
@@ -195,6 +196,7 @@
           "api_key_missing",
           "internal_error",
           "empty_response",
+          "answer_unavailable",
           "job_failed",
           "job_cancelled",
           "job_timeout",
@@ -254,6 +256,7 @@
           "api_key_missing",
           "internal_error",
           "empty_response",
+          "answer_unavailable",
           "idempotency_conflict",
           "idempotency_in_progress",
           "idempotency_result_unavailable"
@@ -307,6 +310,7 @@
           "api_key_missing",
           "internal_error",
           "empty_response",
+          "answer_unavailable",
           "invalid_scope",
           "invalid_base",
           "invalid_commit",
@@ -378,6 +382,7 @@
           "api_key_missing",
           "internal_error",
           "empty_response",
+          "answer_unavailable",
           "invalid_scope",
           "invalid_base",
           "invalid_commit",
@@ -443,6 +448,7 @@
           "api_key_missing",
           "internal_error",
           "empty_response",
+          "answer_unavailable",
           "not_a_git_repo",
           "git_unavailable",
           "worktree_error",
@@ -502,6 +508,7 @@
           "api_key_missing",
           "internal_error",
           "empty_response",
+          "answer_unavailable",
           "not_a_git_repo",
           "git_unavailable",
           "worktree_error",
@@ -1251,6 +1258,7 @@
               },
               "code": {
                 "enum": [
+                  "answer_unavailable",
                   "api_key_invalid",
                   "api_key_missing",
                   "backend_auth_indeterminate",
@@ -1567,7 +1575,7 @@
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-36",
+                "default": "amicus/0.1/schema-37",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -2125,7 +2133,7 @@
       "description": "The full ErrorResult schema; tool outputSchemas carry only an opaque error branch.",
       "mimeType": "application/schema+json",
       "name": "amicus-error-envelope",
-      "size": 14717,
+      "size": 14739,
       "title": "amicus error envelope schema",
       "uri": "amicus://error-envelope"
     },
@@ -2479,7 +2487,7 @@
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-36",
+            "default": "amicus/0.1/schema-37",
             "title": "Fingerprint",
             "type": "string"
           },

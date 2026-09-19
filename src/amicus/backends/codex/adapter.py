@@ -137,6 +137,7 @@ class CodexBackend:
                     for name, path in (("last-message", last_msg_path), ("schema", schema_path))
                     if path
                 },
+                answer_artifacts=("last-message",),
                 dropped_flags=tuple(dropped),
             )
 

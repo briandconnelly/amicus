@@ -55,8 +55,22 @@ often holds the review, and an identical retry can fail the same way. An answer 
 one object in a preamble, a fence or a sign-off is read as that object and stays `completed`;
 one that holds two objects, or whose preamble has a `{` or sign-off a `}`, is `unstructured`
 rather than guessed at. That reading is for reviews only: a consult answered in prose keeps its
-whole answer in `summary`. Only an empty answer is still an error: `invalid_json`, or `empty_response` on `kimi`, which
-detects it before a result is built.
+whole answer in `summary`. Two cases are still errors, because in both amicus has no answer to
+deliver: an empty one (`invalid_json`, or `empty_response` on `kimi`, which detects it before a
+result is built) and one amicus refused to read (`answer_unavailable`).
+
+`answer_unavailable` is a different fact from either: the backend **did** answer, and amicus
+refused to read the file it answered in. `error.details.reason` says why — `artifact_oversize`
+(over the read limit, with `limit_bytes` and, when known, `actual_bytes`), `artifact_not_regular`
+(a symlink, FIFO or device) or `artifact_unreadable`. Read `error.temporary` rather than assume:
+it is true only for an unreadable file whose cause passes, and even then a retry is a new paid
+run. Otherwise never repeat the identical call: for oversize, narrow the task or ask for a
+shorter answer. A delegate whose summary file was refused, and which has no other whole answer
+from the backend, still comes back `ok: true` when its diff was captured: with the diff,
+amicus's own summary saying the backend's could not be read, a null `raw_response.text`, and a
+`meta.security_warnings` entry. Where the backend's stream did carry its answer (`kimi`), that
+answer is the summary and the raw response, beside the same warning. Read `meta.truncated` and `meta.redacted_paths` for whether that
+diff is whole, as on any delegate.
 
 When a review was not complete, the result's `coverage` object says so in fields you can branch
 on: `coverage.status` is `complete` or `partial`, and `coverage.omission_reasons` names why, in a

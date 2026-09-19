@@ -8,7 +8,9 @@ structured review/consult JSON) to the `--output-last-message` path, optionally 
 file under `--cd` (FAKE_CODEX_WRITE=relative/path), prints FAKE_CODEX_EVENTS (default: a
 session + token_count JSONL) to stdout and FAKE_CODEX_STDERR to stderr, sleeps
 FAKE_CODEX_SLEEP seconds, and exits FAKE_CODEX_EXIT (default 0). FAKE_CODEX_ARGV_FILE gets
-one JSON line per invocation; FAKE_CODEX_STDIN_FILE receives the prompt."""
+one JSON line per invocation; FAKE_CODEX_STDIN_FILE receives the prompt.
+FAKE_CODEX_ANSWER_MODE (oversize | symlink | absent) shapes the answer FILE; see
+`_write_answer`."""
 
 from __future__ import annotations
 
@@ -39,6 +41,27 @@ _DEFAULT_EVENTS = (
 )
 
 
+def _write_answer(path: Path) -> None:
+    """FAKE_CODEX_ANSWER_MODE shapes the file rather than its text (#162): `oversize` writes
+    FAKE_CODEX_ANSWER_BYTES of filler, generated here because an environment variable
+    cannot carry a megabyte; `symlink` leaves a link to a real answer beside it; `absent`
+    writes nothing."""
+    mode = os.environ.get("FAKE_CODEX_ANSWER_MODE", "")
+    answer = os.environ.get("FAKE_CODEX_ANSWER", _DEFAULT_ANSWER)
+    if mode == "absent":
+        return
+    if mode == "oversize":
+        path.write_bytes(b"x" * int(os.environ["FAKE_CODEX_ANSWER_BYTES"]))
+        return
+    if mode == "symlink":
+        real = path.with_name(path.name + ".real")
+        real.write_text(answer, encoding="utf-8")
+        path.unlink(missing_ok=True)
+        path.symlink_to(real)
+        return
+    path.write_text(answer, encoding="utf-8")
+
+
 def main() -> int:
     argv = sys.argv[1:]
     if argv[:1] == ["--version"]:
@@ -66,8 +89,7 @@ def main() -> int:
         with (Path(cwd) / target).open("w", encoding="utf-8") as fh:
             fh.write("changed\n")
     if "--output-last-message" in argv:
-        with Path(argv[argv.index("--output-last-message") + 1]).open("w", encoding="utf-8") as fh:
-            fh.write(os.environ.get("FAKE_CODEX_ANSWER", _DEFAULT_ANSWER))
+        _write_answer(Path(argv[argv.index("--output-last-message") + 1]))
     sys.stdout.write(os.environ.get("FAKE_CODEX_EVENTS", _DEFAULT_EVENTS))
     sys.stderr.write(os.environ.get("FAKE_CODEX_STDERR", ""))
     return int(os.environ.get("FAKE_CODEX_EXIT", "0"))

@@ -21,7 +21,7 @@ from dataclasses import dataclass
 
 # Bump on any externally observable change to a category below; the committed manifest
 # snapshot (tests/test_manifest.py) fails on drift and its message says to bump this.
-FINGERPRINT = "amicus/0.1/schema-36"
+FINGERPRINT = "amicus/0.1/schema-37"
 
 # Persisted result-format version stamped into job records (M2); moves only when a
 # stored result.json shape an older reader's closed schema could reject changes.
@@ -39,7 +39,9 @@ FINGERPRINT = "amicus/0.1/schema-36"
 # that carries it, which is the point: a 6 reader has no way to know that nothing was parsed.
 # 8 (#140): findings_diagnostics.reasons gained `backend_artifact_reference_removed`. A 7
 # reader's closed enum REJECTS an 8 record that carries it, as with 4 and 7.
-RESULT_FORMAT: int = 8
+# 9 (#162): error.code gained `answer_unavailable`. An 8 reader's closed enum REJECTS a 9
+# record that carries it, as with 4, 7 and 8.
+RESULT_FORMAT: int = 9
 
 JSON_SCHEMA_DIALECT = "https://json-schema.org/draft/2020-12/schema"
 PROTOCOL_REVISION = "2026-07-28"

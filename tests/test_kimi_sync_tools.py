@@ -31,6 +31,7 @@ def app(tmp_path, fake_kimi, monkeypatch):
         "FAKE_KIMI_EVENTS",
         "FAKE_KIMI_PROVIDERS",
         "FAKE_KIMI_SLEEP",
+        "FAKE_KIMI_ANSWER_MODE",
     ):
         monkeypatch.delenv(key, raising=False)
     monkeypatch.setattr(lifecycle, "SYNC_POLL_INTERVAL_S", 0.02)
@@ -339,3 +340,53 @@ async def test_discovery_tools_read_the_fake(app, tmp_path, repo):
     assert dry.structured_content["ok"] is True
     assert dry.structured_content["meta"]["backend"] == "kimi"
     assert _runs(tmp_path) == []
+
+
+# --- #162: kimi's delegate answer FILE refused, with and without its stream -----------------
+
+
+async def test_a_refused_answer_file_falls_back_to_the_stream_and_says_so(app, repo, monkeypatch):
+    monkeypatch.setenv("FAKE_KIMI_ANSWER_MODE", "symlink")
+    monkeypatch.setenv("FAKE_KIMI_ANSWER", "Added b.py.")
+    monkeypatch.setenv("FAKE_KIMI_WRITE", "b.py")
+    async with Client(app) as c:
+        res = await c.call_tool(
+            "amicus_delegate", {"backend": "kimi", "task": "add b.py", "workspace_root": str(repo)}
+        )
+    body = res.structured_content
+    assert body["ok"] is True and body["summary"] == "Added b.py.", "the stream's whole answer"
+    # `truncated` reports a bounded diff or input, never stream capture; it is false here
+    # because this small diff fit, not because the stream was whole.
+    assert body["meta"]["truncated"] is False
+    assert any("answer file" in w for w in body["meta"]["security_warnings"])
+
+
+async def test_a_refused_answer_file_with_no_stream_is_not_an_empty_response(
+    app, repo, monkeypatch
+):
+    """Kimi's inspector calls a clean exit with no answer `empty_response`. Here the answer
+    exists and amicus refused it, which is why it looked empty, so that is what is said."""
+    monkeypatch.setenv("FAKE_KIMI_ANSWER_MODE", "symlink")
+    monkeypatch.setenv(
+        "FAKE_KIMI_EVENTS",
+        '{"role":"meta","type":"session.resume_hint","session_id":"session-fake"}\n',
+    )
+    async with Client(app) as c:
+        res = await c.call_tool(
+            "amicus_delegate",
+            {"backend": "kimi", "task": "add b.py", "workspace_root": str(repo)},
+            raise_on_error=False,
+        )
+    err = res.structured_content["error"]
+    assert err["code"] == "answer_unavailable" and err["backend"] == "kimi"
+    assert err["details"]["reason"] == "artifact_not_regular"
+    # Control: the same run with a READABLE EMPTY file and no stream is the ordinary empty
+    # case. The fake writes the file itself; an unset answer would leave it absent instead.
+    monkeypatch.setenv("FAKE_KIMI_ANSWER_MODE", "empty")
+    async with Client(app) as c:
+        res = await c.call_tool(
+            "amicus_delegate",
+            {"backend": "kimi", "task": "add b.py", "workspace_root": str(repo)},
+            raise_on_error=False,
+        )
+    assert res.structured_content["error"]["code"] == "empty_response"
