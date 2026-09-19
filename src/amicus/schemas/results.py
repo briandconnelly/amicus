@@ -347,15 +347,29 @@ class DelegateResult(_ModelResult):
 
 
 class JobFollowUp(BaseModel):
-    """The one follow-up an async start ever hands back: poll the job. The same shape as
-    `Repair`, narrowed to that one action, so the four async tools' output schemas do not
-    each inline the whole RepairStep enum for a field that has a single value (#41)."""
+    """The follow-up on a RUNNING handle, which every fresh async start is: poll the job.
+    The same shape as `Repair`, narrowed to that one action, so the four async tools' output
+    schemas do not each inline the whole RepairStep enum (#41). A terminal handle carries
+    `JobResultFollowUp` instead (#103)."""
 
     model_config = ConfigDict(extra="forbid")
     # No defaults: a default would drop the field from the schema's `required`, and the
     # advertised handle would then admit a follow_up with no action or tool.
     next_step: Literal["poll_job_status"]
     tool: Literal["amicus_job_status"]
+    arguments: dict[str, Any]
+    alternative: str | None = None
+
+
+class JobResultFollowUp(BaseModel):
+    """The follow-up on a handle whose job is already terminal, which a replayed keyed
+    start can return (#103): fetch the result, do not poll. Its own model rather than wider
+    literals on `JobFollowUp`, so the schema admits the two correlated step/tool pairs and
+    no mismatched one."""
+
+    model_config = ConfigDict(extra="forbid")
+    next_step: Literal["fetch_job_result"]
+    tool: Literal["amicus_job_result"]
     arguments: dict[str, Any]
     alternative: str | None = None
 
@@ -379,7 +393,7 @@ class JobStarted(SuccessBase):
     poll_after_ms: int | None = Field(description=_POLL_AFTER_DESC)
     expires_at: str | None
     task_id: str | None = None
-    follow_up: JobFollowUp
+    follow_up: JobFollowUp | JobResultFollowUp
 
 
 class JobStatus(SuccessBase):

@@ -167,3 +167,29 @@ def test_selection_time_facts_cover_every_contract():
 def test_timeout_bounds_and_pattern():
     assert (p.MIN_TIMEOUT_SECONDS, p.MAX_TIMEOUT_SECONDS) == (10, 600)
     assert p.CONTROL_CHAR_FREE_PATTERN == r"^[^\x00-\x1F\x7F-\x9F]*$"
+
+
+def test_the_idempotency_summary_scopes_the_key_as_the_code_does():
+    """#178. The summary said "this tool + backend + workspace", which reads as though the
+    same key on another backend were a separate identity. `key_digest` hashes (tool, key)
+    only, under the workspace's state dir; `backend` is one of the effective arguments, so
+    the same key on another backend is an idempotency_conflict."""
+    import inspect
+
+    from amicus.jobs import idempotency
+
+    assert list(inspect.signature(idempotency.key_digest).parameters) == ["tool", "key"]
+    # ...and backend really is one of the arguments compared, not merely absent from the key.
+    import dataclasses
+
+    from amicus.request import IDENTITY_EXCLUDE, RunSpec
+
+    assert "backend" in {f.name for f in dataclasses.fields(RunSpec)}
+    assert "backend" not in IDENTITY_EXCLUDE
+    contract = p.PARAMETER_CONTRACTS["idempotency_key"]
+    summary = " ".join(contract.summary.split())
+    assert "scoped to this tool + workspace" in summary
+    assert "tool + backend" not in summary
+    # Backend is still named, as one of the arguments that must match, in both texts.
+    assert "backend included" in summary
+    assert "(backend, model, reasoning_effort" in " ".join(contract.full.split())

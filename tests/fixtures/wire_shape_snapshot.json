@@ -909,13 +909,13 @@
       "deadline_seconds": 1800,
       "expires_at": "1970-01-02T00:00:00+00:00",
       "follow_up": {
-        "alternative": "Poll amicus_job_status with these arguments while status is running, honoring poll_after_ms. On any terminal status, call amicus_job_result for the stored result or the terminal error. Recover a lost job_id with amicus_job_list.",
+        "alternative": "This job is already terminal, so do not poll it: call amicus_job_result with these arguments for the stored result or the terminal error.",
         "arguments": {
           "job_id": "00000000000000000000000000000000",
           "workspace_root": "/repo"
         },
-        "next_step": "poll_job_status",
-        "tool": "amicus_job_status"
+        "next_step": "fetch_job_result",
+        "tool": "amicus_job_result"
       },
       "job_id": "00000000000000000000000000000000",
       "kind": "consult",

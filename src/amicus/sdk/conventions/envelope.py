@@ -38,6 +38,7 @@ REPAIR_STEPS = frozenset(
         "reduce_input",
         "use_workspace_in_roots",
         "poll_job_status",
+        "fetch_job_result",
         "list_jobs",
         "list_resources",
         "start_new_job",

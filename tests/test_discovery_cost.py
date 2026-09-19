@@ -185,6 +185,16 @@ sentence of `_REASONS_DESC`, inlined once per tool that carries findings, sync a
 first draft cost 1344; the sentence was cut to what a caller needs (what was cleared, that
 nothing openable was lost) and a second mention in `dropped`'s description was removed.
 MEASURED and BUDGET both move by the 888 bytes, so the budget keeps no headroom.
+
+The schema-37 -> schema-38 raise (+1456 bytes, 120173 -> 121629 on "all") is #103 and #178,
+each measured alone on the wire rather than estimated. #103 gives the async handle a second
+`follow_up` shape, `JobResultFollowUp`, so a terminal handle can say fetch rather than poll:
+1384 bytes, 346 on each of the four `_async` tools, for a shape with no description at all. It
+has to be a second correlated shape rather than two widened literals, which would admit a
+mismatched step/tool pair, so that is the floor. #178's corrected `idempotency_key` summary is
+9 bytes longer on each of the eight paid tools (72). schema-37 itself moved nothing here:
+error codes do not ride tools/list.
+MEASURED and BUDGET both move by the 1456 bytes, so the budget keeps no headroom.
 """
 
 from __future__ import annotations
@@ -194,7 +204,7 @@ from tests.conftest import spawned_server_env
 
 from amicus import manifest
 
-MEASURED: dict[str, int] = {"all": 120173, "codex-kimi": 120181, "claude": 120173}
+MEASURED: dict[str, int] = {"all": 121629, "codex-kimi": 121637, "claude": 121629}
 # The budget is a literal, not MEASURED rounded up to the next kilobyte as it was until
 # 2026-09-14. The rounding left up to 1 KB of growth per bucket that no PR had to own, and
 # this file records three such accumulations (448 and 12 bytes in the paragraphs above, and
@@ -202,7 +212,7 @@ MEASURED: dict[str, int] = {"all": 120173, "codex-kimi": 120181, "claude": 12017
 # #94 that landed after it), each noticed only when the next deliberate raise re-measured.
 # Any growth now fails until a PR raises BUDGET and says why; a shrink passes and shows as
 # drift against MEASURED. Raising one means re-measuring and moving both.
-BUDGET: dict[str, int] = {"all": 120173, "codex-kimi": 120181, "claude": 120173}
+BUDGET: dict[str, int] = {"all": 121629, "codex-kimi": 121637, "claude": 121629}
 
 
 @pytest.mark.parametrize("profile", sorted(manifest.PROFILES))

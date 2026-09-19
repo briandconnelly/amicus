@@ -467,9 +467,11 @@ async def test_keyed_start_creates_then_replays_the_real_handle(tmp_path, monkey
         ),
     )
     assert status["status"] == "done" and status["poll_after_ms"] is None
-    # Its follow_up still names the status tool: pontonier has no step for fetching a
-    # finished job's result yet (briandconnelly/pontonier#30). Flip this with #103.
-    assert again["follow_up"]["next_step"] == "poll_job_status"
+    # A finished job is fetched, not polled (#103): same arguments, the other tool.
+    assert again["follow_up"]["next_step"] == "fetch_job_result"
+    assert again["follow_up"]["tool"] == "amicus_job_result"
+    assert again["follow_up"]["arguments"] == first["follow_up"]["arguments"]
+    assert first["follow_up"]["next_step"] == "poll_job_status", "a running handle still polls"
     assert again["started_at"] == first["started_at"]
     assert len(store.list_jobs(str(tmp_path))) == 1
     spec_on_disk = json.loads(
@@ -1271,3 +1273,30 @@ async def test_keyed_start_cancelled_mid_thread_records_nothing_without_a_task(
         await task
     await asyncio.sleep(0.4)
     assert task_map.entries() == {}
+
+
+@pytest.mark.parametrize("status", ["done", "failed", "cancelled", "timeout"])
+def test_every_terminal_status_is_fetched_and_only_running_is_polled(status):
+    """`amicus_job_result` returns the stored result for `done` and the terminal error for
+    the other three, so fetching is right for all four (#103). The replay test above
+    reaches only `done`; this pins the rest, and that the set is complete."""
+    from typing import get_args
+
+    from amicus.schemas.results import JobStarted
+
+    statuses = set(get_args(JobStarted.model_fields["status"].annotation))
+    assert statuses == {"running", "done", "failed", "cancelled", "timeout"}, (
+        "a new handle status needs a follow_up decision"
+    )
+    args = {"job_id": "j", "workspace_root": "/w"}
+    terminal = lifecycle._follow_up(status, args)
+    assert (terminal.next_step, terminal.tool) == ("fetch_job_result", "amicus_job_result")
+    assert terminal.arguments == args
+    running = lifecycle._follow_up("running", args)
+    assert (running.next_step, running.tool) == ("poll_job_status", "amicus_job_status")
+
+
+def test_the_fetch_instruction_never_tells_a_caller_to_poll():
+    text = lifecycle.FETCH_FOLLOW_UP
+    assert "amicus_job_result" in text and "do not poll" in text
+    assert "amicus_job_status" not in text and "result_available" not in text

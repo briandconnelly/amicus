@@ -33,6 +33,19 @@ per-change, as its own lead says.
 
 ### Fixed
 
+- **Surface.** A replayed keyed `_async` call can hand back a job that is already terminal, and
+  its handle's `follow_up` still said `poll_job_status` / `amicus_job_status`, which the skill's
+  own rules forbid for a finished job. A terminal handle now carries `next_step:
+  fetch_job_result` and `tool: amicus_job_result` with the same `job_id` and `workspace_root`; a
+  running handle is unchanged. The two are separate correlated shapes in the output schema, so
+  no mismatched step/tool pair is admitted. `fetch_job_result` is a new `repair.next_step`
+  value. A caller that went by `status`, as the 0.4.0 descriptions told it to, changes nothing
+  (#103).
+- **Surface.** The `idempotency_key` parameter description said the key is scoped to "this tool
+  + backend + workspace", which reads as though the same key on another backend were a separate
+  identity. It never was: the key is scoped to the tool and the workspace, and `backend` is one
+  of the arguments that must match, so that call is an `idempotency_conflict`. The description
+  now says so; behaviour is unchanged (#178).
 - **Breaking.** An answer file amicus refuses to read is no longer delivered as an empty answer.
   The bounded reader accepts only a regular file within 1,000,000 bytes (ADR 0009), and a file
   it refused was indistinguishable from a backend that wrote nothing: a Codex review came back

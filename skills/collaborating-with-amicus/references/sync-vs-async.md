@@ -48,8 +48,10 @@ started with the `_async` twin.
 A job handle: `job_id`, `status`, `poll_after_ms`, `expires_at`, and a `follow_up` pointer. It is
 not the consult/review/delegate result. A fresh start is always `running`. Repeating a keyed
 `_async` call replays the existing job's handle instead, and that job may already be terminal:
-then `poll_after_ms` is `null`. Go by `status` there, not by `follow_up`, which names
-`amicus_job_status` on every handle.
+then `poll_after_ms` is `null` and `follow_up` names `amicus_job_result` with
+`next_step: fetch_job_result`, where a running handle names `amicus_job_status` with
+`poll_job_status`. Both take the same `job_id` and `workspace_root`, and `status` still says
+which case you are in.
 
 ## Polling
 

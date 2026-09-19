@@ -158,8 +158,9 @@ PARAMETER_CONTRACTS: dict[str, ParamContract] = {
     "idempotency_key": ParamContract(
         name="idempotency_key",
         summary=(
-            "Dedup key scoped to this tool + backend + workspace: reusing it with identical "
-            "args replays the prior result unpaid; different args are refused. Lifecycle: "
+            "Dedup key scoped to this tool + workspace: reusing it with identical args "
+            "(backend included) replays the prior result unpaid; different args are refused. "
+            "Lifecycle: "
             f"{PARAMS_RESOURCE_URI}."
         ),
         full=(
