@@ -35,9 +35,10 @@ per-change, as its own lead says.
   state directory the server now refuses to start, naming the variable on stderr: falling back
   to the default would keep whole answers somewhere the operator did not choose. A relative
   binary override makes that backend report the override as unusable, as a missing file already
-  did. Absolute values and `~` are unchanged. A `$XDG_CACHE_HOME` that is not absolute as
-  written, `~/cache` included, is ignored, as the XDG Base Directory specification requires
-  (#173).
+  did. Absolute values are unchanged, and so is a leading `~` in `AMICUS_STATE_DIR`, which is
+  still expanded. `$XDG_CACHE_HOME` is different: a value that is not absolute as written,
+  `~/cache` included, is ignored and never expanded, as the XDG Base Directory specification
+  requires (#173).
 - `config.settings()` no longer documents itself as never raising: it never raises on a
   malformed or conflicting setting, and an unresolvable home directory is a startup failure
   (#147).
