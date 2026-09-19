@@ -355,7 +355,9 @@ async def test_a_refused_answer_file_falls_back_to_the_stream_and_says_so(app, r
         )
     body = res.structured_content
     assert body["ok"] is True and body["summary"] == "Added b.py.", "the stream's whole answer"
-    assert body["meta"]["truncated"] is False, "nothing delivered was cut short"
+    # `truncated` reports a bounded diff or input, never stream capture; it is false here
+    # because this small diff fit, not because the stream was whole.
+    assert body["meta"]["truncated"] is False
     assert any("answer file" in w for w in body["meta"]["security_warnings"])
 
 

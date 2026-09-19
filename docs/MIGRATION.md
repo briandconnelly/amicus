@@ -211,9 +211,9 @@ A caller that treated any non-null `findings_diagnostics` as loss should read th
 **An answer file amicus refuses to read is `answer_unavailable`, not an empty answer (#162).**
 amicus reads a backend's answer file only if it is a regular file within a 1,000,000-byte limit.
 A refused file used to be indistinguishable from a backend that wrote nothing: a Codex review returned `invalid_json`, and a Codex consult returned `ok: true` with the summary "(the backend returned no message)".
-Both now return `answer_unavailable` with `error.details.reason` set to `artifact_oversize`, `artifact_not_regular` or `artifact_unreadable`; it is not temporary, and for oversize its repair is `reduce_input`.
+Both now return `answer_unavailable` with `error.details.reason` set to `artifact_oversize`, `artifact_not_regular` or `artifact_unreadable`; it is temporary only for an unreadable file whose cause passes, such as descriptor exhaustion, and for oversize its repair is `reduce_input`.
 A caller that treated "(the backend returned no message)" as the backend having nothing to say should branch on `ok` first, as it always should have.
-A delegate whose summary file was refused but whose diff was captured is still `ok: true`, with the diff and a `meta.security_warnings` entry.
+A delegate whose summary file was refused, and which has no other whole answer from the backend, is still `ok: true` when its diff was captured, with the diff and a `meta.security_warnings` entry.
 
 ## Upgrading from 0.3.0
 

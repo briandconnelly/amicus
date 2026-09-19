@@ -43,6 +43,18 @@ REFUSED_UNREADABLE = "unreadable"
 class Refusal(NamedTuple):
     reason: str
     size: int | None = None  # known only where fstat said so
+    # The identical call may succeed later: the cause was resource exhaustion, which passes,
+    # rather than the file. Decided from the errno, which itself never reaches the wire.
+    transient: bool = False
+
+
+# Exhaustion of descriptors or memory, and an interrupted call. A permission or I/O error
+# is about the file and will meet the next identical call too.
+_TRANSIENT_ERRNOS = frozenset({errno.EMFILE, errno.ENFILE, errno.ENOMEM, errno.EINTR, errno.EAGAIN})
+
+
+def _unreadable(exc: OSError) -> Refusal:
+    return Refusal(REFUSED_UNREADABLE, transient=exc.errno in _TRANSIENT_ERRNOS)
 
 
 # What a refusal looks like on the wire: a fixed token and fixed prose, never the path, an
@@ -89,7 +101,7 @@ def _read_bounded(path: str) -> tuple[str, Refusal | None]:
         return "", None
     except OSError as exc:
         # ELOOP is what O_NOFOLLOW raises for a symlink at the final component.
-        return "", Refusal(REFUSED_NOT_REGULAR if exc.errno == errno.ELOOP else REFUSED_UNREADABLE)
+        return "", Refusal(REFUSED_NOT_REGULAR) if exc.errno == errno.ELOOP else _unreadable(exc)
     try:
         st = os.fstat(fd)
         if not S_ISREG(st.st_mode):
@@ -104,8 +116,8 @@ def _read_bounded(path: str) -> tuple[str, Refusal | None]:
         while remaining > 0 and (chunk := os.read(fd, remaining)):
             chunks.append(chunk)
             remaining -= len(chunk)
-    except OSError:
-        return "", Refusal(REFUSED_UNREADABLE)
+    except OSError as exc:
+        return "", _unreadable(exc)
     finally:
         os.close(fd)
     if remaining <= 0:
@@ -136,16 +148,24 @@ def _answer_refusal(prepared: PreparedRun, refused: dict[str, Refusal]) -> Refus
 def _answer_unavailable(refusal: Refusal, meta: Any, plugin: BackendPlugin) -> dict[str, Any]:
     reason, message, next_step = _REFUSAL_WIRE[refusal.reason]
     oversize = refusal.reason == REFUSED_OVERSIZE
+    alternative = None
+    if refusal.transient:
+        next_step = "retry_after_delay"
+        alternative = (
+            "amicus could not read the backend's answer file because this machine was short "
+            "of a resource, which passes. The run itself finished, so a retry is a new paid run."
+        )
+    elif not oversize:
+        alternative = "amicus refused the backend's answer file; check the run before repeating it."
     return error_envelope(
         "answer_unavailable",
         message,
         meta,
         plugin=plugin,
+        temporary=refusal.transient,
         details=ErrorDetail(reason=reason),
         repair_next_step=next_step,
-        repair_alternative=None
-        if oversize
-        else "amicus refused the backend's answer file; check the run before repeating it.",
+        repair_alternative=alternative,
         limit_bytes=MAX_ARTIFACT_BYTES if oversize else None,
         actual_bytes=refusal.size if oversize else None,
     )

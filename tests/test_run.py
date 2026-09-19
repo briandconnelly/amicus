@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import json
 import subprocess
 from pathlib import Path
 
@@ -522,3 +523,43 @@ def test_each_refusal_has_its_own_wire_reason_and_repair():
         assert err["details"]["reason"] == token and err["repair"]["next_step"] == step
         sized = reason == "oversize"
         assert (err.get("actual_bytes") == 7) is sized and ("limit_bytes" in err) is sized
+
+
+@pytest.mark.parametrize(
+    ("code", "transient"),
+    [("EMFILE", True), ("ENFILE", True), ("ENOMEM", True), ("EACCES", False), ("EIO", False)],
+)
+def test_an_unreadable_file_is_temporary_only_when_the_cause_is(
+    tmp_path, monkeypatch, code, transient
+):
+    """Descriptor or memory exhaustion passes, so the identical call may succeed later; a
+    permission or I/O error does not. The errno decides and never reaches the wire."""
+    import errno
+    import os
+
+    from amicus.request import meta_for
+    from amicus.sdk.backend.protocol import PreparedRun
+
+    path = tmp_path / "answer.md"
+    path.write_text("an answer")
+    real_open = os.open
+
+    def failing(target, *args, **kwargs):
+        if target != str(path):
+            return real_open(target, *args, **kwargs)
+        raise OSError(getattr(errno, code), "injected")
+
+    monkeypatch.setattr(run_mod.os, "open", failing)
+    prepared = PreparedRun(
+        argv=("x",), env={}, cwd=str(tmp_path), artifact_paths={"answer": str(path)}
+    )
+    _, refused = run_mod._read_artifacts(prepared)
+    assert refused["answer"].reason == "unreadable" and refused["answer"].transient is transient
+    out = run_mod._answer_unavailable(
+        refused["answer"], meta_for(_spec()), fakeplugin.make_plugin()
+    )
+    err = out["error"]
+    assert err["details"]["reason"] == "artifact_unreadable"
+    assert err["temporary"] is transient
+    assert err["repair"]["next_step"] == ("retry_after_delay" if transient else "inspect_and_retry")
+    assert code not in json.dumps(out) and "injected" not in json.dumps(out)
