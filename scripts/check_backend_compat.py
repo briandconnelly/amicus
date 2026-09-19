@@ -13,9 +13,8 @@ checked"): for every in-tree backend it reports
       `docs/<backend>-help/<version>/` does not, and the reverse. Flags, not text: claude
       wraps its help to the terminal width and a capture may have been trimmed, so a text
       diff reports a change on every run. `--diff` prints the text diff for a reader;
-    * the latest upstream release, where that can be read (`npm view` for codex and claude;
-      Kimi Code updates itself through `kimi upgrade`, so its latest is not knowable here
-      and is reported as unknown rather than guessed).
+    * the latest upstream release, from `npm view` for all three. A lookup that fails is
+      reported as unknown, never guessed, and fails the check unless `--offline` was given.
 
 It runs `--version`, `--help` and each backend's free login probe, and nothing else: no
 prompt is sent, so no quota is spent. It cannot do the other half of the precondition, the
@@ -57,8 +56,13 @@ if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Callable
 
 BACKENDS: tuple[str, ...] = ("codex", "kimi", "claude")
-# Where npm publishes a backend's CLI. Kimi Code is not on npm: it self-updates.
-NPM_PACKAGES: dict[str, str] = {"codex": "@openai/codex", "claude": "@anthropic-ai/claude-code"}
+# Where npm publishes each backend's CLI. Kimi Code updates itself through `kimi upgrade`,
+# but it is published as an npm package too, which is what makes its latest readable.
+NPM_PACKAGES: dict[str, str] = {
+    "codex": "@openai/codex",
+    "kimi": "@moonshot-ai/kimi-code",
+    "claude": "@anthropic-ai/claude-code",
+}
 _SEMVER = re.compile(r"(\d+)\.(\d+)\.(\d+)")
 # An option ROW: a shallow indent, then the declaration column up to the gap before its
 # description. codex indents rows by 2 or 6 and puts the description on the next line;
@@ -255,8 +259,8 @@ def problems(report: Report) -> list[str]:
             f"({report.latest}); upgrade before recording release evidence"
         )
     elif report.latest is None and report.backend in NPM_PACKAGES and not report.offline:
-        # Kimi's latest is expected to be unreadable; an npm backend's is not, and a lookup
-        # that failed must not look like a version that matched.
+        # Every backend is on npm, so an unreadable latest is a lookup that failed, and a
+        # lookup that failed must not look like a version that matched.
         found.append(
             f"{report.backend}: the latest release could not be read from npm, so whether "
             f"{report.version} is current is unknown; rerun online, or pass --offline to say "

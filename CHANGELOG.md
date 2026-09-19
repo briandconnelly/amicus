@@ -22,6 +22,14 @@ per-change, as its own lead says.
 
 ### Changed
 
+- Kimi Code 2.0 is a supported version, so `amicus_backends` no longer warns on it. Kimi Code
+  went from 0.43.1 to 2.0.2 in one upgrade; amicus has seen no 1.x and claims none. It was
+  checked against the 0.43.1 capture at zero spend: `--help` differs by one new subcommand and no
+  option, the `provider list --json` shape is identical, and `kimi session` still offers `list`
+  only and still reads the existing session store, so no new way to avoid that carrier was
+  found. The kimi live suite then passed on 2.0.2, which exercises consult, the read-only tool
+  profile, review and delegate; whether 2.0.2 still writes to the session store was not looked
+  at in that run (#202).
 - Releasing now checks the backend CLIs first. `docs/RELEASING.md` gains a precondition, run
   immediately before the release evidence: bring `codex`, `kimi` and `claude` to their latest
   releases, run the new zero-spend `scripts/check_backend_compat.py` (installed and latest

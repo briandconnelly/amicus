@@ -78,13 +78,14 @@ def test_a_capture_is_compared_to_the_live_help_and_the_newest_one_is_chosen(fak
 
 
 def test_a_flag_amicus_always_sends_that_help_no_longer_lists_is_a_failure(fakes, tmp_path):
-    ok = compat.check_backend("kimi", tmp_path, latest=_no_network)
+    ok = compat.check_backend("kimi", tmp_path, latest=_no_network, offline=True)
     assert compat.problems(ok) == []
     assert "--agent-file" in ok.declared, "control: the flag is declared before it is dropped"
     dropped = compat.check_backend(
         "kimi",
         tmp_path,
         latest=_no_network,
+        offline=True,
         help_text=ok.help_text.replace("--agent-file", "--agent-phile"),
     )
     assert dropped.missing_flags == ["--agent-file"]
@@ -183,22 +184,23 @@ def test_help_that_could_not_be_read_is_a_failure_not_a_clean_run(fakes, tmp_pat
 @pytest.mark.parametrize("state", [False, None])
 def test_a_backend_that_is_not_authenticated_is_a_failure(fakes, tmp_path, state):
     """The evidence run needs all three logged in, and RELEASING.md says yes means so."""
-    report = compat.check_backend("kimi", tmp_path, latest=_no_network)
+    report = compat.check_backend("kimi", tmp_path, latest=_no_network, offline=True)
     assert report.authenticated is True and compat.problems(report) == []
     report.authenticated = state
     assert any("authenticated" in p for p in compat.problems(report))
 
 
-def test_an_unreadable_latest_is_expected_for_kimi_and_a_failure_for_an_npm_backend(
-    fakes, tmp_path
-):
-    kimi = compat.check_backend("kimi", tmp_path, latest=_no_network)
-    assert kimi.latest is None and compat.problems(kimi) == []
-    codex = compat.check_backend("codex", tmp_path, latest=_no_network)
-    assert codex.latest is None
-    assert any("latest" in p and "npm" in p for p in compat.problems(codex))
+@pytest.mark.parametrize("backend", ["codex", "kimi", "claude"])
+def test_an_unreadable_latest_is_a_failure_for_every_backend(fakes, tmp_path, backend):
+    """All three CLIs are on npm (kimi as @moonshot-ai/kimi-code, which #202 established; it
+    was first treated as unreadable). So a missing latest is a lookup that failed, and it
+    must not look like a version that matched."""
+    assert backend in compat.NPM_PACKAGES
+    report = compat.check_backend(backend, tmp_path, latest=_no_network)
+    assert report.latest is None
+    assert any("latest" in p and "npm" in p for p in compat.problems(report))
     # --offline asked for no lookup, so its absence is advisory and said so, not a failure.
-    offline = compat.check_backend("codex", tmp_path, latest=_no_network, offline=True)
+    offline = compat.check_backend(backend, tmp_path, latest=_no_network, offline=True)
     assert compat.problems(offline) == []
 
 
