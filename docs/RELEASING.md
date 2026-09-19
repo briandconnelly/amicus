@@ -100,11 +100,12 @@ uv run python scripts/check_backend_compat.py
 ```
 
 Yes is exit status 0, with each backend reported as installed and authenticated, no `FAIL` line, and `same flags` against its newest committed capture.
-A `FAIL` line names what is wrong: a CLI that is not installed or not authenticated, a `--help` that could not be read, a warning `amicus_backends` would raise (such as an installed version outside the contract's supported set), a flag amicus always sends that `--help` no longer declares as an option, an installed version behind the latest release npm reports, or an npm lookup that failed.
+A `FAIL` line names what is wrong: a CLI that is not installed or not authenticated, a `--help` that could not be read, an installed version outside the supported versions of the contract amicus ships (read from the contract itself, so a `AMICUS_*_SUPPORTED_*` override in the environment cannot vouch for it), any warning `amicus_backends` would raise, a flag amicus always sends that `--help` no longer declares as an option, an installed version behind the latest release npm reports, or an npm lookup that failed.
 It fails closed: help that cannot be read, or a latest release that cannot be looked up, is a failure rather than a pass, and `--offline` exists to say out loud that the lookup was skipped, which is not good enough for a release.
 A flag counts only where `--help` declares it as an option, never where another option's description happens to name it.
 `FLAGS DIFFER` is not by itself a failure, since upstream adds flags constantly, but every removed flag must be looked up in that backend's `contract.py` before going on.
-`latest unknown` is expected for kimi and is a failure for nothing; it is why `kimi upgrade` comes first.
+`latest unknown` is expected for kimi, whose latest release cannot be read from outside the CLI, and does not fail the check; that is why `kimi upgrade` comes first.
+For codex and claude it does fail the check, because npm can answer and did not.
 
 When a CLI's version has no capture of its own, commit one with the change that adds support for it, so the next release has something to compare against.
 

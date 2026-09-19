@@ -47,6 +47,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from amicus import backends as in_tree
+from amicus.backends.claude import contract as claude_contract
+from amicus.backends.codex import contract as codex_contract
+from amicus.backends.kimi import contract as kimi_contract
 from amicus.registry import BackendRegistry
 from amicus.sdk.core import runtime
 
@@ -81,6 +84,7 @@ class Report:
     help_ok: bool = False  # the help command exited 0 and declared at least one option
     declared: frozenset[str] = frozenset()
     offline: bool = False
+    builtin_supported: bool = False  # by the SHIPPED contract, whatever the environment says
     missing_flags: list[str] = field(default_factory=list)
     capture: Path | None = None
     capture_state: str = "none"  # none | identical | reworded | flags_differ
@@ -93,6 +97,20 @@ class Report:
 def semver(text: str | None) -> tuple[int, int, int] | None:
     match = _SEMVER.search(text or "")
     return (int(match[1]), int(match[2]), int(match[3])) if match else None
+
+
+def builtin_supported(backend: str, version: str | None) -> bool:
+    """Whether the contract amicus SHIPS names this version. `status.warnings` cannot say:
+    it reads the effective configuration, so an ambient AMICUS_*_SUPPORTED_VERSIONS naming
+    the installed version silences the warning (the hole #113 closed in the live gate). The
+    contract modules are read at call time, not bound at import, so this sees what ships."""
+    parsed = semver(version)
+    if parsed is None:
+        return False
+    if backend == "claude":
+        return parsed[0] in claude_contract.SUPPORTED_MAJORS
+    shipped = {"codex": codex_contract, "kimi": kimi_contract}[backend].SUPPORTED_VERSIONS
+    return parsed[:2] in shipped
 
 
 def declared_flags(help_text: str) -> frozenset[str]:
@@ -157,6 +175,7 @@ def check_backend(
     )
     if not status.installed:
         return report
+    report.builtin_supported = builtin_supported(backend, report.version)
     probe_ok = True
     if help_text is None:
         run = runtime.run_sync_capture(list(plugin.help_probe.help_argv), timeout_seconds=15)
@@ -210,6 +229,12 @@ def problems(report: Report) -> list[str]:
     if not report.installed:
         return [f"{report.backend}: not installed, so nothing about it was checked"]
     found = [f"{report.backend}: warning: {w}" for w in report.warnings]
+    if not report.builtin_supported:
+        found.append(
+            f"{report.backend}: installed {report.version} is outside the built-in contract's "
+            "supported versions, whatever AMICUS_*_SUPPORTED_* says in this environment; "
+            "support it in its own PR first"
+        )
     if report.authenticated is not True:
         found.append(
             f"{report.backend}: not authenticated ({report.authenticated}); the evidence run "

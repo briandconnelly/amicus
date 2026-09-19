@@ -200,3 +200,36 @@ def test_an_unreadable_latest_is_expected_for_kimi_and_a_failure_for_an_npm_back
     # --offline asked for no lookup, so its absence is advisory and said so, not a failure.
     offline = compat.check_backend("codex", tmp_path, latest=_no_network, offline=True)
     assert compat.problems(offline) == []
+
+
+def test_an_ambient_support_override_cannot_vouch_for_an_unchecked_version(fakes, tmp_path):
+    """The same hole #113 closed in the live gate: `status.warnings` reads the EFFECTIVE
+    configuration, so an operator override naming the installed version silences the
+    warning. The shipped contract is what a release vouches for, so it is checked directly."""
+    ok = compat.check_backend("codex", tmp_path, latest=_no_network, offline=True)
+    assert ok.version == "0.153.4" and ok.builtin_supported is True
+    assert compat.problems(ok) == []
+    # The fake is 0.153.4. Pretend the shipped contract stops short of it, and let the
+    # environment claim support for it anyway.
+    fakes.setenv("AMICUS_CODEX_SUPPORTED_VERSIONS", "0.153")
+    fakes.setattr("amicus.backends.codex.contract.SUPPORTED_VERSIONS", frozenset({(0, 152)}))
+    hidden = compat.check_backend("codex", tmp_path, latest=_no_network, offline=True)
+    assert hidden.warnings == (), "control: the override did silence the status warning"
+    assert hidden.builtin_supported is False
+    assert any("built-in contract" in p for p in compat.problems(hidden))
+
+
+@pytest.mark.parametrize(
+    ("backend", "version", "want"),
+    [
+        ("codex", "0.155.1", True),
+        ("codex", "0.999.0", False),
+        ("kimi", "0.43.9", True),
+        ("kimi", "0.999.0", False),
+        ("claude", "2.9.9", True),
+        ("claude", "3.0.0", False),
+        ("codex", "nightly", False),
+    ],
+)
+def test_builtin_support_is_read_from_each_contract(backend, version, want):
+    assert compat.builtin_supported(backend, version) is want
