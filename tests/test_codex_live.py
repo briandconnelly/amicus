@@ -42,6 +42,10 @@ async def test_backends_reports_codex_ready_live(live_codex):
     assert entry["available"] is True and entry["status"]["installed"] is True
     assert entry["status"]["authenticated"] is True, entry["status"]
     assert entry["status"]["version"].startswith("codex-cli")
+    # Rule-20 evidence must not vouch for a codex minor amicus never checked (#113). Any
+    # minor in SUPPORTED_VERSIONS will do, which is what no warning means; kimi's gate pins
+    # the newest one instead, at the cost of blocking evidence on every CLI upgrade.
+    assert entry["status"]["warnings"] == [], entry["status"]
 
 
 async def test_consult_live(live_codex, tmp_path):
