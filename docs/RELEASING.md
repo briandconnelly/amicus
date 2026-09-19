@@ -100,7 +100,9 @@ uv run python scripts/check_backend_compat.py
 ```
 
 Yes is exit status 0, with each backend reported as installed and authenticated, no `FAIL` line, and `same flags` against its newest committed capture.
-A `FAIL` line names what is wrong: a CLI that is not installed, a warning `amicus_backends` would raise (an installed version outside the contract's supported set, or a flag amicus always sends that `--help` no longer lists), or an installed version behind the latest release npm reports.
+A `FAIL` line names what is wrong: a CLI that is not installed or not authenticated, a `--help` that could not be read, a warning `amicus_backends` would raise (such as an installed version outside the contract's supported set), a flag amicus always sends that `--help` no longer declares as an option, an installed version behind the latest release npm reports, or an npm lookup that failed.
+It fails closed: help that cannot be read, or a latest release that cannot be looked up, is a failure rather than a pass, and `--offline` exists to say out loud that the lookup was skipped, which is not good enough for a release.
+A flag counts only where `--help` declares it as an option, never where another option's description happens to name it.
 `FLAGS DIFFER` is not by itself a failure, since upstream adds flags constantly, but every removed flag must be looked up in that backend's `contract.py` before going on.
 `latest unknown` is expected for kimi and is a failure for nothing; it is why `kimi upgrade` comes first.
 

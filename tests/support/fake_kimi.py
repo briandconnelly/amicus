@@ -83,8 +83,11 @@ def main(argv: list[str]) -> int:
         print("0.41.0")
         return 0
     if argv == ["--help"]:
-        print(_HELP)
-        return 0
+        # FAKE_KIMI_HELP_EXIT makes the probe itself fail, printing nothing (#188).
+        failed = int(os.environ.get("FAKE_KIMI_HELP_EXIT", "0"))
+        if not failed:
+            print(_HELP)
+        return failed
     if argv == ["provider", "list", "--json"]:
         print(os.environ.get("FAKE_KIMI_PROVIDERS", _DEFAULT_PROVIDERS))
         return 0

@@ -48,7 +48,6 @@ from typing import TYPE_CHECKING
 
 from amicus import backends as in_tree
 from amicus.registry import BackendRegistry
-from amicus.sdk.conventions.preflight import FlagSupport, parse_supported
 from amicus.sdk.core import runtime
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -58,6 +57,12 @@ BACKENDS: tuple[str, ...] = ("codex", "kimi", "claude")
 # Where npm publishes a backend's CLI. Kimi Code is not on npm: it self-updates.
 NPM_PACKAGES: dict[str, str] = {"codex": "@openai/codex", "claude": "@anthropic-ai/claude-code"}
 _SEMVER = re.compile(r"(\d+)\.(\d+)\.(\d+)")
+# An option ROW: a shallow indent, then the declaration column up to the gap before its
+# description. codex indents rows by 2 or 6 and puts the description on the next line;
+# kimi and claude indent by 2 and describe on the same line. Description text wraps at 10
+# columns or deeper, and may itself begin with a flag, so the indent is what tells them apart.
+_OPTION_ROW = re.compile(r"^ {1,8}(-\S.*?)(?: {2,}|$)", re.MULTILINE)
+_LONG_FLAG = re.compile(r"(?<![\w-])--[A-Za-z][\w-]*")
 CARRIER_REMINDER = (
     "Not checked here: AGENTS.md rule 18's carrier re-check. For each version above, confirm "
     "no documented or observed way to avoid that backend's native carriers has appeared "
@@ -73,6 +78,9 @@ class Report:
     authenticated: bool | None = None
     warnings: tuple[str, ...] = ()
     help_text: str = ""
+    help_ok: bool = False  # the help command exited 0 and declared at least one option
+    declared: frozenset[str] = frozenset()
+    offline: bool = False
     missing_flags: list[str] = field(default_factory=list)
     capture: Path | None = None
     capture_state: str = "none"  # none | identical | reworded | flags_differ
@@ -85,6 +93,16 @@ class Report:
 def semver(text: str | None) -> tuple[int, int, int] | None:
     match = _SEMVER.search(text or "")
     return (int(match[1]), int(match[2]), int(match[3])) if match else None
+
+
+def declared_flags(help_text: str) -> frozenset[str]:
+    """The long flags `--help` DECLARES, from its option rows alone. The SDK's
+    `parse_supported` takes every `--flag` token in the text, which suits a help-gated flag,
+    where a stray match sends something harmless. Here it would hide a removal: claude's
+    help names `--mcp-config` inside two other options' descriptions."""
+    return frozenset(
+        flag for row in _OPTION_ROW.findall(help_text) for flag in _LONG_FLAG.findall(row)
+    )
 
 
 def latest_upstream(backend: str) -> str | None:
@@ -122,6 +140,7 @@ def check_backend(
     *,
     latest: Callable[[str], str | None] = latest_upstream,
     help_text: str | None = None,
+    offline: bool = False,
 ) -> Report:
     """`help_text` stands in for the live probe, so a test can show a dropped flag."""
     plugin = BackendRegistry.load((backend,), in_tree=in_tree.IN_TREE, entry_points=()).get(backend)
@@ -134,15 +153,23 @@ def check_backend(
         version=".".join(map(str, semver(status.version) or ())) or status.version,
         authenticated=status.authenticated,
         warnings=tuple(status.warnings),
+        offline=offline,
     )
     if not status.installed:
         return report
+    probe_ok = True
     if help_text is None:
         run = runtime.run_sync_capture(list(plugin.help_probe.help_argv), timeout_seconds=15)
-        help_text = "" if run.binary_missing else run.stdout
+        probe_ok = not run.binary_missing and not run.timed_out and run.exit_code == 0
+        help_text = run.stdout if probe_ok else ""
     report.help_text = help_text
-    support = FlagSupport(supported=parse_supported(help_text), help_parsed=bool(help_text.strip()))
-    report.missing_flags = plugin.help_probe.missing_expected_flags(support)
+    report.declared = declared_flags(help_text)
+    # Fail closed: help that could not be read declares nothing, and "nothing is missing"
+    # from nothing is how an unreadable probe used to pass.
+    report.help_ok = probe_ok and bool(report.declared)
+    if report.help_ok:
+        always = plugin.help_probe.always_send_flags
+        report.missing_flags = sorted(f for f in always if f not in report.declared)
     report.capture = newest_capture(docs_root, backend)
     if report.capture is not None:
         committed = (report.capture / f"{backend}-help.txt").read_text(encoding="utf-8")
@@ -155,7 +182,7 @@ def check_backend(
                 lineterm="",
             )
         )
-        before, after = parse_supported(committed), parse_supported(help_text)
+        before, after = declared_flags(committed), report.declared
         report.flags_added = sorted(after - before)
         report.flags_removed = sorted(before - after)
         if report.flags_added or report.flags_removed:
@@ -169,15 +196,30 @@ def check_backend(
 
 
 def check_all(
-    docs_root: Path, *, latest: Callable[[str], str | None] = latest_upstream
+    docs_root: Path,
+    *,
+    latest: Callable[[str], str | None] = latest_upstream,
+    offline: bool = False,
 ) -> list[Report]:
-    return [check_backend(backend, docs_root, latest=latest) for backend in BACKENDS]
+    return [
+        check_backend(backend, docs_root, latest=latest, offline=offline) for backend in BACKENDS
+    ]
 
 
 def problems(report: Report) -> list[str]:
     if not report.installed:
         return [f"{report.backend}: not installed, so nothing about it was checked"]
     found = [f"{report.backend}: warning: {w}" for w in report.warnings]
+    if report.authenticated is not True:
+        found.append(
+            f"{report.backend}: not authenticated ({report.authenticated}); the evidence run "
+            "needs every backend logged in"
+        )
+    if not report.help_ok:
+        found.append(
+            f"{report.backend}: --help could not be read (it failed, timed out, or declared no "
+            "option), so no flag was checked"
+        )
     found += [
         f"{report.backend}: amicus always sends {flag}, which --help no longer lists"
         for flag in report.missing_flags
@@ -186,6 +228,14 @@ def problems(report: Report) -> list[str]:
         found.append(
             f"{report.backend}: installed {report.version} is not the latest release "
             f"({report.latest}); upgrade before recording release evidence"
+        )
+    elif report.latest is None and report.backend in NPM_PACKAGES and not report.offline:
+        # Kimi's latest is expected to be unreadable; an npm backend's is not, and a lookup
+        # that failed must not look like a version that matched.
+        found.append(
+            f"{report.backend}: the latest release could not be read from npm, so whether "
+            f"{report.version} is current is unknown; rerun online, or pass --offline to say "
+            "the check was skipped"
         )
     return found
 
@@ -201,7 +251,9 @@ def write_capture(report: Report, docs_root: Path) -> Path:
 def _describe(report: Report, *, show_diff: bool = False) -> list[str]:
     if not report.installed:
         return [f"{report.backend}: NOT INSTALLED"]
-    latest = report.latest or "unknown (not readable from here)"
+    latest = report.latest or (
+        "not looked up (--offline)" if report.offline else "unknown (not readable from here)"
+    )
     lines = [
         f"{report.backend}: installed {report.version}, latest {latest}, "
         f"authenticated={report.authenticated}"
@@ -230,7 +282,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--diff", action="store_true")
     args = parser.parse_args(argv)
     latest = (lambda _backend: None) if args.offline else latest_upstream
-    reports = check_all(args.docs_root, latest=latest)
+    reports = check_all(args.docs_root, latest=latest, offline=args.offline)
     found: list[str] = []
     for report in reports:
         print("\n".join(_describe(report, show_diff=args.diff)))
