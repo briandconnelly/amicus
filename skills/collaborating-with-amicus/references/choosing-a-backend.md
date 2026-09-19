@@ -17,6 +17,9 @@ are not restated here. These are this file's own:
   underlying models.
 - **Never inspect a user's provider configuration to establish model identity.** Report the
   diversity as unverified instead.
+- **Never send `kimi` text you would not leave on this machine's disk.** What is acceptable to
+  hand a provider is not thereby acceptable to keep locally: the kimi CLI's own session store
+  outlives the run and amicus does not delete it (see the carrier table below).
 
 ## What `amicus_backends` reports
 
@@ -97,7 +100,7 @@ backend's own choice, and `carriers` on `amicus_backends(detail="full")` is auth
 | --- | --- | --- | --- |
 | `codex` | stdin | **argv**, as the `-c developer_instructions` override | Visible to any local process listing for the run's duration — never put a secret here |
 | `claude` | stdin | stdin | argv carries only fixed text and flags |
-| `kimi` | a file in a private temp dir outside the workspace; argv carries only its path | same file | Nothing you type rides argv. amicus removes its temp directory when the run ends, but the kimi CLI also writes its own session store, which can hold the whole prompt and any answer produced (by default `~/.kimi-code/sessions`), which amicus does not delete and which job expiry, the per-workspace cap and `amicus_job_consume_result` never touch — send nothing you would not leave on this machine's disk |
+| `kimi` | a file in a private temp dir outside the workspace; argv carries only its path | same file | Nothing you type rides argv. amicus removes its temp directory when the run ends, but the kimi CLI also writes its own session store (observed under `~/.kimi-code/sessions`), which can hold the whole prompt and any answer produced; amicus does not delete it, and job expiry, the per-workspace cap and `amicus_job_consume_result` never touch it |
 
 Each backend also loads context you did not supply — `AGENTS.md`, skills, and on `claude` under
 `inherit`/`scoped`, workspace hooks that run outside the tool allowlist. `implicit_context` on

@@ -38,7 +38,7 @@ No suppression mechanism was found, and the claim is scoped to what was looked a
 So this establishes that no documented or observed switch exists in 0.43.1, not that none exists.
 
 amicus discloses the store rather than deleting it.
-The session id reaches amicus only in the stream's last event, so a cancelled or killed run never yields one; the store's layout is undocumented and can move with `KIMI_CODE_HOME`; and the same tree holds the operator's own interactive sessions.
+The session id reaches amicus only in the stream's last event, so a cancelled or killed run never yields one; the store's layout is undocumented, and whether `KIMI_CODE_HOME` or anything else moves it is untested, so amicus cannot be sure where a given run's session is; and the same tree holds the operator's own interactive sessions.
 A cleanup that works only on the happy path would make the disclosure less true, not more.
 Relocating the store per run stays open, and needs a probe against a local mock provider showing that one variable moves sessions without moving configuration or login state.
 

@@ -23,7 +23,7 @@ per-change, as its own lead says.
 ### Fixed
 
 - Kimi's `carriers` disclosure on `amicus_backends(detail="full")` now names the kimi CLI's own
-  session store (by default `~/.kimi-code/sessions`), whose files can hold the whole prompt and
+  session store (observed under `~/.kimi-code/sessions`), whose files can hold the whole prompt and
   any answer produced. amicus does not delete it, and `AMICUS_JOB_TTL`, the per-workspace cap and
   `amicus_job_consume_result` never reach it. Kimi's `readonly_honesty` no longer says Kimi
   "cannot MODIFY anything": read-only removes the agent's shell and write tools, not the CLI's

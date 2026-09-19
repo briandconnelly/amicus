@@ -367,3 +367,11 @@ def test_the_carrier_table_names_kimis_session_store():
     [row] = [line for line in _BACKENDS_REF.splitlines() if line.startswith("| `kimi` | a file")]
     assert "session store" in row and "amicus does not delete" in row
     assert "briefly on local disk" not in row
+    # The table is context. What the agent must do about it is a rule, and this file
+    # declares its own, so an agent reading only `## Rules` still meets the obligation.
+    rules = _BACKENDS_REF.partition("\n## Rules\n")[2].split("\n## ", 1)[0]
+    [rule] = [b for b in _bullets(rules) if "`kimi`" in b]
+    assert " ".join(rule.split()).startswith(
+        "- **Never send `kimi` text you would not leave on this machine's disk.**"
+    )
+    assert "send nothing" not in row, "the directive belongs under `## Rules`, not in the table"
