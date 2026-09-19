@@ -3,6 +3,7 @@ the 2.1.263 evidence rule (a flag the contract sends must appear in the capture)
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -145,3 +146,39 @@ def test_known_models_are_well_formed_aliases_first():
     assert len(set(slugs)) == len(slugs)
     for slug, name, kind in contract.KNOWN_MODELS:
         assert contract.MODEL_SLUG_PATTERN.match(slug) and name and kind in ("alias", "full")
+
+
+# --- every committed capture, not only the first (#188) -------------------------------------
+
+_CAPTURE_ROOT = _DOCS_PATH.parent
+# A capture directory may hold findings alone (2.1.274 records a budget-stop shape and no
+# help text); only one with a help file is held to the flags.
+HELP_CAPTURES = sorted(p for p in _CAPTURE_ROOT.iterdir() if (p / "claude-help.txt").is_file())
+# An option ROW, by its shallow indent: claude's descriptions wrap at column 40 and can begin
+# with a flag themselves, so a substring match would survive the option being dropped.
+_OPTION_ROW = re.compile(r"^ {1,8}(-\S.*?)(?: {2,}|$)", re.MULTILINE)
+_LONG_FLAG = re.compile(r"(?<![\w-])--[A-Za-z][\w-]*")
+
+
+def _declared(help_text: str) -> set[str]:
+    return {flag for row in _OPTION_ROW.findall(help_text) for flag in _LONG_FLAG.findall(row)}
+
+
+def test_the_captures_under_test_include_the_newest_one():
+    assert [p.name for p in HELP_CAPTURES] == ["2.1.263", "2.1.278"]
+
+
+@pytest.mark.parametrize("capture", HELP_CAPTURES, ids=lambda p: p.name)
+def test_every_sent_flag_is_declared_in_every_committed_capture(capture):
+    text = (capture / "claude-help.txt").read_text()
+    declared = _declared(text)
+    # Controls: rows are found, and a flag named only in another option's description is
+    # not counted as declared (2.1.278 names --mcp-config inside two descriptions).
+    assert "--model" in declared and "--definitely-not-a-claude-flag" not in declared
+    assert _declared(" " * 40 + "--mcp-config, mentioned in prose only\n") == set()
+    sent = {*contract.ALWAYS_SEND_FLAGS, *contract.HELP_GATED_FLAGS, "--print", "--tools"}
+    assert sorted(sent - declared) == [], capture.name
+    assert "\x1b" not in text
+    version = (capture / "claude-version.txt").read_text().strip()
+    assert version.startswith(capture.name), (version, capture.name)
+    assert int(capture.name.split(".")[0]) in contract.SUPPORTED_MAJORS

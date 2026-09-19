@@ -71,7 +71,10 @@ def main() -> int:
         print("Logged in using ChatGPT")
         return 0
     if argv[:2] == ["exec", "--help"]:
-        print(f"{_ALWAYS} --model")
+        # One option row per flag, in codex's own layout (six-space indent, description on
+        # the next line), so a reader that wants DECLARED options finds them (#188).
+        rows = [f"      {flag}\n          (fake)" for flag in f"{_ALWAYS} --model".split()]
+        print("Usage: codex exec [OPTIONS] [PROMPT]\n\nOptions:\n" + "\n".join(rows))
         return 0
     argv_file = os.environ.get("FAKE_CODEX_ARGV_FILE")
     if argv_file:

@@ -22,6 +22,14 @@ per-change, as its own lead says.
 
 ### Changed
 
+- Releasing now checks the backend CLIs first. `docs/RELEASING.md` gains a precondition, run
+  immediately before the release evidence: bring `codex`, `kimi` and `claude` to their latest
+  releases, run the new zero-spend `scripts/check_backend_compat.py` (installed and latest
+  version, the warnings `amicus_backends` would raise, and the flags each `--help` declares
+  against the newest committed capture), and do the AGENTS.md rule-18 carrier re-check by
+  reading, which no script can. Codex gains its first committed help capture (0.155.1), held
+  to the flags amicus always sends as Kimi's and Claude's already were, and Claude gains one for
+  2.1.278. Nothing about how amicus runs changes (#188).
 - codex-cli 0.155 is a supported version, so `amicus_backends` no longer warns on it. It was
   checked against 0.154.0 at zero spend: `--help`, `exec --help`, `exec review --help` and
   `login --help` are byte-identical, the unknown-feature error and the logged-out `login status`

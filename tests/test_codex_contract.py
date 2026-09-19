@@ -286,3 +286,35 @@ def test_parse_usage_limit_reset_reports_whether_a_zone_was_stated(text, zone_st
 def test_parse_usage_limit_reset_is_sanitized():
     reset = c.parse_usage_limit_reset("try again at 1:00\x1b[31m PM.")
     assert reset is not None and "\x1b" not in reset.when
+
+
+def _codex_captures():
+    from pathlib import Path
+
+    root = Path(__file__).parent.parent / "docs" / "codex-help"
+    return sorted(p for p in root.iterdir() if p.is_dir())
+
+
+def test_every_flag_the_contract_always_sends_is_declared_in_every_committed_capture():
+    """The evidence rule kimi and claude already had (#188): a flag amicus sends without
+    asking `--help` first must appear in each capture taken of `codex exec --help`. It is
+    checked as a declared option, since a flag named only in another option's prose would
+    keep a substring match passing after codex dropped it."""
+    import re
+
+    captures = _codex_captures()
+    assert captures, "no codex help capture is committed; scripts/check_backend_compat.py --write"
+    declared_row = re.compile(r"^\s+(?:-\w, )?(--[a-z][\w-]*)", re.MULTILINE)
+    for capture in captures:
+        text = (capture / "codex-help.txt").read_text()
+        declared = set(declared_row.findall(text))
+        # Control: the parse finds options at all, and rejects a flag codex never had.
+        assert "--sandbox" in declared and "--amicus-no-such-flag" not in declared
+        missing = sorted(c.ALWAYS_SEND_FLAGS - declared)
+        assert missing == [], f"{capture.name}: {missing}"
+        version = (capture / "codex-version.txt").read_text().strip()
+        assert version == capture.name
+        major, minor, _patch = version.split(".")
+        assert (int(major), int(minor)) in c.SUPPORTED_VERSIONS, (
+            f"a capture exists for {version}, which the contract does not support"
+        )
