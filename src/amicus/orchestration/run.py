@@ -125,6 +125,13 @@ def _read_artifacts(prepared: PreparedRun) -> tuple[dict[str, str], dict[str, Re
     return texts, refused
 
 
+def _answer_refusal(prepared: PreparedRun, refused: dict[str, Refusal]) -> Refusal | None:
+    """The refusal that matters: of an artifact the backend declared as carrying its ANSWER.
+    Codex stages its input schema beside the answer, and refusing that says nothing about
+    whether the backend answered."""
+    return next((refused[name] for name in prepared.answer_artifacts if name in refused), None)
+
+
 def _answer_unavailable(refusal: Refusal, meta: Any, plugin: BackendPlugin) -> dict[str, Any]:
     reason, message, next_step = _REFUSAL_WIRE[refusal.reason]
     oversize = refusal.reason == REFUSED_OVERSIZE
@@ -289,9 +296,7 @@ async def run_request(
             # An answer file amicus refused is not the backend saying nothing (#162). A real
             # process failure is the more accurate account and wins; a clean exit that an
             # inspector called empty does not, since the refusal is WHY it looked empty.
-            refusal = next(
-                (refused[name] for name in prepared.answer_artifacts if name in refused), None
-            )
+            refusal = _answer_refusal(prepared, refused)
             clean_exit = run.exit_code == 0 and not run.binary_missing and not run.timed_out
             if failure is not None and not (refusal is not None and clean_exit):
                 return render_failure(plugin, finalize.scrub_failure(failure, refs), meta)

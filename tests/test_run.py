@@ -373,3 +373,30 @@ def test_a_file_that_grows_past_the_cap_after_fstat_is_refused(tmp_path, monkeyp
     )
     # Its size was never learned: fstat lied, and the read stopped one byte past the cap.
     assert run_mod._read_artifacts(prepared) == ({}, {"answer": run_mod.Refusal("oversize")})
+
+
+def test_only_a_refused_answer_artifact_is_a_refused_answer(tmp_path):
+    """Codex lists its input schema in `artifact_paths` beside the answer. A refused schema
+    with an absent answer is the backend writing nothing, not amicus refusing an answer."""
+    from amicus.sdk.backend.protocol import PreparedRun
+
+    big = tmp_path / "schema.json"
+    big.write_bytes(b"x" * (run_mod.MAX_ARTIFACT_BYTES + 1))
+    prepared = PreparedRun(
+        argv=("x",),
+        env={},
+        cwd=str(tmp_path),
+        artifact_paths={"last-message": str(tmp_path / "absent"), "schema": str(big)},
+        answer_artifacts=("last-message",),
+    )
+    _, refused = run_mod._read_artifacts(prepared)
+    assert set(refused) == {"schema"}, "control: something WAS refused"
+    assert run_mod._answer_refusal(prepared, refused) is None
+    swapped = PreparedRun(
+        argv=("x",),
+        env={},
+        cwd=str(tmp_path),
+        artifact_paths=prepared.artifact_paths,
+        answer_artifacts=("schema",),
+    )
+    assert run_mod._answer_refusal(swapped, refused) == refused["schema"]
