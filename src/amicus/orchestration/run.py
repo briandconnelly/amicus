@@ -12,7 +12,7 @@ import os
 from stat import S_ISREG
 from typing import TYPE_CHECKING, Any, NamedTuple
 
-from amicus.errors import error_envelope, render_failure
+from amicus.errors import error_envelope, generalize_code, render_failure
 from amicus.orchestration import finalize, prompts, review
 from amicus.orchestration.isolation import SiteError, select_site
 from amicus.request import meta_for
@@ -72,8 +72,8 @@ ANSWER_REFUSED_WARNING = (
     "comes from the backend's other output, not from that file."
 )
 DELEGATE_SUMMARY_UNAVAILABLE = (
-    "The backend's summary could not be read: amicus refused its answer file. The diff below "
-    "was captured from the worktree and is complete."
+    "The backend's summary could not be read: amicus refused its answer file. The diff was "
+    "captured from the worktree, not from that file, and is still delivered."
 )
 
 
@@ -293,24 +293,38 @@ async def run_request(
             failure = inspect_outcome(plugin.backend, outcome, request)
             if failure is None and (run.exit_code != 0 or run.binary_missing or run.timed_out):
                 failure = plugin.backend.classify_failure(outcome, request)
-            # An answer file amicus refused is not the backend saying nothing (#162). A real
-            # process failure is the more accurate account and wins; a clean exit that an
-            # inspector called empty does not, since the refusal is WHY it looked empty.
+            # An answer file amicus refused is not the backend saying nothing (#162). Every
+            # failure is the more accurate account and wins, with one exception: a clean
+            # exit an inspector diagnosed as EMPTY, since the refusal is why it looked empty.
+            # Anything else an inspector reports on exit 0 (auth, a rate limit, a budget
+            # stop) is its own fact, which a refusal must never hide.
             refusal = _answer_refusal(prepared, refused)
             clean_exit = run.exit_code == 0 and not run.binary_missing and not run.timed_out
-            if failure is not None and not (refusal is not None and clean_exit):
+            explained_by_refusal = (
+                refusal is not None
+                and clean_exit
+                and failure is not None
+                and generalize_code(failure.code, plugin.backend_id) == "empty_response"
+            )
+            if failure is not None and not explained_by_refusal:
                 return render_failure(plugin, finalize.scrub_failure(failure, refs), meta)
             diff = site.capture_diff() if spec.kind == "delegate" else None
             aliases = site.aliases
+            summary_override = None
             if refusal is not None:
-                if (result.answer or "").strip():
-                    # The backend's other channel carried a whole answer (kimi's stream).
+                # The other channel (kimi's stream) is a substitute only if it was captured
+                # whole: a truncated or failed capture can lose the true final message while
+                # an earlier one still parses.
+                whole_stream = not run.output_truncated and not run.capture_failed
+                if (result.answer or "").strip() and whole_stream:
                     meta.security_warnings.append(ANSWER_REFUSED_WARNING)
                 elif spec.kind == "delegate" and (diff or "").strip():
                     # The diff comes from the worktree, not from the file, so it is still
-                    # the honest primary result; say what is missing rather than hide it.
+                    # the honest primary result. The summary is amicus's own, so it rides
+                    # beside the (now empty) backend answer rather than in place of it.
                     meta.security_warnings.append(ANSWER_REFUSED_WARNING)
-                    result = dataclasses.replace(result, answer=DELEGATE_SUMMARY_UNAVAILABLE)
+                    result = dataclasses.replace(result, answer="")
+                    summary_override = DELEGATE_SUMMARY_UNAVAILABLE
                 else:
                     return _answer_unavailable(refusal, meta, plugin)
     except SiteError as exc:
@@ -329,4 +343,5 @@ async def run_request(
         aliases=aliases,
         max_diff_bytes=spec.max_diff_bytes,
         refs=refs,
+        summary_override=summary_override,
     )

@@ -400,3 +400,79 @@ def test_only_a_refused_answer_artifact_is_a_refused_answer(tmp_path):
         answer_artifacts=("schema",),
     )
     assert run_mod._answer_refusal(swapped, refused) == refused["schema"]
+
+
+# --- #162: what a refused answer artifact may and may not override -------------------------
+
+
+def _refusing(base, tmp_path):
+    """`base` with an answer artifact amicus will refuse (a symlink), answering on stdout."""
+    import contextlib
+
+    from amicus.sdk.backend.protocol import PreparedRun
+
+    real = tmp_path / "answer.real"
+    real.write_text("from the file")
+    link = tmp_path / "answer.md"
+    link.symlink_to(real)
+
+    class Refusing(base):
+        def prepare(self, request):
+            @contextlib.asynccontextmanager
+            async def _cm():
+                yield PreparedRun(
+                    argv=("fake",),
+                    env={},
+                    cwd=request.cwd,
+                    stdin_text=request.prompt,
+                    artifact_paths={"answer": str(link)},
+                    answer_artifacts=("answer",),
+                )
+
+            return _cm()
+
+    return fakeplugin.make_plugin(backend=Refusing())
+
+
+async def test_a_refusal_never_hides_an_inspectors_own_failure(monkeypatch, tmp_path):
+    """Only the empty-answer diagnosis is explained by a refusal. Any other failure an
+    inspector reports on a clean exit (auth, a rate limit, a budget stop) is its own fact."""
+    monkeypatch.setattr(run_mod.runtime, "run_async", cf.scripted_run_async(stdout="INSPECT_FAIL"))
+    out = await run_mod.run_request(_spec(), _refusing(fakeplugin.InspectingBackend, tmp_path))
+    assert out["ok"] is False and out["error"]["code"] == "nonzero_exit"
+    assert "inspector said no" in out["error"]["message"]
+
+
+@pytest.mark.parametrize("flag", ["output_truncated", "capture_failed"])
+async def test_a_stream_that_was_not_captured_whole_is_no_substitute(monkeypatch, tmp_path, flag):
+    """With the answer file refused, the stream is the only answer left, and a truncated or
+    failed capture may have lost the true final message while an earlier one still parses."""
+    import dataclasses
+
+    scripted = cf.scripted_run_async(stdout="an earlier message")
+
+    async def damaged(*args, **kwargs):
+        return dataclasses.replace(await scripted(*args, **kwargs), **{flag: True})
+
+    plugin = _refusing(fakeplugin.FakeBackend, tmp_path)
+    monkeypatch.setattr(run_mod.runtime, "run_async", damaged)
+    out = await run_mod.run_request(_spec(), plugin)
+    assert out["ok"] is False and out["error"]["code"] == "answer_unavailable"
+    # Control: the same run captured whole IS delivered, with the warning.
+    monkeypatch.setattr(run_mod.runtime, "run_async", scripted)
+    ok = await run_mod.run_request(_spec(), plugin)
+    assert ok["ok"] is True and ok["summary"] == "an earlier message"
+    assert run_mod.ANSWER_REFUSED_WARNING in ok["meta"]["security_warnings"]
+
+
+def test_answer_unavailable_is_amicus_own_code_not_an_sdk_universal_one():
+    """The SDK's universal set is the intersection every bridge emits. This code comes from
+    amicus's own orchestration, for answer-file backends only (ADR 0030)."""
+    from amicus.errors import repair_table
+    from amicus.schemas import codes
+    from amicus.sdk.conventions import envelope
+
+    assert "answer_unavailable" in codes.LOCAL_CODES
+    assert "answer_unavailable" not in envelope.UNIVERSAL_CODES
+    rule = repair_table(None)["answer_unavailable"]
+    assert rule.next_step == "reduce_input" and rule.temporary is False

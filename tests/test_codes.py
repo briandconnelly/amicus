@@ -39,6 +39,7 @@ def test_error_codes_cover_the_universal_taxonomy_and_generalized_backend_codes(
     assert (
         frozenset(
             {
+                "answer_unavailable",
                 "backend_unavailable",
                 "feature_unsupported",
                 "user_config_rejected",

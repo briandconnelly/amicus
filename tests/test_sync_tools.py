@@ -464,11 +464,20 @@ async def test_a_delegate_keeps_its_diff_when_only_the_summary_was_refused(app, 
     async with Client(app) as c:
         res = await c.call_tool(
             "amicus_delegate",
-            {"backend": "codex", "task": "edit a.py", "workspace_root": str(repo)},
+            {
+                "backend": "codex",
+                "task": "edit a.py",
+                "workspace_root": str(repo),
+                "detail": "full",
+            },
         )
     body = res.structured_content
     assert body["ok"] is True and "+changed" in body["diff"]
     assert "could not be read" in body["summary"] and "oversize" not in body["summary"].lower()
+    # The summary is amicus's, so it is not passed off as the backend's own words, and it
+    # makes no claim about the diff, which `meta.truncated` and `redacted_paths` describe.
+    assert (body.get("raw_response") or {}).get("text") is None
+    assert "complete" not in body["summary"]
     assert any("answer file" in w for w in body["meta"]["security_warnings"])
 
 

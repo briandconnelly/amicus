@@ -64,7 +64,9 @@ refused to read the file it answered in. `error.details.reason` says why — `ar
 (a symlink, FIFO or device) or `artifact_unreadable`. It is not temporary, so never repeat the
 identical call: for oversize, narrow the task or ask for a shorter answer. A delegate whose
 summary file was refused but whose diff was captured still comes back `ok: true`, with the diff,
-a summary saying the backend's own could not be read, and a `meta.security_warnings` entry.
+amicus's own summary saying the backend's could not be read, a null `raw_response.text`, and a
+`meta.security_warnings` entry. Read `meta.truncated` and `meta.redacted_paths` for whether that
+diff is whole, as on any delegate.
 
 When a review was not complete, the result's `coverage` object says so in fields you can branch
 on: `coverage.status` is `complete` or `partial`, and `coverage.omission_reasons` names why, in a
