@@ -156,6 +156,53 @@ async def test_a_finding_citing_the_handshake_prompt_is_delivered_without_it(
     assert "amicus-kimi-handshake-" not in json.dumps(payload), "scrubbed before it is stored"
 
 
+async def test_a_review_citing_the_prompt_in_jsons_escaped_spelling_is_scrubbed(
+    app, repo, monkeypatch
+):
+    """A review re-parses the raw answer, and JSON lets a path be written `\\/tmp\\/x`, which
+    text replacement cannot see. Judged at detail=full, so raw_response.text is in scope."""
+    (repo / "a.py").write_text("x = 2\n")
+    answer = (
+        '{"summary": "s", "verdict": "pass", "confidence": "high", "findings": '
+        '[{"title": "t", "severity": "low", "file": "{PROMPT_PATH_ESCAPED}", "line": 4}], '
+        '"questions": [], "assumptions": [], "next_steps": []}'
+    )
+    assert "\\/" not in answer, "control: only the fake's substitution supplies the escape"
+    monkeypatch.setenv("FAKE_KIMI_ANSWER", answer)
+    async with Client(app) as c:
+        res = await c.call_tool(
+            "amicus_review_changes",
+            {"backend": "kimi", "workspace_root": str(repo), "detail": "full"},
+        )
+    body = res.structured_content
+    assert body["ok"] is True and body["review_status"] == "completed", body.get("summary")
+    [finding] = body["findings"]
+    assert finding.get("file") is None and finding.get("line") is None
+    assert body["findings_diagnostics"]["reasons"] == ["backend_artifact_reference_removed"]
+    assert body["verdict"] == "pass" and body["confidence"] == "high", "never folds a verdict"
+    assert body["raw_response"]["text"], "control: the raw answer was delivered"
+    assert "amicus-kimi-handshake-" not in json.dumps(body)
+
+
+async def test_a_failure_citing_the_handshake_prompt_is_scrubbed_too(app, repo, monkeypatch):
+    monkeypatch.setenv("FAKE_KIMI_EXIT", "1")
+    monkeypatch.setenv("FAKE_KIMI_STDERR", "error: cannot parse {PROMPT_PATH}: line 3")
+    async with Client(app) as c:
+        res = await c.call_tool(
+            "amicus_consult",
+            {"backend": "kimi", "question": "q", "workspace_root": str(repo)},
+            raise_on_error=False,
+        )
+    body = res.structured_content
+    assert body["ok"] is False
+    # Control: the stderr line did reach the message, so the path's absence means something.
+    assert "cannot parse [amicus temporary file]: line 3" in body["error"]["message"]
+    assert "amicus-kimi-handshake-" not in json.dumps(body)
+    store = lifecycle.job_store(config.settings())
+    _, payload = store.result_payload(str(repo.resolve()), body["meta"]["job_id"])
+    assert "amicus-kimi-handshake-" not in json.dumps(payload)
+
+
 async def test_consult_outside_a_repo_runs_in_an_empty_dir_with_a_warning(app, tmp_path):
     async with Client(app) as c:
         res = await c.call_tool(

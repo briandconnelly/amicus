@@ -10,12 +10,17 @@ from __future__ import annotations
 import json
 from typing import get_args
 
+import pytest
+
 from amicus.orchestration import finalize, review
 from amicus.schemas.results import FindingReason
-from amicus.sdk.backend.protocol import ExecResult
+from amicus.sdk.backend.protocol import ClassifiedFailure
 
-_ART = "/private/var/folders/xx/T/amicus-kimi-handshake-ab12/prompt.md"
+_DIR = "/private/var/folders/xx/T/amicus-kimi-handshake-ab12"
+_ART = f"{_DIR}/prompt.md"
 _REASON = "backend_artifact_reference_removed"
+_REFS = finalize.artifact_refs((_ART,))
+_P = finalize.ARTIFACT_PLACEHOLDER
 
 
 def _answer(finding: dict, **extra) -> dict:
@@ -31,15 +36,16 @@ def _answer(finding: dict, **extra) -> dict:
     }
 
 
-def _scrubbed(structured: dict, artifacts=(_ART,)) -> ExecResult:
-    raw = ExecResult(answer=json.dumps(structured), structured=structured)
-    return finalize.scrub_artifact_references(raw, artifacts)
+def _coerced(structured: dict, refs=_REFS):
+    scrubbed, touched = finalize.scrub_structured(structured, refs)
+    findings, diagnostics = finalize.coerce_findings(scrubbed["findings"], touched)
+    return scrubbed, findings, diagnostics
 
 
 def test_a_finding_anchored_to_an_artifact_loses_file_and_line_and_says_so():
-    result = _scrubbed(_answer({"title": "t", "severity": "high", "file": _ART, "line": 28}))
-    findings, diagnostics = finalize.coerce_findings(result.structured["findings"])
-    [finding] = findings
+    _, [finding], diagnostics = _coerced(
+        _answer({"title": "t", "severity": "high", "file": _ART, "line": 28})
+    )
     assert finding.title == "t" and finding.severity == "high", "the finding survives"
     assert finding.file is None and finding.line is None, "a dead anchor keeps no line"
     assert diagnostics is not None and diagnostics.dropped == 0
@@ -50,53 +56,101 @@ def test_a_workspace_path_that_merely_looks_like_one_is_left_alone():
     """Exact run-owned paths only: a prefix or temp-root heuristic would clear this real,
     actionable location, which costs the caller more than a leaked dead path does."""
     lookalike = "tests/fixtures/amicus-kimi-handshake-zz99/prompt.md"
-    result = _scrubbed(_answer({"title": "t", "file": lookalike, "line": 3}))
-    findings, diagnostics = finalize.coerce_findings(result.structured["findings"])
-    assert findings[0].file == lookalike and findings[0].line == 3 and diagnostics is None
+    _, [finding], diagnostics = _coerced(_answer({"title": "t", "file": lookalike, "line": 3}))
+    assert finding.file == lookalike and finding.line == 3 and diagnostics is None
 
 
-def test_every_prose_carrier_and_the_raw_answer_are_scrubbed():
+def test_the_placeholder_is_ordinary_text_and_proves_nothing():
+    """What changed travels beside the object as indexes, never inside it: a backend can
+    write the placeholder itself, and a real file can be named with it."""
+    real = f"docs/{_P}/example.py"
+    for refs in (finalize.NO_ARTIFACTS, _REFS):
+        _, [finding], diagnostics = _coerced(
+            _answer({"title": f"about {_P}", "file": real, "line": 7}), refs
+        )
+        assert finding.file == real and finding.line == 7 and diagnostics is None
+
+
+def test_every_prose_carrier_is_scrubbed():
     structured = _answer(
-        {"title": f"in {_ART}", "evidence": f"see {_ART}:28", "suggestion": f"edit {_ART}"},
+        {"title": f"in {_ART}", "evidence": f"see {_ART}:28", "suggestion": f"edit {_ART}."},
         summary=f"read {_ART}",
         questions=[f"why {_ART}?"],
         assumptions=[f"{_ART} is current"],
         next_steps=[f"open {_ART}"],
     )
-    result = _scrubbed(structured)
-    assert _ART not in json.dumps(result.structured) and _ART not in result.answer
-    assert finalize.ARTIFACT_PLACEHOLDER in result.answer
-    _, diagnostics = finalize.coerce_findings(result.structured["findings"])
+    scrubbed, [finding], diagnostics = _coerced(structured)
+    assert _DIR not in json.dumps(scrubbed)
+    assert finding.evidence == f"see {_P}:28" and finding.suggestion == f"edit {_P}."
     assert diagnostics is not None and diagnostics.reasons == [_REASON], (
         "a finding whose prose was changed is reported, like one whose anchor was cleared"
     )
 
 
 def test_scrubbing_top_level_prose_alone_is_not_a_findings_deviation():
-    result = _scrubbed(_answer({"title": "t"}, summary=f"read {_ART}"))
-    assert _ART not in result.structured["summary"]
-    _, diagnostics = finalize.coerce_findings(result.structured["findings"])
+    scrubbed, _, diagnostics = _coerced(_answer({"title": "t"}, summary=f"read {_ART}"))
+    assert scrubbed["summary"] == f"read {_P}"
     assert diagnostics is None, "findings_diagnostics describes the findings list only"
 
 
+def test_only_the_changed_finding_is_reported_and_an_unreadable_one_still_counts():
+    structured = _answer({"title": "clean"})
+    structured["findings"] += [{"title": "t", "file": _ART, "line": 1}, f"see {_ART}"]
+    scrubbed, touched = finalize.scrub_structured(structured, _REFS)
+    assert touched == {1, 2}
+    findings, diagnostics = finalize.coerce_findings(scrubbed["findings"], touched)
+    assert [f.title for f in findings] == ["clean", "t"]
+    assert diagnostics is not None and diagnostics.dropped == 1
+    assert diagnostics.reasons == [_REASON, "invalid_entry"]
+
+
+@pytest.mark.parametrize(
+    ("text", "want"),
+    [
+        (f"{_ART}:28", f"{_P}:28"),
+        (f"see {_ART}.", f"see {_P}."),
+        (f"({_ART})", f"({_P})"),
+        (f"{_ART}.bak", f"{_ART}.bak"),
+        (f"{_ART}x", f"{_ART}x"),
+        (f"{_DIR}/other.md", f"{_DIR}/other.md"),
+    ],
+)
+def test_a_listed_file_is_matched_at_its_boundaries_and_nowhere_else(text, want):
+    assert _REFS.scrub(text) == want
+
+
+@pytest.mark.parametrize(
+    ("text", "want"),
+    [
+        (f"{_DIR}/other.md:3 and {_DIR}", f"{_P}:3 and {_P}"),
+        (f"ls {_DIR}/", f"ls {_P}"),
+        (f"{_DIR}c/prompt.md", f"{_DIR}c/prompt.md"),
+        (f"{_DIR}.bak", f"{_DIR}.bak"),
+    ],
+)
+def test_a_staging_dir_takes_everything_beneath_it_and_no_longer_sibling(text, want):
+    assert finalize.artifact_refs((_ART,), _DIR).scrub(text) == want
+
+
 def test_every_staged_artifact_is_covered_not_just_the_prompt():
-    agent = _ART.replace("prompt.md", "readonly-agent.md")
-    result = _scrubbed(_answer({"title": "t", "file": agent, "line": 1}), (_ART, agent))
-    findings, _ = finalize.coerce_findings(result.structured["findings"])
-    assert findings[0].file is None
+    agent = f"{_DIR}/readonly-agent.md"
+    refs = finalize.artifact_refs((_ART, agent))
+    _, [finding], _ = _coerced(_answer({"title": "t", "file": agent, "line": 1}), refs)
+    assert finding.file is None
 
 
 def test_no_artifacts_means_nothing_is_touched():
     structured = _answer({"title": "t", "file": _ART, "line": 28})
-    raw = ExecResult(answer=json.dumps(structured), structured=structured)
-    assert finalize.scrub_artifact_references(raw, ()) is raw
+    assert finalize.artifact_refs(()) is finalize.NO_ARTIFACTS
+    scrubbed, touched = finalize.scrub_structured(structured, finalize.NO_ARTIFACTS)
+    assert scrubbed is structured and touched == frozenset()
+    assert finalize.scrub_answer(_ART, finalize.NO_ARTIFACTS) == _ART
 
 
 def test_the_reason_merges_in_declaration_order_and_never_folds_the_verdict():
-    result = _scrubbed(
+    _, _, diagnostics = _coerced(
         _answer({"title": "t", "severity": "HIGH", "file": _ART, "line": 28, "cwe": "x"})
     )
-    _, diagnostics = finalize.coerce_findings(result.structured["findings"])
     assert diagnostics is not None
     declared = [r for r in get_args(FindingReason) if r in diagnostics.reasons]
     assert diagnostics.reasons == declared and set(declared) == {
@@ -120,6 +174,39 @@ def test_the_resolved_spelling_of_a_staged_path_is_covered_too(tmp_path):
     link.symlink_to(real)
     staged, cited = str(link / "prompt.md"), str(real / "prompt.md")
     assert staged != cited
-    result = _scrubbed(_answer({"title": "t", "file": cited, "line": 2}), (staged,))
-    findings, diagnostics = finalize.coerce_findings(result.structured["findings"])
-    assert findings[0].file is None and diagnostics is not None
+    refs = finalize.artifact_refs((staged,))
+    _, [finding], diagnostics = _coerced(_answer({"title": "t", "file": cited, "line": 2}), refs)
+    assert finding.file is None and diagnostics is not None
+
+
+def _spellings(obj: dict) -> dict[str, str]:
+    plain = json.dumps(obj)
+    return {
+        "plain": plain,
+        "solidus": plain.replace("/", "\\/"),
+        "unicode": plain.replace(_ART, "".join(f"\\u{ord(c):04x}" for c in _ART)),
+    }
+
+
+@pytest.mark.parametrize("spelling", ["plain", "solidus", "unicode"])
+def test_a_json_escaped_path_does_not_survive_in_the_raw_answer(spelling):
+    """JSON lets a backend write the same path as `\\/tmp\\/x` or `\\u002ftmp`. Text
+    replacement cannot see those, and a review re-parses the raw answer, so the raw text is
+    judged by what it DECODES to."""
+    obj = _answer({"title": "t", "file": _ART, "line": 3})
+    text = _spellings(obj)[spelling]
+    assert json.loads(text) == obj, "control: every spelling is the same object"
+    raw = finalize.scrub_answer(text, _REFS)
+    assert "amicus-kimi-handshake-" not in json.dumps(json.loads(raw))
+    assert json.loads(raw)["findings"][0]["title"] == "t", "still the same answer"
+
+
+def test_prose_answers_and_failures_are_scrubbed_as_text():
+    assert finalize.scrub_answer(f"I read {_ART}:28.", _REFS) == f"I read {_P}:28."
+    failure = ClassifiedFailure(
+        code="nonzero_exit", detail=f"kimi exited 1: cannot read {_ART}", details={"reason": _ART}
+    )
+    scrubbed = finalize.scrub_failure(failure, _REFS)
+    assert scrubbed.detail == f"kimi exited 1: cannot read {_P}"
+    assert scrubbed.details == {"reason": _P} and scrubbed.code == "nonzero_exit"
+    assert finalize.scrub_failure(failure, finalize.NO_ARTIFACTS) is failure

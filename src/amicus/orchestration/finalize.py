@@ -6,7 +6,9 @@ the model wrote them so a control-split value degrades rather than being repaire
 from __future__ import annotations
 
 import dataclasses
+import json
 import os
+import re
 from typing import TYPE_CHECKING, Any, cast, get_args
 
 from pydantic import ValidationError
@@ -37,7 +39,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from amicus.plugin import BackendPlugin
     from amicus.schemas.envelope import Meta
     from amicus.schemas.results import Coverage
-    from amicus.sdk.backend.protocol import ExecResult
+    from amicus.sdk.backend.protocol import ClassifiedFailure, ExecResult
     from amicus.sdk.core.runtime import CommandRun
 
 _PROSE_KEYS = ("summary", "questions", "assumptions", "next_steps")
@@ -96,7 +98,10 @@ def sanitize_finding(finding: object) -> object:
     }
 
 
-def _sanitize_structured(parsed: dict) -> dict:
+def _sanitize_structured(
+    parsed: dict, refs: ArtifactRefs | None = None
+) -> tuple[dict, frozenset[int]]:
+    parsed, scrubbed = scrub_structured(parsed, refs or NO_ARTIFACTS)
     out: dict = dict(parsed)
     for key in _PROSE_KEYS:
         if key in out:
@@ -108,7 +113,7 @@ def _sanitize_structured(parsed: dict) -> dict:
         if key in _PROSE_KEYS or (key == "findings" and isinstance(findings, list)):
             continue
         out[key] = redaction.redact_tree(value)
-    return out
+    return out, scrubbed
 
 
 def _normalize_severity(item: dict) -> tuple[dict, bool]:
@@ -130,65 +135,124 @@ def _normalize_severity(item: dict) -> tuple[dict, bool]:
 # path deleted before the caller reads the result, a line number into amicus's framing, and
 # the handshake location besides.
 ARTIFACT_PLACEHOLDER = "[amicus temporary file]"
+# What may follow a staged FILE's path and still be that file: `prompt.md:28` and a sentence's
+# closing `prompt.md.` are; `prompt.md.bak` and `prompt.mdx` are other files.
+_FILE_END = r"(?![\w\-]|\.\w)"
+# A staging DIRECTORY takes everything beneath it, whether or not `artifacts` listed it, and
+# must not match a longer sibling name (`...-ab` inside `...-abc`). A `:` ends the path, so
+# `other.md:3` keeps its line suffix as a listed file's does.
+_UNDER_DIR = r"(?:/[^\s\"'`<>)\]:]*|(?![\w.\-]))"
 
 
-def _artifact_refs(artifacts: tuple[str, ...]) -> tuple[str, ...]:
-    """The run's own staged paths, as written and as resolved (macOS reports a temp file
-    under /private/var as readily as /var), longest first so a nested path wins."""
-    refs = {p for a in artifacts if a for p in (a, os.path.realpath(a))}
-    return tuple(sorted(refs, key=len, reverse=True))
+@dataclasses.dataclass(frozen=True)
+class ArtifactRefs:
+    """The strings that name one run's staged temp files. EXACT run-owned paths only: a
+    prefix or temp-root heuristic would also clear a real workspace location that merely
+    looks like one, which costs the caller more than a leaked dead path does."""
+
+    pattern: re.Pattern[str] | None = None
+
+    def scrub(self, text: str) -> str:
+        return self.pattern.sub(ARTIFACT_PLACEHOLDER, text) if self.pattern else text
+
+    def names(self, text: object) -> bool:
+        return bool(self.pattern and isinstance(text, str) and self.pattern.search(text))
 
 
-def _scrub(value: object, refs: tuple[str, ...]) -> object:
+NO_ARTIFACTS = ArtifactRefs()
+
+
+def artifact_refs(artifacts: tuple[str, ...], staging_dir: str | None = None) -> ArtifactRefs:
+    """Each path as written and as resolved (macOS hands out /var temp paths that resolve
+    under /private/var, and a backend may cite either), longest first so a directory's
+    pattern never pre-empts a longer one."""
+
+    def spellings(path: str) -> set[str]:
+        return {path, os.path.realpath(path)} if path else set()
+
+    dirs = {d.rstrip("/") for d in spellings(staging_dir or "")} - {""}
+    files = {f for a in artifacts for f in spellings(a)}
+    parts = [(d, re.escape(d) + _UNDER_DIR) for d in dirs]
+    parts += [(f, re.escape(f) + _FILE_END) for f in files]
+    if not parts:
+        return NO_ARTIFACTS
+    parts.sort(key=lambda part: len(part[0]), reverse=True)
+    return ArtifactRefs(re.compile("|".join(pattern for _, pattern in parts)))
+
+
+def _scrub_value(value: object, refs: ArtifactRefs) -> object:
     if isinstance(value, str):
-        for ref in refs:
-            value = value.replace(ref, ARTIFACT_PLACEHOLDER)
-        return value
+        return refs.scrub(value)
     if isinstance(value, list):
-        return [_scrub(v, refs) for v in value]
+        return [_scrub_value(v, refs) for v in value]
     if isinstance(value, dict):
-        return {k: _scrub(v, refs) for k, v in value.items()}
+        return {k: _scrub_value(v, refs) for k, v in value.items()}
     return value
 
 
-def scrub_artifact_references(result: ExecResult, artifacts: tuple[str, ...]) -> ExecResult:
-    """Replace every reference to this run's staged temp files, in the answer and in the
-    parsed object alike, before anything is built or stored from either.
+def scrub_structured(parsed: dict, refs: ArtifactRefs) -> tuple[dict, frozenset[int]]:
+    """The parsed object with every artifact reference replaced, and the indexes of the
+    findings that changed. It works on DECODED values, so a path the backend spelled
+    `\\/tmp\\/x` or `\\u002ftmp` in its JSON is the same string here. The indexes travel
+    beside the object rather than in it: the placeholder is ordinary text a backend could
+    write itself, so its presence proves nothing. A `file` that named an artifact is cleared
+    whole with its `line`, since a line without its file points nowhere."""
+    if refs.pattern is None:
+        return parsed, frozenset()
+    out = cast("dict", _scrub_value(parsed, refs))
+    raw_findings = parsed.get("findings")
+    if not isinstance(raw_findings, list):
+        return out, frozenset()
+    touched: set[int] = set()
+    for index, (before, after) in enumerate(zip(raw_findings, out["findings"], strict=True)):
+        if before == after:
+            continue
+        touched.add(index)
+        if isinstance(after, dict) and refs.names(before.get("file")):
+            after["file"] = None
+            after["line"] = None
+    return out, frozenset(touched)
 
-    EXACT paths only, the ones `PreparedRun.artifacts` names: a prefix or temp-root
-    heuristic would also clear a real workspace location that merely looks like one, which
-    costs the caller more than a leaked dead path does. `coerce_findings` then turns a
-    placeholder in a finding into a cleared anchor and a disclosed reason."""
-    refs = _artifact_refs(artifacts)
-    if not refs:
-        return result
-    structured = result.structured
+
+def scrub_answer(answer: str, refs: ArtifactRefs) -> str:
+    """The raw answer, for `raw_response.text` and a prose summary. Text replacement covers
+    the as-written spelling; if the answer is JSON whose DECODED content still names an
+    artifact, the backend escaped the path, and the text is rebuilt from the scrubbed
+    object rather than chasing every spelling JSON allows."""
+    text = refs.scrub(answer)
+    if refs.pattern is None:
+        return text
+    status, parsed = classify_structured(text)
+    if status != "ok" or not isinstance(parsed, dict):
+        return text
+    scrubbed, _ = scrub_structured(parsed, refs)
+    return text if scrubbed == parsed else json.dumps(scrubbed, ensure_ascii=False)
+
+
+def scrub_failure(failure: ClassifiedFailure, refs: ArtifactRefs) -> ClassifiedFailure:
+    """A failed run's detail is built from the backend's stderr, stdout or error event,
+    which can cite a staged path as readily as an answer can."""
+    if refs.pattern is None:
+        return failure
+    details = failure.details
     return dataclasses.replace(
-        result,
-        answer=cast("str", _scrub(result.answer, refs)),
-        structured=cast("dict", _scrub(structured, refs)) if structured is not None else None,
+        failure,
+        detail=refs.scrub(failure.detail),
+        details=cast("dict", _scrub_value(details, refs)) if details is not None else None,
     )
 
 
-def _clear_artifact_anchor(item: dict) -> tuple[dict, bool]:
-    """A finding that named a staged temp file: its prose keeps the placeholder, and an
-    anchor made of one is cleared whole, since a `line` without its `file` points nowhere."""
-    if not any(isinstance(v, str) and ARTIFACT_PLACEHOLDER in v for v in item.values()):
-        return item, False
-    file = item.get("file")
-    if isinstance(file, str) and ARTIFACT_PLACEHOLDER in file:
-        return {**item, "file": None, "line": None}, True
-    return item, True
-
-
-def coerce_findings(raw: object) -> tuple[list[Finding], FindingsDiagnostics | None]:
+def coerce_findings(
+    raw: object, scrubbed: frozenset[int] = frozenset()
+) -> tuple[list[Finding], FindingsDiagnostics | None]:
     """The backend's findings list, plus what could not be carried from it (issue #38).
 
     Returns diagnostics of None only when nothing deviated, so a caller can distinguish a
     genuinely clean list from one amicus failed to relay. The findings member is required
     by the output schema, so an absent one deviates (`missing_findings`) as surely as a
     present one that is not a list (`invalid_container`, which an explicit null reaches);
-    both leave the count unknowable. Pass ABSENT, not None, for a key never there."""
+    both leave the count unknowable. Pass ABSENT, not None, for a key never there.
+    `scrubbed` holds the indexes `scrub_structured` changed (#140)."""
     if raw is ABSENT:
         # The output schema REQUIRES findings, so an omitted member is not the backend
         # saying "none" -- it is the backend leaving amicus unable to know, and a verdict
@@ -199,7 +263,9 @@ def coerce_findings(raw: object) -> tuple[list[Finding], FindingsDiagnostics | N
     findings: list[Finding] = []
     seen: set[str] = set()
     dropped = 0
-    for item in raw:
+    for index, item in enumerate(raw):
+        if index in scrubbed:
+            seen.add("backend_artifact_reference_removed")
         if not isinstance(item, dict):
             dropped += 1
             seen.add("invalid_entry")
@@ -207,9 +273,6 @@ def coerce_findings(raw: object) -> tuple[list[Finding], FindingsDiagnostics | N
         candidate, normalized = _normalize_severity(item)
         if normalized:
             seen.add("severity_normalized")
-        candidate, scrubbed = _clear_artifact_anchor(candidate)
-        if scrubbed:
-            seen.add("backend_artifact_reference_removed")
         known = {k: v for k, v in candidate.items() if k in _FINDING_FIELDS}
         if len(known) != len(candidate):
             # An unknown key (`category`, `cwe`) is an ordinary backend addition; losing
@@ -284,20 +347,23 @@ def coerce_prose_lists(
     return lists, ListsDiagnostics(**diagnostics) if diagnostics else None
 
 
-def _raw(result: ExecResult, meta: Meta) -> RawResponse:
+def _raw(result: ExecResult, meta: Meta, refs: ArtifactRefs = NO_ARTIFACTS) -> RawResponse:
     return RawResponse(
-        text=redaction.redact_text(result.answer) or None,
+        text=redaction.redact_text(scrub_answer(result.answer, refs)) or None,
         session_id=meta.session_id,
         model=meta.model,
     )
 
 
-def consult_result(result: ExecResult, meta: Meta) -> dict[str, Any]:
+def consult_result(
+    result: ExecResult, meta: Meta, refs: ArtifactRefs = NO_ARTIFACTS
+) -> dict[str, Any]:
     apply_exec(meta, result)
     structured = result.structured
     if structured is not None:
-        s = cast("dict[str, Any]", _sanitize_structured(structured))
-        findings, diagnostics = coerce_findings(s.get("findings", ABSENT))
+        sanitized, scrubbed = _sanitize_structured(structured, refs)
+        s = cast("dict[str, Any]", sanitized)
+        findings, diagnostics = coerce_findings(s.get("findings", ABSENT), scrubbed)
         lists, lists_diagnostics = coerce_prose_lists(s)
         return dump_success(
             ConsultResult(
@@ -308,7 +374,7 @@ def consult_result(result: ExecResult, meta: Meta) -> dict[str, Any]:
                 questions=lists["questions"],
                 assumptions=lists["assumptions"],
                 next_steps=lists["next_steps"],
-                raw_response=_raw(result, meta),
+                raw_response=_raw(result, meta, refs),
                 meta=meta,
             )
         )
@@ -320,7 +386,7 @@ def consult_result(result: ExecResult, meta: Meta) -> dict[str, Any]:
     lists, lists_diagnostics = coerce_prose_lists({})
     return dump_success(
         ConsultResult(
-            summary=redaction.sanitize_echo_prose(result.answer).strip()
+            summary=redaction.sanitize_echo_prose(scrub_answer(result.answer, refs)).strip()
             or "(the backend returned no message)",
             findings=findings,
             findings_diagnostics=diagnostics,
@@ -328,7 +394,7 @@ def consult_result(result: ExecResult, meta: Meta) -> dict[str, Any]:
             questions=lists["questions"],
             assumptions=lists["assumptions"],
             next_steps=lists["next_steps"],
-            raw_response=_raw(result, meta),
+            raw_response=_raw(result, meta, refs),
             meta=meta,
         )
     )
@@ -345,7 +411,12 @@ UNSTRUCTURED_SUMMARY = (
 
 
 def _parse_reviewed(
-    result: ExecResult, meta: Meta, coverage: Coverage, plugin: BackendPlugin, noun: str
+    result: ExecResult,
+    meta: Meta,
+    coverage: Coverage,
+    plugin: BackendPlugin,
+    noun: str,
+    refs: ArtifactRefs = NO_ARTIFACTS,
 ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
     """Strict about SHAPE, lenient about FIELDS, and never discarding an answer. An empty
     answer is a hard invalid_json error: there is nothing to deliver. A non-empty answer
@@ -390,11 +461,12 @@ def _parse_reviewed(
             "findings_diagnostics": diagnostics,
             "lists_diagnostics": lists_diagnostics,
             **lists,
-            "raw_response": _raw(result, meta),
+            "raw_response": _raw(result, meta, refs),
             "meta": meta,
         }
-    s = cast("dict[str, Any]", _sanitize_structured(cast("dict", parsed)))
-    findings, diagnostics = coerce_findings(s.get("findings", ABSENT))
+    sanitized, scrubbed = _sanitize_structured(cast("dict", parsed), refs)
+    s = cast("dict[str, Any]", sanitized)
+    findings, diagnostics = coerce_findings(s.get("findings", ABSENT), scrubbed)
     verdict, confidence, summary = review_mod.apply_coverage(
         _enum(s.get("verdict"), ("pass", "concerns", "fail", "unknown"), "unknown"),
         _enum(s.get("confidence"), ("low", "medium", "high"), "unknown"),
@@ -418,26 +490,34 @@ def _parse_reviewed(
         "findings_diagnostics": diagnostics,
         "lists_diagnostics": lists_diagnostics,
         **lists,
-        "raw_response": _raw(result, meta),
+        "raw_response": _raw(result, meta, refs),
         "meta": meta,
     }
 
 
 def review_result(
-    result: ExecResult, meta: Meta, coverage: Coverage, plugin: BackendPlugin
+    result: ExecResult,
+    meta: Meta,
+    coverage: Coverage,
+    plugin: BackendPlugin,
+    refs: ArtifactRefs = NO_ARTIFACTS,
 ) -> dict[str, Any]:
-    error, fields = _parse_reviewed(result, meta, coverage, plugin, "review")
+    error, fields = _parse_reviewed(result, meta, coverage, plugin, "review", refs)
     if error is not None:
         return error
     return dump_success(ReviewResult(**cast("dict[str, Any]", fields)))
 
 
 def adversarial_result(
-    result: ExecResult, meta: Meta, coverage: Coverage, plugin: BackendPlugin
+    result: ExecResult,
+    meta: Meta,
+    coverage: Coverage,
+    plugin: BackendPlugin,
+    refs: ArtifactRefs = NO_ARTIFACTS,
 ) -> dict[str, Any]:
     """The critique's envelope: the review shape (verdict, confidence, findings), the same
     strict/lenient rule, and the same coverage fold for an attached diff or a focus."""
-    error, fields = _parse_reviewed(result, meta, coverage, plugin, "critique")
+    error, fields = _parse_reviewed(result, meta, coverage, plugin, "critique", refs)
     if error is not None:
         return error
     return dump_success(AdversarialReviewResult(**cast("dict[str, Any]", fields)))
@@ -474,12 +554,14 @@ def delegate_result(
     diff: str,
     aliases: tuple[str, ...],
     max_diff_bytes: int,
+    refs: ArtifactRefs = NO_ARTIFACTS,
 ) -> dict[str, Any]:
     apply_exec(meta, result)
     stat = _diffstat(diff)
     meta.context_summary = stat
-    last_message = pathalias.sanitize_prose(result.answer or None, aliases)
-    summary_text = pathalias.sanitize_echo_prose(result.answer or None, aliases)
+    answer = scrub_answer(result.answer, refs) if result.answer else None
+    last_message = pathalias.sanitize_prose(answer, aliases)
+    summary_text = pathalias.sanitize_echo_prose(answer, aliases)
     summary = (summary_text or "").strip() or "(the backend returned no summary)"
     if not diff.strip():
         summary = f"The backend made no changes. {summary}"
