@@ -111,6 +111,7 @@ RepairStep = Literal[
     "authenticate",
     "correct_arguments",
     "correct_config",
+    "fetch_job_result",
     "init_git_repo",
     "inspect_and_retry",
     "install_backend",

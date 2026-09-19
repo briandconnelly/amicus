@@ -134,19 +134,35 @@ def test_job_started_follow_up_is_narrowed_to_the_one_action_it_carries():
     instead of inlining the whole RepairStep enum on four tools (#41). `Repair` itself,
     which the error envelope uses, still spans the enum."""
     schema = r.JOB_STARTED_SCHEMA
-    assert schema["anyOf"][0]["properties"]["follow_up"] == {"$ref": "#/$defs/JobFollowUp"}
-    props = schema["$defs"]["JobFollowUp"]["properties"]
-    assert props["next_step"]["const"] == "poll_job_status"
-    assert props["tool"]["const"] == "amicus_job_status"
-    assert "enum" not in props["next_step"]
-    # Required on the wire, not defaulted: the advertised handle must not admit a
-    # follow_up with no action or tool.
-    assert {"next_step", "tool", "arguments"} <= set(schema["$defs"]["JobFollowUp"]["required"])
+    # Two correlated variants, never two independently widened literals: a running handle
+    # polls, a terminal one fetches (#103), and no mismatched step/tool pair is admitted.
+    variants = schema["anyOf"][0]["properties"]["follow_up"]["anyOf"]
+    assert variants == [{"$ref": "#/$defs/JobFollowUp"}, {"$ref": "#/$defs/JobResultFollowUp"}]
+    pairs = {}
+    for name in ("JobFollowUp", "JobResultFollowUp"):
+        props = schema["$defs"][name]["properties"]
+        assert "enum" not in props["next_step"] and "enum" not in props["tool"]
+        pairs[props["next_step"]["const"]] = props["tool"]["const"]
+        # Required on the wire, not defaulted: the advertised handle must not admit a
+        # follow_up with no action or tool.
+        assert {"next_step", "tool", "arguments"} <= set(schema["$defs"][name]["required"])
+    assert pairs == {
+        "poll_job_status": "amicus_job_status",
+        "fetch_job_result": "amicus_job_result",
+    }
     with pytest.raises(ValueError):
         r.JobFollowUp(arguments={})  # ty: ignore[missing-argument]
     with pytest.raises(ValueError):
         r.JobFollowUp(next_step="retry_after_delay", tool="amicus_job_status", arguments={})  # ty: ignore[invalid-argument-type]
+    for mismatched in (
+        {"next_step": "poll_job_status", "tool": "amicus_job_result"},
+        {"next_step": "fetch_job_result", "tool": "amicus_job_status"},
+    ):
+        for model in (r.JobFollowUp, r.JobResultFollowUp):
+            with pytest.raises(ValueError):
+                model(arguments={}, **mismatched)
     assert Repair(next_step="retry_after_delay").next_step == "retry_after_delay"
+    assert Repair(next_step="fetch_job_result").next_step == "fetch_job_result"
 
 
 def test_job_started_poll_hint_is_required_but_nullable():

@@ -20,7 +20,7 @@ from amicus.jobs.polling import job_status_arguments, poll_hint_ms
 from amicus.jobs.store import JobStore
 from amicus.orchestration.isolation import WORKTREE_PREFIX
 from amicus.schemas.fingerprint import RESULT_FORMAT
-from amicus.schemas.results import JobFollowUp, JobStarted
+from amicus.schemas.results import JobFollowUp, JobResultFollowUp, JobStarted
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Callable, Coroutine
@@ -43,6 +43,11 @@ POLL_FOLLOW_UP = (
     "Poll amicus_job_status with these arguments while status is running, honoring "
     "poll_after_ms. On any terminal status, call amicus_job_result for the stored result "
     "or the terminal error. Recover a lost job_id with amicus_job_list."
+)
+
+FETCH_FOLLOW_UP = (
+    "This job is already terminal, so do not poll it: call amicus_job_result with these "
+    "arguments for the stored result or the terminal error."
 )
 
 # Bound on acquiring the idempotency coordination locks for a keyed start: a peer holding
@@ -112,6 +117,24 @@ def _extra(spec: RunSpec) -> dict[str, Any]:
     return {"result_format": RESULT_FORMAT, "backend": spec.backend, "tool": spec.tool}
 
 
+def _follow_up(status: str, arguments: dict[str, Any]) -> JobFollowUp | JobResultFollowUp:
+    """A running job is polled; a terminal one, which a replayed keyed start can hand back,
+    is fetched (#103). Both tools take the same arguments, so only the pair changes."""
+    if status == "running":
+        return JobFollowUp(
+            next_step="poll_job_status",
+            tool="amicus_job_status",
+            arguments=arguments,
+            alternative=POLL_FOLLOW_UP,
+        )
+    return JobResultFollowUp(
+        next_step="fetch_job_result",
+        tool="amicus_job_result",
+        arguments=arguments,
+        alternative=FETCH_FOLLOW_UP,
+    )
+
+
 def job_started_handle(
     job_id: str,
     *,
@@ -136,12 +159,7 @@ def job_started_handle(
         poll_after_ms=poll_after_ms,
         expires_at=expires_at,
         task_id=task_id,
-        follow_up=JobFollowUp(
-            next_step="poll_job_status",
-            tool="amicus_job_status",
-            arguments=job_status_arguments(job_id, spec.cwd),
-            alternative=POLL_FOLLOW_UP,
-        ),
+        follow_up=_follow_up(status, job_status_arguments(job_id, spec.cwd)),
         meta=meta,
     ).model_dump(mode="json")
 

@@ -360,6 +360,19 @@ class JobFollowUp(BaseModel):
     alternative: str | None = None
 
 
+class JobResultFollowUp(BaseModel):
+    """The follow-up on a handle whose job is already terminal, which a replayed keyed
+    start can return (#103): fetch the result, do not poll. Its own model rather than wider
+    literals on `JobFollowUp`, so the schema admits the two correlated step/tool pairs and
+    no mismatched one."""
+
+    model_config = ConfigDict(extra="forbid")
+    next_step: Literal["fetch_job_result"]
+    tool: Literal["amicus_job_result"]
+    arguments: dict[str, Any]
+    alternative: str | None = None
+
+
 _POLL_AFTER_DESC = (
     "Milliseconds to wait before the next poll while status is running; null on any "
     "terminal status."
@@ -379,7 +392,7 @@ class JobStarted(SuccessBase):
     poll_after_ms: int | None = Field(description=_POLL_AFTER_DESC)
     expires_at: str | None
     task_id: str | None = None
-    follow_up: JobFollowUp
+    follow_up: JobFollowUp | JobResultFollowUp
 
 
 class JobStatus(SuccessBase):
