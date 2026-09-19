@@ -146,7 +146,14 @@ def test_every_referenced_amicus_tool_exists():
     `amicus.tools.TOOL_ORDER`), the same class of error as a prior review finding
     where `*_status` rows named a non-existent `amicus_capabilities(backend=...)`
     call."""
-    unknown = _referenced_tool_names() - set(TOOL_ORDER)
+    # A tool the doc names in order to say it was REMOVED. Each must really be gone, and the
+    # doc must say so, or the name is just the stale reference this test exists to catch.
+    removed = {"amicus_dry_run"}
+    assert removed & set(TOOL_ORDER) == set(), "a tool listed as removed is still registered"
+    text = DOC.read_text()
+    for name in removed:
+        assert re.search(rf"`{name}` is gone|removed it", text), name
+    unknown = _referenced_tool_names() - set(TOOL_ORDER) - removed
     assert not unknown, f"MIGRATION.md names tools that do not exist: {sorted(unknown)}"
 
 

@@ -61,9 +61,21 @@ def test_every_live_tool_is_reachable_from_some_command():
     assert set(TOOL_ORDER) - set(DEPRECATED_TOOLS) - _referenced_tools() == set()
 
 
-def test_no_command_names_a_deprecated_tool():
-    assert DEPRECATED_TOOLS, "known positive: an empty table makes the check below vacuous"
+def test_no_command_names_a_deprecated_tool(monkeypatch):
     assert _referenced_tools() & set(DEPRECATED_TOOLS) == set()
+    # The table is empty since `amicus_dry_run` was removed (#204), which makes the line
+    # above vacuous. Its known positive: deprecate a tool the commands DO launch, and the
+    # same expression has to catch it.
+    from amicus.schemas.results import ToolDeprecation
+
+    monkeypatch.setitem(
+        DEPRECATED_TOOLS,
+        "amicus_consult",
+        ToolDeprecation(
+            since="0.5.0", removal_at_or_after="0.7.0", replaced_by=None, migration="m"
+        ),
+    )
+    assert _referenced_tools() & set(DEPRECATED_TOOLS) == {"amicus_consult"}
 
 
 def test_every_verb_and_listed_twin_has_a_command_that_launches_it():

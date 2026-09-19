@@ -367,18 +367,12 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
         "error_codes": ["invalid_workspace_root", "workspace_outside_roots"],
     },
 }
-# A deprecated alias reports its replacement's facts; only `use_when` says what it is.
-TOOL_DETAILS["amicus_dry_run"] = {
-    **TOOL_DETAILS["amicus_review_changes_dry_run"],
-    "use_when": "Deprecated alias: call amicus_review_changes_dry_run instead.",
-}
 _REVIEW_PREVIEW_PARAMS: tuple[list[str], list[str]] = (
     ["backend"],
     ["scope", "base", "commit", "paths", "workspace_root", "backend_options"],
 )
 _JOB_PARAMS: dict[str, tuple[list[str], list[str]]] = {
     "amicus_review_changes_dry_run": _REVIEW_PREVIEW_PARAMS,
-    "amicus_dry_run": _REVIEW_PREVIEW_PARAMS,
     "amicus_delegate_dry_run": (["backend", "task"], ["workspace_root", "backend_options"]),
     "amicus_backends": ([], ["backend", "detail"]),
     "amicus_models": (["backend"], []),

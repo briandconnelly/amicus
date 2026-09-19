@@ -35,20 +35,30 @@ def test_server_lifecycle_meta_carries_the_server_wide_tier():
     assert _meta.server_lifecycle_meta() == {LIFECYCLE_META_KEY: {"stability": "experimental"}}
 
 
-def test_a_deprecated_tool_carries_the_marker_beside_its_tier():
-    """[9.stability-tiers]: deprecation is its own axis, so the alias keeps the tier it had
-    and gains the marker; its replacement carries no marker at all."""
-    block = _meta.lifecycle_meta("amicus_dry_run")[LIFECYCLE_META_KEY]
+_SYNTHETIC = ToolDeprecation(
+    since="0.5.0", removal_at_or_after="0.7.0", replaced_by="amicus_backends", migration="m"
+)
+
+
+def test_a_deprecated_tool_carries_the_marker_beside_its_tier(monkeypatch):
+    """[9.stability-tiers]: deprecation is its own axis, so a deprecated tool keeps the tier
+    it had and gains the marker; its replacement carries no marker at all. Nothing ships
+    deprecated since `amicus_dry_run` was removed (#204), so the entry is synthetic."""
+    assert _meta.lifecycle_meta("amicus_models")[LIFECYCLE_META_KEY] == {
+        "stability": "experimental"
+    }, "control: no marker before the entry exists"
+    monkeypatch.setitem(_meta.DEPRECATED_TOOLS, "amicus_models", _SYNTHETIC)
+    block = _meta.lifecycle_meta("amicus_models")[LIFECYCLE_META_KEY]
     assert block == {
         "stability": "experimental",
         "deprecation": {
-            "since": "0.3.0",
-            "removal_at_or_after": "0.5.0",
-            "replaced_by": "amicus_review_changes_dry_run",
-            "migration": _meta.DEPRECATED_TOOLS["amicus_dry_run"].migration,
+            "since": "0.5.0",
+            "removal_at_or_after": "0.7.0",
+            "replaced_by": "amicus_backends",
+            "migration": "m",
         },
     }
-    replacement = _meta.lifecycle_meta("amicus_review_changes_dry_run")[LIFECYCLE_META_KEY]
+    replacement = _meta.lifecycle_meta("amicus_backends")[LIFECYCLE_META_KEY]
     assert replacement == {"stability": "experimental"}
 
 
@@ -77,16 +87,28 @@ def _minor(version: str) -> tuple[int, int, int]:
     return major, minor, micro
 
 
+def _window_problems(table: dict[str, ToolDeprecation]) -> list[str]:
+    problems = []
+    for name, deprecation in table.items():
+        major, minor, micro = _minor(deprecation.since)
+        if micro != 0 or _minor(deprecation.removal_at_or_after) != (major, minor + 2, 0):
+            problems.append(f"{name}: window is not two minor releases")
+        if deprecation.replaced_by == name or deprecation.replaced_by in table:
+            problems.append(f"{name}: replaced by a deprecated tool")
+    return problems
+
+
 def test_every_window_spans_the_two_minor_releases_the_policy_promises():
     """amicus_capabilities.deprecation_policy: discoverable for two minor releases, so a
-    deprecation in x.y.0 may be removed no earlier than x.(y+2).0."""
-    assert _meta.DEPRECATED_TOOLS, "known positive: the loop below would pass on an empty table"
-    for name, deprecation in _meta.DEPRECATED_TOOLS.items():
-        major, minor, micro = _minor(deprecation.since)
-        assert micro == 0, name
-        assert _minor(deprecation.removal_at_or_after) == (major, minor + 2, 0), name
-        assert deprecation.replaced_by != name
-        assert deprecation.replaced_by not in _meta.DEPRECATED_TOOLS, name
+    deprecation in x.y.0 may be removed no earlier than x.(y+2).0. The shipped table is
+    empty since #204, so the rule is shown to pass a good entry and fail two bad ones before
+    it is trusted on the real table."""
+    assert _window_problems({"amicus_models": _SYNTHETIC}) == []
+    short = _SYNTHETIC.model_copy(update={"removal_at_or_after": "0.6.0"})
+    assert _window_problems({"amicus_models": short}) != []
+    chained = _SYNTHETIC.model_copy(update={"replaced_by": "amicus_models"})
+    assert _window_problems({"amicus_models": chained}) != []
+    assert _window_problems(_meta.DEPRECATED_TOOLS) == []
 
 
 def test_no_deprecated_tool_outlives_its_window():

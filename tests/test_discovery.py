@@ -36,9 +36,9 @@ async def _tools(app):
         return await c.list_tools()
 
 
-async def test_exactly_nineteen_tools_in_the_fixed_order():
+async def test_exactly_eighteen_tools_in_the_fixed_order():
     listed = [t.name for t in await _tools(_app())]
-    assert len(listed) == 19
+    assert len(listed) == 18
     assert listed == list(tools.TOOL_ORDER)
 
 
@@ -59,7 +59,7 @@ async def test_free_and_job_tool_markers_and_annotations():
 
 async def _lifecycle_stability_tiers(app) -> dict[str, str]:
     """Every stability value the discovery records carry in `_meta`, keyed by where it
-    appears: 19 tools, 4 static resources, 2 templates. One collector covers all three
+    appears: 18 tools, 4 static resources, 2 templates. One collector covers all three
     surfaces, so none of them can drift on its own. These blocks are plain dicts with no
     model behind them, so nothing rejects an illegal tier at runtime -- the declared type
     of `SERVER_STABILITY` and this collector are what hold them."""
@@ -81,31 +81,32 @@ async def test_every_published_stability_tier_is_in_the_closed_set():
     """[9.stability-tiers] closes the set so an agent can filter on the tier directly;
     the server published `alpha`, outside it and outside its own literal, until #43."""
     tiers = await _lifecycle_stability_tiers(_app())
-    assert len(tiers) == 25, sorted(tiers)
+    assert len(tiers) == 24, sorted(tiers)
     async with Client(_app()) as c:
         caps = (await c.call_tool("amicus_capabilities", {"detail": "full"})).structured_content
     tiers["capabilities:stability"] = caps["stability"]
     for entry in caps["tool_details"]:
         if entry["stability"] is not None:
             tiers[f"capabilities:tool_details:{entry['name']}"] = entry["stability"]
-    # 26, not 27+: every tool_details override is null today, because the per-tool table
+    # 25, not 26+: every tool_details override is null today, because the per-tool table
     # is empty and each tool inherits the server-wide tier.
-    assert len(tiers) == 26, sorted(tiers)
+    assert len(tiers) == 25, sorted(tiers)
     assert {v for v in tiers.values() if v not in set(get_args(results.ToolStability))} == set()
 
 
 async def test_an_illegal_server_tier_would_reach_every_lifecycle_record(monkeypatch):
     """Mutation control for the collector above: one bad server-wide tier has to surface on
-    all 25 records, because every record now inherits it -- the deprecated alias included,
-    since deprecation never replaces a tier (#98). That all-inherit invariant is what this
-    pins, not the historical state: `alpha` reached 15 of the 24 records there were then
+    all 24 records, because every record now inherits it; a deprecated tool would too, since
+    deprecation never replaces a tier (#98), though none exists since the alias was removed
+    (#204). That all-inherit invariant is what this pins, not the historical state: `alpha`
+    reached 15 of the 24 records there were then
     (nine tools, four resources, two templates) plus `amicus_capabilities.stability`,
     because the other nine tools carried an explicit `experimental` override (#43). It also
     pins the single-sourcing -- a module that had bound its own copy of the constant would
     stay behind here."""
     monkeypatch.setattr(_meta, "SERVER_STABILITY", "alpha")
     tiers = await _lifecycle_stability_tiers(_app())
-    assert len(tiers) == 25 and set(tiers.values()) == {"alpha"}
+    assert len(tiers) == 24 and set(tiers.values()) == {"alpha"}
 
 
 async def test_capabilities_refuses_to_publish_a_tier_outside_the_closed_set(monkeypatch):
@@ -131,7 +132,6 @@ async def test_every_tool_output_schema_is_valid_and_every_error_envelope_valida
         listed = await c.list_tools()
         args = {
             "amicus_review_changes_dry_run": {"backend": "codex"},
-            "amicus_dry_run": {"backend": "codex"},
             "amicus_delegate_dry_run": {"backend": "codex", "task": "t"},
             "amicus_models": {"backend": "codex"},
             "amicus_job_status": {"job_id": "a" * 32},

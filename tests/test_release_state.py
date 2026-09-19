@@ -915,11 +915,36 @@ def test_the_static_read_of_the_deprecation_table_matches_the_runtime_table():
     repo_root = Path(__file__).resolve().parent.parent
     windows, problems = release_state.deprecation_windows(repo_root)
     assert problems == [], "; ".join(problems)
-    assert _meta.DEPRECATED_TOOLS, "known positive: an empty runtime table proves nothing here"
     assert windows == {
         name: (deprecation.since, deprecation.removal_at_or_after)
         for name, deprecation in _meta.DEPRECATED_TOOLS.items()
     }
+
+
+def test_the_static_reader_finds_an_entry_written_the_way_the_real_table_writes_them(tmp_path):
+    """The shipped table is empty since `amicus_dry_run` was removed (#204), so the
+    comparison above is `{} == {}` and proves nothing by itself. This is its known positive:
+    the same source shape the table used, in a scratch tree, must be read back, or the
+    release predicate would pass a real deprecation as though the table were empty."""
+    meta = tmp_path / release_state.DEPRECATIONS_PATH
+    meta.parent.mkdir(parents=True)
+    meta.write_text(
+        "DEPRECATED_TOOLS: dict[str, ToolDeprecation] = {\n"
+        '    "amicus_old": ToolDeprecation(\n'
+        '        since="0.5.0",\n'
+        '        removal_at_or_after="0.7.0",\n'
+        '        replaced_by="amicus_new",\n'
+        '        migration=("Call amicus_new " "instead."),\n'
+        "    ),\n"
+        "}\n"
+    )
+    windows, problems = release_state.deprecation_windows(tmp_path)
+    assert problems == [] and windows == {"amicus_old": ("0.5.0", "0.7.0")}
+    assert release_state.check_deprecations("0.6.0", repo_root=tmp_path) == []
+    assert release_state.check_deprecations("0.7.0", repo_root=tmp_path) != []
+    # An empty literal table, which is what ships, reads as no windows and no problems.
+    meta.write_text("DEPRECATED_TOOLS: dict[str, ToolDeprecation] = {}\n")
+    assert release_state.deprecation_windows(tmp_path) == ({}, [])
 
 
 def test_the_static_read_of_the_env_declarations_matches_the_runtime_declarations():

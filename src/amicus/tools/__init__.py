@@ -29,7 +29,6 @@ FREE_TOOLS: tuple[str, ...] = (
     "amicus_backends",
     "amicus_models",
     "amicus_capabilities",
-    "amicus_dry_run",
 )
 JOB_TOOLS: tuple[str, ...] = (
     "amicus_job_status",
@@ -59,7 +58,6 @@ def register_all(
     registered += review.register_adversarial(app, settings, registry)
     registered += dry_run.register(app, settings, registry)
     registered += discovery.register(app, settings, registry, state)
-    registered += dry_run.register_deprecated(app, settings, registry)
     registered += jobs.register(app, settings, registry)
     if registered != TOOL_ORDER:
         raise RuntimeError(f"tool registration order drifted: {registered} != {TOOL_ORDER}")
