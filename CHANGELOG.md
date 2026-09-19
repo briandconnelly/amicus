@@ -27,8 +27,9 @@ per-change, as its own lead says.
   checked against the 0.43.1 capture at zero spend: `--help` differs by one new subcommand and no
   option, the `provider list --json` shape is identical, and `kimi session` still offers `list`
   only and still reads the existing session store, so no new way to avoid that carrier was
-  found. Whether 2.0.2 still writes to the store was not observed, since that takes a paid run,
-  and nothing else that needs a prompt was part of the check (#202).
+  found. The kimi live suite then passed on 2.0.2, which exercises consult, the read-only tool
+  profile, review and delegate; whether 2.0.2 still writes to the session store was not looked
+  at in that run (#202).
 - Releasing now checks the backend CLIs first. `docs/RELEASING.md` gains a precondition, run
   immediately before the release evidence: bring `codex`, `kimi` and `claude` to their latest
   releases, run the new zero-spend `scripts/check_backend_compat.py` (installed and latest

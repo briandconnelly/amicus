@@ -55,14 +55,32 @@ None changes a flag or a file amicus uses, and each is behaviour only a prompt c
   `-p` is the mode amicus uses.
 - 2.0.1: "Stop workspace file watchers from scanning an unbounded project root, and add `[watch] enabled` / `KIMI_CODE_WATCH` to disable watching entirely."
 
-## What is not established here
+## What the capture alone does not establish
 
 Everything that needs a prompt, which is where a major version is likeliest to move: the stream-json event shape `normalize.py` reads (the version line, assistant events, the `session.resume_hint`), whether the read-only agent profile still reports exactly `Read`, `Glob` and `Grep`, whether `--agent-file` and `--session` are still incompatible, and the failure signatures in `contract.py`.
 The behavioural findings carried from moonbridge's 0.39.1 probes, listed in `docs/kimi-help/0.41.0/FINDINGS.md`, were not re-run.
 
 ## Live gate outcome
 
-Not run as part of this capture.
-AGENTS.md rule 5 reserves the live suites for when the maintainer asks, and the PR that adds this file asks the maintainer to run `tests/test_kimi_live.py` on its branch before merging, because a zero-spend check says the CLI's surface held, not that its behaviour did.
-If that run happens, its outcome belongs in this section.
-It would still not be rule-20 release evidence, which `scripts/record_live_gate_evidence.py` records against the release commit itself.
+The maintainer ran the kimi live suite on 2026-09-19 from this branch's worktree, at commit `fea958d`, with Kimi Code 2.0.2:
+
+```
+AMICUS_REQUIRE_LIVE=1 uv run pytest -m integration --no-cov tests/test_kimi_live.py -v
+```
+
+All 6 tests passed in 166.70s.
+
+- `test_backends_reports_kimi_ready_live` PASSED: the installed version matched the newest supported minor, `(2, 0)`, and `amicus_backends` reported no warnings.
+- `test_consult_outside_a_repo_live`, `test_read_only_profile_is_enforced_live`, `test_review_changes_live`, `test_delegate_live` and `test_unknown_model_alias_is_invalid_model_live` PASSED.
+
+So what "What is not established here" lists as needing a prompt was exercised on 2.0.2 by those tests: the stream-json events amicus parses, the read-only agent profile reporting exactly `Read`, `Glob` and `Grep`, a structured review, and a delegate in a worktree.
+The failure signatures in `contract.py` were not, since every call succeeded.
+
+The model behind the run was not a Kimi model.
+The maintainer's `~/.kimi-code/config.toml` names a self-hosted RunPod proxy, and its `moonshotai/Kimi-K3` worker was wedged all day: the first attempt at this suite, made from the main checkout, failed 5 of 6 on provider timeouts and one `nonzero_exit`, and kimi's own per-session logs show empty completions and 524s from that route, starting before the upgrade to 2.0.2.
+For this run the default model was pointed at another route on the same proxy, `deepseek-ai/DeepSeek-V4.1-Flash`, declared with `tool_use` only.
+That is within what the gate tests, which is whether amicus drives the kimi CLI correctly; the CLI talks to whatever OpenAI-compatible provider its config names, and amicus discloses that provider rather than depending on it.
+It does mean nothing here says how a Kimi model behaves under 2.0.2, and the thinking-effort path was not exercised, since that model entry declares no efforts.
+
+This run is not rule-20 release evidence.
+That evidence is recorded by `scripts/record_live_gate_evidence.py` against the release commit itself, and that record, not this file, is where the release run's outcome lives.
