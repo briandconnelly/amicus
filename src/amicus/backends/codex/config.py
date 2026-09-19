@@ -26,7 +26,7 @@ ENV = EnvNamespace(
     vars=(
         EnvVar(
             f"{PREFIX}BIN",
-            "Explicit path to the codex executable; used exactly as given.",
+            "Absolute path to the codex executable; used exactly as given.",
             None,
             removed=(f"{_RETIRED}CODEX_BIN",),
         ),

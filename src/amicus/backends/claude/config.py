@@ -25,7 +25,7 @@ ENV = EnvNamespace(
     vars=(
         EnvVar(
             f"{PREFIX}BIN",
-            "Explicit path to the claude executable; used exactly as given.",
+            "Absolute path to the claude executable; used exactly as given.",
             None,
         ),
         EnvVar(
