@@ -64,6 +64,9 @@ NPM_PACKAGES: dict[str, str] = {
     "claude": "@anthropic-ai/claude-code",
 }
 _SEMVER = re.compile(r"(\d+)\.(\d+)\.(\d+)")
+# The same core with whatever semver prerelease or build suffix is attached to it. A product
+# label (`2.1.278 (Claude Code)`) is set off by a space, so it is never part of the suffix.
+_RELEASE = re.compile(r"(\d+\.\d+\.\d+)((?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)")
 # An option ROW: a shallow indent, then the declaration column up to the gap before its
 # description. codex indents rows by 2 or 6 and puts the description on the next line;
 # kimi and claude indent by 2 and describe on the same line. Description text wraps at 10
@@ -101,6 +104,13 @@ class Report:
 def semver(text: str | None) -> tuple[int, int, int] | None:
     match = _SEMVER.search(text or "")
     return (int(match[1]), int(match[2]), int(match[3])) if match else None
+
+
+def release(text: str | None) -> tuple[str, str] | None:
+    """(core, suffix): `0.155.1-beta.1` is ("0.155.1", "-beta.1"). Three integers cannot tell
+    that build from the release it precedes, and the gate is about the published one (#208)."""
+    match = _RELEASE.search(text or "")
+    return (match[1], match[2]) if match else None
 
 
 def builtin_supported(backend: str, version: str | None) -> bool:
@@ -142,8 +152,8 @@ def latest_upstream(backend: str) -> str | None:
         )
     except (OSError, subprocess.TimeoutExpired):
         return None
-    found = semver(done.stdout)
-    return ".".join(map(str, found)) if done.returncode == 0 and found else None
+    found = release(done.stdout)
+    return "".join(found) if done.returncode == 0 and found else None
 
 
 def newest_capture(docs_root: Path, backend: str) -> Path | None:
@@ -172,7 +182,7 @@ def check_backend(
     report = Report(
         backend,
         installed=status.installed,
-        version=".".join(map(str, semver(status.version) or ())) or status.version,
+        version="".join(release(status.version) or ()) or status.version,
         authenticated=status.authenticated,
         warnings=tuple(status.warnings),
         offline=offline,
@@ -253,7 +263,13 @@ def problems(report: Report) -> list[str]:
         f"{report.backend}: amicus always sends {flag}, which --help no longer lists"
         for flag in report.missing_flags
     ]
-    if report.latest and semver(report.version) != semver(report.latest):
+    if (release(report.version) or ("", ""))[1]:
+        found.append(
+            f"{report.backend}: installed {report.version} is a prerelease or development "
+            "build, not a published stable release; install the release before recording "
+            "release evidence"
+        )
+    elif report.latest and release(report.version) != release(report.latest):
         found.append(
             f"{report.backend}: installed {report.version} is not the latest release "
             f"({report.latest}); upgrade before recording release evidence"
@@ -317,7 +333,8 @@ def main(argv: list[str] | None = None) -> int:
         print("\n".join(_describe(report, show_diff=args.diff)))
         found += problems(report)
         has_own = report.capture is not None and report.capture.name == report.version
-        if args.write and report.installed and report.help_text and not has_own:
+        stable = not (release(report.version) or ("", "x"))[1]
+        if args.write and report.installed and report.help_text and not has_own and stable:
             print(f"    wrote {write_capture(report, args.docs_root)}")
     print()
     for problem in found:
