@@ -1,4 +1,4 @@
-"""The agent-friendly-mcp walk artifact must satisfy the checklist's Done Criteria.
+"""The agent-friendly-mcp walk artifacts must satisfy the checklist's Done Criteria.
 
 The walk is an M6 gate item, so a token document must not be able to pass for it.
 
@@ -29,6 +29,28 @@ Criteria do not allow:
    probes; being skipped-with-a-reason is excused by the next clause of the
    criterion, not a substitute for this one. Skipped bodies are now filtered out
    before counting, and the test name no longer encodes the misreading.
+
+Two more, found when a SECOND walk was written (2026-09-20) and neither could be
+satisfied without weakening the artifact or fabricating its evidence:
+
+5. `DOC = next(glob("*agent-friendly-mcp-walk.md"))` bound the suite to ONE file,
+   chosen by filesystem order rather than by name. A second walk did not add a
+   second set of assertions; it silently REPLACED the first, leaving the earlier
+   artifact unguarded with nothing failing to say so. Every walk is now validated,
+   and `sorted()` makes which-file-is-which deterministic. Confirmed by mutation:
+   before this change, adding a second walk that violated the coverage table left
+   the original walk's rows unchecked, and deleting a section row from the
+   2026-09-07 walk while a newer walk existed still passed.
+6. The mandatory probes had to cite `docs/host-captures/` specifically, which is
+   narrower than the standard it encodes: `review-workflow.md` says to use a real
+   transcript "when available; otherwise simulate one from the schema", and its
+   Step 1 allows simulated cold-start evidence explicitly. A walk whose surface
+   has moved far enough that the committed captures describe a different server
+   must re-run its probes, and could satisfy the old assertion only by citing a
+   capture it did not use. A probe now cites EITHER a committed capture path or a
+   re-runnable command, and still may not be skipped. The point the hole-3 closure
+   defends is untouched: a skipped body is still rejected before evidence is
+   considered, so neither form of citation can launder a skip.
 """
 
 from __future__ import annotations
@@ -38,28 +60,42 @@ from pathlib import Path
 
 import pytest
 
-DOC = next(
+DOCS = sorted(
     (Path(__file__).resolve().parents[1] / "docs" / "reviews").glob("*agent-friendly-mcp-walk.md")
 )
-TEXT = DOC.read_text()
 SECTIONS = [f"§{n}" for n in range(1, 10)]
 FINDING_FIELDS = ("severity:", "section:", "summary:", "evidence:", "remediation:")
 # Deviation 2: `**` between the label and the value.
-SEVERITY_RE = re.compile(r"severity:\W*(critical|major)", re.I)
+SEVERITY_RE = re.compile(r"severity:\W*(critical|major|minor|nit)", re.I)
 # A probe body opens with this marker when the walk declined to run it. It is a regex,
 # not an exact string: as a literal `"**Skipped."` it missed `**Skipped:**`,
 # `**Skipped**`, and any other punctuation an author might reach for, and a missed skip
 # marker silently reclassifies a SKIPPED probe as a RUN one -- the one substitution the
 # Done Criteria forbid, and the very hole holes 3 and 4 below were opened by.
 SKIP_RE = re.compile(r"\*\*Skipped\b[.:]?", re.I)
+# Hole 6: the two admissible forms of probe evidence. A committed capture, or a command
+# a later reader can run to reproduce the probe. Prose alone is neither.
+CAPTURE_RE = re.compile(r"docs/host-captures/")
+RERUN_RE = re.compile(r"\*\*Re-run:\*\*\s*`[^`]+`")
 MANDATORY_PROBES = ("cold-start", "first-repair")
 
 
-def _probes() -> list[tuple[str, str]]:
+def _ids(docs: list[Path]) -> list[str]:
+    return [d.name for d in docs]
+
+
+assert DOCS, "no agent-friendly-mcp walk artifact found under docs/reviews/"
+
+
+def _text(doc: Path) -> str:
+    return doc.read_text()
+
+
+def _probes(text: str) -> list[tuple[str, str]]:
     """(name, body) for every probe section, in document order."""
     return [
         (name.strip(), body)
-        for name, body in re.findall(r"### Probe: (.+?)\n(.+?)(?=\n### |\n## |\Z)", TEXT, re.S)
+        for name, body in re.findall(r"### Probe: (.+?)\n(.+?)(?=\n### |\n## |\Z)", text, re.S)
     ]
 
 
@@ -67,56 +103,72 @@ def _is_skipped(body: str) -> bool:
     return SKIP_RE.search(body) is not None
 
 
+@pytest.mark.parametrize("doc", DOCS, ids=_ids(DOCS))
 @pytest.mark.parametrize("section", SECTIONS)
-def test_every_checklist_section_is_accounted_for(section):
+def test_every_checklist_section_is_accounted_for(doc, section):
     # Deviation 1: two capture groups, so group(0) spans the notes column too.
-    row = re.search(rf"^\|\s*{re.escape(section)}\s*\|([^|]*)\|([^|]*)\|", TEXT, re.M)
-    assert row, f"{section} has no coverage-table row"
+    row = re.search(rf"^\|\s*{re.escape(section)}\s*\|([^|]*)\|([^|]*)\|", _text(doc), re.M)
+    assert row, f"{doc.name}: {section} has no coverage-table row"
     status = row.group(1).strip().lower()
-    assert status in {"covered", "ok", "not-checked"}, f"{section}: bad status {status!r}"
+    assert status in {"covered", "ok", "not-checked"}, (
+        f"{doc.name}: {section}: bad status {status!r}"
+    )
     if status == "not-checked":
         assert len(row.group(0).split("|")[3].strip()) > 10, (
-            f"{section}: not-checked needs a reason"
+            f"{doc.name}: {section}: not-checked needs a reason"
         )
 
 
-def test_the_two_mandatory_probes_were_run_with_evidence():
+@pytest.mark.parametrize("doc", DOCS, ids=_ids(DOCS))
+def test_the_two_mandatory_probes_were_run_with_evidence(doc):
     """These two must be RUN, not merely present. A skip that happens to name a
-    capture path is not evidence the probe was answered (hole 3)."""
-    bodies = dict(_probes())
+    capture path is not evidence the probe was answered (hole 3). The evidence may
+    be a committed capture or a re-runnable command (hole 6), but the skip check
+    runs FIRST, so neither form can stand in for a probe that was not run."""
+    bodies = dict(_probes(_text(doc)))
     for probe in MANDATORY_PROBES:
         body = next((b for n, b in bodies.items() if n.lower() == probe), None)
-        assert body is not None, f"no {probe} probe section"
+        assert body is not None, f"{doc.name}: no {probe} probe section"
         assert not _is_skipped(body), (
-            f"{probe} is a mandatory probe and was skipped; the Done Criteria require it run"
+            f"{doc.name}: {probe} is a mandatory probe and was skipped; "
+            "the Done Criteria require it run"
         )
-        assert "docs/host-captures/" in body, f"{probe} probe cites no captured evidence"
+        assert CAPTURE_RE.search(body) or RERUN_RE.search(body), (
+            f"{doc.name}: {probe} probe cites neither a committed capture under "
+            "docs/host-captures/ nor a **Re-run:** command"
+        )
 
 
-def test_at_least_three_further_probes_were_run():
+@pytest.mark.parametrize("doc", DOCS, ids=_ids(DOCS))
+def test_at_least_three_further_probes_were_run(doc):
     """The criterion asks for at least three other APPLICABLE probes. A probe
     skipped with a reason is excused by the criterion's next clause; it does not
     count toward this one (hole 4)."""
-    further = [(name, body) for name, body in _probes() if name.lower() not in MANDATORY_PROBES]
+    further = [
+        (name, body) for name, body in _probes(_text(doc)) if name.lower() not in MANDATORY_PROBES
+    ]
     run = [name for name, body in further if not _is_skipped(body)]
     skipped = [name for name, body in further if _is_skipped(body)]
     assert len(run) >= 3, (
-        f"only {len(run)} further probes were run: {run} (skipped, which do not count: {skipped})"
+        f"{doc.name}: only {len(run)} further probes were run: {run} "
+        f"(skipped, which do not count: {skipped})"
     )
 
 
-def test_every_skipped_probe_records_an_inapplicability_reason():
+@pytest.mark.parametrize("doc", DOCS, ids=_ids(DOCS))
+def test_every_skipped_probe_records_an_inapplicability_reason(doc):
     """A probe the walk declines must say why; silence is the defect the workflow names."""
-    skipped = [(name, body) for name, body in _probes() if _is_skipped(body)]
+    skipped = [(name, body) for name, body in _probes(_text(doc)) if _is_skipped(body)]
     assert skipped, (
-        "known positive for SKIP_RE: this walk records skipped probes, so a scan that "
-        "finds none is broken, not a report with nothing to excuse"
+        f"{doc.name}: known positive for SKIP_RE: this walk records skipped probes, so a "
+        "scan that finds none is broken, not a report with nothing to excuse"
     )
     for name, body in skipped:
-        assert "Inapplicability reason:**" in body, f"{name}: skipped with no reason"
+        assert "Inapplicability reason:**" in body, f"{doc.name}: {name}: skipped with no reason"
 
 
-def test_every_finding_carries_all_five_labeled_lines():
+@pytest.mark.parametrize("doc", DOCS, ids=_ids(DOCS))
+def test_every_finding_carries_all_five_labeled_lines(doc):
     """The old form checked only that each label's text appeared somewhere in the
     finding, which a label followed by nothing else also satisfies. Confirmed by
     mutation: a synthetic finding with all five labels present and every value
@@ -133,16 +185,17 @@ def test_every_finding_carries_all_five_labeled_lines():
     every other field correctly on its own bullet line, passed the old regex
     unchanged. The match is now anchored to the field's own bullet line (`re.M`,
     matching from line start, allowing the leading `- ` the artifact uses)."""
-    findings = re.findall(r"#### Finding \d+(.+?)(?=\n#### |\n## |\Z)", TEXT, re.S)
-    assert findings, "the walk records no findings at all"
+    findings = re.findall(r"#### Finding \d+(.+?)(?=\n#### |\n## |\Z)", _text(doc), re.S)
+    assert findings, f"{doc.name}: the walk records no findings at all"
     for finding in findings:
         for field in FINDING_FIELDS:
             match = re.search(rf"^- \*\*{re.escape(field)}\*\*(.*)$", finding, re.I | re.M)
-            assert match, f"finding missing {field}"
-            assert match.group(1).strip(), f"finding has {field} with an empty value"
+            assert match, f"{doc.name}: finding missing {field}"
+            assert match.group(1).strip(), f"{doc.name}: finding has {field} with an empty value"
 
 
-def test_the_report_names_residual_risks():
+@pytest.mark.parametrize("doc", DOCS, ids=_ids(DOCS))
+def test_the_report_names_residual_risks(doc):
     """Unconditional, and it was not always so.
 
     This assertion used to be guarded by `if not SEVERITY_RE.search(TEXT)` -- "a CLEAN
@@ -152,15 +205,31 @@ def test_the_report_names_residual_risks():
     one of the two durable homes this milestone chose for a known gap (ADR 0012 is the
     other), so it is required of every report, clean or not -- a report WITH findings has
     more reason to say what it leaves standing, not less."""
-    assert "residual risk" in TEXT.lower(), (
-        "the walk must name the risks it leaves standing, in a Residual risks section"
+    assert "residual risk" in _text(doc).lower(), (
+        f"{doc.name}: the walk must name the risks it leaves standing, in a Residual risks section"
     )
 
 
-def test_the_severity_scan_can_see_this_report_s_own_severities():
+@pytest.mark.parametrize("doc", DOCS, ids=_ids(DOCS))
+def test_the_severity_scan_can_see_every_finding_s_severity(doc):
     """Known positive for the instrument above: a broken scan and a clean report
-    look identical, so pin that the scan actually matches the document's format."""
-    assert SEVERITY_RE.search(TEXT), (
-        "the severity scan matched nothing in a report that records findings; either "
-        "every finding is Minor/Nit or the scan no longer understands the format"
+    look identical, so pin that the scan actually matches the document's format.
+
+    This used to assert that SEVERITY_RE matched `critical|major` SOMEWHERE in the
+    document, and its own failure message named the hole: "either every finding is
+    Minor/Nit or the scan no longer understands the format". The 2026-09-20 walk is
+    the first case -- no finding above Minor survived review -- so the control fired
+    on a report it had no complaint about. A scan that only recognises the two worst
+    tiers is also a weaker instrument than one that reads them all. It now covers the
+    closed set and counts: one severity value per finding, every value legal. That
+    cannot pass while the scan is blind to the format, and it does not assume a walk
+    must find something Major to be a real walk."""
+    text = _text(doc)
+    findings = re.findall(r"#### Finding \d+(.+?)(?=\n#### |\n## |\Z)", text, re.S)
+    assert findings, f"{doc.name}: the walk records no findings at all"
+    seen = [SEVERITY_RE.search(finding) for finding in findings]
+    assert all(seen), (
+        f"{doc.name}: the severity scan matched nothing in "
+        f"{sum(1 for m in seen if m is None)} of {len(findings)} findings; the scan no "
+        "longer understands the format the artifact uses"
     )
