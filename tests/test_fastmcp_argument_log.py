@@ -11,7 +11,14 @@ pass while the real server still leaks. The end-to-end assertion therefore reads
 of a real `amicus.server` stdio subprocess, and it carries positive controls — the rewritten
 records must be on that same stderr — so a silent or unread stderr cannot pass. The
 in-process tests below pin the pieces: the summary, the record filter, and the dependency
-logger configuration `obs.configure` installs."""
+logger configuration `obs.configure` installs.
+
+FastMCP 4.0.4 closed the same leak on its own side (PrefectHQ/fastmcp#5106): it now logs a
+`{"error_count", "error_types"}` summary instead of pydantic's error list, so no `loc` and
+no rejected value reach amicus at all, and the rewritten record names no field. Both shapes
+install under the `fastmcp>=4.0,<4.1` floor, so the positive controls below follow the
+installed one. amicus keeps its own rewrite rather than deferring to upstream's: the floor
+still admits 4.0.3, and the filter covers the rest of the logger's records regardless."""
 
 from __future__ import annotations
 
@@ -25,6 +32,7 @@ import tempfile
 from typing import Any
 
 import fastmcp
+import fastmcp.server.server
 import pytest
 from fastmcp.utilities.logging import configure_logging, temporary_log_level
 from tests.conftest import restored_dependency_logging, spawned_server_env
@@ -57,10 +65,31 @@ LEAKING_CALLS: tuple[tuple[str, str, dict[str, Any]], ...] = (
     ),
 )
 
+# Which upstream branch this install takes. Named off the helper that builds the summary
+# rather than off a version string: if a later 4.0.x renames it while keeping the mapping,
+# the controls below assert the list-shaped records and FAIL, which is the safe direction —
+# they never fall back to asserting nothing.
+UPSTREAM_SUMMARIZES = hasattr(fastmcp.server.server, "_validation_error_summary")
+
 # What the rewritten records say for those calls: which tool, and why, and nothing sent.
+# Upstream's summary carries no `loc`, so on that branch there is no field to name.
 EXPECTED_RECORDS = (
-    "Invalid arguments for tool amicus_backends: "
-    "1 error(s): unexpected_keyword_argument at <unknown>",
+    (
+        "Invalid arguments for tool amicus_backends: 1 error(s): unexpected_keyword_argument",
+        "Invalid arguments for tool amicus_consult: 1 error(s): string_type",
+        "Invalid arguments for tool amicus_consult: 1 error(s): missing_argument",
+    )
+    if UPSTREAM_SUMMARIZES
+    else (
+        "Invalid arguments for tool amicus_backends: "
+        "1 error(s): unexpected_keyword_argument at <unknown>",
+        "Invalid arguments for tool amicus_consult: 1 error(s): string_type at question",
+        "Invalid arguments for tool amicus_consult: 1 error(s): missing_argument at question",
+    )
+)
+# The record filter is fed both shapes directly, so its own tests never depend on the
+# installed branch.
+LIST_SHAPED_RECORDS = (
     "Invalid arguments for tool amicus_consult: 1 error(s): string_type at question",
     "Invalid arguments for tool amicus_consult: 1 error(s): missing_argument at question",
 )
@@ -235,6 +264,74 @@ def test_the_summary_withholds_a_detail_it_cannot_parse(detail, expected):
     assert obs.summarize_argument_errors(detail) == expected
 
 
+# --- FastMCP's own summary mapping (4.0.4+, PrefectHQ/fastmcp#5106) ---------------------
+
+
+def test_the_upstream_summary_keeps_its_count_and_types():
+    summary = obs.summarize_argument_errors(
+        {"error_count": 2, "error_types": ["missing_argument", "string_type"]}
+    )
+    assert summary == "2 error(s): missing_argument, string_type"
+
+
+def test_the_upstream_summary_counts_errors_not_deduped_types():
+    # Upstream builds `error_types` from a set, so two errors of one type render as one.
+    summary = obs.summarize_argument_errors({"error_count": 3, "error_types": ["missing_argument"]})
+    assert summary == "3 error(s): missing_argument"
+
+
+@pytest.mark.parametrize(
+    "error_types",
+    [[MARKER + " x"], [f"Value error, {MARKER}"], [0], [_HostileStr("string_type")], [None]],
+)
+def test_the_upstream_summary_echoes_no_type_outside_the_shape(error_types):
+    summary = obs.summarize_argument_errors({"error_count": 1, "error_types": error_types})
+    assert summary == "1 error(s): <unknown>"
+
+
+def test_the_upstream_summary_is_capped_and_keeps_the_count():
+    summary = obs.summarize_argument_errors(
+        {"error_count": 25, "error_types": [f"type_{i}" for i in range(25)]}
+    )
+    assert summary.startswith("25 error(s): type_0, ")
+    assert summary.endswith("type_9, ...")
+    assert summary.count(", ") == 10
+
+
+@pytest.mark.parametrize(
+    "detail",
+    [
+        # A count that is not a plain int, so nothing renders `True error(s)`.
+        {"error_count": True, "error_types": ["missing_argument"]},
+        {"error_count": -1, "error_types": ["missing_argument"]},
+        {"error_count": "1", "error_types": ["missing_argument"]},
+        # `error_types` must be a sequence this module can slice; a bare string would
+        # otherwise render character by character.
+        {"error_count": 1, "error_types": "missing_argument"},
+        {"error_count": 1, "error_types": None},
+    ],
+)
+def test_the_upstream_summary_is_withheld_when_its_shape_does_not_hold(detail):
+    assert obs.summarize_argument_errors(detail) == "<detail withheld>"
+
+
+def test_an_empty_upstream_type_list_still_reports_the_count():
+    summary = obs.summarize_argument_errors({"error_count": 1, "error_types": []})
+    assert summary == "1 error(s): <unknown>"
+
+
+def test_the_upstream_summary_is_rewritten_at_its_source():
+    detail = {"error_count": 1, "error_types": ["missing_argument"]}
+    text = _filtered(_record("Invalid arguments for tool %r: %s", ("amicus_consult", detail)))
+    assert text == "Invalid arguments for tool amicus_consult: 1 error(s): missing_argument"
+
+
+def test_a_reworded_template_carrying_the_upstream_summary_is_recognised_by_its_shape():
+    detail = {"error_count": 1, "error_types": ["string_type"]}
+    text = _filtered(_record("Tool %r rejected its arguments (%s)", ("amicus_consult", detail)))
+    assert text == "Invalid arguments for tool amicus_consult: 1 error(s): string_type"
+
+
 # --- the record filter on fastmcp.server.server ----------------------------------------
 
 
@@ -252,13 +349,13 @@ def _filtered(record: logging.LogRecord) -> str:
 def test_the_validation_record_is_rewritten_at_its_source():
     detail = [_error("missing_argument", ("question",), {"extra_context": MARKER})]
     text = _filtered(_record("Invalid arguments for tool %r: %s", ("amicus_consult", detail)))
-    assert text == EXPECTED_RECORDS[2]
+    assert text == LIST_SHAPED_RECORDS[1]
 
 
 def test_a_reworded_template_is_still_recognised_by_its_shape():
     detail = [_error("string_type", ("question",))]
     text = _filtered(_record("Tool %r rejected its arguments (%s)", ("amicus_consult", detail)))
-    assert text == EXPECTED_RECORDS[1]
+    assert text == LIST_SHAPED_RECORDS[0]
 
 
 def test_the_str_detail_branch_is_withheld():

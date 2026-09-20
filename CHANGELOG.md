@@ -20,6 +20,17 @@ per-change, as its own lead says.
 
 ## [Unreleased]
 
+### Changed
+
+- `obs` reads FastMCP's own argument-validation summary. FastMCP 4.0.4 closed the leak issue
+  #79 worked around (PrefectHQ/fastmcp#5106): it logs a `{"error_count", "error_types"}`
+  summary in place of pydantic's error list. amicus's filter did not recognise that shape and
+  withheld it whole, so the record read `Invalid arguments for tool amicus_consult: <detail
+  withheld>`. It now renders the summary — `1 error(s): missing_argument` — with no field
+  named, because upstream's summary carries no `loc`. The list shape is still read, since the
+  `fastmcp>=4.0,<4.1` floor admits 4.0.3, and upstream's count and types are re-checked here
+  rather than trusted. Nothing a caller sent reached the log under either shape.
+
 ## [0.5.0] - 2026-09-20
 
 Across this release the discovery surface moves `amicus/0.1/schema-35`, what 0.4.0 shipped, to

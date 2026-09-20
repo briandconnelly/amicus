@@ -23,13 +23,16 @@ A Codex consult on this issue (2026-09-13) corrected the first design in three w
 `obs.FastMCPServerRecordFilter` is a logger filter on `fastmcp.server.server`, so it runs once, before every handler the record reaches, and survives a handler being replaced.
 The rewritten record names the tool and, for each error, its `type` and the top-level component of its `loc`: `Invalid arguments for tool amicus_consult: 1 error(s): missing_argument at question`.
 `input`, `ctx` and `msg` are never read, because `msg` echoes the input through a `value_error`.
+FastMCP 4.0.4 closed the same leak upstream (PrefectHQ/fastmcp#5106) by logging a `{"error_count", "error_types"}` summary in place of pydantic's error list.
+That summary carries no `loc`, so against it the rewritten record names no field: `Invalid arguments for tool amicus_consult: 1 error(s): missing_argument`.
+Both shapes are read, because the `fastmcp>=4.0,<4.1` floor still admits 4.0.3, and upstream's count and types are re-checked here rather than trusted, on the same grounds as the list branch.
 The `loc` is withheld for an extra-key error, and every component below the top level is dropped, because inside an open-keyed mapping a component can be a client's key under any error type.
 An error type must be a lowercase slug and a field or tool name an identifier, because a `PydanticCustomError` may carry any string as its type.
 
 **It is recognised by shape as well as by text, and anything unaudited is withheld.**
 The first design matched the message template alone.
 Codex held that a reworded template in a later 4.0.x release would pass the record through unchanged, which fails open.
-A two-argument record whose second argument is a list of error mappings is therefore rewritten whatever its message says.
+A two-argument record whose second argument is a list of error mappings, or FastMCP's own summary mapping, is therefore rewritten whatever its message says.
 A tool or prompt failure record is kept only when the name has an identifier's shape, since FastMCP writes it after the name was looked up.
 A resource URI is the client's own text, so it is never kept.
 Every other record from that logger keeps its level, logger name and exception, which the formatter renders as type and frames, and loses its message.
