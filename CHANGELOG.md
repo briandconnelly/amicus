@@ -20,6 +20,15 @@ per-change, as its own lead says.
 
 ## [Unreleased]
 
+### Removed
+
+- **Breaking.** `amicus_dry_run`, the deprecated alias of `amicus_review_changes_dry_run`, is
+  removed. It was deprecated in 0.3.0 (#98) with a marker in its lifecycle `_meta`, on its
+  `amicus_capabilities` row and at the head of its description, each naming 0.5.0, and ADR 0028
+  removes a tool at the end of its window. Call `amicus_review_changes_dry_run` with the same
+  arguments. The server now lists 18 tools, and no tool carries a deprecation marker; the
+  mechanism and `amicus_capabilities.deprecation_policy` stay (#204).
+
 ### Changed
 
 - Kimi Code 2.0 is a supported version, so `amicus_backends` no longer warns on it. Kimi Code

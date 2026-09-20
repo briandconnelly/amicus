@@ -8,13 +8,12 @@ from typing import TYPE_CHECKING, Any, Literal
 from amicus.backends import KNOWN_EFFECTS
 from amicus.schemas.envelope import Meta
 from amicus.schemas.fingerprint import LIFECYCLE_META_KEY
-from amicus.schemas.results import ToolDeprecation
 from amicus.sdk.conventions import annotations as ann
 from amicus.sdk.conventions.annotations import AnnotationEffects
 
 if TYPE_CHECKING:  # pragma: no cover
     from amicus.config import Settings
-    from amicus.schemas.results import ToolStability
+    from amicus.schemas.results import ToolDeprecation, ToolStability
 
 # The server-wide tier, published on every tool, resource and template. Typed as
 # ToolStability so the checker rejects a value outside the closed set [9.stability-tiers]
@@ -39,17 +38,9 @@ def tool_stability(name: str) -> ToolStability:
 # Tools inside their deprecation window, keyed by the deprecated name. Each marker rides
 # the tool's lifecycle _meta and its amicus_capabilities row, so read it through
 # `tool_deprecation()` rather than importing this table (the #43 trap).
-DEPRECATED_TOOLS: dict[str, ToolDeprecation] = {
-    "amicus_dry_run": ToolDeprecation(
-        since="0.3.0",
-        removal_at_or_after="0.5.0",
-        replaced_by="amicus_review_changes_dry_run",
-        migration=(
-            "Call amicus_review_changes_dry_run with the same arguments. Its result is the "
-            "same, except that `tool` names amicus_review_changes_dry_run."
-        ),
-    ),
-}
+# Empty since 0.5.0: `amicus_dry_run`, the first entry (#98, 0.3.0 to 0.5.0), was removed at
+# the end of its window (#204, ADR 0028). The mechanism stays, because the policy does.
+DEPRECATED_TOOLS: dict[str, ToolDeprecation] = {}
 
 
 def tool_deprecation(name: str) -> ToolDeprecation | None:

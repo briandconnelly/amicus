@@ -61,9 +61,21 @@ def test_every_live_tool_is_reachable_from_some_command():
     assert set(TOOL_ORDER) - set(DEPRECATED_TOOLS) - _referenced_tools() == set()
 
 
-def test_no_command_names_a_deprecated_tool():
-    assert DEPRECATED_TOOLS, "known positive: an empty table makes the check below vacuous"
+def test_no_command_names_a_deprecated_tool(monkeypatch):
     assert _referenced_tools() & set(DEPRECATED_TOOLS) == set()
+    # The table is empty since `amicus_dry_run` was removed (#204), which makes the line
+    # above vacuous. Its known positive: deprecate a tool the commands DO launch, and the
+    # same expression has to catch it.
+    from amicus.schemas.results import ToolDeprecation
+
+    monkeypatch.setitem(
+        DEPRECATED_TOOLS,
+        "amicus_consult",
+        ToolDeprecation(
+            since="0.5.0", removal_at_or_after="0.7.0", replaced_by=None, migration="m"
+        ),
+    )
+    assert _referenced_tools() & set(DEPRECATED_TOOLS) == {"amicus_consult"}
 
 
 def test_every_verb_and_listed_twin_has_a_command_that_launches_it():
@@ -141,3 +153,17 @@ async def test_no_command_names_a_parameter_its_own_tools_do_not_have():
         if bad:
             offenders[path.name] = bad
     assert not offenders, f"command files cite parameters their own tools do not have: {offenders}"
+
+
+_COUNT_WORDS = {17: "Seventeen", 18: "Eighteen", 19: "Nineteen", 20: "Twenty"}
+
+
+def test_the_readme_counts_the_tools_that_are_registered():
+    """The sentence opening "The tools" is kept by hand, and it went stale when the alias was
+    removed (Copilot's review of #205): it said nineteen, with a deprecated alias, over an
+    eighteen-tool table."""
+    readme = (COMMANDS.parents[1] / "README.md").read_text()
+    stated = re.search(r"^## The tools\n\n(\w+) tools, in five groups(.*?)\.", readme, re.M)
+    assert stated, "the README no longer opens its tool section with a count"
+    assert stated.group(1) == _COUNT_WORDS[len(TOOL_ORDER)]
+    assert ("deprecated" in stated.group(2)) == bool(DEPRECATED_TOOLS)

@@ -194,7 +194,6 @@ async def test_all_four_paid_sync_tools_are_task_tools_and_nothing_else_is(app):
         "amicus_backends",
         "amicus_capabilities",
         "amicus_review_changes_dry_run",
-        "amicus_dry_run",
         "amicus_job_list",
     ):
         assert not (await app.get_tool(name)).task_config.supports_tasks(), name

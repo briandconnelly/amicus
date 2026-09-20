@@ -1,5 +1,6 @@
 """amicus_review_changes_dry_run / amicus_delegate_dry_run: free previews that fail where the
-paid call would, and the deprecated amicus_dry_run alias (#98)."""
+paid call would, and the deprecation marker's carriers, which outlive the amicus_dry_run
+alias they were built for (#98, removed by #204)."""
 
 from __future__ import annotations
 
@@ -10,13 +11,13 @@ import pytest
 from fastmcp import Client
 from jsonschema import Draft202012Validator
 
-from amicus import config, server
+from amicus import config, server, tools
 from amicus.registry import BackendRegistry
 from amicus.schemas.envelope import META_ALWAYS_PRESENT
 from amicus.schemas.fingerprint import LIFECYCLE_META_KEY
 from amicus.schemas.results import ToolDeprecation
 from amicus.tools import _meta
-from amicus.tools._resolve import FREE_MARKER
+from amicus.tools._resolve import FREE_MARKER, PAID_MARKER
 
 
 @pytest.fixture
@@ -202,50 +203,8 @@ async def test_delegate_dry_run(app, repo, tmp_path):
     assert plain.structured_content["error"]["code"] == "not_a_git_repo"
 
 
-def _without(body: dict, *keys: str) -> dict:
-    return {k: v for k, v in body.items() if k not in keys}
-
-
-def _with_tool_const(schema: dict, name: str) -> dict:
-    swapped = json.loads(json.dumps(schema))
-    for branch in swapped.get("anyOf", [swapped]):
-        if "tool" in branch.get("properties", {}):
-            branch["properties"]["tool"]["const"] = name
-    return swapped
-
-
-async def test_the_deprecated_alias_is_the_same_preview_under_its_old_name(app, repo):
-    """#98, [9.rename]: amicus_dry_run keeps its arguments and its result for the window.
-    Only `tool` differs, and it names the tool the caller actually called."""
-    (repo / "a.py").write_text("x = 2\n")
-    args = {"backend": "codex", "workspace_root": str(repo), "reasoning_effort": "high"}
-    async with Client(app) as c:
-        listed = {t.name: t for t in await c.list_tools()}
-        new = (await c.call_tool("amicus_review_changes_dry_run", args)).structured_content
-        old = (await c.call_tool("amicus_dry_run", args)).structured_content
-        bad = await c.call_tool("amicus_dry_run", {"backend": "codex"}, raise_on_error=False)
-    alias, replacement = listed["amicus_dry_run"], listed["amicus_review_changes_dry_run"]
-    assert alias.input_schema == replacement.input_schema
-    assert alias.annotations == replacement.annotations
-    # The outputSchemas differ in exactly the `tool` const; the inequality is the known
-    # positive that makes the swapped comparison mean something.
-    assert alias.output_schema != replacement.output_schema
-    assert alias.output_schema == _with_tool_const(replacement.output_schema, "amicus_dry_run")
-    assert (new["tool"], old["tool"]) == ("amicus_review_changes_dry_run", "amicus_dry_run")
-    Draft202012Validator(replacement.output_schema).validate(new)
-    Draft202012Validator(alias.output_schema).validate(old)
-    assert new["would_call_model"] is True
-    assert _without(old, "tool", "meta") == _without(new, "tool", "meta")
-    assert _without(old["meta"], "request_id") == _without(new["meta"], "request_id")
-    assert bad.structured_content["error"]["code"] == "invalid_workspace_root"
-
-
-async def test_only_the_alias_is_deprecated_and_its_marker_names_a_live_tool(app):
-    """[9.tier-metadata] puts the marker on the record itself and the same facts in the
-    capability summary; [9.deprecation-marker] makes its presence the signal. So exactly one
-    tool record and one capability row carry it, identically, on both detail levels, and
-    no resource or template does. The description repeats it because a host may never show
-    _meta to the model."""
+async def _marked(app):
+    """(tool records carrying a marker, resource/template metas, capability rows by detail)."""
     async with Client(app) as c:
         listed = {t.name: t for t in await c.list_tools()}
         others = [r.meta for r in await c.list_resources()]
@@ -261,25 +220,109 @@ async def test_only_the_alias_is_deprecated_and_its_marker_names_a_live_tool(app
         for name, tool in listed.items()
         if "deprecation" in tool.meta[LIFECYCLE_META_KEY]
     }
-    assert set(marked) == {"amicus_dry_run"}
-    marker = marked["amicus_dry_run"]
-    assert set(marker) == {"since", "removal_at_or_after", "replaced_by", "migration"}
+    return listed, marked, others, rows
+
+
+async def test_no_tool_is_deprecated_since_the_alias_was_removed(app):
+    """`amicus_dry_run` was the one deprecated tool (#98), removed at the end of its window
+    (#204, ADR 0028). [9.deprecation-marker] makes a marker's PRESENCE the signal, so with
+    nothing deprecated no record and no capability row carries one. The test below is what
+    makes this absence mean something."""
+    listed, marked, others, rows = await _marked(app)
+    assert "amicus_dry_run" not in listed and "amicus_review_changes_dry_run" in listed
+    assert marked == {}
     assert all("deprecation" not in meta[LIFECYCLE_META_KEY] for meta in others)
     for detail, detail_rows in rows.items():
         assert len(detail_rows) == len(listed), detail
+        assert [row["name"] for row in detail_rows if row["deprecation"]] == [], detail
+
+
+async def test_a_deprecated_tool_would_carry_its_marker_on_both_carriers(monkeypatch, tmp_path):
+    """The mechanism outlives its first user. [9.tier-metadata] puts the marker on the record
+    itself and the same facts in the capability summary, so exactly one tool record and one
+    capability row carry it, identically, on both detail levels, and no resource or template
+    does. The entry is synthetic, and the app is built AFTER it is patched in, because a
+    record's lifecycle _meta is fixed at registration."""
+    monkeypatch.setitem(
+        _meta.DEPRECATED_TOOLS,
+        "amicus_models",
+        ToolDeprecation(
+            since="0.5.0",
+            removal_at_or_after="0.7.0",
+            replaced_by="amicus_backends",
+            migration="m",
+        ),
+    )
+    monkeypatch.setenv("AMICUS_STATE_DIR", str(tmp_path / "state"))
+    settings = config.settings()
+    patched = server.create_app(
+        settings, BackendRegistry.load(settings.enabled_backends, entry_points=())
+    )
+    listed, marked, others, rows = await _marked(patched)
+    assert set(marked) == {"amicus_models"}
+    marker = marked["amicus_models"]
+    assert set(marker) == {"since", "removal_at_or_after", "replaced_by", "migration"}
+    assert all("deprecation" not in meta[LIFECYCLE_META_KEY] for meta in others)
+    for detail, detail_rows in rows.items():
         carried = {row["name"]: row["deprecation"] for row in detail_rows if row["deprecation"]}
-        assert carried == {"amicus_dry_run": marker}, detail
+        assert carried == {"amicus_models": marker}, detail
     assert marker["replaced_by"] in listed and marker["replaced_by"] not in marked
-    description = listed["amicus_dry_run"].description or ""
-    assert description.startswith(FREE_MARKER)
-    assert f"Deprecated: use {marker['replaced_by']}" in description
-    assert marker["removal_at_or_after"] in description
+
+
+def _registration_problems(table, descriptions, groups):
+    """ADR 0028's two promises for any deprecated tool: it sits last in its cost group, and
+    its description leads with the deprecation, because a host may never show `_meta` to the
+    model. Plain data in, so the rule can be shown to fire without a deprecated tool."""
+    problems = []
+    for name, deprecation in table.items():
+        group = next((g for g in groups if name in g), None)
+        if group is None or name not in descriptions:
+            problems.append(f"{name}: not registered")
+            continue
+        live = [n for n in group if n not in table]
+        if group[: len(live)] != tuple(live):
+            problems.append(f"{name}: not last in its cost group")
+        lead = "Deprecated: " + (
+            f"use {deprecation.replaced_by}" if deprecation.replaced_by else "no replacement"
+        )
+        before, found, _ = descriptions[name].partition(lead)
+        if not found or before.strip() not in ("", FREE_MARKER, PAID_MARKER):
+            problems.append(f"{name}: description does not lead with {lead!r}")
+    return problems
+
+
+async def test_a_deprecated_tool_sits_last_in_its_group_and_says_so_first(app):
+    """Nothing is deprecated since #204, so the rule is first shown to pass a well-placed
+    entry and to fail a misplaced one, an unannounced one and an unregistered one; only then
+    is its silence on the real table worth anything."""
+    async with Client(app) as c:
+        real = {t.name: t.description for t in await c.list_tools()}
+    groups = (tools.ACTIVE_TOOLS, tools.FREE_TOOLS, tools.JOB_TOOLS)
+    entry = ToolDeprecation(
+        since="0.5.0", removal_at_or_after="0.7.0", replaced_by="amicus_backends", migration="m"
+    )
+    good = {**real, "amicus_old": f"{FREE_MARKER} Deprecated: use amicus_backends. Lists backends."}
+    good_groups = (tools.ACTIVE_TOOLS, (*tools.FREE_TOOLS, "amicus_old"), tools.JOB_TOOLS)
+    assert _registration_problems({"amicus_old": entry}, good, good_groups) == []
+    first = (tools.ACTIVE_TOOLS, ("amicus_old", *tools.FREE_TOOLS), tools.JOB_TOOLS)
+    assert _registration_problems({"amicus_old": entry}, good, first) == [
+        "amicus_old: not last in its cost group"
+    ]
+    quiet = {
+        **real,
+        "amicus_old": f"{FREE_MARKER} Lists backends. Deprecated: use amicus_backends.",
+    }
+    assert len(_registration_problems({"amicus_old": entry}, quiet, good_groups)) == 1
+    assert _registration_problems({"amicus_old": entry}, real, groups) == [
+        "amicus_old: not registered"
+    ]
+    assert _registration_problems(_meta.DEPRECATED_TOOLS, real, groups) == []
 
 
 async def test_a_marker_without_a_successor_keeps_its_null_on_the_capability_row(app, monkeypatch):
     """[9.deprecation-marker] fixes the field set, so a deprecation with no successor carries
     `replaced_by: null` on its amicus_capabilities row as well as in its lifecycle _meta.
-    The shipped alias has a successor, so this patches in one that has none: the row is
+    Nothing ships deprecated today, so this patches in an entry with no successor: the row is
     dumped with exclude_none, which would drop the null, and only the restamp from the
     lifecycle source keeps it (Copilot's review of #99)."""
     monkeypatch.setitem(

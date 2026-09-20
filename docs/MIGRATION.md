@@ -130,7 +130,7 @@ Most amicus tools take `backend` as a required parameter (no default); pick `"co
 ## Behavior deltas
 
 `amicus_dry_run` was renamed `amicus_review_changes_dry_run` (#98), and the sibling maps above point at the new name.
-The old name still works as a deprecated alias until 0.5.0, with the same arguments and the same result, whose `tool` stays `amicus_dry_run`.
+The old name worked as a deprecated alias in 0.3.x and 0.4.x, and 0.5.0 removed it at the end of that window (#204); the new name takes the same arguments.
 Call the new name in anything you write now.
 
 Review results and `amicus_review_changes_dry_run` carry a top-level `coverage` object, in the shape `codex_review_changes` returns (#65).
@@ -208,6 +208,11 @@ On Kimi, which is handed its prompt as a file, a finding could come back with `f
 Such a `file` is now null together with its `line`, the path is replaced by `[amicus temporary file]` wherever the answer's text named it, and `findings_diagnostics.reasons` says `backend_artifact_reference_removed` at `dropped: 0`.
 A caller that treated any non-null `findings_diagnostics` as loss should read the reason: this one loses nothing a caller could have opened.
 
+**`amicus_dry_run` is gone (#204).**
+It was the deprecated alias of `amicus_review_changes_dry_run` since 0.3.0 (#98), with a marker in its lifecycle `_meta` and on its `amicus_capabilities` row naming 0.5.0 as its removal, and ADR 0028 removes a tool at that release.
+Call `amicus_review_changes_dry_run` with the same arguments; the result is the same except that `tool` names the tool you called.
+A call to the old name now returns `isError: true` with the text `Unknown tool: 'amicus_dry_run'` and no `structuredContent`: it comes from the MCP layer, so there is no amicus error envelope and no `error.code` to branch on.
+
 **An answer file amicus refuses to read is `answer_unavailable`, not an empty answer (#162).**
 amicus reads a backend's answer file only if it is a regular file within a 1,000,000-byte limit.
 A refused file used to be indistinguishable from a backend that wrote nothing: a Codex review returned `invalid_json`, and a Codex consult returned `ok: true` with the summary "(the backend returned no message)".
@@ -269,8 +274,8 @@ Fetch or consume any stored result you still need before upgrading; the record i
 The four `_async` tools accepted `""`; every paid tool now rejects it before spending as `invalid_arguments` (`minLength: 1`).
 Omit the key instead.
 
-**`amicus_dry_run` is a deprecated alias (#98).**
-Call `amicus_review_changes_dry_run`; the alias is removed at or after 0.5.0.
+**`amicus_dry_run` is a deprecated alias (#98), and 0.5.0 removed it (#204).**
+Call `amicus_review_changes_dry_run`.
 
 **Two workspace errors carry no `repair` (#42).**
 `invalid_workspace_root` and `workspace_outside_roots` return `error.repair: null`, because no call can supply the caller's directory; read `details.field` and `details.candidate_roots` instead.

@@ -463,14 +463,6 @@ class DryRunResult(SuccessBase):
     warnings: list[str] = Field(default_factory=list)
 
 
-class DeprecatedDryRunResult(DryRunResult):
-    """What the deprecated amicus_dry_run alias returns (#98): the preview under the `tool`
-    value it always had, so the alias's published outputSchema stays the one a caller
-    already holds."""
-
-    tool: Literal["amicus_dry_run"] = "amicus_dry_run"
-
-
 class WorktreePlan(BaseModel):
     model_config = ConfigDict(extra="forbid")
     baseline_ref: str
@@ -718,7 +710,6 @@ JOB_STARTED_SCHEMA = publish.published_schema(JobStarted)
 JOB_STATUS_SCHEMA = publish.published_schema(JobStatus)
 JOB_LIST_SCHEMA = publish.published_schema(JobListResult)
 DRY_RUN_SCHEMA = publish.published_schema(DryRunResult)
-DEPRECATED_DRY_RUN_SCHEMA = publish.published_schema(DeprecatedDryRunResult)
 DELEGATE_DRY_RUN_SCHEMA = publish.published_schema(DelegateDryRunResult)
 BACKENDS_SCHEMA = publish.published_schema(BackendsResult)
 MODEL_CATALOG_SCHEMA = publish.published_schema(ModelCatalogResult)
