@@ -235,3 +235,53 @@ def test_an_ambient_support_override_cannot_vouch_for_an_unchecked_version(fakes
 )
 def test_builtin_support_is_read_from_each_contract(backend, version, want):
     assert compat.builtin_supported(backend, version) is want
+
+
+@pytest.mark.parametrize(
+    ("text", "want"),
+    [
+        ("codex-cli 0.155.1", ("0.155.1", "")),
+        ("codex-cli 0.155.1-beta.1", ("0.155.1", "-beta.1")),
+        ("0.155.1-dev+abc123", ("0.155.1", "-dev+abc123")),
+        ("0.155.1+local", ("0.155.1", "+local")),
+        ("2.1.278 (Claude Code)", ("2.1.278", "")),
+        ("kimi, version 2.0.2", ("2.0.2", "")),
+        ("no version here", None),
+    ],
+)
+def test_a_release_keeps_its_prerelease_and_build_suffix_and_drops_a_product_label(text, want):
+    """#208: three integers cannot tell 0.155.1-beta.1 from 0.155.1. A product label is set
+    off by a space, so it is never read as a suffix."""
+    assert compat.release(text) == want
+
+
+def _codex_reporting(fake_codex: Path, tmp_path: Path, version: str) -> Path:
+    source = fake_codex.read_text()
+    assert source.count("codex-cli 0.153.4") == 2, "the fake's docstring and its --version"
+    exe = tmp_path / "bin" / "codex"
+    exe.parent.mkdir()
+    exe.write_text(source.replace("codex-cli 0.153.4", f"codex-cli {version}"))
+    exe.chmod(0o755)
+    return exe
+
+
+@pytest.mark.parametrize("suffix", ["-beta.1", "-dev+abc123", "+local"])
+def test_a_prerelease_or_development_build_is_not_the_latest_release(
+    fakes, fake_codex, tmp_path, capsys, monkeypatch, suffix
+):
+    """The build whose core matches npm's latest is the case that used to pass."""
+    lookup = lambda _backend: "0.153.4"  # noqa: E731
+    stable = compat.check_backend("codex", tmp_path, latest=lookup)
+    assert stable.version == "0.153.4" and compat.problems(stable) == [], "control"
+    fakes.setenv(
+        "AMICUS_CODEX_BIN", str(_codex_reporting(fake_codex, tmp_path, "0.153.4" + suffix))
+    )
+    report = compat.check_backend("codex", tmp_path, latest=lookup)
+    assert report.version == "0.153.4" + suffix
+    found = compat.problems(report)
+    assert len(found) == 1 and "not a published stable release" in found[0], found
+    # And --write must not file that build's help where the stable release's belongs.
+    monkeypatch.setattr(compat, "BACKENDS", ("codex",))
+    assert compat.main(["--docs-root", str(tmp_path / "docs"), "--offline", "--write"]) == 1
+    assert "wrote" not in capsys.readouterr().out
+    assert not (tmp_path / "docs").exists()
