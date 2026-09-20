@@ -97,8 +97,11 @@ per-change, as its own lead says.
   `findings_diagnostics.reasons` reports `backend_artifact_reference_removed` at `dropped: 0`.
   It never moves a verdict, and a failed run's error message is scrubbed the same way. Only the
   run's own staged paths match, the files it listed and anything under Kimi's per-run handshake
-  directory, at path boundaries and in whatever spelling the backend's JSON used, so a
-  workspace file that merely looks like one is untouched. `FINGERPRINT` moves to schema-36 for the new reason, and
+  directory, at path boundaries, so a workspace file that merely looks like one is untouched.
+  A JSON answer is judged by what it decodes to, object keys included, whatever spelling it
+  used; an answer that is prose around a JSON fragment is never decoded, so there the `\/` and
+  `\u002f` spellings of a separator are recognised and a path spelled wholly in `\uXXXX` is
+  not (#207). `FINGERPRINT` moves to schema-36 for the new reason, and
   `RESULT_FORMAT` moves 7 to 8, so a job result 0.4.0 stored is `job_result_incompatible`
   after upgrading: fetch it first (`docs/MIGRATION.md`, "Upgrading from 0.4.0") (#140).
 

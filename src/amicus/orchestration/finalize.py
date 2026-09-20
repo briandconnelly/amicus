@@ -141,7 +141,11 @@ _FILE_END = r"(?![\w\-]|\.\w)"
 # A staging DIRECTORY takes everything beneath it, whether or not `artifacts` listed it, and
 # must not match a longer sibling name (`...-ab` inside `...-abc`). A `:` ends the path, so
 # `other.md:3` keeps its line suffix as a listed file's does.
-_UNDER_DIR = r"(?:/[^\s\"'`<>)\]:]*|(?![\w.\-]))"
+# A path separator as JSON may spell it: `/`, `\/` or `\u002f`. An answer that is prose around
+# a JSON fragment is never decoded, so the text pass has to read these itself (#207). `\/` is
+# what ordinary encoders emit; a path spelled wholly in `\uXXXX` inside prose is not chased.
+_SLASH = r"(?:\\?/|\\u002[fF])"
+_UNDER_DIR = rf"(?:{_SLASH}[^\s\"'`<>)\]:]*|(?![\w.\-]))"
 
 
 @dataclasses.dataclass(frozen=True)
@@ -172,8 +176,12 @@ def artifact_refs(artifacts: tuple[str, ...], staging_dir: str | None = None) ->
 
     dirs = {d.rstrip("/") for d in spellings(staging_dir or "")} - {""}
     files = {f for a in artifacts for f in spellings(a)}
-    parts = [(d, re.escape(d) + _UNDER_DIR) for d in dirs]
-    parts += [(f, re.escape(f) + _FILE_END) for f in files]
+
+    def spelled(path: str) -> str:
+        return re.escape(path).replace("/", _SLASH)
+
+    parts = [(d, spelled(d) + _UNDER_DIR) for d in dirs]
+    parts += [(f, spelled(f) + _FILE_END) for f in files]
     if not parts:
         return NO_ARTIFACTS
     parts.sort(key=lambda part: len(part[0]), reverse=True)
@@ -186,7 +194,18 @@ def _scrub_value(value: object, refs: ArtifactRefs) -> object:
     if isinstance(value, list):
         return [_scrub_value(v, refs) for v in value]
     if isinstance(value, dict):
-        return {k: _scrub_value(v, refs) for k, v in value.items()}
+        # Keys are the backend's text as much as values are (#207). Two keys can scrub to
+        # one string, and a dict would keep the last and drop the rest, so later ones are
+        # numbered instead.
+        out: dict = {}
+        for key, item in value.items():
+            base = refs.scrub(key) if isinstance(key, str) else key
+            new, count = base, 1
+            while new in out:
+                count += 1
+                new = f"{base} ({count})"
+            out[new] = _scrub_value(item, refs)
+        return out
     return value
 
 
@@ -216,9 +235,10 @@ def scrub_structured(parsed: dict, refs: ArtifactRefs) -> tuple[dict, frozenset[
 
 def scrub_answer(answer: str, refs: ArtifactRefs) -> str:
     """The raw answer, for `raw_response.text` and a prose summary. Text replacement covers
-    the as-written spelling; if the answer is JSON whose DECODED content still names an
-    artifact, the backend escaped the path, and the text is rebuilt from the scrubbed
-    object rather than chasing every spelling JSON allows."""
+    the as-written spelling and the escaped-solidus ones; if the answer is JSON whose
+    DECODED content still names an artifact, the backend escaped the path some other way,
+    and the text is rebuilt from the scrubbed object rather than chasing every spelling
+    JSON allows."""
     text = refs.scrub(answer)
     if refs.pattern is None:
         return text
