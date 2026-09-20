@@ -286,6 +286,40 @@ def _argument_error(err: object) -> str:
     return f"{error_type or _UNKNOWN} at {field}"
 
 
+# FastMCP 4.0.4 redacts this record upstream (PrefectHQ/fastmcp#5106): where it logged
+# pydantic's error list it now logs ``{"error_count": N, "error_types": [...]}``, built with
+# ``include_input=False``/``include_context=False`` and every non-builtin type collapsed to
+# ``custom_error``. That summary carries no ``loc``, so no field name survives to render.
+# Both shapes are installable under this package's ``fastmcp>=4.0,<4.1`` floor, so both are
+# read here. The count and the types are re-checked rather than trusted, because this module
+# echoes only shapes it has checked itself -- the same reason the list branch re-checks a
+# ``type`` pydantic also produced.
+_SUMMARY_KEYS = ("error_count", "error_types")
+
+
+def _summarized_argument_errors(detail: Mapping[object, object]) -> str:
+    """FastMCP's own ``{"error_count", "error_types"}`` summary as ``N error(s): type, ...``."""
+    count = detail.get("error_count")
+    # `type(...) is int` rather than `isinstance`: `True` is an `int`, and would render as
+    # `True error(s)`.
+    if type(count) is not int or count < 0:
+        return _DETAIL_WITHHELD
+    error_types = detail.get("error_types")
+    # Exactly a `list` or `tuple`: a bare `str` would otherwise render character by
+    # character, and a subclass could override `__getitem__`.
+    if type(error_types) not in (tuple, list):
+        return _DETAIL_WITHHELD
+    assert isinstance(error_types, tuple | list)  # narrowed by the check above
+    shown = ", ".join(
+        raw if type(raw) is str and _ERROR_TYPE.fullmatch(raw) else _UNKNOWN
+        for raw in error_types[:_MAX_ARGUMENT_ERRORS]
+    )
+    more = ", ..." if len(error_types) > _MAX_ARGUMENT_ERRORS else ""
+    # Upstream dedupes the types, so their number is not the error count and an empty list
+    # is possible; the count is rendered from `error_count` alone.
+    return f"{count} error(s): {shown or _UNKNOWN}{more}"
+
+
 def summarize_argument_errors(detail: object) -> str:
     """pydantic's argument errors as ``N error(s): type at field, ...``, never a value the
     caller sent.
@@ -296,9 +330,15 @@ def summarize_argument_errors(detail: object) -> str:
     text, so none of the three is read. The ``loc`` is withheld for an extra-key error,
     where it IS the key the client sent, and every component below the top level is
     dropped, because inside an open-keyed mapping a component can be a client's key under
-    any error type. Anything that is not a list of error mappings is withheld whole:
-    FastMCP's other branch logs ``str(e)``, which embeds pydantic's own rendering, input
-    values included."""
+    any error type.
+
+    FastMCP's own summary mapping is rendered without a field, because it carries none.
+    Anything else is withheld whole: FastMCP's remaining branch logs ``str(e)``, which
+    embeds pydantic's own rendering, input values included."""
+    if isinstance(detail, Mapping):
+        if all(key in detail for key in _SUMMARY_KEYS):
+            return _summarized_argument_errors(detail)
+        return _DETAIL_WITHHELD
     if type(detail) is not list or not detail:
         return _DETAIL_WITHHELD
     shown = ", ".join(_argument_error(err) for err in detail[:_MAX_ARGUMENT_ERRORS])
@@ -321,8 +361,8 @@ def _is_argument_record(record: logging.LogRecord) -> bool:
     """FastMCP's argument-validation record, recognised by its text OR by its shape.
 
     The shape test is what keeps a reworded template in a later 4.0.x release from passing
-    through: a two-argument record whose second argument is a list of error mappings is
-    rewritten whatever its message says."""
+    through: a two-argument record whose second argument is an error list, or FastMCP's own
+    summary mapping, is rewritten whatever its message says."""
     args = record.args
     if type(args) is not tuple or len(args) != 2:
         return False
@@ -330,6 +370,8 @@ def _is_argument_record(record: logging.LogRecord) -> bool:
     if type(msg) is str and msg.startswith("Invalid arguments for tool"):
         return True
     detail = args[1]
+    if isinstance(detail, Mapping):
+        return all(key in detail for key in _SUMMARY_KEYS)
     return type(detail) is list and bool(detail) and all(isinstance(e, Mapping) for e in detail)
 
 
