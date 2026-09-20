@@ -210,3 +210,87 @@ def test_prose_answers_and_failures_are_scrubbed_as_text():
     assert scrubbed.detail == f"kimi exited 1: cannot read {_P}"
     assert scrubbed.details == {"reason": _P} and scrubbed.code == "nonzero_exit"
     assert finalize.scrub_failure(failure, finalize.NO_ARTIFACTS) is failure
+
+
+@pytest.mark.parametrize("spelling", ["plain", "solidus", "unicode"])
+def test_a_path_used_as_an_object_key_is_scrubbed_in_every_spelling(spelling):
+    """#207: the decoded-value pass walked values only, so a key the backend escaped came
+    through whole. A key is as much the backend's text as a value is."""
+    obj = _answer({"title": "t", "file": None, "line": None}, **{_ART: "x", "notes": {_ART: 1}})
+    text = _spellings(obj)[spelling]
+    assert json.loads(text) == obj, "control: every spelling is the same object"
+    raw = json.loads(finalize.scrub_answer(text, _REFS))
+    assert "amicus-kimi-handshake-" not in json.dumps(raw)
+    assert raw[_P] == "x" and raw["notes"] == {_P: 1}, "the values keep their place"
+
+
+def test_keys_that_scrub_to_the_same_text_are_numbered_not_merged():
+    """Two staged files, or a key that already reads as the placeholder, scrub to one string;
+    a plain dict would keep the last and drop the rest without a trace."""
+    other = f"{_DIR}/other.md"
+    refs = finalize.artifact_refs((_ART,), _DIR)
+    scrubbed, _ = finalize.scrub_structured({_P: 0, _ART: 1, other: 2, "findings": []}, refs)
+    assert scrubbed == {_P: 0, f"{_P} (2)": 1, f"{_P} (3)": 2, "findings": []}
+
+
+@pytest.mark.parametrize("slash", ["\\/", "\\u002f", "\\u002F"])
+def test_an_escaped_path_inside_prose_is_scrubbed_where_the_slash_is_what_was_escaped(slash):
+    """An answer that is prose around a JSON fragment is never decoded, so the text pass has
+    to know the fragment's spelling. It knows the solidus escapes, the one spelling ordinary
+    encoders emit; a path spelled entirely in \\uXXXX inside prose is not chased."""
+    escaped = _ART.replace("/", slash)
+    text = f'Here is what I found: {{"file": "{escaped}", "line": 28}} and nothing else.'
+    assert "handshake" in text, "control"
+    assert finalize.scrub_answer(text, _REFS) == (
+        f'Here is what I found: {{"file": "{_P}", "line": 28}} and nothing else.'
+    )
+    under = f'{{"file": "{_DIR.replace("/", slash)}{slash}notes.txt"}}'
+    assert "handshake" not in finalize.artifact_refs((_ART,), _DIR).scrub(f"x {under} y")
+
+
+@pytest.mark.parametrize(
+    ("refs", "owned", "tail", "decoded_tail"),
+    [
+        (finalize.artifact_refs((), _DIR), _DIR, "\\u002ebak", ".bak"),
+        (finalize.artifact_refs((), _DIR), _DIR, "\\u0063", "c"),
+        (finalize.artifact_refs((_ART,)), _ART, "\\u0078", "x"),
+        (finalize.artifact_refs((_ART,)), _ART, "\\u002ebak", ".bak"),
+    ],
+)
+def test_an_escaped_character_after_a_path_is_not_mistaken_for_its_end(
+    refs, owned, tail, decoded_tail
+):
+    """Codex's review of #209: the boundary guards read the next ENCODED character, and a
+    `\\u002e` begins with a backslash, which is no word character, so `<dir>\\u002ebak`
+    passed as the directory's end although it decodes to a longer sibling. The text pass now
+    declines what it cannot read, and the decoded pass, whose boundaries are exact, decides."""
+    escaped = owned.replace("/", "\\/")
+    fragment = json.dumps({"summary": "S"}).replace("S", escaped + tail)
+    assert json.loads(fragment)["summary"] == owned + decoded_tail, "control: longer, unowned"
+    mine = json.dumps({"summary": "S"}).replace("S", escaped)
+    # Whole JSON is decoded, where boundaries are exact; prose is where the text pass, and so
+    # these guards, decide. Both must leave the unowned path and take the owned one.
+    for wrap in ("{}", "I saw {} in the log."):
+        text = wrap.format(fragment)
+        assert finalize.scrub_answer(text, refs) == text, wrap
+        assert "handshake" not in finalize.scrub_answer(wrap.format(mine), refs), wrap
+
+
+@pytest.mark.parametrize("spelling", ["plain", "solidus", "unicode"])
+def test_a_whole_json_answer_is_never_left_with_duplicate_keys(spelling):
+    """Copilot's review of #209: the text pass ran first, and it turns two owned keys into
+    one key written twice, which amicus's own reader refuses (#51), so `raw_response.text`
+    stopped being the JSON it was. A whole-JSON answer is decoded FIRST, where collisions are
+    numbered; the text pass is for what cannot be decoded."""
+    other = f"{_DIR}/other.md"
+    obj = {_P: 0, _ART: 1, other: 2, "findings": []}
+    text = json.dumps(obj)
+    if spelling == "solidus":
+        text = text.replace("/", "\\/")
+    elif spelling == "unicode":
+        text = text.replace(_ART, "".join(f"\\u{ord(c):04x}" for c in _ART))
+    assert finalize.classify_structured(text) == ("ok", obj), "control"
+    raw = finalize.scrub_answer(text, finalize.artifact_refs((_ART,), _DIR))
+    status, parsed = finalize.classify_structured(raw)
+    assert status == "ok", raw
+    assert parsed == {_P: 0, f"{_P} (2)": 1, f"{_P} (3)": 2, "findings": []}
