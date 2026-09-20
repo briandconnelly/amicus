@@ -244,6 +244,8 @@ def test_builtin_support_is_read_from_each_contract(backend, version, want):
         ("codex-cli 0.155.1-beta.1", ("0.155.1", "-beta.1")),
         ("0.155.1-dev+abc123", ("0.155.1", "-dev+abc123")),
         ("0.155.1+local", ("0.155.1", "+local")),
+        ("codex-cli 0.155.1--beta.1", ("0.155.1", "--beta.1")),
+        ("0.155.1-beta.1\n", ("0.155.1", "-beta.1")),
         ("2.1.278 (Claude Code)", ("2.1.278", "")),
         ("kimi, version 2.0.2", ("2.0.2", "")),
         ("no version here", None),
@@ -265,7 +267,7 @@ def _codex_reporting(fake_codex: Path, tmp_path: Path, version: str) -> Path:
     return exe
 
 
-@pytest.mark.parametrize("suffix", ["-beta.1", "-dev+abc123", "+local"])
+@pytest.mark.parametrize("suffix", ["-beta.1", "--beta.1", "-dev+abc123", "+local"])
 def test_a_prerelease_or_development_build_is_not_the_latest_release(
     fakes, fake_codex, tmp_path, capsys, monkeypatch, suffix
 ):
@@ -285,3 +287,24 @@ def test_a_prerelease_or_development_build_is_not_the_latest_release(
     assert compat.main(["--docs-root", str(tmp_path / "docs"), "--offline", "--write"]) == 1
     assert "wrote" not in capsys.readouterr().out
     assert not (tmp_path / "docs").exists()
+
+
+def test_the_latest_release_is_reported_as_npm_printed_it(monkeypatch):
+    """Codex's review of #210: the lookup rebuilt the version from three integers too, so an
+    npm `latest` of 0.155.1-beta.1 compared equal to an installed 0.155.1."""
+
+    def npm(stdout: str, returncode: int = 0):
+        done = compat.subprocess.CompletedProcess([], returncode, stdout=stdout, stderr="")
+        monkeypatch.setattr(compat.subprocess, "run", lambda *_a, **_k: done)
+        return compat.latest_upstream("codex")
+
+    assert npm("0.155.1\n") == "0.155.1", "control"
+    assert npm("0.155.1-beta.1\n") == "0.155.1-beta.1"
+    assert npm("0.155.1\n", returncode=1) is None
+    assert npm("npm ERR! nothing\n") is None
+    report = compat.Report("codex", installed=True, version="0.155.1", authenticated=True)
+    report.builtin_supported = report.help_ok = True
+    report.latest = "0.155.1"
+    assert compat.problems(report) == [], "control"
+    report.latest = "0.155.1-beta.1"
+    assert len(compat.problems(report)) == 1 and "0.155.1-beta.1" in compat.problems(report)[0]

@@ -66,7 +66,7 @@ NPM_PACKAGES: dict[str, str] = {
 _SEMVER = re.compile(r"(\d+)\.(\d+)\.(\d+)")
 # The same core with whatever semver prerelease or build suffix is attached to it. A product
 # label (`2.1.278 (Claude Code)`) is set off by a space, so it is never part of the suffix.
-_RELEASE = re.compile(r"(\d+\.\d+\.\d+)((?:-[0-9A-Za-z][0-9A-Za-z.-]*)?(?:\+[0-9A-Za-z.-]+)?)")
+_RELEASE = re.compile(r"(\d+\.\d+\.\d+)((?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)")
 # An option ROW: a shallow indent, then the declaration column up to the gap before its
 # description. codex indents rows by 2 or 6 and puts the description on the next line;
 # kimi and claude indent by 2 and describe on the same line. Description text wraps at 10
@@ -152,8 +152,8 @@ def latest_upstream(backend: str) -> str | None:
         )
     except (OSError, subprocess.TimeoutExpired):
         return None
-    found = semver(done.stdout)
-    return ".".join(map(str, found)) if done.returncode == 0 and found else None
+    found = release(done.stdout)
+    return "".join(found) if done.returncode == 0 and found else None
 
 
 def newest_capture(docs_root: Path, backend: str) -> Path | None:
