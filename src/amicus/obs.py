@@ -291,9 +291,11 @@ def _argument_error(err: object) -> str:
 # ``include_input=False``/``include_context=False`` and every non-builtin type collapsed to
 # ``custom_error``. That summary carries no ``loc``, so no field name survives to render.
 # Both shapes are installable under this package's ``fastmcp>=4.0,<4.1`` floor, so both are
-# read here. The count and the types are re-checked rather than trusted, because this module
-# echoes only shapes it has checked itself -- the same reason the list branch re-checks a
-# ``type`` pydantic also produced.
+# read here; if that floor ever rises to ``>=4.0.4``, the list branch in
+# ``summarize_argument_errors`` becomes unreachable and should be removed with it. The count
+# and the types are re-checked rather than trusted, because this module echoes only shapes it
+# has checked itself -- the same reason the list branch re-checks a ``type`` pydantic also
+# produced.
 _SUMMARY_KEYS = ("error_count", "error_types")
 
 
