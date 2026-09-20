@@ -153,3 +153,17 @@ async def test_no_command_names_a_parameter_its_own_tools_do_not_have():
         if bad:
             offenders[path.name] = bad
     assert not offenders, f"command files cite parameters their own tools do not have: {offenders}"
+
+
+_COUNT_WORDS = {17: "Seventeen", 18: "Eighteen", 19: "Nineteen", 20: "Twenty"}
+
+
+def test_the_readme_counts_the_tools_that_are_registered():
+    """The sentence opening "The tools" is kept by hand, and it went stale when the alias was
+    removed (Copilot's review of #205): it said nineteen, with a deprecated alias, over an
+    eighteen-tool table."""
+    readme = (COMMANDS.parents[1] / "README.md").read_text()
+    stated = re.search(r"^## The tools\n\n(\w+) tools, in five groups(.*?)\.", readme, re.M)
+    assert stated, "the README no longer opens its tool section with a count"
+    assert stated.group(1) == _COUNT_WORDS[len(TOOL_ORDER)]
+    assert ("deprecated" in stated.group(2)) == bool(DEPRECATED_TOOLS)

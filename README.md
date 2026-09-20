@@ -85,7 +85,7 @@ anything.
 
 ## The tools
 
-Nineteen tools, in five groups, one of them a deprecated alias. Discovery, previews and job
+Eighteen tools, in five groups. Discovery, previews and job
 management are free; the verbs and their background twins invoke the selected backend and spend
 its quota.
 
