@@ -22,7 +22,8 @@ ACTIVE_TOOLS: tuple[str, ...] = (
     "amicus_adversarial_review_async",
 )
 # A deprecated tool keeps its cost group and sits last in it until removal; deprecation is
-# its lifecycle marker (`_meta.DEPRECATED_TOOLS`), not a group of its own (#98).
+# its lifecycle marker (`_meta.DEPRECATED_TOOLS`), not a group of its own (#98). Nothing is
+# deprecated since #204; tests/test_dry_run.py holds the placement for the next one.
 FREE_TOOLS: tuple[str, ...] = (
     "amicus_review_changes_dry_run",
     "amicus_delegate_dry_run",

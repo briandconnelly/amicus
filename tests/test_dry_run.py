@@ -1,5 +1,6 @@
 """amicus_review_changes_dry_run / amicus_delegate_dry_run: free previews that fail where the
-paid call would, and the deprecated amicus_dry_run alias (#98)."""
+paid call would, and the deprecation marker's carriers, which outlive the amicus_dry_run
+alias they were built for (#98, removed by #204)."""
 
 from __future__ import annotations
 
@@ -10,12 +11,13 @@ import pytest
 from fastmcp import Client
 from jsonschema import Draft202012Validator
 
-from amicus import config, server
+from amicus import config, server, tools
 from amicus.registry import BackendRegistry
 from amicus.schemas.envelope import META_ALWAYS_PRESENT
 from amicus.schemas.fingerprint import LIFECYCLE_META_KEY
 from amicus.schemas.results import ToolDeprecation
 from amicus.tools import _meta
+from amicus.tools._resolve import FREE_MARKER, PAID_MARKER
 
 
 @pytest.fixture
@@ -265,6 +267,56 @@ async def test_a_deprecated_tool_would_carry_its_marker_on_both_carriers(monkeyp
         carried = {row["name"]: row["deprecation"] for row in detail_rows if row["deprecation"]}
         assert carried == {"amicus_models": marker}, detail
     assert marker["replaced_by"] in listed and marker["replaced_by"] not in marked
+
+
+def _registration_problems(table, descriptions, groups):
+    """ADR 0028's two promises for any deprecated tool: it sits last in its cost group, and
+    its description leads with the deprecation, because a host may never show `_meta` to the
+    model. Plain data in, so the rule can be shown to fire without a deprecated tool."""
+    problems = []
+    for name, deprecation in table.items():
+        group = next((g for g in groups if name in g), None)
+        if group is None or name not in descriptions:
+            problems.append(f"{name}: not registered")
+            continue
+        live = [n for n in group if n not in table]
+        if group[: len(live)] != tuple(live):
+            problems.append(f"{name}: not last in its cost group")
+        lead = "Deprecated: " + (
+            f"use {deprecation.replaced_by}" if deprecation.replaced_by else "no replacement"
+        )
+        before, found, _ = descriptions[name].partition(lead)
+        if not found or before.strip() not in ("", FREE_MARKER, PAID_MARKER):
+            problems.append(f"{name}: description does not lead with {lead!r}")
+    return problems
+
+
+async def test_a_deprecated_tool_sits_last_in_its_group_and_says_so_first(app):
+    """Nothing is deprecated since #204, so the rule is first shown to pass a well-placed
+    entry and to fail a misplaced one, an unannounced one and an unregistered one; only then
+    is its silence on the real table worth anything."""
+    async with Client(app) as c:
+        real = {t.name: t.description for t in await c.list_tools()}
+    groups = (tools.ACTIVE_TOOLS, tools.FREE_TOOLS, tools.JOB_TOOLS)
+    entry = ToolDeprecation(
+        since="0.5.0", removal_at_or_after="0.7.0", replaced_by="amicus_backends", migration="m"
+    )
+    good = {**real, "amicus_old": f"{FREE_MARKER} Deprecated: use amicus_backends. Lists backends."}
+    good_groups = (tools.ACTIVE_TOOLS, (*tools.FREE_TOOLS, "amicus_old"), tools.JOB_TOOLS)
+    assert _registration_problems({"amicus_old": entry}, good, good_groups) == []
+    first = (tools.ACTIVE_TOOLS, ("amicus_old", *tools.FREE_TOOLS), tools.JOB_TOOLS)
+    assert _registration_problems({"amicus_old": entry}, good, first) == [
+        "amicus_old: not last in its cost group"
+    ]
+    quiet = {
+        **real,
+        "amicus_old": f"{FREE_MARKER} Lists backends. Deprecated: use amicus_backends.",
+    }
+    assert len(_registration_problems({"amicus_old": entry}, quiet, good_groups)) == 1
+    assert _registration_problems({"amicus_old": entry}, real, groups) == [
+        "amicus_old: not registered"
+    ]
+    assert _registration_problems(_meta.DEPRECATED_TOOLS, real, groups) == []
 
 
 async def test_a_marker_without_a_successor_keeps_its_null_on_the_capability_row(app, monkeypatch):

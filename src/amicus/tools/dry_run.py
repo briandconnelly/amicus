@@ -78,24 +78,16 @@ def _register_review_preview(
     app: FastMCP,
     settings: Settings,
     registry: BackendRegistry,
-    *,
-    name: str,
-    title: str,
-    description: str,
-    output_schema: dict[str, Any],
-    result_model: type[DryRunResult],
 ) -> None:
-    """One review-preview handler under `name`. The deprecated alias registers the same
-    handler, so the two cannot drift; each reports its own name as `tool`, through the
-    result model whose schema it publishes."""
+    name = "amicus_review_changes_dry_run"
 
     @app.tool(
         name=name,
         annotations=annotations_for("free", settings),
-        output_schema=output_schema,
-        title=title,
+        output_schema=DRY_RUN_SCHEMA,
+        title="Preview a review (free)",
         meta=lifecycle_meta(name),
-        description=description,
+        description=_DRY_RUN_DESC,
     )
     @guard(name, settings)
     async def review_preview(
@@ -175,7 +167,7 @@ def _register_review_preview(
         if advisory:
             warnings.append(advisory)
         return dump_success(
-            result_model(
+            DryRunResult(
                 backend=backend,
                 would_call_model=would_call_model,
                 scope=scope,
@@ -197,16 +189,7 @@ def _register_review_preview(
 
 
 def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tuple[str, ...]:
-    _register_review_preview(
-        app,
-        settings,
-        registry,
-        name="amicus_review_changes_dry_run",
-        title="Preview a review (free)",
-        description=_DRY_RUN_DESC,
-        output_schema=DRY_RUN_SCHEMA,
-        result_model=DryRunResult,
-    )
+    _register_review_preview(app, settings, registry)
 
     @app.tool(
         name="amicus_delegate_dry_run",

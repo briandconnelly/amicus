@@ -152,7 +152,7 @@ def test_every_referenced_amicus_tool_exists():
     assert removed & set(TOOL_ORDER) == set(), "a tool listed as removed is still registered"
     text = DOC.read_text()
     for name in removed:
-        assert re.search(rf"`{name}` is gone|removed it", text), name
+        assert re.search(rf"`{re.escape(name)}` is gone", text), name
     unknown = _referenced_tool_names() - set(TOOL_ORDER) - removed
     assert not unknown, f"MIGRATION.md names tools that do not exist: {sorted(unknown)}"
 

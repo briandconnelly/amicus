@@ -111,17 +111,34 @@ def test_every_window_spans_the_two_minor_releases_the_policy_promises():
     assert _window_problems(_meta.DEPRECATED_TOOLS) == []
 
 
+def _outlived(table, version):
+    """Names whose removal_at_or_after the given version has reached."""
+    return [
+        name
+        for name, deprecation in table.items()
+        if _minor(version) >= _minor(deprecation.removal_at_or_after)
+    ]
+
+
 def test_no_deprecated_tool_outlives_its_window():
     """The removal ratchet: once the tree declares a version at or past a tool's
     removal_at_or_after, the tool must already be gone. It first fires on the release PR that
     moves the version, and that release waits for an ordinary removal PR (rule 19 keeps a
     release PR to its version literals); scripts/check_release_state.py holds the same line
     at tag time."""
-    for name, deprecation in _meta.DEPRECATED_TOOLS.items():
-        assert _minor(__version__) < _minor(deprecation.removal_at_or_after), (
-            f"{name} is past its removal_at_or_after {deprecation.removal_at_or_after}: "
-            "remove it, its alias registration and its DEPRECATED_TOOLS entry"
-        )
+    assert _outlived(_meta.DEPRECATED_TOOLS, __version__) == [], (
+        "remove each tool, its alias registration and its DEPRECATED_TOOLS entry"
+    )
+
+
+def test_the_ratchet_fires_at_the_removal_version_and_not_before():
+    """The shipped table is empty since #204, so the ratchet is shown on a synthetic entry:
+    quiet inside the window, and firing from the removal version on."""
+    table = {"amicus_models": _SYNTHETIC}
+    assert _outlived(table, "0.5.0") == []
+    assert _outlived(table, "0.6.3") == []
+    assert _outlived(table, "0.7.0") == ["amicus_models"]
+    assert _outlived(table, "0.8.1") == ["amicus_models"]
 
 
 def test_effects_for_is_destructive_when_any_enabled_backend_is():
