@@ -265,11 +265,15 @@ def test_an_escaped_character_after_a_path_is_not_mistaken_for_its_end(
     passed as the directory's end although it decodes to a longer sibling. The text pass now
     declines what it cannot read, and the decoded pass, whose boundaries are exact, decides."""
     escaped = owned.replace("/", "\\/")
-    text = json.dumps({"summary": "S"}).replace("S", escaped + tail)
-    assert json.loads(text)["summary"] == owned + decoded_tail, "control: a longer, unowned path"
-    assert finalize.scrub_answer(text, refs) == text
+    fragment = json.dumps({"summary": "S"}).replace("S", escaped + tail)
+    assert json.loads(fragment)["summary"] == owned + decoded_tail, "control: longer, unowned"
     mine = json.dumps({"summary": "S"}).replace("S", escaped)
-    assert "handshake" not in finalize.scrub_answer(mine, refs), "control: the owned one goes"
+    # Whole JSON is decoded, where boundaries are exact; prose is where the text pass, and so
+    # these guards, decide. Both must leave the unowned path and take the owned one.
+    for wrap in ("{}", "I saw {} in the log."):
+        text = wrap.format(fragment)
+        assert finalize.scrub_answer(text, refs) == text, wrap
+        assert "handshake" not in finalize.scrub_answer(wrap.format(mine), refs), wrap
 
 
 @pytest.mark.parametrize("spelling", ["plain", "solidus", "unicode"])
