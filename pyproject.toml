@@ -25,8 +25,9 @@ dependencies = [
     # Minor-line caps: fastmcp documents that breaking changes may land in minor releases.
     # Widening either cap is a hand-written upgrade PR, not a resolver decision:
     # .github/dependabot.yml ignores minor and major updates to both packages.
-    # Raising the fastmcp floor to >=4.0.4 makes the list branch in
-    # `amicus.obs.summarize_argument_errors` unreachable; remove it in that same PR.
+    # Raising the fastmcp floor to >=4.0.4 retires every 4.0.3 list-shape path in
+    # `amicus.obs`; the comment above `_SUMMARY_KEYS` there names them. Remove them in
+    # that same PR.
     "fastmcp>=4.0,<4.1",
     "mcp>=2.1,<2.3",
     "pydantic>=2",
