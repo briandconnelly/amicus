@@ -237,19 +237,18 @@ def scrub_structured(parsed: dict, refs: ArtifactRefs) -> tuple[dict, frozenset[
 
 
 def scrub_answer(answer: str, refs: ArtifactRefs) -> str:
-    """The raw answer, for `raw_response.text` and a prose summary. Text replacement covers
-    the as-written spelling and the escaped-solidus ones; if the answer is JSON whose
-    DECODED content still names an artifact, the backend escaped the path some other way,
-    and the text is rebuilt from the scrubbed object rather than chasing every spelling
-    JSON allows."""
-    text = refs.scrub(answer)
+    """The raw answer, for `raw_response.text` and a prose summary. An answer that is one
+    JSON object is judged by what it DECODES to and rebuilt from the scrubbed object, which
+    covers every spelling JSON allows and numbers keys that collide; replacing text inside it
+    instead can write one key twice, which is no longer the JSON it was (#207). Anything else
+    is text, and gets the text pass with its escaped-solidus spellings."""
     if refs.pattern is None:
-        return text
-    status, parsed = classify_structured(text)
+        return answer
+    status, parsed = classify_structured(answer)
     if status != "ok" or not isinstance(parsed, dict):
-        return text
+        return refs.scrub(answer)
     scrubbed, _ = scrub_structured(parsed, refs)
-    return text if scrubbed == parsed else json.dumps(scrubbed, ensure_ascii=False)
+    return answer if scrubbed == parsed else json.dumps(scrubbed, ensure_ascii=False)
 
 
 def scrub_failure(failure: ClassifiedFailure, refs: ArtifactRefs) -> ClassifiedFailure:

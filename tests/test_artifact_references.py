@@ -270,3 +270,23 @@ def test_an_escaped_character_after_a_path_is_not_mistaken_for_its_end(
     assert finalize.scrub_answer(text, refs) == text
     mine = json.dumps({"summary": "S"}).replace("S", escaped)
     assert "handshake" not in finalize.scrub_answer(mine, refs), "control: the owned one goes"
+
+
+@pytest.mark.parametrize("spelling", ["plain", "solidus", "unicode"])
+def test_a_whole_json_answer_is_never_left_with_duplicate_keys(spelling):
+    """Copilot's review of #209: the text pass ran first, and it turns two owned keys into
+    one key written twice, which amicus's own reader refuses (#51), so `raw_response.text`
+    stopped being the JSON it was. A whole-JSON answer is decoded FIRST, where collisions are
+    numbered; the text pass is for what cannot be decoded."""
+    other = f"{_DIR}/other.md"
+    obj = {_P: 0, _ART: 1, other: 2, "findings": []}
+    text = json.dumps(obj)
+    if spelling == "solidus":
+        text = text.replace("/", "\\/")
+    elif spelling == "unicode":
+        text = text.replace(_ART, "".join(f"\\u{ord(c):04x}" for c in _ART))
+    assert finalize.classify_structured(text) == ("ok", obj), "control"
+    raw = finalize.scrub_answer(text, finalize.artifact_refs((_ART,), _DIR))
+    status, parsed = finalize.classify_structured(raw)
+    assert status == "ok", raw
+    assert parsed == {_P: 0, f"{_P} (2)": 1, f"{_P} (3)": 2, "findings": []}
