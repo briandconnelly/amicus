@@ -137,7 +137,7 @@ def _normalize_severity(item: dict) -> tuple[dict, bool]:
 ARTIFACT_PLACEHOLDER = "[amicus temporary file]"
 # What may follow a staged FILE's path and still be that file: `prompt.md:28` and a sentence's
 # closing `prompt.md.` are; `prompt.md.bak` and `prompt.mdx` are other files.
-_FILE_END = r"(?![\w\-]|\.\w)"
+_FILE_END = r"(?![\w\-]|\.\w|\\u[0-9a-fA-F]{4})"
 # A staging DIRECTORY takes everything beneath it, whether or not `artifacts` listed it, and
 # must not match a longer sibling name (`...-ab` inside `...-abc`). A `:` ends the path, so
 # `other.md:3` keeps its line suffix as a listed file's does.
@@ -145,7 +145,10 @@ _FILE_END = r"(?![\w\-]|\.\w)"
 # a JSON fragment is never decoded, so the text pass has to read these itself (#207). `\/` is
 # what ordinary encoders emit; a path spelled wholly in `\uXXXX` inside prose is not chased.
 _SLASH = r"(?:\\?/|\\u002[fF])"
-_UNDER_DIR = rf"(?:{_SLASH}[^\s\"'`<>)\]:]*|(?![\w.\-]))"
+# What follows a path may itself be escaped: `<dir>\u002ebak` is a longer sibling, and its
+# next character is a backslash, which no guard written for decoded text refuses. The text
+# pass declines any `\uXXXX` there; a whole-JSON answer is then judged decoded, exactly.
+_UNDER_DIR = rf"(?:{_SLASH}[^\s\"'`<>)\]:]*|(?![\w.\-]|\\u[0-9a-fA-F]{{4}}))"
 
 
 @dataclasses.dataclass(frozen=True)

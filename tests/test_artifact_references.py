@@ -246,3 +246,27 @@ def test_an_escaped_path_inside_prose_is_scrubbed_where_the_slash_is_what_was_es
     )
     under = f'{{"file": "{_DIR.replace("/", slash)}{slash}notes.txt"}}'
     assert "handshake" not in finalize.artifact_refs((_ART,), _DIR).scrub(f"x {under} y")
+
+
+@pytest.mark.parametrize(
+    ("refs", "owned", "tail", "decoded_tail"),
+    [
+        (finalize.artifact_refs((), _DIR), _DIR, "\\u002ebak", ".bak"),
+        (finalize.artifact_refs((), _DIR), _DIR, "\\u0063", "c"),
+        (finalize.artifact_refs((_ART,)), _ART, "\\u0078", "x"),
+        (finalize.artifact_refs((_ART,)), _ART, "\\u002ebak", ".bak"),
+    ],
+)
+def test_an_escaped_character_after_a_path_is_not_mistaken_for_its_end(
+    refs, owned, tail, decoded_tail
+):
+    """Codex's review of #209: the boundary guards read the next ENCODED character, and a
+    `\\u002e` begins with a backslash, which is no word character, so `<dir>\\u002ebak`
+    passed as the directory's end although it decodes to a longer sibling. The text pass now
+    declines what it cannot read, and the decoded pass, whose boundaries are exact, decides."""
+    escaped = owned.replace("/", "\\/")
+    text = json.dumps({"summary": "S"}).replace("S", escaped + tail)
+    assert json.loads(text)["summary"] == owned + decoded_tail, "control: a longer, unowned path"
+    assert finalize.scrub_answer(text, refs) == text
+    mine = json.dumps({"summary": "S"}).replace("S", escaped)
+    assert "handshake" not in finalize.scrub_answer(mine, refs), "control: the owned one goes"
