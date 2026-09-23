@@ -65,6 +65,19 @@ per-change, as its own lead says.
 
 ### Fixed
 
+- **Breaking.** An answer the output capture cut is no longer delivered as a shorter or earlier
+  one (#198). amicus bounds a backend's stdout at `AMICUS_MAX_OUTPUT_BYTES`, keeping its start
+  and end, and cuts any single line past that size. A Kimi consult or review whose final message
+  was too large for what is kept at the end came back `ok: true` with the interim message before
+  it as its answer, and a Claude envelope cut the same way came back `invalid_json`. Both are now
+  `answer_unavailable` with `error.details.reason` `stream_truncated`, which repairs with
+  `reduce_input`, or `stream_capture_failed` when amicus's reader of the stream failed, which is
+  temporary. A stream cut only in the middle, whose final message survived, is still delivered,
+  as is any answer read from a file, and a Kimi delegate whose stream lost its summary still
+  delivers its diff with amicus's own summary saying so. A flood on stderr, which carries no
+  answer, no longer stops a Kimi stream standing in for a refused answer file. ADR 0037.
+  **Surface**: `answer_unavailable` is now listed on `amicus_adversarial_review` and its async
+  twin, and `FINGERPRINT` moves to schema-41.
 - The release predicate, `scripts/check_release_state.py`, now checks `CHANGELOG.md`'s
   link footer (#211). A release must define `[Unreleased]` as a comparison from its own tag to
   `HEAD`, and `[X.Y.Z]` as a comparison from the previous release's tag, or its tag page for a

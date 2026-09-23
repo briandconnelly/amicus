@@ -89,6 +89,39 @@ DELEGATE_SUMMARY_UNAVAILABLE = (
     "captured from the worktree, not from that file, and is still delivered."
 )
 
+# Why a backend's answer read from its output stream was not delivered (#198), in the shape
+# of _REFUSAL_WIRE plus `temporary`. Keyed by ExecResult.answer_loss.
+_LOSS_WIRE: dict[str, tuple[str, str, str, bool, str]] = {
+    "truncated": (
+        "stream_truncated",
+        "the backend answered, but its output passed amicus's capture limit "
+        "(AMICUS_MAX_OUTPUT_BYTES) and the part that carried the final answer was dropped, "
+        "so amicus did not deliver an earlier message in its place.",
+        "reduce_input",
+        False,
+        "Narrow the task or ask for a shorter answer, or raise AMICUS_MAX_OUTPUT_BYTES. The "
+        "run itself finished, so a retry is a new paid run.",
+    ),
+    "capture_failed": (
+        "stream_capture_failed",
+        "the backend answered, but amicus's capture of its output failed before the end, so "
+        "amicus did not deliver what it had read.",
+        "retry_then_report",
+        True,
+        "The server log records why the capture failed. The run itself finished, so a retry "
+        "is a new paid run.",
+    ),
+}
+DELEGATE_SUMMARY_LOST = (
+    "The backend's summary could not be read whole: amicus's capture of its output lost the "
+    "end of it. The diff was captured from the worktree, not from that output, and is still "
+    "delivered."
+)
+# A clean exit an inspector diagnosed as one of these is explained by a lost stream answer:
+# kimi finds no message in a stream whose every message was dropped, and claude finds no
+# JSON in an envelope that was cut. Any other clean-exit failure is its own fact.
+_LOSS_EXPLAINS = frozenset({"empty_response", "invalid_json"})
+
 
 def _read_bounded(path: str) -> tuple[str, Refusal | None]:
     """(text, refusal): an artifact's text, or "" with why amicus would not read it. A
@@ -168,6 +201,20 @@ def _answer_unavailable(refusal: Refusal, meta: Any, plugin: BackendPlugin) -> d
         repair_alternative=alternative,
         limit_bytes=MAX_ARTIFACT_BYTES if oversize else None,
         actual_bytes=refusal.size if oversize else None,
+    )
+
+
+def _lost_answer(loss: str, meta: Any, plugin: BackendPlugin) -> dict[str, Any]:
+    reason, message, next_step, temporary, alternative = _LOSS_WIRE[loss]
+    return error_envelope(
+        "answer_unavailable",
+        message,
+        meta,
+        plugin=plugin,
+        temporary=temporary,
+        details=ErrorDetail(reason=reason),
+        repair_next_step=next_step,
+        repair_alternative=alternative,
     )
 
 
@@ -320,34 +367,41 @@ async def run_request(
             # Anything else an inspector reports on exit 0 (auth, a rate limit, a budget
             # stop) is its own fact, which a refusal must never hide.
             refusal = _answer_refusal(prepared, refused)
+            # An answer the backend read from a stream amicus did not capture whole (#198).
+            loss = result.answer_loss
             clean_exit = run.exit_code == 0 and not run.binary_missing and not run.timed_out
-            explained_by_refusal = (
-                refusal is not None
-                and clean_exit
-                and failure is not None
-                and generalize_code(failure.code, plugin.backend_id) == "empty_response"
+            code = generalize_code(failure.code, plugin.backend_id) if failure else None
+            explained = clean_exit and (
+                (refusal is not None and code == "empty_response")
+                or (loss is not None and code in _LOSS_EXPLAINS)
             )
-            if failure is not None and not explained_by_refusal:
+            if failure is not None and not explained:
                 return render_failure(plugin, finalize.scrub_failure(failure, refs), meta)
             diff = site.capture_diff() if spec.kind == "delegate" else None
             aliases = site.aliases
             summary_override = None
-            if refusal is not None:
-                # The other channel (kimi's stream) is a substitute only if it was captured
-                # whole: a truncated or failed capture can lose the true final message while
-                # an earlier one still parses.
-                whole_stream = not run.output_truncated and not run.capture_failed
-                if (result.answer or "").strip() and whole_stream:
+            if refusal is not None or loss is not None:
+                # The other channel (kimi's stream) is a substitute for a refused file only
+                # if the backend found it whole: a damaged capture can lose the true final
+                # message while an earlier one still parses.
+                if (result.answer or "").strip() and loss is None:
                     meta.security_warnings.append(ANSWER_REFUSED_WARNING)
                 elif spec.kind == "delegate" and (diff or "").strip():
-                    # The diff comes from the worktree, not from the file, so it is still
-                    # the honest primary result. The summary is amicus's own, so it rides
-                    # beside the (now empty) backend answer rather than in place of it.
-                    meta.security_warnings.append(ANSWER_REFUSED_WARNING)
+                    # The diff comes from the worktree, not from the file or the stream, so
+                    # it is still the honest primary result. The summary is amicus's own, so
+                    # it rides beside the (now empty) backend answer rather than in its place.
+                    if refusal is not None:
+                        meta.security_warnings.append(ANSWER_REFUSED_WARNING)
                     result = dataclasses.replace(result, answer="")
-                    summary_override = DELEGATE_SUMMARY_UNAVAILABLE
-                else:
+                    summary_override = (
+                        DELEGATE_SUMMARY_UNAVAILABLE
+                        if refusal is not None
+                        else DELEGATE_SUMMARY_LOST
+                    )
+                elif refusal is not None:
                     return _answer_unavailable(refusal, meta, plugin)
+                elif loss is not None:
+                    return _lost_answer(loss, meta, plugin)
     except SiteError as exc:
         return _site_error(exc, meta, plugin)
 

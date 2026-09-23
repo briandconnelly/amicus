@@ -45,6 +45,7 @@ The first draft superseded any clean-exit failure, which would have hidden an in
 Kimi's stream can carry the answer when its answer file is refused.
 It is delivered, with a `meta.security_warnings` entry, only when the capture was neither truncated nor failed (`CommandRun.output_truncated` and `capture_failed`), because a damaged capture can lose the true final message while an earlier one still parses.
 That check is its own: `meta.truncated` reports a bounded review input or delegate diff, not stream capture, so a delivered stream answer can sit beside `meta.truncated: true` when the diff was over its limit.
+That check is superseded by ADR 0037 (#198): the stream substitutes when the backend reports no `ExecResult.answer_loss`, so a stream cut only in the middle, or a stderr flood, no longer rules it out.
 
 **A delegate keeps its diff.**
 The diff is captured from the worktree, not read from the answer file, so it is still the honest primary result.

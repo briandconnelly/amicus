@@ -1016,3 +1016,61 @@ def test_capture_failed_defaults_to_false_so_existing_constructions_keep_working
     """A defaulted field: every caller that builds a CommandRun positionally is unchanged."""
     assert not runtime.CommandRun("out", "err", 0, 1, False).capture_failed
     assert not runtime.run_sync_capture(_py("print('ok')"), timeout_seconds=10).capture_failed
+
+
+# --- Stdout's own losses (#198) ---------------------------------------------------------
+# A backend that answers on stdout needs to know whether STDOUT was captured whole; the
+# union flags are also set by stderr, which never carries an answer.
+
+
+async def test_a_stderr_flood_truncates_the_run_but_not_stdout(tmp_path):
+    code = "import sys\nprint('answer')\nfor i in range(200_000): sys.stderr.write(f'e{i}\\n')"
+    run = await runtime.run_async(_py(code), cwd=str(tmp_path), timeout_seconds=30)
+    assert run.output_truncated, "control: stderr did overflow its reserve"
+    assert not run.stdout_truncated and run.stdout == "answer\n"
+
+
+async def test_a_stdout_flood_is_a_stdout_truncation(tmp_path):
+    code = "import sys\nfor i in range(20000): print(i)"
+    run = await runtime.run_async(
+        _py(code), cwd=str(tmp_path), timeout_seconds=30, max_output_bytes=20_000
+    )
+    assert run.stdout_truncated and run.output_truncated
+
+
+async def test_one_line_cut_at_the_cap_is_a_stdout_truncation_though_nothing_was_evicted(
+    tmp_path,
+):
+    """The only line is cut to exactly the cap, so the capture keeps it and evicts nothing:
+    the capture's own `truncated` stays false, and before #198 so did the run's."""
+    run = await runtime.run_async(
+        _py("print('x' * 100_000)"), cwd=str(tmp_path), timeout_seconds=30, max_output_bytes=65_536
+    )
+    assert streamcap._LINE_TRUNC_SENTINEL in run.stdout, "control: the line was cut, not evicted"
+    assert "[output truncated]" not in run.stdout
+    assert run.stdout_truncated and run.output_truncated
+
+
+async def test_a_stdout_under_the_cap_is_not_a_stdout_truncation(tmp_path):
+    run = await runtime.run_async(_py("print('x' * 1000)"), cwd=str(tmp_path), timeout_seconds=10)
+    assert not run.stdout_truncated and not run.stdout_capture_failed
+
+
+@pytest.mark.parametrize("dead", ["stdout", "stderr"])
+async def test_a_dead_pump_is_attributed_to_its_stream(tmp_path, monkeypatch, dead):
+    real = runtime.streamcap.iter_bounded_lines
+    dead_cap = runtime.DEFAULT_MAX_OUTPUT_BYTES if dead == "stdout" else runtime._STDERR_RESERVE
+
+    def failing(stream, max_line_bytes, *args, **kwargs):
+        if max_line_bytes == dead_cap:
+            raise RuntimeError("pump exploded")
+        return real(stream, max_line_bytes, *args, **kwargs)
+
+    monkeypatch.setattr(runtime.streamcap, "iter_bounded_lines", failing)
+    run = await runtime.run_async(
+        _py("import sys; print('out'); sys.stderr.write('err')"),
+        cwd=str(tmp_path),
+        timeout_seconds=10,
+    )
+    assert run.capture_failed
+    assert run.stdout_capture_failed is (dead == "stdout")

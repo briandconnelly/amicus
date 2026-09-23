@@ -98,10 +98,11 @@ _COMMON_PAID_CODES = [
 # Kimi's inspector reports a zero-exit run with no answer as empty_response on every verb it
 # runs, so only a tool that can select kimi lists it; adversarial review is claude-only.
 _KIMI_PAID_CODES = ["empty_response"]
-# A backend that hands its answer back as a FILE (codex's last message, kimi's delegate
-# answer) can have that file refused by amicus's bounded reader (#162). Claude answers on
-# stdout, so adversarial review, which only claude runs, cannot produce it.
-_ANSWER_FILE_CODES = ["answer_unavailable"]
+# The backend answered and amicus could not read the answer whole: an answer FILE (codex's
+# last message, kimi's delegate answer) its bounded reader refused (#162), or an answer on
+# the output stream (claude's envelope, kimi's final message) its capture cut or lost
+# (#198). Every backend can produce it, so every paid tool lists it.
+_ANSWER_UNAVAILABLE_CODES = ["answer_unavailable"]
 _REVIEW_CODES = [
     "invalid_scope",
     "invalid_base",
@@ -140,7 +141,7 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
         "error_codes": (
             _COMMON_PAID_CODES
             + _KIMI_PAID_CODES
-            + _ANSWER_FILE_CODES
+            + _ANSWER_UNAVAILABLE_CODES
             + _SYNC_LIFECYCLE_CODES
             + _IDEMPOTENCY_CODES
         ),
@@ -154,7 +155,7 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
         ),
         "error_codes": _COMMON_PAID_CODES
         + _KIMI_PAID_CODES
-        + _ANSWER_FILE_CODES
+        + _ANSWER_UNAVAILABLE_CODES
         + _IDEMPOTENCY_CODES,
     },
     "amicus_review_changes": {
@@ -169,7 +170,7 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
         "error_codes": (
             _COMMON_PAID_CODES
             + _KIMI_PAID_CODES
-            + _ANSWER_FILE_CODES
+            + _ANSWER_UNAVAILABLE_CODES
             + _REVIEW_CODES_EMITTED
             + _SYNC_LIFECYCLE_CODES
             + _IDEMPOTENCY_CODES
@@ -182,7 +183,7 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
         "returns": "a job handle; result via amicus_job_result.",
         "error_codes": _COMMON_PAID_CODES
         + _KIMI_PAID_CODES
-        + _ANSWER_FILE_CODES
+        + _ANSWER_UNAVAILABLE_CODES
         + _REVIEW_CODES
         + _IDEMPOTENCY_CODES,
     },
@@ -197,7 +198,7 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
         "error_codes": [
             *_COMMON_PAID_CODES,
             *_KIMI_PAID_CODES,
-            *_ANSWER_FILE_CODES,
+            *_ANSWER_UNAVAILABLE_CODES,
             "not_a_git_repo",
             "git_unavailable",
             "worktree_error",
@@ -213,7 +214,7 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
         "error_codes": [
             *_COMMON_PAID_CODES,
             *_KIMI_PAID_CODES,
-            *_ANSWER_FILE_CODES,
+            *_ANSWER_UNAVAILABLE_CODES,
             "not_a_git_repo",
             "git_unavailable",
             "worktree_error",
@@ -228,14 +229,20 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
             "verdict, confidence, findings, review_status, coverage, raw_response (detail=full; "
             "the whole answer when review_status is unstructured) and meta."
         ),
-        "error_codes": _COMMON_PAID_CODES + _REVIEW_CODES + _IDEMPOTENCY_CODES,
+        "error_codes": _COMMON_PAID_CODES
+        + _ANSWER_UNAVAILABLE_CODES
+        + _REVIEW_CODES
+        + _IDEMPOTENCY_CODES,
     },
     "amicus_adversarial_review_async": {
         "cost": "active",
         "backends": ["claude"],
         "use_when": "The same critique when it may exceed the sync deadline.",
         "returns": "a job handle; result via amicus_job_result.",
-        "error_codes": _COMMON_PAID_CODES + _REVIEW_CODES + _IDEMPOTENCY_CODES,
+        "error_codes": _COMMON_PAID_CODES
+        + _ANSWER_UNAVAILABLE_CODES
+        + _REVIEW_CODES
+        + _IDEMPOTENCY_CODES,
     },
     "amicus_review_changes_dry_run": {
         "cost": "free",

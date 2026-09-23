@@ -444,12 +444,11 @@ async def test_a_refusal_never_hides_an_inspectors_own_failure(monkeypatch, tmp_
     assert "inspector said no" in out["error"]["message"]
 
 
-@pytest.mark.parametrize("flag", ["output_truncated", "capture_failed"])
+@pytest.mark.parametrize("flag", ["stdout_truncated", "stdout_capture_failed"])
 async def test_a_stream_that_was_not_captured_whole_is_no_substitute(monkeypatch, tmp_path, flag):
     """With the answer file refused, the stream is the only answer left, and a truncated or
-    failed capture may have lost the true final message while an earlier one still parses."""
-    import dataclasses
-
+    failed capture may have lost the true final message while an earlier one still parses.
+    The file is the primary channel, so its refusal is what the error reports."""
     scripted = cf.scripted_run_async(stdout="an earlier message")
 
     async def damaged(*args, **kwargs):
@@ -459,11 +458,75 @@ async def test_a_stream_that_was_not_captured_whole_is_no_substitute(monkeypatch
     monkeypatch.setattr(run_mod.runtime, "run_async", damaged)
     out = await run_mod.run_request(_spec(), plugin)
     assert out["ok"] is False and out["error"]["code"] == "answer_unavailable"
+    assert out["error"]["details"]["reason"] == "artifact_not_regular"
     # Control: the same run captured whole IS delivered, with the warning.
     monkeypatch.setattr(run_mod.runtime, "run_async", scripted)
     ok = await run_mod.run_request(_spec(), plugin)
     assert ok["ok"] is True and ok["summary"] == "an earlier message"
     assert run_mod.ANSWER_REFUSED_WARNING in ok["meta"]["security_warnings"]
+
+
+def _damaged(scripted, **flags):
+    async def run_async(*args, **kwargs):
+        return dataclasses.replace(await scripted(*args, **kwargs), **flags)
+
+    return run_async
+
+
+@pytest.mark.parametrize(
+    ("flag", "reason", "step", "temporary"),
+    [
+        ("stdout_truncated", "stream_truncated", "reduce_input", False),
+        ("stdout_capture_failed", "stream_capture_failed", "retry_then_report", True),
+    ],
+)
+async def test_a_stream_answer_the_capture_lost_is_answer_unavailable(
+    monkeypatch, flag, reason, step, temporary
+):
+    """A backend answering on stdout reports the loss, and the loop refuses to deliver what is
+    left of the answer as though it were the whole of it (#198)."""
+    scripted = cf.scripted_run_async(stdout="INTERIM-ONLY")
+    monkeypatch.setattr(run_mod.runtime, "run_async", _damaged(scripted, **{flag: True}))
+    out = await run_mod.run_request(_spec(), fakeplugin.make_plugin())
+    err = out["error"]
+    assert err["code"] == "answer_unavailable" and err["details"]["reason"] == reason
+    assert err["repair"]["next_step"] == step and err["temporary"] is temporary
+    assert "INTERIM-ONLY" not in json.dumps(out)
+
+
+async def test_a_stderr_loss_leaves_a_stdout_answer_deliverable(monkeypatch):
+    """The union flags are also set by stderr, which carries no answer: before #198 a stderr
+    flood alone was enough to refuse a stream substitute."""
+    scripted = cf.scripted_run_async(stdout="the answer")
+    damaged = _damaged(scripted, output_truncated=True, capture_failed=True)
+    monkeypatch.setattr(run_mod.runtime, "run_async", damaged)
+    out = await run_mod.run_request(_spec(), fakeplugin.make_plugin())
+    assert out["ok"] is True and out["summary"] == "the answer"
+
+
+async def test_a_lost_stream_explains_only_an_empty_or_unparseable_answer(monkeypatch):
+    """An inspector's own finding on a clean exit (here the fake's nonzero_exit on
+    INSPECT_FAIL) is its own fact, which a lost stream must never hide."""
+    scripted = cf.scripted_run_async(stdout="INSPECT_FAIL")
+    monkeypatch.setattr(run_mod.runtime, "run_async", _damaged(scripted, stdout_truncated=True))
+    plugin = fakeplugin.make_plugin(backend=fakeplugin.InspectingBackend())
+    out = await run_mod.run_request(_spec(), plugin)
+    assert out["error"]["code"] == "nonzero_exit"
+
+
+def test_each_stream_loss_has_its_own_wire_reason():
+    from typing import get_args
+
+    from amicus.request import meta_for
+    from amicus.sdk.backend.protocol import AnswerLoss
+
+    assert set(run_mod._LOSS_WIRE) == set(get_args(AnswerLoss)), "a new loss needs a wire shape"
+    tokens = {run_mod._LOSS_WIRE[loss][0] for loss in run_mod._LOSS_WIRE}
+    refusal_tokens = {wire[0] for wire in run_mod._REFUSAL_WIRE.values()}
+    assert len(tokens) == len(run_mod._LOSS_WIRE) and not tokens & refusal_tokens
+    for loss in run_mod._LOSS_WIRE:
+        out = run_mod._lost_answer(loss, meta_for(_spec()), fakeplugin.make_plugin())
+        assert out["error"]["code"] == "answer_unavailable"
 
 
 def test_answer_unavailable_is_amicus_own_code_not_an_sdk_universal_one():

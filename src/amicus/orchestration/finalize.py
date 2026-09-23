@@ -459,7 +459,8 @@ def _parse_reviewed(
             error_envelope(
                 "invalid_json",
                 f"the backend exited 0 but amicus read no answer for the {noun}: it returned "
-                "none. (An answer file amicus refuses to read is answer_unavailable instead.)",
+                "none. (An answer amicus could not read whole, from a file it refused or an "
+                "output stream it cut, is answer_unavailable instead.)",
                 meta,
                 plugin=plugin,
             ),

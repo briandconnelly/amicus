@@ -16,7 +16,7 @@ import subprocess
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, NamedTuple, cast
 
 import anyio
 from anyio.to_thread import run_sync
@@ -66,6 +66,13 @@ class CommandRun:
     # the capture is deliberately bounded. Defaulted: every positional construction and
     # every caller that ignores it is unaffected.
     capture_failed: bool = field(default=False)
+    # The same two facts for stdout alone, which is where a backend that answers on its
+    # stream reads the answer (#198): the union above is also set by a stderr flood or a
+    # dead stderr reader, which leave the answer whole. `stdout_truncated` also covers a
+    # single stdout line cut at the per-line cap, which evicts nothing and so does not show
+    # in the capture's own `truncated`.
+    stdout_truncated: bool = field(default=False)
+    stdout_capture_failed: bool = field(default=False)
 
     @property
     def binary_missing(self) -> bool:
@@ -254,6 +261,19 @@ def sweep_orphans(marker: str, grace_seconds: float = _ORPHAN_SWEEP_GRACE_SECOND
     return pids
 
 
+class _Drained(NamedTuple):
+    """What ``_wait_streaming`` captured. ``truncated`` and ``capture_failed`` cover both
+    streams; the ``stdout_`` pair covers stdout alone (see ``CommandRun``)."""
+
+    stdout: str
+    stderr: str
+    timed_out: bool
+    truncated: bool
+    capture_failed: bool
+    stdout_truncated: bool
+    stdout_capture_failed: bool
+
+
 def _wait_streaming(  # noqa: PLR0915
     proc: subprocess.Popen,
     stdin_text: str | None,
@@ -261,11 +281,11 @@ def _wait_streaming(  # noqa: PLR0915
     timeout_seconds: int,
     max_output_bytes: int,
     orphan_marker: str | None = None,
-) -> tuple[str, str, bool, bool, bool]:
+) -> _Drained:
     """Drain stdout/stderr concurrently under independent byte caps, optionally
-    calling ``on_stdout_line`` per stdout line. Returns ``(stdout, stderr,
-    timed_out, output_truncated, capture_failed)``, the last set when a capture
-    thread died and its stream's output was therefore lost. Stdout is captured up
+    calling ``on_stdout_line`` per stdout line. Returns a ``_Drained``: the two
+    captures, whether the run timed out, and for each stream whether output was
+    dropped at a cap or lost to a capture thread that died. Stdout is captured up
     to ``max_output_bytes`` bytes; stderr is captured up to a separate
     ``_STDERR_RESERVE`` (~1 MiB) — worst-case retained is
     ``max_output_bytes + _STDERR_RESERVE``. Both use
@@ -295,11 +315,15 @@ def _wait_streaming(  # noqa: PLR0915
     # A daemon thread's exception is printed by threading.excepthook and then discarded,
     # so before this the run reported exit 0 with the output silently missing.
     capture_failures: list[BaseException] = []
+    stdout_failed = threading.Event()
+    stdout_line_cut = threading.Event()
 
     def _pump_stdout() -> None:
         try:
             if proc.stdout is not None:
                 for line in streamcap.iter_bounded_lines(cast("TextIO", proc.stdout), stdout_cap):
+                    if streamcap.is_loss_marker(line):
+                        stdout_line_cut.set()
                     out.add(line)
                     if observe:
                         # F2: byte-bound the queue; drop silently under flood, never
@@ -314,6 +338,7 @@ def _wait_streaming(  # noqa: PLR0915
                                     pass  # count guard: drop silently
         except BaseException as exc:  # recorded, then reported on the result
             capture_failures.append(exc)
+            stdout_failed.set()
             logger.error("stdout capture failed: %s", exc, exc_info=True)
         finally:
             if observe:
@@ -411,14 +436,23 @@ def _wait_streaming(  # noqa: PLR0915
     # _observe exits once the event is set and the queue is empty.
     if observer is not None:
         observer.join(timeout=max(0.0, deadline - time.monotonic()))
-    truncated = out.truncated or err.truncated
+    stdout_truncated = out.truncated or stdout_line_cut.is_set()
+    truncated = stdout_truncated or err.truncated
     if truncated:
         logger.warning(
             "subprocess pid=%s output exceeded %s bytes; capture bounded",
             proc.pid,
             max_output_bytes,
         )
-    return out.result(), err.result(), timed_out, truncated, bool(capture_failures)
+    return _Drained(
+        out.result(),
+        err.result(),
+        timed_out=timed_out,
+        truncated=truncated,
+        capture_failed=bool(capture_failures),
+        stdout_truncated=stdout_truncated,
+        stdout_capture_failed=stdout_failed.is_set(),
+    )
 
 
 async def run_async(
@@ -465,7 +499,7 @@ async def run_async(
 
     logger.debug("spawned pid=%s cmd=%s timeout=%ss", proc.pid, cmd[0], timeout_seconds)
 
-    def _wait() -> tuple[str, str, bool, bool, bool]:
+    def _wait() -> _Drained:
         return _wait_streaming(
             proc,
             stdin_text,
@@ -476,9 +510,7 @@ async def run_async(
         )
 
     try:
-        out, err, timed_out, truncated, capture_failed = await run_sync(
-            _wait, abandon_on_cancel=True
-        )
+        drained = await run_sync(_wait, abandon_on_cancel=True)
     except anyio.get_cancelled_exc_class():
         logger.warning("subprocess pid=%s cancelled; killing process group", proc.pid)
         # _kill_group does NOT early-return when the direct child has already exited
@@ -512,32 +544,22 @@ async def run_async(
                     len(reclaimed),
                 )
     elapsed = int((time.monotonic() - start) * 1000)
-    if timed_out:
-        return CommandRun(
-            out,
-            TIMED_OUT,
-            -9,
-            elapsed,
-            True,
-            output_truncated=truncated,
-            capture_failed=capture_failed,
-        )
+    losses = {
+        "output_truncated": drained.truncated,
+        "capture_failed": drained.capture_failed,
+        "stdout_truncated": drained.stdout_truncated,
+        "stdout_capture_failed": drained.stdout_capture_failed,
+    }
+    if drained.timed_out:
+        return CommandRun(drained.stdout, TIMED_OUT, -9, elapsed, True, **losses)
     logger.debug(
         "subprocess pid=%s exited code=%s elapsed_ms=%s stdout_bytes=%s",
         proc.pid,
         proc.returncode,
         elapsed,
-        len(out or ""),
+        len(drained.stdout or ""),
     )
-    return CommandRun(
-        out,
-        err,
-        proc.returncode,
-        elapsed,
-        False,
-        output_truncated=truncated,
-        capture_failed=capture_failed,
-    )
+    return CommandRun(drained.stdout, drained.stderr, proc.returncode, elapsed, False, **losses)
 
 
 def run_sync_capture(
