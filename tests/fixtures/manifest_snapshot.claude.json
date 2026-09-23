@@ -10,7 +10,7 @@
       "amicus_adversarial_review",
       "amicus_adversarial_review_async"
     ],
-    "annotations_reading": "Annotations describe the worst ENABLED backend, not the backend selected per call: paid tools are destructiveHint true for this profile because Claude Code is enabled and its config modes may run workspace hooks. readOnlyHint tracks whether a call changes observable state that outlives the response (a job record, committed spend), so paid tools are readOnlyHint false even when the run writes nothing, and job reads stay readOnlyHint true under the observable-scope reading. Per-backend effects are published on amicus_backends.",
+    "annotations_reading": "Annotations describe the worst ENABLED backend, not the backend selected per call: paid tools are destructiveHint true for this profile because Claude Code is enabled and its config modes may run workspace hooks. readOnlyHint tracks whether a call changes observable state that outlives the response (a job record, committed spend), so paid tools are readOnlyHint false even when the run writes nothing, and job reads stay readOnlyHint true under the observable-scope reading. amicus_job_consume_result and amicus_job_cancel are destructiveHint true in every profile: consume deletes a retained result and cancel kills the worker and removes its worktree, so neither update is additive. Per-backend effects are published on amicus_backends.",
     "deprecation_policy": "A deprecated tool, parameter or code stays discoverable for two minor releases with a deprecation marker in its lifecycle _meta naming the replacement.",
     "enabled_backends": [
       "claude"
@@ -1528,7 +1528,7 @@
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-39",
+                "default": "amicus/0.1/schema-40",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -2441,7 +2441,7 @@
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-39",
+            "default": "amicus/0.1/schema-40",
             "title": "Fingerprint",
             "type": "string"
           },
@@ -6620,7 +6620,7 @@
         }
       },
       "annotations": {
-        "destructiveHint": false,
+        "destructiveHint": true,
         "idempotentHint": true,
         "openWorldHint": false,
         "readOnlyHint": false
@@ -6835,7 +6835,7 @@
         }
       },
       "annotations": {
-        "destructiveHint": false,
+        "destructiveHint": true,
         "idempotentHint": false,
         "openWorldHint": false,
         "readOnlyHint": false
