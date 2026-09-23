@@ -278,7 +278,7 @@ Omit the key instead.
 Call `amicus_review_changes_dry_run`.
 
 **Two workspace errors carry no `repair` (#42).**
-`invalid_workspace_root` and `workspace_outside_roots` return `error.repair: null`, because no call can supply the caller's directory; read `details.field`, `details.reason` (a fixed token naming the cause, #214) and `error.candidate_roots` instead.
+`invalid_workspace_root` and `workspace_outside_roots` omit the `error.repair` key, because no call can supply the caller's directory; read `details.field`, `details.reason` (a fixed token naming the cause, #214) and `error.candidate_roots` instead.
 Every other repair that names a tool carries a complete call in `repair.arguments`.
 
 **Claude adversarial reviews default to `config_mode="safe"` (#64).**
