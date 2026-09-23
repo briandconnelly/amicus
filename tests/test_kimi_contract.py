@@ -69,9 +69,9 @@ def test_read_only_tools_carry_no_shell_or_write():
 def test_the_captures_are_the_ones_the_contract_claims():
     # An empty parameter set skips rather than fails, so pin the directories the tests below
     # run over.
-    assert [p.name for p in CAPTURES] == ["0.41.0", "0.42.0", "0.43.1", "2.0.2"]
+    assert [p.name for p in CAPTURES] == ["0.41.0", "0.42.0", "0.43.1", "2.0.2", "2.1.0"]
     assert (
-        frozenset({(0, 35), (0, 39), (0, 41), (0, 42), (0, 43), (2, 0)})
+        frozenset({(0, 35), (0, 39), (0, 41), (0, 42), (0, 43), (2, 0), (2, 1)})
         == contract.SUPPORTED_VERSIONS
     )
     # The newest supported minor is the one the live gate pins, so it must carry a capture.

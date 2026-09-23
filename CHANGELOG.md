@@ -22,6 +22,14 @@ per-change, as its own lead says.
 
 ### Changed
 
+- Kimi Code 2.1 is a supported version, so `amicus_backends` no longer warns on it. It was
+  checked against the 2.0.2 capture at zero spend: `--help` is identical apart from a trailing
+  blank line, the `provider list --json` shape is unchanged, and `kimi session` still offers
+  `list` only, reading the same session store, so the rule-18 carrier position is unchanged. None
+  of the 24 commits since 2.0.2 changes the source files that implement kimi's prompt mode and its
+  stream-json output. 2.1.0 now stops its file tools following a symlink out of the workspace,
+  but still reads absolute paths outside it, so the disclosure that no workspace is a read
+  boundary stays true. Nothing that needs a prompt was part of the check (#227).
 - codex-cli 0.156 is a supported version, so `amicus_backends` no longer warns on it. It was
   checked against 0.155.1 at zero spend: `exec --help`, `exec review --help` and `login --help`
   are identical apart from trailing whitespace, and top-level `--help` adds only `--no-daemon`,
