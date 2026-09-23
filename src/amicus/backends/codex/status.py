@@ -37,9 +37,15 @@ class CodexStatus:
         version = cli.codex_version(binary)
         if version is None:
             return StatusReport(installed=False, warnings=tuple(warnings))
-        authenticated, auth_detail = cli.login_status(binary)
-        if authenticated is None and auth_detail is not None:
-            warnings.append(auth_detail)
+        if self._config.home_error is not None:
+            # `codex login status` would read a home resolved against the server's cwd, not
+            # the one a paid run would use, so its answer would describe neither (#193).
+            authenticated: bool | None = None
+            warnings.append(self._config.home_error)
+        else:
+            authenticated, auth_detail = cli.login_status(binary)
+            if authenticated is None and auth_detail is not None:
+                warnings.append(auth_detail)
         if version_supported(version, self._config) is False:
             warnings.append(VERSION_WARNING)
         fs = self._help_probe.flag_support(force=True)

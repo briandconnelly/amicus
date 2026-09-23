@@ -90,3 +90,24 @@ def test_login_probe_failure_is_indeterminate_and_warns(pinned_codex_bin, monkey
         "Codex login status probe failed: Error loading configuration: No such file or "
         "directory (os error 2)",
     )
+
+
+def test_non_absolute_codex_home_skips_the_login_probe(pinned_codex_bin, monkeypatch):
+    calls = []
+    _probe_with(monkeypatch)
+    probe = st.cli.runtime.run_sync_capture
+
+    def recording(cmd, timeout_seconds, **k):
+        calls.append(cmd[1:])
+        return probe(cmd, timeout_seconds, **k)
+
+    monkeypatch.setattr(st.cli.runtime, "run_sync_capture", recording)
+    # Control: an absolute home is probed and reported authenticated.
+    assert cf.make_backend({"CODEX_HOME": "/abs/home"})[0].status.probe().authenticated is True
+    assert ["login", "status"] in calls
+    calls.clear()
+    rep = cf.make_backend({"CODEX_HOME": "codexhome"})[0].status.probe()
+    assert rep.installed and rep.version == "codex-cli 0.153.4"
+    assert rep.authenticated is None and ["login", "status"] not in calls
+    joined = "\n".join(rep.warnings)
+    assert "CODEX_HOME" in joined and "codexhome" not in joined

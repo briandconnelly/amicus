@@ -276,3 +276,23 @@ async def test_prepare_fails_closed_on_an_unresolved_binary():
     with pytest.raises(binary_mod.BinaryNotFoundError):
         async with plugin.backend.prepare(_req()):
             pytest.fail("prepare() must not yield a PreparedRun for an unresolved binary")
+
+
+@pytest.mark.parametrize("value", ["codexhome", "~/.codex"])
+async def test_non_absolute_codex_home_is_refused_pre_spend(pinned_codex_bin, value):
+    # Control: the same backend with an absolute home accepts the request.
+    assert cf.make_backend({"CODEX_HOME": "/abs/home"})[1].validate_request(_req()) is None
+    plugin, backend = cf.make_backend({"CODEX_HOME": value})
+    for kind in ("consult", "review_changes", "delegate"):
+        refused = backend.validate_request(_req(kind=kind))
+        assert refused is not None and refused.code == "user_config_rejected"
+        assert "CODEX_HOME" in refused.detail and value not in refused.detail
+    envelope = errors.render_failure(plugin, refused, Meta(backend="codex"))
+    error = envelope["error"]
+    assert error["code"] == "user_config_rejected"
+    assert error["repair"]["next_step"] == "correct_config"
+    assert "absolute path" in error["repair"]["alternative"]
+    assert "ignore-config" not in error["repair"]["alternative"]
+    with pytest.raises(ValueError, match="CODEX_HOME"):
+        async with backend.prepare(_req()):
+            pass  # pragma: no cover

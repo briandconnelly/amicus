@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from amicus.backends.codex import contract
+from amicus.backends.codex.config import CODEX_HOME_VAR, codex_home_error
 from amicus.plugin import ModelEntry, ModelListing
 from amicus.sdk.core import redaction
 from amicus.sdk.core.jsoncache import read_bounded_json
@@ -17,10 +18,13 @@ if TYPE_CHECKING:  # pragma: no cover
 
 
 def codex_home() -> Path | None:
-    """$CODEX_HOME if set, else ~/.codex; None when the path cannot be expanded."""
-    env = os.environ.get("CODEX_HOME")
+    """$CODEX_HOME as written, else ~/.codex when it is unset or empty. None when the value is
+    refused (codex_home_error) or the home directory cannot be resolved."""
+    env = os.environ.get(CODEX_HOME_VAR)
+    if env:
+        return None if codex_home_error() is not None else Path(env)
     try:
-        return Path(env).expanduser() if env else Path.home() / ".codex"
+        return Path.home() / ".codex"
     except RuntimeError:
         return None
 

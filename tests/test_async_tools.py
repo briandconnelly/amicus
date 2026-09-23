@@ -199,3 +199,64 @@ async def test_async_pre_spend_refusals_never_spawn(app, tmp_path):
     assert body["ok"] is True and body["backend"] == "claude" and body["job_id"]
     assert sessionless.structured_content["error"]["code"] == "invalid_workspace_root"
     assert _argv_lines(tmp_path) == []
+
+
+def _app_with_codex_home(monkeypatch, tmp_path, fake_codex, home):
+    monkeypatch.setenv("AMICUS_CODEX_BIN", str(fake_codex))
+    monkeypatch.setenv("AMICUS_STATE_DIR", str(tmp_path / "state"))
+    monkeypatch.setenv("FAKE_CODEX_ARGV_FILE", str(tmp_path / "argv.jsonl"))
+    monkeypatch.setenv("CODEX_HOME", home)
+    settings = config.settings()
+    return server.create_app(
+        settings, BackendRegistry.load(settings.enabled_backends, entry_points=())
+    )
+
+
+@pytest.mark.parametrize("anchored", [True, False])
+async def test_relative_codex_home_means_nothing_to_discovery_or_a_worker_run(
+    tmp_path, fake_codex, monkeypatch, anchored
+):
+    """#193: the server resolves a relative CODEX_HOME against its cwd, the job worker runs
+    in <job_dir>, and codex runs in the workspace. From the server's cwd this one names a
+    real home with a models cache, so the relative arm is refused, not merely missing."""
+    server_cwd = tmp_path / "server-cwd"
+    (server_cwd / "codexhome").mkdir(parents=True)
+    (server_cwd / "codexhome" / "models_cache.json").write_text(
+        json.dumps({"models": [{"slug": "from-cache"}]})
+    )
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    monkeypatch.chdir(server_cwd)
+    home = str(server_cwd / "codexhome") if anchored else "codexhome"
+    app = _app_with_codex_home(monkeypatch, tmp_path, fake_codex, home)
+    store = lifecycle.job_store(server.state_of(app).settings)
+    async with Client(app) as c:
+        backends = (await c.call_tool("amicus_backends", {"backend": "codex"})).structured_content
+        models = (await c.call_tool("amicus_models", {"backend": "codex"})).structured_content
+        started = (
+            await c.call_tool(
+                "amicus_consult_async",
+                {"backend": "codex", "question": "why?", "workspace_root": str(workspace)},
+            )
+        ).structured_content
+        rec = await _wait_done(store, workspace, started["job_id"])
+        sync = await c.call_tool(
+            "amicus_consult",
+            {"backend": "codex", "question": "why?", "workspace_root": str(workspace)},
+            raise_on_error=False,
+        )
+    status = backends["backends"][0]["status"]
+    _rec, payload = store.result_payload(str(workspace), started["job_id"])
+    if anchored:
+        assert status["authenticated"] is True and models["source"] == "cache"
+        assert rec["result_ok"] is True and payload["ok"] is True and not sync.is_error
+        assert len(_argv_lines(tmp_path)) == 2  # the fake logs exec runs only
+        return
+    assert status["installed"] is True and status["authenticated"] is None
+    assert any("CODEX_HOME" in w for w in status["warnings"])
+    assert models["source"] == "static"
+    assert rec["status"] == "done" and rec["result_ok"] is False
+    assert payload["error"]["code"] == "user_config_rejected"
+    assert sync.is_error and sync.structured_content["error"]["code"] == "user_config_rejected"
+    assert "codexhome" not in json.dumps(payload) + json.dumps(sync.structured_content)
+    assert _argv_lines(tmp_path) == []

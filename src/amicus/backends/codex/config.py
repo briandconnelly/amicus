@@ -4,6 +4,7 @@ the resolved CodexConfig, the operator extra-args allowlist, and the argv policy
 
 from __future__ import annotations
 
+import os
 import re
 import shlex
 from dataclasses import dataclass
@@ -62,6 +63,14 @@ ENV = EnvNamespace(
             removed=(f"{_RETIRED}SUPPORTED_VERSIONS",),
         ),
     ),
+)
+
+CODEX_HOME_VAR = "CODEX_HOME"
+CODEX_HOME_NOT_ABSOLUTE = (
+    f"{CODEX_HOME_VAR} is set, but it is not an absolute path as written. codex resolves a "
+    "relative value against each run's working directory (the workspace, or a delegate's "
+    "throwaway worktree) and does not expand a leading `~`, so it would not name the home "
+    "amicus reads and probes. Set it to an absolute path, or unset it."
 )
 
 VALID_ISOLATIONS = ("inherit", "ignore-config", "ignore-rules")
@@ -311,6 +320,18 @@ class CodexConfig:
     supported_versions: frozenset[tuple[int, int]]
     warnings: tuple[str, ...] = ()
     errors: tuple[str, ...] = ()
+    home_error: str | None = None
+
+
+def codex_home_error(environ: Mapping[str, str] | None = None) -> str | None:
+    """Why $CODEX_HOME is unusable, or None. codex's own variable: a relative value (or a
+    literal `~`, which codex does not expand) names a different directory to the server, a
+    job worker and each codex run, so it is refused rather than resolved (#193). An empty
+    value is unset, as it is to codex. The message never echoes the value."""
+    raw = (os.environ if environ is None else environ).get(CODEX_HOME_VAR)
+    if raw and not Path(raw).is_absolute():
+        return CODEX_HOME_NOT_ABSOLUTE
+    return None
 
 
 def _parse_supported_versions(raw: str | None) -> frozenset[tuple[int, int]]:
@@ -365,6 +386,7 @@ def load_config(environ: Mapping[str, str] | None = None) -> CodexConfig:
         supported_versions=_parse_supported_versions(get(f"{PREFIX}SUPPORTED_VERSIONS")),
         warnings=tuple(warnings),
         errors=tuple(errors),
+        home_error=codex_home_error(environ),
     )
 
 

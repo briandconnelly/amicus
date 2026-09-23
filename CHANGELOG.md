@@ -55,6 +55,18 @@ per-change, as its own lead says.
   `fastmcp>=4.0,<4.1` floor admits 4.0.3, and upstream's count and types are re-checked here
   rather than trusted. Nothing a caller sent reached the log under either shape.
 
+### Fixed
+
+- A `CODEX_HOME` that is not an absolute path as written is refused (#193). A relative value
+  named one directory to the server, which read the models cache and probed `codex login status`
+  from its own cwd, and another to each codex run, which resolves it against the workspace or a
+  delegate's throwaway worktree. A literal `~` was expanded by amicus but not by codex, which
+  then fails with "path does not exist". A paid Codex call now fails before spawning codex as
+  `user_config_rejected`, whose repair says to set `CODEX_HOME` to an absolute path or unset it.
+  `amicus_backends` reports codex with `authenticated: null` and a warning naming the variable,
+  never its value, rather than probing a login from the wrong directory, and `amicus_models` falls
+  back to the bundled list. An empty `CODEX_HOME` is still treated as unset, as codex treats it.
+
 ## [0.5.0] - 2026-09-20
 
 Across this release the discovery surface moves `amicus/0.1/schema-35`, what 0.4.0 shipped, to
