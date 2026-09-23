@@ -65,6 +65,19 @@ async def test_resolve_job_workspace_explicit_roots_and_errors(tmp_path):
     assert err["error"]["code"] == "invalid_workspace_root"
 
 
+async def test_job_workspace_errors_name_their_cause_in_details_reason(tmp_path):
+    """Issue #214: the job path's workspace refusal carries the same reason token as the
+    paid path's, so the causes are distinguishable there too."""
+    for root, reason in (
+        (None, "no_workspace"),
+        ("relative/path", "not_absolute"),
+        (str(tmp_path / "missing"), "not_a_directory"),
+    ):
+        *_, err = await lookup.resolve_job_workspace(_settings(tmp_path), None, root)
+        assert err["error"]["code"] == "invalid_workspace_root"
+        assert err["error"]["details"]["reason"] == reason
+
+
 async def test_job_workspace_errors_carry_no_repair(tmp_path):
     for root in (None, "relative/path"):
         *_, err = await lookup.resolve_job_workspace(_settings(tmp_path), None, root)

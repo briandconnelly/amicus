@@ -159,7 +159,7 @@ async def prepare_run(
             redaction.sanitize_echo_prose(resolution.error_detail) or "invalid workspace",
             meta,
             plugin=plugin,
-            details=ErrorDetail(field="workspace_root"),
+            details=ErrorDetail(field="workspace_root", reason=resolution.reason),
             candidate_roots=list(roots)
             if resolution.error_code == "workspace_outside_roots" and roots
             else None,

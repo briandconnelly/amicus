@@ -87,7 +87,7 @@ async def resolve_job_workspace(
                 res.error_code,
                 redaction.sanitize_echo_prose(res.error_detail) or "invalid workspace",
                 meta,
-                details=ErrorDetail(field="workspace_root"),
+                details=ErrorDetail(field="workspace_root", reason=res.reason),
                 candidate_roots=list(roots)
                 if res.error_code == "workspace_outside_roots" and roots
                 else None,

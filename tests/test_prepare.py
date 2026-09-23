@@ -140,6 +140,44 @@ async def test_workspace_errors_from_prepare_carry_no_repair(tmp_path):
         assert out["error"]["code"] == "invalid_workspace_root" and "repair" not in out["error"]
 
 
+async def test_workspace_errors_name_their_cause_in_details_reason(tmp_path):
+    """Issue #214: the causes share one code, so details.reason is a fixed token an agent
+    branches on; the path stays in the sanitized message and never reaches details."""
+    hostile = str(tmp_path / "x\x1by" / "api_key=abcdefghijklmnopqrstuvwxyz0123")
+    for root, reason in (
+        (None, "no_workspace"),
+        ("relative", "not_absolute"),
+        (str(tmp_path / "missing"), "not_a_directory"),
+        (hostile, "not_a_directory"),
+    ):
+        err = (await _prep(tmp_path, workspace_root=root))["error"]
+        assert err["code"] == "invalid_workspace_root"
+        assert err["details"] == {
+            "field": "workspace_root",
+            "reason": reason,
+            "field_withheld": False,
+        }
+    assert "\x1b" not in err["message"] and "abcdefghijklmnop" not in err["message"]
+
+
+async def test_outside_roots_names_its_cause_in_details_reason(tmp_path, monkeypatch):
+    """Issue #214: workspace_outside_roots carries its token too, beside candidate_roots."""
+    root = tmp_path / "root"
+    root.mkdir()
+
+    async def roots(_ctx):
+        return [str(root)], "client"
+
+    monkeypatch.setattr(_prepare.ws, "roots_from_ctx", roots)
+    err = (await _prep(tmp_path, workspace_root=str(tmp_path)))["error"]
+    assert err["code"] == "workspace_outside_roots" and err["candidate_roots"] == [str(root)]
+    assert err["details"] == {
+        "field": "workspace_root",
+        "reason": "outside_roots",
+        "field_withheld": False,
+    }
+
+
 async def test_workspace_resolution_errors(tmp_path):
     out = await _prep(tmp_path, workspace_root=None)
     assert (

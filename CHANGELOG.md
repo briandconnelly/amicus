@@ -98,6 +98,14 @@ per-change, as its own lead says.
   its worktree, so neither update is additive, and the `false` they carried contradicted their own
   descriptions. `amicus_capabilities.annotations_reading` now states this. **Surface**:
   `FINGERPRINT` moves to schema-40 for the annotations and the reading text.
+- A workspace refusal now says which cause it is in `error.details.reason`, a fixed token (#214).
+  Four causes shared `invalid_workspace_root` with identical `details`, and only the prose
+  `message` told them apart, though each needs a different correction. The tokens are
+  `no_workspace`, `not_absolute`, `not_a_directory` and `cwd_gone`, plus `outside_roots` on
+  `workspace_outside_roots`. The path stays in the message and never reaches `details`. Neither
+  code gains a `repair`, and no code changes. **Surface**: `FINGERPRINT` moves to schema-42 for
+  the `workspace_root` parameter contract, which lists the tokens, and the error-envelope schema
+  text.
 
 ## [0.5.0] - 2026-09-20
 

@@ -626,6 +626,7 @@ async def test_a_needed_but_deleted_cwd_is_a_workspace_error_not_internal(
             assert err["temporary"] is False and "repair" not in err, tool
             assert err["details"]["field"] == "workspace_root", tool
             assert "no longer exists" in err["message"] and "restart" in err["message"], tool
+            assert err["details"]["reason"] == "cwd_gone", tool
     assert not (tmp_path / "argv.jsonl").exists(), "the fake codex was spawned"
 
 

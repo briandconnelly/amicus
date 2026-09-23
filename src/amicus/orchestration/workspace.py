@@ -28,6 +28,7 @@ class WorkspaceResolution:
     source: str | None  # "param" | "roots" | "cwd"
     error_code: str | None = None  # invalid_workspace_root | workspace_outside_roots
     error_detail: str | None = None
+    reason: str | None = None  # a WORKSPACE_REASONS token, set with error_code (#214)
 
 
 # The scope clause is the shared one (schemas.params), so this repair cannot widen the
@@ -68,12 +69,20 @@ def resolve_workspace(
         candidate = Path(explicit)
         if not candidate.is_absolute():
             return WorkspaceResolution(
-                None, None, "invalid_workspace_root", "workspace_root must be an absolute path"
+                None,
+                None,
+                "invalid_workspace_root",
+                "workspace_root must be an absolute path",
+                "not_absolute",
             )
         resolved = candidate.resolve()
         if not resolved.is_dir():
             return WorkspaceResolution(
-                None, None, "invalid_workspace_root", f"not a directory: {resolved}"
+                None,
+                None,
+                "invalid_workspace_root",
+                f"not a directory: {resolved}",
+                "not_a_directory",
             )
         if norm_roots and not any(_is_within(resolved, Path(r)) for r in norm_roots):
             return WorkspaceResolution(
@@ -81,12 +90,15 @@ def resolve_workspace(
                 None,
                 "workspace_outside_roots",
                 f"{resolved} is outside the client's MCP roots",
+                "outside_roots",
             )
         return WorkspaceResolution(str(resolved), "param")
     if norm_roots:
         return WorkspaceResolution(norm_roots[0], "roots")
     if server_cwd is None:
-        return WorkspaceResolution(None, None, "invalid_workspace_root", _NO_WORKSPACE)
+        return WorkspaceResolution(
+            None, None, "invalid_workspace_root", _NO_WORKSPACE, "no_workspace"
+        )
     return WorkspaceResolution(str(Path(server_cwd).resolve()), "cwd")
 
 
@@ -105,7 +117,7 @@ def resolve(
         try:
             server_cwd = str(Path.cwd())
         except FileNotFoundError:
-            return WorkspaceResolution(None, None, "invalid_workspace_root", _CWD_GONE)
+            return WorkspaceResolution(None, None, "invalid_workspace_root", _CWD_GONE, "cwd_gone")
     return resolve_workspace(explicit, roots, server_cwd if allow_cwd else None)
 
 

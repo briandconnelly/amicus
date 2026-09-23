@@ -300,7 +300,8 @@ _REPAIR_POLICY = (
     "corrects the failures this envelope reports; a later check can still reject it with "
     "a repair of its own. A repair that names no tool is a symbolic next step, not a call. "
     "invalid_workspace_root and workspace_outside_roots carry no repair at all: only the "
-    "caller holds the directory they need, and details names the field."
+    "caller holds the directory they need, details names the field, and details.reason is "
+    "a fixed token naming the cause, listed in the workspace_root contract at amicus://params."
 )
 
 
