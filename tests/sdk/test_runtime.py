@@ -1042,13 +1042,14 @@ async def test_one_line_cut_at_the_cap_is_a_stdout_truncation_though_nothing_was
     tmp_path,
 ):
     """The only line is cut to exactly the cap, so the capture keeps it and evicts nothing:
-    the capture's own `truncated` stays false, and before #198 so did the run's."""
+    the capture's own `truncated` stays false, and so does the union `output_truncated`,
+    whose meaning #198 leaves alone."""
     run = await runtime.run_async(
         _py("print('x' * 100_000)"), cwd=str(tmp_path), timeout_seconds=30, max_output_bytes=65_536
     )
     assert streamcap._LINE_TRUNC_SENTINEL in run.stdout, "control: the line was cut, not evicted"
     assert "[output truncated]" not in run.stdout
-    assert run.stdout_truncated and run.output_truncated
+    assert run.stdout_truncated and not run.output_truncated
 
 
 async def test_a_stdout_under_the_cap_is_not_a_stdout_truncation(tmp_path):

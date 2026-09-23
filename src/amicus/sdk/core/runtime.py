@@ -436,8 +436,10 @@ def _wait_streaming(  # noqa: PLR0915
     # _observe exits once the event is set and the queue is empty.
     if observer is not None:
         observer.join(timeout=max(0.0, deadline - time.monotonic()))
+    # The union keeps its meaning (a capture evicted lines); only the stdout flag also
+    # counts a line cut at the per-line cap.
+    truncated = out.truncated or err.truncated
     stdout_truncated = out.truncated or stdout_line_cut.is_set()
-    truncated = stdout_truncated or err.truncated
     if truncated:
         logger.warning(
             "subprocess pid=%s output exceeded %s bytes; capture bounded",

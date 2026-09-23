@@ -6,7 +6,7 @@
 
 amicus captures a backend's stdout under `AMICUS_MAX_OUTPUT_BYTES` (10 MB by default) so a runaway process cannot exhaust memory.
 The capture keeps a head window and a bounded tail, and any single line longer than the cap is cut short with a `…[line truncated]` marker.
-`CommandRun.output_truncated` and `capture_failed` recorded that output was lost, and nothing downstream read them except ADR 0036's stream-substitute check (#198).
+`CommandRun.output_truncated` and `capture_failed` recorded that output was lost, but no answer path read them: only ADR 0036's stream-substitute check and, for `capture_failed`, the wording of Codex's timeout and non-zero-exit messages (#198).
 
 Two backends answer on that stream.
 Claude's stdout is one JSON envelope.
@@ -37,7 +37,7 @@ An answer read from a file never sets it, since the stream is then only accounti
 
 **Stdout has its own flags.**
 `CommandRun.stdout_truncated` and `stdout_capture_failed` cover stdout alone; the union flags keep their meaning.
-`stdout_truncated` also counts one line cut at the per-line cap, which evicts nothing and so never set `output_truncated` before.
+`stdout_truncated` also counts one line cut at the per-line cap, which evicts nothing and so does not set `output_truncated`.
 
 **A lost stream explains only an empty or unparseable answer.**
 A clean exit that Kimi's inspector calls `empty_response`, or Claude's calls `invalid_json`, is `answer_unavailable` when the backend reports a loss, since the loss is why the answer looked absent.
