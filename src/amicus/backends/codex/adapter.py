@@ -16,7 +16,13 @@ from amicus.backends.codex.binary import BinaryNotFoundError
 from amicus.backends.codex.config import reasoning_effort_shape_error, sandbox_for_kind
 from amicus.backends.codex.models import CodexModels
 from amicus.schemas import instructions
-from amicus.sdk.backend.protocol import ClassifiedFailure, ExecResult, PreparedRun, Usage
+from amicus.sdk.backend.protocol import (
+    ClassifiedFailure,
+    ExecResult,
+    PreparedRun,
+    RepairHint,
+    Usage,
+)
 from amicus.sdk.core import pathalias
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -54,6 +60,21 @@ class CodexBackend:
         return self._config.reasoning_effort
 
     def validate_request(self, request: RunRequest) -> ClassifiedFailure | None:
+        if self._config.home_error is not None:
+            # Refused pre-spend (#193): codex would resolve it against request.cwd, a
+            # directory the readiness probe never looked at.
+            return ClassifiedFailure(
+                code="user_config_rejected",
+                detail=f"{self._config.home_error} No model call was made.",
+                repair=RepairHint(
+                    next_step="correct_config",
+                    alternative=(
+                        "Set CODEX_HOME to an absolute path (or unset it) in the environment "
+                        "the amicus server starts with, restart the server, then rerun "
+                        "amicus_backends."
+                    ),
+                ),
+            )
         effort = self._effort(request)
         if effort is not None:
             reason = reasoning_effort_shape_error(effort)
