@@ -494,14 +494,23 @@ async def test_a_stream_answer_the_capture_lost_is_answer_unavailable(
     assert "INTERIM-ONLY" not in json.dumps(out)
 
 
-async def test_a_stderr_loss_leaves_a_stdout_answer_deliverable(monkeypatch):
-    """The union flags are also set by stderr, which carries no answer: before #198 a stderr
-    flood alone was enough to refuse a stream substitute."""
+@pytest.mark.parametrize("refused_file", [False, True])
+async def test_a_stderr_loss_leaves_a_stdout_answer_deliverable(
+    monkeypatch, tmp_path, refused_file
+):
+    """The union flags are also set by stderr, which carries no answer. With the answer file
+    refused, the stream is the substitute, and before #198 a stderr flood alone was enough to
+    refuse it; with no file, it is simply the answer."""
     scripted = cf.scripted_run_async(stdout="the answer")
     damaged = _damaged(scripted, output_truncated=True, capture_failed=True)
     monkeypatch.setattr(run_mod.runtime, "run_async", damaged)
-    out = await run_mod.run_request(_spec(), fakeplugin.make_plugin())
+    plugin = (
+        _refusing(fakeplugin.FakeBackend, tmp_path) if refused_file else fakeplugin.make_plugin()
+    )
+    out = await run_mod.run_request(_spec(), plugin)
     assert out["ok"] is True and out["summary"] == "the answer"
+    warned = run_mod.ANSWER_REFUSED_WARNING in out["meta"]["security_warnings"]
+    assert warned is refused_file
 
 
 async def test_a_lost_stream_explains_only_an_empty_or_unparseable_answer(monkeypatch):
