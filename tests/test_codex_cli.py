@@ -47,7 +47,7 @@ def test_build_core_and_ordering():
     assert cmd[cmd.index("--output-last-message") + 1] == "/TMP/last.txt"
     assert "--ephemeral" in cmd and cmd[cmd.index("--model") + 1] == "gpt-5.4"
     assert cmd[-1] == contract.STDIN_PROMPT and dropped == []
-    assert _disabled(cmd) == ["remote_plugin", "sleep_tool"]
+    assert _disabled(cmd) == ["remote_plugin", "sleep_tool", "goals"]
     assert contract.STRICT_CONFIG_FLAG not in cmd  # no -c override rides a default consult
 
 
@@ -62,6 +62,7 @@ def test_workspace_write_pins_exactly(sandbox, isolation):
         pairs = [i for i in range(len(cmd) - 1) if cmd[i] == "-c" and cmd[i + 1] == pin]
         assert len(pairs) == (1 if sandbox == "workspace-write" else 0)
     assert (contract.STRICT_CONFIG_FLAG in cmd) == (sandbox == "workspace-write")
+    assert _disabled(cmd) == ["remote_plugin", "sleep_tool", "goals"]
     if isolation == "ignore-rules":
         assert "--ignore-user-config" in cmd and "--ignore-rules" in cmd
 

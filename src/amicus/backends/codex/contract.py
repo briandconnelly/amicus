@@ -45,17 +45,27 @@ VALID_SANDBOXES = (SANDBOX_READ_ONLY, SANDBOX_WORKSPACE_WRITE, SANDBOX_DANGER_FU
 
 # --- Features forced off on every model-bearing run --------------------------------
 # remote_plugin (codex 0.143+ default-on third-party connectors: a network side-effect
-# channel outside the sandbox) and sleep_tool (0.152+, a native sleep of up to 12h that can
+# channel outside the sandbox); sleep_tool (0.152+, a native sleep of up to 12h that can
 # burn a run's budget into `timeout`; 0.154.0's gpt-6-astra advertises `clock`, so its default
-# exec path offers `clock.sleep`). `--disable X` == `-c features.X=false`, wins over any
-# `--enable` in either order, and an unknown feature name fails loud as
-# `Error: Unknown feature flag` (classified cli_contract_changed). One `--disable` per
-# entry, in this order, emitted before operator extra args; the config denylist derives
-# from the same tuple.
+# exec path offers `clock.sleep`); and goals (#222: `stable` on 0.152.0, 0.153.4, 0.154.0,
+# 0.155.1 and 0.156.1, and 0.156.1 also offers its create/get/update_goal tools to gpt-5.5).
+# Under the `--ephemeral` amicus always sends, create_goal is refused ("Goal tools require a
+# persistent thread"); on a persistent thread an active goal can make exec send a "continue
+# working toward the active thread goal" request after the final answer, a turn its JSONL
+# never reports. Disabling goals removes the tools instead of relying on that refusal.
+# `--disable X` == `-c features.X=false`, wins over any `--enable` in either order, and an
+# unknown feature name fails loud as `Error: Unknown feature flag` (classified
+# cli_contract_changed). One `--disable` per entry, in this order, emitted before operator
+# extra args; the config denylist derives from the same tuple.
 DISABLE_FEATURE_FLAG = "--disable"
 REMOTE_PLUGIN_FEATURE = "remote_plugin"
 SLEEP_TOOL_FEATURE = "sleep_tool"
-MODEL_RUN_DISABLED_FEATURES: tuple[str, ...] = (REMOTE_PLUGIN_FEATURE, SLEEP_TOOL_FEATURE)
+GOALS_FEATURE = "goals"
+MODEL_RUN_DISABLED_FEATURES: tuple[str, ...] = (
+    REMOTE_PLUGIN_FEATURE,
+    SLEEP_TOOL_FEATURE,
+    GOALS_FEATURE,
+)
 
 # --- Implicit Codex context (disclosed on every egress carrier) ---------------------
 SKILLS_DISCOVERY_FACT = (

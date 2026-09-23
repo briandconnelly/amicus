@@ -30,7 +30,7 @@ def test_forbidden_phrases_exclude_sibling_names_but_ban_the_mechanisms_amicus_l
 
 
 def test_disabled_features_are_ordered_and_always_send():
-    assert c.MODEL_RUN_DISABLED_FEATURES == ("remote_plugin", "sleep_tool")
+    assert c.MODEL_RUN_DISABLED_FEATURES == ("remote_plugin", "sleep_tool", "goals")
     assert c.DISABLE_FEATURE_FLAG in c.ALWAYS_SEND_FLAGS
     assert c.STRICT_CONFIG_FLAG in c.ALWAYS_SEND_FLAGS
     assert not set(c.ALWAYS_SEND_FLAGS) & set(c.HELP_GATED_FLAGS)
@@ -320,3 +320,20 @@ def test_every_flag_the_contract_always_sends_is_declared_in_every_committed_cap
         assert (int(major), int(minor)) in c.SUPPORTED_VERSIONS, (
             f"a capture exists for {version}, which the contract does not support"
         )
+
+
+def test_server_down_fallback_recipe_disables_every_model_run_feature():
+    """The skill's direct-CLI fallback says its flags come from MODEL_RUN_DISABLED_FEATURES;
+    keep the two from drifting (#222 added goals to one and not, until now, the other)."""
+    from pathlib import Path
+
+    recipe = (
+        Path(__file__).parent.parent
+        / "skills/collaborating-with-amicus/references/server-down-fallback.md"
+    ).read_text()
+    command = recipe.split("```sh", 1)[1].split("```", 1)[0]
+    disabled = [
+        line.split()[1] for line in command.splitlines() if line.strip().startswith("--disable ")
+    ]
+    assert "remote_plugin" in disabled, "control: the parse finds the recipe's disables"
+    assert disabled == list(c.MODEL_RUN_DISABLED_FEATURES)

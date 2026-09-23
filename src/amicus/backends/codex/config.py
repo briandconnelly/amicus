@@ -103,6 +103,11 @@ _PLUGIN_OWNED_FEATURE_REASONS: dict[str, str] = {
         "sleep (up to 12h) cannot burn the run's budget into a timeout; an operator "
         "override cannot re-enable it"
     ),
+    contract.GOALS_FEATURE: (
+        "amicus disables codex's goals feature on every model-bearing run so an active goal "
+        "cannot schedule continuation turns amicus neither asked for nor accounts for; an "
+        "operator override cannot re-enable it"
+    ),
 }
 _FEATURES_NAMESPACE = "features"
 _DENIED_CONFIG_KEY_ROOTS = frozenset({"sandbox", "approval_policy", "shell_environment_policy"})
