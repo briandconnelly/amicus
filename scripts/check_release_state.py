@@ -95,7 +95,10 @@ _MCP_SOURCE_RE = re.compile(
 
 # The repository `CHANGELOG.md`'s comparison-link footer points at (#211).
 CHANGELOG_REPO_URL = "https://github.com/briandconnelly/amicus"
-_LINK_DEFINITION_RE = re.compile(r"^\[(?P<label>[^\]]+)\]:[ \t]*(?P<url>\S+)[ \t]*$", re.MULTILINE)
+# CommonMark reads a link reference definition indented up to three spaces.
+_LINK_DEFINITION_RE = re.compile(
+    r"^ {0,3}\[(?P<label>[^\]]+)\]:[ \t]*(?P<url>\S+)[ \t]*$", re.MULTILINE
+)
 _DATED_HEADING_RE = re.compile(
     r"^## \[(?P<version>\d+\.\d+\.\d+)\] - \d{4}-\d{2}-\d{2}$", re.MULTILINE
 )
@@ -417,7 +420,7 @@ def check_marketplace_transition(base: str | dict, head: str | dict, declared: s
 
 def check_changelog(version: str, *, repo_root: Path = REPO_ROOT) -> list[str]:
     """`CHANGELOG.md` must carry exactly one dated section for `version`, below `Unreleased`,
-    and comparison links for both.
+    and footer link definitions for both.
 
     `docs/RELEASING.md` step 2 rolls `## [Unreleased]` into `## [X.Y.Z] - YYYY-MM-DD` and
     leaves a fresh empty `## [Unreleased]` above it, so "exactly one dated heading, with an
@@ -447,6 +450,15 @@ def check_changelog(version: str, *, repo_root: Path = REPO_ROOT) -> list[str]:
     return problems
 
 
+def _link_label_key(label: str) -> str:
+    """A reference label as CommonMark matches it: case-folded, whitespace collapsed.
+
+    Keying labels verbatim would let a stale `[unreleased]:` above a correct `[Unreleased]:`
+    pass as two different labels, while a renderer resolves both to the stale first one.
+    """
+    return " ".join(label.split()).casefold()
+
+
 def _check_changelog_links(text: str, version: str, released_end: int) -> list[str]:
     """The footer's `[Unreleased]` and `[version]` link definitions must follow the roll (#211).
 
@@ -467,11 +479,11 @@ def _check_changelog_links(text: str, version: str, released_end: int) -> list[s
     }
     definitions: dict[str, list[str]] = {}
     for match in _LINK_DEFINITION_RE.finditer(text):
-        definitions.setdefault(match["label"], []).append(match["url"])
+        definitions.setdefault(_link_label_key(match["label"]), []).append(match["url"])
 
     problems: list[str] = []
     for label, url in expected.items():
-        found = definitions.get(label, [])
+        found = definitions.get(_link_label_key(label), [])
         if not found:
             problems.append(f"CHANGELOG.md has no `[{label}]:` link definition; expected {url}")
         elif len(found) > 1:

@@ -670,6 +670,34 @@ def test_a_duplicate_link_definition_is_rejected(repo):
     assert any("2 `[Unreleased]:` links" in p for p in problems), problems
 
 
+@pytest.mark.parametrize(
+    "stale_label",
+    ["[unreleased]:", "[UNRELEASED]:", "[ Unreleased ]:", "   [Unreleased]:"],
+    ids=["lowercase", "uppercase", "padded", "indented"],
+)
+def test_a_stale_definition_markdown_would_match_is_a_duplicate(repo, stale_label):
+    """CommonMark matches labels case-insensitively with whitespace collapsed, and still
+    reads a definition indented up to three spaces, so each variant here is the definition a
+    renderer resolves `[Unreleased]` to -- and it is stale."""
+    (repo / "CHANGELOG.md").write_text(
+        _changelog_with(
+            "[Unreleased]:",
+            f"{stale_label} {CHANGELOG_BASE}/compare/v{PREVIOUS}...HEAD\n[Unreleased]:",
+        ),
+        encoding="utf-8",
+    )
+    problems = release_state.check_changelog(VERSION, repo_root=repo)
+    assert any("2 `[Unreleased]:` links" in p for p in problems), problems
+
+
+def test_a_correct_definition_in_another_case_is_accepted(repo):
+    """The same normalization cuts the other way: `[unreleased]:` DOES define `[Unreleased]`."""
+    (repo / "CHANGELOG.md").write_text(
+        _changelog_with("[Unreleased]:", "[unreleased]:"), encoding="utf-8"
+    )
+    assert release_state.check_changelog(VERSION, repo_root=repo) == []
+
+
 def test_a_first_release_links_to_its_tag(repo):
     """With no earlier dated section there is nothing to compare from, so the release's link
     is the tag page -- the form `[0.1.0]` has."""
@@ -693,7 +721,7 @@ def test_a_first_release_with_a_compare_link_is_rejected(repo):
     assert any(f"releases/tag/v{VERSION}" in p for p in problems), problems
 
 
-def test_this_repositorys_changelog_footer_matches_its_declared_version():
+def test_the_repository_changelog_footer_matches_its_declared_version():
     """The real file, not a fixture: `main` must satisfy the footer check for the version it
     declares, which is the state every release PR is checked against."""
     root = _SCRIPT.parent.parent
