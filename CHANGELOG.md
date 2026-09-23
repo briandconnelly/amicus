@@ -26,7 +26,8 @@ Across this release the discovery surface moves `amicus/0.1/schema-39`, what 0.5
 `amicus/0.1/schema-40`, and `RESULT_FORMAT` stays 9, so a job result 0.5.0 stored can still be
 delivered. No entry is labelled **Breaking**. One change asks something of an operator: a
 `CODEX_HOME` that is not an absolute path is now refused, and `docs/MIGRATION.md` ("Upgrading
-from 0.5.0") says what to do.
+from 0.5.0") says what to do. It was checked against codex-cli 0.156.1, Kimi Code 2.1.0 and
+Claude Code 2.1.280.
 
 ### Changed
 
