@@ -1,8 +1,12 @@
 ---
-name: agent-friendly-mcp
 description: Use when designing, building, auditing, or reviewing an MCP server that AI agents will invoke directly. Symptoms include agents picking the wrong tool from many candidates, burning tokens loading hundreds of tool definitions upfront, repeated invalid tool calls due to ambiguous schemas, tools that mirror an underlying API endpoint-by-endpoint instead of completing tasks, missing or unclear resource browsing, prompts that duplicate tool contracts, token-heavy responses that should be paginated or filtered, brittle integrations that break across server versions, long-running operations with no progress, cancellation, or recoverable task status. Also use when defining or hardening tool, resource, or prompt schemas.
+metadata:
+    github-path: agent-friendly-mcp
+    github-ref: refs/heads/main
+    github-repo: https://github.com/briandconnelly/skills
+    github-tree-sha: ebf496f66a9bc542464fdea730466f40080a4dd6
+name: agent-friendly-mcp
 ---
-
 # Agent-Friendly MCP
 
 Use this skill to make MCP servers easy for agents to discover, invoke correctly, recover from, and use at low token cost without sacrificing correctness.
@@ -83,7 +87,22 @@ Shared terms — discovery surface, repair signal, state handle, capability fing
 ## Checklist Map
 
 The normative standard lives in [contract-checklist.md](references/contract-checklist.md), with two named exceptions homed in this file: the Spec Baseline facts and the native-vs-convention rule.
-Walk the checklist top to bottom for any design or review.
+There are two routes into the standard, and every design or review declares which one it took.
+
+- **Full walk** — read the checklist top to bottom.
+  Required for a new server, a new primitive, a change to the auth model or the error taxonomy, a change of protocol-revision target, and any audit that reports coverage across §1–§9.
+- **Focused route** — for a change scoped to a known surface, such as one tool's input schema or one error payload.
+  1. Name the surface and the sections it touches.
+  2. Read `[1.spec-revision]` and the native-vs-convention rule below whatever the surface; they govern how every other rule is read.
+  3. Read the named sections in full — sections, not single bullets, so a rule is never read without its neighbours.
+  4. Close over citations: for every rule you read, read the rule ids it cites, and repeat until nothing new is pulled in.
+     Those citations are the dependency edges, and following them is what stops a focused read from applying a rule without the rules it depends on.
+  5. Report the sections you did not read as `not-checked` with the reason, per [review-workflow.md](references/review-workflow.md) — a focused route is never reported as full coverage.
+  Escalate to the full walk when step 4 pulls in more than two sections beyond those you named, or when the change turns out to add a primitive.
+
+The closure in step 4 converges rather than expanding to the whole standard: measured against the current checklist, a single-rule seed closes at 1–3 rules, and a whole-section seed at 19–27% of the 12,211 words of rule text.
+What is *not* measured is the focused route's effect on review quality — no scenario in `tests/scenarios.md` yet compares the two routes.
+Until one does, prefer the full walk wherever its cost is acceptable, and treat the focused route as a documented reduction whose risk is unquantified.
 This index orients and routes — its one-line summaries aid navigation and never define or override a rule.
 State-handle discipline and long-running-operation contracts are normative in §1/§8 and §7 respectively; consult them there rather than a second copy here.
 Notation: bare `§N` always means a contract-checklist section; `ex§N` means section N of [examples.md](references/examples.md).
