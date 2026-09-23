@@ -236,8 +236,8 @@ You are the only evidence that the runs happened, which is what AGENTS.md rule 2
 Approve that deployment deliberately once you have confirmed the build artifacts look right.
 The upload is irreversible: PyPI does not allow re-uploading a version, even a broken one.
 A pause here is the workflow waiting on you, not a hang.
-The tagged `pypi` job itself has never actually run: its condition is `github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')`, and both dispatches exercised so far (2026-09-08, TestPyPI: `34255779351`, which failed at the OIDC token exchange, and `34256365085`, which succeeded) ran against `refs/heads/main`, a branch, so that job was skipped both by the current two-clause condition and by the original one-clause condition it replaced.
-Approving that first real deployment is authorizing untested territory, not a rerun of something already proven.
+The tagged `pypi` job has run: its condition is `github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')`, and it succeeded on every release tag from `v0.1.0` (run `34311419893`) through `v0.5.0` (run `35487405992`); `gh run view <run-id> --json jobs` shows each job's own conclusion, which `gh run list` does not, because a run can succeed with `pypi` skipped.
+A previous success does not make this approval a formality, because the check that matters is whether this build's artifacts are the right ones, not whether the job works.
 
 ## Post-tag completion checks
 
