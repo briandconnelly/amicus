@@ -15,7 +15,13 @@ from amicus.backends.claude.binary import BinaryNotFoundError
 from amicus.backends.claude.options import adversarial_config_mode, review_access
 from amicus.schemas import instructions
 from amicus.schemas.structured import schema_instruction
-from amicus.sdk.backend.protocol import ClassifiedFailure, ExecResult, PreparedRun, RepairHint
+from amicus.sdk.backend.protocol import (
+    ClassifiedFailure,
+    ExecResult,
+    PreparedRun,
+    RepairHint,
+    stream_answer_loss,
+)
 from amicus.sdk.core import pathalias
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -204,7 +210,8 @@ class ClaudeBackend:
         """A tolerant read of the envelope, whatever it says about success (the loop calls this
         before inspection so a failure keeps its usage). The workspace hook scan rides
         `warnings`: the loop copies them onto meta.security_warnings."""
-        env = normalize.parse_envelope(outcome.run.stdout) or {}
+        parsed = normalize.parse_envelope(outcome.run.stdout)
+        env = parsed or {}
         answer = normalize.extract_answer(env)
         structured = normalize.parse_structured(answer) if request.schema is not None else None
         return ExecResult(
@@ -215,6 +222,11 @@ class ClaudeBackend:
             warnings=tuple(
                 claude_config.hook_security_warnings(request.cwd, self._config_mode(request))
             ),
+            # Stdout is one JSON document, so a capture that lost any of it leaves nothing
+            # that parses; an envelope that did parse was captured whole (#198).
+            answer_loss=None
+            if parsed is not None
+            else stream_answer_loss(outcome.run, lost_after_answer=True),
         )
 
     def inspect_outcome(self, outcome: RunOutcome, request: RunRequest) -> ClassifiedFailure | None:

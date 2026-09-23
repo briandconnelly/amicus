@@ -10,18 +10,24 @@ import json
 from amicus.backends.kimi import contract
 from amicus.schemas.structured import classify_structured
 from amicus.sdk.backend.protocol import Usage
+from amicus.sdk.core import streamcap
+
+
+def _event(raw_line: str) -> dict | None:
+    line = raw_line.strip()
+    if not line.startswith("{"):
+        return None
+    try:
+        event = json.loads(line)
+    except (json.JSONDecodeError, ValueError):
+        return None
+    return event if isinstance(event, dict) else None
 
 
 def _events(events: str):
     for raw_line in events.splitlines():
-        line = raw_line.strip()
-        if not line.startswith("{"):
-            continue
-        try:
-            event = json.loads(line)
-        except (json.JSONDecodeError, ValueError):
-            continue
-        if isinstance(event, dict):
+        event = _event(raw_line)
+        if event is not None:
             yield event
 
 
@@ -42,13 +48,30 @@ def extract_final_message(events: str) -> str | None:
     are the model calling a tool, not answering. None when nothing answered."""
     found: str | None = None
     for event in _events(events):
-        # `goal.summary` lines carry no "role" at all, so read it tolerantly.
-        if event.get(contract.ROLE_KEY) != contract.ROLE_ASSISTANT:
-            continue
-        content = event.get(contract.CONTENT_KEY)
-        if isinstance(content, str) and content.strip():
-            found = content.strip()
+        found = _assistant_text(event) or found
     return found
+
+
+def lost_after_final_message(events: str) -> bool:
+    """Whether a capture loss marker sits after the line `extract_final_message` takes, or
+    anywhere when it takes none (#198). The capture keeps the head and tail of the stream,
+    so a final message larger than what is left for the tail is evicted whole while an
+    earlier one still parses: the answer would then be the wrong message, not a short one."""
+    lost = False
+    for raw_line in events.splitlines():
+        if streamcap.is_loss_marker(raw_line):
+            lost = True
+        elif (event := _event(raw_line)) is not None and _assistant_text(event):
+            lost = False
+    return lost
+
+
+def _assistant_text(event: dict) -> str | None:
+    # `goal.summary` lines carry no "role" at all, so read it tolerantly.
+    if event.get(contract.ROLE_KEY) != contract.ROLE_ASSISTANT:
+        return None
+    content = event.get(contract.CONTENT_KEY)
+    return content.strip() if isinstance(content, str) and content.strip() else None
 
 
 def extract_error_message(events: str) -> str | None:

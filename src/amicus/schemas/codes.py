@@ -30,7 +30,8 @@ _FEATURE_CODES = _pe.feature_codes(frozenset({"model_validation", "empty_respons
 
 LOCAL_CODES = frozenset(
     {
-        # amicus's own orchestration refused to read the file a backend answered in (#162).
+        # amicus's own orchestration refused to read the file a backend answered in (#162),
+        # or its capture of the output stream a backend answered on cut the answer (#198).
         "answer_unavailable",
         # The registry recorded the backend as unavailable (import, conformance, config).
         "backend_unavailable",

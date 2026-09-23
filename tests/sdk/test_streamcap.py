@@ -349,3 +349,33 @@ def test_bounded_capture_rejects_head_bytes_outside_the_budget():
 def test_bounded_capture_accepts_head_bytes_at_the_boundaries():
     assert streamcap.BoundedCapture(max_bytes=100, head_bytes=0) is not None
     assert streamcap.BoundedCapture(max_bytes=100, head_bytes=100) is not None
+
+
+# --- is_loss_marker (#198) --------------------------------------------------------------
+
+
+def test_is_loss_marker_recognizes_both_markers_with_or_without_their_separator():
+    cap = streamcap.BoundedCapture(20, head_bytes=0)
+    for line in ("aaaaaaaaaa\n", "bbbbbbbbbb\n", "cccccccccc\n"):
+        cap.add(line)
+    marker = cap.result().splitlines(keepends=True)[0]
+    cut = next(streamcap.iter_bounded_lines(io.StringIO("y" * 200 + "\n"), 64))
+    for line in (marker, cut):
+        assert streamcap.is_loss_marker(line)
+        assert streamcap.is_loss_marker(line.rstrip("\n"))
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "",
+        "an ordinary line\n",
+        # A producer can put either marker's text INSIDE a record; only a whole marker line,
+        # or a record that ends in the sentinel, stands in for lost output.
+        '{"content": "[output truncated]"}\n',
+        '{"content": "…[line truncated]"}\n',
+        "[output truncated] and more\n",
+    ],
+)
+def test_is_loss_marker_is_false_for_a_record_that_only_quotes_one(line):
+    assert not streamcap.is_loss_marker(line)

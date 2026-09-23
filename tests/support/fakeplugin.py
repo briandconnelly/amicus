@@ -25,6 +25,7 @@ from amicus.sdk.backend.protocol import (
     PreparedRun,
     RunOutcome,
     RunRequest,
+    stream_answer_loss,
 )
 from amicus.sdk.conventions.annotations import AnnotationEffects
 from amicus.sdk.conventions.envelope import BackendErrorVocabulary
@@ -66,7 +67,11 @@ class FakeBackend:
         return _cm()
 
     def finalize(self, outcome: RunOutcome, request: RunRequest) -> ExecResult:
-        return ExecResult(answer=outcome.run.stdout)
+        # The whole stdout is the answer, so any loss the capture reports is a loss of it.
+        return ExecResult(
+            answer=outcome.run.stdout,
+            answer_loss=stream_answer_loss(outcome.run, lost_after_answer=True),
+        )
 
     def classify_failure(self, outcome: RunOutcome, request: RunRequest) -> ClassifiedFailure:
         return ClassifiedFailure(code="nonzero_exit", detail=outcome.run.stderr[:80])

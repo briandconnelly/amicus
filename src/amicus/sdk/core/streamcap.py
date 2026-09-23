@@ -46,6 +46,17 @@ _LINE_TRUNC_MARKER = _LINE_TRUNC_SENTINEL + "\n"
 _LINE_TRUNC_MARKER_BYTES = len(_LINE_TRUNC_MARKER.encode("utf-8"))
 _OUTPUT_TRUNC_MARKER = "[output truncated]\n"
 
+
+def is_loss_marker(line: str) -> bool:
+    """True for a record that stands in for lost output: the ``[output truncated]`` line a
+    ``BoundedCapture`` puts where it evicted lines, or a record the assembler cut short at
+    its per-record cap. Either means bytes the producer wrote are not in the capture, so a
+    reader that takes the LAST record of a kind cannot know it saw the last one past it.
+    The record's own separator is optional, so a caller may pass a ``splitlines()`` line."""
+    record = line.rstrip("\n\0")
+    return record == _OUTPUT_TRUNC_MARKER.rstrip("\n") or record.endswith(_LINE_TRUNC_SENTINEL)
+
+
 # The only record separators supported by the assembler: the two git actually emits
 # (newline for ordinary output, NUL for ``-z`` listings). Both are a single character —
 # an empty separator would never make progress, and a multi-character one would need

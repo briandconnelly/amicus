@@ -62,3 +62,45 @@ def test_parse_structured_accepts_fenced_objects_only():
     assert normalize.parse_structured("[1, 2]") is None
     assert normalize.parse_structured("prose") is None
     assert normalize.parse_structured(None) is None
+
+
+# --- lost_after_final_message (#198) ----------------------------------------------------
+LOST = "[output truncated]\n"
+CUT = '{"role":"assistant","content":"the true fin…[line truncated]\n'
+
+
+def test_a_loss_before_the_final_message_leaves_it_trusted():
+    """The capture keeps the head and tail: a middle cut leaves the final message whole."""
+    events = VERSION + '{"role":"assistant","content":"early"}\n' + LOST
+    events += '{"role":"assistant","content":"final"}\n' + RESUME
+    assert normalize.extract_final_message(events) == "final"
+    assert not normalize.lost_after_final_message(events)
+
+
+def test_a_loss_after_the_final_message_means_a_later_one_may_be_what_was_lost():
+    events = VERSION + '{"role":"assistant","content":"early"}\n' + LOST + RESUME
+    assert normalize.extract_final_message(events) == "early", "control: an answer still parses"
+    assert normalize.lost_after_final_message(events)
+
+
+def test_a_cut_line_after_the_final_message_is_a_loss_too():
+    """One line over the per-line cap is cut and no longer parses, so the message before it
+    is what extract_final_message takes."""
+    events = VERSION + '{"role":"assistant","content":"early"}\n' + CUT + RESUME
+    assert normalize.extract_final_message(events) == "early"
+    assert normalize.lost_after_final_message(events)
+
+
+def test_a_loss_with_no_message_at_all_is_a_loss():
+    assert normalize.lost_after_final_message(VERSION + LOST + RESUME)
+    assert not normalize.lost_after_final_message(VERSION + RESUME), "control: nothing lost"
+
+
+def test_tool_call_only_and_empty_assistant_lines_do_not_clear_a_loss():
+    """They are not answers, so extract_final_message skips them, and they must not count
+    as the answer line that follows the loss."""
+    events = VERSION + '{"role":"assistant","content":"early"}\n' + LOST
+    events += '{"role":"assistant","tool_calls":[{"id":"Read:0"}]}\n'
+    events += '{"role":"assistant","content":"  "}\n' + RESUME
+    assert normalize.extract_final_message(events) == "early"
+    assert normalize.lost_after_final_message(events)

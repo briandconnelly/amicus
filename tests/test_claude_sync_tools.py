@@ -624,3 +624,33 @@ async def test_an_unreadable_review_is_delivered_and_its_text_recovered_from_the
     assert stored["ok"] is True and stored["review_status"] == "unstructured"
     assert stored["raw_response"]["text"] == answer
     assert len(_runs(tmp_path)) == 1
+
+
+async def test_an_envelope_cut_by_the_capture_is_answer_unavailable_not_invalid_json(
+    app, monkeypatch, tmp_path
+):
+    """claude's stdout is one JSON envelope; past AMICUS_MAX_OUTPUT_BYTES the capture cuts
+    it, and what is left does not parse because amicus cut it, not because claude drifted
+    (#198)."""
+    monkeypatch.setenv("AMICUS_MAX_OUTPUT_BYTES", "65536")
+    settings = config.settings()
+    capped = server.create_app(
+        settings, BackendRegistry.load(settings.enabled_backends, entry_points=())
+    )
+
+    async def consult(answer):
+        monkeypatch.setenv("FAKE_CLAUDE_ANSWER", answer)
+        async with Client(capped) as c:
+            res = await c.call_tool(
+                "amicus_consult",
+                {"backend": "claude", "question": "q", "workspace_root": str(tmp_path)},
+                raise_on_error=False,
+            )
+        return res.structured_content
+
+    body = await consult("y" * 70_000)
+    err = body["error"]
+    assert err["code"] == "answer_unavailable" and err["backend"] == "claude"
+    assert err["details"]["reason"] == "stream_truncated"
+    # Control: an envelope under the cap is delivered.
+    assert (await consult("a short answer"))["ok"] is True

@@ -60,16 +60,21 @@ deliver: an empty one (`invalid_json`, or `empty_response` on `kimi`, which dete
 result is built) and one amicus refused to read (`answer_unavailable`).
 
 `answer_unavailable` is a different fact from either: the backend **did** answer, and amicus
-refused to read the file it answered in. `error.details.reason` says why — `artifact_oversize`
-(over the read limit, with `limit_bytes` and, when known, `actual_bytes`), `artifact_not_regular`
-(a symlink, FIFO or device) or `artifact_unreadable`. Read `error.temporary` rather than assume:
-it is true only for an unreadable file whose cause passes, and even then a retry is a new paid
-run. Otherwise never repeat the identical call: for oversize, narrow the task or ask for a
-shorter answer. A delegate whose summary file was refused, and which has no other whole answer
+could not read the answer whole. `error.details.reason` says why. For an answer file amicus
+refused, it is `artifact_oversize` (over the read limit, with `limit_bytes` and, when known,
+`actual_bytes`), `artifact_not_regular` (a symlink, FIFO or device) or `artifact_unreadable`.
+For an answer on the output stream (`claude`, and `kimi` when it wrote no answer file), it is
+`stream_truncated`, the output passed `AMICUS_MAX_OUTPUT_BYTES` and the part carrying the answer
+was dropped, or `stream_capture_failed`. Read `error.temporary` rather than assume: it is true
+only for an unreadable file whose cause passes and for a failed stream capture, and even then a
+retry is a new paid run. Otherwise never repeat the identical call: for oversize or a truncated
+stream, narrow the task or ask for a shorter answer. A delegate whose summary file was refused, and which has no other whole answer
 from the backend, still comes back `ok: true` when its diff was captured: with the diff,
 amicus's own summary saying the backend's could not be read, a null `raw_response.text`, and a
-`meta.security_warnings` entry. Where the backend's stream did carry its answer (`kimi`), that
-answer is the summary and the raw response, beside the same warning. Read `meta.truncated` and `meta.redacted_paths` for whether that
+`meta.security_warnings` entry. Where the backend's stream did carry its whole answer (`kimi`),
+that answer is the summary and the raw response, beside the same warning. A `kimi` delegate whose
+stream lost its summary also comes back `ok: true` with its diff and amicus's own summary saying
+so, but with no warning, since nothing was refused. Read `meta.truncated` and `meta.redacted_paths` for whether that
 diff is whole, as on any delegate.
 
 When a review was not complete, the result's `coverage` object says so in fields you can branch

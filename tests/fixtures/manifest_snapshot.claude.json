@@ -557,6 +557,7 @@
           "api_key_invalid",
           "api_key_missing",
           "internal_error",
+          "answer_unavailable",
           "invalid_scope",
           "invalid_base",
           "invalid_commit",
@@ -623,6 +624,7 @@
           "api_key_invalid",
           "api_key_missing",
           "internal_error",
+          "answer_unavailable",
           "invalid_scope",
           "invalid_base",
           "invalid_commit",
@@ -1528,7 +1530,7 @@
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-40",
+                "default": "amicus/0.1/schema-41",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -2441,7 +2443,7 @@
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-40",
+            "default": "amicus/0.1/schema-41",
             "title": "Fingerprint",
             "type": "string"
           },

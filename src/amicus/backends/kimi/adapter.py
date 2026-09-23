@@ -16,7 +16,13 @@ from amicus.backends.kimi.binary import BinaryNotFoundError
 from amicus.schemas import instructions
 from amicus.schemas.params import reasoning_effort_shape_error
 from amicus.schemas.structured import schema_instruction
-from amicus.sdk.backend.protocol import ClassifiedFailure, ExecResult, PreparedRun, RepairHint
+from amicus.sdk.backend.protocol import (
+    ClassifiedFailure,
+    ExecResult,
+    PreparedRun,
+    RepairHint,
+    stream_answer_loss,
+)
 from amicus.sdk.core import pathalias, runtime
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -216,7 +222,20 @@ class KimiBackend:
         events = outcome.events or outcome.run.stdout
         usage, session_id = normalize.parse_event_metadata(events)
         structured = normalize.parse_structured(answer) if request.schema is not None else None
-        return ExecResult(answer=answer, structured=structured, usage=usage, session_id=session_id)
+        # Only an answer taken from the stream can have lost to the capture; with the
+        # answer file read, the stream is accounting.
+        loss = None
+        if not (outcome.artifact_texts.get("answer") or "").strip():
+            loss = stream_answer_loss(
+                outcome.run, lost_after_answer=normalize.lost_after_final_message(events)
+            )
+        return ExecResult(
+            answer=answer,
+            structured=structured,
+            usage=usage,
+            session_id=session_id,
+            answer_loss=loss,
+        )
 
     def inspect_outcome(
         self,

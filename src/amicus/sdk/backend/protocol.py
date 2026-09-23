@@ -20,7 +20,7 @@ backend-specific decision flow through the adapter.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
 
 from amicus.sdk.conventions.envelope import REPAIR_STEPS
 
@@ -147,6 +147,23 @@ class Usage:
     cache_creation_input_tokens: int | None = None
 
 
+# Why a stream answer cannot be delivered; see ExecResult.answer_loss.
+AnswerLoss = Literal["truncated", "capture_failed"]
+
+
+def stream_answer_loss(run: CommandRun, *, lost_after_answer: bool) -> AnswerLoss | None:
+    """The ``answer_loss`` for an answer read from ``run.stdout``. ``lost_after_answer`` is
+    the backend's own finding that a loss marker (``streamcap.is_loss_marker``) sits after
+    the record it took its answer from, or anywhere when it found none; only the backend
+    knows which record that was. A failed reader loses everything after it died, so that
+    is a loss wherever the answer sat."""
+    if run.stdout_capture_failed:
+        return "capture_failed"
+    if run.stdout_truncated and lost_after_answer:
+        return "truncated"
+    return None
+
+
 @dataclass(frozen=True)
 class ExecResult:
     """The normalized result of a successful run — the protocol's currency.
@@ -156,6 +173,13 @@ class ExecResult:
     succeeded (parse tolerantly; never assume). ``usage`` is None when the
     backend emits no usage events for this mode. ``session_id`` is opportunistic
     metadata, not a resume promise.
+
+    ``answer_loss`` is set by a backend whose answer came from its output stream when that
+    capture cannot vouch for it: ``"truncated"`` when output was dropped after the point
+    the answer was read from (or, with no answer, anywhere), so a later and truer answer
+    may be what was lost, and ``"capture_failed"`` when the stream's reader died. An
+    answer read from a file never sets it, since the stream is then only accounting. The
+    consumer must not deliver an answer that carries it (#198).
     """
 
     answer: str
@@ -163,6 +187,7 @@ class ExecResult:
     usage: Usage | None = None
     session_id: str | None = None
     warnings: tuple[str, ...] = ()
+    answer_loss: AnswerLoss | None = None
 
 
 @dataclass(frozen=True)
