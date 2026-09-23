@@ -10,7 +10,8 @@ path, `{PROMPT_DIR}` by its directory and `{PROMPT_PATH_ESCAPED}` by its `\\/`-e
 spelling; FAKE_KIMI_STDERR takes `{PROMPT_PATH}` too) to the answer file the pointer names
 (write tier only),
 optionally writes FAKE_KIMI_WRITE (a relative path) under cwd, prints FAKE_KIMI_EVENTS
-(default: a version line, an assistant line carrying the answer, a resume hint) to stdout
+(default: a version line, an assistant line carrying the answer, a resume hint; or the contents
+of FAKE_KIMI_EVENTS_FILE) to stdout
 and FAKE_KIMI_STDERR to stderr, sleeps FAKE_KIMI_SLEEP seconds, and exits FAKE_KIMI_EXIT
 (default 0). FAKE_KIMI_ARGV_FILE gets one JSON line per invocation: the argv (binary
 omitted) and the KIMI_MODEL_* environment."""
@@ -77,6 +78,15 @@ def _record(argv: list[str]) -> None:
             fh.write(json.dumps({"argv": argv, "env": env}) + "\n")
 
 
+def _scripted_events() -> str | None:
+    events_file = os.environ.get("FAKE_KIMI_EVENTS_FILE")
+    if events_file:
+        # Linux caps one environment string at 128 KiB (MAX_ARG_STRLEN), below what a
+        # stream past amicus's smallest output cap needs.
+        return Path(events_file).read_text(encoding="utf-8")
+    return os.environ.get("FAKE_KIMI_EVENTS")
+
+
 def main(argv: list[str]) -> int:
     _record(argv)
     if argv == ["--version"]:
@@ -126,7 +136,7 @@ def main(argv: list[str]) -> int:
     write = os.environ.get("FAKE_KIMI_WRITE")
     if write:
         (Path.cwd() / write).write_text("written by fake kimi\n", encoding="utf-8")
-    events = os.environ.get("FAKE_KIMI_EVENTS")
+    events = _scripted_events()
     if events is None:
         lines = ['{"role":"meta","type":"system.version","version":"0.41.0"}']
         if answer:

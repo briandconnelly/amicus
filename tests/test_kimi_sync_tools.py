@@ -29,6 +29,7 @@ def app(tmp_path, fake_kimi, monkeypatch):
         "FAKE_KIMI_ANSWER",
         "FAKE_KIMI_WRITE",
         "FAKE_KIMI_EVENTS",
+        "FAKE_KIMI_EVENTS_FILE",
         "FAKE_KIMI_PROVIDERS",
         "FAKE_KIMI_SLEEP",
         "FAKE_KIMI_ANSWER_MODE",
@@ -396,6 +397,13 @@ async def test_a_refused_answer_file_with_no_stream_is_not_an_empty_response(
 _CAP = 65_536  # the smallest AMICUS_MAX_OUTPUT_BYTES amicus accepts
 
 
+def _set_stream(monkeypatch, tmp_path, events):
+    """Through a file: a stream past the cap is over Linux's 128 KiB limit on one env string."""
+    path = tmp_path / "events.jsonl"
+    path.write_text(events, encoding="utf-8")
+    monkeypatch.setenv("FAKE_KIMI_EVENTS_FILE", str(path))
+
+
 def _capped_app(monkeypatch):
     """The `app` fixture reads settings before a test can set the cap, so build another."""
     monkeypatch.setenv("AMICUS_MAX_OUTPUT_BYTES", str(_CAP))
@@ -426,11 +434,11 @@ async def _consult(app, cwd):
 
 
 async def test_a_final_message_past_the_cap_is_answer_unavailable_not_the_one_before_it(
-    app, repo, monkeypatch
+    app, repo, monkeypatch, tmp_path
 ):
     """The capture keeps a head and a tail, and a final message too large for the tail is
     evicted whole, so the interim message before it used to be delivered as the answer."""
-    monkeypatch.setenv("FAKE_KIMI_EVENTS", _stream("EARLY interim", "FINAL " + "y" * 70_000))
+    _set_stream(monkeypatch, tmp_path, _stream("EARLY interim", "FINAL " + "y" * 70_000))
     body = await _consult(_capped_app(monkeypatch), repo)
     assert body["ok"] is False, f"delivered {body.get('summary')!r}"
     err = body["error"]
@@ -440,37 +448,40 @@ async def test_a_final_message_past_the_cap_is_answer_unavailable_not_the_one_be
     assert "AMICUS_MAX_OUTPUT_BYTES" in err["repair"]["alternative"]
     assert "EARLY" not in json.dumps(body)
     # Control: the same stream with a final message that fits is delivered whole.
-    monkeypatch.setenv("FAKE_KIMI_EVENTS", _stream("EARLY interim", "FINAL " + "y" * 200))
+    _set_stream(monkeypatch, tmp_path, _stream("EARLY interim", "FINAL " + "y" * 200))
     ok = await _consult(_capped_app(monkeypatch), repo)
     assert ok["ok"] is True and ok["summary"].startswith("FINAL")
 
 
-async def test_a_stream_cut_in_the_middle_still_delivers_its_final_message(app, repo, monkeypatch):
+async def test_a_stream_cut_in_the_middle_still_delivers_its_final_message(
+    app, repo, monkeypatch, tmp_path
+):
     """What the tail keeps is the newest output, so a final message that survived is the
     true one; refusing it would fail a run that answers correctly."""
-    monkeypatch.setenv("FAKE_KIMI_EVENTS", _stream("EARLY", "FINAL", tool_lines=200))
+    _set_stream(monkeypatch, tmp_path, _stream("EARLY", "FINAL", tool_lines=200))
     body = await _consult(_capped_app(monkeypatch), repo)
-    assert body["ok"] is True and body["summary"] == "FINAL"
+    assert body["ok"] is True, body.get("error")
+    assert body["summary"] == "FINAL"
 
 
 async def test_a_stream_that_lost_its_only_message_is_answer_unavailable_not_empty(
-    app, repo, monkeypatch
+    app, repo, monkeypatch, tmp_path
 ):
     """kimi's inspector sees no message and says empty_response, but the backend did answer:
     the capture dropped it."""
-    monkeypatch.setenv("FAKE_KIMI_EVENTS", _stream("FINAL " + "y" * 70_000))
+    _set_stream(monkeypatch, tmp_path, _stream("FINAL " + "y" * 70_000))
     body = await _consult(_capped_app(monkeypatch), repo)
     assert body["error"]["code"] == "answer_unavailable"
     assert body["error"]["details"]["reason"] == "stream_truncated"
 
 
 async def test_a_delegate_answering_in_its_file_is_indifferent_to_the_stream(
-    app, repo, monkeypatch
+    app, repo, monkeypatch, tmp_path
 ):
     """With the answer file read, the stream is accounting only, so its loss costs nothing."""
     monkeypatch.setenv("FAKE_KIMI_WRITE", "b.py")
     monkeypatch.setenv("FAKE_KIMI_ANSWER", "Added b.py.")
-    monkeypatch.setenv("FAKE_KIMI_EVENTS", _stream("EARLY", "FINAL " + "y" * 70_000))
+    _set_stream(monkeypatch, tmp_path, _stream("EARLY", "FINAL " + "y" * 70_000))
     async with Client(_capped_app(monkeypatch)) as c:
         res = await c.call_tool(
             "amicus_delegate", {"backend": "kimi", "task": "add b.py", "workspace_root": str(repo)}
@@ -480,14 +491,14 @@ async def test_a_delegate_answering_in_its_file_is_indifferent_to_the_stream(
 
 
 async def test_a_delegate_whose_stream_lost_its_summary_still_delivers_the_diff(
-    app, repo, monkeypatch
+    app, repo, monkeypatch, tmp_path
 ):
     """No answer file and a cut stream: the summary is gone, the diff is from the worktree."""
     from amicus.orchestration.run import DELEGATE_SUMMARY_LOST
 
     monkeypatch.setenv("FAKE_KIMI_WRITE", "b.py")
     monkeypatch.setenv("FAKE_KIMI_ANSWER", "")
-    monkeypatch.setenv("FAKE_KIMI_EVENTS", _stream("EARLY", "FINAL " + "y" * 70_000))
+    _set_stream(monkeypatch, tmp_path, _stream("EARLY", "FINAL " + "y" * 70_000))
     async with Client(_capped_app(monkeypatch)) as c:
         res = await c.call_tool(
             "amicus_delegate", {"backend": "kimi", "task": "add b.py", "workspace_root": str(repo)}
