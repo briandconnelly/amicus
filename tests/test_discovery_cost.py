@@ -203,6 +203,12 @@ the deprecation sentence at the head of its description, which is the temporary 
 schema-27 paragraph above said would come back at removal (ADR 0028). Measured on the wire,
 not computed. MEASURED and BUDGET both move down by the 9076 bytes, so the budget keeps no
 headroom.
+
+The schema-39 -> schema-40 DROP (-2 bytes, 112553 -> 112551 on "all") is #213:
+`amicus_job_consume_result` and `amicus_job_cancel` now carry `destructiveHint: true`, one
+byte shorter than `false` on each. The `annotations_reading` sentence that explains it is
+on `amicus_capabilities`'s result, not on tools/list. Measured on the wire. MEASURED and
+BUDGET both move down by the 2 bytes, so the budget keeps no headroom.
 """
 
 from __future__ import annotations
@@ -212,7 +218,7 @@ from tests.conftest import spawned_server_env
 
 from amicus import manifest
 
-MEASURED: dict[str, int] = {"all": 112553, "codex-kimi": 112561, "claude": 112553}
+MEASURED: dict[str, int] = {"all": 112551, "codex-kimi": 112559, "claude": 112551}
 # The budget is a literal, not MEASURED rounded up to the next kilobyte as it was until
 # 2026-09-14. The rounding left up to 1 KB of growth per bucket that no PR had to own, and
 # this file records three such accumulations (448 and 12 bytes in the paragraphs above, and
@@ -220,7 +226,7 @@ MEASURED: dict[str, int] = {"all": 112553, "codex-kimi": 112561, "claude": 11255
 # #94 that landed after it), each noticed only when the next deliberate raise re-measured.
 # Any growth now fails until a PR raises BUDGET and says why; a shrink passes and shows as
 # drift against MEASURED. Raising one means re-measuring and moving both.
-BUDGET: dict[str, int] = {"all": 112553, "codex-kimi": 112561, "claude": 112553}
+BUDGET: dict[str, int] = {"all": 112551, "codex-kimi": 112559, "claude": 112551}
 
 
 @pytest.mark.parametrize("profile", sorted(manifest.PROFILES))

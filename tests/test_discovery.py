@@ -55,6 +55,9 @@ async def test_free_and_job_tool_markers_and_annotations():
     cancel = by_name["amicus_job_cancel"].annotations
     assert consume.read_only_hint is False and consume.idempotent_hint is False
     assert cancel.read_only_hint is False and cancel.idempotent_hint is True
+    # Consume deletes a retained result and cancel discards in-flight work, so
+    # neither is additive (#213).
+    assert consume.destructive_hint is True and cancel.destructive_hint is True
 
 
 async def _lifecycle_stability_tiers(app) -> dict[str, str]:

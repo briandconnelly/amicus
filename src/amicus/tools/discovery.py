@@ -604,7 +604,10 @@ async def capabilities_payload(
             + "readOnlyHint tracks whether a call changes observable state that outlives the "
             "response (a job record, committed spend), so paid tools are readOnlyHint false "
             "even when the run writes nothing, and job reads stay readOnlyHint true under the "
-            "observable-scope reading. Per-backend effects are published on amicus_backends."
+            "observable-scope reading. amicus_job_consume_result and amicus_job_cancel are "
+            "destructiveHint true in every profile: consume deletes a retained result and "
+            "cancel kills the worker and removes its worktree, so neither update is additive. "
+            "Per-backend effects are published on amicus_backends."
         ),
         tasks=TaskSupport(
             enabled=tasks_active,
