@@ -50,6 +50,7 @@ codex exec \
   --ignore-rules \
   --disable remote_plugin \
   --disable sleep_tool \
+  --disable goals \
   -
 ```
 
@@ -68,7 +69,10 @@ the default `inherit` isolation, and `--skip-git-repo-check` is emitted conditio
 command is deliberately stricter than the default paid path, not a reproduction of it.
 
 `--disable sleep_tool` is spend hygiene rather than a guarantee — it removes a native sleep whose
-single call can last up to 12 hours, and no server deadline bounds this route.
+single call can last up to 12 hours, and no server deadline bounds this route. `--disable goals` is
+the same kind of hygiene: it removes codex's goal tools, whose active goal can prompt codex to start
+another turn after the answer. `--ephemeral` already makes `create_goal` fail; the disable removes
+the tools rather than relying on that.
 
 The two rules above govern `WORKSPACE` and when this route may be used at all.
 

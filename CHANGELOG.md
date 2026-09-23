@@ -27,13 +27,25 @@ per-change, as its own lead says.
   are identical apart from trailing whitespace, and top-level `--help` adds only `--no-daemon`,
   which `exec` does not accept. The unknown-feature error, the logged-out `login status` line and
   the `--strict-config` rejection are unchanged, the four config keys amicus pins with `-c` are
-  still accepted, and both features amicus disables on every run are still `stable`. The tool
-  list sent to `gpt-5.5` gains codex's `create_goal`, `get_goal` and `update_goal`; the tool
-  lists of `gpt-6-astra`, `gpt-6-sol` and `gpt-6-luna` offer `clock.sleep` by default, and
-  amicus's `--disable sleep_tool` still removes it. No paid call was part of the check.
+  still accepted, and `remote_plugin` and `sleep_tool` are still `stable`. The tool list sent to
+  `gpt-5.5` gains codex's `create_goal`, `get_goal` and `update_goal`, which amicus now disables
+  (next entry). The tool lists of `gpt-6-astra`, `gpt-6-sol` and `gpt-6-luna` offer `clock.sleep`
+  by default, and amicus's `--disable sleep_tool` still removes it. No paid call was part of the
+  check.
 - The bundled Codex model list that `amicus_models` falls back to gains `gpt-6-sol` and
   `gpt-6-luna`, copied from the catalog codex serves today, which is the same for 0.155.1 and
   0.156.1.
+- Every Codex run now also passes `--disable goals`, so the model is no longer offered codex's
+  `create_goal`, `get_goal` and `update_goal` tools. codex-cli 0.156.1 started offering them to
+  `gpt-5.5`. On a persistent thread, an active goal can make codex start another turn after
+  the final answer, and that turn never appears in `codex exec --json` output. This was seen once
+  in seven runs against a scripted local endpoint, so the continuation is intermittent. amicus's
+  runs were already protected, because under the `--ephemeral` flag amicus always sends codex
+  refuses `create_goal` ("Goal tools require a persistent thread"). The disable removes the tools
+  instead of relying on that refusal. `AMICUS_CODEX_EXTRA_ARGS` now refuses `--enable goals`,
+  `--disable goals` and `-c features.goals…`, as it already did for `remote_plugin` and
+  `sleep_tool`. `--disable goals` was checked on codex-cli 0.152.0, 0.153.4, 0.154.0, 0.155.1 and
+  0.156.1, where `goals` is a `stable` feature (#222).
 - `obs` reads FastMCP's own argument-validation summary. FastMCP 4.0.4 closed the leak issue
   #79 worked around (PrefectHQ/fastmcp#5106): it logs a `{"error_count", "error_types"}`
   summary in place of pydantic's error list. amicus's filter did not recognise that shape and

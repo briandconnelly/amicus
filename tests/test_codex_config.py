@@ -119,6 +119,13 @@ def test_extra_args_allowlist_and_descriptors():
         ("-c features.remote_plugin=true", "remote_plugin"),
         ("-c features={remote_plugin=true}", "features table"),
         ("--enable sleep_tool", "sleep_tool"),
+        ("--enable goals", "goals"),
+        ("--disable goals", "goals"),
+        ("--enable=goals", "goals"),
+        ("-c features.goals=true", "goals"),
+        ("-c 'features.\"goals\"'=true", "goals"),
+        ("-c features.goals.mode=x", "goals"),
+        ("-c features={goals=true}", "features table"),
         ("--disable remote_plugin", "remote_plugin"),
         ("-c model=gpt-5.5", "reserved"),
         ("-c model_reasoning_effort=high", "reserved"),
@@ -140,7 +147,14 @@ def test_extra_args_refusal_never_echoes_a_secret_value():
 
 
 @pytest.mark.parametrize(
-    "raw", ["-c features.sleep_toolbox.mode=x", "-c features.other=true", "-c model_verbosity=high"]
+    "raw",
+    [
+        "-c features.sleep_toolbox.mode=x",
+        "-c features.goals_extra=true",
+        "--enable goalsx",
+        "-c features.other=true",
+        "-c model_verbosity=high",
+    ],
 )
 def test_extra_args_allows_near_misses(raw):
     assert cc.parse_extra_args(raw).valid

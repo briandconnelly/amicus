@@ -1,6 +1,6 @@
 """Differential: amicus's staged argv, prompts and developer turn == codex-in-claude's
-(captured by scripts/capture_codex_differentials.py), temp paths and the one deliberate
-host-neutral phrase aside."""
+(captured by scripts/capture_codex_differentials.py), temp paths, the one deliberate
+host-neutral phrase and amicus's own `--disable goals` (#222, which the sibling predates) aside."""
 
 from __future__ import annotations
 
@@ -20,6 +20,24 @@ from amicus.schemas import instructions as ins
 from amicus.sdk.backend.protocol import RunRequest
 
 SIBLING_HOST = "Claude Code"
+# Features amicus disables that the captured sibling argv does not; each must appear exactly
+# once, straight after the sibling's own disables, and is then compared away.
+AMICUS_ONLY_DISABLED_FEATURES = ("goals",)
+
+
+def _strip_amicus_only_disables(argv: list[str]) -> list[str]:
+    out = list(argv)
+    for feature in AMICUS_ONLY_DISABLED_FEATURES:
+        pairs = [
+            i
+            for i in range(len(out) - 1)
+            if out[i] == contract.DISABLE_FEATURE_FLAG and out[i + 1] == feature
+        ]
+        assert len(pairs) == 1, f"--disable {feature} must appear exactly once: {out}"
+        i = pairs[0]
+        assert out[i - 2 : i] == [contract.DISABLE_FEATURE_FLAG, contract.SLEEP_TOOL_FEATURE]
+        del out[i : i + 2]
+    return out
 
 
 def _decode_di(argv: list[str]) -> tuple[list[str], str | None]:
@@ -63,7 +81,7 @@ async def test_staged_argv_matches_the_sibling(pinned_codex_bin, monkeypatch, ca
         instructions_append=req.get("developer_instructions"),
     )
     async with backend.prepare(request) as prepared:
-        ours, our_di = _decode_di(cf.normalize_argv(prepared.argv))
+        ours, our_di = _decode_di(_strip_amicus_only_disables(cf.normalize_argv(prepared.argv)))
         assert list(prepared.dropped_flags) == entry["dropped"]
     theirs, their_di = _decode_di(entry["argv"])
     assert ours == theirs
