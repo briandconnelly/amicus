@@ -22,6 +22,18 @@ per-change, as its own lead says.
 
 ### Changed
 
+- codex-cli 0.156 is a supported version, so `amicus_backends` no longer warns on it. It was
+  checked against 0.155.1 at zero spend: `exec --help`, `exec review --help` and `login --help`
+  are identical apart from trailing whitespace, and top-level `--help` adds only `--no-daemon`,
+  which `exec` does not accept. The unknown-feature error, the logged-out `login status` line and
+  the `--strict-config` rejection are unchanged, the four config keys amicus pins with `-c` are
+  still accepted, and both features amicus disables on every run are still `stable`. The tool
+  list sent to `gpt-5.5` gains codex's `create_goal`, `get_goal` and `update_goal`; the tool
+  lists of `gpt-6-astra`, `gpt-6-sol` and `gpt-6-luna` offer `clock.sleep` by default, and
+  amicus's `--disable sleep_tool` still removes it. No paid call was part of the check.
+- The bundled Codex model list that `amicus_models` falls back to gains `gpt-6-sol` and
+  `gpt-6-luna`, copied from the catalog codex serves today, which is the same for 0.155.1 and
+  0.156.1.
 - `obs` reads FastMCP's own argument-validation summary. FastMCP 4.0.4 closed the leak issue
   #79 worked around (PrefectHQ/fastmcp#5106): it logs a `{"error_count", "error_types"}`
   summary in place of pydantic's error list. amicus's filter did not recognise that shape and

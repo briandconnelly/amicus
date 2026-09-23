@@ -3,7 +3,8 @@ codex-in-claude `cli_contract.py`, verified against codex-cli 0.152.0/0.153.x; 0
 checked zero-spend only: `--help`, `features list`, the stderr grammars and the model-facing
 tool catalog; 0.155.1 likewise, but narrower: `--help`, the rows of `features list` amicus
 sends, the unknown-feature and strict-config grammars, the four `-c` pins under
-`--strict-config`, and gpt-5.5's tool catalog).
+`--strict-config`, and gpt-5.5's tool catalog; 0.156.1 the same checks, plus the tool catalogs
+of gpt-6-astra, gpt-6-sol and gpt-6-luna with and without the disabled features).
 
 Every assumption amicus makes about the `codex` CLI — subcommands, flags, sandbox values,
 config keys it pins, the event/result extraction surface, and the stderr phrasings that
@@ -277,10 +278,13 @@ MODELS_CACHE_FILENAME = "models_cache.json"
 MODELS_CACHE_MAX_BYTES = 1_000_000
 MODELS_CACHE_MAX_ENTRIES = 256
 MODEL_SLUG_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
-# Bundled fallback, copied from codex-cli 0.154.0's cache in priority order; 0.155.1's cache
-# holds the same seven slugs in the same order.
+# Bundled fallback, copied in priority order from the catalog codex-cli 0.156.1 fetched on
+# 2026-09-23 (0.155.1 is served the same list, so gpt-6-sol and gpt-6-luna are a server-side
+# addition, not a 0.156 one).
 KNOWN_MODEL_SLUGS: tuple[str, ...] = (
     "gpt-6-astra",
+    "gpt-6-sol",
+    "gpt-6-luna",
     "gpt-reserve",
     "gpt-5.6-sol",
     "gpt-5.6-terra",
@@ -292,7 +296,7 @@ KNOWN_MODEL_SLUGS: tuple[str, ...] = (
 HELP_CACHE_TTL_SECONDS = 300
 
 # Advisory: a mismatch warns on amicus_backends, never blocks.
-SUPPORTED_VERSIONS = frozenset({(0, 152), (0, 153), (0, 154), (0, 155)})
+SUPPORTED_VERSIONS = frozenset({(0, 152), (0, 153), (0, 154), (0, 155), (0, 156)})
 
 # --- Result / event extraction surface -----------------------------------------------------
 USAGE_EVENT_MARKERS = ("token_count", "usage")
