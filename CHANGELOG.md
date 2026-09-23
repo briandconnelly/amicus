@@ -20,6 +20,14 @@ per-change, as its own lead says.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-23
+
+Across this release the discovery surface moves `amicus/0.1/schema-39`, what 0.5.0 shipped, to
+`amicus/0.1/schema-40`, and `RESULT_FORMAT` stays 9, so a job result 0.5.0 stored can still be
+delivered. No entry is labelled **Breaking**. One change asks something of an operator: a
+`CODEX_HOME` that is not an absolute path is now refused, and `docs/MIGRATION.md` ("Upgrading
+from 0.5.0") says what to do.
+
 ### Changed
 
 - Kimi Code 2.1 is a supported version, so `amicus_backends` no longer warns on it. It was
@@ -951,7 +959,8 @@ per-change rather than net, so they also name intermediate states that no releas
 - The tagged publish path to pypi.org has never run. Only the TestPyPI dispatch path has been exercised.
 - Eval scenario S6 in `skills/collaborating-with-amicus/tests/scenarios.md` passed on one run (status: `pass`, validated by that run alone); an M7 follow-up run against the current skill text did not isolate the still-open F3 finding, so F3 remains open. S7 (real-host approval friction) has failed both of its recorded runs (status: `fail`); an M7 zero-spend recheck reached neither a pass nor a fail and is recorded as inconclusive, so it does not move S7's status. See their `status` fields and ADR 0012.
 
-[Unreleased]: https://github.com/briandconnelly/amicus/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/briandconnelly/amicus/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/briandconnelly/amicus/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/briandconnelly/amicus/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/briandconnelly/amicus/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/briandconnelly/amicus/compare/v0.2.0...v0.3.0

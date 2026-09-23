@@ -193,6 +193,17 @@ A `null` there means no loaded plugin declares one.
 The `amicus://backends/{backend}` resource is always the full entry.
 `amicus_capabilities(detail="contracts")` is removed: pass `include_tool_details=false` for the same rowless payload, and `detail` now selects only how much each `tool_details` row carries (`summary` is `name`, `cost`, `stability`, `backends`; `full` adds the rest, including `error_codes`).
 
+## Upgrading from 0.5.0
+
+The change below is the one an operator using amicus 0.5.0 may have to handle before running 0.6.0.
+`CHANGELOG.md`'s 0.6.0 section lists every user-visible change since 0.5.0, including the ones that require no migration.
+A job result stored by 0.5.0 is still readable: `RESULT_FORMAT` did not move.
+
+**A `CODEX_HOME` that is not an absolute path as written is refused (#193).**
+A relative value, or one starting with a literal `~`, used to name one directory to the server and another to each codex run, and codex does not expand `~` at all.
+A paid Codex call now fails before codex starts, as `user_config_rejected`, and `amicus_backends` reports codex with `authenticated: null` and a warning naming the variable.
+Set `CODEX_HOME` to an absolute path in the environment amicus runs in, or unset it to use codex's default; an empty value is still treated as unset.
+
 ## Upgrading from 0.4.0
 
 The changes below are the ones an operator or caller using amicus 0.4.0 has to handle before running 0.5.0.
