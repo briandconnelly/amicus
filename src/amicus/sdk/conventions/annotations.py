@@ -72,15 +72,18 @@ def job_read(effects: AnnotationEffects) -> dict[str, bool]:
 
 
 def job_mutate(*, idempotent: bool) -> dict[str, bool]:
-    """Job consume/cancel: closed-world state mutations. ``consume`` deletes the
-    retained record (a repeat returns not-found — a different response), so it is
-    non-idempotent; ``cancel`` re-validates concurrent completion and returns a
-    terminal job unchanged, so a retry after a lost response has no additional
-    effect."""
+    """Job consume/cancel: closed-world state mutations, and destructive ones —
+    neither is additive. ``consume`` deletes the retained record, so a result the
+    caller may still need is gone; ``cancel`` kills the worker and removes its
+    worktree, discarding in-flight work.
+
+    ``consume`` is non-idempotent because a repeat returns not-found — a different
+    response; ``cancel`` re-validates concurrent completion and returns a terminal
+    job unchanged, so a retry after a lost response has no additional effect."""
     return {
         "readOnlyHint": False,
         "openWorldHint": False,
-        "destructiveHint": False,
+        "destructiveHint": True,
         "idempotentHint": idempotent,
     }
 

@@ -67,6 +67,11 @@ per-change, as its own lead says.
   never its value, rather than probing a login from the wrong directory, and `amicus_models` falls
   back to the bundled list. An empty `CODEX_HOME` is still treated as unset, as codex treats it.
   An operator who set a relative `CODEX_HOME` must make it absolute before Codex calls run again.
+- `amicus_job_consume_result` and `amicus_job_cancel` now advertise `destructiveHint: true` in
+  every profile (#213). Consume deletes a retained result and cancel kills the worker and removes
+  its worktree, so neither update is additive, and the `false` they carried contradicted their own
+  descriptions. `amicus_capabilities.annotations_reading` now states this. **Surface**:
+  `FINGERPRINT` moves to schema-40 for the annotations and the reading text.
 
 ## [0.5.0] - 2026-09-20
 

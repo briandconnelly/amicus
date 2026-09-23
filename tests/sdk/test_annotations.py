@@ -62,14 +62,14 @@ def test_job_read_maintenance_position_is_mutating():
 
 
 def test_job_mutate_consume_vs_cancel_idempotency():
-    # codex-in-claude: _JOB_MUTATE (consume, non-idempotent) vs _JOB_CANCEL
-    # (idempotent) differ only in idempotentHint.
+    # consume (non-idempotent) and cancel (idempotent) differ only in idempotentHint;
+    # both are destructive, since neither update is additive (#213).
     consume = annotations.job_mutate(idempotent=False)
     cancel = annotations.job_mutate(idempotent=True)
     assert consume == {
         "readOnlyHint": False,
         "openWorldHint": False,
-        "destructiveHint": False,
+        "destructiveHint": True,
         "idempotentHint": False,
     }
     assert cancel == {**consume, "idempotentHint": True}
