@@ -136,6 +136,18 @@ WORKSPACE_PREREQUISITE: str = (
 )
 
 
+# error.details.reason on a workspace refusal (#214). The causes share invalid_workspace_root,
+# and call for different corrections, so this fixed token is what an agent branches on; the
+# message keeps the prose and the path, which details never carries.
+WORKSPACE_REASONS: dict[str, str] = {
+    "no_workspace": "no workspace_root, no client file roots, and no cwd opt-in",
+    "not_absolute": "workspace_root is not an absolute path",
+    "not_a_directory": "workspace_root does not resolve to an existing directory",
+    "cwd_gone": "the cwd opt-in was needed and the server's working directory no longer exists",
+    "outside_roots": "workspace_root lies outside the client's file roots",
+}
+_WORKSPACE_REASONS_PROSE = "; ".join(f"{k} ({v})" for k, v in WORKSPACE_REASONS.items())
+
 PARAMETER_CONTRACTS: dict[str, ParamContract] = {
     "workspace_root": ParamContract(
         name="workspace_root",
@@ -152,7 +164,10 @@ PARAMETER_CONTRACTS: dict[str, ParamContract] = {
             "unless the operator opts in: it is used only when AMICUS_ALLOW_CWD_WORKSPACE=1, "
             "and then meta.workspace_warning discloses the resolved path. On an active call the "
             "workspace selects where the backend works, not what it can read: every "
-            "backend CLI can read files outside it, up to everything the OS user can read."
+            "backend CLI can read files outside it, up to everything the OS user can read. "
+            "A refusal names its cause in error.details.reason, a fixed token: "
+            f"{_WORKSPACE_REASONS_PROSE}; outside_roots comes with workspace_outside_roots, "
+            "every other with invalid_workspace_root."
         ),
     ),
     "idempotency_key": ParamContract(

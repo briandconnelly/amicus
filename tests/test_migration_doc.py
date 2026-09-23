@@ -263,12 +263,15 @@ def test_upgrade_section_states_the_current_result_format():
 
 
 def test_upgrade_section_names_exactly_the_codes_that_carry_no_repair():
-    from amicus.errors import NO_CORRECTIVE_CALL
+    from amicus.errors import NO_CORRECTIVE_CALL, error_envelope
+    from amicus.schemas.envelope import Meta
 
-    line = _line_containing(_upgrade_section(), "`error.repair: null`")
-    named = set(re.findall(r"`([a-z_]+)`", line)) - {"error.repair: null"}
-    named &= {code for code in named if not code.startswith("details")}
+    line = _line_containing(_upgrade_section(), "omit the `error.repair` key")
+    named = set(re.findall(r"`([a-z_]+)`", line))
     assert named == set(NO_CORRECTIVE_CALL), (named, NO_CORRECTIVE_CALL)
+    # The doc says the key is omitted, not null, so pin that against the wire (PR #232).
+    for code in named:
+        assert "repair" not in error_envelope(code, "m", Meta())["error"], code
 
 
 def _first_table_line() -> str:

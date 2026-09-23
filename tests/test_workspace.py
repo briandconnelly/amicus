@@ -9,7 +9,7 @@ from types import SimpleNamespace
 from mcp.types import ClientCapabilities, Implementation, InitializeRequestParams
 
 from amicus.orchestration import workspace as ws
-from amicus.schemas.params import WORKSPACE_SCOPE
+from amicus.schemas.params import WORKSPACE_REASONS, WORKSPACE_SCOPE
 
 
 def test_explicit_root_wins_and_is_checked_against_roots(tmp_path):
@@ -199,3 +199,27 @@ def test_a_deleted_cwd_is_reported_not_raised_when_the_cwd_is_needed(tmp_path, m
     monkeypatch.setattr(ws, "Path", _patched_path(lambda: tmp_path))
     live = ws.resolve(None, [], allow_cwd=True)
     assert (live.path, live.source) == (str(tmp_path.resolve()), "cwd")
+
+
+def test_every_refusal_carries_a_published_reason_token(tmp_path, monkeypatch):
+    """Issue #214: the refusals share a code or two, so each names its cause as a
+    WORKSPACE_REASONS token, and every published token is one some refusal emits, so the
+    vocabulary cannot drift. The prose stays in error_detail, which names no token."""
+    root = tmp_path / "root"
+    root.mkdir()
+    other = tmp_path / "other"
+    other.mkdir()
+    cases = {
+        "no_workspace": ws.resolve_workspace(None, [], None),
+        "not_absolute": ws.resolve_workspace("relative/path", [], None),
+        "not_a_directory": ws.resolve_workspace(str(tmp_path / "nope"), [], None),
+        "outside_roots": ws.resolve_workspace(str(other), [str(root)], None),
+    }
+    monkeypatch.setattr(ws, "Path", _patched_path(_gone))
+    cases["cwd_gone"] = ws.resolve(None, [], allow_cwd=True)
+    for reason, res in cases.items():
+        assert (res.path, res.reason) == (None, reason), reason
+        assert res.error_detail and reason not in res.error_detail, reason
+    assert set(cases) == set(WORKSPACE_REASONS)
+    # Control: a resolution that succeeds carries no reason at all.
+    assert ws.resolve_workspace(str(root), [str(root)], None).reason is None

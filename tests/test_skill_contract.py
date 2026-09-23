@@ -15,6 +15,7 @@ from typing import get_args
 from amicus import errors
 from amicus.orchestration import review as review_mod
 from amicus.schemas import results
+from amicus.schemas.params import WORKSPACE_REASONS
 from amicus.schemas.results import (
     Confidence,
     CoverageReason,
@@ -178,6 +179,13 @@ def test_the_skill_names_every_code_that_carries_no_repair():
     section = _OPTIONS_REF.partition("\n## The error envelope\n")[2].split("\n## ", 1)[0]
     assert section, "options-and-errors.md has no `## The error envelope` section"
     assert set(errors.NO_CORRECTIVE_CALL) <= set(re.findall(r"`([a-z_]+)`", section))
+
+
+def test_the_skill_names_every_workspace_reason_token():
+    # Issue #214: with no repair on a workspace refusal, details.reason is what says which
+    # fix applies, so a token added to WORKSPACE_REASONS fails here until the skill names it.
+    section = _OPTIONS_REF.partition("\n## The error envelope\n")[2].split("\n## ", 1)[0]
+    assert set(WORKSPACE_REASONS) <= set(re.findall(r"`([a-z_]+)`", section))
 
 
 def test_no_rule_reads_a_repair_the_envelope_may_not_carry():
