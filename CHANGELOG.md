@@ -57,6 +57,11 @@ per-change, as its own lead says.
 
 ### Fixed
 
+- The release predicate, `scripts/check_release_state.py`, now checks `CHANGELOG.md`'s
+  link footer (#211). A release must define `[Unreleased]` as a comparison from its own tag to
+  `HEAD`, and `[X.Y.Z]` as a comparison from the previous release's tag, or its tag page for a
+  first release. 0.5.0's release PR rolled the heading but not the footer, and nothing caught
+  it but review.
 - A `CODEX_HOME` that is not an absolute path as written is refused (#193). A relative value
   named one directory to the server, which read the models cache and probed `codex login status`
   from its own cwd, and another to each codex run, which resolves it against the workspace or a

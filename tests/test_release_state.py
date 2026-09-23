@@ -4,7 +4,7 @@ Two kinds of check live in that script and they are worth different amounts, so 
 tested separately here:
 
 - The tree checks prove facts. A green `check_tree` means the literals, the changelog section
-  and `uv.lock` really do agree, on this tree.
+  and its footer links, and `uv.lock` really do agree, on this tree.
 - `check_tag` proves only that a well-formed evidence record naming this commit exists. It
   cannot prove the live gates ran. The tests below assert the shape of that check, never that
   it establishes more than it does.
