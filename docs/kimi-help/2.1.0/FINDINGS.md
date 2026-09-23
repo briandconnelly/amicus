@@ -2,8 +2,8 @@
 
 Captured 2026-09-23 on the maintainer's machine by running the binary, with the same probes as `docs/kimi-help/2.0.2/`: `kimi --version`, `kimi --help`, `kimi provider list --json`, `kimi session --help` and `kimi session list --all --json`.
 No model call was made for this capture.
-It was made because Kimi Code 2.1.0 was published on 2026-09-23 and is outside `SUPPORTED_VERSIONS` (#227).
-The kimi live gate requires the installed version to equal the newest supported minor, so no release evidence can pass on 2.1.0 until `(2, 1)` is supported.
+It was made because Kimi Code 2.1.0 was published on 2026-09-23, when `SUPPORTED_VERSIONS` stopped at `(2, 0)` (#227).
+The kimi live gate requires the installed version to equal the newest supported minor, so until `(2, 1)` was added no release evidence could pass on 2.1.0.
 
 ## What the captures show
 
