@@ -77,9 +77,14 @@ def job_mutate(*, idempotent: bool) -> dict[str, bool]:
     caller may still need is gone; ``cancel`` kills the worker and removes its
     worktree, discarding in-flight work.
 
-    ``consume`` is non-idempotent because a repeat returns not-found — a different
-    response; ``cancel`` re-validates concurrent completion and returns a terminal
-    job unchanged, so a retry after a lost response has no additional effect."""
+    ``idempotentHint`` is judged by effect, as MCP defines it, and each value is
+    chosen for what it tells a host about retrying after a lost response. A repeat
+    ``consume`` removes nothing further, so by effect alone it could be called
+    idempotent; it is advertised non-idempotent anyway, because that retry cannot
+    recover the result the first call already deleted, and returns not-found
+    instead. ``cancel`` re-validates concurrent completion and returns a terminal
+    job unchanged, so a retry after a lost response has no additional effect and
+    still returns the job."""
     return {
         "readOnlyHint": False,
         "openWorldHint": False,
