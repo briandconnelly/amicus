@@ -66,6 +66,7 @@ per-change, as its own lead says.
   `amicus_backends` reports codex with `authenticated: null` and a warning naming the variable,
   never its value, rather than probing a login from the wrong directory, and `amicus_models` falls
   back to the bundled list. An empty `CODEX_HOME` is still treated as unset, as codex treats it.
+  An operator who set a relative `CODEX_HOME` must make it absolute before Codex calls run again.
 
 ## [0.5.0] - 2026-09-20
 

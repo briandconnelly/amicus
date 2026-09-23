@@ -109,5 +109,15 @@ def test_non_absolute_codex_home_skips_the_login_probe(pinned_codex_bin, monkeyp
     rep = cf.make_backend({"CODEX_HOME": "codexhome"})[0].status.probe()
     assert rep.installed and rep.version == "codex-cli 0.153.4"
     assert rep.authenticated is None and ["login", "status"] not in calls
-    joined = "\n".join(rep.warnings)
-    assert "CODEX_HOME" in joined and "codexhome" not in joined
+    assert sum("CODEX_HOME" in w for w in rep.warnings) == 1
+    assert "codexhome" not in "\n".join(rep.warnings)
+
+
+def test_non_absolute_codex_home_is_reported_even_when_codex_is_not_installed(
+    pinned_codex_bin, monkeypatch
+):
+    _probe_with(monkeypatch, version=None)
+    assert cf.make_backend({"CODEX_HOME": "/abs/home"})[0].status.probe().warnings == ()
+    rep = cf.make_backend({"CODEX_HOME": "codexhome"})[0].status.probe()
+    assert rep.installed is False
+    assert sum("CODEX_HOME" in w for w in rep.warnings) == 1
