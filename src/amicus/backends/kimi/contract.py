@@ -3,6 +3,8 @@ moonbridge `cli_contract.py` (verified by the sibling against 0.35.0 and 0.39.1)
 re-verified against 0.41.0, 0.42.0 and 0.43.1 by the captures under docs/kimi-help/. 2.0.2 is
 checked for its CLI surface (help, provider-list shape, the session subcommand, release notes)
 and by one live gate run, whose scope and provider docs/kimi-help/2.0.2/FINDINGS.md records.
+2.1.0 is checked for its CLI surface and its release notes and commits since 2.0.2, as
+docs/kimi-help/2.1.0/FINDINGS.md records.
 
 `kimi -p` is NOT `codex exec`. Three differences drive the whole design:
 
@@ -98,8 +100,9 @@ SANDBOX_WORKSPACE_WRITE = "workspace-write"
 
 # Advisory: a mismatch warns on amicus_backends, never blocks. (0, 41), (0, 42) and (0, 43)
 # are supported on the evidence in docs/kimi-help/0.41.0/, 0.42.0/ and 0.43.1/, and (2, 0) on
-# docs/kimi-help/2.0.2/. Kimi Code went from 0.43 to 2.0 with no 1.x that amicus has seen.
-SUPPORTED_VERSIONS = frozenset({(0, 35), (0, 39), (0, 41), (0, 42), (0, 43), (2, 0)})
+# docs/kimi-help/2.0.2/, and (2, 1) on docs/kimi-help/2.1.0/. Kimi Code went from 0.43 to 2.0
+# with no 1.x that amicus has seen.
+SUPPORTED_VERSIONS = frozenset({(0, 35), (0, 39), (0, 41), (0, 42), (0, 43), (2, 0), (2, 1)})
 
 # --- Models --------------------------------------------------------------------------------
 MODEL_SLUG_PATTERN = re.compile(r"^[A-Za-z0-9._/-]{1,128}$")
