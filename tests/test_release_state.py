@@ -4,7 +4,7 @@ Two kinds of check live in that script and they are worth different amounts, so 
 tested separately here:
 
 - The tree checks prove facts. A green `check_tree` means the literals, the changelog section
-  and `uv.lock` really do agree, on this tree.
+  and its footer links, and `uv.lock` really do agree, on this tree.
 - `check_tag` proves only that a well-formed evidence record naming this commit exists. It
   cannot prove the live gates ran. The tests below assert the shape of that check, never that
   it establishes more than it does.
@@ -68,6 +68,7 @@ def _record(**overrides):
     return record
 
 
+CHANGELOG_BASE = "https://github.com/briandconnelly/amicus"
 CHANGELOG = f"""# Changelog
 
 ## [Unreleased]
@@ -77,6 +78,16 @@ CHANGELOG = f"""# Changelog
 ### Added
 
 - A thing.
+
+## [{PREVIOUS}] - 2026-09-01
+
+### Added
+
+- An earlier thing.
+
+[Unreleased]: {CHANGELOG_BASE}/compare/v{VERSION}...HEAD
+[{VERSION}]: {CHANGELOG_BASE}/compare/v{PREVIOUS}...v{VERSION}
+[{PREVIOUS}]: {CHANGELOG_BASE}/releases/tag/v{PREVIOUS}
 """
 
 DEPRECATIONS = """DEPRECATED_TOOLS: dict[str, ToolDeprecation] = {
@@ -580,6 +591,143 @@ def test_an_unreleased_heading_below_the_release_is_rejected(repo):
     )
     problems = release_state.check_changelog(VERSION, repo_root=repo)
     assert any("below" in problem for problem in problems), problems
+
+
+# --- changelog link footer (#211) ------------------------------------------------------
+
+
+def _changelog_with(old: str, new: str) -> str:
+    assert old in CHANGELOG, old
+    return CHANGELOG.replace(old, new)
+
+
+def test_the_fixture_footer_passes(repo):
+    assert release_state.check_changelog(VERSION, repo_root=repo) == []
+
+
+def test_an_unreleased_link_still_comparing_from_the_previous_release_is_rejected(repo):
+    """The #206 miss: the heading rolled, the `[Unreleased]` definition did not."""
+    (repo / "CHANGELOG.md").write_text(
+        _changelog_with(f"compare/v{VERSION}...HEAD", f"compare/v{PREVIOUS}...HEAD"),
+        encoding="utf-8",
+    )
+    problems = release_state.check_changelog(VERSION, repo_root=repo)
+    assert any("`[Unreleased]`" in p and f"v{VERSION}...HEAD" in p for p in problems), problems
+
+
+def test_a_missing_unreleased_link_is_rejected(repo):
+    (repo / "CHANGELOG.md").write_text(
+        _changelog_with(f"[Unreleased]: {CHANGELOG_BASE}/compare/v{VERSION}...HEAD\n", ""),
+        encoding="utf-8",
+    )
+    problems = release_state.check_changelog(VERSION, repo_root=repo)
+    assert any("no `[Unreleased]:` link" in p for p in problems), problems
+
+
+def test_a_missing_release_link_is_rejected(repo):
+    """The other half of the #206 miss: `[X.Y.Z]` had no definition at all."""
+    (repo / "CHANGELOG.md").write_text(
+        _changelog_with(f"[{VERSION}]: {CHANGELOG_BASE}/compare/v{PREVIOUS}...v{VERSION}\n", ""),
+        encoding="utf-8",
+    )
+    problems = release_state.check_changelog(VERSION, repo_root=repo)
+    assert any(f"no `[{VERSION}]:` link" in p for p in problems), problems
+
+
+def test_a_release_link_comparing_from_the_wrong_release_is_rejected(repo):
+    (repo / "CHANGELOG.md").write_text(
+        _changelog_with(f"compare/v{PREVIOUS}...v{VERSION}", f"compare/v1.0.0...v{VERSION}"),
+        encoding="utf-8",
+    )
+    problems = release_state.check_changelog(VERSION, repo_root=repo)
+    assert any(f"`[{VERSION}]`" in p and f"v{PREVIOUS}...v{VERSION}" in p for p in problems), (
+        problems
+    )
+
+
+def test_a_link_to_another_repository_is_rejected(repo):
+    (repo / "CHANGELOG.md").write_text(
+        _changelog_with(
+            f"[Unreleased]: {CHANGELOG_BASE}/", "[Unreleased]: https://github.com/someone/amicus/"
+        ),
+        encoding="utf-8",
+    )
+    problems = release_state.check_changelog(VERSION, repo_root=repo)
+    assert any("`[Unreleased]`" in p for p in problems), problems
+
+
+def test_a_duplicate_link_definition_is_rejected(repo):
+    """Markdown resolves a duplicated label to its FIRST definition, so a correct second one
+    would hide behind a stale first one; the check reports the duplicate instead."""
+    (repo / "CHANGELOG.md").write_text(
+        _changelog_with(
+            "[Unreleased]:",
+            f"[Unreleased]: {CHANGELOG_BASE}/compare/v{PREVIOUS}...HEAD\n[Unreleased]:",
+        ),
+        encoding="utf-8",
+    )
+    problems = release_state.check_changelog(VERSION, repo_root=repo)
+    assert any("2 `[Unreleased]:` links" in p for p in problems), problems
+
+
+@pytest.mark.parametrize(
+    "stale_label",
+    ["[unreleased]:", "[UNRELEASED]:", "[ Unreleased ]:", "   [Unreleased]:"],
+    ids=["lowercase", "uppercase", "padded", "indented"],
+)
+def test_a_stale_definition_markdown_would_match_is_a_duplicate(repo, stale_label):
+    """CommonMark matches labels case-insensitively with whitespace collapsed, and still
+    reads a definition indented up to three spaces, so each variant here is the definition a
+    renderer resolves `[Unreleased]` to -- and it is stale."""
+    (repo / "CHANGELOG.md").write_text(
+        _changelog_with(
+            "[Unreleased]:",
+            f"{stale_label} {CHANGELOG_BASE}/compare/v{PREVIOUS}...HEAD\n[Unreleased]:",
+        ),
+        encoding="utf-8",
+    )
+    problems = release_state.check_changelog(VERSION, repo_root=repo)
+    assert any("2 `[Unreleased]:` links" in p for p in problems), problems
+
+
+def test_a_correct_definition_in_another_case_is_accepted(repo):
+    """The same normalization cuts the other way: `[unreleased]:` DOES define `[Unreleased]`."""
+    (repo / "CHANGELOG.md").write_text(
+        _changelog_with("[Unreleased]:", "[unreleased]:"), encoding="utf-8"
+    )
+    assert release_state.check_changelog(VERSION, repo_root=repo) == []
+
+
+def test_a_first_release_links_to_its_tag(repo):
+    """With no earlier dated section there is nothing to compare from, so the release's link
+    is the tag page -- the form `[0.1.0]` has."""
+    (repo / "CHANGELOG.md").write_text(
+        f"# Changelog\n\n## [Unreleased]\n\n## [{VERSION}] - 2026-09-08\n\n- A thing.\n\n"
+        f"[Unreleased]: {CHANGELOG_BASE}/compare/v{VERSION}...HEAD\n"
+        f"[{VERSION}]: {CHANGELOG_BASE}/releases/tag/v{VERSION}\n",
+        encoding="utf-8",
+    )
+    assert release_state.check_changelog(VERSION, repo_root=repo) == []
+
+
+def test_a_first_release_with_a_compare_link_is_rejected(repo):
+    (repo / "CHANGELOG.md").write_text(
+        f"# Changelog\n\n## [Unreleased]\n\n## [{VERSION}] - 2026-09-08\n\n- A thing.\n\n"
+        f"[Unreleased]: {CHANGELOG_BASE}/compare/v{VERSION}...HEAD\n"
+        f"[{VERSION}]: {CHANGELOG_BASE}/compare/v{PREVIOUS}...v{VERSION}\n",
+        encoding="utf-8",
+    )
+    problems = release_state.check_changelog(VERSION, repo_root=repo)
+    assert any(f"releases/tag/v{VERSION}" in p for p in problems), problems
+
+
+def test_the_repository_changelog_footer_matches_its_declared_version():
+    """The real file, not a fixture: `main` must satisfy the footer check for the version it
+    declares, which is the state every release PR is checked against."""
+    root = _SCRIPT.parent.parent
+    version = release_state.declared_version(root)
+    problems = [p for p in release_state.check_changelog(version, repo_root=root) if "link" in p]
+    assert problems == [], problems
 
 
 # --- uv.lock ---------------------------------------------------------------------------

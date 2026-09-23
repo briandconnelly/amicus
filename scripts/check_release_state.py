@@ -6,7 +6,8 @@ question, and the difference matters more than the code:
 
 1. **Release-state coherence** (`check_tree`). Every version literal AGENTS.md rule 19 names
    agrees with the version being released, `CHANGELOG.md` has exactly one dated section for
-   that version with `## [Unreleased]` above it, `uv.lock` is current, `.mcp.json`'s pin
+   that version with `## [Unreleased]` above it and footer links that follow the roll,
+   `uv.lock` is current, `.mcp.json`'s pin
    names this release's tag and that tag resolves IN THIS CHECKOUT, the marketplace pointer
    is well formed, older than this release and consistent at its tag, every tool
    deprecation window (`DEPRECATED_TOOLS` in `src/amicus/tools/_meta.py`) contains this
@@ -90,6 +91,16 @@ TAG_RE = re.compile(r"^v(?P<version>\d+\.\d+\.\d+)$")
 _INIT_VERSION_RE = re.compile(r'^__version__ = "(?P<version>[^"]+)"$', re.MULTILINE)
 _MCP_SOURCE_RE = re.compile(
     r"^git\+https://github\.com/briandconnelly/amicus\.git@v(?P<version>\d+\.\d+\.\d+)$"
+)
+
+# The repository `CHANGELOG.md`'s comparison-link footer points at (#211).
+CHANGELOG_REPO_URL = "https://github.com/briandconnelly/amicus"
+# CommonMark reads a link reference definition indented up to three spaces.
+_LINK_DEFINITION_RE = re.compile(
+    r"^ {0,3}\[(?P<label>[^\]]+)\]:[ \t]*(?P<url>\S+)[ \t]*$", re.MULTILINE
+)
+_DATED_HEADING_RE = re.compile(
+    r"^## \[(?P<version>\d+\.\d+\.\d+)\] - \d{4}-\d{2}-\d{2}$", re.MULTILINE
 )
 
 MARKETPLACE_PATH = ".claude-plugin/marketplace.json"
@@ -408,7 +419,8 @@ def check_marketplace_transition(base: str | dict, head: str | dict, declared: s
 
 
 def check_changelog(version: str, *, repo_root: Path = REPO_ROOT) -> list[str]:
-    """`CHANGELOG.md` must carry exactly one dated section for `version`, below `Unreleased`.
+    """`CHANGELOG.md` must carry exactly one dated section for `version`, below `Unreleased`,
+    and footer link definitions for both.
 
     `docs/RELEASING.md` step 2 rolls `## [Unreleased]` into `## [X.Y.Z] - YYYY-MM-DD` and
     leaves a fresh empty `## [Unreleased]` above it, so "exactly one dated heading, with an
@@ -433,6 +445,51 @@ def check_changelog(version: str, *, repo_root: Path = REPO_ROOT) -> list[str]:
     elif matches and unreleased.start() > matches[0].start():
         problems.append("CHANGELOG.md's `## [Unreleased]` heading is below the released section")
 
+    if len(matches) == 1:
+        problems += _check_changelog_links(text, version, matches[0].end())
+    return problems
+
+
+def _link_label_key(label: str) -> str:
+    """A reference label as CommonMark matches it: case-folded, whitespace collapsed.
+
+    Keying labels verbatim would let a stale `[unreleased]:` above a correct `[Unreleased]:`
+    pass as two different labels, while a renderer resolves both to the stale first one.
+    """
+    return " ".join(label.split()).casefold()
+
+
+def _check_changelog_links(text: str, version: str, released_end: int) -> list[str]:
+    """The footer's `[Unreleased]` and `[version]` link definitions must follow the roll (#211).
+
+    Rolling the heading without the footer leaves `[Unreleased]` comparing from the previous
+    release and `[version]` undefined, which renders as literal brackets. The previous release
+    is the next dated heading below this one; with none, this is the first release and its
+    link is the tag page instead of a comparison. Older definitions are not checked: a release
+    moves only these two.
+    """
+    below = _DATED_HEADING_RE.search(text, released_end)
+    expected = {
+        "Unreleased": f"{CHANGELOG_REPO_URL}/compare/v{version}...HEAD",
+        version: (
+            f"{CHANGELOG_REPO_URL}/compare/v{below['version']}...v{version}"
+            if below
+            else f"{CHANGELOG_REPO_URL}/releases/tag/v{version}"
+        ),
+    }
+    definitions: dict[str, list[str]] = {}
+    for match in _LINK_DEFINITION_RE.finditer(text):
+        definitions.setdefault(_link_label_key(match["label"]), []).append(match["url"])
+
+    problems: list[str] = []
+    for label, url in expected.items():
+        found = definitions.get(_link_label_key(label), [])
+        if not found:
+            problems.append(f"CHANGELOG.md has no `[{label}]:` link definition; expected {url}")
+        elif len(found) > 1:
+            problems.append(f"CHANGELOG.md has {len(found)} `[{label}]:` links, expected 1")
+        elif found[0] != url:
+            problems.append(f"CHANGELOG.md's `[{label}]` link is {found[0]}, expected {url}")
     return problems
 
 
@@ -789,7 +846,9 @@ def _write_summary(path: Path, *, tag: str | None, version: str, problems: list[
         lines += [f"- {problem}" for problem in problems]
     else:
         lines.append("**Release-state coherence: PASSED.** Every version literal, the changelog")
-        lines.append("section and `uv.lock` agree with this tag, on this tree.")
+        lines.append(
+            "section and its footer links, and `uv.lock` agree with this tag, on this tree."
+        )
         lines.append("")
         lines.append(
             "**Install manifest: PASSED.** `.mcp.json` pins this release's own tag, and the "

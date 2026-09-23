@@ -137,6 +137,8 @@ The tag therefore deliberately points at a commit that is in `main`'s history bu
 1. Merge PR B (the milestone work, version literals untouched).
 2. Open PR C, the `chore(release):` PR described by AGENTS.md rule 19, and do not merge it yet.
    Roll `## [Unreleased]` in `CHANGELOG.md` into a dated `## [X.Y.Z] - YYYY-MM-DD` section, and leave a fresh empty `## [Unreleased]` above it.
+   Move the footer's link definitions with it: `[Unreleased]` compares `vX.Y.Z...HEAD`, and a new `[X.Y.Z]` definition compares the previous release's tag with `vX.Y.Z`.
+   `scripts/check_release_state.py` rejects a footer that did not follow the roll, which 0.5.0's release PR first shipped with (#211).
    That date is **UTC** (`date -u +%F`), not the local date of whoever prepares the PR.
    The two disagree for part of every day in this maintainer's timezone, and the tag, the publish run and the PyPI record are all stamped in UTC, so a local date makes the changelog disagree with every other artifact of the same release.
    0.1.0 predates this convention and is dated `2026-09-08`, its local date; it was tagged on 2026-09-09 UTC, and that section is left as it shipped rather than rewritten.
