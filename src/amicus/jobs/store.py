@@ -706,9 +706,12 @@ class JobStore:
         a reused PID reads as alive, and a worker that is gone never comes back. The lock
         is probed, never held: a held lock is how every reader, in any process, tells a
         live worker from a reused PID, so holding it would make them treat a dead job as
-        alive and signal its PID.
+        alive and signal its PID. A pid that is not a positive int (``meta.json`` is not
+        validated on read) proves nothing, so the worker is never taken as gone.
         """
         pid = meta.get("pid")
+        if type(pid) is not int or pid <= 0:
+            return False
         if self._owned(meta):
             return not _is_running(pid)
         return _worker_lock_held(jd / "worker.lock") is False and not _pid_alive(pid)
@@ -929,7 +932,14 @@ class JobStore:
             if live is None:
                 return DiscardOutcome.DELETE_FAILED if left else DiscardOutcome.MISSING
             jd, meta, state = live
-            if state != expected or (state == "failed" and not self._worker_gone(jd, meta)):
+            if state != expected:
+                return DiscardOutcome.STATE_CHANGED
+            # Prove a failed job's worker gone, THEN read again: a worker running without
+            # its lock can write result.json and exit after the first read, and only once it
+            # is gone can no result appear (PR #238 review).
+            if state == "failed" and (
+                not self._worker_gone(jd, meta) or self._status_of(jd, meta) != "failed"
+            ):
                 return DiscardOutcome.STATE_CHANGED
             self._rmtree(jd)
             return DiscardOutcome.REMOVED if self._gone(jd) else DiscardOutcome.DELETE_FAILED

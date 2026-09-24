@@ -445,6 +445,51 @@ def test_discard_keeps_an_unowned_failed_record_whose_pid_is_alive(tmp_path):
     assert store.status(cwd, job_id)["status"] == "failed"
 
 
+def test_discard_rereads_a_failed_record_once_its_worker_is_proved_gone(tmp_path, monkeypatch):
+    # A worker running without its lock can write result.json and exit after the discard
+    # read `failed` but before it proved the worker gone. Only once the worker is gone can no
+    # result appear, so the state is read again then, and the result is kept (PR #238 review).
+    store = _store(tmp_path)
+    cwd = str(tmp_path)
+    job_id = _failed_job(store, cwd)
+    jd = store._job_dir(cwd, job_id)
+    real_gone = JobStore._worker_gone
+
+    def result_lands_while_proving(self, path, meta):
+        (path / "result.json").write_text(json.dumps({"ok": True, "tool": "t"}))
+        return real_gone(self, path, meta)
+
+    monkeypatch.setattr(JobStore, "_worker_gone", result_lands_while_proving)
+    assert store.discard(cwd, job_id, expected="failed") is DiscardOutcome.STATE_CHANGED
+    monkeypatch.undo()
+    assert (jd / "result.json").exists(), "control: the result landed mid-discard"
+    _assert_still_done(store, cwd, job_id)
+
+
+# Each (owned, pid) pair a status read still reports as failed: an owned record reads a
+# truthy invalid pid through waitpid, which reports it running or raises before any discard.
+_UNCHECKABLE_PIDS = [(True, None), (True, 0)] + [
+    (False, pid) for pid in (None, 0, -1, "123", 1.5, True)
+]
+
+
+@pytest.mark.parametrize(("owned", "pid"), _UNCHECKABLE_PIDS)
+def test_discard_keeps_a_failed_record_whose_pid_cannot_be_checked(tmp_path, owned, pid):
+    # meta.json is not validated on read, so a pid that is not a positive int proves
+    # nothing about the worker and must never count as its exit (PR #238 review).
+    store = _store(tmp_path)
+    cwd = str(tmp_path)
+    job_id = _failed_job(store, cwd)
+    jd = _disown(store, cwd, job_id) if not owned else store._job_dir(cwd, job_id)
+    (jd / "worker.lock").touch()
+    meta = json.loads((jd / "meta.json").read_text())
+    meta["pid"] = pid
+    (jd / "meta.json").write_text(json.dumps(meta))
+    assert store.status(cwd, job_id)["status"] == "failed", "control: it reads as failed"
+    assert store.discard(cwd, job_id, expected="failed") is DiscardOutcome.STATE_CHANGED
+    assert store.status(cwd, job_id)["status"] == "failed"
+
+
 def test_discard_never_holds_the_worker_lock(tmp_path, monkeypatch):
     # A held worker.lock is how every reader, in any process, tells a live worker from a
     # reused PID. A discard that held it would make another server process read a dead,
