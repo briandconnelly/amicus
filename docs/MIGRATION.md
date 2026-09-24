@@ -193,6 +193,29 @@ A `null` there means no loaded plugin declares one.
 The `amicus://backends/{backend}` resource is always the full entry.
 `amicus_capabilities(detail="contracts")` is removed: pass `include_tool_details=false` for the same rowless payload, and `detail` now selects only how much each `tool_details` row carries (`summary` is `name`, `cost`, `stability`, `backends`; `full` adds the rest, including `error_codes`).
 
+## Upgrading from 0.5.0
+
+The changes below are the ones a caller or operator using amicus 0.5.0 may have to handle before running 0.6.0.
+`CHANGELOG.md`'s 0.6.0 section lists every user-visible change since 0.5.0, including the ones that require no migration.
+A job result stored by 0.5.0 is still readable: `RESULT_FORMAT` did not move.
+
+**`amicus_job_consume_result` deletes a failed, cancelled or timed-out job's record, and `not_done` is now `state_changed` (#126).**
+Such a job still returns its terminal error, and `meta.consume` now reports the delete, so a repeat call returns `job_not_found` after `removed` or `missing`; in 0.5.0 the record stayed until it expired or the per-workspace cap evicted it, and no `meta.consume` was attached.
+A caller that read a terminal error through consume and then expected the record to remain must read it with `amicus_job_result` instead, which deletes nothing.
+A caller that branched on `meta.consume.discard_outcome` being `not_done` must branch on `state_changed`, which means the record was not, or not verifiably, still in the state the call returned it in; its `follow_up` still names the `amicus_job_status` call that shows what is left.
+A failed record the store cannot prove final returns `state_changed` on every retry and stays until it expires or is evicted, so stop retrying it.
+
+**An answer the output capture cut is `answer_unavailable`, not a shorter or earlier answer (#198).**
+0.5.0 could deliver a Kimi consult or review whose final message was dropped at `AMICUS_MAX_OUTPUT_BYTES` as `ok: true` with the interim message before it, and a Claude envelope cut the same way as `invalid_json`.
+Both are now `answer_unavailable`, with `error.details.reason` `stream_truncated` (repair `reduce_input`: narrow the task, ask for a shorter answer, or raise `AMICUS_MAX_OUTPUT_BYTES`) or `stream_capture_failed` (temporary, repair `retry_then_report`).
+A caller that handled `answer_unavailable` only for a refused answer file, or `invalid_json` for a cut Claude envelope, should branch on `error.details.reason`; the code is now listed on `amicus_adversarial_review` and its async twin as well.
+An answer read from a file, and a Kimi delegate's diff, are unaffected.
+
+**A `CODEX_HOME` that is not an absolute path as written is refused (#193).**
+A relative value, or one starting with a literal `~`, used to name one directory to the server and another to each codex run, and codex does not expand `~` at all.
+A paid Codex call now fails before codex starts, as `user_config_rejected`, and `amicus_backends` reports codex with `authenticated: null` and a warning naming the variable.
+Set `CODEX_HOME` to an absolute path in the environment amicus runs in, or unset it to use codex's default; an empty value is still treated as unset.
+
 ## Upgrading from 0.4.0
 
 The changes below are the ones an operator or caller using amicus 0.4.0 has to handle before running 0.5.0.

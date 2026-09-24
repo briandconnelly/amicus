@@ -20,6 +20,18 @@ per-change, as its own lead says.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-24
+
+Across this release the discovery surface moves `amicus/0.1/schema-39`, what 0.5.0 shipped, to
+`amicus/0.1/schema-43`, and `RESULT_FORMAT` stays 9, so a job result 0.5.0 stored can still be
+delivered. Two entries are labelled **Breaking**: `amicus_job_consume_result` now deletes a
+failed, cancelled or timed-out job's record, and its `not_done` outcome is renamed
+`state_changed` (#126); and an answer the output capture cut is `answer_unavailable` rather than
+a shorter or earlier answer (#198). One change asks something of an operator: a `CODEX_HOME`
+that is not an absolute path is now refused. `docs/MIGRATION.md` ("Upgrading from 0.5.0") says
+what to do for each. It was checked against codex-cli 0.156.1, Kimi Code 2.1.1 and Claude Code
+2.1.281.
+
 ### Changed
 
 - Kimi Code 2.1 is a supported version, so `amicus_backends` no longer warns on it. It was
@@ -29,7 +41,11 @@ per-change, as its own lead says.
   of the 24 commits since 2.0.2 changes the source files that implement kimi's prompt mode and its
   stream-json output. 2.1.0 now stops its file tools following a symlink out of the workspace,
   but still reads absolute paths outside it, so the disclosure that no workspace is a read
-  boundary stays true. Nothing that needs a prompt was part of the check (#227).
+  boundary stays true. 2.1.1, published the next day, rolls that symlink block back
+  (MoonshotAI/kimi-code#4013); its `--help` is identical to the 2.1.0 capture apart from the
+  same trailing blank line, `kimi session` still offers `list` only, and none of its four
+  commits changes the source files that implement kimi's prompt mode and its stream-json output.
+  Nothing that needs a prompt was part of the check (#227).
 - codex-cli 0.156 is a supported version, so `amicus_backends` no longer warns on it. It was
   checked against 0.155.1 at zero spend: `exec --help`, `exec review --help` and `login --help`
   are identical apart from trailing whitespace, and top-level `--help` adds only `--no-daemon`,
@@ -951,7 +967,8 @@ per-change rather than net, so they also name intermediate states that no releas
 - The tagged publish path to pypi.org has never run. Only the TestPyPI dispatch path has been exercised.
 - Eval scenario S6 in `skills/collaborating-with-amicus/tests/scenarios.md` passed on one run (status: `pass`, validated by that run alone); an M7 follow-up run against the current skill text did not isolate the still-open F3 finding, so F3 remains open. S7 (real-host approval friction) has failed both of its recorded runs (status: `fail`); an M7 zero-spend recheck reached neither a pass nor a fail and is recorded as inconclusive, so it does not move S7's status. See their `status` fields and ADR 0012.
 
-[Unreleased]: https://github.com/briandconnelly/amicus/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/briandconnelly/amicus/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/briandconnelly/amicus/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/briandconnelly/amicus/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/briandconnelly/amicus/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/briandconnelly/amicus/compare/v0.2.0...v0.3.0
