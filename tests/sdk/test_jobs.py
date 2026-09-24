@@ -497,6 +497,31 @@ def test_rmtree_never_restores_a_result_without_its_marker(tmp_path, monkeypatch
     assert store.status(cwd, job_id) is None
 
 
+def test_rmtree_touches_nothing_when_a_snapshot_cannot_be_taken(tmp_path, monkeypatch):
+    # Copilot on #236: an unreadable marker used to be skipped rather than snapshotted, so
+    # after a refused rmdir the result came back without it, invisible and unreapable. Any
+    # snapshot error other than absence now aborts the delete before either file goes.
+    store, cwd, job_id, jd = _done_job(tmp_path)
+    real_read_bytes = Path.read_bytes
+    real_rmdir = Path.rmdir
+
+    def unreadable_marker(self, *args, **kwargs):
+        if self.name == "meta.json":
+            raise PermissionError("read denied")
+        return real_read_bytes(self, *args, **kwargs)
+
+    def stuck_dir(self, *args, **kwargs):
+        if self == jd:
+            raise OSError("directory busy")
+        return real_rmdir(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_bytes", unreadable_marker)
+    monkeypatch.setattr(Path, "rmdir", stuck_dir)
+    assert store.discard(cwd, job_id) is DiscardOutcome.DELETE_FAILED
+    monkeypatch.undo()
+    _assert_still_done(store, cwd, job_id)
+
+
 def _expire(jd: Path) -> None:
     meta = json.loads((jd / "meta.json").read_text())
     meta["completed_epoch"] = time.time() - 10_000

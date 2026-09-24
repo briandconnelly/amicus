@@ -530,8 +530,10 @@ class JobStore:
         # Both must be gone before rmdir (the dir has to be empty), so they are snapshotted
         # first and, if unlinking either or the final rmdir fails, restored atomically (tmp
         # + replace, mirroring _write_meta, so a cross-process reader never sees a torn
-        # file). The marker is restored first and the result only once the marker is back:
-        # a result.json with no marker would be invisible, outliving every retention bound.
+        # file). A file that exists but cannot be snapshotted aborts the delete before
+        # either goes. The marker is restored first and the result only once the marker is
+        # back: a result.json with no marker would be invisible, outliving every retention
+        # bound.
         meta = jd / "meta.json"
         result = jd / "result.json"
         core = (result, meta)
@@ -543,8 +545,12 @@ class JobStore:
             return  # nothing in core was touched, so the record is intact
         snapshots: dict[Path, bytes] = {}
         for path in core:
-            with contextlib.suppress(OSError):
+            try:
                 snapshots[path] = path.read_bytes()
+            except FileNotFoundError:
+                continue  # absent, so there is nothing to restore
+            except OSError:
+                return  # a file that cannot be restored must not be deleted
         unlinked: list[Path] = []
         try:
             for path in core:
