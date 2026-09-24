@@ -129,6 +129,13 @@ per-change, as its own lead says.
 - `amicus_job_consume_result` reports `meta.consume.discard_outcome` as `delete_failed`, not
   `missing`, when the record expired between its read and its delete and removing it failed
   (#125). The store no longer serves such a record, but its files remain.
+- A job record whose `meta.json` holds a `pid` that is not a positive int within the C int
+  range is now read as having no pid, and the job reads as `failed` unless it left a result
+  (#239). For a job the server itself started, a `pid` of `"123"` or `1.5` made every status,
+  result, list, cancel and consume call on that record raise `TypeError`, one past the C int
+  range raised `OverflowError`, and `-1` reported the job running while waiting on any other
+  child of the server, which could collect that child's exit status. Only a corrupted
+  `meta.json` reaches this.
 
 ## [0.5.0] - 2026-09-20
 
