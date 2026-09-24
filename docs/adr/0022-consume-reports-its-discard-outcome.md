@@ -60,15 +60,23 @@ The discard re-read the state under the store's lock and deleted only a `done` r
 Issue #126 made the store's discard a compare-and-delete: it takes the terminal state the caller read, `done` by default, and deletes the record only if a fresh read still finds it in that state.
 Because `failed` is derived rather than stamped, the discard also requires it to be final: it deletes a `failed` record only once the worker is verifiably gone.
 A worker that is gone never writes `result.json`, so the record can no longer turn `done`.
-The proof is the worker's exit when this process started it, and otherwise a `worker.lock` that exists and is free.
+For a job this process started, the proof is that its child has exited.
+For any other job, the proof is a `worker.lock` that exists and is free and a PID that is no longer alive.
+A free lock alone is not proof: every liveness probe briefly takes the lock, and a worker whose own attempt collided with one used to give up and run without it.
+The worker now retries its lock for up to two seconds, and the PID check covers a worker that still ran unlocked.
+Both checks err only toward keeping a record, since a reused PID reads as alive.
 An unowned record with no lock file reads as `failed` but its worker may still run, so the discard keeps it.
+Such a record returns `state_changed` on every retry, so the `follow_up`'s `alternative` says to stop retrying a `failed` job that keeps returning it, and that the record stays until it expires or is evicted.
 The first design held the job's `worker.lock` through the read and the delete instead.
 It was dropped before review, because a held lock is how every reader, in any process, tells a live worker from a reused PID.
 Another server process sharing the state root would then have read a dead, overdue job as running and signalled its PID, which may belong to an unrelated process by then.
 A consume now discards a terminal-error record in the state it read and attaches `meta.consume` as it does for a delivered envelope, so a repeat call returns `job_not_found` after `removed` or `missing`.
 A done record whose stored result does not read back is still described, not delivered, and is kept.
 A mismatch, or a `failed` record not yet final, is `state_changed`, which replaced `not_done`, because a consume that read `failed` can now find the record `done`, and a record that became `done` is not "not done".
-Its `follow_up` is the same inspection call, and the `alternative` says that any terminal status means a retried consume returns what the record now holds and can delete it.
+Its `follow_up` is the same inspection call, and the `alternative` says that any terminal status means a retried consume returns what the record now holds and can delete it, with the stopping condition above.
+A consume can also land while a cancel waits, unlocked, for the worker to exit.
+If the worker exits without a result, the consume reads `failed`, the worker is provably gone, and the record is deleted before the cancel can stamp `cancelled`; the cancel then returns `job_not_found`.
+No result is lost, because none existed, so this is accepted.
 The one-caller-wins guarantee stays process-local, as it was for a `done` record, because the store's lock serializes only threads in one process; issue #237 tracks the related cross-process window during a delete.
 
 ## Consequences
