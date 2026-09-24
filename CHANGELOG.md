@@ -106,6 +106,16 @@ per-change, as its own lead says.
   code gains a `repair`, and no code changes. **Surface**: `FINGERPRINT` moves to schema-42 for
   the `workspace_root` parameter contract, which lists the tokens, and the error-envelope schema
   text.
+- A job record whose deletion fails partway now stays as it was (#124). The store could unlink
+  `result.json` before a file it then failed to remove, and when the job directory's `rmdir`
+  failed it restored only `meta.json`; either way a finished job that
+  `amicus_job_consume_result` had already delivered read as `failed`, and a retried consume
+  returned `job_failed`. It now removes `result.json` and `meta.json` after every other file and
+  restores both when the delete fails, so the record still reads as `done` and a retried consume
+  delivers and deletes it.
+- `amicus_job_consume_result` reports `meta.consume.discard_outcome` as `delete_failed`, not
+  `missing`, when the record expired between its read and its delete and removing it failed
+  (#125). The store no longer serves such a record, but its files remain.
 
 ## [0.5.0] - 2026-09-20
 

@@ -1,6 +1,6 @@
 # ADR 0022: A consume reports its discard outcome as delivery-only metadata
 
-**Status:** Accepted (2026-09-13); amended 2026-09-14 for issue #94
+**Status:** Accepted (2026-09-13); amended 2026-09-14 for issue #94 and 2026-09-24 for issues #124 and #125
 
 ## Context
 
@@ -26,9 +26,10 @@ The first design was a `record_deleted` boolean.
 Codex held that it would credit a `missing` record's absence to this call, and overstate what `delete_failed` proves, since that outcome also covers a deletion that could not be verified.
 Only `removed` and `missing` support the repeat-call `job_not_found` promise, and the description now says so.
 `missing` means the store no longer serves the record, not that its files are gone.
-Codex's review of the branch found that a record expiring between the read and the discard is cleaned up inside the discard, and that cleanup ignores its own failure before the discard reports `MISSING`.
-A repeat call still returns `job_not_found`, because an expired record is dropped on every read, so the promise holds while physical deletion does not.
-The `missing` description and the follow-up's `job_not_found` branch say "no longer serves", and a test pins that path.
+Codex's review of the branch found that a record expiring between the read and the discard is cleaned up inside the discard, and that cleanup ignored its own failure before the discard reported `MISSING`.
+Since issue #125 a failed expiry cleanup is reported as `delete_failed`, because its files remain.
+The follow-up's call then returns `job_not_found`, because an expired record is dropped on every read, and a test pins that path.
+The `missing` description and the follow-up's `job_not_found` branch still say "no longer serves", because a delete whose restore also fails can leave a directory that holds no readable record.
 
 **A record that may remain gets a `follow_up` that inspects it.**
 For `not_done` and `delete_failed`, `follow_up` is `{next_step: "inspect_and_retry", tool: "amicus_job_status", arguments: {job_id, workspace_root}}`, with `workspace_root` only when the caller supplied it.
@@ -37,7 +38,8 @@ It is the `Repair` shape narrowed to that one action, as `JobFollowUp` narrows i
 The first design pointed at `amicus_job_list`; Codex preferred the tool that addresses this job, since `amicus_job_list` is the surface for recovering a lost id.
 `next_step` stays in pontonier's vocabulary, as ADR 0005 requires, and echoing `job_id` and a caller's `workspace_root` follows the `job_running` and `job_not_found` repairs.
 Its `alternative` promises neither redelivery nor deletion at expiry.
-Pontonier has no reaper daemon, so an expired record goes only when a later job call finds it, and a real failed delete can leave a record that reads as `failed`.
+The store has no reaper daemon, so an expired record goes only when a later job call finds it.
+A failed delete leaves the record as it was, but one whose restore also fails can leave a record that reads as `failed`.
 
 **The field is delivery-only, so `RESULT_FORMAT` stays 5.**
 `Meta.consume` is excluded from every dump, and `attach_consume_disposition` sets it on the delivered dictionary after the discard.
@@ -64,7 +66,11 @@ A safe deletion needs an atomic compare-and-delete from pontonier, requested as 
 - The #94 amendment moves `FINGERPRINT` to `schema-30` for the corrected descriptions.
   Behavior and `RESULT_FORMAT` are unchanged.
 - A future delivery-only `Meta` field should follow the same pattern: excluded from every dump, set on the delivered dictionary, and scrubbed from a stored copy.
-- Pontonier's `_rmtree` comment says a partial failure leaves the record fully readable.
-  It does not once `result.json` has been unlinked, and the leftover record then reports the job as `failed`.
-  Expired-record cleanup in `_read_live_job` likewise returns "no record" after a failed `_rmtree`, which is how `missing` can leave files behind.
-  Both are pontonier's to fix, since rule 17 forbids editing the sibling here, so the prose in this ADR and on the wire describes the behavior as it is.
+- Pontonier's `_rmtree` comment said a partial failure leaves the record fully readable.
+  It did not once `result.json` had been unlinked, and the leftover record then reported the job as `failed`.
+  Expired-record cleanup in `_read_live_job` likewise returned "no record" after a failed `_rmtree`, which is how `missing` could leave files behind.
+  The store has been amicus's own since ADR 0030, and issues #124 and #125 fixed both.
+  `_rmtree` now unlinks `result.json` and `meta.json` after every other entry, and restores both when either unlink or the final `rmdir` fails, marker first, never the result without its marker.
+  A discard whose expiry cleanup fails reports `delete_failed`.
+  No description had to change, because each already hedged for the worse behavior, so `FINGERPRINT` did not move; `RESULT_FORMAT` did not either, because `meta.consume` is never stored.
+  Pontonier's copy keeps both defects, and carrying the fix there is the maintainer's call under rule 17.

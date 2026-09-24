@@ -522,32 +522,65 @@ class JobStore:
 
     @staticmethod
     def _rmtree(jd: Path) -> None:
-        # meta.json goes LAST: it is the record's existence marker (a dir without it
-        # is invisible to status/list and skipped by the reaper), so a partial
-        # failure must never orphan an unreapable remainder (#306 review). If any
-        # earlier unlink fails, the record stays fully readable. The marker must be
-        # gone before rmdir (the dir has to be empty), so if that final rmdir fails
-        # the snapshotted marker is restored — the shell stays visible and a later
-        # reap pass retries — atomically (tmp + replace), mirroring _write_meta, so
-        # a cross-process reader never sees a torn file.
+        # A partial failure must leave the record exactly as it was: still visible, and
+        # still reporting the outcome it had. So result.json and meta.json go LAST, after
+        # every other entry: meta.json is the record's existence marker (a dir without it
+        # is invisible to status/list and skipped by the reaper, #306 review), and
+        # result.json is what makes a finished job read as done rather than failed (#124).
+        # Both must be gone before rmdir (the dir has to be empty), so they are snapshotted
+        # first and, if unlinking either or the final rmdir fails, restored atomically (tmp
+        # + replace, mirroring _write_meta, so a cross-process reader never sees a torn
+        # file). A file that exists but cannot be snapshotted aborts the delete before
+        # either goes. The marker is restored first and the result only once the marker is
+        # back: a result.json with no marker would be invisible, outliving every retention
+        # bound.
         meta = jd / "meta.json"
+        result = jd / "result.json"
+        core = (result, meta)
         try:
             for child in jd.iterdir():
-                if child != meta:
+                if child not in core:
                     child.unlink(missing_ok=True)
-            marker = None
-            with contextlib.suppress(OSError):
-                marker = meta.read_bytes()
-            meta.unlink(missing_ok=True)
-            try:
-                jd.rmdir()
-            except OSError:
-                if marker is not None:
-                    tmp = jd / "meta.json.tmp"
-                    tmp.write_bytes(marker)
-                    tmp.replace(meta)
         except OSError:
-            pass
+            return  # nothing in core was touched, so the record is intact
+        snapshots: dict[Path, bytes] = {}
+        for path in core:
+            try:
+                snapshots[path] = path.read_bytes()
+            except FileNotFoundError:
+                continue  # absent, so there is nothing to restore
+            except OSError:
+                return  # a file that cannot be restored must not be deleted
+        unlinked: list[Path] = []
+        try:
+            for path in core:
+                path.unlink(missing_ok=True)
+                unlinked.append(path)
+            jd.rmdir()
+        except OSError:
+            for path in sorted(unlinked, key=lambda p: p != meta):  # marker first
+                if path not in snapshots:
+                    continue
+                try:
+                    tmp = path.with_name(path.name + ".tmp")
+                    tmp.write_bytes(snapshots[path])
+                    tmp.replace(path)
+                except OSError:
+                    return  # never restore the result without its marker
+
+    @staticmethod
+    def _gone(jd: Path) -> bool:
+        """Whether ``jd`` is verifiably absent. A ``stat`` probe, not ``exists()``: since
+        Python 3.14 ``exists()`` returns False for an inaccessible-but-present path, which
+        would claim a removal that never happened. Only FileNotFoundError proves absence;
+        any other stat error means unverified."""
+        try:
+            jd.stat()
+        except FileNotFoundError:
+            return True
+        except OSError:
+            return False
+        return False
 
     # --------------------------------------------------------------- spawning
     def start(
@@ -768,19 +801,26 @@ class JobStore:
     # ----------------------------------------------------------- maintenance
     def _read_live_job(self, cwd: str, job_id: str) -> tuple[Path, dict, str] | None:
         """Read + refresh a single record; drop it if terminal and expired."""
+        live, _left = self._read_or_expire(cwd, job_id)
+        return live
+
+    def _read_or_expire(self, cwd: str, job_id: str) -> tuple[tuple[Path, dict, str] | None, bool]:
+        """``_read_live_job``, plus whether an expired record's cleanup failed. Such a
+        record is never served, like any expired one, but its files remain, which a
+        caller reporting what it deleted must not call absent (#125)."""
         if _JOB_ID_RE.fullmatch(job_id) is None:
             # A malformed id (wrong shape, traversal, empty) is by construction not a
             # job this store started: report not-found without touching the filesystem.
-            return None
+            return None, False
         jd = self._job_dir(cwd, job_id)
         meta = self._read_meta(jd)
         if meta is None:
-            return None
+            return None, False
         state = self._status_of(jd, meta)
         if state in _TERMINAL and self._expired(meta):
             self._rmtree(jd)
-            return None
-        return jd, meta, state
+            return None, not self._gone(jd)
+        return (jd, meta, state), False
 
     def _reap_workspace(self, cwd: str) -> None:
         ws = self._ws_dir(cwd)
@@ -846,32 +886,25 @@ class JobStore:
         ``status`` read: MISSING means there was no record to delete (already
         discarded, expired, or evicted), NOT_DONE means the record exists but is
         not a done result (never deleted), and DELETE_FAILED means removal failed
-        or could not be verified — the record (kept fully readable by ``_rmtree``'s
-        meta-last ordering) is left to the TTL reaper.
-        Verification is a ``stat`` probe, not ``exists()``: since Python 3.14
-        ``exists()`` returns False for an inaccessible-but-present path, which
-        would claim a removal that never happened. Only FileNotFoundError proves
-        absence; any other stat error means unverified, never REMOVED.
+        or could not be verified. A done record is then left as it was (``_rmtree``
+        restores it) for a retry or the TTL reaper; an expired record whose cleanup
+        failed is no longer served but its files remain (#125).
+        Verification is ``_gone``'s ``stat`` probe, so an unverifiable removal is
+        never REMOVED.
         The one-caller-wins guarantee is process-local: ``_LOCK`` serializes
         threads in this process, but two server processes sharing a state root
         can each observe the record before either deletes it (unchanged from
         the pre-split read+delete, which held the same process-local lock).
         """
         with _LOCK:
-            live = self._read_live_job(cwd, job_id)
+            live, left = self._read_or_expire(cwd, job_id)
             if live is None:
-                return DiscardOutcome.MISSING
+                return DiscardOutcome.DELETE_FAILED if left else DiscardOutcome.MISSING
             jd, _meta, state = live
             if state != "done":
                 return DiscardOutcome.NOT_DONE
             self._rmtree(jd)
-            try:
-                jd.stat()
-            except FileNotFoundError:
-                return DiscardOutcome.REMOVED
-            except OSError:
-                return DiscardOutcome.DELETE_FAILED
-            return DiscardOutcome.DELETE_FAILED
+            return DiscardOutcome.REMOVED if self._gone(jd) else DiscardOutcome.DELETE_FAILED
 
     def cancel(self, cwd: str, job_id: str) -> dict | None:
         with _LOCK:

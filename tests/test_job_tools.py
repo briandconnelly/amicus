@@ -273,14 +273,13 @@ async def test_consume_reports_a_retained_record_and_a_follow_up_that_resolves_i
         assert gone.structured_content["error"]["code"] == "job_not_found"
 
 
-async def test_a_real_failed_delete_is_reported_and_its_follow_up_shows_what_is_left(
+async def test_a_real_failed_delete_is_reported_and_leaves_the_record_consumable(
     app, store, tmp_path, monkeypatch
 ):
-    """A real failure, not a faked outcome: the job directory's rmdir is refused, so
-    pontonier has already unlinked result.json and restores only meta.json, which the store
-    then reads as `failed`. The follow_up's own call reports that, and a repeat consume
-    returns job_failed and deletes nothing, so the prose may promise neither redelivery
-    nor job_not_found (#44)."""
+    """A real failure, not a faked outcome: the job directory's rmdir is refused. The store
+    restores the whole record, so the follow_up's own call shows it still done, and a
+    consume retried once the failure clears delivers it again and deletes it, as the
+    follow_up's alternative says (#44, #124)."""
     ws = {"workspace_root": str(tmp_path)}
     async with Client(app) as c:
         job_id = await _start(c, tmp_path)
@@ -305,12 +304,14 @@ async def test_a_real_failed_delete_is_reported_and_its_follow_up_shows_what_is_
         assert disposition["discard_outcome"] == "delete_failed"
         follow_up = disposition["follow_up"]
         checked = (await c.call_tool(follow_up["tool"], follow_up["arguments"])).structured_content
-        assert checked["status"] == "failed" and checked["result_available"] is False
-        again = await c.call_tool(
-            "amicus_job_consume_result", {"job_id": job_id, **ws}, raise_on_error=False
-        )
-        assert again.structured_content["error"]["code"] == "job_failed"
-        assert sorted(p.name for p in target.iterdir()) == ["meta.json"]
+        assert checked["status"] == "done" and checked["result_available"] is True
+        monkeypatch.undo()
+        again = (
+            await c.call_tool("amicus_job_consume_result", {"job_id": job_id, **ws})
+        ).structured_content
+        assert again["ok"] is True and again["summary"] == "Looks fine"
+        assert again["meta"]["consume"] == {"discard_outcome": "removed"}
+        assert not target.exists()
 
 
 async def _terminal_error_job(c, store, tmp_path, monkeypatch, state):
@@ -536,14 +537,14 @@ async def test_two_tasks_on_one_job_report_the_first_task_on_every_surface(
     assert status["task_id"] == "task-first" and result["meta"]["task_id"] == "task-first"
 
 
-async def test_missing_after_a_failed_expiry_cleanup_still_answers_job_not_found(
+async def test_a_failed_expiry_cleanup_during_consume_is_delete_failed(
     app, store, tmp_path, monkeypatch
 ):
     """Codex's review of #44: a record that expires between the read and the discard is
-    cleaned up inside the discard, and that cleanup ignores its own failure, so the discard
-    says MISSING while files remain. The repeat-call promise still holds, because an expired
-    record is dropped on every read, which is why `missing` claims only that the store no
-    longer serves the record, never that its files are gone."""
+    cleaned up inside the discard. When that cleanup fails, the files remain, so the
+    outcome is delete_failed, not missing (#125). The follow_up's call answers
+    job_not_found, the branch of its alternative that says the store no longer serves the
+    record, because an expired record is dropped on every read; a repeat consume agrees."""
     ws = {"workspace_root": str(tmp_path)}
     async with Client(app) as c:
         job_id = await _start(c, tmp_path)
@@ -572,13 +573,16 @@ async def test_missing_after_a_failed_expiry_cleanup_still_answers_job_not_found
         ).structured_content
         assert refused, "control: the expiry cleanup ran and failed"
         assert consumed["ok"] is True and consumed["summary"] == "Looks fine"
-        assert consumed["meta"]["consume"] == {"discard_outcome": "missing"}
-        assert target.exists(), "files a failed cleanup left remain"
+        disposition = consumed["meta"]["consume"]
+        assert disposition["discard_outcome"] == "delete_failed"
+        assert target.exists(), "files the failed cleanup left remain"
+        follow_up = disposition["follow_up"]
+        checked = await c.call_tool(follow_up["tool"], follow_up["arguments"], raise_on_error=False)
+        assert checked.structured_content["error"]["code"] == "job_not_found"
         again = await c.call_tool(
             "amicus_job_consume_result", {"job_id": job_id, **ws}, raise_on_error=False
         )
         assert again.structured_content["error"]["code"] == "job_not_found"
-        assert target.exists(), "a read reports not-found without the files being gone"
 
 
 async def test_an_explicit_root_survives_a_deleted_server_cwd(app, store, tmp_path, gone_cwd):
