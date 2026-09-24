@@ -153,10 +153,13 @@ the new ones.
 ## Status and known limits
 
 0.6.0 is the current release. The discovery surface moved from `amicus/0.1/schema-39` to
-`amicus/0.1/schema-40`, and `RESULT_FORMAT` did not move, so a job result 0.5.0 stored can still be
-read. One change asks something of an operator: a `CODEX_HOME` that is not an absolute path is
-now refused. [`docs/MIGRATION.md`](docs/MIGRATION.md#upgrading-from-050) explains how to upgrade,
-and [`CHANGELOG.md`](CHANGELOG.md) lists every user-visible change.
+`amicus/0.1/schema-43`, and `RESULT_FORMAT` did not move, so a job result 0.5.0 stored can still be
+read. Two changes ask something of a caller: `amicus_job_consume_result` now deletes a failed,
+cancelled or timed-out job's record and reports `state_changed` where it reported `not_done`, and
+an answer the output capture cut is `answer_unavailable` rather than a shorter or earlier answer.
+One change asks something of an operator: a `CODEX_HOME` that is not an absolute path is now
+refused. [`docs/MIGRATION.md`](docs/MIGRATION.md#upgrading-from-050) explains how to upgrade, and
+[`CHANGELOG.md`](CHANGELOG.md) lists every user-visible change.
 
 One known limit: a third-party backend distribution can load through the `amicus.backends`
 entry-point group, but cannot yet be enabled or called. `AMICUS_BACKENDS` and the `backend`
