@@ -10,7 +10,7 @@
               "enum": [
                 "removed",
                 "missing",
-                "not_done",
+                "state_changed",
                 "delete_failed"
               ],
               "title": "Discard Outcome",
@@ -1011,7 +1011,7 @@
               "enum": [
                 "removed",
                 "missing",
-                "not_done",
+                "state_changed",
                 "delete_failed"
               ],
               "title": "Discard Outcome",
@@ -1856,7 +1856,7 @@
               "enum": [
                 "removed",
                 "missing",
-                "not_done",
+                "state_changed",
                 "delete_failed"
               ],
               "title": "Discard Outcome",
@@ -2637,7 +2637,7 @@
               "enum": [
                 "removed",
                 "missing",
-                "not_done",
+                "state_changed",
                 "delete_failed"
               ],
               "title": "Discard Outcome",
@@ -3567,7 +3567,7 @@
               "enum": [
                 "removed",
                 "missing",
-                "not_done",
+                "state_changed",
                 "delete_failed"
               ],
               "title": "Discard Outcome",

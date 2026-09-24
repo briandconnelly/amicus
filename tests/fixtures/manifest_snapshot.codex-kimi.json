@@ -878,9 +878,9 @@
         "required_params": [
           "job_id"
         ],
-        "returns": "the originating tool's envelope for a done job whose stored result reads back; meta.consume.discard_outcome is what the store did, with a follow_up after not_done or delete_failed. A failed, cancelled or timed-out job returns its terminal error with no meta.consume and is not deleted, nor is a corrupt or incompatible record.",
+        "returns": "the originating tool's envelope for a done job whose stored result reads back; meta.consume.discard_outcome is what the store did, with a follow_up after state_changed or delete_failed. A failed, cancelled or timed-out job returns its terminal error, and meta.consume reports its discard too. A corrupt or incompatible record is kept.",
         "stability": null,
-        "use_when": "Fetch a done job's envelope and delete its record."
+        "use_when": "Fetch a finished job's envelope or terminal error and delete its record."
       },
       {
         "backends": [
@@ -972,15 +972,15 @@
         "$defs": {
           "ConsumeDisposition": {
             "additionalProperties": false,
-            "description": "What amicus_job_consume_result did to the record after delivering it (#44).",
+            "description": "What amicus_job_consume_result did to the record after returning it (#44, #126).",
             "properties": {
               "discard_outcome": {
-                "description": "What deleting the record did. removed: this call deleted it. missing: the store had already dropped it (consumed, expired or evicted); files a failed cleanup left may remain. After either, a repeat call returns job_not_found. not_done: it was no longer a finished result, so nothing was deleted. delete_failed: deletion failed or could not be verified, so the record may remain.",
+                "description": "What deleting the record did. removed: this call deleted it. missing: the store had already dropped it (consumed, expired or evicted); files a failed cleanup left may remain. After either, a repeat call returns job_not_found. state_changed: the record no longer read as it did when this call returned it (a failed job's result can still appear), so nothing was deleted. delete_failed: deletion failed or could not be verified, so the record may remain.",
                 "enum": [
                   "delete_failed",
                   "missing",
-                  "not_done",
-                  "removed"
+                  "removed",
+                  "state_changed"
                 ],
                 "title": "Discard Outcome",
                 "type": "string"
@@ -1500,7 +1500,7 @@
                   }
                 ],
                 "default": null,
-                "description": "Set only by amicus_job_consume_result, on the envelope it delivers: what deleting the job record did. Never stored with the result."
+                "description": "Set only by amicus_job_consume_result, on the envelope it returns: what deleting the job record did. Never stored with the result."
               },
               "context_summary": {
                 "anyOf": [
@@ -1531,7 +1531,7 @@
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-42",
+                "default": "amicus/0.1/schema-43",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -2090,7 +2090,7 @@
       "description": "The full ErrorResult schema; tool outputSchemas carry only an opaque error branch.",
       "mimeType": "application/schema+json",
       "name": "amicus-error-envelope",
-      "size": 14867,
+      "size": 14950,
       "title": "amicus error envelope schema",
       "uri": "amicus://error-envelope"
     },
@@ -2116,7 +2116,7 @@
       "description": "The full Meta schema every success envelope's opaque `meta` points at.",
       "mimeType": "application/schema+json",
       "name": "amicus-result-meta",
-      "size": 8053,
+      "size": 8136,
       "title": "amicus result metadata schema",
       "uri": "amicus://result-meta"
     }
@@ -2133,15 +2133,15 @@
         "$defs": {
           "ConsumeDisposition": {
             "additionalProperties": false,
-            "description": "What amicus_job_consume_result did to the record after delivering it (#44).",
+            "description": "What amicus_job_consume_result did to the record after returning it (#44, #126).",
             "properties": {
               "discard_outcome": {
-                "description": "What deleting the record did. removed: this call deleted it. missing: the store had already dropped it (consumed, expired or evicted); files a failed cleanup left may remain. After either, a repeat call returns job_not_found. not_done: it was no longer a finished result, so nothing was deleted. delete_failed: deletion failed or could not be verified, so the record may remain.",
+                "description": "What deleting the record did. removed: this call deleted it. missing: the store had already dropped it (consumed, expired or evicted); files a failed cleanup left may remain. After either, a repeat call returns job_not_found. state_changed: the record no longer read as it did when this call returned it (a failed job's result can still appear), so nothing was deleted. delete_failed: deletion failed or could not be verified, so the record may remain.",
                 "enum": [
                   "delete_failed",
                   "missing",
-                  "not_done",
-                  "removed"
+                  "removed",
+                  "state_changed"
                 ],
                 "title": "Discard Outcome",
                 "type": "string"
@@ -2413,7 +2413,7 @@
               }
             ],
             "default": null,
-            "description": "Set only by amicus_job_consume_result, on the envelope it delivers: what deleting the job record did. Never stored with the result."
+            "description": "Set only by amicus_job_consume_result, on the envelope it returns: what deleting the job record did. Never stored with the result."
           },
           "context_summary": {
             "anyOf": [
@@ -2444,7 +2444,7 @@
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-42",
+            "default": "amicus/0.1/schema-43",
             "title": "Fingerprint",
             "type": "string"
           },
@@ -6843,7 +6843,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Free — no model call. Like amicus_job_result, then delete the record; meta.consume.discard_outcome says what happened. After removed or missing a repeat call returns job_not_found (not idempotent); otherwise the record may remain, so follow meta.consume.follow_up. A failed, cancelled or timed-out job returns its terminal error with no meta.consume and is not deleted, nor is a corrupt or incompatible record.",
+      "description": "Free — no model call. Like amicus_job_result, then delete the record; meta.consume.discard_outcome says what happened. After removed or missing a repeat call returns job_not_found (not idempotent); otherwise the record may remain, so see meta.consume.follow_up. A failed, cancelled or timed-out job returns its terminal error, and meta.consume reports its discard too. A corrupt or incompatible record is kept.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
