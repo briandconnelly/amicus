@@ -394,16 +394,51 @@ def test_discard_never_deletes_a_failed_record_that_turned_done(tmp_path):
     _assert_still_done(store, cwd, job_id)
 
 
-def test_discard_holds_the_worker_lock_while_it_deletes(tmp_path, monkeypatch):
-    # The worker holds worker.lock for its whole life, including when it writes result.json.
-    # Holding it through the read and the delete is what keeps a worker from turning a
-    # `failed` record done between the two (#126).
+def _disown(store: JobStore, cwd: str, job_id: str) -> Path:
+    """Make the record look started by an earlier server process, as after a restart."""
+    jd = store._job_dir(cwd, job_id)
+    meta = json.loads((jd / "meta.json").read_text())
+    meta["owner"] = "an-earlier-process"
+    (jd / "meta.json").write_text(json.dumps(meta))
+    return jd
+
+
+def test_discard_keeps_a_failed_record_whose_worker_may_still_run(tmp_path):
+    # An unowned record with no worker.lock reads as failed, but its worker cannot be
+    # proved gone: it may still write result.json. So `failed` is not final, and the
+    # discard keeps it (#126).
+    store = _store(tmp_path)
+    cwd = str(tmp_path)
+    job_id = _failed_job(store, cwd)
+    jd = _disown(store, cwd, job_id)
+    assert not (jd / "worker.lock").exists(), "control: the lock is indeterminate"
+    assert store.status(cwd, job_id)["status"] == "failed"
+    assert store.discard(cwd, job_id, expected="failed") is DiscardOutcome.STATE_CHANGED
+    assert store.status(cwd, job_id)["status"] == "failed"
+
+
+def test_discard_deletes_an_unowned_failed_record_whose_lock_is_free(tmp_path):
+    # After a restart the worker is not our child, so only a free lock proves it gone.
+    store = _store(tmp_path)
+    cwd = str(tmp_path)
+    job_id = _failed_job(store, cwd)
+    jd = _disown(store, cwd, job_id)
+    (jd / "worker.lock").touch()
+    assert store.discard(cwd, job_id, expected="failed") is DiscardOutcome.REMOVED
+    assert store.status(cwd, job_id) is None
+
+
+def test_discard_never_holds_the_worker_lock(tmp_path, monkeypatch):
+    # A held worker.lock is how every reader, in any process, tells a live worker from a
+    # reused PID. A discard that held it would make another server process read a dead,
+    # overdue job as running and signal its PID, so it only ever probes the lock (#126).
     from amicus.jobs import store as job_store
 
     store = _store(tmp_path)
     cwd = str(tmp_path)
     job_id = _failed_job(store, cwd)
-    jd = store._job_dir(cwd, job_id)
+    jd = _disown(store, cwd, job_id)
+    (jd / "worker.lock").touch()
     seen: list[bool | None] = []
     real_rmtree = JobStore._rmtree
 
@@ -413,30 +448,7 @@ def test_discard_holds_the_worker_lock_while_it_deletes(tmp_path, monkeypatch):
 
     monkeypatch.setattr(JobStore, "_rmtree", staticmethod(observing))
     assert store.discard(cwd, job_id, expected="failed") is DiscardOutcome.REMOVED
-    assert seen == [True]
-    assert not jd.exists()
-
-
-def test_discard_takes_a_worker_lock_the_worker_never_created(tmp_path, monkeypatch):
-    # A worker that exits before locking leaves no worker.lock. The discard creates and holds
-    # one, so a late worker cannot take it either.
-    from amicus.jobs import store as job_store
-
-    store = _store(tmp_path)
-    cwd = str(tmp_path)
-    job_id = _failed_job(store, cwd)
-    jd = store._job_dir(cwd, job_id)
-    (jd / "worker.lock").unlink(missing_ok=True)
-    seen: list[bool | None] = []
-    real_rmtree = JobStore._rmtree
-
-    def observing(path):
-        seen.append(job_store._worker_lock_held(path / "worker.lock"))
-        real_rmtree(path)
-
-    monkeypatch.setattr(JobStore, "_rmtree", staticmethod(observing))
-    assert store.discard(cwd, job_id, expected="failed") is DiscardOutcome.REMOVED
-    assert seen == [True]
+    assert seen == [False]
 
 
 @pytest.mark.parametrize("expected", ["running", "bogus", ""])
