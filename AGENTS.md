@@ -25,7 +25,7 @@ The rules bind; the context after them explains and points elsewhere.
 13. When a change needs a new commit scope, extend `scripts/check_commit_message.py` in that same change.
 14. Pin every `uses:` in a workflow to a full commit SHA with the version in a trailing comment.
 15. Never add a `pull_request_target` workflow.
-16. Under `docs/`, write Markdown with one sentence per line.
+16. Under `docs/`, write Markdown with one sentence per line, where a semicolon or a colon joins clauses into one sentence rather than ending one.
 17. Never edit a sibling checkout (`~/projects/codex-in-claude`, `~/projects/moonbridge`, `~/projects/claude-in-codex`, `~/projects/pontonier`).
 18. Never write a prompt input — every field in `INPUT_FIELDS` (`src/amicus/request.py`): `question`, `task`, `extra_context`, `instructions_append`, `focus`, `target`, `evidence` — to disk, to a worker's argv or to a log; it travels over the worker's stdin.
     This binds amicus's own handling and everything it commits, including host captures and eval prompt bodies, which are recorded as an id and a `sha256` instead.
@@ -75,6 +75,7 @@ Kimi's session store is different in kind: the CLI rather than amicus writes it,
 Rule 2 is the gate's single definition; other documents link here rather than restating it.
 CI (`.github/workflows/test.yml`) runs exactly those commands on every supported Python version and is authoritative; the local hooks below are a convenience.
 `pytest` excludes `-m integration` by default (`addopts` in `pyproject.toml`), so the gate never spends quota.
+Rule 16 is in the gate through `pytest`: `tests/test_check_sentence_per_line.py` runs `scripts/check_sentence_per_line.py` over the committed `docs/` tree.
 
 ### How work is organized
 
@@ -118,7 +119,7 @@ The sibling checkouts named in rule 17 are read for porting, and their virtualen
 ### Local hooks
 
 `prek.toml` mirrors the gate as Git hooks; install once with `uv run prek install --prepare-hooks`.
-Pre-commit runs file hygiene, ruff, ty, import-linter, the Actions-pinning check and `uv lock --check`; pre-push runs pytest; commit-msg runs the Conventional Commits check.
+Pre-commit runs file hygiene, ruff, ty, import-linter, the Actions-pinning check, the one-sentence-per-line check and `uv lock --check`; pre-push runs pytest; commit-msg runs the Conventional Commits check.
 
 ### Spend
 
