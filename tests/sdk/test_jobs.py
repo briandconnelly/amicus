@@ -8,6 +8,7 @@ worker does.
 from __future__ import annotations
 
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -417,8 +418,8 @@ def test_discard_keeps_a_failed_record_whose_worker_may_still_run(tmp_path):
     assert store.status(cwd, job_id)["status"] == "failed"
 
 
-def test_discard_deletes_an_unowned_failed_record_whose_lock_is_free(tmp_path):
-    # After a restart the worker is not our child, so only a free lock proves it gone.
+def test_discard_deletes_an_unowned_failed_record_whose_worker_is_gone(tmp_path):
+    # After a restart the worker is not our child: a free lock and a dead PID prove it gone.
     store = _store(tmp_path)
     cwd = str(tmp_path)
     job_id = _failed_job(store, cwd)
@@ -426,6 +427,22 @@ def test_discard_deletes_an_unowned_failed_record_whose_lock_is_free(tmp_path):
     (jd / "worker.lock").touch()
     assert store.discard(cwd, job_id, expected="failed") is DiscardOutcome.REMOVED
     assert store.status(cwd, job_id) is None
+
+
+def test_discard_keeps_an_unowned_failed_record_whose_pid_is_alive(tmp_path):
+    # A free lock alone is not proof: a worker that could not take its lock runs without
+    # it, reading as failed while it may still write result.json (#126 review).
+    store = _store(tmp_path)
+    cwd = str(tmp_path)
+    job_id = _failed_job(store, cwd)
+    jd = _disown(store, cwd, job_id)
+    (jd / "worker.lock").touch()
+    meta = json.loads((jd / "meta.json").read_text())
+    meta["pid"] = os.getpid()  # alive, and never signalled: the record reads as failed
+    (jd / "meta.json").write_text(json.dumps(meta))
+    assert store.status(cwd, job_id)["status"] == "failed", "control: it reads as failed"
+    assert store.discard(cwd, job_id, expected="failed") is DiscardOutcome.STATE_CHANGED
+    assert store.status(cwd, job_id)["status"] == "failed"
 
 
 def test_discard_never_holds_the_worker_lock(tmp_path, monkeypatch):
@@ -765,7 +782,6 @@ def test_start_oserror_cleans_up(tmp_path):
 
 
 # --- defensive helpers / edge branches ---------------------------------------
-import os  # noqa: E402
 
 from amicus.jobs import store as job_store  # noqa: E402
 

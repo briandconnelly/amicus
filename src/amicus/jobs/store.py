@@ -698,15 +698,20 @@ class JobStore:
 
         Stricter than ``not _job_running``: an unowned job whose lock is indeterminate
         (no lock file) reads as not running, so ``_status_of`` calls it ``failed``, yet
-        its worker may still finish and turn the record ``done``. Only our own child's
-        exit, or a lock file that exists and is free, proves the worker is gone, and a
-        worker that is gone never comes back (#126). The lock is probed, never held: a
-        held lock is how every reader, in any process, tells a live worker from a reused
-        PID, so holding it would make them treat a dead job as alive and signal its PID.
+        its worker may still finish and turn the record ``done`` (#126). For our own
+        job, ``_is_running`` reaps the child, then falls back to a ``kill(0)`` probe of
+        the PID. For an unowned one, the lock file must exist and be free AND the PID
+        must be dead: a free lock alone is not proof, since a worker that could not take
+        its lock runs without it. Either test errs only toward keeping the record, since
+        a reused PID reads as alive, and a worker that is gone never comes back. The lock
+        is probed, never held: a held lock is how every reader, in any process, tells a
+        live worker from a reused PID, so holding it would make them treat a dead job as
+        alive and signal its PID.
         """
+        pid = meta.get("pid")
         if self._owned(meta):
-            return not _is_running(meta.get("pid"))
-        return _worker_lock_held(jd / "worker.lock") is False
+            return not _is_running(pid)
+        return _worker_lock_held(jd / "worker.lock") is False and not _pid_alive(pid)
 
     def _status_of(self, jd: Path, meta: dict) -> str:
         """Compute the live status, killing + marking jobs that overran."""
