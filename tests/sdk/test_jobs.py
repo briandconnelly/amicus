@@ -469,7 +469,7 @@ def test_discard_rereads_a_failed_record_once_its_worker_is_proved_gone(tmp_path
 # Each (owned, pid) pair a status read still reports as failed: an owned record reads a
 # truthy invalid pid through waitpid, which reports it running or raises before any discard.
 _UNCHECKABLE_PIDS = [(True, None), (True, 0)] + [
-    (False, pid) for pid in (None, 0, -1, "123", 1.5, True)
+    (False, pid) for pid in (None, 0, -1, "123", 1.5, True, 10**100)
 ]
 
 
@@ -488,6 +488,21 @@ def test_discard_keeps_a_failed_record_whose_pid_cannot_be_checked(tmp_path, own
     assert store.status(cwd, job_id)["status"] == "failed", "control: it reads as failed"
     assert store.discard(cwd, job_id, expected="failed") is DiscardOutcome.STATE_CHANGED
     assert store.status(cwd, job_id)["status"] == "failed"
+
+
+@pytest.mark.parametrize("owned", [True, False])
+def test_worker_gone_is_false_for_a_pid_the_os_cannot_represent(tmp_path, owned):
+    # os.kill and os.waitpid raise OverflowError for an int past the C range, which must
+    # keep the record rather than escape the discard (PR #238 review). The owned case is
+    # checked directly: its status read already fails in waitpid first (#239).
+    store = _store(tmp_path)
+    cwd = str(tmp_path)
+    job_id = _failed_job(store, cwd)
+    jd = _disown(store, cwd, job_id) if not owned else store._job_dir(cwd, job_id)
+    (jd / "worker.lock").touch()
+    meta = json.loads((jd / "meta.json").read_text())
+    meta["pid"] = 10**100
+    assert store._worker_gone(jd, meta) is False
 
 
 def test_discard_never_holds_the_worker_lock(tmp_path, monkeypatch):

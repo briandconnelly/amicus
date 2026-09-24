@@ -707,14 +707,18 @@ class JobStore:
         is probed, never held: a held lock is how every reader, in any process, tells a
         live worker from a reused PID, so holding it would make them treat a dead job as
         alive and signal its PID. A pid that is not a positive int (``meta.json`` is not
-        validated on read) proves nothing, so the worker is never taken as gone.
+        validated on read), or one the OS cannot represent, proves nothing, so the worker
+        is never taken as gone.
         """
         pid = meta.get("pid")
         if type(pid) is not int or pid <= 0:
             return False
-        if self._owned(meta):
-            return not _is_running(pid)
-        return _worker_lock_held(jd / "worker.lock") is False and not _pid_alive(pid)
+        try:
+            if self._owned(meta):
+                return not _is_running(pid)
+            return _worker_lock_held(jd / "worker.lock") is False and not _pid_alive(pid)
+        except (OverflowError, ValueError):
+            return False  # past the OS's pid range: kill/waitpid cannot probe it
 
     def _status_of(self, jd: Path, meta: dict) -> str:
         """Compute the live status, killing + marking jobs that overran."""
