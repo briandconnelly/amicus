@@ -66,14 +66,15 @@ A free lock alone is not proof: every liveness probe briefly takes the lock, and
 The worker now retries its lock for up to two seconds, and the PID check covers a worker that still ran unlocked.
 Both checks err only toward keeping a record, since a reused PID reads as alive.
 An unowned record with no lock file reads as `failed` but its worker may still run, so the discard keeps it.
-Such a record returns `state_changed` on every retry, so the `follow_up`'s `alternative` says to stop retrying a `failed` job that keeps returning it, and that the record stays until it expires or is evicted.
+Such a record returns `state_changed` on every retry, so it stays until it expires or is evicted.
 The first design held the job's `worker.lock` through the read and the delete instead.
 It was dropped before review, because a held lock is how every reader, in any process, tells a live worker from a reused PID.
 Another server process sharing the state root would then have read a dead, overdue job as running and signalled its PID, which may belong to an unrelated process by then.
 A consume now discards a terminal-error record in the state it read and attaches `meta.consume` as it does for a delivered envelope, so a repeat call returns `job_not_found` after `removed` or `missing`.
 A done record whose stored result does not read back is still described, not delivered, and is kept.
 A mismatch, or a `failed` record not yet final, is `state_changed`, which replaced `not_done`, because a consume that read `failed` can now find the record `done`, and a record that became `done` is not "not done".
-Its `follow_up` is the same inspection call, and the `alternative` says that any terminal status means a retried consume returns what the record now holds and can delete it, with the stopping condition above.
+Its `follow_up` is the same inspection call, and the `alternative` says that a retried consume returns what the record now holds and deletes it only if it can.
+It names the two records a retry never deletes, and says to stop retrying them: a `failed` one the store cannot prove final, and a `done` one whose result does not read back.
 A consume can also land while a cancel waits, unlocked, for the worker to exit.
 If the worker exits without a result, the consume reads `failed`, the worker is provably gone, and the record is deleted before the cancel can stamp `cancelled`; the cancel then returns `job_not_found`.
 No result is lost, because none existed, so this is accepted.
