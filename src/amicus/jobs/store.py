@@ -50,7 +50,7 @@ import signal
 import subprocess
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -83,7 +83,7 @@ class DiscardOutcome(StrEnum):
 
     REMOVED = "removed"  # this call removed the record and verified it absent
     MISSING = "missing"  # no record: already discarded, expired, or evicted
-    NOT_DONE = "not_done"  # record exists but is not a done result; never deleted
+    STATE_CHANGED = "state_changed"  # record exists but not in the named state; kept
     DELETE_FAILED = "delete_failed"  # removal failed or could not be verified
 
 
@@ -242,6 +242,41 @@ def _worker_lock_held(lock_path: Path) -> bool | None:
         return False
     finally:
         os.close(fd)
+
+
+@contextlib.contextmanager
+def _worker_excluded(lock_path: Path) -> Iterator[bool]:
+    """Hold the per-job lock at ``lock_path`` for the body, when it is free, and yield
+    whether this call holds it.
+
+    The worker holds this lock for its whole life, including when it writes
+    ``result.json``, so while the body holds it no worker can finish the job. That is
+    what makes a ``failed`` record, which ``_status_of`` derives on every read rather
+    than stamps, stable between a read and a delete (#126). The file is created when
+    the worker never made one, so a late worker cannot take it either. A lock held by
+    someone else, or one that cannot be taken at all, leaves the body unguarded: a
+    live holder makes the job read as running, which no caller may name, and without
+    ``fcntl`` there is no lock to take. While this call holds the lock, a liveness probe
+    of it reads as held, so the body must say so to ``_job_running`` (``lock_ours``)."""
+    try:
+        import fcntl  # noqa: PLC0415 - platform-guarded lazy import (POSIX only)
+    except ImportError:  # pragma: no cover - non-POSIX
+        yield False
+        return
+    try:
+        fd = os.open(str(lock_path), os.O_CREAT | os.O_WRONLY, 0o600)
+    except OSError:
+        yield False  # the record is gone or unwritable; the re-read in the body decides
+        return
+    try:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            yield False  # a live worker holds it (or flock is unsupported here)
+        else:
+            yield True
+    finally:
+        os.close(fd)  # closing the descriptor releases the lock
 
 
 def _signal_proc(pid: int, sig: int) -> None:
@@ -673,7 +708,7 @@ class JobStore:
         owner = meta.get("owner")
         return bool(owner) and owner == _PROCESS_OWNER
 
-    def _job_running(self, jd: Path, meta: dict) -> bool:
+    def _job_running(self, jd: Path, meta: dict, *, lock_ours: bool = False) -> bool:
         """Whether the job's worker is alive AND safe to signal.
 
         A held per-job lock is authoritative for ANY job: a PID reused by an unrelated
@@ -683,27 +718,28 @@ class JobStore:
         correct during the worker's tiny create-then-``flock`` startup window, when the
         lock briefly reads as free. An unowned job is treated as running only while its
         worker still holds the lock; otherwise it is not running, so cancel/timeout
-        never signal a stale or reused PID."""
+        never signal a stale or reused PID. ``lock_ours`` says the caller itself holds the
+        lock (``_worker_excluded``), so no worker does, whatever a probe of it reads."""
         pid = meta.get("pid")
         if not pid:
             return False
-        if _worker_lock_held(jd / "worker.lock") is True:
+        if not lock_ours and _worker_lock_held(jd / "worker.lock") is True:
             return True  # positively verified alive (a reused PID can't hold this lock)
         if self._owned(meta):
             return _is_running(pid)  # our own child: the PID probe is authoritative
         return False  # unowned + no verified lock -> never reported running or signaled
 
-    def _status_of(self, jd: Path, meta: dict) -> str:
+    def _status_of(self, jd: Path, meta: dict, *, lock_ours: bool = False) -> str:
         """Compute the live status, killing + marking jobs that overran."""
         terminal = meta.get("terminal_status")
         if terminal:
             return terminal
-        if self._job_running(jd, meta):
+        if self._job_running(jd, meta, lock_ours=lock_ours):
             if time.time() > meta.get("deadline_epoch", float("inf")):
                 _terminate_pid_tree(
                     meta.get("pid"),
                     self.terminate_grace_seconds,
-                    is_alive=lambda: self._job_running(jd, meta),
+                    is_alive=lambda: self._job_running(jd, meta, lock_ours=lock_ours),
                 )
                 # The worker may have completed during the grace window — prefer its
                 # result over masking it as a timeout (result-first finalization).
@@ -804,7 +840,9 @@ class JobStore:
         live, _left = self._read_or_expire(cwd, job_id)
         return live
 
-    def _read_or_expire(self, cwd: str, job_id: str) -> tuple[tuple[Path, dict, str] | None, bool]:
+    def _read_or_expire(
+        self, cwd: str, job_id: str, *, lock_ours: bool = False
+    ) -> tuple[tuple[Path, dict, str] | None, bool]:
         """``_read_live_job``, plus whether an expired record's cleanup failed. Such a
         record is never served, like any expired one, but its files remain, which a
         caller reporting what it deleted must not call absent (#125)."""
@@ -816,7 +854,7 @@ class JobStore:
         meta = self._read_meta(jd)
         if meta is None:
             return None, False
-        state = self._status_of(jd, meta)
+        state = self._status_of(jd, meta, lock_ours=lock_ours)
         if state in _TERMINAL and self._expired(meta):
             self._rmtree(jd)
             return None, not self._gone(jd)
@@ -879,16 +917,20 @@ class JobStore:
                 return rec, None
             return rec, self._read_envelope(jd)
 
-    def discard(self, cwd: str, job_id: str) -> DiscardOutcome:
-        """Delete a done job record; REMOVED only when THIS call removed it.
+    def discard(self, cwd: str, job_id: str, *, expected: str = "done") -> DiscardOutcome:
+        """Delete a terminal job record, but only in the state the caller names.
 
+        A compare-and-delete: ``expected`` is the terminal state the caller read
+        (``done`` by default), and the record is deleted only if a fresh read under
+        ``_LOCK`` and the job's worker lock still finds it. So a caller that read
+        ``failed`` never deletes a result that appeared since (#126).
         The outcome is discriminated so callers never infer it from a follow-up
         ``status`` read: MISSING means there was no record to delete (already
-        discarded, expired, or evicted), NOT_DONE means the record exists but is
-        not a done result (never deleted), and DELETE_FAILED means removal failed
-        or could not be verified. A done record is then left as it was (``_rmtree``
-        restores it) for a retry or the TTL reaper; an expired record whose cleanup
-        failed is no longer served but its files remain (#125).
+        discarded, expired, or evicted), STATE_CHANGED means the record exists but
+        is not in the named state (never deleted), and DELETE_FAILED means removal
+        failed or could not be verified. The record is then left as it was
+        (``_rmtree`` restores it) for a retry or the TTL reaper; an expired record
+        whose cleanup failed is no longer served but its files remain (#125).
         Verification is ``_gone``'s ``stat`` probe, so an unverifiable removal is
         never REMOVED.
         The one-caller-wins guarantee is process-local: ``_LOCK`` serializes
@@ -896,13 +938,17 @@ class JobStore:
         can each observe the record before either deletes it (unchanged from
         the pre-split read+delete, which held the same process-local lock).
         """
-        with _LOCK:
-            live, left = self._read_or_expire(cwd, job_id)
+        if expected not in _TERMINAL:
+            raise ValueError(f"expected must be a terminal state, not {expected!r}")
+        if _JOB_ID_RE.fullmatch(job_id) is None:
+            return DiscardOutcome.MISSING  # never a job this store started (see _JOB_ID_RE)
+        with _LOCK, _worker_excluded(self._job_dir(cwd, job_id) / "worker.lock") as ours:
+            live, left = self._read_or_expire(cwd, job_id, lock_ours=ours)
             if live is None:
                 return DiscardOutcome.DELETE_FAILED if left else DiscardOutcome.MISSING
             jd, _meta, state = live
-            if state != "done":
-                return DiscardOutcome.NOT_DONE
+            if state != expected:
+                return DiscardOutcome.STATE_CHANGED
             self._rmtree(jd)
             return DiscardOutcome.REMOVED if self._gone(jd) else DiscardOutcome.DELETE_FAILED
 

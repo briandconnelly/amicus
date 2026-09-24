@@ -323,7 +323,7 @@ def test_discard_nondone_keeps_record(tmp_path):
     cwd = str(tmp_path)
     job_id, _ = store.start(_factory("import time; time.sleep(30)"), cwd, kind="k")
     store.cancel(cwd, job_id)
-    assert store.discard(cwd, job_id) is DiscardOutcome.NOT_DONE
+    assert store.discard(cwd, job_id) is DiscardOutcome.STATE_CHANGED
     # not deleted (non-done)
     assert store.status(cwd, job_id) is not None
 
@@ -333,10 +333,117 @@ def test_discard_running_keeps_record(tmp_path):
     cwd = str(tmp_path)
     job_id, _ = store.start(_factory("import time; time.sleep(30)"), cwd, kind="k")
     try:
-        assert store.discard(cwd, job_id) is DiscardOutcome.NOT_DONE
+        assert store.discard(cwd, job_id) is DiscardOutcome.STATE_CHANGED
         assert store.status(cwd, job_id)["status"] == "running"
     finally:
         store.cancel(cwd, job_id)
+
+
+def _cancelled_job(store: JobStore, cwd: str) -> str:
+    job_id, _ = store.start(_factory("import time; time.sleep(30)"), cwd, kind="k")
+    assert store.cancel(cwd, job_id)["status"] == "cancelled"
+    return job_id
+
+
+def _timed_out_job(store: JobStore, cwd: str) -> str:
+    job_id, _ = store.start(_factory("import time; time.sleep(30)"), cwd, kind="k")
+    jd = store._job_dir(cwd, job_id)
+    meta = json.loads((jd / "meta.json").read_text())
+    meta["deadline_epoch"] = 0
+    (jd / "meta.json").write_text(json.dumps(meta))
+    assert store.status(cwd, job_id)["status"] == "timeout"
+    return job_id
+
+
+def _failed_job(store: JobStore, cwd: str) -> str:
+    job_id, _ = store.start(_factory("raise SystemExit(1)"), cwd, kind="k")
+    assert _wait_terminal(store, cwd, job_id) == "failed"
+    return job_id
+
+
+_TERMINAL_ERROR_JOBS = {
+    "cancelled": _cancelled_job,
+    "timeout": _timed_out_job,
+    "failed": _failed_job,
+}
+
+
+@pytest.mark.parametrize("state", sorted(_TERMINAL_ERROR_JOBS))
+def test_discard_deletes_a_terminal_error_record_in_the_named_state(tmp_path, state):
+    # #126: a failed, cancelled or timed-out record can be deleted, but only by naming the
+    # state the caller read, so the store deletes nothing that changed since.
+    store = _store(tmp_path)
+    cwd = str(tmp_path)
+    job_id = _TERMINAL_ERROR_JOBS[state](store, cwd)
+    assert store.discard(cwd, job_id) is DiscardOutcome.STATE_CHANGED  # default: done only
+    assert store.status(cwd, job_id)["status"] == state
+    assert store.discard(cwd, job_id, expected=state) is DiscardOutcome.REMOVED
+    assert store.status(cwd, job_id) is None
+    assert store.discard(cwd, job_id, expected=state) is DiscardOutcome.MISSING
+
+
+def test_discard_never_deletes_a_failed_record_that_turned_done(tmp_path):
+    # `failed` is derived on every read, never stamped: a result.json that appears later
+    # turns the record done. A caller that read `failed` must not delete that result (#126).
+    store = _store(tmp_path)
+    cwd = str(tmp_path)
+    job_id = _failed_job(store, cwd)
+    jd = store._job_dir(cwd, job_id)
+    (jd / "result.json").write_text(json.dumps({"ok": True, "tool": "t"}))
+    assert store.discard(cwd, job_id, expected="failed") is DiscardOutcome.STATE_CHANGED
+    _assert_still_done(store, cwd, job_id)
+
+
+def test_discard_holds_the_worker_lock_while_it_deletes(tmp_path, monkeypatch):
+    # The worker holds worker.lock for its whole life, including when it writes result.json.
+    # Holding it through the read and the delete is what keeps a worker from turning a
+    # `failed` record done between the two (#126).
+    from amicus.jobs import store as job_store
+
+    store = _store(tmp_path)
+    cwd = str(tmp_path)
+    job_id = _failed_job(store, cwd)
+    jd = store._job_dir(cwd, job_id)
+    seen: list[bool | None] = []
+    real_rmtree = JobStore._rmtree
+
+    def observing(path):
+        seen.append(job_store._worker_lock_held(path / "worker.lock"))
+        real_rmtree(path)
+
+    monkeypatch.setattr(JobStore, "_rmtree", staticmethod(observing))
+    assert store.discard(cwd, job_id, expected="failed") is DiscardOutcome.REMOVED
+    assert seen == [True]
+    assert not jd.exists()
+
+
+def test_discard_takes_a_worker_lock_the_worker_never_created(tmp_path, monkeypatch):
+    # A worker that exits before locking leaves no worker.lock. The discard creates and holds
+    # one, so a late worker cannot take it either.
+    from amicus.jobs import store as job_store
+
+    store = _store(tmp_path)
+    cwd = str(tmp_path)
+    job_id = _failed_job(store, cwd)
+    jd = store._job_dir(cwd, job_id)
+    (jd / "worker.lock").unlink(missing_ok=True)
+    seen: list[bool | None] = []
+    real_rmtree = JobStore._rmtree
+
+    def observing(path):
+        seen.append(job_store._worker_lock_held(path / "worker.lock"))
+        real_rmtree(path)
+
+    monkeypatch.setattr(JobStore, "_rmtree", staticmethod(observing))
+    assert store.discard(cwd, job_id, expected="failed") is DiscardOutcome.REMOVED
+    assert seen == [True]
+
+
+@pytest.mark.parametrize("expected", ["running", "bogus", ""])
+def test_discard_refuses_a_non_terminal_expected_state(tmp_path, expected):
+    store = _store(tmp_path)
+    with pytest.raises(ValueError, match="terminal"):
+        store.discard(str(tmp_path), "0" * 32, expected=expected)
 
 
 def test_discard_verification_error_reports_failure(tmp_path, monkeypatch):
