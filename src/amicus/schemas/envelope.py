@@ -79,7 +79,8 @@ _DISCARD_OUTCOME_DESC = (
     "already dropped it (consumed, expired or evicted); files a failed cleanup left may "
     "remain. After either, a repeat call returns job_not_found. state_changed: the record "
     "was not, or not verifiably, still as this call returned it (a failed job's result can "
-    "still appear), so nothing was deleted. delete_failed: deletion failed or could not be "
+    "still appear), so nothing was deleted; a failed record the store cannot prove final "
+    "stays until it expires or is evicted. delete_failed: deletion failed or could not be "
     "verified, so the record may remain."
 )
 _CONSUME_DESC = (
