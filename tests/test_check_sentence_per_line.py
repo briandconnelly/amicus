@@ -45,6 +45,9 @@ check = _load_script()
         "- A list item. With a second sentence.",
         "1. A numbered item. With a second sentence.",
         "- **Label.** One sentence. And another.",
+        'A quotation can end the sentence it sits in, "like this." Then the next.',
+        "A curly one can too, \u201clike this.\u201d Then the next.",
+        'He asked "why?" Then he left.',
     ],
 )
 def test_sentence_breaks_finds_a_second_sentence(line):
@@ -64,6 +67,7 @@ def test_sentence_breaks_finds_a_second_sentence(line):
         "A double-backtick span ``a. `B` c`` hides its periods too.",
         'A quotation "Ends here. Then more." is reproduced as written.',
         "A curly quotation “Ends here. Then more.” is too.",
+        'A quotation closing on its own period, "like this." is still one sentence.',
         'A link [text](a.md "Its title. Two sentences.") hides its target.',
         "A bare URL https://example.com/v1.2/A.B hides its dots.",
         "An ellipsis ... Does not end a sentence.",
@@ -131,6 +135,47 @@ def test_a_fence_closes_only_on_its_own_character_and_length():
     # A ~~~ or shorter ``` line inside a ```` block is content, not a close.
     text = "````\n~~~\n```\nOne. Two.\n````\nThree. Four.\n"
     assert check.iter_violations(text) == [(6, "Three. Four.")]
+
+
+@pytest.mark.parametrize(
+    ("text", "lineno"),
+    [
+        ("<!-- note --> One. Two.\n", 1),
+        ("One. Two. <!-- note -->\n", 1),
+        ("<!--\nHidden. Hidden.\n--> One. Two.\n", 3),
+        ("<!-- a --> One. <!-- b --> Two.\n", 1),
+    ],
+)
+def test_prose_beside_a_comment_is_still_checked(text, lineno):
+    assert [n for n, _ in check.iter_violations(text)] == [lineno]
+
+
+def test_a_fence_inside_a_comment_does_not_open_a_code_block():
+    text = "<!-- ``` -->\nOne. Two.\n"
+    assert check.iter_violations(text) == [(2, "One. Two.")]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "| A | B |\n| --- | --- |\n| One. Two. | Three |\n",
+        "A | B\n--- | ---\nOne. Two. | Three\n",
+        "One. Two. | B\n:-- | --:\nC | D\n",
+    ],
+)
+def test_iter_violations_skips_a_table_with_or_without_leading_pipes(text):
+    assert check.iter_violations(text) == []
+
+
+def test_a_table_ends_at_the_next_blank_line():
+    text = "A | B\n--- | ---\nC | D\n\nOne. Two.\n"
+    assert check.iter_violations(text) == [(5, "One. Two.")]
+
+
+def test_a_pipe_above_a_thematic_break_is_not_a_table():
+    # A delimiter row needs a pipe; a bare ``---`` makes a setext heading instead.
+    text = "One. Two | x\n---\n"
+    assert check.iter_violations(text) == [(1, "One. Two | x")]
 
 
 def test_front_matter_is_skipped_only_at_the_top_of_a_file():

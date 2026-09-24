@@ -16,12 +16,15 @@ character that can open the next one (a capital, a code span, a link, emphasis o
 an opening bracket or quote); an ellipsis and a short list of abbreviations do
 not end one.
 
-Not prose, so never checked: fenced code blocks, HTML comments, YAML front
-matter, table rows, link reference definitions and blockquotes, which in this
+Not prose, so never checked: fenced code blocks, HTML comments (only the comment,
+so prose beside one on the same line is still checked), YAML front matter,
+tables (from the header row above a delimiter row to the next blank line, with or
+without leading pipes), link reference definitions and blockquotes, which in this
 repository carry captured output verbatim. On a checked line, inline code spans,
 link targets, URLs and double-quoted text are masked before segmenting, and a
 leading heading marker, list marker or bold run-in label (``**Label.**``) is
-not counted as a sentence.
+not counted as a sentence. A quotation keeps a terminator it closes on, because
+that terminator can end the enclosing sentence too.
 
 Pure stdlib, line by line, in the style of the other ``scripts/check_*.py``.
 
@@ -60,6 +63,9 @@ _QUOTE_RE = re.compile(r"\"[^\"]*\"|\u201c[^\u201d]*\u201d")
 _PREFIX_RE = re.compile(
     r"^\s*(?:#{1,6}\s+|[-*+]\s+|\d+[.)]\s+|\[[ xX]\]\s+|(\*\*|__)[^*_]+?[.:?]\1\s+)"
 )
+# A table's delimiter row, with or without leading and trailing pipes:
+# ``| --- | :-: |`` or ``--- | ---``. A row with no pipe is a thematic break.
+_DELIMITER_ROW_RE = re.compile(r"^\s*\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)*\|?\s*$")
 # A link reference or footnote definition: ``[label]: target``.
 _REFERENCE_DEF_RE = re.compile(r"^\s*\[[^\]]+\]:\s")
 # A sentence boundary: the offset where its match ends is where the next one begins.
@@ -82,6 +88,40 @@ def _fill(match: re.Match[str]) -> str:
     return "X" + "x" * (len(match.group(0)) - 1)
 
 
+def _fill_quote(match: re.Match[str]) -> str:
+    """Mask a quotation but keep a terminator it closes on: ``"Done." Then`` ends one."""
+    quote = match.group(0)
+    if len(quote) >= 3 and quote[-2] in ".?!":
+        return "X" + "x" * (len(quote) - 3) + quote[-2:]
+    return _fill(match)
+
+
+def _hide_comments(line: str, in_comment: bool) -> tuple[str, bool]:
+    """Blank every HTML comment span in ``line``, carrying an open comment across lines.
+
+    Returns the line with comment text replaced by spaces, so what is left is the
+    visible prose at its own offsets, and whether a comment is still open at its end.
+    """
+    out: list[str] = []
+    pos = 0
+    while pos < len(line):
+        if in_comment:
+            end = line.find("-->", pos)
+            if end < 0:
+                out.append(" " * (len(line) - pos))
+                break
+            out.append(" " * (end + 3 - pos))
+            pos, in_comment = end + 3, False
+        else:
+            start = line.find("<!--", pos)
+            if start < 0:
+                out.append(line[pos:])
+                break
+            out.append(line[pos:start] + " " * 4)
+            pos, in_comment = start + 4, True
+    return "".join(out), in_comment
+
+
 def _mask(line: str) -> str:
     """Blank out spans whose punctuation is not sentence punctuation."""
     line = _CODE_SPAN_RE.sub(_fill, line)
@@ -89,7 +129,7 @@ def _mask(line: str) -> str:
         line = " " * prefix.end() + line[prefix.end() :]
     line = _LINK_TARGET_RE.sub(lambda m: "]" + "x" * (len(m.group(0)) - 1), line)
     line = _URL_RE.sub(_fill, line)
-    return _QUOTE_RE.sub(_fill, line)
+    return _QUOTE_RE.sub(_fill_quote, line)
 
 
 def sentence_breaks(line: str) -> list[int]:
@@ -111,6 +151,7 @@ def iter_violations(text: str) -> list[tuple[int, str]]:
     lines = text.splitlines()
     fence: str | None = None  # the fence run that opened the current code block
     in_comment = False
+    in_table = False
     in_front_matter = bool(lines) and lines[0].strip() == "---"
     for lineno, line in enumerate(lines, start=1):
         stripped = line.strip()
@@ -128,19 +169,21 @@ def iter_violations(text: str) -> list[tuple[int, str]]:
             ):
                 fence = None
             continue
-        if in_comment:
-            in_comment = "-->" not in line
+        visible, in_comment = _hide_comments(line, in_comment)
+        if in_table:
+            in_table = bool(visible.strip())
             continue
-        opening = _FENCE_RE.match(line)
+        opening = _FENCE_RE.match(visible)
         if opening:
             fence = opening.group(1)
             continue
-        if stripped.startswith("<!--"):
-            in_comment = "-->" not in stripped
+        following = lines[lineno] if lineno < len(lines) else ""
+        if "|" in visible and "|" in following and _DELIMITER_ROW_RE.match(following):
+            in_table = True
             continue
-        if stripped.startswith(("|", ">")) or _REFERENCE_DEF_RE.match(line):
+        if visible.lstrip().startswith(("|", ">")) or _REFERENCE_DEF_RE.match(visible):
             continue
-        if sentence_breaks(line):
+        if sentence_breaks(visible):
             found.append((lineno, line))
     return found
 
