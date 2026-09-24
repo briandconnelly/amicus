@@ -974,7 +974,7 @@
             "description": "What amicus_job_consume_result did to the record after returning it (#44, #126).",
             "properties": {
               "discard_outcome": {
-                "description": "What deleting the record did. removed: this call deleted it. missing: the store had already dropped it (consumed, expired or evicted); files a failed cleanup left may remain. After either, a repeat call returns job_not_found. state_changed: the record was not, or not verifiably, still as this call returned it (a failed job's result can still appear), so nothing was deleted. delete_failed: deletion failed or could not be verified, so the record may remain.",
+                "description": "What deleting the record did. removed: this call deleted it. missing: the store had already dropped it (consumed, expired or evicted); files a failed cleanup left may remain. After either, a repeat call returns job_not_found. state_changed: the record was not, or not verifiably, still as this call returned it (a failed job's result can still appear), so nothing was deleted; a failed record the store cannot prove final stays until it expires or is evicted. delete_failed: deletion failed or could not be verified, so the record may remain.",
                 "enum": [
                   "delete_failed",
                   "missing",
@@ -2089,7 +2089,7 @@
       "description": "The full ErrorResult schema; tool outputSchemas carry only an opaque error branch.",
       "mimeType": "application/schema+json",
       "name": "amicus-error-envelope",
-      "size": 14957,
+      "size": 15040,
       "title": "amicus error envelope schema",
       "uri": "amicus://error-envelope"
     },
@@ -2115,7 +2115,7 @@
       "description": "The full Meta schema every success envelope's opaque `meta` points at.",
       "mimeType": "application/schema+json",
       "name": "amicus-result-meta",
-      "size": 8143,
+      "size": 8226,
       "title": "amicus result metadata schema",
       "uri": "amicus://result-meta"
     }
@@ -2135,7 +2135,7 @@
             "description": "What amicus_job_consume_result did to the record after returning it (#44, #126).",
             "properties": {
               "discard_outcome": {
-                "description": "What deleting the record did. removed: this call deleted it. missing: the store had already dropped it (consumed, expired or evicted); files a failed cleanup left may remain. After either, a repeat call returns job_not_found. state_changed: the record was not, or not verifiably, still as this call returned it (a failed job's result can still appear), so nothing was deleted. delete_failed: deletion failed or could not be verified, so the record may remain.",
+                "description": "What deleting the record did. removed: this call deleted it. missing: the store had already dropped it (consumed, expired or evicted); files a failed cleanup left may remain. After either, a repeat call returns job_not_found. state_changed: the record was not, or not verifiably, still as this call returned it (a failed job's result can still appear), so nothing was deleted; a failed record the store cannot prove final stays until it expires or is evicted. delete_failed: deletion failed or could not be verified, so the record may remain.",
                 "enum": [
                   "delete_failed",
                   "missing",
