@@ -168,7 +168,7 @@ def test_the_consume_instrument_can_fail():
 
 
 # PR #83 review: three more surfaces said meta.consume tells whether the record was deleted,
-# which `missing` cannot (a failed expiry cleanup can leave files), and one implied every
+# which `missing` cannot (a delete whose restore fails can leave files), and one implied every
 # undeleted record carries a follow_up. Each must name discard_outcome, follow_up and every
 # outcome that carries one. Two are markdown, read here because nothing else in the gate
 # sees them.
