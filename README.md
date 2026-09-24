@@ -126,7 +126,9 @@ the backend and the feature, rather than failing obscurely.
 - **A paid call's whole answer stays on disk** in the job record under `AMICUS_STATE_DIR`,
   whatever `detail` delivered it and after only best-effort secret redaction, until it expires
   (`AMICUS_JOB_TTL`, default 24h; an expired record is removed on a later job call, not by a
-  daemon), the per-workspace cap evicts it or `amicus_job_consume_result` removes it. It can
+  daemon), `amicus_job_consume_result` removes it or, once amicus has returned it, the
+  per-workspace cap evicts it. The cap never evicts a result nobody has fetched: a new paid call
+  is refused with `job_cap_reached` instead ([ADR 0038](docs/adr/0038-the-job-cap-never-evicts-an-unreturned-result.md)). It can
   quote what you sent. Your inputs themselves are never written there ([ADR 0035](docs/adr/0035-a-backend-answer-is-kept-on-the-job-record.md)).
 - **Kimi keeps its own copy.** The kimi CLI writes its own session files (observed under
   `~/.kimi-code/sessions`), which can hold the whole prompt and any answer produced. amicus found

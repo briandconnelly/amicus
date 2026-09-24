@@ -243,7 +243,7 @@ def test_the_consume_follow_up_says_when_retrying_stops_helping():
     assert "a done result that does not read back" in text
     assert "a failed job it cannot prove final, which keeps returning state_changed" in text
     assert "stop retrying either" in text
-    assert "expired or the per-workspace cap evicts it" in text
+    assert "expired, and the per-workspace cap may evict it sooner" in text
 
 
 def test_consumable_state_names_what_a_consume_may_delete():

@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 from amicus.jobs import idempotency
-from amicus.jobs.store import DiscardOutcome, JobStore
+from amicus.jobs.store import DiscardOutcome, JobCapReached, JobStore
 
 # A snippet (run with cwd=job_dir) that writes the final envelope to result.json.
 _WRITE_DONE = "import json; open('result.json','w').write(json.dumps({'ok': True, 'tool': 't'}))"
@@ -827,10 +827,11 @@ def test_list_newest_first_and_count_cap(tmp_path):
     for _ in range(3):
         jid, _ = store.start(_factory(_WRITE_DONE), cwd, kind="k")
         _wait_terminal(store, cwd, jid)
+        assert store.mark_delivered(cwd, jid) is True
         ids.append(jid)
         time.sleep(0.01)
     listed = store.list_jobs(cwd)
-    assert len(listed) <= 2  # oldest terminal evicted at the cap
+    assert [j["job_id"] for j in listed] == [ids[2], ids[1]]  # oldest delivered evicted
     # newest first
     epochs = [j["started_epoch"] for j in listed]
     assert epochs == sorted(epochs, reverse=True)
@@ -1138,7 +1139,7 @@ def test_read_meta_unparseable(tmp_path):
 
 
 def test_write_meta_is_atomic_against_torn_writes(tmp_path, monkeypatch):
-    # A concurrent reader (status/list/_enforce_count_cap in another process) must
+    # A concurrent reader (status/list/_make_room in another process) must
     # never observe a torn meta.json — a partial read parses as no meta, which
     # _status_of treats as terminal, and eviction can then delete a live job. Simulate
     # a write interrupted partway through: the original (pre-fix) _write_meta wrote
@@ -1168,18 +1169,159 @@ def test_write_meta_is_atomic_against_torn_writes(tmp_path, monkeypatch):
     assert JobStore._read_meta(jd) == original
 
 
-def test_count_cap_keeps_running_job(tmp_path):
-    # max_count=1 with one running + one done: the running job is never evicted.
+def test_count_cap_refuses_rather_than_evict_a_running_job(tmp_path):
+    # max_count=1 with one running job: a new start is refused before anything spawns,
+    # and the running job is never evicted.
     store = _store(tmp_path, max_count=1)
     cwd = str(tmp_path)
     running_id, _ = store.start(_factory("import time; time.sleep(30)"), cwd, kind="k")
-    done_id, _ = store.start(_factory(_WRITE_DONE), cwd, kind="k")
-    _wait_terminal(store, cwd, done_id)
-    # starting a third (done) job triggers the cap; the running job stays.
-    third_id, _ = store.start(_factory(_WRITE_DONE), cwd, kind="k")
-    _wait_terminal(store, cwd, third_id)
-    assert store.status(cwd, running_id) is not None
+    spawned = []
+
+    def factory(jd):
+        spawned.append(jd)
+        return [sys.executable, "-c", _WRITE_DONE]
+
+    with pytest.raises(JobCapReached) as info:
+        store.start(factory, cwd, kind="k")
+    assert (info.value.max_count, info.value.held) == (1, 1)
+    assert spawned == []  # refused pre-spend: no command was even built
+    assert [j["job_id"] for j in store.list_jobs(cwd)] == [running_id]
     store.cancel(cwd, running_id)
+
+
+def test_count_cap_never_evicts_an_undelivered_result(tmp_path):
+    # Issue #244: a done result nobody has read is what the caller paid for. The cap
+    # refuses the new start instead of deleting it.
+    store = _store(tmp_path, max_count=1)
+    cwd = str(tmp_path)
+    first, _ = store.start(_factory(_WRITE_DONE), cwd, kind="k")
+    assert _wait_terminal(store, cwd, first) == "done"
+    with pytest.raises(JobCapReached):
+        store.start(_factory(_WRITE_DONE), cwd, kind="k")
+    rec, env = store.result_payload(cwd, first)
+    assert rec is not None and rec["status"] == "done" and env == {"ok": True, "tool": "t"}
+
+
+def test_count_cap_evicts_a_delivered_result_to_make_room(tmp_path):
+    store = _store(tmp_path, max_count=1)
+    cwd = str(tmp_path)
+    first, _ = store.start(_factory(_WRITE_DONE), cwd, kind="k")
+    _wait_terminal(store, cwd, first)
+    assert store.mark_delivered(cwd, first) is True
+    second, _ = store.start(_factory(_WRITE_DONE), cwd, kind="k")
+    assert store.status(cwd, first) is None
+    assert store.status(cwd, second) is not None
+
+
+def test_count_cap_evicts_a_failed_record(tmp_path):
+    store = _store(tmp_path, max_count=1)
+    cwd = str(tmp_path)
+    first, _ = store.start(_factory("import sys; sys.exit(3)"), cwd, kind="k")
+    assert _wait_terminal(store, cwd, first) == "failed"  # no result.json
+    second, _ = store.start(_factory(_WRITE_DONE), cwd, kind="k")
+    assert store.status(cwd, first) is None
+    assert store.status(cwd, second) is not None
+
+
+def test_count_cap_evicts_a_cancelled_record(tmp_path):
+    store = _store(tmp_path, max_count=1)
+    cwd = str(tmp_path)
+    first, _ = store.start(_factory("import time; time.sleep(30)"), cwd, kind="k")
+    assert store.cancel(cwd, first)["status"] == "cancelled"
+    store.start(_factory(_WRITE_DONE), cwd, kind="k")
+    assert store.status(cwd, first) is None
+
+
+def test_count_cap_reaps_expired_records_before_refusing(tmp_path):
+    # An undelivered result past its TTL is expired, not protected: the pre-spend check
+    # reaps it rather than refusing the new start on its account.
+    store = _store(tmp_path, max_count=1, ttl_seconds=60)
+    cwd = str(tmp_path)
+    first, _ = store.start(_factory(_WRITE_DONE), cwd, kind="k")
+    _wait_terminal(store, cwd, first)
+    jd = store._job_dir(cwd, first)
+    meta = json.loads((jd / "meta.json").read_text())
+    meta["completed_epoch"] = time.time() - 10_000
+    (jd / "meta.json").write_text(json.dumps(meta))
+    store.start(_factory(_WRITE_DONE), cwd, kind="k")
+    assert store.status(cwd, first) is None
+
+
+def test_count_cap_evicts_a_record_that_predates_delivery_tracking(tmp_path):
+    # A record written before delivery tracking existed carries no delivered_epoch key and
+    # is evicted as before, so an upgrade cannot wedge a full workspace until its TTL.
+    store = _store(tmp_path, max_count=1)
+    cwd = str(tmp_path)
+    first, _ = store.start(_factory(_WRITE_DONE), cwd, kind="k")
+    _wait_terminal(store, cwd, first)
+    jd = store._job_dir(cwd, first)
+    meta = json.loads((jd / "meta.json").read_text())
+    del meta["delivered_epoch"]
+    (jd / "meta.json").write_text(json.dumps(meta))
+    store.start(_factory(_WRITE_DONE), cwd, kind="k")
+    assert store.status(cwd, first) is None
+
+
+def test_count_cap_evicts_a_result_this_server_cannot_deliver(tmp_path):
+    # A result stored under another result format can never be delivered, so it never
+    # gets a delivered stamp; it must not hold a cap slot until its TTL.
+    store = _store(tmp_path, max_count=1, result_format=9)
+    cwd = str(tmp_path)
+    first, _ = store.start(_factory(_WRITE_DONE), cwd, kind="k", extra={"result_format": 8})
+    _wait_terminal(store, cwd, first)
+    store.start(_factory(_WRITE_DONE), cwd, kind="k", extra={"result_format": 9})
+    assert store.status(cwd, first) is None
+
+
+def test_count_cap_keeps_a_result_in_the_current_format(tmp_path):
+    # Mutation control for the test above: the same record in the current format is kept.
+    store = _store(tmp_path, max_count=1, result_format=9)
+    cwd = str(tmp_path)
+    first, _ = store.start(_factory(_WRITE_DONE), cwd, kind="k", extra={"result_format": 9})
+    _wait_terminal(store, cwd, first)
+    with pytest.raises(JobCapReached):
+        store.start(_factory(_WRITE_DONE), cwd, kind="k")
+
+
+def test_count_cap_ignores_a_directory_without_a_record(tmp_path):
+    # A job dir with no meta.json is invisible to status/list (it may be another
+    # process's start mid-spawn): it neither holds a slot nor is deleted.
+    store = _store(tmp_path, max_count=1)
+    cwd = str(tmp_path)
+    stray = store._ws_dir(cwd) / ("a" * 32)
+    stray.mkdir(parents=True)
+    (stray / "spec.json").write_text("{}")
+    store.start(_factory(_WRITE_DONE), cwd, kind="k")
+    assert (stray / "spec.json").exists()
+
+
+def test_count_cap_refusal_leaves_an_idempotency_key_reusable(tmp_path):
+    store = _store(tmp_path, max_count=1)
+    cwd = str(tmp_path)
+    first, _ = store.start(_factory(_WRITE_DONE), cwd, kind="k")
+    _wait_terminal(store, cwd, first)
+    kw = {"kind": "k", "tool": "t", "key": "K", "arg_hash": "h"}
+    with pytest.raises(JobCapReached):
+        store.start_idempotent(_factory(_WRITE_DONE), cwd, **kw)
+    assert store.mark_delivered(cwd, first) is True
+    assert store.start_idempotent(_factory(_WRITE_DONE), cwd, **kw)["kind"] == "created"
+
+
+def test_mark_delivered_stamps_only_a_tracked_done_record_once(tmp_path):
+    store = _store(tmp_path)
+    cwd = str(tmp_path)
+    assert store.mark_delivered(cwd, "b" * 32) is False  # no such record
+    running, _ = store.start(_factory("import time; time.sleep(30)"), cwd, kind="k")
+    assert store.mark_delivered(cwd, running) is False  # nothing to deliver yet
+    store.cancel(cwd, running)
+    assert store.mark_delivered(cwd, running) is False  # cancelled: no result
+    done, _ = store.start(_factory(_WRITE_DONE), cwd, kind="k")
+    _wait_terminal(store, cwd, done)
+    assert store.mark_delivered(cwd, done) is True
+    stamp = store._read_meta(store._job_dir(cwd, done))["delivered_epoch"]
+    assert isinstance(stamp, float)
+    assert store.mark_delivered(cwd, done) is False  # already stamped: unchanged
+    assert store._read_meta(store._job_dir(cwd, done))["delivered_epoch"] == stamp
 
 
 def test_deadline_and_expiry_helpers(tmp_path):

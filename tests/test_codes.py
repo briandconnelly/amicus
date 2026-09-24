@@ -47,6 +47,7 @@ def test_error_codes_cover_the_universal_taxonomy_and_generalized_backend_codes(
                 "claude_permission_error",
                 "api_key_invalid",
                 "api_key_missing",
+                "job_cap_reached",
             }
         )
         == codes.LOCAL_CODES

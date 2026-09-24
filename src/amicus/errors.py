@@ -58,6 +58,15 @@ _LOCAL_RULES: dict[str, RepairRule] = {
         "The backend failed to load; amicus_backends reports the reason. Fix it or pick "
         "another backend.",
     ),
+    "job_cap_reached": RepairRule(
+        "list_jobs",
+        "amicus_job_list",
+        True,
+        "This workspace already holds AMICUS_JOB_MAX_COUNT job records the cap may not "
+        "evict: running jobs and finished results not yet returned. Nothing was spent. "
+        "Fetch a finished result (amicus_job_result, or amicus_job_consume_result to delete "
+        "it) or cancel a running job, then retry.",
+    ),
     "feature_unsupported": RepairRule(
         "use_allowed_value",
         "amicus_backends",

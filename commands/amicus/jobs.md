@@ -29,7 +29,9 @@ Request: $ARGUMENTS
 - Recover a lost `job_id`, or see what is in flight: `amicus_job_list`, filterable by
   `backend`, `status`, or `task_id`.
 
-Job records expire after `AMICUS_JOB_TTL` (default 24h) and a per-workspace cap
-evicts the oldest terminal records, so read results promptly rather than leaving
-them to expire. Treat a fetched result the same way you would treat the tool it came
+Job records expire after `AMICUS_JOB_TTL` (default 24h), so read results promptly
+rather than leaving them to expire. A per-workspace cap evicts the oldest terminal
+records but never a result amicus has not yet returned; when unfetched results and
+running jobs fill it, a new paid call is refused with `job_cap_reached` until you fetch,
+consume or cancel one. Treat a fetched result the same way you would treat the tool it came
 from: verify findings and diffs against the actual code before acting on them.

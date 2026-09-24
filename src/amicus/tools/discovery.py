@@ -93,6 +93,7 @@ _COMMON_PAID_CODES = [
     "claude_permission_error",
     "api_key_invalid",
     "api_key_missing",
+    "job_cap_reached",
     "internal_error",
 ]
 # Kimi's inspector reports a zero-exit run with no answer as empty_response on every verb it
@@ -608,6 +609,12 @@ async def capabilities_payload(
                 if effects.paid_calls_destructive
                 else "every enabled backend confines writes to a throwaway worktree. "
             )
+            + "A paid call never deletes a result nobody has fetched to make room for its own "
+            "job record: the per-workspace cap (AMICUS_JOB_MAX_COUNT) evicts only expired "
+            "records, terminal errors and results amicus has already returned once, and when "
+            "only running jobs and unreturned results remain it refuses the call pre-spend "
+            "with job_cap_reached. Returned once means amicus handed the result back, not "
+            "that the client received it. "
             + "readOnlyHint tracks whether a call changes observable state that outlives the "
             "response (a job record, committed spend), so paid tools are readOnlyHint false "
             "even when the run writes nothing, and job reads stay readOnlyHint true under the "

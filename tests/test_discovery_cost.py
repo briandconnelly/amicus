@@ -209,6 +209,15 @@ The schema-39 -> schema-40 DROP (-2 bytes, 112553 -> 112551 on "all") is #213:
 byte shorter than `false` on each. The `annotations_reading` sentence that explains it is
 on `amicus_capabilities`'s result, not on tools/list. Measured on the wire. MEASURED and
 BUDGET both move down by the 2 bytes, so the budget keeps no headroom.
+
+The schema-43 -> schema-44 raise (+132 bytes on every profile: all 112551 -> 112683) is #244:
+the job cap no longer evicts a result nobody has fetched, and the retention sentences say so.
+`tools/_resolve.RECORD_RETENTION` gains "once returned" on each of the eight paid tools (14
+bytes each, 112), and the three `amicus_job_*` read tools' retention sentence now says unfetched
+results fill the cap and it refuses paid calls (job_cap_reached), 20 bytes over the old text in
+all, after "read results promptly" was dropped as implied. A first draft cost 1338 bytes. The
+new `job_cap_reached` code moves nothing here: error codes do not ride tools/list. Measured on
+the wire. MEASURED and BUDGET both move by the 132 bytes, so the budget keeps no headroom.
 """
 
 from __future__ import annotations
@@ -218,7 +227,7 @@ from tests.conftest import spawned_server_env
 
 from amicus import manifest
 
-MEASURED: dict[str, int] = {"all": 112551, "codex-kimi": 112559, "claude": 112551}
+MEASURED: dict[str, int] = {"all": 112683, "codex-kimi": 112691, "claude": 112683}
 # The budget is a literal, not MEASURED rounded up to the next kilobyte as it was until
 # 2026-09-14. The rounding left up to 1 KB of growth per bucket that no PR had to own, and
 # this file records three such accumulations (448 and 12 bytes in the paragraphs above, and
@@ -226,7 +235,7 @@ MEASURED: dict[str, int] = {"all": 112551, "codex-kimi": 112559, "claude": 11255
 # #94 that landed after it), each noticed only when the next deliberate raise re-measured.
 # Any growth now fails until a PR raises BUDGET and says why; a shrink passes and shows as
 # drift against MEASURED. Raising one means re-measuring and moving both.
-BUDGET: dict[str, int] = {"all": 112551, "codex-kimi": 112559, "claude": 112551}
+BUDGET: dict[str, int] = {"all": 112683, "codex-kimi": 112691, "claude": 112683}
 
 
 @pytest.mark.parametrize("profile", sorted(manifest.PROFILES))
