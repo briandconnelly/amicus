@@ -24,6 +24,7 @@ hooks = [
   { id = "ty", name = "ty check", language = "system", entry = "uv run ty check", types_or = ["python", "toml"], files = "(\\.py|^pyproject\\.toml)$", pass_filenames = false },
   { id = "lint-imports", name = "import-linter", language = "system", entry = "uv run lint-imports", types = ["python"], pass_filenames = false },
   { id = "actions-pinning", name = "github actions sha pinning", language = "system", entry = "uv run python scripts/check_github_actions_pinning.py", files = "^\\.github/workflows/.*\\.ya?ml$", pass_filenames = false },
+  { id = "sentence-per-line", name = "one sentence per line under docs/", language = "system", entry = "uv run python scripts/check_sentence_per_line.py", files = "^(docs/.*\\.md|scripts/check_sentence_per_line\\.py)$", pass_filenames = false },
   { id = "uv-lock-check", name = "uv lock --check", language = "system", entry = "uv lock --check", pass_filenames = false, files = "^(pyproject\\.toml|uv\\.lock|uv\\.toml)$" },
 ]
 
