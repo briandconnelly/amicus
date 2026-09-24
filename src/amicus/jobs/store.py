@@ -176,6 +176,25 @@ class ActivityRecorder:
             self._last_write = now_epoch
 
 
+# os.kill and os.waitpid parse a pid as a C int, which is 32 bits wherever amicus runs;
+# a larger int raises OverflowError rather than reaching the OS.
+_PID_MAX = 2**31 - 1
+
+
+def _meta_pid(meta: dict) -> int | None:
+    """The record's worker pid, or None when ``meta.json`` holds anything else.
+
+    ``meta.json`` is not validated on read, and only a positive int within the C int
+    range names one process: ``-1`` makes ``waitpid`` wait on any child and ``kill``
+    signal every process, a str or float raises ``TypeError``, and an int past the range
+    raises ``OverflowError`` (#239). ``bool`` is excluded although it subclasses int.
+    """
+    pid = meta.get("pid")
+    if type(pid) is not int or not 0 < pid <= _PID_MAX:
+        return None
+    return pid
+
+
 def _pid_alive(pid: int | None) -> bool:
     if not pid:
         return False
@@ -683,9 +702,9 @@ class JobStore:
         correct during the worker's tiny create-then-``flock`` startup window, when the
         lock briefly reads as free. An unowned job is treated as running only while its
         worker still holds the lock; otherwise it is not running, so cancel/timeout
-        never signal a stale or reused PID."""
-        pid = meta.get("pid")
-        if not pid:
+        never signal a stale or reused PID. A pid ``_meta_pid`` rejects is no pid."""
+        pid = _meta_pid(meta)
+        if pid is None:
             return False
         if _worker_lock_held(jd / "worker.lock") is True:
             return True  # positively verified alive (a reused PID can't hold this lock)
@@ -706,19 +725,15 @@ class JobStore:
         a reused PID reads as alive, and a worker that is gone never comes back. The lock
         is probed, never held: a held lock is how every reader, in any process, tells a
         live worker from a reused PID, so holding it would make them treat a dead job as
-        alive and signal its PID. A pid that is not a positive int (``meta.json`` is not
-        validated on read), or one the OS cannot represent, proves nothing, so the worker
-        is never taken as gone.
+        alive and signal its PID. A pid ``_meta_pid`` rejects proves nothing, so the
+        worker is never taken as gone.
         """
-        pid = meta.get("pid")
-        if type(pid) is not int or pid <= 0:
+        pid = _meta_pid(meta)
+        if pid is None:
             return False
-        try:
-            if self._owned(meta):
-                return not _is_running(pid)
-            return _worker_lock_held(jd / "worker.lock") is False and not _pid_alive(pid)
-        except (OverflowError, ValueError):
-            return False  # past the OS's pid range: kill/waitpid cannot probe it
+        if self._owned(meta):
+            return not _is_running(pid)
+        return _worker_lock_held(jd / "worker.lock") is False and not _pid_alive(pid)
 
     def _status_of(self, jd: Path, meta: dict) -> str:
         """Compute the live status, killing + marking jobs that overran."""
@@ -728,7 +743,7 @@ class JobStore:
         if self._job_running(jd, meta):
             if time.time() > meta.get("deadline_epoch", float("inf")):
                 _terminate_pid_tree(
-                    meta.get("pid"),
+                    _meta_pid(meta),
                     self.terminate_grace_seconds,
                     is_alive=lambda: self._job_running(jd, meta),
                 )
@@ -956,7 +971,7 @@ class JobStore:
             jd, meta, state = live
             if state in _TERMINAL:
                 return self._status_dict(jd, meta, state)
-            pid = meta.get("pid")
+            pid = _meta_pid(meta)
         # Terminate with the lock released: the graceful-shutdown grace wait must
         # not block status/list/result calls for every workspace. Liveness stays
         # lock-aware throughout, so a worker that exits mid-grace (and a PID then

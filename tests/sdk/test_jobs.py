@@ -466,14 +466,13 @@ def test_discard_rereads_a_failed_record_once_its_worker_is_proved_gone(tmp_path
     _assert_still_done(store, cwd, job_id)
 
 
-# Each (owned, pid) pair a status read still reports as failed: an owned record reads a
-# truthy invalid pid through waitpid, which reports it running or raises before any discard.
-_UNCHECKABLE_PIDS = [(True, None), (True, 0)] + [
-    (False, pid) for pid in (None, 0, -1, "123", 1.5, True, 10**100)
-]
+# Every pid a store read must treat as no pid: not a positive int, or past the C int range
+# os.kill and os.waitpid accept (#239).
+_INVALID_PIDS = [None, 0, -1, "123", 1.5, True, 2**31, 10**100]
 
 
-@pytest.mark.parametrize(("owned", "pid"), _UNCHECKABLE_PIDS)
+@pytest.mark.parametrize("owned", [True, False])
+@pytest.mark.parametrize("pid", _INVALID_PIDS)
 def test_discard_keeps_a_failed_record_whose_pid_cannot_be_checked(tmp_path, owned, pid):
     # meta.json is not validated on read, so a pid that is not a positive int proves
     # nothing about the worker and must never count as its exit (PR #238 review).
@@ -490,19 +489,44 @@ def test_discard_keeps_a_failed_record_whose_pid_cannot_be_checked(tmp_path, own
     assert store.status(cwd, job_id)["status"] == "failed"
 
 
-@pytest.mark.parametrize("owned", [True, False])
-def test_worker_gone_is_false_for_a_pid_the_os_cannot_represent(tmp_path, owned):
-    # os.kill and os.waitpid raise OverflowError for an int past the C range, which must
-    # keep the record rather than escape the discard (PR #238 review). The owned case is
-    # checked directly: its status read already fails in waitpid first (#239).
+@pytest.mark.parametrize("pid", _INVALID_PIDS)
+def test_an_owned_record_with_an_invalid_pid_reads_as_no_pid(tmp_path, monkeypatch, pid):
+    # An owned record's pid went straight to os.waitpid: "123" and 1.5 raised TypeError,
+    # an out-of-range int raised OverflowError, and -1 waited on ANY child of the server,
+    # reporting the job running while reaping an unrelated child's exit (#239).
+    from amicus.jobs import store as job_store
+
     store = _store(tmp_path)
     cwd = str(tmp_path)
     job_id = _failed_job(store, cwd)
-    jd = _disown(store, cwd, job_id) if not owned else store._job_dir(cwd, job_id)
-    (jd / "worker.lock").touch()
+    jd = store._job_dir(cwd, job_id)
     meta = json.loads((jd / "meta.json").read_text())
-    meta["pid"] = 10**100
-    assert store._worker_gone(jd, meta) is False
+    assert store._owned(meta), "control: this process owns the record"
+    meta["pid"] = pid
+    meta["completed_epoch"] = None
+    meta.pop("terminal_status", None)
+    (jd / "meta.json").write_text(json.dumps(meta))
+    probed: list[object] = []
+    wait, kill = os.waitpid, os.kill
+    monkeypatch.setattr(job_store.os, "waitpid", lambda p, o: probed.append(p) or wait(p, o))
+    monkeypatch.setattr(job_store.os, "kill", lambda p, s: probed.append(p) or kill(p, s))
+    assert store.status(cwd, job_id)["status"] == "failed"
+    assert store.result_payload(cwd, job_id) == (store.status(cwd, job_id), None)
+    assert [j["job_id"] for j in store.list_jobs(cwd)] == [job_id]
+    assert store.cancel(cwd, job_id)["status"] == "failed"
+    assert probed == [], "an invalid pid is never handed to the OS"
+
+
+def test_the_largest_valid_pid_is_probed_without_overflow(tmp_path):
+    # The bound is the C int range os.kill and os.waitpid parse: its top value must reach
+    # the OS (which reports no such process), and one past it must not (#239).
+    from amicus.jobs import store as job_store
+
+    assert job_store._meta_pid({"pid": 2**31 - 1}) == 2**31 - 1
+    assert job_store._meta_pid({"pid": 2**31}) is None
+    assert job_store._is_running(2**31 - 1) is False
+    with pytest.raises(OverflowError):
+        os.kill(2**31, 0)
 
 
 def test_discard_never_holds_the_worker_lock(tmp_path, monkeypatch):
