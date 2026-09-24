@@ -90,9 +90,9 @@ Prefer `amicus_job_result` over `amicus_job_consume_result` while a workflow is 
 Consuming deletes the record, and a later synthesis, comparison, or second reviewer cannot read an
 artifact you have already destroyed. The consumed envelope's `meta.consume.discard_outcome`
 reports what the store did, not whether the files are gone: after `removed` or `missing` it no
-longer serves the record; after `not_done` or `delete_failed` the record may remain, and
+longer serves the record; after `state_changed` or `delete_failed` the record may remain, and
 `meta.consume.follow_up` names the call that shows what is left. A failed, cancelled or timed-out
-job returns its terminal error with no `meta.consume` and is not deleted.
+job returns its terminal error, and `meta.consume` reports its discard too.
 
 ## Backend-local codes
 

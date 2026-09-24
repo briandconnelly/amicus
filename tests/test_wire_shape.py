@@ -64,7 +64,7 @@ def test_populated_optionals_survive_and_every_producible_optional_is_populated_
     # `consume` is set only by amicus_job_consume_result, never by a plain delivery, so it
     # is populated in the snapshot's `consumed` section, one entry per discard outcome (#44).
     assert "consume" not in populated
-    assert set(snap["consumed"]) == {"removed", "missing", "not_done", "delete_failed"}
+    assert set(snap["consumed"]) == {"removed", "missing", "state_changed", "delete_failed"}
     populated.add("consume")
     assert optional - impossible <= populated
 

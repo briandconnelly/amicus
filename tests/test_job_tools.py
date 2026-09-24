@@ -208,9 +208,9 @@ async def test_consume_reports_a_record_already_gone_as_missing(app, store, tmp_
     happens (#44)."""
     real_discard = JobStore.discard
 
-    def raced(self, cwd, job_id):
-        assert real_discard(self, cwd, job_id) is DiscardOutcome.REMOVED
-        return real_discard(self, cwd, job_id)
+    def raced(self, cwd, job_id, **kw):
+        assert real_discard(self, cwd, job_id, **kw) is DiscardOutcome.REMOVED
+        return real_discard(self, cwd, job_id, **kw)
 
     monkeypatch.setattr(JobStore, "discard", raced)
     ws = {"workspace_root": str(tmp_path)}
@@ -228,7 +228,7 @@ async def test_consume_reports_a_record_already_gone_as_missing(app, store, tmp_
         assert again.structured_content["error"]["code"] == "job_not_found"
 
 
-@pytest.mark.parametrize("outcome", [DiscardOutcome.DELETE_FAILED, DiscardOutcome.NOT_DONE])
+@pytest.mark.parametrize("outcome", [DiscardOutcome.DELETE_FAILED, DiscardOutcome.STATE_CHANGED])
 async def test_consume_reports_a_retained_record_and_a_follow_up_that_resolves_it(
     app, store, tmp_path, monkeypatch, outcome
 ):
@@ -238,9 +238,9 @@ async def test_consume_reports_a_retained_record_and_a_follow_up_that_resolves_i
     real_discard = JobStore.discard
     calls: list[str] = []
 
-    def first_call_keeps_it(self, cwd, job_id):
+    def first_call_keeps_it(self, cwd, job_id, **kw):
         calls.append(job_id)
-        return outcome if len(calls) == 1 else real_discard(self, cwd, job_id)
+        return outcome if len(calls) == 1 else real_discard(self, cwd, job_id, **kw)
 
     monkeypatch.setattr(JobStore, "discard", first_call_keeps_it)
     ws = {"workspace_root": str(tmp_path)}
@@ -349,42 +349,83 @@ async def _terminal_error_job(c, store, tmp_path, monkeypatch, state):
     ("state", "code"),
     [("failed", "job_failed"), ("cancelled", "job_cancelled"), ("timeout", "job_timeout")],
 )
-async def test_consume_on_a_terminal_error_job_returns_the_error_and_deletes_nothing(
+async def test_consume_on_a_terminal_error_job_returns_the_error_and_deletes_it(
     app, store, tmp_path, monkeypatch, state, code
 ):
-    """A failed, cancelled or timed-out job has no stored envelope, so a consume delivers
-    nothing: it returns the terminal error with no meta.consume, never calls discard, and the
-    record survives a repeat call (#94). Discard must not even be attempted: the store never
-    stamps `failed` as terminal, so a record read as `failed` turns `done` if its result.json
-    appears after the read, and a discard then would delete a result never delivered."""
-    discards: list[str] = []
+    """A failed, cancelled or timed-out job has no stored envelope, so a consume returns its
+    terminal error, discards the record in the state it read, and reports that in
+    meta.consume; a repeat call is job_not_found (#126). Before #126 it deleted nothing (#94),
+    because the store had no delete safe for a `failed` record."""
+    discards: list[tuple[str, str]] = []
     real_discard = JobStore.discard
 
-    def counted(self, cwd, job_id):
-        discards.append(job_id)
-        return real_discard(self, cwd, job_id)
+    def counted(self, cwd, job_id, *, expected="done"):
+        discards.append((job_id, expected))
+        return real_discard(self, cwd, job_id, expected=expected)
 
     monkeypatch.setattr(JobStore, "discard", counted)
     ws = {"workspace_root": str(tmp_path)}
     async with Client(app) as c:
         schemas = await _schemas(c)
         job_id = await _terminal_error_job(c, store, tmp_path, monkeypatch, state)
-        for attempt in (1, 2):
-            res = await c.call_tool(
-                "amicus_job_consume_result", {"job_id": job_id, **ws}, raise_on_error=False
-            )
-            body = res.structured_content
-            schemas["amicus_job_consume_result"].validate(body)
-            assert res.is_error and body["error"]["code"] == code, attempt
-            assert "consume" not in body["meta"], attempt
-            assert store.status(str(tmp_path), job_id)["status"] == state, attempt
-        assert discards == []
-        # Control: the counter sees the discard a delivered consume makes.
-        monkeypatch.delenv("FAKE_CODEX_SLEEP", raising=False)
-        done = await _start(c, tmp_path)
-        await _wait_done(store, tmp_path, done)
-        await c.call_tool("amicus_job_consume_result", {"job_id": done, **ws})
-        assert discards == [done]
+        res = await c.call_tool(
+            "amicus_job_consume_result", {"job_id": job_id, **ws}, raise_on_error=False
+        )
+        body = res.structured_content
+        schemas["amicus_job_consume_result"].validate(body)
+        assert res.is_error and body["error"]["code"] == code
+        assert body["meta"]["consume"] == {"discard_outcome": "removed"}
+        assert discards == [(job_id, state)]
+        assert store.status(str(tmp_path), job_id) is None
+        again = await c.call_tool(
+            "amicus_job_consume_result", {"job_id": job_id, **ws}, raise_on_error=False
+        )
+        assert again.structured_content["error"]["code"] == "job_not_found"
+
+
+async def test_consume_keeps_a_failed_record_whose_result_appears_before_the_discard(
+    app, store, tmp_path, monkeypatch
+):
+    """The race #126 exists for: `failed` is derived on every read, never stamped, so a
+    result.json that appears between the consume's read and its discard turns the record
+    done. The discard must keep it and say state_changed, and the follow_up leads to a
+    retried consume that delivers the result it would otherwise have destroyed."""
+    real_discard = JobStore.discard
+    stored: dict[str, bytes] = {}
+
+    def result_appears_first(self, cwd, job_id, **kw):
+        if stored:
+            (self._job_dir(cwd, job_id) / "result.json").write_bytes(stored.pop("result"))
+        return real_discard(self, cwd, job_id, **kw)
+
+    ws = {"workspace_root": str(tmp_path)}
+    async with Client(app) as c:
+        job_id = await _start(c, tmp_path)
+        await _wait_done(store, tmp_path, job_id)
+        jd = store._job_dir(str(tmp_path), job_id)
+        stored["result"] = (jd / "result.json").read_bytes()
+        (jd / "result.json").unlink()
+        meta = json.loads((jd / "meta.json").read_text(encoding="utf-8"))
+        meta["terminal_status"] = None
+        (jd / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
+        assert store.status(str(tmp_path), job_id)["status"] == "failed", "control"
+        monkeypatch.setattr(JobStore, "discard", result_appears_first)
+        res = await c.call_tool(
+            "amicus_job_consume_result", {"job_id": job_id, **ws}, raise_on_error=False
+        )
+        body = res.structured_content
+        assert res.is_error and body["error"]["code"] == "job_failed"
+        assert not stored, "control: the result appeared before the discard"
+        disposition = body["meta"]["consume"]
+        assert disposition["discard_outcome"] == "state_changed"
+        follow_up = disposition["follow_up"]
+        checked = (await c.call_tool(follow_up["tool"], follow_up["arguments"])).structured_content
+        assert checked["status"] == "done" and checked["result_available"] is True
+        retried = (
+            await c.call_tool("amicus_job_consume_result", {"job_id": job_id, **ws})
+        ).structured_content
+        assert retried["ok"] is True and retried["summary"] == "Looks fine"
+        assert retried["meta"]["consume"] == {"discard_outcome": "removed"}
 
 
 async def test_cancel_running_then_terminal_is_idempotent(app, store, tmp_path, monkeypatch):
@@ -555,9 +596,9 @@ async def test_a_failed_expiry_cleanup_during_consume_is_delete_failed(
         real_discard = JobStore.discard
         real_rmdir = Path.rmdir
 
-        def expire_then_discard(self, cwd, jid):
+        def expire_then_discard(self, cwd, jid, **kw):
             expired[0] = True
-            return real_discard(self, cwd, jid)
+            return real_discard(self, cwd, jid, **kw)
 
         def refuse_the_job_dir(self):
             if self == target:

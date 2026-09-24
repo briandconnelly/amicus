@@ -11,7 +11,11 @@ from typing import TYPE_CHECKING, Any
 from fastmcp import Context
 
 from amicus.jobs import lifecycle, lookup
-from amicus.jobs.delivery import attach_consume_disposition, finished_job_envelope
+from amicus.jobs.delivery import (
+    attach_consume_disposition,
+    consumable_state,
+    finished_job_envelope,
+)
 from amicus.jobs.store import MAX_POLL_AFTER_MS
 from amicus.schemas.params import (
     DetailParam,
@@ -100,11 +104,14 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
         )
         if delivered and isinstance(envelope.get("meta"), dict) and meta.task_id is not None:
             envelope["meta"]["task_id"] = meta.task_id
-        if not (consume and delivered):
+        expected = consumable_state(rec["status"], delivered)
+        if not consume or expected is None:
             return envelope
-        # Once delivered is true, every discard outcome still returns the envelope, since
-        # refusing would lose paid work; meta.consume reports which outcome it was (#44).
-        outcome = await asyncio.to_thread(store().discard, cwd, job_id)
+        # Every discard outcome still returns the envelope, since refusing would lose paid
+        # work; meta.consume reports which outcome it was (#44). The discard deletes only a
+        # record still in the state this call read, so a failed job whose result appeared
+        # since is kept for a retried consume to deliver (#126).
+        outcome = await asyncio.to_thread(store().discard, cwd, job_id, expected=expected)
         return attach_consume_disposition(envelope, outcome, job_id, workspace_root)
 
     @app.tool(
@@ -161,9 +168,9 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
             f"{FREE_MARKER} Like amicus_job_result, then delete the record; "
             "meta.consume.discard_outcome says what happened. After removed or missing a "
             "repeat call returns job_not_found (not idempotent); otherwise the record may "
-            "remain, so follow meta.consume.follow_up. A failed, cancelled or timed-out job "
-            "returns its terminal error with no meta.consume and is not deleted, nor is a "
-            "corrupt or incompatible record."
+            "remain, so see meta.consume.follow_up. A failed, cancelled or timed-out job "
+            "returns its terminal error, and meta.consume reports its discard too. "
+            "A corrupt or incompatible record is kept."
         ),
     )
     @guard("amicus_job_consume_result", settings)
