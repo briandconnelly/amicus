@@ -399,34 +399,140 @@ def test_rmtree_partial_failure_keeps_record_readable(tmp_path, monkeypatch):
     assert payload == {"ok": True, "tool": "t"}  # result still fetchable
 
 
-def test_rmtree_failed_rmdir_restores_marker(tmp_path, monkeypatch):
-    # meta.json must be gone before rmdir (the dir has to be empty), so a failed
-    # final rmdir would otherwise strand a marker-less shell that status/list and
-    # the reaper all skip. _rmtree restores the snapshotted marker so the record
-    # stays visible and a later reap pass can retry (Copilot review on #314).
+def _done_job(tmp_path) -> tuple[JobStore, str, str, Path]:
     store = _store(tmp_path)
     cwd = str(tmp_path)
     job_id, _ = store.start(_factory(_WRITE_DONE), cwd, kind="k")
     assert _wait_terminal(store, cwd, job_id) == "done"
+    return store, cwd, job_id, store._job_dir(cwd, job_id)
+
+
+def _assert_still_done(store: JobStore, cwd: str, job_id: str) -> None:
+    rec, payload = store.result_payload(cwd, job_id)
+    assert rec is not None and rec["status"] == "done" and rec["result_available"] is True
+    assert payload == {"ok": True, "tool": "t"}
+
+
+def test_rmtree_failed_rmdir_restores_the_whole_record(tmp_path, monkeypatch):
+    # result.json and meta.json must both be gone before rmdir (the dir has to be empty).
+    # A refused rmdir restores both, so the leftover is the record as it was: still done,
+    # its result still fetchable, and a later discard can finish the job. Restoring only
+    # meta.json made a delivered job read as failed (#124).
+    store, cwd, job_id, jd = _done_job(tmp_path)
     real_rmdir = Path.rmdir
 
     def stuck_dir(self, *args, **kwargs):
-        if self.name == job_id:
+        if self == jd:
             raise OSError("directory busy")
         return real_rmdir(self, *args, **kwargs)
 
     monkeypatch.setattr(Path, "rmdir", stuck_dir)
     assert store.discard(cwd, job_id) is DiscardOutcome.DELETE_FAILED
     monkeypatch.undo()
-    jd = store._job_dir(cwd, job_id)
-    assert (jd / "meta.json").is_file()  # marker restored
-    # The shell reads as a terminal record (result.json is gone, so "failed" —
-    # natural completion never persists terminal_status), which is the point:
-    # visible to status/list and eligible for TTL reaping, never an orphan.
-    assert store.status(cwd, job_id)["status"] == "failed"
-    # Once the transient failure clears, cleanup completes.
-    store._rmtree(jd)
+    _assert_still_done(store, cwd, job_id)
+    assert sorted(p.name for p in jd.iterdir()) == ["meta.json", "result.json"]
+    # Once the transient failure clears, the delete completes.
+    assert store.discard(cwd, job_id) is DiscardOutcome.REMOVED
+
+
+def test_rmtree_failed_marker_unlink_restores_the_result(tmp_path, monkeypatch):
+    # result.json goes before meta.json, so a refused unlink of the marker would leave a
+    # visible record without its result, which reads as failed (#124).
+    store, cwd, job_id, _jd = _done_job(tmp_path)
+    real_unlink = Path.unlink
+
+    def sticky_marker(self, *args, **kwargs):
+        if self.name == "meta.json":
+            raise PermissionError("unlink denied")
+        return real_unlink(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "unlink", sticky_marker)
+    assert store.discard(cwd, job_id) is DiscardOutcome.DELETE_FAILED
+    monkeypatch.undo()
+    _assert_still_done(store, cwd, job_id)
+
+
+def test_rmtree_failure_on_another_entry_never_touches_the_result(tmp_path, monkeypatch):
+    # A real failure, not a patched one: unlink refuses a directory. Whatever order iterdir
+    # yields, result.json is not unlinked until every other entry is gone, so the record is
+    # still done. The patched order puts result.json first, the order that lost it (#124).
+    store, cwd, job_id, jd = _done_job(tmp_path)
+    (jd / "stuck").mkdir()
+    real_iterdir = Path.iterdir
+
+    def result_first(self):
+        return iter(sorted(real_iterdir(self), key=lambda p: p.name != "result.json"))
+
+    monkeypatch.setattr(Path, "iterdir", result_first)
+    assert store.discard(cwd, job_id) is DiscardOutcome.DELETE_FAILED
+    monkeypatch.undo()
+    _assert_still_done(store, cwd, job_id)
+    (jd / "stuck").rmdir()
+    assert store.discard(cwd, job_id) is DiscardOutcome.REMOVED
+
+
+def test_rmtree_never_restores_a_result_without_its_marker(tmp_path, monkeypatch):
+    # If the marker cannot be written back, the result is not restored either: a result.json
+    # in a directory without meta.json is invisible to status, list and the reaper, so it
+    # would outlive every retention bound the tool surface discloses.
+    store, cwd, job_id, jd = _done_job(tmp_path)
+    real_rmdir = Path.rmdir
+    real_write_bytes = Path.write_bytes
+
+    def stuck_dir(self, *args, **kwargs):
+        if self == jd:
+            raise OSError("directory busy")
+        return real_rmdir(self, *args, **kwargs)
+
+    def full_disk(self, *args, **kwargs):
+        if self.name == "meta.json.tmp":
+            raise OSError("no space left on device")
+        return real_write_bytes(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "rmdir", stuck_dir)
+    monkeypatch.setattr(Path, "write_bytes", full_disk)
+    assert store.discard(cwd, job_id) is DiscardOutcome.DELETE_FAILED
+    monkeypatch.undo()
+    assert not (jd / "result.json").exists()
     assert store.status(cwd, job_id) is None
+
+
+def _expire(jd: Path) -> None:
+    meta = json.loads((jd / "meta.json").read_text())
+    meta["completed_epoch"] = time.time() - 10_000
+    (jd / "meta.json").write_text(json.dumps(meta))
+
+
+def test_discard_reports_a_failed_expiry_cleanup_as_delete_failed(tmp_path, monkeypatch):
+    # A record that has expired is cleaned up by the read inside discard. When that cleanup
+    # fails, the record is no longer served but its files remain, so discard must say
+    # DELETE_FAILED, not MISSING (#125).
+    store, cwd, job_id, jd = _done_job(tmp_path)
+    _expire(jd)
+    real_rmdir = Path.rmdir
+    refused: list[Path] = []
+
+    def stuck_dir(self, *args, **kwargs):
+        if self == jd:
+            refused.append(self)
+            raise OSError("directory busy")
+        return real_rmdir(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "rmdir", stuck_dir)
+    assert store.discard(cwd, job_id) is DiscardOutcome.DELETE_FAILED
+    assert refused, "control: the expiry cleanup ran and failed"
+    assert store.status(cwd, job_id) is None, "an expired record is never served"
+    assert jd.exists()
+    monkeypatch.undo()
+    assert store.discard(cwd, job_id) is DiscardOutcome.MISSING
+    assert not jd.exists(), "the retried expiry cleanup removed it"
+
+
+def test_discard_reports_a_completed_expiry_cleanup_as_missing(tmp_path):
+    store, cwd, job_id, jd = _done_job(tmp_path)
+    _expire(jd)
+    assert store.discard(cwd, job_id) is DiscardOutcome.MISSING
+    assert not jd.exists()
 
 
 def test_missing_job(tmp_path):
