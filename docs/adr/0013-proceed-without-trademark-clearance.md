@@ -31,8 +31,11 @@ Accepted, in full:
 
 - A trademark holder could later object and demand a rename.
 - By then the cost falls on users who have pinned the package, not only on this project.
-- A rename is not a package rename. `amicus_consult`, `amicus_review_changes`, `amicus_delegate` and the rest are the agent-visible tool surface — which is what `FINGERPRINT` exists to track. Renaming moves every tool name, the `AMICUS_*` environment prefix, both plugin manifests, the `.mcp.json` pin, and the fingerprint itself.
-- The risk is smallest while the project is MIT-licensed, non-commercial, and in a different field from the known legal-software use. Each of those changing raises it.
+- A rename is not a package rename.
+  `amicus_consult`, `amicus_review_changes`, `amicus_delegate` and the rest are the agent-visible tool surface — which is what `FINGERPRINT` exists to track.
+  Renaming moves every tool name, the `AMICUS_*` environment prefix, both plugin manifests, the `.mcp.json` pin, and the fingerprint itself.
+- The risk is smallest while the project is MIT-licensed, non-commercial, and in a different field from the known legal-software use.
+  Each of those changing raises it.
 
 ## What would reopen this
 
@@ -42,6 +45,7 @@ Accepted, in full:
 
 ## Alternatives not taken
 
-- **A self-run search** of the public registries. Free and roughly an hour, and it converts an unknown into a known risk — but it is a search, not clearance, and does not produce defensibility.
+- **A self-run search** of the public registries.
+  Free and roughly an hour, and it converts an unknown into a known risk — but it is a search, not clearance, and does not produce defensibility.
 - **A lawyer's opinion.** The only path producing genuine clearance, and disproportionate to a personal open-source project at 0.1.0.
 - **Renaming now.** Cheapest it will ever be, and rejected because the name is a good fit for the product's central property, not an arbitrary label.
