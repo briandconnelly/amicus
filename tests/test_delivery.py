@@ -234,11 +234,15 @@ def test_attach_consume_disposition_maps_every_discard_outcome():
 
 
 def test_the_consume_follow_up_says_when_retrying_stops_helping():
-    """A failed record whose worker cannot be proved gone returns state_changed on every
-    retry, so the follow_up must name that case and where the record goes instead, or an
-    agent following it loops until expiry (#126 review)."""
+    """Two records survive every retry: a failed one whose worker cannot be proved gone,
+    which returns state_changed each time, and a done one whose result does not read back,
+    which a consume never deletes. The follow_up must name both and where they go instead,
+    or an agent following it loops until expiry (#126 review, PR #238 Copilot)."""
     text = delivery.CONSUME_FOLLOW_UP
-    assert "Stop retrying a failed job that keeps returning state_changed" in text
+    assert "deletes it only if it can" in text
+    assert "a done result that does not read back" in text
+    assert "a failed job it cannot prove final, which keeps returning state_changed" in text
+    assert "stop retrying either" in text
     assert "expired or the per-workspace cap evicts it" in text
 
 

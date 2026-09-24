@@ -140,9 +140,10 @@ TERMINAL_ERROR_STATES = frozenset({"failed", "cancelled", "timeout"})
 CONSUME_FOLLOW_UP = (
     "The record may remain. amicus_job_status on this job shows what is left: job_not_found "
     "means the store no longer serves it; done, failed, cancelled or timeout means a retried "
-    "consume returns what the record now holds and can delete it. Stop retrying a failed job "
-    "that keeps returning state_changed: the store cannot prove that record final, so it stays "
-    "until a later job call finds it expired or the per-workspace cap evicts it."
+    "consume returns what the record now holds and deletes it only if it can. It keeps a done "
+    "result that does not read back, and a failed job it cannot prove final, which keeps "
+    "returning state_changed, so stop retrying either: it stays until a later job call finds "
+    "it expired or the per-workspace cap evicts it."
 )
 
 
