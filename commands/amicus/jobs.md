@@ -21,10 +21,10 @@ Request: $ARGUMENTS
   `job_id` — use this once you are done with the result. Its
   `meta.consume.discard_outcome` reports what the store did: after `removed` or
   `missing` it no longer serves the record, so a repeat call returns `job_not_found`;
-  after `not_done` or `delete_failed` the record may remain, and
+  after `state_changed` or `delete_failed` the record may remain, and
   `meta.consume.follow_up` names the call that shows what is left. A failed,
-  cancelled or timed-out job returns its terminal error with no `meta.consume` and
-  is not deleted.
+  cancelled or timed-out job returns its terminal error, and `meta.consume` reports
+  its discard too.
 - Cancel a running job: `amicus_job_cancel` with `job_id`.
 - Recover a lost `job_id`, or see what is in flight: `amicus_job_list`, filterable by
   `backend`, `status`, or `task_id`.

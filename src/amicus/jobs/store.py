@@ -83,7 +83,7 @@ class DiscardOutcome(StrEnum):
 
     REMOVED = "removed"  # this call removed the record and verified it absent
     MISSING = "missing"  # no record: already discarded, expired, or evicted
-    NOT_DONE = "not_done"  # record exists but is not a done result; never deleted
+    STATE_CHANGED = "state_changed"  # not (verifiably) in the named state; never deleted
     DELETE_FAILED = "delete_failed"  # removal failed or could not be verified
 
 
@@ -693,6 +693,33 @@ class JobStore:
             return _is_running(pid)  # our own child: the PID probe is authoritative
         return False  # unowned + no verified lock -> never reported running or signaled
 
+    def _worker_gone(self, jd: Path, meta: dict) -> bool:
+        """Whether no worker can still write this job's ``result.json``.
+
+        Stricter than ``not _job_running``: an unowned job whose lock is indeterminate
+        (no lock file) reads as not running, so ``_status_of`` calls it ``failed``, yet
+        its worker may still finish and turn the record ``done`` (#126). For our own
+        job, ``_is_running`` reaps the child, then falls back to a ``kill(0)`` probe of
+        the PID. For an unowned one, the lock file must exist and be free AND the PID
+        must be dead: a free lock alone is not proof, since a worker that could not take
+        its lock runs without it. Either test errs only toward keeping the record, since
+        a reused PID reads as alive, and a worker that is gone never comes back. The lock
+        is probed, never held: a held lock is how every reader, in any process, tells a
+        live worker from a reused PID, so holding it would make them treat a dead job as
+        alive and signal its PID. A pid that is not a positive int (``meta.json`` is not
+        validated on read), or one the OS cannot represent, proves nothing, so the worker
+        is never taken as gone.
+        """
+        pid = meta.get("pid")
+        if type(pid) is not int or pid <= 0:
+            return False
+        try:
+            if self._owned(meta):
+                return not _is_running(pid)
+            return _worker_lock_held(jd / "worker.lock") is False and not _pid_alive(pid)
+        except (OverflowError, ValueError):
+            return False  # past the OS's pid range: kill/waitpid cannot probe it
+
     def _status_of(self, jd: Path, meta: dict) -> str:
         """Compute the live status, killing + marking jobs that overran."""
         terminal = meta.get("terminal_status")
@@ -879,16 +906,22 @@ class JobStore:
                 return rec, None
             return rec, self._read_envelope(jd)
 
-    def discard(self, cwd: str, job_id: str) -> DiscardOutcome:
-        """Delete a done job record; REMOVED only when THIS call removed it.
+    def discard(self, cwd: str, job_id: str, *, expected: str = "done") -> DiscardOutcome:
+        """Delete a terminal job record, but only in the state the caller names.
 
+        A compare-and-delete: ``expected`` is the terminal state the caller read
+        (``done`` by default), and the record is deleted only if a fresh read under
+        ``_LOCK`` still finds it. So a caller that read ``failed`` never deletes a
+        result that appeared since (#126). ``failed`` is derived rather than stamped,
+        so it must also be final: a ``failed`` record is deleted only once its worker
+        is verifiably gone (``_worker_gone``), and is otherwise STATE_CHANGED.
         The outcome is discriminated so callers never infer it from a follow-up
         ``status`` read: MISSING means there was no record to delete (already
-        discarded, expired, or evicted), NOT_DONE means the record exists but is
-        not a done result (never deleted), and DELETE_FAILED means removal failed
-        or could not be verified. A done record is then left as it was (``_rmtree``
-        restores it) for a retry or the TTL reaper; an expired record whose cleanup
-        failed is no longer served but its files remain (#125).
+        discarded, expired, or evicted), STATE_CHANGED means the record exists but
+        is not in the named state (never deleted), and DELETE_FAILED means removal
+        failed or could not be verified. The record is then left as it was
+        (``_rmtree`` restores it) for a retry or the TTL reaper; an expired record
+        whose cleanup failed is no longer served but its files remain (#125).
         Verification is ``_gone``'s ``stat`` probe, so an unverifiable removal is
         never REMOVED.
         The one-caller-wins guarantee is process-local: ``_LOCK`` serializes
@@ -896,13 +929,22 @@ class JobStore:
         can each observe the record before either deletes it (unchanged from
         the pre-split read+delete, which held the same process-local lock).
         """
+        if expected not in _TERMINAL:
+            raise ValueError(f"expected must be a terminal state, not {expected!r}")
         with _LOCK:
             live, left = self._read_or_expire(cwd, job_id)
             if live is None:
                 return DiscardOutcome.DELETE_FAILED if left else DiscardOutcome.MISSING
-            jd, _meta, state = live
-            if state != "done":
-                return DiscardOutcome.NOT_DONE
+            jd, meta, state = live
+            if state != expected:
+                return DiscardOutcome.STATE_CHANGED
+            # Prove a failed job's worker gone, THEN read again: a worker running without
+            # its lock can write result.json and exit after the first read, and only once it
+            # is gone can no result appear (PR #238 review).
+            if state == "failed" and (
+                not self._worker_gone(jd, meta) or self._status_of(jd, meta) != "failed"
+            ):
+                return DiscardOutcome.STATE_CHANGED
             self._rmtree(jd)
             return DiscardOutcome.REMOVED if self._gone(jd) else DiscardOutcome.DELETE_FAILED
 

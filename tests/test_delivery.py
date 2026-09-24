@@ -233,6 +233,31 @@ def test_attach_consume_disposition_maps_every_discard_outcome():
             }
 
 
+def test_the_consume_follow_up_says_when_retrying_stops_helping():
+    """Two records survive every retry: a failed one whose worker cannot be proved gone,
+    which returns state_changed each time, and a done one whose result does not read back,
+    which a consume never deletes. The follow_up must name both and where they go instead,
+    or an agent following it loops until expiry (#126 review, PR #238 Copilot)."""
+    text = delivery.CONSUME_FOLLOW_UP
+    assert "deletes it only if it can" in text
+    assert "a done result that does not read back" in text
+    assert "a failed job it cannot prove final, which keeps returning state_changed" in text
+    assert "stop retrying either" in text
+    assert "expired or the per-workspace cap evicts it" in text
+
+
+def test_consumable_state_names_what_a_consume_may_delete():
+    """A done record only once delivered (a corrupt or incompatible one is kept), and every
+    terminal-error record in the state it was read in (#126); a running job never."""
+    assert delivery.consumable_state("done", True) == "done"
+    assert delivery.consumable_state("done", False) is None
+    assert delivery.consumable_state("running", False) is None
+    for state in ("failed", "cancelled", "timeout"):
+        assert delivery.consumable_state(state, False) == state
+    # Every state that has a terminal error, except running, is one a consume may delete.
+    assert set(delivery.STATE_TO_ERROR) - {"running"} == delivery.TERMINAL_ERROR_STATES
+
+
 def test_consume_is_never_persisted_and_a_stored_copy_never_reaches_a_plain_read():
     meta = Meta(consume=ConsumeDisposition(discard_outcome="removed"))
     assert meta.consume is not None, "control: the field is set on the model"

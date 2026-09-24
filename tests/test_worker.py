@@ -322,3 +322,30 @@ def test_a_relative_log_file_does_not_land_in_the_job_directory(tmp_path):
     assert not stray.exists(), "a relative AMICUS_LOG_FILE was written into the job directory"
     assert "amicus.sdk.core.runtime" in output, "dropping the file also lost the stderr record"
     assert _LEAK_MARKER not in output
+
+
+def test_the_worker_takes_its_lock_after_a_probe_releases_it(tmp_path):
+    """Every store liveness probe briefly takes worker.lock. A worker whose own attempt
+    collided with one used to give up and run unlocked, leaving a live worker whose lock read
+    as free, which a discard takes as a sign the worker is gone (#126). It now retries."""
+    import fcntl
+
+    from amicus.jobs.store import _worker_lock_held
+
+    lock = tmp_path / "worker.lock"
+    probe = os.open(str(lock), os.O_CREAT | os.O_WRONLY, 0o600)
+    fcntl.flock(probe, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    release = threading.Timer(0.05, lambda: os.close(probe))
+    release.start()
+    before = list(_worker._held_locks)
+    try:
+        _worker._hold_job_lock(tmp_path)
+        release.join()
+        taken = [fd for fd in _worker._held_locks if fd not in before]
+        assert len(taken) == 1, "the worker gave up on the collision"
+        assert _worker_lock_held(lock) is True
+    finally:
+        release.join()
+        for fd in [fd for fd in _worker._held_locks if fd not in before]:
+            _worker._held_locks.remove(fd)
+            os.close(fd)

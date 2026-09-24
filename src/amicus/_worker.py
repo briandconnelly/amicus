@@ -44,6 +44,14 @@ if TYPE_CHECKING:  # pragma: no cover
 _held_locks: list[int] = []
 
 
+# How long the worker keeps trying for its lock. Every JobStore liveness probe briefly
+# takes the same lock, so a probe can collide with the worker's own attempt; giving up on
+# that collision left a live worker whose lock read as free, which a discard would take as
+# proof the worker is gone (#126). A probe holds it for microseconds.
+_LOCK_ATTEMPT_SECONDS = 2.0
+_LOCK_RETRY_SECONDS = 0.005
+
+
 def _hold_job_lock(job_dir: Path) -> None:
     """Hold `<job_dir>/worker.lock` for this process's life so the JobStore can tell this
     worker from a reused PID after a server restart."""
@@ -53,11 +61,19 @@ def _hold_job_lock(job_dir: Path) -> None:
         return
     with contextlib.suppress(OSError):
         fd = os.open(str(job_dir / "worker.lock"), os.O_CREAT | os.O_WRONLY, 0o600)
-        try:
-            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except OSError:  # pragma: no cover
-            os.close(fd)
-            return
+        deadline = time.monotonic() + _LOCK_ATTEMPT_SECONDS
+        while True:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if time.monotonic() >= deadline:
+                    os.close(fd)
+                    return
+                time.sleep(_LOCK_RETRY_SECONDS)
+            except OSError:  # pragma: no cover
+                os.close(fd)
+                return
         _held_locks.append(fd)
 
 

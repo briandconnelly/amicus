@@ -185,7 +185,7 @@ def test_result_meta_schema_publishes_the_delivery_only_consume_field():
     s = e.RESULT_META_SCHEMA
     assert s["properties"]["consume"]["description"].startswith("Set only by amicus_job_consume")
     outcome = s["$defs"]["ConsumeDisposition"]["properties"]["discard_outcome"]
-    assert outcome["enum"] == ["removed", "missing", "not_done", "delete_failed"]
+    assert outcome["enum"] == ["removed", "missing", "state_changed", "delete_failed"]
     follow_up = s["$defs"]["ConsumeFollowUp"]["properties"]
     assert follow_up["tool"]["const"] == "amicus_job_status"
     # The arguments are the call the follow-up names, not an open object that admits `{}`.

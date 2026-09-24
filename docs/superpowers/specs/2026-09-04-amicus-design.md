@@ -114,7 +114,7 @@ The worktree prefix `amicus-wt-` is orchestration policy, not a plugin choice (t
 Paid, sync (`task=True` when tasks enabled): `amicus_consult`, `amicus_review_changes`, `amicus_delegate` (feature `delegate`), `amicus_adversarial_review` (feature `adversarial_review`).
 Async twins: the four `_async` variants (drop `timeout_seconds`/`detail`; `idempotency_key` is on both since ADR 0020).
 Free: `amicus_review_changes_dry_run` (its deprecated alias `amicus_dry_run` was removed in 0.5.0 at the end of its window, ADR 0028), `amicus_delegate_dry_run`, `amicus_backends` (catalog + readiness probe + option applicability + env warnings, including a retired sibling name still set; optional `backend` filter; replaces per-backend `*_status`), `amicus_models(backend)`, `amicus_capabilities` (error catalog, schemas on request, fingerprint + surface digest, annotation policy).
-Jobs: `amicus_job_status`, `amicus_job_result`, `amicus_job_consume_result`, `amicus_job_cancel`, `amicus_job_list` (all backends; `backend` and `task_id` filters; a consume that delivers a stored envelope reports its discard outcome in `meta.consume`, ADR 0022).
+Jobs: `amicus_job_status`, `amicus_job_result`, `amicus_job_consume_result`, `amicus_job_cancel`, `amicus_job_list` (all backends; `backend` and `task_id` filters; a consume that delivers a stored envelope or returns a failed, cancelled or timed-out job's terminal error reports its discard outcome in `meta.consume`, ADR 0022).
 Codex `transfer` deferred.
 
 **Verb × backend parameter matrix** (`schemas/params.py`, written and tested before any schema):

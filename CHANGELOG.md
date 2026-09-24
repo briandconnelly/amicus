@@ -62,6 +62,19 @@ per-change, as its own lead says.
   named, because upstream's summary carries no `loc`. The list shape is still read, since the
   `fastmcp>=4.0,<4.1` floor admits 4.0.3, and upstream's count and types are re-checked here
   rather than trusted. Nothing a caller sent reached the log under either shape.
+- **Breaking.** `amicus_job_consume_result` now deletes a failed, cancelled or timed-out job's
+  record (#126). It returns the job's terminal error as before, and now also reports the delete in
+  `meta.consume`, so a repeat call returns `job_not_found` after `removed` or `missing`. Before,
+  such a record stayed until it expired or the per-workspace cap evicted it, because the store
+  had no delete that was safe for `failed`: that state is derived on every read, and a record
+  read as `failed` turns `done` if its result appears later. The store's delete now names the
+  state its caller read and deletes only a record still in it, and a `failed` record only once
+  its worker is verifiably gone. `meta.consume.discard_outcome`'s `not_done` is renamed
+  `state_changed`, since a consume that read `failed` can find the record `done`; a caller that
+  branched on `not_done` must branch on `state_changed`, and its `follow_up` still names the
+  `amicus_job_status` call that shows what is left. A corrupt or incompatible record is still
+  kept. ADR 0022. `FINGERPRINT` moves to schema-43; `RESULT_FORMAT` does not move, because
+  `meta.consume` is never stored.
 
 ### Fixed
 

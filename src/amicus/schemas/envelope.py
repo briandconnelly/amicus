@@ -72,17 +72,19 @@ class InstructionsFingerprint(BaseModel):
     bytes: int = Field(ge=1)
 
 
-DiscardOutcome = Literal["removed", "missing", "not_done", "delete_failed"]
+DiscardOutcome = Literal["removed", "missing", "state_changed", "delete_failed"]
 
 _DISCARD_OUTCOME_DESC = (
     "What deleting the record did. removed: this call deleted it. missing: the store had "
     "already dropped it (consumed, expired or evicted); files a failed cleanup left may "
-    "remain. After either, a repeat call returns job_not_found. not_done: it was no longer "
-    "a finished result, so nothing was deleted. delete_failed: deletion failed or could "
-    "not be verified, so the record may remain."
+    "remain. After either, a repeat call returns job_not_found. state_changed: the record "
+    "was not, or not verifiably, still as this call returned it (a failed job's result can "
+    "still appear), so nothing was deleted; a failed record the store cannot prove final "
+    "stays until it expires or is evicted. delete_failed: deletion failed or could not be "
+    "verified, so the record may remain."
 )
 _CONSUME_DESC = (
-    "Set only by amicus_job_consume_result, on the envelope it delivers: what deleting "
+    "Set only by amicus_job_consume_result, on the envelope it returns: what deleting "
     "the job record did. Never stored with the result."
 )
 
@@ -110,7 +112,7 @@ class ConsumeFollowUp(BaseModel):
 
 
 class ConsumeDisposition(BaseModel):
-    """What amicus_job_consume_result did to the record after delivering it (#44)."""
+    """What amicus_job_consume_result did to the record after returning it (#44, #126)."""
 
     model_config = ConfigDict(extra="forbid")
     discard_outcome: DiscardOutcome = Field(description=_DISCARD_OUTCOME_DESC)

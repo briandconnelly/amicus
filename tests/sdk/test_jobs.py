@@ -8,6 +8,7 @@ worker does.
 from __future__ import annotations
 
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -323,7 +324,7 @@ def test_discard_nondone_keeps_record(tmp_path):
     cwd = str(tmp_path)
     job_id, _ = store.start(_factory("import time; time.sleep(30)"), cwd, kind="k")
     store.cancel(cwd, job_id)
-    assert store.discard(cwd, job_id) is DiscardOutcome.NOT_DONE
+    assert store.discard(cwd, job_id) is DiscardOutcome.STATE_CHANGED
     # not deleted (non-done)
     assert store.status(cwd, job_id) is not None
 
@@ -333,10 +334,205 @@ def test_discard_running_keeps_record(tmp_path):
     cwd = str(tmp_path)
     job_id, _ = store.start(_factory("import time; time.sleep(30)"), cwd, kind="k")
     try:
-        assert store.discard(cwd, job_id) is DiscardOutcome.NOT_DONE
+        assert store.discard(cwd, job_id) is DiscardOutcome.STATE_CHANGED
         assert store.status(cwd, job_id)["status"] == "running"
     finally:
         store.cancel(cwd, job_id)
+
+
+def _cancelled_job(store: JobStore, cwd: str) -> str:
+    job_id, _ = store.start(_factory("import time; time.sleep(30)"), cwd, kind="k")
+    assert store.cancel(cwd, job_id)["status"] == "cancelled"
+    return job_id
+
+
+def _timed_out_job(store: JobStore, cwd: str) -> str:
+    job_id, _ = store.start(_factory("import time; time.sleep(30)"), cwd, kind="k")
+    jd = store._job_dir(cwd, job_id)
+    meta = json.loads((jd / "meta.json").read_text())
+    meta["deadline_epoch"] = 0
+    (jd / "meta.json").write_text(json.dumps(meta))
+    assert store.status(cwd, job_id)["status"] == "timeout"
+    return job_id
+
+
+def _failed_job(store: JobStore, cwd: str) -> str:
+    job_id, _ = store.start(_factory("raise SystemExit(1)"), cwd, kind="k")
+    assert _wait_terminal(store, cwd, job_id) == "failed"
+    return job_id
+
+
+_TERMINAL_ERROR_JOBS = {
+    "cancelled": _cancelled_job,
+    "timeout": _timed_out_job,
+    "failed": _failed_job,
+}
+
+
+@pytest.mark.parametrize("state", sorted(_TERMINAL_ERROR_JOBS))
+def test_discard_deletes_a_terminal_error_record_in_the_named_state(tmp_path, state):
+    # #126: a failed, cancelled or timed-out record can be deleted, but only by naming the
+    # state the caller read, so the store deletes nothing that changed since.
+    store = _store(tmp_path)
+    cwd = str(tmp_path)
+    job_id = _TERMINAL_ERROR_JOBS[state](store, cwd)
+    assert store.discard(cwd, job_id) is DiscardOutcome.STATE_CHANGED  # default: done only
+    assert store.status(cwd, job_id)["status"] == state
+    assert store.discard(cwd, job_id, expected=state) is DiscardOutcome.REMOVED
+    assert store.status(cwd, job_id) is None
+    assert store.discard(cwd, job_id, expected=state) is DiscardOutcome.MISSING
+
+
+def test_discard_never_deletes_a_failed_record_that_turned_done(tmp_path):
+    # `failed` is derived on every read, never stamped: a result.json that appears later
+    # turns the record done. A caller that read `failed` must not delete that result (#126).
+    store = _store(tmp_path)
+    cwd = str(tmp_path)
+    job_id = _failed_job(store, cwd)
+    jd = store._job_dir(cwd, job_id)
+    (jd / "result.json").write_text(json.dumps({"ok": True, "tool": "t"}))
+    assert store.discard(cwd, job_id, expected="failed") is DiscardOutcome.STATE_CHANGED
+    _assert_still_done(store, cwd, job_id)
+
+
+def _disown(store: JobStore, cwd: str, job_id: str) -> Path:
+    """Make the record look started by an earlier server process, as after a restart."""
+    jd = store._job_dir(cwd, job_id)
+    meta = json.loads((jd / "meta.json").read_text())
+    meta["owner"] = "an-earlier-process"
+    (jd / "meta.json").write_text(json.dumps(meta))
+    return jd
+
+
+def test_discard_keeps_a_failed_record_whose_worker_may_still_run(tmp_path):
+    # An unowned record with no worker.lock reads as failed, but its worker cannot be
+    # proved gone: it may still write result.json. So `failed` is not final, and the
+    # discard keeps it (#126).
+    store = _store(tmp_path)
+    cwd = str(tmp_path)
+    job_id = _failed_job(store, cwd)
+    jd = _disown(store, cwd, job_id)
+    assert not (jd / "worker.lock").exists(), "control: the lock is indeterminate"
+    assert store.status(cwd, job_id)["status"] == "failed"
+    assert store.discard(cwd, job_id, expected="failed") is DiscardOutcome.STATE_CHANGED
+    assert store.status(cwd, job_id)["status"] == "failed"
+
+
+def test_discard_deletes_an_unowned_failed_record_whose_worker_is_gone(tmp_path):
+    # After a restart the worker is not our child: a free lock and a dead PID prove it gone.
+    store = _store(tmp_path)
+    cwd = str(tmp_path)
+    job_id = _failed_job(store, cwd)
+    jd = _disown(store, cwd, job_id)
+    (jd / "worker.lock").touch()
+    assert store.discard(cwd, job_id, expected="failed") is DiscardOutcome.REMOVED
+    assert store.status(cwd, job_id) is None
+
+
+def test_discard_keeps_an_unowned_failed_record_whose_pid_is_alive(tmp_path):
+    # A free lock alone is not proof: a worker that could not take its lock runs without
+    # it, reading as failed while it may still write result.json (#126 review).
+    store = _store(tmp_path)
+    cwd = str(tmp_path)
+    job_id = _failed_job(store, cwd)
+    jd = _disown(store, cwd, job_id)
+    (jd / "worker.lock").touch()
+    meta = json.loads((jd / "meta.json").read_text())
+    meta["pid"] = os.getpid()  # alive, and never signalled: the record reads as failed
+    (jd / "meta.json").write_text(json.dumps(meta))
+    assert store.status(cwd, job_id)["status"] == "failed", "control: it reads as failed"
+    assert store.discard(cwd, job_id, expected="failed") is DiscardOutcome.STATE_CHANGED
+    assert store.status(cwd, job_id)["status"] == "failed"
+
+
+def test_discard_rereads_a_failed_record_once_its_worker_is_proved_gone(tmp_path, monkeypatch):
+    # A worker running without its lock can write result.json and exit after the discard
+    # read `failed` but before it proved the worker gone. Only once the worker is gone can no
+    # result appear, so the state is read again then, and the result is kept (PR #238 review).
+    store = _store(tmp_path)
+    cwd = str(tmp_path)
+    job_id = _failed_job(store, cwd)
+    jd = store._job_dir(cwd, job_id)
+    real_gone = JobStore._worker_gone
+
+    def result_lands_while_proving(self, path, meta):
+        (path / "result.json").write_text(json.dumps({"ok": True, "tool": "t"}))
+        return real_gone(self, path, meta)
+
+    monkeypatch.setattr(JobStore, "_worker_gone", result_lands_while_proving)
+    assert store.discard(cwd, job_id, expected="failed") is DiscardOutcome.STATE_CHANGED
+    monkeypatch.undo()
+    assert (jd / "result.json").exists(), "control: the result landed mid-discard"
+    _assert_still_done(store, cwd, job_id)
+
+
+# Each (owned, pid) pair a status read still reports as failed: an owned record reads a
+# truthy invalid pid through waitpid, which reports it running or raises before any discard.
+_UNCHECKABLE_PIDS = [(True, None), (True, 0)] + [
+    (False, pid) for pid in (None, 0, -1, "123", 1.5, True, 10**100)
+]
+
+
+@pytest.mark.parametrize(("owned", "pid"), _UNCHECKABLE_PIDS)
+def test_discard_keeps_a_failed_record_whose_pid_cannot_be_checked(tmp_path, owned, pid):
+    # meta.json is not validated on read, so a pid that is not a positive int proves
+    # nothing about the worker and must never count as its exit (PR #238 review).
+    store = _store(tmp_path)
+    cwd = str(tmp_path)
+    job_id = _failed_job(store, cwd)
+    jd = _disown(store, cwd, job_id) if not owned else store._job_dir(cwd, job_id)
+    (jd / "worker.lock").touch()
+    meta = json.loads((jd / "meta.json").read_text())
+    meta["pid"] = pid
+    (jd / "meta.json").write_text(json.dumps(meta))
+    assert store.status(cwd, job_id)["status"] == "failed", "control: it reads as failed"
+    assert store.discard(cwd, job_id, expected="failed") is DiscardOutcome.STATE_CHANGED
+    assert store.status(cwd, job_id)["status"] == "failed"
+
+
+@pytest.mark.parametrize("owned", [True, False])
+def test_worker_gone_is_false_for_a_pid_the_os_cannot_represent(tmp_path, owned):
+    # os.kill and os.waitpid raise OverflowError for an int past the C range, which must
+    # keep the record rather than escape the discard (PR #238 review). The owned case is
+    # checked directly: its status read already fails in waitpid first (#239).
+    store = _store(tmp_path)
+    cwd = str(tmp_path)
+    job_id = _failed_job(store, cwd)
+    jd = _disown(store, cwd, job_id) if not owned else store._job_dir(cwd, job_id)
+    (jd / "worker.lock").touch()
+    meta = json.loads((jd / "meta.json").read_text())
+    meta["pid"] = 10**100
+    assert store._worker_gone(jd, meta) is False
+
+
+def test_discard_never_holds_the_worker_lock(tmp_path, monkeypatch):
+    # A held worker.lock is how every reader, in any process, tells a live worker from a
+    # reused PID. A discard that held it would make another server process read a dead,
+    # overdue job as running and signal its PID, so it only ever probes the lock (#126).
+    from amicus.jobs import store as job_store
+
+    store = _store(tmp_path)
+    cwd = str(tmp_path)
+    job_id = _failed_job(store, cwd)
+    jd = _disown(store, cwd, job_id)
+    (jd / "worker.lock").touch()
+    seen: list[bool | None] = []
+    real_rmtree = JobStore._rmtree
+
+    def observing(path):
+        seen.append(job_store._worker_lock_held(path / "worker.lock"))
+        real_rmtree(path)
+
+    monkeypatch.setattr(JobStore, "_rmtree", staticmethod(observing))
+    assert store.discard(cwd, job_id, expected="failed") is DiscardOutcome.REMOVED
+    assert seen == [False]
+
+
+@pytest.mark.parametrize("expected", ["running", "bogus", ""])
+def test_discard_refuses_a_non_terminal_expected_state(tmp_path, expected):
+    store = _store(tmp_path)
+    with pytest.raises(ValueError, match="terminal"):
+        store.discard(str(tmp_path), "0" * 32, expected=expected)
 
 
 def test_discard_verification_error_reports_failure(tmp_path, monkeypatch):
@@ -646,7 +842,6 @@ def test_start_oserror_cleans_up(tmp_path):
 
 
 # --- defensive helpers / edge branches ---------------------------------------
-import os  # noqa: E402
 
 from amicus.jobs import store as job_store  # noqa: E402
 

@@ -134,19 +134,32 @@ def _validate_success(
 
 # discard outcomes after which the record is gone and a repeat call is job_not_found.
 _RECORD_GONE = frozenset({"removed", "missing"})
+# The terminal states with no stored envelope: a consume returns their terminal error and
+# deletes the record (#126).
+TERMINAL_ERROR_STATES = frozenset({"failed", "cancelled", "timeout"})
 CONSUME_FOLLOW_UP = (
     "The record may remain. amicus_job_status on this job shows what is left: job_not_found "
-    "means the store no longer serves it; done means a retried consume can delete it; any "
-    "other status means "
-    "the result is no longer readable and the record stays until a later job call finds it "
-    "expired."
+    "means the store no longer serves it; done, failed, cancelled or timeout means a retried "
+    "consume returns what the record now holds and deletes it only if it can. It keeps a done "
+    "result that does not read back, and a failed job it cannot prove final, which keeps "
+    "returning state_changed, so stop retrying either: it stays until a later job call finds "
+    "it expired or the per-workspace cap evicts it."
 )
+
+
+def consumable_state(state: str, delivered: bool) -> str | None:
+    """The state a consume may delete the record in, or None when it must keep it: a done
+    record only once its stored envelope was delivered, since a corrupt or incompatible one
+    is kept, and a terminal-error record, whose error needs no stored envelope (#126)."""
+    if delivered:
+        return "done"
+    return state if state in TERMINAL_ERROR_STATES else None
 
 
 def attach_consume_disposition(
     envelope: dict[str, Any], outcome: str, job_id: str, workspace_root: str | None
 ) -> dict[str, Any]:
-    """Set `meta.consume` on a delivered envelope from the store's discard outcome, so a
+    """Set `meta.consume` on a consumed envelope from the store's discard outcome, so a
     failed delete is reported rather than hidden behind plain success (#44). Mutates."""
     disposition: dict[str, Any] = {"discard_outcome": str(outcome)}
     if str(outcome) not in _RECORD_GONE:
@@ -172,7 +185,8 @@ def finished_job_envelope(
     workspace_root: str | None,
 ) -> tuple[dict[str, Any], bool]:
     """(envelope, delivered): delivered is True only for a validated stored success or
-    error, so a consume never destroys a record it merely described."""
+    error, so a consume never destroys a done record it merely described; a terminal-error
+    record has no stored envelope, and `consumable_state` decides it separately (#126)."""
     meta.job_id = job_id
     state = rec["status"]
     if state == "done" and payload is not None:
