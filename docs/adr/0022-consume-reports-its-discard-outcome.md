@@ -65,6 +65,9 @@ For any other job, the proof is a `worker.lock` that exists and is free and a PI
 A free lock alone is not proof: every liveness probe briefly takes the lock, and a worker whose own attempt collided with one used to give up and run without it.
 The worker now retries its lock for up to two seconds, and the PID check covers a worker that still ran unlocked.
 Both checks err only toward keeping a record, since a reused PID reads as alive.
+A PID that is not a positive integer proves nothing, since `meta.json` is not validated on read, so such a record is kept.
+The discard proves the worker gone before it reads the state a second time, and deletes only if that read is still `failed`.
+The first read alone is not enough, because a worker running without its lock can write `result.json` and exit between that read and the proof, and only once the worker is gone can no result appear.
 An unowned record with no lock file reads as `failed` but its worker may still run, so the discard keeps it.
 Such a record returns `state_changed` on every retry, so it stays until it expires or is evicted.
 The first design held the job's `worker.lock` through the read and the delete instead.
