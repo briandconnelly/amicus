@@ -39,13 +39,6 @@ TIMEOUT_DETAIL = (
     "tell a request that was billed from one that never reached Anthropic — and re-issuing it "
     "risks a second charge for work you cannot recover."
 )
-TIMEOUT_REPAIR = (
-    "Decide whether to spend again: any next attempt is a NEW paid run, not a recovery of this "
-    "one. To retry, start the matching _async twin (amicus_consult_async / "
-    "amicus_review_changes_async / amicus_adversarial_review_async), which survives the "
-    "deadline; its idempotency_key guards that new launch against duplicate retries. Raising "
-    "timeout_seconds or narrowing the scope spends again too."
-)
 BUDGET_REPAIR = (
     "Before making another call, raise backend_options.max_budget_usd (up to 5.00) or narrow "
     "the prompt/context (for reviews, a smaller scope or fewer paths). claude checks the "
@@ -350,12 +343,10 @@ def classify_failure(
     if run.binary_missing:
         return ClassifiedFailure(code="claude_not_found", detail=NOT_FOUND_DETAIL)
     if run.timed_out:
-        return ClassifiedFailure(
-            code="timeout",
-            detail=TIMEOUT_DETAIL,
-            retryable=False,
-            repair=_hint("start_new_job", TIMEOUT_REPAIR),
-        )
+        # Not retryable, and no repair of its own: the shared `timeout` rule (amicus.errors,
+        # ADR 0039) names the _async twin and states the spend; the detail says why a Claude
+        # timeout may already have been charged.
+        return ClassifiedFailure(code="timeout", detail=TIMEOUT_DETAIL, retryable=False)
     env = normalize.parse_envelope(run.stdout)
     if env is not None and normalize.is_failure_envelope(env):
         return classify_envelope(env, stderr=run.stderr, config_mode=config_mode, sanitize=sanitize)

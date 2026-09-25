@@ -318,7 +318,7 @@ async def test_timeout_is_not_retryable_and_points_at_a_new_job(
     assert out["ok"] is False and err["code"] == "timeout" and err["temporary"] is False
     assert err["retry_after_ms"] is None
     assert err["repair"]["next_step"] == "start_new_job"
-    assert err["repair"].get("tool") is None
+    assert err["repair"]["tool"] == "amicus_consult_async" and "arguments" not in err["repair"]
     assert "amicus_consult_async" in err["repair"]["alternative"]
     assert "MAY" in err["message"]
 

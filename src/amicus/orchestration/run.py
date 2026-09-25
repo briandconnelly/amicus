@@ -319,14 +319,17 @@ async def run_request(
             )
             invalid = plugin.backend.validate_request(request)
             if invalid is not None:
-                return render_failure(plugin, invalid, meta)
+                return render_failure(plugin, invalid, meta, kind=spec.kind)
             if plugin.binary.resolve() is None:
                 missing = RunOutcome(
                     run=runtime.CommandRun("", runtime.BINARY_NOT_FOUND, 127, 0, False)
                 )
                 finalize.stamp_run(meta, missing.run, ())
                 return render_failure(
-                    plugin, plugin.backend.classify_failure(missing, request), meta
+                    plugin,
+                    plugin.backend.classify_failure(missing, request),
+                    meta,
+                    kind=spec.kind,
                 )
             async with plugin.backend.prepare(request) as prepared:
                 run = await runtime.run_async(
@@ -376,7 +379,9 @@ async def run_request(
                 or (loss is not None and code in _LOSS_EXPLAINS)
             )
             if failure is not None and not explained:
-                return render_failure(plugin, finalize.scrub_failure(failure, refs), meta)
+                return render_failure(
+                    plugin, finalize.scrub_failure(failure, refs), meta, kind=spec.kind
+                )
             diff = site.capture_diff() if spec.kind == "delegate" else None
             aliases = site.aliases
             summary_override = None

@@ -365,6 +365,9 @@ def classify_failure(
             return ClassifiedFailure(
                 code="timeout",
                 detail=_CAPTURE_FAILED_TIMEOUT_MESSAGE,
+                # The hint says to retry the same call once, so the flag agrees with it
+                # (#245); the shared rule marks every other timeout non-temporary.
+                retryable=True,
                 repair=RepairHint(
                     next_step="retry_after_delay", alternative=_CAPTURE_FAILED_TIMEOUT_ALTERNATIVE
                 ),

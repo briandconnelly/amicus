@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from amicus import obs
-from amicus.errors import error_envelope
+from amicus.errors import async_twin_for, error_envelope
 from amicus.jobs.delivery import finished_job_envelope
 from amicus.jobs.polling import job_status_arguments, poll_hint_ms
 from amicus.jobs.store import JobCapReached, JobStore
@@ -446,6 +446,7 @@ async def await_job_result(
                     f"the run exceeded {timeout}s and the grace window; job cancelled.",
                     meta,
                     plugin=plugin,
+                    repair_tool=async_twin_for(kind),
                 )
             await asyncio.sleep(SYNC_POLL_INTERVAL_S)
     except asyncio.CancelledError:

@@ -241,6 +241,11 @@ async def test_grace_exhausted_cancels_and_times_out(tmp_path, monkeypatch):
     assert out["error"]["code"] == "timeout" and "cancelled" in out["error"]["message"]
     status = store.status(str(tmp_path), out["meta"]["job_id"])
     assert status is not None and status["status"] == "cancelled"
+    # #245: the deadline timeout is not temporary and steers to the _async twin of the
+    # verb, through the default table (this fake plugin overrides nothing).
+    assert out["error"]["temporary"] is False and out["error"]["retry_after_ms"] is None
+    assert out["error"]["repair"]["next_step"] == "start_new_job"
+    assert out["error"]["repair"]["tool"] == "amicus_" + spec.kind + "_async"
 
 
 async def test_cancellation_cancels_the_job(tmp_path, monkeypatch):
@@ -1184,6 +1189,46 @@ async def test_keyed_timeout_is_temporary_even_when_the_backend_says_timeout_is_
         detail="summary",
         ctx=None,
         idempotency_key="s14",
+    )
+    try:
+        assert out["error"]["code"] == "timeout" and out["error"]["temporary"] is True
+        assert out["error"]["retry_after_ms"] is not None
+        assert out["error"]["repair"]["next_step"] == "poll_job_status"
+        # The control: the same plugin's unkeyed timeout follows its own rule.
+        unkeyed = await lifecycle.run_sync(
+            store,
+            _spec(str(tmp_path), timeout_seconds=1),
+            meta_for(spec),
+            plugin,
+            timeout=1,
+            detail="summary",
+            ctx=None,
+        )
+        assert unkeyed["error"]["code"] == "timeout" and unkeyed["error"]["temporary"] is False
+        assert unkeyed["error"]["repair"]["next_step"] == "start_new_job"
+    finally:
+        store.cancel(str(tmp_path), out["meta"]["job_id"])
+
+
+async def test_keyed_timeout_is_temporary_under_the_default_table(tmp_path, monkeypatch):
+    """Same as above, with the default table (no repair_overrides): the keyed wait's timeout
+    is temporary because the run is still going, whatever the default rule says about an
+    unkeyed timeout."""
+    plugin = fakeplugin.make_plugin()
+    store = lifecycle.job_store(_settings(tmp_path))
+    monkeypatch.setattr(lifecycle, "SYNC_AWAIT_GRACE_S", 0.05)
+    monkeypatch.setattr(lifecycle, "SYNC_POLL_INTERVAL_S", 0.01)
+    monkeypatch.setattr(lifecycle, "worker_cmd", _sleeping_worker_cmd())
+    spec = _spec(str(tmp_path), timeout_seconds=1)
+    out = await lifecycle.run_sync(
+        store,
+        spec,
+        meta_for(spec),
+        plugin,
+        timeout=1,
+        detail="summary",
+        ctx=None,
+        idempotency_key="s14b",
     )
     try:
         assert out["error"]["code"] == "timeout" and out["error"]["temporary"] is True
