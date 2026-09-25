@@ -110,8 +110,10 @@ dedicated adversarial-review verb is scoped to Claude. To ask Codex or Kimi for 
 review, use `consult` or `review_changes` and supply the stance yourself; the dedicated verb adds
 a fixed critic stance and the `target` and `evidence` inputs.
 
-Asking a backend for something it does not support returns a `feature_unsupported` error naming
-the backend and the feature, rather than failing obscurely.
+Asking an in-tree backend for a verb it does not support is rejected before any spend as an
+`invalid_arguments` error whose `details.allowed_values` lists the backends that tool accepts
+(the tool's `backend` enum is that set); `feature_unsupported` remains only for a third-party
+backend plugin that does not declare the feature.
 
 ## Safety
 

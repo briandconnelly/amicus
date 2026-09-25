@@ -43,8 +43,10 @@ prefer.
 `features` is not the list of verbs a backend answers. It names the gated verbs the backend
 declares, plus capabilities that are not verbs at all:
 
-- `delegate` and `adversarial_review` — the gated verbs. A call routed to a backend whose
-  `features` lacks the verb fails pre-spend with `feature_unsupported`.
+- `delegate` and `adversarial_review` — the gated verbs. A call routing one to an in-tree backend
+  that lacks it is rejected pre-spend as `invalid_arguments` with `details.allowed_values` (the
+  tool's `backend` enum is the accepted set); `feature_unsupported` remains only for a
+  third-party backend plugin that does not declare the verb.
 - `usage_accounting` — the backend's CLI reports token usage, carried as `meta.usage`.
 - `model_validation` and `empty_response_detection` — the backend can refuse an unknown `model`
   (`invalid_model`) and report a reply with no content (`empty_response`).
