@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import builtins
+import dataclasses
 import json
 import logging
 import sys
@@ -19,6 +20,7 @@ from amicus.jobs import store as job_store
 from amicus.jobs.taskmap import TaskJobMap
 from amicus.request import RunSpec, meta_for
 from amicus.schemas.envelope import Meta, dump_success
+from amicus.schemas.fingerprint import RESULT_FORMAT
 from amicus.schemas.results import ConsultResult, RawResponse
 
 
@@ -1300,3 +1302,98 @@ def test_the_fetch_instruction_never_tells_a_caller_to_poll():
     text = lifecycle.FETCH_FOLLOW_UP
     assert "amicus_job_result" in text and "do not poll" in text
     assert "amicus_job_status" not in text and "result_available" not in text
+
+
+# --- the per-workspace cap (#244) -----------------------------------------------------
+
+
+def _capped_store(tmp_path, max_count=1):
+    return dataclasses.replace(lifecycle.job_store(_settings(tmp_path)), max_count=max_count)
+
+
+def _fill_with_an_unreturned_result(store, cwd):
+    job_id, _ = store.start(
+        _fake_worker_cmd(_success(cwd)),
+        cwd,
+        kind="consult",
+        extra={"result_format": RESULT_FORMAT},
+    )
+    deadline = time.monotonic() + 5
+    while store.status(cwd, job_id)["status"] == "running":
+        assert time.monotonic() < deadline
+        time.sleep(0.02)
+    return job_id
+
+
+def _assert_cap_reached(out, cwd):
+    assert out["ok"] is False and out["error"]["code"] == "job_cap_reached"
+    assert out["error"]["temporary"] is True and out["error"]["retry_after_ms"] is None
+    assert out["error"]["repair"]["next_step"] == "list_jobs"
+    assert out["error"]["repair"]["tool"] == "amicus_job_list"
+    assert out["error"]["repair"]["arguments"] == {"workspace_root": cwd}
+    assert "AMICUS_JOB_MAX_COUNT is 1" in out["error"]["message"]
+
+
+@pytest.mark.parametrize("key", [None, "cap-key"])
+async def test_a_full_cap_refuses_a_sync_call_before_spawning(tmp_path, monkeypatch, key):
+    store = _capped_store(tmp_path)
+    cwd = str(tmp_path)
+    held = _fill_with_an_unreturned_result(store, cwd)
+    spawned = []
+    monkeypatch.setattr(lifecycle, "worker_cmd", lambda jd: spawned.append(jd) or ["false"])
+    out = await _run_keyed(store, _spec(cwd), key)
+    _assert_cap_reached(out, cwd)
+    assert spawned == []
+    assert [j["job_id"] for j in store.list_jobs(cwd)] == [held]
+
+
+@pytest.mark.parametrize("key", [None, "cap-key"])
+async def test_a_full_cap_refuses_an_async_start_before_spawning(tmp_path, monkeypatch, key):
+    store = _capped_store(tmp_path)
+    cwd = str(tmp_path)
+    held = _fill_with_an_unreturned_result(store, cwd)
+    spawned = []
+    monkeypatch.setattr(lifecycle, "worker_cmd", lambda jd: spawned.append(jd) or ["false"])
+    out = await _start(store, _spec(cwd, tool="amicus_consult_async", timeout_seconds=1800), key)
+    _assert_cap_reached(out, cwd)
+    assert spawned == []
+    assert [j["job_id"] for j in store.list_jobs(cwd)] == [held]
+
+
+async def test_a_sync_call_returns_its_result_once_so_the_cap_can_evict_it(tmp_path, monkeypatch):
+    store = _capped_store(tmp_path)
+    cwd = str(tmp_path)
+    monkeypatch.setattr(lifecycle, "worker_cmd", _fake_worker_cmd(_success(cwd)))
+    first = await _run_keyed(store, _spec(cwd), None)
+    assert first["ok"] is True
+    meta = store._read_meta(store._job_dir(cwd, first["meta"]["job_id"]))
+    assert isinstance(meta["delivered_epoch"], float)
+    second = await _run_keyed(store, _spec(cwd), None)
+    assert second["ok"] is True
+    assert store.status(cwd, first["meta"]["job_id"]) is None
+
+
+async def test_a_stored_result_that_does_not_validate_is_not_marked_returned(tmp_path, monkeypatch):
+    # Only a validated delivery stamps the record: a done result amicus could not hand
+    # back stays protected from the cap, so a fixed server can still deliver it.
+    store = lifecycle.job_store(_settings(tmp_path))
+    cwd = str(tmp_path)
+    monkeypatch.setattr(lifecycle, "worker_cmd", _fake_worker_cmd({"ok": True, "bogus": 1}))
+    out = await _run_keyed(store, _spec(cwd), None)
+    assert out["ok"] is False
+    job_id = out["meta"]["job_id"]
+    assert store.status(cwd, job_id)["status"] == "done"
+    assert store._read_meta(store._job_dir(cwd, job_id))["delivered_epoch"] is None
+
+
+async def test_a_failed_delivery_stamp_does_not_fail_the_delivery(tmp_path, monkeypatch):
+    store = lifecycle.job_store(_settings(tmp_path))
+    cwd = str(tmp_path)
+    monkeypatch.setattr(lifecycle, "worker_cmd", _fake_worker_cmd(_success(cwd)))
+
+    def fail(*_a, **_k):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(store, "mark_delivered", fail)
+    out = await _run_keyed(store, _spec(cwd), None)
+    assert out["ok"] is True and out["summary"] == "Looks fine"

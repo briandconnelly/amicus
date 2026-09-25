@@ -143,7 +143,7 @@ CONSUME_FOLLOW_UP = (
     "consume returns what the record now holds and deletes it only if it can. It keeps a done "
     "result that does not read back, and a failed job it cannot prove final, which keeps "
     "returning state_changed, so stop retrying either: it stays until a later job call finds "
-    "it expired or the per-workspace cap evicts it."
+    "it expired, and the per-workspace cap may evict it sooner."
 )
 
 

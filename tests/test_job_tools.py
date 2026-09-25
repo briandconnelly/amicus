@@ -685,3 +685,38 @@ async def test_a_live_cwd_still_resolves_under_the_opt_in(cwd_app, tmp_path, mon
         listed = (await c.call_tool("amicus_job_list", {})).structured_content
     assert listed["ok"] is True and listed["meta"]["workspace_source"] == "cwd"
     assert listed["meta"]["cwd"] == str(live.resolve()) and listed["meta"]["workspace_warning"]
+
+
+async def test_a_full_cap_refuses_a_paid_call_until_the_result_is_fetched(
+    tmp_path, fake_codex, monkeypatch
+):
+    """Issue #244 end to end: with AMICUS_JOB_MAX_COUNT=1, a finished result nobody has
+    fetched is never evicted to make room. A new paid call is refused pre-spend with
+    job_cap_reached until amicus_job_result returns the result once; a status read or a
+    list does not count as returning it."""
+    app = _make_app(tmp_path, fake_codex, monkeypatch, AMICUS_JOB_MAX_COUNT="1")
+    store = lifecycle.job_store(server.state_of(app).settings)
+    ws = {"workspace_root": str(tmp_path)}
+    async with Client(app) as c:
+        first = await _start(c, tmp_path)
+        await _wait_done(store, tmp_path, first)
+        await c.call_tool("amicus_job_status", {"job_id": first, **ws})
+        await c.call_tool("amicus_job_list", ws)
+        argv_file = tmp_path / "argv.jsonl"
+        runs_before = argv_file.read_text().count("\n")
+        refused = await c.call_tool(
+            "amicus_consult_async",
+            {"backend": "codex", "question": "again?", **ws},
+            raise_on_error=False,
+        )
+        assert refused.is_error is True
+        err = refused.structured_content["error"]
+        assert err["code"] == "job_cap_reached" and err["temporary"] is True
+        assert err["repair"]["tool"] == "amicus_job_list" and err["repair"]["arguments"] == ws
+        assert argv_file.read_text().count("\n") == runs_before  # nothing was spent
+        body = (await c.call_tool("amicus_job_result", {"job_id": first, **ws})).structured_content
+        assert body["ok"] is True
+        second = await _start(c, tmp_path)
+        await _wait_done(store, tmp_path, second)
+        listed = (await c.call_tool("amicus_job_list", ws)).structured_content
+        assert [j["job_id"] for j in listed["jobs"]] == [second]

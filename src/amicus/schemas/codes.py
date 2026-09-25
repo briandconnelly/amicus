@@ -33,6 +33,9 @@ LOCAL_CODES = frozenset(
         # amicus's own orchestration refused to read the file a backend answered in (#162),
         # or its capture of the output stream a backend answered on cut the answer (#198).
         "answer_unavailable",
+        # The per-workspace job cap is full of records it may not evict (running jobs and
+        # results not yet returned once), so a new paid start was refused pre-spend (#244).
+        "job_cap_reached",
         # The registry recorded the backend as unavailable (import, conformance, config).
         "backend_unavailable",
         # The backend does not declare the feature this verb needs (e.g. claude+delegate).
@@ -87,6 +90,7 @@ ErrorCode = Literal[
     "invalid_scope",
     "invalid_workspace_root",
     "job_cancelled",
+    "job_cap_reached",
     "job_failed",
     "job_not_found",
     "job_result_incompatible",

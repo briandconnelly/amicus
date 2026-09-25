@@ -2890,6 +2890,7 @@
                 "invalid_scope",
                 "invalid_workspace_root",
                 "job_cancelled",
+                "job_cap_reached",
                 "job_failed",
                 "job_not_found",
                 "job_result_incompatible",

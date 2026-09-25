@@ -43,8 +43,8 @@ if TYPE_CHECKING:  # pragma: no cover
     from amicus.registry import BackendRegistry
 
 _RETENTION = (
-    "Records expire after AMICUS_JOB_TTL (default 24h) and a per-workspace cap evicts the "
-    "oldest terminal records; read results promptly."
+    "Records expire after AMICUS_JOB_TTL (default 24h); unfetched results fill a "
+    "per-workspace cap that refuses paid calls (job_cap_reached)."
 )
 
 
@@ -104,6 +104,10 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
         )
         if delivered and isinstance(envelope.get("meta"), dict) and meta.task_id is not None:
             envelope["meta"]["task_id"] = meta.task_id
+        if delivered:
+            # Before any discard, so a consume that cannot delete leaves the record
+            # evictable rather than holding a cap slot until its TTL (#244).
+            await lifecycle.mark_delivered(store(), cwd, job_id)
         expected = consumable_state(rec["status"], delivered)
         if not consume or expected is None:
             return envelope

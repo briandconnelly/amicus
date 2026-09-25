@@ -17,7 +17,7 @@ from amicus import obs
 from amicus.errors import error_envelope
 from amicus.jobs.delivery import finished_job_envelope
 from amicus.jobs.polling import job_status_arguments, poll_hint_ms
-from amicus.jobs.store import JobStore
+from amicus.jobs.store import JobCapReached, JobStore
 from amicus.orchestration.isolation import WORKTREE_PREFIX
 from amicus.schemas.fingerprint import RESULT_FORMAT
 from amicus.schemas.results import JobFollowUp, JobResultFollowUp, JobStarted
@@ -176,6 +176,20 @@ def _spawn_failure(exc: Exception, meta: Meta, plugin: BackendPlugin) -> dict[st
     )
 
 
+def _cap_reached(exc: JobCapReached, meta: Meta, plugin: BackendPlugin, cwd: str) -> dict[str, Any]:
+    """The pre-spend refusal for a full per-workspace cap (#244). Its repair lists this
+    workspace's jobs, where the running ones and the finished results to fetch are."""
+    return error_envelope(
+        "job_cap_reached",
+        f"this workspace holds {exc.held} job records and AMICUS_JOB_MAX_COUNT is "
+        f"{exc.max_count}; none can be evicted without losing a running job or a result "
+        "not yet returned, so this call was refused before anything was spent.",
+        meta,
+        plugin=plugin,
+        repair_arguments={"workspace_root": cwd},
+    )
+
+
 def idem_error(
     code: str,
     meta: Meta,
@@ -263,6 +277,8 @@ async def start_job(
         _PENDING_START_CLEANUPS.add(start_fut)
         start_fut.add_done_callback(_stop_orphaned_start(store, spec.cwd))
         raise
+    except JobCapReached as exc:
+        return _cap_reached(exc, meta, plugin, spec.cwd)
     except OSError as exc:
         return _spawn_failure(exc, meta, plugin)
     return job_started_handle(
@@ -320,6 +336,8 @@ async def start_async(
         return await start_job(store, spec, meta, plugin, deadline=deadline)
     try:
         outcome = await _reserve_keyed(store, spec, idempotency_key)
+    except JobCapReached as exc:
+        return _cap_reached(exc, meta, plugin, spec.cwd)
     except OSError as exc:
         return _spawn_failure(exc, meta, plugin)
     result_kind = outcome["kind"]
@@ -438,8 +456,17 @@ async def await_job_result(
     rec2, payload = await asyncio.to_thread(store.result_payload, cwd, job_id)
     if rec2 is None:
         return _vanished("job record expired before its result was read")
-    envelope, _delivered = finished_job_envelope(rec2, payload, job_id, kind, meta, detail, cwd)
+    envelope, delivered = finished_job_envelope(rec2, payload, job_id, kind, meta, detail, cwd)
+    if delivered:
+        await mark_delivered(store, cwd, job_id)
     return envelope
+
+
+async def mark_delivered(store: JobStore, cwd: str, job_id: str) -> None:
+    """Let the count cap evict a result amicus has now returned once (#244). A failed
+    stamp only keeps the record protected until its TTL, so it never fails the delivery."""
+    with contextlib.suppress(OSError):
+        await asyncio.to_thread(store.mark_delivered, cwd, job_id)
 
 
 def _keyed_timeout(
@@ -518,6 +545,8 @@ async def _start_keyed_sync(
                 _PENDING_START_CLEANUPS.add(start_fut)
                 start_fut.add_done_callback(_record_late_keyed_start(task_map, task_id))
             raise
+        except JobCapReached as exc:
+            return _cap_reached(exc, meta, plugin, spec.cwd), False
         except OSError as exc:
             return _spawn_failure(exc, meta, plugin), False
         result_kind = outcome["kind"]

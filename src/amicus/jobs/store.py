@@ -87,6 +87,17 @@ class DiscardOutcome(StrEnum):
     DELETE_FAILED = "delete_failed"  # removal failed or could not be verified
 
 
+class JobCapReached(Exception):
+    """A new start was refused because the workspace already holds ``max_count``
+    records the cap may not evict: running jobs, and ``done`` results amicus has not
+    yet returned once (#244). Raised before anything is spawned, so nothing was spent."""
+
+    def __init__(self, max_count: int, held: int) -> None:
+        super().__init__(f"{held} job records held against a per-workspace cap of {max_count}")
+        self.max_count = max_count
+        self.held = held
+
+
 # Per-process identity stamped onto every job this process starts and compared on
 # read to decide ownership. Generated ONCE at import, so it is stable across the many
 # short-lived JobStore instances the server builds (one per tool call) and changes
@@ -342,7 +353,10 @@ class JobStore:
 
     ttl_seconds: how long a terminal record is kept after completion.
     max_seconds: a job's wall-clock cap (a status poll past it reaps the job).
-    max_count: retained records per workspace (oldest terminal evicted first).
+    max_count: records per workspace. A new start first evicts the oldest records the
+        cap may remove (terminal errors, results already returned once, records that
+        predate delivery tracking) and is refused
+        with :class:`JobCapReached` when that cannot make room (#244).
     """
 
     root: Path
@@ -414,7 +428,7 @@ class JobStore:
 
     @staticmethod
     def _write_meta(jd: Path, meta: dict) -> None:
-        # Atomic publication: a concurrent reader (status/list/_enforce_count_cap in
+        # Atomic publication: a concurrent reader (status/list/_make_room in
         # another process) must never observe a torn meta.json — a partial read parses
         # as no meta, which _status_of treats as terminal and eviction can delete.
         tmp = jd / "meta.json.tmp"
@@ -626,6 +640,7 @@ class JobStore:
         byte-identical to the prior behavior.
         """
         with _LOCK:
+            self._make_room(cwd)
             job_id = uuid4().hex
             jd = self._job_dir(cwd, job_id)
             jd.mkdir(parents=True, exist_ok=True)
@@ -666,11 +681,13 @@ class JobStore:
                 "deadline_epoch": started + self.max_seconds,
                 "completed_epoch": None,
                 "terminal_status": None,
+                # Present-and-null marks a record whose delivery is tracked; one without
+                # the key predates tracking, and the cap evicts it as it always did.
+                "delivered_epoch": None,
                 "extra": extra or {},
             }
             try:
                 self._write_meta(jd, meta)
-                self._enforce_count_cap(cwd)
             except BaseException:
                 # Persistence failed after a successful spawn (disk full, fs error). A paid
                 # worker is already running detached; reap its process group so no orphaned
@@ -879,20 +896,46 @@ class JobStore:
                 if now - end > self.ttl_seconds:
                     self._rmtree(jd)
 
-    def _enforce_count_cap(self, cwd: str) -> None:
-        ws = self._ws_dir(cwd)
-        dirs = self._job_dirs(ws)
-        if len(dirs) <= self.max_count:
+    def _evictable(self, meta: dict, state: str) -> bool:
+        """Whether the count cap may delete this record. Never a running job, and never
+        a ``done`` result that has not been returned once (#244); everything else
+        terminal is fair game."""
+        if state not in _TERMINAL:
+            return False
+        if state != "done" or "delivered_epoch" not in meta:
+            return True  # a terminal error, or a record that predates delivery tracking
+        # Returned once, or not: the format is never consulted, because the release that
+        # wrote a result can still deliver it from a server sharing this state root, older
+        # or newer than this one; the same reason a consume keeps an incompatible result.
+        return meta["delivered_epoch"] is not None
+
+    def _make_room(self, cwd: str) -> None:
+        """Make room for one more record, or refuse. Runs under ``_LOCK`` before a start
+        spawns anything: reap expired records, then evict evictable ones oldest first
+        until the workspace holds fewer than ``max_count``. A directory without
+        ``meta.json`` is not a record (it may be another process's start mid-spawn), so
+        it is neither counted nor deleted. ``_LOCK`` is process-local, so server processes
+        sharing a state root can each pass this check at once and overshoot the cap by
+        one start per process; an overshoot deletes nothing."""
+        self._reap_workspace(cwd)
+        records = []
+        for jd in self._job_dirs(self._ws_dir(cwd)):
+            meta = self._read_meta(jd)
+            if meta is not None:
+                records.append((jd, meta, self._status_of(jd, meta)))
+        held = len(records)
+        if held < self.max_count:
             return
-        scored = []
-        for jd in dirs:
-            meta = self._read_meta(jd) or {}
-            state = self._status_of(jd, meta)
-            scored.append((state in _TERMINAL, meta.get("started_epoch", 0.0), jd))
-        scored.sort(key=lambda t: (not t[0], t[1]))  # terminal first, then oldest
-        for is_terminal, _epoch, jd in scored[: max(0, len(dirs) - self.max_count)]:
-            if is_terminal:  # never kill a still-running job to make room
+        records.sort(key=lambda r: r[1].get("started_epoch", 0.0))  # oldest first
+        for jd, meta, state in records:
+            if held < self.max_count:
+                return
+            if self._evictable(meta, state):
                 self._rmtree(jd)
+                if self._gone(jd):
+                    held -= 1
+        if held >= self.max_count:
+            raise JobCapReached(self.max_count, held)
 
     # -------------------------------------------------------------- public API
     def status(self, cwd: str, job_id: str) -> dict | None:
@@ -920,6 +963,25 @@ class JobStore:
             if state != "done":
                 return rec, None
             return rec, self._read_envelope(jd)
+
+    def mark_delivered(self, cwd: str, job_id: str) -> bool:
+        """Stamp a ``done`` record as returned once, which lets the count cap evict it
+        (#244). Call it only after a stored result was validated and handed back: it
+        records that amicus returned the result, never that the client received it.
+        Returns True only when this call wrote the stamp; a missing, non-``done``,
+        untracked or already-stamped record is left unchanged."""
+        with _LOCK:
+            live = self._read_live_job(cwd, job_id)
+            if live is None:
+                return False
+            jd, meta, state = live
+            if state != "done" or "delivered_epoch" not in meta:
+                return False
+            if meta["delivered_epoch"] is not None:
+                return False
+            meta["delivered_epoch"] = time.time()
+            self._write_meta(jd, meta)
+            return True
 
     def discard(self, cwd: str, job_id: str, *, expected: str = "done") -> DiscardOutcome:
         """Delete a terminal job record, but only in the state the caller names.
