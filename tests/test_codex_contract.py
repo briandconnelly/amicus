@@ -226,7 +226,7 @@ def test_static_catalog_and_version_pins():
     assert all(c.MODEL_SLUG_PATTERN.match(s) for s in c.KNOWN_MODEL_SLUGS)
     assert c.MODEL_SLUG_PATTERN.match("gpt-5.4-mini")
     assert not c.MODEL_SLUG_PATTERN.match("-bad")
-    assert {(0, 153), (0, 154), (0, 155), (0, 156)} <= c.SUPPORTED_VERSIONS
+    assert {(0, 153), (0, 154), (0, 155), (0, 156), (0, 157)} <= c.SUPPORTED_VERSIONS
     assert c.RATE_LIMIT_DEFAULT_BACKOFF_MS == 60_000
 
 

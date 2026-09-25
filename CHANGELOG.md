@@ -34,6 +34,16 @@ per-change, as its own lead says.
 
 ### Changed
 
+- codex-cli 0.157 is a supported version, so `amicus_backends` no longer warns on it. It was
+  checked against 0.156.1 at zero spend: top-level `--help`, `exec --help`, `exec review --help`
+  and `login --help` are identical apart from trailing whitespace. The unknown-feature error, the
+  logged-out `login status` line, and the strict-config, invalid-value and retired-setting
+  rejections are unchanged; the four config keys amicus pins with `-c` are still accepted, and
+  all three features amicus disables on every run are still `stable`. The tool list sent to each
+  bundled model is the same as 0.156.1's with and without those disables, and the served model
+  catalog is unchanged. Of the two features 0.157 turns on by default, `daemon_auto_start` is
+  read only by the interactive TUI and `guardianv2.thread_context` only shapes Guardian approval
+  reviews, so neither is enabled or disabled here. No paid call was part of the check.
 - **Surface.** `amicus_capabilities`' `fingerprint_covers` gains `repair_rules` (#252, ADR
   0044): each error code's `temporary`, `repair.next_step`, `repair.tool` and lookup
   `repair.arguments`, as the envelope carries them by default for each in-tree backend, are
