@@ -2,6 +2,8 @@
 
 **Status:** Accepted (2026-09-09)
 
+The `resources/read` clause is superseded by [ADR 0041](0041-static-resource-reads-carry-the-catalog-ttl.md); the rest stands.
+
 Supersedes the cache-hint clause of [ADR 0006](0006-fingerprint-and-surface-digest.md); the rest of that record stands.
 
 ## Context
