@@ -193,6 +193,20 @@ A `null` there means no loaded plugin declares one.
 The `amicus://backends/{backend}` resource is always the full entry.
 `amicus_capabilities(detail="contracts")` is removed: pass `include_tool_details=false` for the same rowless payload, and `detail` now selects only how much each `tool_details` row carries (`summary` is `name`, `cost`, `stability`, `backends`; `full` adds the rest, including `error_codes`).
 
+## Upgrading from 0.6.0
+
+The changes below are the ones a caller using amicus 0.6.0 may have to handle before running the next release.
+`CHANGELOG.md`'s section for that release lists every user-visible change since 0.6.0, including the ones that require no migration.
+A job result stored by 0.6.0 is still readable: `RESULT_FORMAT` did not move.
+
+**A sync `timeout` is never temporary, and its repair names the `_async` twin (#245).**
+On codex and kimi the envelope said `temporary: true` with `retry_after_delay`; it now says `temporary: false` with `start_new_job` and `repair.tool` set to the verb's `_async` tool, as Claude's already did.
+A caller that retried the same sync call on `temporary: true` should start the `_async` twin with its original arguments instead; the retry is a new paid run.
+
+**A backend a verb never accepts is rejected at the boundary (#246).**
+`amicus_delegate` with `claude`, or `amicus_adversarial_review` with `codex` or `kimi`, now fails as `invalid_arguments` with `details.allowed_values`, where it failed as `feature_unsupported`.
+A caller that branched on `feature_unsupported` for those picks should read the tool's `backend` enum, which is now the accepted set.
+
 ## Upgrading from 0.5.0
 
 The changes below are the ones a caller or operator using amicus 0.5.0 may have to handle before running 0.6.0.

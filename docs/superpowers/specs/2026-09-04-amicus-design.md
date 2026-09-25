@@ -29,7 +29,7 @@ Rev 2 absorbs every finding:
 - An **outcome-inspection step** runs after every completed process, before `finalize`, because Claude reports errors in a zero-exit JSON envelope.
 - The Kimi adapter is **fixed in the port** (last message + sanitizer before truncation).
 - `backend_options` is a **closed superset object** for first-call correctness.
-- Repair rules are **backend-overridable**; `timeout` is not retryable for Claude.
+- Repair rules are **backend-overridable**; `timeout` is never temporary for any backend (ADR 0039).
 - Workspace resolution keeps **handshake-era roots** and never silently falls back to cwd.
 - The tasks spike moves to **M0**, with a persisted task-id → job-id mapping.
 - The tools/list target is **measured in M0 on all 18 real schemas**, not asserted.
@@ -53,7 +53,7 @@ Rev 2 absorbs every finding:
     `KimiBackend.finalize` and `CodexBackend.finalize` drop `cached_input_tokens`.
   - `ClaudeBackend.finalize` (`claude-in-codex/backend.py:163-202`) never checks `is_error`/`subtype`; production `normalize.py:527` treats those as failure on exit 0.
     `ClassifiedFailure` cannot carry `repair`/`details`/`retryable` (background: briandconnelly/claude-in-codex#145).
-    Claude marks `timeout` non-retryable (`claude.py:303-313`) and distinguishes `claude_auth_required`/`api_key_missing`/`api_key_invalid`.
+    Claude's classifier marks `timeout` `retryable=False`, which the shared rule now says for every backend (ADR 0039), and distinguishes `claude_auth_required`/`api_key_missing`/`api_key_invalid`.
 - Conventions inherited from the siblings: uv, ruff, ty, hatchling, MIT, conventional commits, draft PRs, `>=3.11` (documented SPEC 0 carve-out), 95% branch coverage, `prek`, `CLAUDE.md` = `@AGENTS.md`, release lockstep, FINGERPRINT bump + digest re-pin in the same PR, one sentence per line in markdown, ADRs in `docs/adr/`, Claude's non-skipping live release gate, Kimi's captured help/signature evidence rule.
 - **Open item before PyPI publish:** trademark clearance for "amicus".
 

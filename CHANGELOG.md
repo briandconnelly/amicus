@@ -20,6 +20,25 @@ per-change, as its own lead says.
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking.** A sync paid call that passes its deadline returns `timeout` with `temporary:
+  false`, `retry_after_ms: null` and `repair.next_step: start_new_job` on every backend, where
+  codex and kimi said `temporary: true` / `retry_after_delay` while their own prose said a retry
+  would time out again (#245, ADR 0039). The repair names the verb's `_async` twin in
+  `repair.tool` and carries no arguments, since they would echo your inputs; its text says so
+  and states that any next attempt is a new paid run. Claude's behaviour is unchanged: it was
+  already this contract. Codex's capture-failed timeout, whose repair says to retry the same
+  call once, now says `temporary: true` itself and its repair names no other tool. A keyed sync
+  wait's timeout is unchanged (ADR 0020).
+- **Breaking.** `amicus_delegate`, `amicus_delegate_async` and `amicus_delegate_dry_run`
+  publish `backend` as `codex | kimi`, and `amicus_adversarial_review` and its async twin as
+  `claude`, the sets those verbs accept (#246, ADR 0040). A backend outside the set now fails
+  at the boundary as `invalid_arguments` with `allowed_values`, where it failed after
+  resolution as `feature_unsupported`; that code remains for a plugin that does not declare
+  the feature, and its repair now lists every backend rather than the one that failed.
+  `amicus_capabilities.tool_details[].backends` derives from the same table.
+
 ### Fixed
 
 - A new paid call no longer deletes a finished result nobody has fetched (#244). Every paid call
