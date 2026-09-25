@@ -788,3 +788,32 @@ async def test_list_rejects_a_malformed_cursor(app, tmp_path):
                 err["details"]["field"] == "cursor" and err["repair"]["tool"] == "amicus_job_list"
             )
             assert "cursor" in err["repair"]["alternative"]
+
+
+async def test_list_pages_through_equal_start_times_without_skipping(app, store, tmp_path):
+    """#249: every job shares one started_epoch, so the page boundary falls inside the tie.
+    The anchor compares (started_epoch, job_id), not the epoch alone, or every job tied with
+    the anchor would be skipped; limit=1 must still walk all three, in job_id order."""
+    ws = {"workspace_root": str(tmp_path)}
+    cwd = str(tmp_path)
+    async with Client(app) as c:
+        ids = []
+        for _ in range(3):
+            job_id = await _start(c, tmp_path)
+            await _wait_done(store, tmp_path, job_id)
+            ids.append(job_id)
+        for jd in store._job_dirs(store._ws_dir(cwd)):
+            meta = store._read_meta(jd)
+            assert meta is not None
+            meta["started_epoch"] = 1_700_000_000.0
+            store._write_meta(jd, meta)
+        walked: list[str] = []
+        cursor = None
+        for _ in range(4):
+            args = {"limit": 1, **ws, **({"cursor": cursor} if cursor else {})}
+            page = (await c.call_tool("amicus_job_list", args)).structured_content
+            walked += [j["job_id"] for j in page["jobs"]]
+            cursor = page["next_cursor"]
+            if cursor is None:
+                break
+    assert walked == sorted(ids, reverse=True)
