@@ -17,13 +17,20 @@ So one condition had two contracts, chosen by `backend`, and an agent that branc
 It lives in `amicus.errors._LOCAL_RULES`, above the SDK default; Claude's `repair_overrides` entry and its classifier's own `RepairHint` are gone, and the classifier keeps `retryable: false` and its detail about a possibly charged run.
 The prose states the spend, names the four `_async` twins, and gates polling on `status` as the `job_running` repair does.
 
-**The repair names the verb's `_async` twin and carries no arguments.**
-`repair.tool` is set where the verb is known: the sync await in `jobs.lifecycle` and `errors.render_failure`, which now takes the run's `kind`.
+**On a sync run, the repair names the verb's `_async` twin and carries no arguments.**
+`repair.tool` is set where the verb is known: the sync await in `jobs.lifecycle` and `errors.render_failure`, which now takes the run's `kind` and whether it is a background run.
 The arguments would echo prompt inputs (rule 18), and ADR 0021 already accepts a repair that names a tool without arguments when the correction is not unique; the prose says the arguments are the caller's own.
 
 **A backend-classified CLI timeout is the same condition.**
-The worker applies the caller's `timeout_seconds` to the backend subprocess, so the classifier's `timeout` is the one that fires in practice, and it takes the same rule.
+On an unkeyed sync call the worker applies the caller's `timeout_seconds` to the backend subprocess, so there the classifier's `timeout` is the one that fires in practice, and it takes the same rule.
 Codex's capture-failed timeout is the one exception: its hint says to retry the same call once, so it sets `retryable: true` itself, and on that one repair no `_async` tool is named, because its hint prescribes retrying the same call.
+
+**A background run's timeout names no tool.**
+A background run, an `_async` job or a keyed sync call, gives the backend subprocess `AMICUS_JOB_MAX_SECONDS` (default 1800s) rather than the caller's wait, so its `_async` twin is the run that already timed out.
+Its `timeout` keeps `temporary: false` and `next_step: "start_new_job"`, names no `repair.tool`, and carries its own prose, which names that deadline, says the same call, sync or `_async`, will likely time out again and that any next attempt is a new paid run, and suggests narrowing the task or having the operator raise `AMICUS_JOB_MAX_SECONDS`.
+`RunSpec.background` carries the fact to `render_failure`; it is not a prompt input, it stays out of the idempotency identity so a keyed record written before it existed still replays, and a record that lacks it loads as `False`.
+The same condition on a background run can instead surface as `job_timeout`, depending on when the job is polled: the job store's deadline starts when the job is recorded, before the subprocess's own, and a poll past it reaps the job.
+That is a separate code, which this ADR leaves unchanged.
 
 **A keyed sync wait's timeout stays temporary.**
 ADR 0020 already made it so whatever the backend's rule said; the run continues and the repair polls it.

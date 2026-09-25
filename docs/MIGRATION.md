@@ -200,7 +200,9 @@ The changes below are the ones a caller using amicus 0.6.0 may have to handle be
 A job result stored by 0.6.0 is still readable: `RESULT_FORMAT` did not move.
 
 **A sync `timeout` is never temporary, and its repair names the `_async` twin (#245).**
-On codex and kimi the envelope said `temporary: true` with `retry_after_delay`; it now says `temporary: false` with `start_new_job` and `repair.tool` set to the verb's `_async` tool, as Claude's already did.
+On codex and kimi the envelope said `temporary: true` with `retry_after_delay`; it now says `temporary: false` with `start_new_job` and `repair.tool` set to the verb's `_async` tool.
+Claude's `temporary` and `next_step` are unchanged; it now also names the `_async` tool and shares the new text.
+A background run (an `_async` job or a keyed sync call) that passes `AMICUS_JOB_MAX_SECONDS` returns `timeout` with no `repair.tool` and prose naming that deadline.
 A caller that retried the same sync call on `temporary: true` should start the `_async` twin with its original arguments instead; the retry is a new paid run.
 
 **A backend a verb never accepts is rejected at the boundary (#246).**

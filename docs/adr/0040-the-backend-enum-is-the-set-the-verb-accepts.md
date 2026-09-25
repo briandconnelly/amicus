@@ -17,7 +17,8 @@ A one-value enum, adversarial review's `claude`, is published as `enum: ["claude
 
 **The enum narrows per verb, not per profile.**
 A per-profile enum would make the profiles differ in more than annotations, which the manifest's byte-difference control pins, and the tool set is the same in every profile by design.
-A tool no enabled backend can serve stays listed; its description says every call is `backend_unavailable` while its backend is not enabled.
+Every tool no enabled backend can serve stays listed.
+The adversarial review description says so (its call is `backend_unavailable` unless `claude` is enabled); the delegate descriptions, already long, do not.
 
 **`feature_unsupported` repairs to the unfiltered `amicus_backends` call.**
 The code is now reachable only through a plugin that does not declare the feature.
@@ -27,4 +28,4 @@ ADR 0021 forbids a repair whose `arguments` are not a complete call, and a corre
 
 - `amicus_delegate(backend="claude")` and its async and dry-run forms, and `amicus_adversarial_review(backend="codex"|"kimi")` and its async form, now fail at the boundary as `invalid_arguments` with `allowed_values`, where they failed after resolution as `feature_unsupported`: **Breaking**, since the code a caller read for that call changed.
 - `amicus_models` and `amicus_backends` keep the whole set: they answer for any known backend.
-- `FINGERPRINT` moves (with #245, to `schema-45`); `tools/list` grows by 152 bytes on every profile, almost all of it the adversarial review description's sentence that the tool stays listed in every profile: 27 bytes from the delegate tools dropping `claude` from their enum and rewording its description, and 125 bytes from the adversarial review tools narrowing to `claude` alone and gaining that description clause.
+- `FINGERPRINT` moves (with #245, to `schema-45`); `tools/list` grows by 134 bytes on every profile (`all`: 112683 to 112817), most of it the adversarial review description's clause that the tool stays listed in every profile: 27 bytes from the delegate tools dropping `claude` from their enum and rewording its description, and 107 bytes from the adversarial review tools narrowing to `claude` alone and gaining that description clause.

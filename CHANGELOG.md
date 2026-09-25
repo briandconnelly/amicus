@@ -27,8 +27,11 @@ per-change, as its own lead says.
   codex and kimi said `temporary: true` / `retry_after_delay` while their own prose said a retry
   would time out again (#245, ADR 0039). The repair names the verb's `_async` twin in
   `repair.tool` and carries no arguments, since they would echo your inputs; its text says so
-  and states that any next attempt is a new paid run. Claude's behaviour is unchanged: it was
-  already this contract. Codex's capture-failed timeout, whose repair says to retry the same
+  and states that any next attempt is a new paid run. Claude's `temporary` and `next_step` are
+  unchanged; it now also names the `_async` tool and shares the new text. A background run (an
+  `_async` job or a keyed sync call) that passes `AMICUS_JOB_MAX_SECONDS` returns `timeout` with
+  no `repair.tool` and prose naming that deadline, since its `_async` twin would hit the same
+  one. Codex's capture-failed timeout, whose repair says to retry the same
   call once, now says `temporary: true` itself and its repair names no other tool. A keyed sync
   wait's timeout is unchanged (ADR 0020).
 - **Breaking.** `amicus_delegate`, `amicus_delegate_async` and `amicus_delegate_dry_run`
