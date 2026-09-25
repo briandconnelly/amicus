@@ -222,7 +222,7 @@
           "question"
         ],
         "returns": "summary, findings, questions, next_steps, raw_response (detail=full) and meta.",
-        "stability": null,
+        "stability": "experimental",
         "use_when": "A read-only second opinion or Q&A from another model, including on a diff pasted inline."
       },
       {
@@ -277,7 +277,7 @@
           "question"
         ],
         "returns": "job_id, status, poll_after_ms, expires_at, follow_up; result via amicus_job_result.",
-        "stability": null,
+        "stability": "experimental",
         "use_when": "The same consult when it may exceed the sync deadline; returns a job handle."
       },
       {
@@ -350,7 +350,7 @@
           "backend"
         ],
         "returns": "verdict, confidence, findings, review_status, coverage, context_summary, raw_response (detail=full; the whole answer when review_status is unstructured) and meta.",
-        "stability": null,
+        "stability": "experimental",
         "use_when": "A structured review of changes that live in git."
       },
       {
@@ -418,7 +418,7 @@
           "backend"
         ],
         "returns": "a job handle; result via amicus_job_result.",
-        "stability": null,
+        "stability": "experimental",
         "use_when": "A multi-file or whole-branch review that may exceed the sync deadline."
       },
       {
@@ -479,7 +479,7 @@
           "task"
         ],
         "returns": "diff, diffstat, summary and meta.",
-        "stability": null,
+        "stability": "experimental",
         "use_when": "A coding task implemented in a throwaway worktree, returned as a diff you apply yourself."
       },
       {
@@ -534,7 +534,7 @@
           "task"
         ],
         "returns": "a job handle; result via amicus_job_result.",
-        "stability": null,
+        "stability": "experimental",
         "use_when": "A substantial delegate that may exceed the sync deadline."
       },
       {
@@ -602,7 +602,7 @@
           "target"
         ],
         "returns": "verdict, confidence, findings, review_status, coverage, raw_response (detail=full; the whole answer when review_status is unstructured) and meta.",
-        "stability": null,
+        "stability": "experimental",
         "use_when": "A fixed critic attacking a plan, claim or decision before you commit to it."
       },
       {
@@ -668,7 +668,7 @@
           "target"
         ],
         "returns": "a job handle; result via amicus_job_result.",
-        "stability": null,
+        "stability": "experimental",
         "use_when": "The same critique when it may exceed the sync deadline."
       },
       {
@@ -707,7 +707,7 @@
           "backend"
         ],
         "returns": "would_call_model, scope, prompt_bytes, coverage, max_input_bytes, context_summary, resolved backend_options.",
-        "stability": null,
+        "stability": "experimental",
         "use_when": "Preview a review's scope, size and resolved options before spending."
       },
       {
@@ -740,7 +740,7 @@
           "task"
         ],
         "returns": "worktree plan, task_bytes, resolved backend_options.",
-        "stability": null,
+        "stability": "experimental",
         "use_when": "Preview a delegate's worktree baseline before spending."
       },
       {
@@ -761,7 +761,7 @@
         "name": "amicus_backends",
         "required_params": [],
         "returns": "per-backend entries, unavailable reasons, env warnings, config errors.",
-        "stability": null,
+        "stability": "experimental",
         "use_when": "Before the first paid call: which backends are enabled, installed, authenticated, and what each supports."
       },
       {
@@ -782,7 +782,7 @@
           "backend"
         ],
         "returns": "advisory model slugs with effort sets and the catalog source.",
-        "stability": null,
+        "stability": "experimental",
         "use_when": "Before overriding model or reasoning_effort."
       },
       {
@@ -804,7 +804,7 @@
         "name": "amicus_capabilities",
         "required_params": [],
         "returns": "this payload.",
-        "stability": null,
+        "stability": "experimental",
         "use_when": "The full inventory, fingerprint, surface_digest, result_format and error catalog."
       },
       {
@@ -828,7 +828,7 @@
           "job_id"
         ],
         "returns": "status, result_available, result_ok, poll_after_ms.",
-        "stability": null,
+        "stability": "experimental",
         "use_when": "Poll a job without fetching its result."
       },
       {
@@ -858,7 +858,7 @@
           "job_id"
         ],
         "returns": "the originating tool's envelope.",
-        "stability": null,
+        "stability": "experimental",
         "use_when": "Fetch a finished job's envelope."
       },
       {
@@ -888,7 +888,7 @@
           "job_id"
         ],
         "returns": "the originating tool's envelope for a done job whose stored result reads back; meta.consume.discard_outcome is what the store did, with a follow_up after state_changed or delete_failed. A failed, cancelled or timed-out job returns its terminal error, and meta.consume reports its discard too. A corrupt or incompatible record is kept.",
-        "stability": null,
+        "stability": "experimental",
         "use_when": "Fetch a finished job's envelope or terminal error and delete its record."
       },
       {
@@ -912,7 +912,7 @@
           "job_id"
         ],
         "returns": "the job's status after cancellation.",
-        "stability": null,
+        "stability": "experimental",
         "use_when": "Stop a running job."
       },
       {
@@ -938,7 +938,7 @@
         "name": "amicus_job_list",
         "required_params": [],
         "returns": "job summaries, truncated flag.",
-        "stability": null,
+        "stability": "experimental",
         "use_when": "Recover job_ids, including the job behind a task_id."
       }
     ],
@@ -954,7 +954,6 @@
     "cacheScope": "private",
     "capabilities": {
       "completions": {},
-      "logging": {},
       "resources": {
         "listChanged": false,
         "subscribe": false
@@ -1946,7 +1945,6 @@
   "initialize": {
     "capabilities": {
       "completions": {},
-      "logging": {},
       "resources": {
         "listChanged": false,
         "subscribe": false
@@ -1976,17 +1974,17 @@
       "amicus://error-envelope": {
         "cacheScope": "private",
         "resultType": "complete",
-        "ttlMs": 0
+        "ttlMs": 300000
       },
       "amicus://params": {
         "cacheScope": "private",
         "resultType": "complete",
-        "ttlMs": 0
+        "ttlMs": 300000
       },
       "amicus://result-meta": {
         "cacheScope": "private",
         "resultType": "complete",
-        "ttlMs": 0
+        "ttlMs": 300000
       }
     },
     "resources/templates/list": {
@@ -2035,7 +2033,7 @@
             "summary": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists each model's set); omit for the backend default. Bounds: amicus://params."
           },
           "workspace_root": {
-            "full": "Resolution precedence: explicit workspace_root → the client's handshake-era file roots (first root; an explicit value must lie inside one of them or the call fails as workspace_outside_roots) → invalid_workspace_root. A sessionless client has no roots, so it must pass workspace_root; a handshake-era client may rely on its advertised roots. The server never falls back to its own cwd unless the operator opts in: it is used only when AMICUS_ALLOW_CWD_WORKSPACE=1, and then meta.workspace_warning discloses the resolved path. On an active call the workspace selects where the backend works, not what it can read: every backend CLI can read files outside it, up to everything the OS user can read. A refusal names its cause in error.details.reason, a fixed token: no_workspace (no workspace_root, no client file roots, and no cwd opt-in); not_absolute (workspace_root is not an absolute path); not_a_directory (workspace_root does not resolve to an existing directory); cwd_gone (the cwd opt-in was needed and the server's working directory no longer exists); outside_roots (workspace_root lies outside the client's file roots); outside_roots comes with workspace_outside_roots, every other with invalid_workspace_root.",
+            "full": "Resolution precedence: explicit workspace_root → the client's handshake-era file roots (first root; an explicit value must lie inside one of them or the call fails as workspace_outside_roots) → invalid_workspace_root. A sessionless client has no roots, so it must pass workspace_root; a handshake-era client may rely on its advertised roots. The server never falls back to its own cwd unless the operator opts in: it is used only when AMICUS_ALLOW_CWD_WORKSPACE=1, and then meta.workspace_warning discloses the resolved path. On an active call the workspace selects where the backend works, not what it can read: every backend CLI can read files outside it, up to everything the OS user can read. A refusal names its cause in error.details.reason, a fixed token: no_workspace (no workspace_root, no client file roots, and no cwd opt-in); not_absolute (workspace_root is not an absolute path); not_a_directory (workspace_root does not resolve to an existing directory); root_not_a_directory (the client's first file root does not resolve to an existing directory; fix the advertised root or pass workspace_root); cwd_gone (the cwd opt-in was needed and the server's working directory no longer exists); outside_roots (workspace_root lies outside the client's file roots); outside_roots comes with workspace_outside_roots, every other with invalid_workspace_root.",
             "summary": "Absolute path of the repository the call targets; a sessionless (2026-07-28) client must pass it. Resolution rules: amicus://params."
           }
         }
@@ -2054,7 +2052,7 @@
           "volatile": true
         }
       },
-      "description": "The amicus_backends(detail=\"full\") entry for one backend: a single-backend read\nis the on-demand path to its disclosures, so it never takes the summary projection.",
+      "description": "One backend's amicus_backends entry at detail=full, disclosures included; an unknown backend id is resource_not_found.",
       "mimeType": "application/json",
       "name": "amicus-backend",
       "title": "One backend's catalog entry",
@@ -2069,7 +2067,7 @@
           "volatile": true
         }
       },
-      "description": "The amicus_models payload for one backend, unlike the `amicus_models` TOOL:\nfor an unavailable (but known) backend id this returns the informational\n`available: false` payload rather than a `backend_unavailable` error envelope,\nbecause a resource read has no repair carrier to put one in. Only an unknown\nbackend id (not in BACKEND_IDS and not a loaded plugin) is resource_not_found.",
+      "description": "One backend's amicus_models payload. Unlike the tool, a known but unavailable backend returns the informational available=false payload rather than a backend_unavailable error; only an unknown backend id is resource_not_found.",
       "mimeType": "application/json",
       "name": "amicus-models",
       "title": "One backend's model catalog",
@@ -2114,7 +2112,7 @@
       "description": "Full semantics for parameters whose inline description is a compressed summary.",
       "mimeType": "application/json",
       "name": "amicus-params",
-      "size": 6692,
+      "size": 6835,
       "title": "amicus parameter contracts",
       "uri": "amicus://params"
     },
