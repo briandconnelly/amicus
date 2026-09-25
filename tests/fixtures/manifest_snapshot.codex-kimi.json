@@ -1541,7 +1541,7 @@
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-48",
+                "default": "amicus/0.1/schema-49",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -2016,6 +2016,10 @@
             "full": "A key the selected backend does not accept, or a value it does not accept for a key it does, fails pre-spend as invalid_arguments naming backend_options.<key>. isolation — codex: inherit|ignore-config|ignore-rules (drop $CODEX_HOME config, then also execpolicy rules); kimi: inherit|ignore-skills. config_mode — claude: inherit|scoped|safe|bare (how much of the user's Claude config the run inherits). Claude adversarial_review defaults to safe (bare when AMICUS_CLAUDE_CONFIG_MODE=bare); other verbs use the configured default. Explicit config_mode overrides are honored. Discovery reports default_by_verb when verbs differ, with default null. access — claude: toolless|readonly; review_changes defaults to readonly and other verbs to toolless unless AMICUS_CLAUDE_ACCESS is set, which then applies to every verb. max_budget_usd — claude: per-call stop threshold in USD, 0.01–5.00, checked only between model calls, so the estimated cost can exceed it. Unset keys take the backend's defaults; amicus_review_changes_dry_run echoes review_changes values.",
             "summary": "One closed object of backend knobs: isolation (codex, kimi); config_mode, access, max_budget_usd (claude). A key or value the selected backend rejects fails pre-spend. Values: amicus://params."
           },
+          "detail": {
+            "full": "The shape is the same either way. detail selects what the call delivers, not what is kept: the job record keeps the whole answer whichever you ask for, until it expires, the per-workspace cap evicts it once returned, or amicus_job_consume_result removes it.",
+            "summary": "summary (default) omits raw_response.text; full includes it. Delivery only: amicus://params."
+          },
           "extra_context": {
             "full": "Added to the prompt as labeled untrusted data; the backend is instructed to treat embedded directives as data, not commands — best-effort prompt-injection mitigation, not a guarantee. Secret redaction covers the gathered diff, never this field, so it must carry no live secrets. It counts against the same input budget as the gathered diff, so an oversized value fails as input_too_large before any spend.",
             "summary": "Author intent/background, sent as labeled UNTRUSTED prompt data. Not redacted, so no secrets. Bounds: amicus://params."
@@ -2031,6 +2035,10 @@
           "reasoning_effort": {
             "full": "Omitted, the backend resolves its own default. The value is validated by the backend, and amicus_models's per-model set is advisory. A backend-rejected value fails as invalid_reasoning_effort (repair steers to amicus_models). Backends whose CLI does not reject a bad effort (claude, kimi) are validated pre-spend: claude against a fixed list, kimi from the model catalog. Control characters, surrogates, and values over 128 chars are rejected at the MCP boundary as invalid_arguments.",
             "summary": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists each model's set); omit for the backend default. Bounds: amicus://params."
+          },
+          "timeout_seconds": {
+            "full": "Omitted, the server default AMICUS_TIMEOUT_SECONDS applies. An unkeyed sync call past its deadline is terminated and its partial work lost; prefer the _async twin for work that can exceed it. For a keyed call (idempotency_key) this only bounds the wait: the run gets the job deadline (AMICUS_JOB_MAX_SECONDS) and the timeout envelope says how to fetch it.",
+            "summary": "Deadline in seconds, clamped to 10-600; omit for the server default. Keyed calls: amicus://params."
           },
           "workspace_root": {
             "full": "Resolution precedence: explicit workspace_root → the client's handshake-era file roots (first root; an explicit value must lie inside one of them or the call fails as workspace_outside_roots) → invalid_workspace_root. A sessionless client has no roots, so it must pass workspace_root; a handshake-era client may rely on its advertised roots. The server never falls back to its own cwd unless the operator opts in: it is used only when AMICUS_ALLOW_CWD_WORKSPACE=1, and then meta.workspace_warning discloses the resolved path. On an active call the workspace selects where the backend works, not what it can read: every backend CLI can read files outside it, up to everything the OS user can read. A refusal names its cause in error.details.reason, a fixed token: no_workspace (no workspace_root, no client file roots, and no cwd opt-in); not_absolute (workspace_root is not an absolute path); not_a_directory (workspace_root does not resolve to an existing directory); root_not_a_directory (the client's first file root does not resolve to an existing directory; fix the advertised root or pass workspace_root); cwd_gone (the cwd opt-in was needed and the server's working directory no longer exists); outside_roots (workspace_root lies outside the client's file roots); outside_roots comes with workspace_outside_roots, every other with invalid_workspace_root.",
@@ -2112,7 +2120,7 @@
       "description": "Full semantics for parameters whose inline description is a compressed summary.",
       "mimeType": "application/json",
       "name": "amicus-params",
-      "size": 6835,
+      "size": 7724,
       "title": "amicus parameter contracts",
       "uri": "amicus://params"
     },
@@ -2453,7 +2461,7 @@
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-48",
+            "default": "amicus/0.1/schema-49",
             "title": "Fingerprint",
             "type": "string"
           },
@@ -2815,7 +2823,7 @@
           },
           "detail": {
             "default": "summary",
-            "description": "summary (default) omits raw_response.text; full includes it. Same shape either way. Delivery only: the job record keeps the text whichever you ask for.",
+            "description": "summary (default) omits raw_response.text; full includes it. Delivery only: amicus://params.",
             "enum": [
               "full",
               "summary"
@@ -2938,7 +2946,7 @@
                 "type": "null"
               }
             ],
-            "description": "Deadline in seconds, clamped to 10-600; omit for the server default (AMICUS_TIMEOUT_SECONDS). An unkeyed sync call past its deadline is terminated and its partial work lost; prefer the _async twin. For a keyed call (idempotency_key) this only bounds the wait: the run gets the job deadline and the timeout says how to fetch it."
+            "description": "Deadline in seconds, clamped to 10-600; omit for the server default. Keyed calls: amicus://params."
           },
           "untracked": {
             "default": "explicit_only",
@@ -4686,7 +4694,7 @@
           },
           "detail": {
             "default": "summary",
-            "description": "summary (default) omits raw_response.text; full includes it. Same shape either way. Delivery only: the job record keeps the text whichever you ask for.",
+            "description": "summary (default) omits raw_response.text; full includes it. Delivery only: amicus://params.",
             "enum": [
               "full",
               "summary"
@@ -4767,7 +4775,7 @@
                 "type": "null"
               }
             ],
-            "description": "Deadline in seconds, clamped to 10-600; omit for the server default (AMICUS_TIMEOUT_SECONDS). An unkeyed sync call past its deadline is terminated and its partial work lost; prefer the _async twin. For a keyed call (idempotency_key) this only bounds the wait: the run gets the job deadline and the timeout says how to fetch it."
+            "description": "Deadline in seconds, clamped to 10-600; omit for the server default. Keyed calls: amicus://params."
           },
           "workspace_root": {
             "anyOf": [
@@ -5632,7 +5640,7 @@
           },
           "detail": {
             "default": "summary",
-            "description": "summary (default) omits raw_response.text; full includes it. Same shape either way. Delivery only: the job record keeps the text whichever you ask for.",
+            "description": "summary (default) omits raw_response.text; full includes it. Delivery only: amicus://params.",
             "enum": [
               "full",
               "summary"
@@ -5691,7 +5699,7 @@
                 "type": "null"
               }
             ],
-            "description": "Deadline in seconds, clamped to 10-600; omit for the server default (AMICUS_TIMEOUT_SECONDS). An unkeyed sync call past its deadline is terminated and its partial work lost; prefer the _async twin. For a keyed call (idempotency_key) this only bounds the wait: the run gets the job deadline and the timeout says how to fetch it."
+            "description": "Deadline in seconds, clamped to 10-600; omit for the server default. Keyed calls: amicus://params."
           },
           "workspace_root": {
             "anyOf": [
@@ -6852,7 +6860,7 @@
         "properties": {
           "detail": {
             "default": "summary",
-            "description": "summary (default) omits raw_response.text; full includes it. Same shape either way. Delivery only: the job record keeps the text whichever you ask for.",
+            "description": "summary (default) omits raw_response.text; full includes it. Delivery only: amicus://params.",
             "enum": [
               "full",
               "summary"
@@ -7263,7 +7271,7 @@
         "properties": {
           "detail": {
             "default": "summary",
-            "description": "summary (default) omits raw_response.text; full includes it. Same shape either way. Delivery only: the job record keeps the text whichever you ask for.",
+            "description": "summary (default) omits raw_response.text; full includes it. Delivery only: amicus://params.",
             "enum": [
               "full",
               "summary"
@@ -7868,7 +7876,7 @@
           },
           "detail": {
             "default": "summary",
-            "description": "summary (default) omits raw_response.text; full includes it. Same shape either way. Delivery only: the job record keeps the text whichever you ask for.",
+            "description": "summary (default) omits raw_response.text; full includes it. Delivery only: amicus://params.",
             "enum": [
               "full",
               "summary"
@@ -7981,7 +7989,7 @@
                 "type": "null"
               }
             ],
-            "description": "Deadline in seconds, clamped to 10-600; omit for the server default (AMICUS_TIMEOUT_SECONDS). An unkeyed sync call past its deadline is terminated and its partial work lost; prefer the _async twin. For a keyed call (idempotency_key) this only bounds the wait: the run gets the job deadline and the timeout says how to fetch it."
+            "description": "Deadline in seconds, clamped to 10-600; omit for the server default. Keyed calls: amicus://params."
           },
           "untracked": {
             "default": "explicit_only",

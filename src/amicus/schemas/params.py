@@ -282,6 +282,33 @@ PARAMETER_CONTRACTS: dict[str, ParamContract] = {
             "values."
         ),
     ),
+    "timeout_seconds": ParamContract(
+        name="timeout_seconds",
+        summary=(
+            f"Deadline in seconds, clamped to {MIN_TIMEOUT_SECONDS}-{MAX_TIMEOUT_SECONDS}; omit "
+            f"for the server default. Keyed calls: {PARAMS_RESOURCE_URI}."
+        ),
+        full=(
+            "Omitted, the server default AMICUS_TIMEOUT_SECONDS applies. An unkeyed sync call "
+            "past its deadline is terminated and its partial work lost; prefer the _async "
+            "twin for work that can exceed it. For a keyed call (idempotency_key) this only "
+            "bounds the wait: the run gets the job deadline (AMICUS_JOB_MAX_SECONDS) and the "
+            "timeout envelope says how to fetch it."
+        ),
+    ),
+    "detail": ParamContract(
+        name="detail",
+        summary=(
+            "summary (default) omits raw_response.text; full includes it. Delivery only: "
+            f"{PARAMS_RESOURCE_URI}."
+        ),
+        full=(
+            "The shape is the same either way. detail selects what the call delivers, not "
+            "what is kept: the job record keeps the whole answer whichever you ask for, until "
+            "it expires, the per-workspace cap evicts it once returned, or "
+            "amicus_job_consume_result removes it."
+        ),
+    ),
 }
 
 
@@ -381,26 +408,9 @@ ReasoningEffortParam = Annotated[
     ),
 ]
 TimeoutSecondsParam = Annotated[
-    int | None,
-    Field(
-        description=(
-            f"Deadline in seconds, clamped to {MIN_TIMEOUT_SECONDS}-{MAX_TIMEOUT_SECONDS}; "
-            "omit for the server default (AMICUS_TIMEOUT_SECONDS). An unkeyed sync call "
-            "past its deadline is terminated and its partial work lost; prefer the _async "
-            "twin. For a keyed call (idempotency_key) this only bounds the wait: the run "
-            "gets the job deadline and the timeout says how to fetch it."
-        )
-    ),
+    int | None, Field(description=PARAMETER_CONTRACTS["timeout_seconds"].summary)
 ]
-DetailParam = Annotated[
-    Detail,
-    Field(
-        description=(
-            "summary (default) omits raw_response.text; full includes it. Same shape either way. "
-            "Delivery only: the job record keeps the text whichever you ask for."
-        )
-    ),
-]
+DetailParam = Annotated[Detail, Field(description=PARAMETER_CONTRACTS["detail"].summary)]
 CapabilitiesDetailParam = Annotated[
     CapabilitiesDetail,
     Field(

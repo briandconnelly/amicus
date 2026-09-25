@@ -46,6 +46,13 @@ per-change, as its own lead says.
   resource and template record on the wire no longer carries FastMCP's `_meta.fastmcp` block.
   Item 1 of the issue, echoing `workspace_root` in `repair.arguments`, was declined under ADR
   0021.
+- **Surface.** `timeout_seconds` and `detail` carry a one-line summary and an `amicus://params`
+  pointer on every tool that declares them, with the keyed-call and retention elaboration in
+  the resource's `full` text (#247, part), 1,270 bytes of `tools/list`. With the other
+  changes in this release, `tools/list` on the `all` profile is 112,105 bytes (-578 since
+  0.6.0's 112,683, o200k 27,659 tokens). ADR 0043 proposes merging each sync tool
+  with its `_async` twin behind a `wait` flag; that change, and the deprecation of the twins,
+  is not in this release.
 - **Breaking.** A sync paid call that passes its deadline returns `timeout` with `temporary:
   false`, `retry_after_ms: null` and `repair.next_step: start_new_job` on every backend, where
   codex and kimi said `temporary: true` / `retry_after_delay` while their own prose said a retry

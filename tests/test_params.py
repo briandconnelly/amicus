@@ -124,6 +124,8 @@ def test_parameter_contracts_have_summary_and_full_and_point_at_the_resource():
         "reasoning_effort",
         "backend_options",
         "workspace_root",
+        "timeout_seconds",
+        "detail",
     }
     for c in p.PARAMETER_CONTRACTS.values():
         assert c.summary and c.full
@@ -149,6 +151,8 @@ SELECTION_TIME_FACTS: dict[str, tuple[str, ...]] = {
     "instructions_append": ("UNTRUSTED", "grants no tools", "secrets", "4096"),
     "reasoning_effort": ("amicus_models",),
     "backend_options": ("key or value", "pre-spend"),
+    "timeout_seconds": ("10-600", "Keyed"),
+    "detail": ("raw_response", "Delivery only"),
 }
 
 
@@ -193,3 +197,17 @@ def test_the_idempotency_summary_scopes_the_key_as_the_code_does():
     # Backend is still named, as one of the arguments that must match, in both texts.
     assert "backend included" in summary
     assert "(backend, model, reasoning_effort" in " ".join(contract.full.split())
+
+
+def test_the_sync_only_parameters_have_contracts_and_short_inline_summaries():
+    """#247 item 3: timeout_seconds and detail ride four and six tools; their inline text is
+    one line plus the amicus://params pointer, and the elaboration lives in `full`."""
+    for name in ("timeout_seconds", "detail"):
+        contract = p.PARAMETER_CONTRACTS[name]
+        assert contract.name == name
+        assert p.PARAMS_RESOURCE_URI in contract.summary and "\n" not in contract.summary
+        assert len(contract.summary) < len(contract.full)
+    assert "keyed" in p.PARAMETER_CONTRACTS["timeout_seconds"].full
+    assert "job record keeps" in p.PARAMETER_CONTRACTS["detail"].full
+    assert "10-600" in p.PARAMETER_CONTRACTS["timeout_seconds"].summary
+    assert "raw_response" in p.PARAMETER_CONTRACTS["detail"].summary
