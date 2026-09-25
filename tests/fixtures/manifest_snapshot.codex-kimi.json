@@ -222,7 +222,7 @@
           "question"
         ],
         "returns": "summary, findings, questions, next_steps, raw_response (detail=full) and meta.",
-        "stability": "experimental",
+        "stability": null,
         "use_when": "A read-only second opinion or Q&A from another model, including on a diff pasted inline."
       },
       {
@@ -277,7 +277,7 @@
           "question"
         ],
         "returns": "job_id, status, poll_after_ms, expires_at, follow_up; result via amicus_job_result.",
-        "stability": "experimental",
+        "stability": null,
         "use_when": "The same consult when it may exceed the sync deadline; returns a job handle."
       },
       {
@@ -350,7 +350,7 @@
           "backend"
         ],
         "returns": "verdict, confidence, findings, review_status, coverage, context_summary, raw_response (detail=full; the whole answer when review_status is unstructured) and meta.",
-        "stability": "experimental",
+        "stability": null,
         "use_when": "A structured review of changes that live in git."
       },
       {
@@ -418,7 +418,7 @@
           "backend"
         ],
         "returns": "a job handle; result via amicus_job_result.",
-        "stability": "experimental",
+        "stability": null,
         "use_when": "A multi-file or whole-branch review that may exceed the sync deadline."
       },
       {
@@ -479,7 +479,7 @@
           "task"
         ],
         "returns": "diff, diffstat, summary and meta.",
-        "stability": "experimental",
+        "stability": null,
         "use_when": "A coding task implemented in a throwaway worktree, returned as a diff you apply yourself."
       },
       {
@@ -534,7 +534,7 @@
           "task"
         ],
         "returns": "a job handle; result via amicus_job_result.",
-        "stability": "experimental",
+        "stability": null,
         "use_when": "A substantial delegate that may exceed the sync deadline."
       },
       {
@@ -602,7 +602,7 @@
           "target"
         ],
         "returns": "verdict, confidence, findings, review_status, coverage, raw_response (detail=full; the whole answer when review_status is unstructured) and meta.",
-        "stability": "experimental",
+        "stability": null,
         "use_when": "A fixed critic attacking a plan, claim or decision before you commit to it."
       },
       {
@@ -668,7 +668,7 @@
           "target"
         ],
         "returns": "a job handle; result via amicus_job_result.",
-        "stability": "experimental",
+        "stability": null,
         "use_when": "The same critique when it may exceed the sync deadline."
       },
       {
@@ -707,7 +707,7 @@
           "backend"
         ],
         "returns": "would_call_model, scope, prompt_bytes, coverage, max_input_bytes, context_summary, resolved backend_options.",
-        "stability": "experimental",
+        "stability": null,
         "use_when": "Preview a review's scope, size and resolved options before spending."
       },
       {
@@ -740,7 +740,7 @@
           "task"
         ],
         "returns": "worktree plan, task_bytes, resolved backend_options.",
-        "stability": "experimental",
+        "stability": null,
         "use_when": "Preview a delegate's worktree baseline before spending."
       },
       {
@@ -761,7 +761,7 @@
         "name": "amicus_backends",
         "required_params": [],
         "returns": "per-backend entries, unavailable reasons, env warnings, config errors.",
-        "stability": "experimental",
+        "stability": null,
         "use_when": "Before the first paid call: which backends are enabled, installed, authenticated, and what each supports."
       },
       {
@@ -782,7 +782,7 @@
           "backend"
         ],
         "returns": "advisory model slugs with effort sets and the catalog source.",
-        "stability": "experimental",
+        "stability": null,
         "use_when": "Before overriding model or reasoning_effort."
       },
       {
@@ -804,7 +804,7 @@
         "name": "amicus_capabilities",
         "required_params": [],
         "returns": "this payload.",
-        "stability": "experimental",
+        "stability": null,
         "use_when": "The full inventory, fingerprint, surface_digest, result_format and error catalog."
       },
       {
@@ -828,7 +828,7 @@
           "job_id"
         ],
         "returns": "status, result_available, result_ok, poll_after_ms.",
-        "stability": "experimental",
+        "stability": null,
         "use_when": "Poll a job without fetching its result."
       },
       {
@@ -858,7 +858,7 @@
           "job_id"
         ],
         "returns": "the originating tool's envelope.",
-        "stability": "experimental",
+        "stability": null,
         "use_when": "Fetch a finished job's envelope."
       },
       {
@@ -888,7 +888,7 @@
           "job_id"
         ],
         "returns": "the originating tool's envelope for a done job whose stored result reads back; meta.consume.discard_outcome is what the store did, with a follow_up after state_changed or delete_failed. A failed, cancelled or timed-out job returns its terminal error, and meta.consume reports its discard too. A corrupt or incompatible record is kept.",
-        "stability": "experimental",
+        "stability": null,
         "use_when": "Fetch a finished job's envelope or terminal error and delete its record."
       },
       {
@@ -912,7 +912,7 @@
           "job_id"
         ],
         "returns": "the job's status after cancellation.",
-        "stability": "experimental",
+        "stability": null,
         "use_when": "Stop a running job."
       },
       {
@@ -930,7 +930,6 @@
         "key_optional_params": [
           "workspace_root",
           "limit",
-          "cursor",
           "status",
           "backend",
           "task_id"
@@ -938,7 +937,7 @@
         "name": "amicus_job_list",
         "required_params": [],
         "returns": "job summaries, truncated flag.",
-        "stability": "experimental",
+        "stability": null,
         "use_when": "Recover job_ids, including the job behind a task_id."
       }
     ],
@@ -954,6 +953,7 @@
     "cacheScope": "private",
     "capabilities": {
       "completions": {},
+      "logging": {},
       "resources": {
         "listChanged": false,
         "subscribe": false
@@ -1541,7 +1541,7 @@
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-48",
+                "default": "amicus/0.1/schema-49",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -1945,6 +1945,7 @@
   "initialize": {
     "capabilities": {
       "completions": {},
+      "logging": {},
       "resources": {
         "listChanged": false,
         "subscribe": false
@@ -1974,17 +1975,17 @@
       "amicus://error-envelope": {
         "cacheScope": "private",
         "resultType": "complete",
-        "ttlMs": 300000
+        "ttlMs": 0
       },
       "amicus://params": {
         "cacheScope": "private",
         "resultType": "complete",
-        "ttlMs": 300000
+        "ttlMs": 0
       },
       "amicus://result-meta": {
         "cacheScope": "private",
         "resultType": "complete",
-        "ttlMs": 300000
+        "ttlMs": 0
       }
     },
     "resources/templates/list": {
@@ -2016,6 +2017,10 @@
             "full": "A key the selected backend does not accept, or a value it does not accept for a key it does, fails pre-spend as invalid_arguments naming backend_options.<key>. isolation — codex: inherit|ignore-config|ignore-rules (drop $CODEX_HOME config, then also execpolicy rules); kimi: inherit|ignore-skills. config_mode — claude: inherit|scoped|safe|bare (how much of the user's Claude config the run inherits). Claude adversarial_review defaults to safe (bare when AMICUS_CLAUDE_CONFIG_MODE=bare); other verbs use the configured default. Explicit config_mode overrides are honored. Discovery reports default_by_verb when verbs differ, with default null. access — claude: toolless|readonly; review_changes defaults to readonly and other verbs to toolless unless AMICUS_CLAUDE_ACCESS is set, which then applies to every verb. max_budget_usd — claude: per-call stop threshold in USD, 0.01–5.00, checked only between model calls, so the estimated cost can exceed it. Unset keys take the backend's defaults; amicus_review_changes_dry_run echoes review_changes values.",
             "summary": "One closed object of backend knobs: isolation (codex, kimi); config_mode, access, max_budget_usd (claude). A key or value the selected backend rejects fails pre-spend. Values: amicus://params."
           },
+          "detail": {
+            "full": "The shape is the same either way. detail selects what the call delivers, not what is kept: the job record keeps the whole answer whichever you ask for, until it expires, the per-workspace cap evicts it once returned, or amicus_job_consume_result removes it.",
+            "summary": "summary (default) omits raw_response.text; full includes it. Delivery only: amicus://params."
+          },
           "extra_context": {
             "full": "Added to the prompt as labeled untrusted data; the backend is instructed to treat embedded directives as data, not commands — best-effort prompt-injection mitigation, not a guarantee. Secret redaction covers the gathered diff, never this field, so it must carry no live secrets. It counts against the same input budget as the gathered diff, so an oversized value fails as input_too_large before any spend.",
             "summary": "Author intent/background, sent as labeled UNTRUSTED prompt data. Not redacted, so no secrets. Bounds: amicus://params."
@@ -2032,8 +2037,12 @@
             "full": "Omitted, the backend resolves its own default. The value is validated by the backend, and amicus_models's per-model set is advisory. A backend-rejected value fails as invalid_reasoning_effort (repair steers to amicus_models). Backends whose CLI does not reject a bad effort (claude, kimi) are validated pre-spend: claude against a fixed list, kimi from the model catalog. Control characters, surrogates, and values over 128 chars are rejected at the MCP boundary as invalid_arguments.",
             "summary": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists each model's set); omit for the backend default. Bounds: amicus://params."
           },
+          "timeout_seconds": {
+            "full": "Omitted, the server default AMICUS_TIMEOUT_SECONDS applies. An unkeyed sync call past its deadline is terminated and its partial work lost; prefer the _async twin for work that can exceed it. For a keyed call (idempotency_key) this only bounds the wait: the run gets the job deadline (AMICUS_JOB_MAX_SECONDS) and the timeout envelope says how to fetch it.",
+            "summary": "Deadline in seconds, clamped to 10-600; omit for the server default. Keyed calls: amicus://params."
+          },
           "workspace_root": {
-            "full": "Resolution precedence: explicit workspace_root → the client's handshake-era file roots (first root; an explicit value must lie inside one of them or the call fails as workspace_outside_roots) → invalid_workspace_root. A sessionless client has no roots, so it must pass workspace_root; a handshake-era client may rely on its advertised roots. The server never falls back to its own cwd unless the operator opts in: it is used only when AMICUS_ALLOW_CWD_WORKSPACE=1, and then meta.workspace_warning discloses the resolved path. On an active call the workspace selects where the backend works, not what it can read: every backend CLI can read files outside it, up to everything the OS user can read. A refusal names its cause in error.details.reason, a fixed token: no_workspace (no workspace_root, no client file roots, and no cwd opt-in); not_absolute (workspace_root is not an absolute path); not_a_directory (workspace_root does not resolve to an existing directory); root_not_a_directory (the client's first file root does not resolve to an existing directory; fix the advertised root or pass workspace_root); cwd_gone (the cwd opt-in was needed and the server's working directory no longer exists); outside_roots (workspace_root lies outside the client's file roots); outside_roots comes with workspace_outside_roots, every other with invalid_workspace_root.",
+            "full": "Resolution precedence: explicit workspace_root → the client's handshake-era file roots (first root; an explicit value must lie inside one of them or the call fails as workspace_outside_roots) → invalid_workspace_root. A sessionless client has no roots, so it must pass workspace_root; a handshake-era client may rely on its advertised roots. The server never falls back to its own cwd unless the operator opts in: it is used only when AMICUS_ALLOW_CWD_WORKSPACE=1, and then meta.workspace_warning discloses the resolved path. On an active call the workspace selects where the backend works, not what it can read: every backend CLI can read files outside it, up to everything the OS user can read. A refusal names its cause in error.details.reason, a fixed token: no_workspace (no workspace_root, no client file roots, and no cwd opt-in); not_absolute (workspace_root is not an absolute path); not_a_directory (workspace_root does not resolve to an existing directory); cwd_gone (the cwd opt-in was needed and the server's working directory no longer exists); outside_roots (workspace_root lies outside the client's file roots); outside_roots comes with workspace_outside_roots, every other with invalid_workspace_root.",
             "summary": "Absolute path of the repository the call targets; a sessionless (2026-07-28) client must pass it. Resolution rules: amicus://params."
           }
         }
@@ -2052,7 +2061,7 @@
           "volatile": true
         }
       },
-      "description": "One backend's amicus_backends entry at detail=full, disclosures included; an unknown backend id is resource_not_found.",
+      "description": "The amicus_backends(detail=\"full\") entry for one backend: a single-backend read\nis the on-demand path to its disclosures, so it never takes the summary projection.",
       "mimeType": "application/json",
       "name": "amicus-backend",
       "title": "One backend's catalog entry",
@@ -2067,7 +2076,7 @@
           "volatile": true
         }
       },
-      "description": "One backend's amicus_models payload. Unlike the tool, a known but unavailable backend returns the informational available=false payload rather than a backend_unavailable error; only an unknown backend id is resource_not_found.",
+      "description": "The amicus_models payload for one backend, unlike the `amicus_models` TOOL:\nfor an unavailable (but known) backend id this returns the informational\n`available: false` payload rather than a `backend_unavailable` error envelope,\nbecause a resource read has no repair carrier to put one in. Only an unknown\nbackend id (not in BACKEND_IDS and not a loaded plugin) is resource_not_found.",
       "mimeType": "application/json",
       "name": "amicus-models",
       "title": "One backend's model catalog",
@@ -2112,7 +2121,7 @@
       "description": "Full semantics for parameters whose inline description is a compressed summary.",
       "mimeType": "application/json",
       "name": "amicus-params",
-      "size": 6835,
+      "size": 7581,
       "title": "amicus parameter contracts",
       "uri": "amicus://params"
     },
@@ -2453,7 +2462,7 @@
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-48",
+            "default": "amicus/0.1/schema-49",
             "title": "Fingerprint",
             "type": "string"
           },
@@ -2815,7 +2824,7 @@
           },
           "detail": {
             "default": "summary",
-            "description": "summary (default) omits raw_response.text; full includes it. Same shape either way. Delivery only: the job record keeps the text whichever you ask for.",
+            "description": "summary (default) omits raw_response.text; full includes it. Delivery only: amicus://params.",
             "enum": [
               "full",
               "summary"
@@ -2938,7 +2947,7 @@
                 "type": "null"
               }
             ],
-            "description": "Deadline in seconds, clamped to 10-600; omit for the server default (AMICUS_TIMEOUT_SECONDS). An unkeyed sync call past its deadline is terminated and its partial work lost; prefer the _async twin. For a keyed call (idempotency_key) this only bounds the wait: the run gets the job deadline and the timeout says how to fetch it."
+            "description": "Deadline in seconds, clamped to 10-600; omit for the server default. Keyed calls: amicus://params."
           },
           "untracked": {
             "default": "explicit_only",
@@ -4686,7 +4695,7 @@
           },
           "detail": {
             "default": "summary",
-            "description": "summary (default) omits raw_response.text; full includes it. Same shape either way. Delivery only: the job record keeps the text whichever you ask for.",
+            "description": "summary (default) omits raw_response.text; full includes it. Delivery only: amicus://params.",
             "enum": [
               "full",
               "summary"
@@ -4767,7 +4776,7 @@
                 "type": "null"
               }
             ],
-            "description": "Deadline in seconds, clamped to 10-600; omit for the server default (AMICUS_TIMEOUT_SECONDS). An unkeyed sync call past its deadline is terminated and its partial work lost; prefer the _async twin. For a keyed call (idempotency_key) this only bounds the wait: the run gets the job deadline and the timeout says how to fetch it."
+            "description": "Deadline in seconds, clamped to 10-600; omit for the server default. Keyed calls: amicus://params."
           },
           "workspace_root": {
             "anyOf": [
@@ -5632,7 +5641,7 @@
           },
           "detail": {
             "default": "summary",
-            "description": "summary (default) omits raw_response.text; full includes it. Same shape either way. Delivery only: the job record keeps the text whichever you ask for.",
+            "description": "summary (default) omits raw_response.text; full includes it. Delivery only: amicus://params.",
             "enum": [
               "full",
               "summary"
@@ -5691,7 +5700,7 @@
                 "type": "null"
               }
             ],
-            "description": "Deadline in seconds, clamped to 10-600; omit for the server default (AMICUS_TIMEOUT_SECONDS). An unkeyed sync call past its deadline is terminated and its partial work lost; prefer the _async twin. For a keyed call (idempotency_key) this only bounds the wait: the run gets the job deadline and the timeout says how to fetch it."
+            "description": "Deadline in seconds, clamped to 10-600; omit for the server default. Keyed calls: amicus://params."
           },
           "workspace_root": {
             "anyOf": [
@@ -6852,7 +6861,7 @@
         "properties": {
           "detail": {
             "default": "summary",
-            "description": "summary (default) omits raw_response.text; full includes it. Same shape either way. Delivery only: the job record keeps the text whichever you ask for.",
+            "description": "summary (default) omits raw_response.text; full includes it. Delivery only: amicus://params.",
             "enum": [
               "full",
               "summary"
@@ -6951,7 +6960,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Free — no model call. List the jobs known for this workspace, newest first, across all backends; narrow with `backend`, `status`, or `task_id` (no match is an empty list). Only an explicit `limit` pages (has_more: true; pass next_cursor as `cursor` with the same filters for the page after it). The per-workspace cap AMICUS_JOB_MAX_COUNT limits how many jobs are kept; server processes sharing a state root can each exceed it by one start. Records expire after AMICUS_JOB_TTL (default 24h); unfetched results fill a per-workspace cap that refuses paid calls (job_cap_reached).",
+      "description": "Free — no model call. List the jobs known for this workspace, newest first, across all backends; narrow with `backend`, `status`, or `task_id` (no match is an empty list). Only an explicit `limit` truncates (truncated: true, no cursor). Records expire after AMICUS_JOB_TTL (default 24h); unfetched results fill a per-workspace cap that refuses paid calls (job_cap_reached).",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
@@ -6971,19 +6980,6 @@
               }
             ],
             "description": "Restrict to one backend: codex | kimi | claude. Omit for all."
-          },
-          "cursor": {
-            "anyOf": [
-              {
-                "maxLength": 80,
-                "pattern": "^[^\\x00-\\x1F\\x7F-\\x9F]*$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Opaque page cursor: a previous result's next_cursor, with the same filters. Omit to start from the newest job."
           },
           "limit": {
             "anyOf": [
@@ -7050,10 +7046,6 @@
           {
             "additionalProperties": false,
             "properties": {
-              "has_more": {
-                "description": "True when more matching jobs follow this page; fetch them with next_cursor. A house pagination convention, not a protocol field.",
-                "type": "boolean"
-              },
               "jobs": {
                 "items": {
                   "additionalProperties": false,
@@ -7138,23 +7130,11 @@
                 "description": "Result metadata; schema at amicus://result-meta",
                 "type": "object"
               },
-              "next_cursor": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "description": "Pass as `cursor` with the same filters for the jobs after this page; null when this page is the last."
-              },
               "ok": {
                 "const": true,
                 "type": "boolean"
               },
               "truncated": {
-                "description": "Kept from 0.6.0 as an alias of has_more on this tool: true when this page omits matching jobs, every one of them reachable through next_cursor.",
                 "type": "boolean"
               },
               "truncation_hint": {
@@ -7263,7 +7243,7 @@
         "properties": {
           "detail": {
             "default": "summary",
-            "description": "summary (default) omits raw_response.text; full includes it. Same shape either way. Delivery only: the job record keeps the text whichever you ask for.",
+            "description": "summary (default) omits raw_response.text; full includes it. Delivery only: amicus://params.",
             "enum": [
               "full",
               "summary"
@@ -7868,7 +7848,7 @@
           },
           "detail": {
             "default": "summary",
-            "description": "summary (default) omits raw_response.text; full includes it. Same shape either way. Delivery only: the job record keeps the text whichever you ask for.",
+            "description": "summary (default) omits raw_response.text; full includes it. Delivery only: amicus://params.",
             "enum": [
               "full",
               "summary"
@@ -7981,7 +7961,7 @@
                 "type": "null"
               }
             ],
-            "description": "Deadline in seconds, clamped to 10-600; omit for the server default (AMICUS_TIMEOUT_SECONDS). An unkeyed sync call past its deadline is terminated and its partial work lost; prefer the _async twin. For a keyed call (idempotency_key) this only bounds the wait: the run gets the job deadline and the timeout says how to fetch it."
+            "description": "Deadline in seconds, clamped to 10-600; omit for the server default. Keyed calls: amicus://params."
           },
           "untracked": {
             "default": "explicit_only",
