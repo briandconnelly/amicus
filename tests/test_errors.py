@@ -290,6 +290,21 @@ def test_the_timeout_rule_is_never_temporary_for_any_backend():
     assert info.repair is not None and info.repair.next_step == "start_new_job"
 
 
+def test_a_plugin_table_cannot_make_the_timeout_temporary_again():
+    """ADR 0039: amicus's timeout rule is re-applied after a plugin's own table, so neither
+    a repair_overrides entry nor a local_codes entry for `timeout` restores the temporary
+    retry contract (Copilot on PR #253)."""
+    temporary = RepairRule("retry_after_delay", None, True, "x")
+    for plugin in (
+        fakeplugin.make_plugin(repair_overrides={"timeout": temporary}),
+        fakeplugin.make_plugin(local_codes={"timeout": temporary}),
+    ):
+        rule = errors.repair_table(plugin)["timeout"]
+        assert rule.temporary is False
+        assert rule.next_step == "start_new_job"
+        assert rule.alternative == errors.TIMEOUT_ALTERNATIVE
+
+
 def test_async_twin_for_names_the_verbs_async_tool():
     assert errors.async_twin_for("consult") == "amicus_consult_async"
     assert errors.async_twin_for("review_changes") == "amicus_review_changes_async"

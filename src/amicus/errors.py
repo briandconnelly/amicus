@@ -2,7 +2,8 @@
 
 The SDK's `repair_rules()` are the defaults, minted with a neutral vocabulary so the
 four per-backend codes come out as `backend_*`; amicus-local codes and prose overrides
-sit on top; a plugin's `local_codes` are added and its `repair_overrides` win per code.
+sit on top; a plugin's `local_codes` are added and its `repair_overrides` win per code,
+except `timeout`, whose amicus rule no plugin table overrides (ADR 0039).
 `render_failure` turns a backend's ClassifiedFailure into the wire envelope, honoring the
 0.9.0 machine fields (`retryable`, `details`, `repair`, `usage`)."""
 
@@ -222,6 +223,10 @@ def repair_table(plugin: BackendPlugin | None = None) -> dict[str, RepairRule]:
         rules.update(plugin.local_codes)
         for code, rule in plugin.repair_overrides.items():
             rules[generalize_code(code, plugin.backend_id)] = rule
+        # The deadline timeout is one contract for every backend (ADR 0039): a plugin's
+        # table cannot make it temporary again. A backend still overrides it per failure,
+        # through ClassifiedFailure.retryable or its own repair, in render_failure.
+        rules["timeout"] = _LOCAL_RULES["timeout"]
     return rules
 
 

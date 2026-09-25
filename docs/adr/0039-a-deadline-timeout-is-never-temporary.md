@@ -15,6 +15,7 @@ So one condition had two contracts, chosen by `backend`, and an agent that branc
 
 **The `timeout` rule is amicus-wide: `temporary: false`, `next_step: "start_new_job"`, one prose text.**
 It lives in `amicus.errors._LOCAL_RULES`, above the SDK default; Claude's `repair_overrides` entry and its classifier's own `RepairHint` are gone, and the classifier keeps `retryable: false` and its detail about a possibly charged run.
+A plugin cannot override it: `repair_table` re-applies it after a plugin's `local_codes` and `repair_overrides`, so only a single failure's own `retryable` or repair, applied in `render_failure`, changes that failure's envelope.
 The prose states the spend, names the four `_async` twins, and gates polling on `status` as the `job_running` repair does.
 
 **On a sync run, the repair names the verb's `_async` twin and carries no arguments.**
