@@ -307,3 +307,23 @@ async def test_background_prepare_uses_the_job_deadline_unclamped():
     # The caller's timeout is still carried, clamped, as the wait bound a keyed sync call
     # uses (#66); an unkeyed sync call's spec.timeout_seconds equals it.
     assert prep.wait_seconds == 10
+
+
+async def test_feature_unsupported_repairs_to_the_unfiltered_backend_list(tmp_path):
+    """#246: the lookup lists every candidate rather than the backend that just failed; the
+    corrected call cannot be named because it would echo the prompt input (ADR 0021)."""
+    out = await _prep(
+        tmp_path,
+        verb="delegate",
+        tool_name="amicus_delegate",
+        backend="codex",
+        registry=BackendRegistry(
+            {"codex": fakeplugin.make_plugin("codex", features=frozenset())}, {}
+        ),
+        task="t",
+        question=None,
+    )
+    assert out["error"]["code"] == "feature_unsupported"
+    repair = out["error"]["repair"]
+    assert repair["next_step"] == "use_allowed_value"
+    assert repair["tool"] == "amicus_backends" and repair["arguments"] == {}

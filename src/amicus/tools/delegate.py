@@ -9,7 +9,7 @@ from fastmcp import Context
 from amicus.jobs import lifecycle, lookup
 from amicus.schemas.params import (
     BackendOptionsParam,
-    BackendParam,
+    DelegateBackendParam,
     DetailParam,
     IdempotencyKeyParam,
     ModelParam,
@@ -58,7 +58,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
     )
     @guard("amicus_delegate", settings)
     async def amicus_delegate(
-        backend: BackendParam,
+        backend: DelegateBackendParam,
         task: TaskParam,
         ctx: Context | None = None,
         workspace_root: WorkspaceRootParam = None,
@@ -112,7 +112,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
     )
     @guard("amicus_delegate_async", settings)
     async def amicus_delegate_async(
-        backend: BackendParam,
+        backend: DelegateBackendParam,
         task: TaskParam,
         ctx: Context | None = None,
         workspace_root: WorkspaceRootParam = None,

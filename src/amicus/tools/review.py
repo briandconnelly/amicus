@@ -8,6 +8,7 @@ from fastmcp import Context
 
 from amicus.jobs import lifecycle, lookup
 from amicus.schemas.params import (
+    AdversarialBackendParam,
     BackendOptionsParam,
     BackendParam,
     BaseParam,
@@ -62,7 +63,8 @@ _ADV_DESC = (
     f"{_resolve.PAID_MARKER} A fixed adversarial critic on `backend` attacks `target` (a "
     "plan, claim or decision) using `evidence` and an optionally attached git diff; the "
     "critic stance is the product, so there is no instructions_append. Claude only in v1 "
-    "(feature adversarial_review). Egress: sends target, evidence, extra_context and the "
+    "(feature adversarial_review); listed in every profile, and backend_unavailable while "
+    "claude is not in AMICUS_BACKENDS. Egress: sends target, evidence, extra_context and the "
     "redacted diff raw to the backend's provider. An attached scope that gathers nothing "
     f"returns review_status=not_run with no spend. Recorded as a job (meta.job_id). "
     f"{_resolve.RECORD_RETENTION}"
@@ -220,7 +222,7 @@ def register_adversarial(
     )
     @guard("amicus_adversarial_review", settings)
     async def amicus_adversarial_review(
-        backend: BackendParam,
+        backend: AdversarialBackendParam,
         target: TargetParam,
         ctx: Context | None = None,
         evidence: EvidenceParam = None,
@@ -292,7 +294,7 @@ def register_adversarial(
     )
     @guard("amicus_adversarial_review_async", settings)
     async def amicus_adversarial_review_async(
-        backend: BackendParam,
+        backend: AdversarialBackendParam,
         target: TargetParam,
         ctx: Context | None = None,
         evidence: EvidenceParam = None,

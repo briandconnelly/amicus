@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 from amicus import SERVER_NAME, __version__, surface
 from amicus.backends import KNOWN_DISPLAY_NAMES, KNOWN_EFFECTS
 from amicus.errors import error_envelope
-from amicus.schemas.codes import BACKEND_IDS, ERROR_CODES
+from amicus.schemas.codes import BACKEND_IDS, ERROR_CODES, VERB_BACKENDS
 from amicus.schemas.envelope import ERROR_ENVELOPE_SCHEMA, RESULT_META_SCHEMA, Meta
 from amicus.schemas.options import OPTION_ALLOWED_VALUES
 from amicus.schemas.params import (
@@ -190,7 +190,7 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
     },
     "amicus_delegate": {
         "cost": "active",
-        "backends": ["codex", "kimi"],
+        "backends": list(VERB_BACKENDS["delegate"]),
         "use_when": (
             "A coding task implemented in a throwaway worktree, returned as a diff you "
             "apply yourself."
@@ -209,7 +209,7 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
     },
     "amicus_delegate_async": {
         "cost": "active",
-        "backends": ["codex", "kimi"],
+        "backends": list(VERB_BACKENDS["delegate"]),
         "use_when": "A substantial delegate that may exceed the sync deadline.",
         "returns": "a job handle; result via amicus_job_result.",
         "error_codes": [
@@ -224,7 +224,7 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
     },
     "amicus_adversarial_review": {
         "cost": "active",
-        "backends": ["claude"],
+        "backends": list(VERB_BACKENDS["adversarial_review"]),
         "use_when": "A fixed critic attacking a plan, claim or decision before you commit to it.",
         "returns": (
             "verdict, confidence, findings, review_status, coverage, raw_response (detail=full; "
@@ -237,7 +237,7 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
     },
     "amicus_adversarial_review_async": {
         "cost": "active",
-        "backends": ["claude"],
+        "backends": list(VERB_BACKENDS["adversarial_review"]),
         "use_when": "The same critique when it may exceed the sync deadline.",
         "returns": "a job handle; result via amicus_job_result.",
         "error_codes": _COMMON_PAID_CODES
@@ -266,7 +266,7 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
     },
     "amicus_delegate_dry_run": {
         "cost": "free",
-        "backends": ["codex", "kimi"],
+        "backends": list(VERB_BACKENDS["delegate"]),
         "use_when": "Preview a delegate's worktree baseline before spending.",
         "returns": "worktree plan, task_bytes, resolved backend_options.",
         "error_codes": [

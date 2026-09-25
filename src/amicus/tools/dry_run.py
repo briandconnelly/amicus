@@ -17,6 +17,7 @@ from amicus.schemas.params import (
     BackendParam,
     BaseParam,
     CommitParam,
+    DelegateBackendParam,
     ExtraContextParam,
     FocusParam,
     InstructionsAppendParam,
@@ -201,7 +202,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
     )
     @guard("amicus_delegate_dry_run", settings)
     async def amicus_delegate_dry_run(
-        backend: BackendParam,
+        backend: DelegateBackendParam,
         task: TaskParam,
         ctx: Context | None = None,
         workspace_root: WorkspaceRootParam = None,

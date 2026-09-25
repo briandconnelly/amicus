@@ -81,11 +81,15 @@ def resolve_paid_call(
         )
     feature = FEATURE_FOR_VERB.get(verb)
     if feature is not None and feature not in plugin.contract.supported_features:
+        # Unreachable for an in-tree backend since the enum narrowed per verb (#246): a
+        # plugin lacking the feature lands here. The lookup is unfiltered so it lists every
+        # candidate rather than the backend that just failed; the corrected call cannot be
+        # named because it would echo the prompt input (ADR 0021).
         return error_envelope(
             "feature_unsupported",
             f"backend {backend!r} does not support {feature}",
             meta,
             plugin=plugin,
-            repair_arguments={"backend": backend},
+            repair_arguments={},
         )
     return plugin, resolved_options(backend, backend_options)

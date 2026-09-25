@@ -566,14 +566,16 @@ async def test_discovery_reads_the_fake(app, monkeypatch):
     assert any("--safe-mode" in w for w in status["warnings"])
 
 
-async def test_delegate_is_feature_gated_and_never_spawns(app, tmp_path, repo):
+async def test_delegate_rejects_claude_at_the_boundary_and_never_spawns(app, tmp_path, repo):
     async with Client(app) as c:
         res = await c.call_tool(
             "amicus_delegate",
             {"backend": "claude", "task": "t", "workspace_root": str(repo)},
             raise_on_error=False,
         )
-    assert res.structured_content["error"]["code"] == "feature_unsupported"
+    err = res.structured_content["error"]
+    assert err["code"] == "invalid_arguments"
+    assert err["details"]["allowed_values"] == ["codex", "kimi"]
     assert _runs(tmp_path) == []
 
 

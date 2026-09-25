@@ -12,6 +12,13 @@ from amicus.sdk.conventions import envelope as pe
 def test_backend_ids_are_the_v1_set_in_order():
     assert codes.BACKEND_IDS == ("codex", "kimi", "claude")
     assert get_args(codes.BackendId) == codes.BACKEND_IDS
+    assert codes.VERB_BACKENDS["delegate"] == ("codex", "kimi")
+    assert codes.VERB_BACKENDS["adversarial_review"] == ("claude",)
+    assert (
+        codes.VERB_BACKENDS["consult"] == codes.VERB_BACKENDS["review_changes"] == codes.BACKEND_IDS
+    )
+    assert get_args(codes.DelegateBackendId) == codes.VERB_BACKENDS["delegate"]
+    assert get_args(codes.AdversarialBackendId) == codes.VERB_BACKENDS["adversarial_review"]
 
 
 def test_verbs_are_the_four_paid_kinds():
