@@ -150,3 +150,13 @@ def test_task_map_lives_under_the_state_dir(tmp_path):
     assert (tmp_path / "state" / "tasks.json").exists()
     assert lookup.task_map(settings).job_for("task-1") == "c" * 32
     assert lookup.task_map(settings).task_for("c" * 32) == "task-1"
+
+
+async def test_a_missing_client_root_is_refused_on_the_job_path_too(tmp_path, monkeypatch):
+    async def roots(_ctx):
+        return [str(tmp_path / "gone")], "client"
+
+    monkeypatch.setattr(lookup.ws, "roots_from_ctx", roots)
+    *_, err = await lookup.resolve_job_workspace(_settings(tmp_path), object(), None)
+    assert err["error"]["code"] == "invalid_workspace_root"
+    assert err["error"]["details"]["reason"] == "root_not_a_directory"

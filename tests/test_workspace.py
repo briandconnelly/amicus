@@ -214,6 +214,7 @@ def test_every_refusal_carries_a_published_reason_token(tmp_path, monkeypatch):
         "not_absolute": ws.resolve_workspace("relative/path", [], None),
         "not_a_directory": ws.resolve_workspace(str(tmp_path / "nope"), [], None),
         "outside_roots": ws.resolve_workspace(str(other), [str(root)], None),
+        "root_not_a_directory": ws.resolve_workspace(None, [str(tmp_path / "gone")], None),
     }
     monkeypatch.setattr(ws, "Path", _patched_path(_gone))
     cases["cwd_gone"] = ws.resolve(None, [], allow_cwd=True)

@@ -352,3 +352,22 @@ async def test_feature_unsupported_repairs_to_the_unfiltered_backend_list(tmp_pa
     repair = out["error"]["repair"]
     assert repair["next_step"] == "use_allowed_value"
     assert repair["tool"] == "amicus_backends" and repair["arguments"] == {}
+
+
+async def test_a_missing_client_root_is_refused_before_any_work(tmp_path, monkeypatch):
+    """#248: a stale root is invalid_workspace_root with its own reason token and no repair,
+    not a later git_unavailable from a subprocess that could not start in it."""
+
+    async def roots(_ctx):
+        return [str(tmp_path / "gone")], "client"
+
+    monkeypatch.setattr(_prepare.ws, "roots_from_ctx", roots)
+    out = await _prep(tmp_path, workspace_root=None)
+    err = out["error"]
+    assert err["code"] == "invalid_workspace_root" and "repair" not in err
+    assert err["details"] == {
+        "field": "workspace_root",
+        "reason": "root_not_a_directory",
+        "field_withheld": False,
+    }
+    assert out["meta"]["roots_source"] == "client"

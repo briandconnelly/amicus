@@ -143,6 +143,10 @@ WORKSPACE_REASONS: dict[str, str] = {
     "no_workspace": "no workspace_root, no client file roots, and no cwd opt-in",
     "not_absolute": "workspace_root is not an absolute path",
     "not_a_directory": "workspace_root does not resolve to an existing directory",
+    "root_not_a_directory": (
+        "the client's first file root does not resolve to an existing directory; fix the "
+        "advertised root or pass workspace_root"
+    ),
     "cwd_gone": "the cwd opt-in was needed and the server's working directory no longer exists",
     "outside_roots": "workspace_root lies outside the client's file roots",
 }
