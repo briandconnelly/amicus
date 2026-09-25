@@ -408,6 +408,35 @@ def test_plan_not_a_git_repo(tmp_path):
         worktree.plan(str(tmp_path), timeout=30)
 
 
+@pytest.mark.parametrize("helper", ["_tracked_files_and_bytes", "_count_untracked"])
+def test_plan_names_a_repo_that_vanishes_inside_a_translating_helper(tmp_path, monkeypatch, helper):
+    """#248 (Copilot on #255): these helpers already turn a failed spawn into WorktreeError,
+    which plan() re-raised before its directory check, so a repo deleted mid-plan was a
+    worktree_error. The repo is deleted just before the real helper runs."""
+    import shutil
+
+    r = tmp_path / "r"
+    r.mkdir()
+    for args in (
+        ("init", "-q"),
+        ("config", "user.email", "t@t.co"),
+        ("config", "user.name", "t"),
+    ):
+        _git(r, *args)
+    (r / "a.py").write_text("x = 1\n")
+    _git(r, "add", "-A")
+    _git(r, "commit", "-qm", "init")
+    real = getattr(worktree, helper)
+
+    def vanish_then_run(repo, timeout):
+        shutil.rmtree(repo)
+        return real(repo, timeout)
+
+    monkeypatch.setattr(worktree, helper, vanish_then_run)
+    with pytest.raises(gitdiff.WorkspaceMissingError):
+        worktree.plan(str(r), timeout=30)
+
+
 def test_plan_raises_workspace_missing_when_the_repo_directory_is_gone(tmp_path):
     """#248: the cwd itself vanishing raises the same FileNotFoundError a missing git
     executable does; plan() tells the two apart by checking the directory, exactly like
