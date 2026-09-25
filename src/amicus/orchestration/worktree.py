@@ -519,6 +519,15 @@ def plan(repo: str, *, timeout: int) -> WorktreePlanData:
         untracked = _count_untracked(repo, timeout)
     except (NotAGitRepoError, NoCommitsError, WorktreeError):
         raise  # domain errors pass through unchanged
+    except (FileNotFoundError, NotADirectoryError) as exc:
+        if not Path(repo).is_dir():
+            # The directory passed resolution and vanished before git ran (#248).
+            raise gitdiff.WorkspaceMissingError(
+                f"workspace directory no longer exists: {repo}"
+            ) from exc
+        raise WorktreeError(
+            f"git command failed during plan: {(redact_text(str(exc)) or '')[:200]}"
+        ) from exc
     except (subprocess.SubprocessError, OSError) as exc:
         # git binary missing (FileNotFoundError) or a subprocess timeout, etc.
         raise WorktreeError(

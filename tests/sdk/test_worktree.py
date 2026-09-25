@@ -408,6 +408,16 @@ def test_plan_not_a_git_repo(tmp_path):
         worktree.plan(str(tmp_path), timeout=30)
 
 
+def test_plan_raises_workspace_missing_when_the_repo_directory_is_gone(tmp_path):
+    """#248: the cwd itself vanishing raises the same FileNotFoundError a missing git
+    executable does; plan() tells the two apart by checking the directory, exactly like
+    gitdiff._spawn_failure. Control: a real non-repo directory (test_plan_not_a_git_repo,
+    above) still raises NotAGitRepoError, not WorkspaceMissingError."""
+    gone = tmp_path / "gone"
+    with pytest.raises(gitdiff.WorkspaceMissingError):
+        worktree.plan(str(gone), timeout=30)
+
+
 def test_plan_no_commits(tmp_path):
     _git(tmp_path, "init", "-q")
     with pytest.raises(worktree.NoCommitsError):
