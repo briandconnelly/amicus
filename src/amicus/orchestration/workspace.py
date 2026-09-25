@@ -94,7 +94,19 @@ def resolve_workspace(
             )
         return WorkspaceResolution(str(resolved), "param")
     if norm_roots:
-        return WorkspaceResolution(norm_roots[0], "roots")
+        root = norm_roots[0]
+        if not Path(root).is_dir():
+            # Checked like an explicit path (#248): a stale root would otherwise become the
+            # cwd of every git subprocess, which then fails as a missing executable. First-root
+            # selection stands; a later root is never tried silently.
+            return WorkspaceResolution(
+                None,
+                None,
+                "invalid_workspace_root",
+                f"the client's first file root is not an existing directory: {root}",
+                "root_not_a_directory",
+            )
+        return WorkspaceResolution(root, "roots")
     if server_cwd is None:
         return WorkspaceResolution(
             None, None, "invalid_workspace_root", _NO_WORKSPACE, "no_workspace"
@@ -119,6 +131,18 @@ def resolve(
         except FileNotFoundError:
             return WorkspaceResolution(None, None, "invalid_workspace_root", _CWD_GONE, "cwd_gone")
     return resolve_workspace(explicit, roots, server_cwd if allow_cwd else None)
+
+
+def vanished_reason(source: str | None) -> str:
+    """The details.reason for a workspace that resolved and then disappeared before git
+    could run in it (#248): the token names the source that supplied the directory, so
+    the correction (fix the client's roots, pass another workspace_root, or restore the
+    server's working directory) is the right one."""
+    if source == "roots":
+        return "root_not_a_directory"
+    if source == "cwd":
+        return "cwd_gone"
+    return "not_a_directory"
 
 
 def workspace_warning_for(source: str | None, cwd: str | None) -> str | None:

@@ -352,3 +352,48 @@ async def test_feature_unsupported_repairs_to_the_unfiltered_backend_list(tmp_pa
     repair = out["error"]["repair"]
     assert repair["next_step"] == "use_allowed_value"
     assert repair["tool"] == "amicus_backends" and repair["arguments"] == {}
+
+
+async def test_a_missing_client_root_is_refused_before_any_work(tmp_path, monkeypatch):
+    """#248: a stale root is invalid_workspace_root with its own reason token and no repair,
+    not a later git_unavailable from a subprocess that could not start in it."""
+
+    async def roots(_ctx):
+        return [str(tmp_path / "gone")], "client"
+
+    monkeypatch.setattr(_prepare.ws, "roots_from_ctx", roots)
+    out = await _prep(tmp_path, workspace_root=None)
+    err = out["error"]
+    assert err["code"] == "invalid_workspace_root" and "repair" not in err
+    assert err["details"] == {
+        "field": "workspace_root",
+        "reason": "root_not_a_directory",
+        "field_withheld": False,
+    }
+    assert out["meta"]["roots_source"] == "client"
+
+
+async def test_delegate_preflight_names_a_workspace_that_vanished(tmp_path, monkeypatch):
+    """#248: the directory passed resolution and was deleted before git ran; that is
+    invalid_workspace_root (reason not_a_directory for an explicit root), not git_unavailable."""
+    import shutil
+
+    ws_dir = tmp_path / "ws"
+    ws_dir.mkdir()
+
+    def vanish(repo, *, timeout):
+        shutil.rmtree(repo)
+        raise FileNotFoundError(2, "No such file or directory", repo)
+
+    monkeypatch.setattr(worktree, "ensure_repo_with_head", vanish)
+    out = await _prep(
+        tmp_path,
+        verb="delegate",
+        tool_name="amicus_delegate",
+        task="t",
+        question=None,
+        workspace_root=str(ws_dir),
+    )
+    assert out["error"]["code"] == "invalid_workspace_root"
+    assert out["error"]["details"]["reason"] == "not_a_directory"
+    assert "repair" not in out["error"]

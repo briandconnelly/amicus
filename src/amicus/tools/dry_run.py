@@ -9,9 +9,10 @@ from typing import TYPE_CHECKING, Any
 from fastmcp import Context
 
 from amicus.errors import error_envelope
-from amicus.orchestration import prompts, review, worktree
+from amicus.orchestration import gitdiff, prompts, review, worktree
+from amicus.orchestration import workspace as ws
 from amicus.orchestration.isolation import WORKTREE_PREFIX
-from amicus.schemas.envelope import Workspace, dump_success
+from amicus.schemas.envelope import ErrorDetail, Workspace, dump_success
 from amicus.schemas.params import (
     BackendOptionsParam,
     BackendParam,
@@ -233,6 +234,25 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
         spec, meta = prep.spec, prep.meta
         try:
             plan = worktree.plan(spec.cwd, timeout=spec.git_timeout)
+        except worktree.NotAGitRepoError as exc:
+            return error_envelope(
+                "not_a_git_repo",
+                redaction.sanitize_echo_prose(str(exc)),
+                meta,
+                plugin=prep.plugin,
+                details=ErrorDetail(field="workspace_root"),
+            )
+        except gitdiff.WorkspaceMissingError:
+            # The directory passed resolution and vanished before plan() ran (#248).
+            return error_envelope(
+                "invalid_workspace_root",
+                "the workspace directory no longer exists",
+                meta,
+                plugin=prep.plugin,
+                details=ErrorDetail(
+                    field="workspace_root", reason=ws.vanished_reason(meta.workspace_source)
+                ),
+            )
         except (worktree.NoCommitsError, worktree.WorktreeError) as exc:
             return error_envelope(
                 "worktree_error",

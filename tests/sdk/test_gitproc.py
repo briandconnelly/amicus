@@ -203,3 +203,19 @@ def test_run_lines_caps_oversized_single_line():
     assert len(lines) == 1
     assert len(lines[0].encode("utf-8")) <= 4096
     assert streamcap._LINE_TRUNC_MARKER.strip() in lines[0]
+
+
+def test_run_lines_raises_binary_not_found_when_the_cwd_is_a_file(tmp_path):
+    """A cwd that is a file makes the spawn raise NotADirectoryError; the caller maps the
+    cause (#248), so this layer reports it as the same spawn failure."""
+    a_file = tmp_path / "f"
+    a_file.write_text("x")
+    with pytest.raises(gitproc.GitBinaryNotFound):
+        gitproc.run_lines(
+            [sys.executable, "-c", "print(1)"],
+            cwd=str(a_file),
+            env=_ENV,
+            timeout=30,
+            max_line_bytes=1 << 20,
+            consume=_count_lines,
+        )

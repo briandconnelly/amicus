@@ -51,3 +51,15 @@ def test_resolve_from_cwd_fallback(tmp_path):
     res = workspace.resolve_workspace(None, [], str(tmp_path))
     assert res.source == "cwd"
     assert res.path == str(tmp_path.resolve())
+
+
+def test_resolve_from_a_missing_root_is_refused_not_used(tmp_path):
+    """#248: a client root that no longer exists never becomes the workspace; the refusal
+    keeps first-root selection rather than silently trying a later root."""
+    gone = tmp_path / "gone"
+    live = tmp_path / "live"
+    live.mkdir()
+    res = workspace.resolve_workspace(None, [str(gone), str(live)], None)
+    assert res.path is None and res.error_code == "invalid_workspace_root"
+    assert res.reason == "root_not_a_directory" and "root" in (res.error_detail or "")
+    assert workspace.resolve_workspace(None, [str(live)], None).source == "roots"

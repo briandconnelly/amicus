@@ -203,6 +203,68 @@ async def test_delegate_dry_run(app, repo, tmp_path):
     assert plain.structured_content["error"]["code"] == "not_a_git_repo"
 
 
+async def test_delegate_dry_run_names_a_workspace_that_vanished_after_resolution(
+    app, repo, monkeypatch
+):
+    """#248: prepare_run's own delegate preflight (`worktree.ensure_repo_with_head`) can
+    pass while the directory still exists, and the directory can then vanish before
+    `worktree.plan()`'s later git calls run inside the dry-run tool itself; that is
+    invalid_workspace_root, reason not_a_directory for an explicit workspace_root, not
+    worktree_error. Patches `_git_ok` (used by plan() after its own
+    `_ensure_repo_with_head` check, but never by the preflight) rather than plan() or
+    `_ensure_repo_with_head` itself, so this exercises the fix under test —
+    worktree.plan() translating the vanished cwd to WorkspaceMissingError, and dry_run.py
+    mapping that to invalid_workspace_root — rather than the earlier, already-fixed
+    preflight path."""
+    import shutil
+
+    from amicus.tools import dry_run
+
+    def vanish(repo_path, *_args, **_kwargs):
+        shutil.rmtree(repo_path)
+        raise FileNotFoundError(2, "No such file or directory", repo_path)
+
+    monkeypatch.setattr(dry_run.worktree, "_git_ok", vanish)
+    async with Client(app) as c:
+        res = await c.call_tool(
+            "amicus_delegate_dry_run",
+            {"backend": "codex", "task": "do it", "workspace_root": str(repo)},
+            raise_on_error=False,
+        )
+    err = res.structured_content["error"]
+    assert err["code"] == "invalid_workspace_root"
+    assert err["details"]["reason"] == "not_a_directory"
+    assert "repair" not in err
+
+
+async def test_delegate_dry_run_maps_not_a_git_repo_found_after_the_preflight(
+    app, repo, monkeypatch
+):
+    """#248: the preflight's own `worktree.ensure_repo_with_head` check can pass, and
+    `worktree.plan()`'s later `_git_ok` call can still raise `NotAGitRepoError` (e.g. a
+    race that turns the directory into a non-repo between the two checks); the dry-run
+    tool's own `except worktree.NotAGitRepoError` clause — added alongside the
+    WorkspaceMissingError one in this fix, but previously untested because
+    `test_delegate_dry_run`'s `not_a_git_repo` case is caught by the earlier preflight
+    and never reaches this clause — must map it to not_a_git_repo with
+    details.field=workspace_root, not let it escape as an unstructured error."""
+    from amicus.tools import dry_run
+
+    def not_a_repo(*_args, **_kwargs):
+        raise dry_run.worktree.NotAGitRepoError("workspace is not a git repository")
+
+    monkeypatch.setattr(dry_run.worktree, "_git_ok", not_a_repo)
+    async with Client(app) as c:
+        res = await c.call_tool(
+            "amicus_delegate_dry_run",
+            {"backend": "codex", "task": "do it", "workspace_root": str(repo)},
+            raise_on_error=False,
+        )
+    err = res.structured_content["error"]
+    assert err["code"] == "not_a_git_repo"
+    assert err["details"]["field"] == "workspace_root"
+
+
 async def _marked(app):
     """(tool records carrying a marker, resource/template metas, capability rows by detail)."""
     async with Client(app) as c:

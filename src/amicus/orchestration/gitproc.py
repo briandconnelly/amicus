@@ -52,7 +52,9 @@ _STDERR_CAP = 64 * 1024
 
 
 class GitBinaryNotFound(RuntimeError):
-    """The git executable could not be launched (spawn raised ``FileNotFoundError``)."""
+    """The git executable could not be launched, or the cwd is missing or not a directory
+    (spawn raised ``FileNotFoundError`` or ``NotADirectoryError``); the caller tells the
+    two apart (#248)."""
 
 
 class GitStreamTimeout(RuntimeError):
@@ -103,7 +105,7 @@ def run_lines(  # noqa: PLR0915
             env=env,
             start_new_session=True,
         )
-    except FileNotFoundError as exc:
+    except (FileNotFoundError, NotADirectoryError) as exc:
         raise GitBinaryNotFound("git executable not found") from exc
 
     # Binary pipes wrapped with an explicit ``newline=""`` decoder: universal-newline text

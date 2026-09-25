@@ -26,7 +26,8 @@ could be a secret or a prompt, and a repair with no `repair.tool` is a symbolic 
 than a call. `invalid_workspace_root` and `workspace_outside_roots` carry no `error.repair`,
 because only you hold the directory they need: fix what `error.details` names.
 `error.details.reason` says which fix: `no_workspace` (pass `workspace_root`), `not_absolute`,
-`not_a_directory`, `outside_roots` (pick one of `error.candidate_roots`) or `cwd_gone`.
+`not_a_directory`, `root_not_a_directory` (the client's first file root is stale; fix it or pass
+`workspace_root`), `outside_roots` (pick one of `error.candidate_roots`) or `cwd_gone`.
 
 `repair.next_step` is symbolic and closed. The ones you will meet most:
 

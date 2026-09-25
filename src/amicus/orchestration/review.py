@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, get_args
 
 from amicus.errors import error_envelope
 from amicus.orchestration import gitdiff
+from amicus.orchestration import workspace as ws
 from amicus.schemas.envelope import ContextSummary, ErrorDetail, InvalidArgument, dump_success
 from amicus.schemas.results import (
     AdversarialReviewResult,
@@ -34,6 +35,7 @@ _GITDIFF_ERRORS: dict[type, tuple[str, str | None]] = {
     gitdiff.InvalidUntrackedError: ("invalid_arguments", "untracked"),
     gitdiff.NotAGitRepoError: ("not_a_git_repo", "workspace_root"),
     gitdiff.GitUnavailableError: ("git_unavailable", None),
+    gitdiff.WorkspaceMissingError: ("invalid_workspace_root", "workspace_root"),
 }
 GITDIFF_EXCEPTIONS = (*_GITDIFF_ERRORS.keys(), RuntimeError)
 
@@ -54,8 +56,11 @@ def gitdiff_error(exc: Exception, meta: Meta, plugin: BackendPlugin) -> dict[str
                 InvalidArgument(field=offending, reason=reason, allowed_values=values)
             ],
         )
+    reason = ws.vanished_reason(meta.workspace_source) if code == "invalid_workspace_root" else None
     details = (
-        ErrorDetail(field=offending, allowed_values=allowed) if (offending or allowed) else None
+        ErrorDetail(field=offending, allowed_values=allowed, reason=reason)
+        if (offending or allowed)
+        else None
     )
     return error_envelope(
         code, redaction.sanitize_echo_prose(str(exc))[:300], meta, plugin=plugin, details=details

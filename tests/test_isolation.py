@@ -151,3 +151,39 @@ def test_select_site_uses_the_empty_dir_only_for_a_non_repo_consult_under_all_ti
     assert isinstance(
         isolation.select_site(_spec("consult", str(non_repo)), sandboxed), isolation.DirectSite
     )
+
+
+def test_worktree_site_names_a_repo_that_vanished_before_the_worker_ran(tmp_path):
+    """#248 (Copilot on #255): a delegate job's repo can pass the preflight and be deleted
+    before the worker creates its worktree; create() then raises a raw FileNotFoundError,
+    which the worker stored as internal_error. It is invalid_workspace_root instead."""
+    with (
+        pytest.raises(isolation.SiteError) as exc,
+        isolation.WorktreeSite(str(tmp_path / "gone"), git_timeout=30),
+    ):
+        pass  # pragma: no cover
+    assert exc.value.code == "invalid_workspace_root" and exc.value.field == "workspace_root"
+    assert exc.value.vanished is True
+
+
+def test_a_vanished_site_error_carries_the_reason_of_its_source():
+    from amicus.orchestration import run as run_mod
+    from amicus.schemas.envelope import Meta
+
+    plugin = fakeplugin.make_plugin(features=frozenset({"delegate"}))
+    err = isolation.SiteError(
+        "invalid_workspace_root", "gone", field="workspace_root", vanished=True
+    )
+    for source, reason in (
+        ("roots", "root_not_a_directory"),
+        ("param", "not_a_directory"),
+        ("cwd", "cwd_gone"),
+    ):
+        out = run_mod._site_error(err, Meta(workspace_source=source), plugin)["error"]
+        assert out["code"] == "invalid_workspace_root"
+        assert out["details"]["field"] == "workspace_root"
+        assert out["details"]["reason"] == reason, source
+    # A site error that is not a vanished workspace carries no reason.
+    plain = isolation.SiteError("not_a_git_repo", "x", field="workspace_root")
+    out = run_mod._site_error(plain, Meta(workspace_source="roots"), plugin)["error"]
+    assert "reason" not in out["details"]

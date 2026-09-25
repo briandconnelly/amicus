@@ -5,6 +5,7 @@ policy, shared by every backend and by the JobStore's cleanup guard."""
 from __future__ import annotations
 
 import tempfile
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from amicus.orchestration import worktree
@@ -46,12 +47,16 @@ class SiteError(Exception):
         *,
         field: str | None = None,
         repair_alternative: str | None = None,
+        vanished: bool = False,
     ) -> None:
         super().__init__(detail)
         self.code = code
         self.detail = detail
         self.field = field
         self.repair_alternative = repair_alternative
+        # The workspace passed resolution and was gone when the site was set up (#248); the
+        # renderer, which knows the workspace's source, names the reason.
+        self.vanished = vanished
 
 
 class DirectSite:
@@ -112,11 +117,16 @@ class WorktreeSite:
             self._wt = worktree.create(
                 self._repo, timeout=self._timeout, on_parent=self._on_parent, config=WORKTREE_CONFIG
             )
+        except (FileNotFoundError, NotADirectoryError) as exc:
+            self._raise_if_vanished(exc)
+            raise
         except worktree.NotAGitRepoError as exc:
+            self._raise_if_vanished(exc)
             raise SiteError(
                 "not_a_git_repo", redaction.sanitize_echo_prose(str(exc)), field="workspace_root"
             ) from exc
         except (worktree.NoCommitsError, worktree.WorktreeError) as exc:
+            self._raise_if_vanished(exc)
             raise SiteError(
                 "worktree_error",
                 redaction.sanitize_echo_prose(str(exc))[:300],
@@ -126,6 +136,17 @@ class WorktreeSite:
         self.aliases = pathalias.path_aliases(self._wt.path)
         self.security_warnings = (self._wt.baseline_warning,) if self._wt.baseline_warning else ()
         return self
+
+    def _raise_if_vanished(self, exc: Exception) -> None:
+        """A delegate job's repo can pass the preflight and be deleted before the worker gets
+        here (#248); create() then fails with a raw spawn error or a git error about it."""
+        if not Path(self._repo).is_dir():
+            raise SiteError(
+                "invalid_workspace_root",
+                "the workspace directory no longer exists",
+                field="workspace_root",
+                vanished=True,
+            ) from exc
 
     def __exit__(self, *exc: object) -> bool:
         if self._wt is not None:

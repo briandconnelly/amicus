@@ -214,6 +214,7 @@ def test_every_refusal_carries_a_published_reason_token(tmp_path, monkeypatch):
         "not_absolute": ws.resolve_workspace("relative/path", [], None),
         "not_a_directory": ws.resolve_workspace(str(tmp_path / "nope"), [], None),
         "outside_roots": ws.resolve_workspace(str(other), [str(root)], None),
+        "root_not_a_directory": ws.resolve_workspace(None, [str(tmp_path / "gone")], None),
     }
     monkeypatch.setattr(ws, "Path", _patched_path(_gone))
     cases["cwd_gone"] = ws.resolve(None, [], allow_cwd=True)
@@ -223,3 +224,13 @@ def test_every_refusal_carries_a_published_reason_token(tmp_path, monkeypatch):
     assert set(cases) == set(WORKSPACE_REASONS)
     # Control: a resolution that succeeds carries no reason at all.
     assert ws.resolve_workspace(str(root), [str(root)], None).reason is None
+
+
+def test_vanished_reason_names_the_source_that_supplied_the_directory():
+    """#248: a workspace that resolved and then vanished is reported with the token whose
+    correction fits its source; the cwd opt-in is the server's own directory, not a
+    workspace_root the caller passed, so it is cwd_gone rather than not_a_directory."""
+    assert ws.vanished_reason("roots") == "root_not_a_directory"
+    assert ws.vanished_reason("param") == "not_a_directory"
+    assert ws.vanished_reason("cwd") == "cwd_gone"
+    assert {ws.vanished_reason(s) for s in ("roots", "param", "cwd")} <= set(WORKSPACE_REASONS)

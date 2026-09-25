@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple
 
 from amicus.errors import error_envelope, generalize_code, render_failure
 from amicus.orchestration import finalize, prompts, review
+from amicus.orchestration import workspace as ws
 from amicus.orchestration.isolation import SiteError, select_site
 from amicus.request import meta_for
 from amicus.schemas.envelope import ErrorDetail
@@ -219,12 +220,13 @@ def _lost_answer(loss: str, meta: Any, plugin: BackendPlugin) -> dict[str, Any]:
 
 
 def _site_error(exc: SiteError, meta: Any, plugin: BackendPlugin) -> dict[str, Any]:
+    reason = ws.vanished_reason(meta.workspace_source) if exc.vanished else None
     return error_envelope(
         exc.code,
         exc.detail,
         meta,
         plugin=plugin,
-        details=ErrorDetail(field=exc.field) if exc.field else None,
+        details=ErrorDetail(field=exc.field, reason=reason) if exc.field else None,
         repair_alternative=exc.repair_alternative,
     )
 

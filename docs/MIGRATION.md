@@ -210,6 +210,10 @@ A caller that retried the same sync call on `temporary: true` should start the `
 `amicus_delegate` with `claude`, or `amicus_adversarial_review` with `codex` or `kimi`, now fails as `invalid_arguments` with `details.allowed_values`, where it failed as `feature_unsupported`.
 A caller that branched on `feature_unsupported` for those picks should read the tool's `backend` enum, which is now the accepted set.
 
+**A stale client root is refused as `invalid_workspace_root`, reason `root_not_a_directory` (#248).**
+A handshake-era client whose advertised first root no longer exists used to get `git_unavailable` from the first git-based call; it now gets the workspace refusal, with no repair, before any work.
+Fix the root the client advertises, or pass `workspace_root`.
+
 ## Upgrading from 0.5.0
 
 The changes below are the ones a caller or operator using amicus 0.5.0 may have to handle before running 0.6.0.

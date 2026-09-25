@@ -223,3 +223,19 @@ def test_build_coverage_breaks_redaction_down_only_from_what_the_split_fields_sa
     )
     cov = review.build_coverage("working_tree", capped, focused=False)
     assert cov.omission_reasons == ["truncated", "redacted"] and cov.redaction is None
+
+
+def test_gitdiff_error_maps_a_vanished_workspace_to_its_source_token():
+    """#248: the token names the source that supplied the directory, and the code carries
+    no repair (ADR 0021)."""
+    from amicus.orchestration.gitdiff import WorkspaceMissingError
+    from amicus.schemas.envelope import Meta
+
+    for source, reason in (("roots", "root_not_a_directory"), ("param", "not_a_directory")):
+        out = review.gitdiff_error(
+            WorkspaceMissingError("gone"), Meta(workspace_source=source), fakeplugin.make_plugin()
+        )
+        assert out["error"]["code"] == "invalid_workspace_root"
+        assert out["error"]["details"]["reason"] == reason
+        assert out["error"]["details"]["field"] == "workspace_root"
+        assert "repair" not in out["error"]
