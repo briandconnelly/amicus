@@ -321,6 +321,14 @@ async def test_timeout_is_not_retryable_and_points_at_a_new_job(
     assert err["repair"]["tool"] == "amicus_consult_async" and "arguments" not in err["repair"]
     assert "amicus_consult_async" in err["repair"]["alternative"]
     assert "MAY" in err["message"]
+    # The twin runs to the job deadline, so it is named only when that is the longer one
+    # (ADR 0039): a 600 s sync call under AMICUS_JOB_MAX_SECONDS=60 names no tool.
+    import dataclasses
+
+    for job_max, named in ((1800, "amicus_consult_async"), (60, None)):
+        shorter = dataclasses.replace(spec, timeout_seconds=600, job_max_seconds=job_max)
+        repair = (await run_mod.run_request(shorter, plugin))["error"]["repair"]
+        assert repair["next_step"] == "start_new_job" and repair.get("tool") == named
 
 
 async def test_background_timeout_names_no_tool_and_the_job_deadline(
