@@ -193,6 +193,7 @@ ADR 0005; what a repair carries, ADR 0021.
 - `_meta["dev.bconnelly.amicus/lifecycle"]` on every tool and resource.
 - Fingerprint = static `amicus/0.1/schema-N` + `surface_digest` (sha256 of the tool, resource and template records plus `instructions`, as the server holds them — not the built manifest, whose stronger hash is pinned only in tests).
   ADR 0006.
+  The snapshot pins each error code's `temporary` and repair step, tool and arguments per in-tree backend, but not the repair prose; ADR 0044.
 - SEP-2549 cache hints: the four list methods and `server/discover` carry `ttlMs: 300000`/`cacheScope: private`, and `resources/read` carries none because the `backends`/`models` templates report live state.
   Both eras report `listChanged: false`.
   ADR 0018.

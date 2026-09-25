@@ -78,6 +78,7 @@
       "tool_annotations",
       "tool_lifecycle_meta",
       "error_codes",
+      "repair_rules",
       "value_enums",
       "resource_metadata",
       "resource_templates",
@@ -1542,7 +1543,7 @@
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-49",
+                "default": "amicus/0.1/schema-50",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -2051,6 +2052,1620 @@
     }
   ],
   "prompts": [],
+  "repair_rules": {
+    "claude": {
+      "answer_unavailable": {
+        "repair": {
+          "arguments": null,
+          "next_step": "reduce_input",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "api_key_invalid": {
+        "repair": {
+          "arguments": {
+            "backend": "claude"
+          },
+          "next_step": "authenticate",
+          "tool": "amicus_backends"
+        },
+        "temporary": false
+      },
+      "api_key_missing": {
+        "repair": {
+          "arguments": {
+            "backend": "claude"
+          },
+          "next_step": "correct_config",
+          "tool": "amicus_backends"
+        },
+        "temporary": false
+      },
+      "backend_auth_indeterminate": {
+        "repair": {
+          "arguments": null,
+          "next_step": "inspect_and_retry",
+          "tool": null
+        },
+        "temporary": true
+      },
+      "backend_auth_required": {
+        "repair": {
+          "arguments": null,
+          "next_step": "authenticate",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "backend_not_found": {
+        "repair": {
+          "arguments": null,
+          "next_step": "install_backend",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "backend_rate_limited": {
+        "repair": {
+          "arguments": null,
+          "next_step": "retry_after_delay",
+          "tool": null
+        },
+        "temporary": true
+      },
+      "backend_unavailable": {
+        "repair": {
+          "arguments": {
+            "backend": "claude"
+          },
+          "next_step": "inspect_and_retry",
+          "tool": "amicus_backends"
+        },
+        "temporary": false
+      },
+      "budget_exceeded": {
+        "repair": {
+          "arguments": null,
+          "next_step": "reduce_input",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "claude_permission_error": {
+        "repair": {
+          "arguments": null,
+          "next_step": "correct_arguments",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "cli_contract_changed": {
+        "repair": {
+          "arguments": null,
+          "next_step": "update_plugin",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "context_too_large": {
+        "repair": {
+          "arguments": null,
+          "next_step": "reduce_input",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "empty_response": {
+        "repair": {
+          "arguments": null,
+          "next_step": "retry_then_report",
+          "tool": null
+        },
+        "temporary": true
+      },
+      "extra_args_rejected": {
+        "repair": {
+          "arguments": null,
+          "next_step": "correct_config",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "feature_unsupported": {
+        "repair": {
+          "arguments": {
+            "backend": "claude"
+          },
+          "next_step": "use_allowed_value",
+          "tool": "amicus_backends"
+        },
+        "temporary": false
+      },
+      "git_unavailable": {
+        "repair": {
+          "arguments": null,
+          "next_step": "install_git",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "idempotency_conflict": {
+        "repair": {
+          "arguments": null,
+          "next_step": "use_new_idempotency_key",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "idempotency_in_progress": {
+        "repair": {
+          "arguments": null,
+          "next_step": "poll_job_status",
+          "tool": null
+        },
+        "temporary": true
+      },
+      "idempotency_result_unavailable": {
+        "repair": {
+          "arguments": null,
+          "next_step": "use_new_idempotency_key",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "input_too_large": {
+        "repair": {
+          "arguments": null,
+          "next_step": "reduce_input",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "internal_error": {
+        "repair": {
+          "arguments": null,
+          "next_step": "retry_then_report",
+          "tool": null
+        },
+        "temporary": true
+      },
+      "invalid_arguments": {
+        "repair": {
+          "arguments": null,
+          "next_step": "correct_arguments",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "invalid_base": {
+        "repair": {
+          "arguments": null,
+          "next_step": "correct_arguments",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "invalid_commit": {
+        "repair": {
+          "arguments": null,
+          "next_step": "correct_arguments",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "invalid_json": {
+        "repair": {
+          "arguments": null,
+          "next_step": "retry_then_report",
+          "tool": null
+        },
+        "temporary": true
+      },
+      "invalid_model": {
+        "repair": {
+          "arguments": {
+            "backend": "claude"
+          },
+          "next_step": "use_allowed_value",
+          "tool": "amicus_models"
+        },
+        "temporary": false
+      },
+      "invalid_paths": {
+        "repair": {
+          "arguments": null,
+          "next_step": "correct_arguments",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "invalid_reasoning_effort": {
+        "repair": {
+          "arguments": {
+            "backend": "claude"
+          },
+          "next_step": "use_allowed_value",
+          "tool": "amicus_models"
+        },
+        "temporary": false
+      },
+      "invalid_scope": {
+        "repair": {
+          "arguments": null,
+          "next_step": "correct_arguments",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "invalid_workspace_root": {
+        "repair": null,
+        "temporary": false
+      },
+      "job_cancelled": {
+        "repair": {
+          "arguments": null,
+          "next_step": "start_new_job",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "job_cap_reached": {
+        "repair": {
+          "arguments": null,
+          "next_step": "list_jobs",
+          "tool": "amicus_job_list"
+        },
+        "temporary": true
+      },
+      "job_failed": {
+        "repair": {
+          "arguments": null,
+          "next_step": "inspect_and_retry",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "job_not_found": {
+        "repair": {
+          "arguments": null,
+          "next_step": "list_jobs",
+          "tool": "amicus_job_list"
+        },
+        "temporary": false
+      },
+      "job_result_incompatible": {
+        "repair": {
+          "arguments": null,
+          "next_step": "start_new_job",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "job_running": {
+        "repair": {
+          "arguments": null,
+          "next_step": "poll_job_status",
+          "tool": "amicus_job_status"
+        },
+        "temporary": true
+      },
+      "job_timeout": {
+        "repair": {
+          "arguments": null,
+          "next_step": "start_new_job",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "nonzero_exit": {
+        "repair": {
+          "arguments": null,
+          "next_step": "inspect_and_retry",
+          "tool": null
+        },
+        "temporary": true
+      },
+      "not_a_git_repo": {
+        "repair": {
+          "arguments": null,
+          "next_step": "init_git_repo",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "resource_not_found": {
+        "repair": {
+          "arguments": null,
+          "next_step": "list_resources",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "schema_violation": {
+        "repair": {
+          "arguments": null,
+          "next_step": "retry_then_report",
+          "tool": null
+        },
+        "temporary": true
+      },
+      "timeout": {
+        "repair": {
+          "arguments": null,
+          "next_step": "start_new_job",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "unexpanded_env_placeholder": {
+        "repair": {
+          "arguments": null,
+          "next_step": "update_plugin",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "unsupported_detail": {
+        "repair": {
+          "arguments": null,
+          "next_step": "use_allowed_value",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "unsupported_isolation": {
+        "repair": {
+          "arguments": null,
+          "next_step": "use_allowed_value",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "unsupported_sandbox": {
+        "repair": {
+          "arguments": null,
+          "next_step": "use_allowed_value",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "unsupported_tier": {
+        "repair": {
+          "arguments": null,
+          "next_step": "use_allowed_value",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "user_config_rejected": {
+        "repair": {
+          "arguments": null,
+          "next_step": "correct_config",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "workspace_outside_roots": {
+        "repair": null,
+        "temporary": false
+      },
+      "worktree_error": {
+        "repair": {
+          "arguments": null,
+          "next_step": "inspect_and_retry",
+          "tool": null
+        },
+        "temporary": true
+      }
+    },
+    "codex": {
+      "answer_unavailable": {
+        "repair": {
+          "arguments": null,
+          "next_step": "reduce_input",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "api_key_invalid": {
+        "repair": {
+          "arguments": {
+            "backend": "codex"
+          },
+          "next_step": "authenticate",
+          "tool": "amicus_backends"
+        },
+        "temporary": false
+      },
+      "api_key_missing": {
+        "repair": {
+          "arguments": {
+            "backend": "codex"
+          },
+          "next_step": "correct_config",
+          "tool": "amicus_backends"
+        },
+        "temporary": false
+      },
+      "backend_auth_indeterminate": {
+        "repair": {
+          "arguments": null,
+          "next_step": "inspect_and_retry",
+          "tool": null
+        },
+        "temporary": true
+      },
+      "backend_auth_required": {
+        "repair": {
+          "arguments": null,
+          "next_step": "authenticate",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "backend_not_found": {
+        "repair": {
+          "arguments": null,
+          "next_step": "install_backend",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "backend_rate_limited": {
+        "repair": {
+          "arguments": null,
+          "next_step": "retry_after_delay",
+          "tool": null
+        },
+        "temporary": true
+      },
+      "backend_unavailable": {
+        "repair": {
+          "arguments": {
+            "backend": "codex"
+          },
+          "next_step": "inspect_and_retry",
+          "tool": "amicus_backends"
+        },
+        "temporary": false
+      },
+      "budget_exceeded": {
+        "repair": {
+          "arguments": null,
+          "next_step": "reduce_input",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "claude_permission_error": {
+        "repair": {
+          "arguments": null,
+          "next_step": "correct_arguments",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "cli_contract_changed": {
+        "repair": {
+          "arguments": null,
+          "next_step": "update_plugin",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "context_too_large": {
+        "repair": {
+          "arguments": null,
+          "next_step": "reduce_input",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "empty_response": {
+        "repair": {
+          "arguments": null,
+          "next_step": "retry_then_report",
+          "tool": null
+        },
+        "temporary": true
+      },
+      "extra_args_rejected": {
+        "repair": {
+          "arguments": null,
+          "next_step": "correct_config",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "feature_unsupported": {
+        "repair": {
+          "arguments": {
+            "backend": "codex"
+          },
+          "next_step": "use_allowed_value",
+          "tool": "amicus_backends"
+        },
+        "temporary": false
+      },
+      "git_unavailable": {
+        "repair": {
+          "arguments": null,
+          "next_step": "install_git",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "idempotency_conflict": {
+        "repair": {
+          "arguments": null,
+          "next_step": "use_new_idempotency_key",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "idempotency_in_progress": {
+        "repair": {
+          "arguments": null,
+          "next_step": "poll_job_status",
+          "tool": null
+        },
+        "temporary": true
+      },
+      "idempotency_result_unavailable": {
+        "repair": {
+          "arguments": null,
+          "next_step": "use_new_idempotency_key",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "input_too_large": {
+        "repair": {
+          "arguments": null,
+          "next_step": "reduce_input",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "internal_error": {
+        "repair": {
+          "arguments": null,
+          "next_step": "retry_then_report",
+          "tool": null
+        },
+        "temporary": true
+      },
+      "invalid_arguments": {
+        "repair": {
+          "arguments": null,
+          "next_step": "correct_arguments",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "invalid_base": {
+        "repair": {
+          "arguments": null,
+          "next_step": "correct_arguments",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "invalid_commit": {
+        "repair": {
+          "arguments": null,
+          "next_step": "correct_arguments",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "invalid_json": {
+        "repair": {
+          "arguments": null,
+          "next_step": "retry_then_report",
+          "tool": null
+        },
+        "temporary": true
+      },
+      "invalid_model": {
+        "repair": {
+          "arguments": {
+            "backend": "codex"
+          },
+          "next_step": "use_allowed_value",
+          "tool": "amicus_models"
+        },
+        "temporary": false
+      },
+      "invalid_paths": {
+        "repair": {
+          "arguments": null,
+          "next_step": "correct_arguments",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "invalid_reasoning_effort": {
+        "repair": {
+          "arguments": {
+            "backend": "codex"
+          },
+          "next_step": "use_allowed_value",
+          "tool": "amicus_models"
+        },
+        "temporary": false
+      },
+      "invalid_scope": {
+        "repair": {
+          "arguments": null,
+          "next_step": "correct_arguments",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "invalid_workspace_root": {
+        "repair": null,
+        "temporary": false
+      },
+      "job_cancelled": {
+        "repair": {
+          "arguments": null,
+          "next_step": "start_new_job",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "job_cap_reached": {
+        "repair": {
+          "arguments": null,
+          "next_step": "list_jobs",
+          "tool": "amicus_job_list"
+        },
+        "temporary": true
+      },
+      "job_failed": {
+        "repair": {
+          "arguments": null,
+          "next_step": "inspect_and_retry",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "job_not_found": {
+        "repair": {
+          "arguments": null,
+          "next_step": "list_jobs",
+          "tool": "amicus_job_list"
+        },
+        "temporary": false
+      },
+      "job_result_incompatible": {
+        "repair": {
+          "arguments": null,
+          "next_step": "start_new_job",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "job_running": {
+        "repair": {
+          "arguments": null,
+          "next_step": "poll_job_status",
+          "tool": "amicus_job_status"
+        },
+        "temporary": true
+      },
+      "job_timeout": {
+        "repair": {
+          "arguments": null,
+          "next_step": "start_new_job",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "nonzero_exit": {
+        "repair": {
+          "arguments": null,
+          "next_step": "inspect_and_retry",
+          "tool": null
+        },
+        "temporary": true
+      },
+      "not_a_git_repo": {
+        "repair": {
+          "arguments": null,
+          "next_step": "init_git_repo",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "resource_not_found": {
+        "repair": {
+          "arguments": null,
+          "next_step": "list_resources",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "schema_violation": {
+        "repair": {
+          "arguments": null,
+          "next_step": "retry_then_report",
+          "tool": null
+        },
+        "temporary": true
+      },
+      "timeout": {
+        "repair": {
+          "arguments": null,
+          "next_step": "start_new_job",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "unexpanded_env_placeholder": {
+        "repair": {
+          "arguments": null,
+          "next_step": "update_plugin",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "unsupported_detail": {
+        "repair": {
+          "arguments": null,
+          "next_step": "use_allowed_value",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "unsupported_isolation": {
+        "repair": {
+          "arguments": null,
+          "next_step": "use_allowed_value",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "unsupported_sandbox": {
+        "repair": {
+          "arguments": null,
+          "next_step": "use_allowed_value",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "unsupported_tier": {
+        "repair": {
+          "arguments": null,
+          "next_step": "use_allowed_value",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "user_config_rejected": {
+        "repair": {
+          "arguments": null,
+          "next_step": "correct_config",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "workspace_outside_roots": {
+        "repair": null,
+        "temporary": false
+      },
+      "worktree_error": {
+        "repair": {
+          "arguments": null,
+          "next_step": "inspect_and_retry",
+          "tool": null
+        },
+        "temporary": true
+      }
+    },
+    "default": {
+      "answer_unavailable": {
+        "repair": {
+          "arguments": null,
+          "next_step": "reduce_input",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "api_key_invalid": {
+        "repair": {
+          "arguments": {},
+          "next_step": "authenticate",
+          "tool": "amicus_backends"
+        },
+        "temporary": false
+      },
+      "api_key_missing": {
+        "repair": {
+          "arguments": {},
+          "next_step": "correct_config",
+          "tool": "amicus_backends"
+        },
+        "temporary": false
+      },
+      "backend_auth_indeterminate": {
+        "repair": {
+          "arguments": null,
+          "next_step": "inspect_and_retry",
+          "tool": null
+        },
+        "temporary": true
+      },
+      "backend_auth_required": {
+        "repair": {
+          "arguments": null,
+          "next_step": "authenticate",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "backend_not_found": {
+        "repair": {
+          "arguments": null,
+          "next_step": "install_backend",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "backend_rate_limited": {
+        "repair": {
+          "arguments": null,
+          "next_step": "retry_after_delay",
+          "tool": null
+        },
+        "temporary": true
+      },
+      "backend_unavailable": {
+        "repair": {
+          "arguments": {},
+          "next_step": "inspect_and_retry",
+          "tool": "amicus_backends"
+        },
+        "temporary": false
+      },
+      "budget_exceeded": {
+        "repair": {
+          "arguments": null,
+          "next_step": "reduce_input",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "claude_permission_error": {
+        "repair": {
+          "arguments": null,
+          "next_step": "correct_arguments",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "cli_contract_changed": {
+        "repair": {
+          "arguments": null,
+          "next_step": "update_plugin",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "context_too_large": {
+        "repair": {
+          "arguments": null,
+          "next_step": "reduce_input",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "empty_response": {
+        "repair": {
+          "arguments": null,
+          "next_step": "retry_then_report",
+          "tool": null
+        },
+        "temporary": true
+      },
+      "extra_args_rejected": {
+        "repair": {
+          "arguments": null,
+          "next_step": "correct_config",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "feature_unsupported": {
+        "repair": {
+          "arguments": {},
+          "next_step": "use_allowed_value",
+          "tool": "amicus_backends"
+        },
+        "temporary": false
+      },
+      "git_unavailable": {
+        "repair": {
+          "arguments": null,
+          "next_step": "install_git",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "idempotency_conflict": {
+        "repair": {
+          "arguments": null,
+          "next_step": "use_new_idempotency_key",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "idempotency_in_progress": {
+        "repair": {
+          "arguments": null,
+          "next_step": "poll_job_status",
+          "tool": null
+        },
+        "temporary": true
+      },
+      "idempotency_result_unavailable": {
+        "repair": {
+          "arguments": null,
+          "next_step": "use_new_idempotency_key",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "input_too_large": {
+        "repair": {
+          "arguments": null,
+          "next_step": "reduce_input",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "internal_error": {
+        "repair": {
+          "arguments": null,
+          "next_step": "retry_then_report",
+          "tool": null
+        },
+        "temporary": true
+      },
+      "invalid_arguments": {
+        "repair": {
+          "arguments": null,
+          "next_step": "correct_arguments",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "invalid_base": {
+        "repair": {
+          "arguments": null,
+          "next_step": "correct_arguments",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "invalid_commit": {
+        "repair": {
+          "arguments": null,
+          "next_step": "correct_arguments",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "invalid_json": {
+        "repair": {
+          "arguments": null,
+          "next_step": "retry_then_report",
+          "tool": null
+        },
+        "temporary": true
+      },
+      "invalid_model": {
+        "repair": {
+          "arguments": null,
+          "next_step": "use_allowed_value",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "invalid_paths": {
+        "repair": {
+          "arguments": null,
+          "next_step": "correct_arguments",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "invalid_reasoning_effort": {
+        "repair": {
+          "arguments": null,
+          "next_step": "use_allowed_value",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "invalid_scope": {
+        "repair": {
+          "arguments": null,
+          "next_step": "correct_arguments",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "invalid_workspace_root": {
+        "repair": null,
+        "temporary": false
+      },
+      "job_cancelled": {
+        "repair": {
+          "arguments": null,
+          "next_step": "start_new_job",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "job_cap_reached": {
+        "repair": {
+          "arguments": null,
+          "next_step": "list_jobs",
+          "tool": "amicus_job_list"
+        },
+        "temporary": true
+      },
+      "job_failed": {
+        "repair": {
+          "arguments": null,
+          "next_step": "inspect_and_retry",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "job_not_found": {
+        "repair": {
+          "arguments": null,
+          "next_step": "list_jobs",
+          "tool": "amicus_job_list"
+        },
+        "temporary": false
+      },
+      "job_result_incompatible": {
+        "repair": {
+          "arguments": null,
+          "next_step": "start_new_job",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "job_running": {
+        "repair": {
+          "arguments": null,
+          "next_step": "poll_job_status",
+          "tool": "amicus_job_status"
+        },
+        "temporary": true
+      },
+      "job_timeout": {
+        "repair": {
+          "arguments": null,
+          "next_step": "start_new_job",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "nonzero_exit": {
+        "repair": {
+          "arguments": null,
+          "next_step": "inspect_and_retry",
+          "tool": null
+        },
+        "temporary": true
+      },
+      "not_a_git_repo": {
+        "repair": {
+          "arguments": null,
+          "next_step": "init_git_repo",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "resource_not_found": {
+        "repair": {
+          "arguments": null,
+          "next_step": "list_resources",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "schema_violation": {
+        "repair": {
+          "arguments": null,
+          "next_step": "retry_then_report",
+          "tool": null
+        },
+        "temporary": true
+      },
+      "timeout": {
+        "repair": {
+          "arguments": null,
+          "next_step": "start_new_job",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "unexpanded_env_placeholder": {
+        "repair": {
+          "arguments": null,
+          "next_step": "update_plugin",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "unsupported_detail": {
+        "repair": {
+          "arguments": null,
+          "next_step": "use_allowed_value",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "unsupported_isolation": {
+        "repair": {
+          "arguments": null,
+          "next_step": "use_allowed_value",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "unsupported_sandbox": {
+        "repair": {
+          "arguments": null,
+          "next_step": "use_allowed_value",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "unsupported_tier": {
+        "repair": {
+          "arguments": null,
+          "next_step": "use_allowed_value",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "user_config_rejected": {
+        "repair": {
+          "arguments": null,
+          "next_step": "correct_config",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "workspace_outside_roots": {
+        "repair": null,
+        "temporary": false
+      },
+      "worktree_error": {
+        "repair": {
+          "arguments": null,
+          "next_step": "inspect_and_retry",
+          "tool": null
+        },
+        "temporary": true
+      }
+    },
+    "kimi": {
+      "answer_unavailable": {
+        "repair": {
+          "arguments": null,
+          "next_step": "reduce_input",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "api_key_invalid": {
+        "repair": {
+          "arguments": {
+            "backend": "kimi"
+          },
+          "next_step": "authenticate",
+          "tool": "amicus_backends"
+        },
+        "temporary": false
+      },
+      "api_key_missing": {
+        "repair": {
+          "arguments": {
+            "backend": "kimi"
+          },
+          "next_step": "correct_config",
+          "tool": "amicus_backends"
+        },
+        "temporary": false
+      },
+      "backend_auth_indeterminate": {
+        "repair": {
+          "arguments": null,
+          "next_step": "inspect_and_retry",
+          "tool": null
+        },
+        "temporary": true
+      },
+      "backend_auth_required": {
+        "repair": {
+          "arguments": null,
+          "next_step": "authenticate",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "backend_not_found": {
+        "repair": {
+          "arguments": null,
+          "next_step": "install_backend",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "backend_rate_limited": {
+        "repair": {
+          "arguments": null,
+          "next_step": "retry_after_delay",
+          "tool": null
+        },
+        "temporary": true
+      },
+      "backend_unavailable": {
+        "repair": {
+          "arguments": {
+            "backend": "kimi"
+          },
+          "next_step": "inspect_and_retry",
+          "tool": "amicus_backends"
+        },
+        "temporary": false
+      },
+      "budget_exceeded": {
+        "repair": {
+          "arguments": null,
+          "next_step": "reduce_input",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "claude_permission_error": {
+        "repair": {
+          "arguments": null,
+          "next_step": "correct_arguments",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "cli_contract_changed": {
+        "repair": {
+          "arguments": null,
+          "next_step": "update_plugin",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "context_too_large": {
+        "repair": {
+          "arguments": null,
+          "next_step": "reduce_input",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "empty_response": {
+        "repair": {
+          "arguments": null,
+          "next_step": "retry_then_report",
+          "tool": null
+        },
+        "temporary": true
+      },
+      "extra_args_rejected": {
+        "repair": {
+          "arguments": null,
+          "next_step": "correct_config",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "feature_unsupported": {
+        "repair": {
+          "arguments": {
+            "backend": "kimi"
+          },
+          "next_step": "use_allowed_value",
+          "tool": "amicus_backends"
+        },
+        "temporary": false
+      },
+      "git_unavailable": {
+        "repair": {
+          "arguments": null,
+          "next_step": "install_git",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "idempotency_conflict": {
+        "repair": {
+          "arguments": null,
+          "next_step": "use_new_idempotency_key",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "idempotency_in_progress": {
+        "repair": {
+          "arguments": null,
+          "next_step": "poll_job_status",
+          "tool": null
+        },
+        "temporary": true
+      },
+      "idempotency_result_unavailable": {
+        "repair": {
+          "arguments": null,
+          "next_step": "use_new_idempotency_key",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "input_too_large": {
+        "repair": {
+          "arguments": null,
+          "next_step": "reduce_input",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "internal_error": {
+        "repair": {
+          "arguments": null,
+          "next_step": "retry_then_report",
+          "tool": null
+        },
+        "temporary": true
+      },
+      "invalid_arguments": {
+        "repair": {
+          "arguments": null,
+          "next_step": "correct_arguments",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "invalid_base": {
+        "repair": {
+          "arguments": null,
+          "next_step": "correct_arguments",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "invalid_commit": {
+        "repair": {
+          "arguments": null,
+          "next_step": "correct_arguments",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "invalid_json": {
+        "repair": {
+          "arguments": null,
+          "next_step": "retry_then_report",
+          "tool": null
+        },
+        "temporary": true
+      },
+      "invalid_model": {
+        "repair": {
+          "arguments": {
+            "backend": "kimi"
+          },
+          "next_step": "use_allowed_value",
+          "tool": "amicus_models"
+        },
+        "temporary": false
+      },
+      "invalid_paths": {
+        "repair": {
+          "arguments": null,
+          "next_step": "correct_arguments",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "invalid_reasoning_effort": {
+        "repair": {
+          "arguments": {
+            "backend": "kimi"
+          },
+          "next_step": "use_allowed_value",
+          "tool": "amicus_models"
+        },
+        "temporary": false
+      },
+      "invalid_scope": {
+        "repair": {
+          "arguments": null,
+          "next_step": "correct_arguments",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "invalid_workspace_root": {
+        "repair": null,
+        "temporary": false
+      },
+      "job_cancelled": {
+        "repair": {
+          "arguments": null,
+          "next_step": "start_new_job",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "job_cap_reached": {
+        "repair": {
+          "arguments": null,
+          "next_step": "list_jobs",
+          "tool": "amicus_job_list"
+        },
+        "temporary": true
+      },
+      "job_failed": {
+        "repair": {
+          "arguments": null,
+          "next_step": "inspect_and_retry",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "job_not_found": {
+        "repair": {
+          "arguments": null,
+          "next_step": "list_jobs",
+          "tool": "amicus_job_list"
+        },
+        "temporary": false
+      },
+      "job_result_incompatible": {
+        "repair": {
+          "arguments": null,
+          "next_step": "start_new_job",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "job_running": {
+        "repair": {
+          "arguments": null,
+          "next_step": "poll_job_status",
+          "tool": "amicus_job_status"
+        },
+        "temporary": true
+      },
+      "job_timeout": {
+        "repair": {
+          "arguments": null,
+          "next_step": "start_new_job",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "nonzero_exit": {
+        "repair": {
+          "arguments": null,
+          "next_step": "inspect_and_retry",
+          "tool": null
+        },
+        "temporary": true
+      },
+      "not_a_git_repo": {
+        "repair": {
+          "arguments": null,
+          "next_step": "init_git_repo",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "resource_not_found": {
+        "repair": {
+          "arguments": null,
+          "next_step": "list_resources",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "schema_violation": {
+        "repair": {
+          "arguments": null,
+          "next_step": "retry_then_report",
+          "tool": null
+        },
+        "temporary": true
+      },
+      "timeout": {
+        "repair": {
+          "arguments": null,
+          "next_step": "start_new_job",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "unexpanded_env_placeholder": {
+        "repair": {
+          "arguments": null,
+          "next_step": "update_plugin",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "unsupported_detail": {
+        "repair": {
+          "arguments": null,
+          "next_step": "use_allowed_value",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "unsupported_isolation": {
+        "repair": {
+          "arguments": null,
+          "next_step": "use_allowed_value",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "unsupported_sandbox": {
+        "repair": {
+          "arguments": null,
+          "next_step": "use_allowed_value",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "unsupported_tier": {
+        "repair": {
+          "arguments": null,
+          "next_step": "use_allowed_value",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "user_config_rejected": {
+        "repair": {
+          "arguments": null,
+          "next_step": "correct_config",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "workspace_outside_roots": {
+        "repair": null,
+        "temporary": false
+      },
+      "worktree_error": {
+        "repair": {
+          "arguments": null,
+          "next_step": "inspect_and_retry",
+          "tool": null
+        },
+        "temporary": true
+      }
+    }
+  },
   "resource_templates": [
     {
       "_meta": {
@@ -2462,7 +4077,7 @@
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-49",
+            "default": "amicus/0.1/schema-50",
             "title": "Fingerprint",
             "type": "string"
           },

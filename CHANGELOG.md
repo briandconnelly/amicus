@@ -34,6 +34,12 @@ per-change, as its own lead says.
 
 ### Changed
 
+- **Surface.** `amicus_capabilities`' `fingerprint_covers` gains `repair_rules` (#252, ADR
+  0044): each error code's `temporary`, `repair.next_step`, `repair.tool` and lookup
+  `repair.arguments`, as the envelope carries them by default for each in-tree backend, are
+  now part of what the fingerprint guards, so a change to any of them moves `fingerprint`.
+  The repair prose (`alternative`) is not. No error envelope changes.
+
 - **Surface.** Six minor contract findings of the 2026-09-24 audit (#250). Reads of
   `amicus://error-envelope`, `amicus://result-meta` and `amicus://params` carry the catalog
   TTL (`ttlMs: 300000`) where they said `0`; `amicus://capabilities` and the two templates

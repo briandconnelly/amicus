@@ -26,7 +26,8 @@ from fastmcp import Client, FastMCP
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Mapping
 
-from amicus import config, server
+from amicus import config, errors, server
+from amicus.backends import IN_TREE
 from amicus.registry import BackendRegistry
 
 PROFILES: dict[str, dict[str, str]] = {
@@ -57,6 +58,21 @@ def app_for_profile(profile: str) -> FastMCP:
     """An app for a profile with NO backend loaded: the manifest guards the schema-only
     surface, which must not depend on which CLIs this machine has installed."""
     return server.create_app(config.settings(PROFILES[profile]), BackendRegistry({}, {}))
+
+
+def repair_rules() -> dict[str, Any]:
+    """The per-code repair contract (ADR 0044): the table with no plugin under "default",
+    and each in-tree backend's own under its id, in every profile, since no table depends
+    on which backends a profile enables. Each factory gets an empty environ, so no operator
+    setting reaches it. What a factory resolves on PATH never reaches a table: the committed
+    snapshot is rendered outside pytest, where the real CLIs may be on PATH, and the golden
+    test compares it under the conftest guard, where none is."""
+    rules: dict[str, Any] = {"default": errors.repair_contract()}
+    for backend_id, target in IN_TREE.items():
+        module_name, _, attr = target.partition(":")
+        factory = getattr(importlib.import_module(module_name), attr)
+        rules[backend_id] = errors.repair_contract(factory({}))
+    return rules
 
 
 def _sorted_by_json(items: list[Any]) -> list[Any]:
@@ -154,6 +170,7 @@ async def build_manifest(app: FastMCP) -> dict[str, Any]:
         "modern_result_envelopes": envelopes,
         **static_sections,
         "capabilities": _canonicalize(caps),
+        "repair_rules": repair_rules(),
     }
 
 
