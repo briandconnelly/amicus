@@ -388,7 +388,7 @@ async def test_progress_is_reported_throttled_while_running(tmp_path, monkeypatc
 
     class Ctx:
         async def report_progress(self, progress, total=None, message=None):
-            reports.append((progress, message))
+            reports.append((progress, total, message))
 
     def worker(job_dir):
         code = (
@@ -410,7 +410,12 @@ async def test_progress_is_reported_throttled_while_running(tmp_path, monkeypatc
         ctx=Ctx(),
     )
     assert out["ok"] is True
-    assert any(m and "events" in m for _, m in reports)
+    assert reports, "no progress was reported"
+    for progress, total, message in reports:
+        # #250: elapsed seconds against the deadline, so a host can show a fraction; the
+        # backend event count rides the message, and there is no phase to report.
+        assert total is not None and 0.0 <= progress <= total
+        assert message and "deadline" in message and "events" in message
 
 
 async def test_a_hanging_report_progress_does_not_stall_the_poll_loop(tmp_path, monkeypatch):
