@@ -404,4 +404,4 @@ def test_detail_says_it_shapes_delivery_only(wire):
     for name, description in carriers.items():
         if name in ("amicus_backends", "amicus_capabilities"):
             continue  # a discovery detail, not a delivery one
-        assert "Delivery only: the job record keeps the text" in description, name
+        assert "Delivery only: amicus://params" in description, name
