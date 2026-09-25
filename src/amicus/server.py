@@ -226,6 +226,46 @@ def _install_static_read_ttl(app: FastMCP) -> None:
     lowlevel.add_request_handler("resources/read", entry.params_type, read)
 
 
+_FASTMCP_META_KEY = "fastmcp"
+_LIST_RECORD_FIELDS: tuple[tuple[str, str], ...] = (
+    ("tools/list", "tools"),
+    ("resources/list", "resources"),
+    ("resources/templates/list", "resource_templates"),
+)
+
+
+def _install_meta_strip(app: FastMCP) -> None:
+    """Re-register the three catalog list methods with wrappers that drop FastMCP's own
+    `_meta.fastmcp` block (`{"tags": []}` on every record) from the wire (#250). The digest
+    (`surface._clean`) and the manifest (`manifest._canonicalize`) already ignore it, so only
+    the byte count moves. A transform or middleware cannot do this: FastMCP adds the key in
+    `to_mcp_tool` after both have run."""
+    lowlevel = app._mcp_server
+    for method, field in _LIST_RECORD_FIELDS:
+        entry = lowlevel._request_handlers[method]
+        lowlevel.add_request_handler(method, entry.params_type, _stripping(entry.handler, field))
+
+
+def _stripping(original: Any, field: str) -> Any:
+    async def handler(ctx: Any, params: Any) -> Any:
+        result = await original(ctx, params)
+        records = getattr(result, field, None)
+        if not isinstance(records, list):
+            return result
+        cleaned = [
+            record.model_copy(
+                update={
+                    "meta": {k: v for k, v in (record.meta or {}).items() if k != _FASTMCP_META_KEY}
+                    or None
+                }
+            )
+            for record in records
+        ]
+        return result.model_copy(update={field: cleaned})
+
+    return handler
+
+
 def create_app(
     settings: Settings | None = None, registry: BackendRegistry | None = None
 ) -> FastMCP:
@@ -240,6 +280,7 @@ def create_app(
     lowlevel.get_capabilities = _filter_capabilities(lowlevel.get_capabilities)  # ty: ignore[invalid-assignment]
     _install_cache_hints(app)
     _install_static_read_ttl(app)
+    _install_meta_strip(app)
     app.add_transform(NullDefaultStrip())
     app.add_middleware(ConnectionLogMiddleware())
     app.add_middleware(InputSchemaDialectMiddleware())

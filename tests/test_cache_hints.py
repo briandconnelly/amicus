@@ -212,3 +212,20 @@ async def test_the_logging_capability_is_not_advertised_in_either_era():
         assert "logging" not in _caps(legacy.initialize_result.capabilities)
     async with Client(_stdio()) as modern:
         assert "logging" not in _caps(modern.session.discover_result.capabilities)
+
+
+async def test_no_catalog_record_carries_the_framework_meta_key():
+    """#250: FastMCP stamps `_meta.fastmcp = {"tags": []}` on every record; the digest and the
+    manifest already ignore it, and now the wire does not carry it either. The lifecycle key
+    on the same records is the positive control that `_meta` itself still arrives."""
+    async with Client(_stdio()) as client:
+        records = [
+            *(await client.list_tools_mcp()).tools,
+            *(await client.list_resources_mcp()).resources,
+            *(await client.list_resource_templates_mcp()).resource_templates,
+        ]
+    assert len(records) == 24
+    for record in records:
+        meta = record.model_dump(mode="json", by_alias=True).get("_meta") or {}
+        assert "fastmcp" not in meta, record
+        assert "dev.bconnelly.amicus/lifecycle" in meta, record
