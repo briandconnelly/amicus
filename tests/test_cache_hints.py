@@ -196,3 +196,13 @@ async def test_the_manifest_pins_the_capabilities_the_shipped_transport_sends():
         "the two eras derive listChanged differently; _filter_capabilities exists to make "
         "them agree, so a divergence here is that override having stopped working"
     )
+
+
+async def test_the_logging_capability_is_not_advertised_in_either_era():
+    """#250: amicus never sends a log message and `logging` is deprecated at 2026-07-28, so
+    neither era advertises it; the handler stays registered for a client that still calls
+    logging/setLevel."""
+    async with Client(_stdio(), mode="legacy") as legacy:
+        assert "logging" not in _caps(legacy.initialize_result.capabilities)
+    async with Client(_stdio()) as modern:
+        assert "logging" not in _caps(modern.session.discover_result.capabilities)

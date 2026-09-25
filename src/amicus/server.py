@@ -159,6 +159,10 @@ def _filter_capabilities(original: Callable[..., Any]) -> Callable[..., Any]:
     startup, so the handshake `true` promised a notification that cannot arrive. Forcing
     `false` makes both eras agree and costs a handshake client nothing it was ever sent
     (ADR 0018).
+
+    Null the logging capability too (#250): amicus sends no log message, the capability is
+    deprecated at 2026-07-28, and the logging/setLevel handler stays registered so a
+    handshake-era client that calls it is not broken.
     """
 
     def get_capabilities(*args: Any, **kwargs: Any) -> Any:
@@ -169,7 +173,7 @@ def _filter_capabilities(original: Callable[..., Any]) -> Callable[..., Any]:
             if isinstance(extensions, dict)
             else None
         )
-        update: dict[str, Any] = {"prompts": None, "extensions": filtered or None}
+        update: dict[str, Any] = {"prompts": None, "logging": None, "extensions": filtered or None}
         for field in ("tools", "resources"):
             capability = getattr(caps, field, None)
             if capability is not None:
