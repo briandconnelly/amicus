@@ -2,18 +2,26 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import re
 import sys
 import time
 import types
 from pathlib import Path
+from typing import Any
 
 import pytest
 from fastmcp import Client
 from tests.conftest import ENV_PREFIXES, spawned_server_env
 
-from amicus import manifest, server
+import amicus.backends.claude as claude_pkg
+import amicus.backends.codex as codex_pkg
+import amicus.backends.kimi as kimi_pkg
+from amicus import errors, manifest, server
+from amicus.backends import IN_TREE
+from amicus.schemas.codes import ERROR_CODES
+from amicus.schemas.envelope import InvalidArgument
 from amicus.schemas.fingerprint import FINGERPRINT_COVERS, FINGERPRINT_COVERS_DESC
 from amicus.schemas.params import WORKSPACE_PREREQUISITE, WORKSPACELESS_TOOLS
 
@@ -62,6 +70,7 @@ async def test_build_manifest_covers_full_surface():
         "result_meta",
         "params",
         "capabilities",
+        "repair_rules",
     ):
         assert m[section], section
     assert m["prompts"] == []
@@ -93,6 +102,7 @@ async def test_fingerprint_covers_accounts_for_every_section():
             "capability_guarantees",
             "capabilities_result_schema",
         },
+        "repair_rules": {"repair_rules"},
     }
     m = await manifest.build_manifest(manifest.app_for_profile("all"))
     assert set(section_tokens) == set(m)
@@ -199,6 +209,111 @@ async def test_profiles_differ_where_annotations_differ():
     consult_b = next(t for t in b["tools"] if t["name"] == "amicus_consult")
     assert consult_a["annotations"]["destructiveHint"] is False
     assert consult_b["annotations"]["destructiveHint"] is True
+
+
+def _in_tree_plugins() -> dict[str, Any]:
+    return {
+        "codex": codex_pkg.plugin({}),
+        "kimi": kimi_pkg.plugin({}),
+        "claude": claude_pkg.plugin({}),
+    }
+
+
+def test_repair_rules_pin_every_code_for_every_in_tree_backend():
+    """Issue #252: the section names the plugin-less table and one table per in-tree
+    backend, each covering the whole catalog, whichever profile is built."""
+    rules = manifest.repair_rules()
+    assert set(rules) == {"default"} | set(IN_TREE)
+    assert set(_in_tree_plugins()) == set(IN_TREE)
+    for table in rules.values():
+        assert set(table) >= set(ERROR_CODES)
+        for entry in table.values():
+            assert set(entry) == {"temporary", "repair"}
+
+
+def test_repair_contract_is_what_make_error_renders():
+    """The pin is only worth its name if it equals the envelope an agent receives: every
+    code, with and without each in-tree plugin, against `make_error` with no override.
+    Controls: the loop reaches a repair-less code and a lookup-completed argument, so the
+    two transformations `repair_contract` restates were both exercised."""
+    seen_no_repair = seen_arguments = False
+    for plugin in (None, *_in_tree_plugins().values()):
+        for code, entry in errors.repair_contract(plugin).items():
+            extra = (
+                {"invalid_arguments": [InvalidArgument(field="x", reason="r")]}
+                if code == "invalid_arguments"
+                else {}
+            )
+            info = errors.make_error(code, "m", plugin=plugin, **extra)
+            rendered = (
+                None
+                if info.repair is None
+                else {
+                    "next_step": info.repair.next_step,
+                    "tool": info.repair.tool,
+                    "arguments": info.repair.arguments,
+                }
+            )
+            assert entry == {"temporary": info.temporary, "repair": rendered}, (plugin, code)
+            seen_no_repair |= rendered is None
+            seen_arguments |= bool(rendered and rendered["arguments"])
+    assert seen_no_repair and seen_arguments
+
+
+def _rules_in_fixture(profile: str) -> dict[str, Any]:
+    return json.loads((FIXTURES / f"manifest_snapshot.{profile}.json").read_text())["repair_rules"]
+
+
+@pytest.mark.parametrize("profile", sorted(manifest.PROFILES))
+async def test_flipping_one_codes_temporary_fails_the_golden(monkeypatch, profile):
+    """Mutation control for #252: commit 1149fd6 flipped `timeout`'s `temporary` and no
+    snapshot moved. A flip in the shared table must now move every table in the section;
+    positive control first, so a mismatch cannot be blamed on a stale fixture."""
+    assert _rules_in_fixture(profile) == manifest.repair_rules()
+    rule = errors._LOCAL_RULES["answer_unavailable"]
+    monkeypatch.setitem(
+        errors._LOCAL_RULES,
+        "answer_unavailable",
+        dataclasses.replace(rule, temporary=not rule.temporary),
+    )
+    mutated = await manifest.build_manifest(manifest.app_for_profile(profile))
+    fixture = (FIXTURES / f"manifest_snapshot.{profile}.json").read_text(encoding="utf-8")
+    assert manifest.manifest_json(mutated) != fixture
+    for backend_id, table in mutated["repair_rules"].items():
+        assert table["answer_unavailable"]["temporary"] is not rule.temporary, backend_id
+
+
+def test_a_plugin_only_flip_moves_only_that_backend(monkeypatch):
+    """The per-plugin tables are read from what the factory passes, not the shared table:
+    flipping codex's own `user_config_rejected` moves the codex table and no other."""
+    before = manifest.repair_rules()
+    rule = codex_pkg.LOCAL_CODES["user_config_rejected"]
+    monkeypatch.setitem(
+        codex_pkg.LOCAL_CODES,
+        "user_config_rejected",
+        dataclasses.replace(rule, temporary=not rule.temporary),
+    )
+    after = manifest.repair_rules()
+    assert {k for k in before if before[k] != after[k]} == {"codex"}
+
+
+def test_repair_prose_is_deliberately_outside_the_pin(monkeypatch):
+    """ADR 0044 leaves `alternative` out: rewording a repair moves no fingerprint. The
+    control is that the same mutation route does move the pin for a machine field."""
+    before = manifest.repair_rules()
+    rule = errors._LOCAL_RULES["answer_unavailable"]
+    monkeypatch.setitem(
+        errors._LOCAL_RULES,
+        "answer_unavailable",
+        dataclasses.replace(rule, alternative=rule.alternative + " Reworded."),
+    )
+    assert manifest.repair_rules() == before
+    monkeypatch.setitem(
+        errors._LOCAL_RULES,
+        "answer_unavailable",
+        dataclasses.replace(rule, next_step="inspect_and_retry"),
+    )
+    assert manifest.repair_rules() != before
 
 
 def test_render_returns_canonical_json():

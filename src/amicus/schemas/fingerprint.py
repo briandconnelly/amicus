@@ -62,6 +62,7 @@ FINGERPRINT_COVERS: tuple[str, ...] = (
     "tool_annotations",
     "tool_lifecycle_meta",
     "error_codes",
+    "repair_rules",
     "value_enums",
     "resource_metadata",
     "resource_templates",

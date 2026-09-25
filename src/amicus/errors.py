@@ -241,6 +241,25 @@ def repair_table(plugin: BackendPlugin | None = None) -> dict[str, RepairRule]:
     return rules
 
 
+def repair_contract(plugin: BackendPlugin | None = None) -> dict[str, dict[str, Any]]:
+    """Each code's machine repair fields as `make_error` renders them from the table, with
+    no per-call override: `temporary`, and `repair` as {next_step, tool, arguments} or None
+    for a NO_CORRECTIVE_CALL code. The manifest pins it per in-tree plugin (`repair_rules`,
+    ADR 0044). `alternative` is left out on purpose: it is prose an agent reads, not a field
+    it branches on, and pinning it would move the fingerprint on every rewording. What a
+    failure changes at render time (`retryable`, a backend's own repair, the timeout's
+    _async twin, a keyed replay) is per call, not per code, and is pinned by its tests."""
+    backend_id = plugin.backend_id if plugin is not None else None
+    contract: dict[str, dict[str, Any]] = {}
+    for code, rule in sorted(repair_table(plugin).items()):
+        repair: dict[str, Any] | None = None
+        if code not in NO_CORRECTIVE_CALL:
+            tool, arguments = complete_lookup(rule.tool, None, backend_id)
+            repair = {"next_step": rule.next_step, "tool": tool, "arguments": arguments}
+        contract[code] = {"temporary": rule.temporary, "repair": repair}
+    return contract
+
+
 class _KeepTableTool:
     __slots__ = ()
 
