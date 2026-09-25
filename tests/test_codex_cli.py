@@ -216,8 +216,10 @@ def test_classify_binary_missing_and_timeout():
     assert out.code == "timeout" and out.repair is None and out.retryable is None
     out = _classify(CommandRun("", TIMED_OUT, -9, 1, True, capture_failed=True))
     assert out.code == "timeout" and out.repair is not None and "capture" in out.detail
-    # Its hint says to retry the same call once, so it says temporary too (#245).
+    # Its hint says to retry the same call once, so it says temporary too (#245), and it
+    # says what that retry costs.
     assert out.retryable is True
+    assert out.repair.alternative.endswith("Each retry is a new paid run.")
 
 
 def test_classify_auth_drift_rate_limit_and_ordering():

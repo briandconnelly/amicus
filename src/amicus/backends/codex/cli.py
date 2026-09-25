@@ -195,7 +195,8 @@ _CAPTURE_FAILED_TIMEOUT_MESSAGE = (
 _CAPTURE_FAILED_TIMEOUT_ALTERNATIVE = (
     "Retry the same call once first: if the capture failure caused this timeout, the retry "
     "may finish normally. If it times out again without this notice, treat it as an ordinary "
-    "timeout — prefer the matching async tool, or narrow the task or raise timeout_seconds."
+    "timeout — prefer the matching async tool, or narrow the task or raise timeout_seconds. "
+    "Each retry is a new paid run."
 )
 _CAPTURE_FAILED_EXIT_NOTE = (
     " (amicus's output capture failed mid-run, so part of codex's output may have been lost "
