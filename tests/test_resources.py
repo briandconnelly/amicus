@@ -74,7 +74,8 @@ async def test_templates_are_listed_and_readable():
         assert json.loads(kimi.text)["available"] is False
         # Unlike the amicus_models TOOL (backend_unavailable envelope), the resource
         # keeps the informational available:false payload for a known-but-unloaded
-        # backend: no repair carrier exists on a resource read.
+        # backend. That is a choice, not a missing carrier: a resource read's error does
+        # carry error.data.repair (resource_not_found for an unknown id).
         [kimi_models] = await c.read_resource("amicus://models/kimi")
         kimi_models_body = json.loads(kimi_models.text)
         assert kimi_models_body["ok"] is True
