@@ -20,6 +20,15 @@ per-change, as its own lead says.
 
 ## [Unreleased]
 
+### Added
+
+- **Surface.** `amicus_job_list` pages (#249, ADR 0042). A truncated page carries
+  `next_cursor`; pass it as `cursor` with the same filters for the jobs after it, and a
+  cursor whose job has since been consumed still resolves, because it names the anchor's
+  start time and id rather than a position. A cursor not in the form the tool returns is
+  `invalid_arguments`. Omitting `limit` still returns every retained match, bounded by
+  `AMICUS_JOB_MAX_COUNT`; the description now says so.
+
 ### Changed
 
 - **Surface.** Six minor contract findings of the 2026-09-24 audit (#250). Reads of
