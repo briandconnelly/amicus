@@ -229,8 +229,11 @@ class ClassifiedFailure:
     them means the backend expressed no opinion and the consumer applies its own
     defaults — it is never a claim. A non-``None`` ``retryable`` overrides the
     ``temporary`` flag of the code's ``RepairRule``: the rule is the default for
-    the code, and the backend saw the actual run (``timeout`` is temporary by
-    rule, but Claude's is not retryable because a replay may double-charge).
+    the code, and the backend saw the actual run. For example, the SDK's default
+    table (``conventions.envelope.repair_rules``) marks ``timeout`` temporary, while
+    amicus's own table makes it non-temporary for every backend (amicus ADR 0039);
+    a backend's ``retryable`` still overrides either per failure, as codex's
+    capture-failed timeout does with ``True``.
     ``details`` is the envelope's field-detail object (``{field, value, reason}``), redacted
     by the backend before it lands here.
 

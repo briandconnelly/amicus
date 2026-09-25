@@ -54,11 +54,6 @@ LOCAL_CODES: dict[str, RepairRule] = {
         "Set it, or use backend_options.config_mode inherit/scoped/safe. No model call was made.",
     ),
 }
-# The first repair_overrides entry in amicus: a Claude timeout MAY have been charged and a
-# replay may double-charge, so it is not temporary and the next step is a new (async) job.
-REPAIR_OVERRIDES: dict[str, RepairRule] = {
-    "timeout": RepairRule("start_new_job", None, False, cli.TIMEOUT_REPAIR),
-}
 EGRESS = (
     "Sends your question/target/evidence, extra_context and instructions_append raw, and the "
     "secret-redacted diff for reviews and critiques, to Anthropic via the claude CLI, using "
@@ -98,7 +93,6 @@ def plugin(environ: Mapping[str, str] | None = None) -> BackendPlugin:
         # ADR 0001: Claude's inherit/scoped modes can run workspace hooks (shell) outside the
         # tool allowlist, so its paid calls advertise destructiveHint: true.
         effects=AnnotationEffects(paid_calls_destructive=True, job_reads_read_only=True),
-        repair_overrides=REPAIR_OVERRIDES,
         framing=ClaudeFraming(),
         local_codes=LOCAL_CODES,
         egress=EGRESS,

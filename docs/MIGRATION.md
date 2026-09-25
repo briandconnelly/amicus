@@ -124,7 +124,7 @@ Most amicus tools take `backend` as a required parameter (no default); pick `"co
 | `claude_job_cancel` | `amicus_job_cancel(...)` |
 | `claude_job_list` | `amicus_job_list(...)` |
 
-`claude-in-codex` had no `claude_delegate`: Claude is review-only in amicus too, so `amicus_delegate` and `amicus_delegate_async` reject `backend="claude"` with `feature_unsupported`.
+`claude-in-codex` had no `claude_delegate`: Claude is review-only in amicus too, so `amicus_delegate` and `amicus_delegate_async` reject `backend="claude"` at the boundary as `invalid_arguments` with `details.allowed_values`, because each tool's `backend` enum is the set it accepts, and any backend outside it, in-tree or not, is `invalid_arguments`; `feature_unsupported` is only a defensive check, returned if the named backend's declared features lack the verb, which no backend a tool's enum accepts does today.
 `amicus_adversarial_review(_async)` is the only pair that rejects `backend="codex"` and `backend="kimi"`, because only Claude declares the `adversarial_review` capability.
 
 ## Behavior deltas
@@ -192,6 +192,23 @@ Pass `detail="full"` to read them.
 A `null` there means no loaded plugin declares one.
 The `amicus://backends/{backend}` resource is always the full entry.
 `amicus_capabilities(detail="contracts")` is removed: pass `include_tool_details=false` for the same rowless payload, and `detail` now selects only how much each `tool_details` row carries (`summary` is `name`, `cost`, `stability`, `backends`; `full` adds the rest, including `error_codes`).
+
+## Upgrading from 0.6.0
+
+The changes below are the ones a caller using amicus 0.6.0 may have to handle before running the next release.
+`CHANGELOG.md`'s section for that release lists every user-visible change since 0.6.0, including the ones that require no migration.
+A job result stored by 0.6.0 is still readable: `RESULT_FORMAT` did not move.
+
+**A sync `timeout` is never temporary, and its repair names the `_async` twin (#245).**
+On codex and kimi the envelope said `temporary: true` with `retry_after_delay`; it now says `temporary: false` with `start_new_job` and `repair.tool` set to the verb's `_async` tool.
+Claude's `temporary` and `next_step` are unchanged; it now also names the `_async` tool and shares the new text.
+The `_async` tool runs to `AMICUS_JOB_MAX_SECONDS`, not `timeout_seconds`, so it is named only when `AMICUS_JOB_MAX_SECONDS` exceeds the deadline that passed; otherwise `repair.tool` is absent and the text says to narrow the task or have the operator raise `AMICUS_JOB_MAX_SECONDS`.
+A background run (an `_async` job or a keyed sync call) that passes `AMICUS_JOB_MAX_SECONDS` returns `timeout` with no `repair.tool` and prose naming that deadline.
+A caller that retried the same sync call on `temporary: true` should start the `_async` twin named in `repair.tool`, when there is one, with its original arguments instead; the retry is a new paid run.
+
+**A backend a verb never accepts is rejected at the boundary (#246).**
+`amicus_delegate` with `claude`, or `amicus_adversarial_review` with `codex` or `kimi`, now fails as `invalid_arguments` with `details.allowed_values`, where it failed as `feature_unsupported`.
+A caller that branched on `feature_unsupported` for those picks should read the tool's `backend` enum, which is now the accepted set.
 
 ## Upgrading from 0.5.0
 

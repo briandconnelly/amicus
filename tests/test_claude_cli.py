@@ -176,8 +176,8 @@ def test_binary_missing_and_timeout():
         _run(stderr=TIMED_OUT, exit_code=-9, timed_out=True), config_mode="inherit", sanitize=None
     )
     assert timeout.code == "timeout" and timeout.retryable is False
-    assert timeout.repair is not None and timeout.repair.next_step == "start_new_job"
-    assert timeout.repair.tool is None and "MAY" in timeout.detail
+    # The repair comes from the shared table (ADR 0039); the detail keeps the charge warning.
+    assert timeout.repair is None and "MAY" in timeout.detail
 
 
 @pytest.mark.parametrize(

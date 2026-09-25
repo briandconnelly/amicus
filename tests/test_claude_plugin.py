@@ -5,7 +5,7 @@ from __future__ import annotations
 from tests.support import claudefixtures as cf
 
 from amicus import backends as in_tree
-from amicus import registry
+from amicus import errors, registry
 from amicus.backends import claude as claude_pkg
 from amicus.backends.claude import adversarial, contract
 
@@ -25,9 +25,10 @@ def test_registry_loads_the_in_tree_claude_plugin(pinned_claude_bin):
         "api_key_invalid",
         "api_key_missing",
     }
-    assert set(plugin.repair_overrides) == {"timeout"}
-    assert plugin.repair_overrides["timeout"].temporary is False
-    assert plugin.repair_overrides["timeout"].next_step == "start_new_job"
+    # #245 (ADR 0039): the timeout rule is amicus-wide, so the plugin overrides nothing.
+    assert plugin.repair_overrides == {}
+    assert errors.repair_table(plugin)["timeout"].temporary is False
+    assert errors.repair_table(plugin)["timeout"].next_step == "start_new_job"
     assert isinstance(plugin.framing, adversarial.ClaudeFraming)
     for phrase in contract.FORBIDDEN_SURFACE_PHRASES:
         assert phrase not in plugin.egress and phrase not in plugin.carriers

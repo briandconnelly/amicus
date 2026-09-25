@@ -2,7 +2,8 @@
 
 The SDK's `repair_rules()` are the defaults, minted with a neutral vocabulary so the
 four per-backend codes come out as `backend_*`; amicus-local codes and prose overrides
-sit on top; a plugin's `local_codes` are added and its `repair_overrides` win per code.
+sit on top; a plugin's `local_codes` are added and its `repair_overrides` win per code,
+except `timeout`, whose amicus rule no plugin table overrides (ADR 0039).
 `render_failure` turns a backend's ClassifiedFailure into the wire envelope, honoring the
 0.9.0 machine fields (`retryable`, `details`, `repair`, `usage`)."""
 
@@ -23,6 +24,7 @@ from amicus.schemas.envelope import (
     Repair,
     Usage,
 )
+from amicus.schemas.params import TOOL_VERB
 from amicus.sdk.conventions.envelope import BackendErrorVocabulary, RepairRule, repair_rules
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -42,7 +44,43 @@ NEUTRAL_VOCABULARY = BackendErrorVocabulary(
 )
 _FEATURES = frozenset({"model_validation", "empty_response_detection"})
 
+# A deadline timeout is never temporary (ADR 0039, #245): the identical synchronous call
+# spends again and will likely hit the same deadline, and a backend may already have charged
+# the run. One prose text for every backend. The repair's tool is the verb's _async twin,
+# set by `async_twin_for` where the verb is known and only when the job deadline is longer
+# than the one that passed; its arguments are omitted because they would echo prompt inputs
+# (rule 18), and the prose says so.
+TIMEOUT_ALTERNATIVE = (
+    "The run passed its deadline; the same synchronous call will likely time out again, and "
+    "any next attempt is a NEW paid run, not a recovery of this one (the backend may already "
+    "have charged this run). To retry, start the matching _async twin (amicus_consult_async / "
+    "amicus_review_changes_async / amicus_adversarial_review_async / amicus_delegate_async), "
+    "which runs to AMICUS_JOB_MAX_SECONDS (default 1800s), not timeout_seconds, and whose "
+    "idempotency_key dedupes retries of that launch; poll amicus_job_status while status is "
+    "running, and on any terminal status fetch amicus_job_result. Its arguments are your "
+    "original call's, which this repair does not echo. If this repair names no tool, the job "
+    "deadline is no longer than this one: narrow the task, or have the operator raise "
+    "AMICUS_JOB_MAX_SECONDS."
+)
+# A background run (an _async job or a keyed sync call) already ran under the job deadline,
+# so its timeout names no tool: an _async twin would hit the same deadline (ADR 0039).
+JOB_DEADLINE_TIMEOUT_ALTERNATIVE = (
+    "The background run passed the job deadline (AMICUS_JOB_MAX_SECONDS, default 1800s); the "
+    "same call, sync or _async, will likely time out again, and any next attempt is a NEW paid "
+    "run, not a recovery of this one (the backend may already have charged this run). Narrow "
+    "the task, or have the operator raise AMICUS_JOB_MAX_SECONDS."
+)
+
+# A keyed run's same call replays its stored outcome (ADR 0020), so a timeout whose own
+# repair says to retry the same call (codex's capture-failed hint) is not temporary for it,
+# and the prose puts the new key first (ADR 0039).
+KEYED_REPLAY_NOTE = (
+    "This call passed an idempotency_key, and repeating it with the same key replays this "
+    "stored error without running again, so any retry below needs a NEW idempotency_key. "
+)
+
 _LOCAL_RULES: dict[str, RepairRule] = {
+    "timeout": RepairRule("start_new_job", None, False, TIMEOUT_ALTERNATIVE),
     "answer_unavailable": RepairRule(
         "reduce_input",
         None,
@@ -120,13 +158,6 @@ _PROSE_OVERRIDES: dict[str, str] = {
     "invalid_arguments": (
         "Check each tool's inputSchema (tools/list) or amicus_capabilities, then retry."
     ),
-    "timeout": (
-        "Retrying the same synchronous call will likely time out again. Prefer the matching "
-        "async tool (amicus_consult_async / amicus_review_changes_async / "
-        "amicus_adversarial_review_async / amicus_delegate_async), then poll "
-        "amicus_job_status while status is running; on any terminal status, fetch "
-        "amicus_job_result. Otherwise narrow the task or raise timeout_seconds."
-    ),
     "resource_not_found": (
         "List the available resource URIs via the MCP resources/list method (or "
         "amicus_capabilities), then retry with an exact URI."
@@ -181,6 +212,17 @@ def complete_lookup(
     return (tool, {"backend": backend}) if backend else (None, None)
 
 
+def async_twin_for(kind: str | None) -> str | None:
+    """The `_async` tool of a paid verb (`kind` is the RunSpec kind, which names the verb),
+    or None. The timeout repair names it as the call to make next (ADR 0039)."""
+    if kind is None:
+        return None
+    for name, (verb, is_async) in TOOL_VERB.items():
+        if is_async and verb == kind:
+            return name
+    return None
+
+
 def repair_table(plugin: BackendPlugin | None = None) -> dict[str, RepairRule]:
     rules = dict(repair_rules(NEUTRAL_VOCABULARY, _FEATURES))
     rules.update(_LOCAL_RULES)
@@ -192,6 +234,10 @@ def repair_table(plugin: BackendPlugin | None = None) -> dict[str, RepairRule]:
         rules.update(plugin.local_codes)
         for code, rule in plugin.repair_overrides.items():
             rules[generalize_code(code, plugin.backend_id)] = rule
+        # The deadline timeout is one contract for every backend (ADR 0039): a plugin's
+        # table cannot make it temporary again. A backend still overrides it per failure,
+        # through ClassifiedFailure.retryable or its own repair, in render_failure.
+        rules["timeout"] = _LOCAL_RULES["timeout"]
     return rules
 
 
@@ -304,11 +350,29 @@ def _detail_from(raw: dict[str, Any] | None) -> ErrorDetail | None:
         return ErrorDetail(reason=" ".join(f"{k}={v}" for k, v in raw.items())[:300])
 
 
-def render_failure(plugin: BackendPlugin, failure: ClassifiedFailure, meta: Meta) -> dict[str, Any]:
+def render_failure(
+    plugin: BackendPlugin,
+    failure: ClassifiedFailure,
+    meta: Meta,
+    *,
+    kind: str | None = None,
+    background: bool = False,
+    job_max_seconds: int | None = None,
+    deadline_seconds: int | None = None,
+    keyed: bool = False,
+) -> dict[str, Any]:
     """The wire envelope for a backend's classified failure. Minted codes are
     generalized; an uncataloged code is reported as internal_error with the original
     code and detail in the message; `retryable` overrides the rule's `temporary`; a
-    backend-supplied repair wins over the table; usage from a failed run is kept."""
+    backend-supplied repair wins over the table; usage from a failed run is kept. A
+    `timeout` whose repair names no tool of its own gets the verb's _async twin, unless the
+    run was already a background one (`background`), which gets no tool and the job-deadline
+    prose (ADR 0039). A sync run names the twin only when the job deadline
+    (`job_max_seconds`) is longer than the one that passed (`deadline_seconds`); when either
+    is unknown (a record written before they existed) it is named. A backend that already
+    gave its own repair (e.g. codex's capture-failed retry-once hint) keeps it, except that a
+    `keyed` run's temporary timeout is made non-temporary and its prose leads with
+    KEYED_REPLAY_NOTE, because the same keyed call would replay this error."""
     table = repair_table(plugin)
     code = generalize_code(failure.code, plugin.backend_id)
     message = failure.detail
@@ -318,23 +382,33 @@ def render_failure(plugin: BackendPlugin, failure: ClassifiedFailure, meta: Meta
     rule = table[code]
     temporary = rule.temporary if failure.retryable is None else failure.retryable
     if failure.repair is not None:
+        next_step = failure.repair.next_step
         tool, arguments = complete_lookup(
             failure.repair.tool, failure.repair.arguments, plugin.backend_id
         )
-        repair = Repair(
-            next_step=failure.repair.next_step,  # ty: ignore[invalid-argument-type]
-            tool=tool,
-            arguments=arguments,
-            alternative=failure.repair.alternative or rule.alternative,
-        )
+        alternative = failure.repair.alternative or rule.alternative
     else:
+        next_step = rule.next_step
         tool, arguments = complete_lookup(rule.tool, None, plugin.backend_id)
-        repair = Repair(
-            next_step=rule.next_step,  # ty: ignore[invalid-argument-type]
-            tool=tool,
-            arguments=arguments,
-            alternative=rule.alternative,
-        )
+        alternative = rule.alternative
+    if code == "timeout" and failure.repair is None and tool is None:
+        if background:
+            alternative = JOB_DEADLINE_TIMEOUT_ALTERNATIVE
+        elif (
+            job_max_seconds is None
+            or deadline_seconds is None
+            or (job_max_seconds > deadline_seconds)
+        ):
+            tool = async_twin_for(kind)
+    if code == "timeout" and keyed and temporary:
+        temporary = False
+        alternative = KEYED_REPLAY_NOTE + (alternative or "")
+    repair: Repair | None = Repair(
+        next_step=next_step,  # ty: ignore[invalid-argument-type]
+        tool=tool,
+        arguments=arguments,
+        alternative=alternative,
+    )
     if code in NO_CORRECTIVE_CALL:
         repair = None
     if failure.usage is not None:

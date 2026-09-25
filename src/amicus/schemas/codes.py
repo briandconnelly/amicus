@@ -10,7 +10,7 @@ joins this catalog when its backend is ported, as a deliberate fingerprint bump.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, get_args
 
 from amicus.sdk.conventions import envelope as _pe
 
@@ -19,6 +19,19 @@ BackendId = Literal["codex", "kimi", "claude"]
 
 VERBS: tuple[str, ...] = ("consult", "review_changes", "adversarial_review", "delegate")
 Verb = Literal["consult", "review_changes", "adversarial_review", "delegate"]
+
+# The backends each paid verb accepts (#246, ADR 0040): the `backend` enum a tool publishes
+# is exactly this set, so a schema-driven caller is never offered a backend the verb
+# rejects. `tools.discovery.TOOL_DETAILS[...]["backends"]` reads these; a test keeps them
+# equal to the published enums.
+DelegateBackendId = Literal["codex", "kimi"]
+AdversarialBackendId = Literal["claude"]
+VERB_BACKENDS: dict[str, tuple[str, ...]] = {
+    "consult": BACKEND_IDS,
+    "review_changes": BACKEND_IDS,
+    "delegate": get_args(DelegateBackendId),
+    "adversarial_review": get_args(AdversarialBackendId),
+}
 
 # The four codes the SDK mints per backend, generalized so the catalog stays closed.
 _MINTED_SUFFIXES = ("_not_found", "_auth_required", "_auth_indeterminate", "_rate_limited")
@@ -38,7 +51,8 @@ LOCAL_CODES = frozenset(
         "job_cap_reached",
         # The registry recorded the backend as unavailable (import, conformance, config).
         "backend_unavailable",
-        # The backend does not declare the feature this verb needs (e.g. claude+delegate).
+        # The backend does not declare the feature this verb needs: a defensive check, since
+        # each tool's backend enum already rejects such a pairing as invalid_arguments (#246).
         "feature_unsupported",
         # Codex-local (M1): the user's own CLI config carries a key or value the installed
         # CLI refuses at startup; zero spend. Preserved verbatim, never generalized.

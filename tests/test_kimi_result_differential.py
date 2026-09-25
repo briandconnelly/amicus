@@ -29,6 +29,9 @@ KNOWN_TEMPORARY_DEVIATIONS: dict[str, tuple[bool, bool]] = {
     # code), and amicus keeps that default rather than special-casing one backend's
     # classifier.
     "nonzero_exit": (False, True),
+    # #245 (ADR 0039): the sibling marks a timeout temporary; amicus does not, because the
+    # identical sync call spends again and will likely hit the same deadline.
+    "timeout": (True, False),
 }
 
 

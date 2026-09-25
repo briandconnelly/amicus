@@ -307,3 +307,48 @@ async def test_background_prepare_uses_the_job_deadline_unclamped():
     # The caller's timeout is still carried, clamped, as the wait bound a keyed sync call
     # uses (#66); an unkeyed sync call's spec.timeout_seconds equals it.
     assert prep.wait_seconds == 10
+
+
+async def test_spec_records_whether_the_run_is_background(tmp_path):
+    """An _async tool and a keyed sync call both run as background jobs (the tool layer
+    passes background=idempotency_key is not None); an unkeyed sync call does not."""
+    for tool_name, background in (
+        ("amicus_consult_async", True),
+        ("amicus_consult", True),
+        ("amicus_consult", False),
+    ):
+        prep = await _prep(tmp_path, tool_name=tool_name, background=background)
+        assert not isinstance(prep, dict)
+        assert prep.spec.background is background
+        assert "background" not in prep.spec.identity()
+
+
+async def test_spec_records_the_job_deadline_for_every_run(tmp_path):
+    """The sync timeout repair compares the job deadline with the one that passed (ADR
+    0039), so every run carries it, sync or background, outside the identity."""
+    settings = config.settings({"AMICUS_JOB_MAX_SECONDS": "90"})
+    for tool_name, background in (("amicus_consult", False), ("amicus_consult_async", True)):
+        prep = await _prep(tmp_path, settings=settings, tool_name=tool_name, background=background)
+        assert not isinstance(prep, dict)
+        assert prep.spec.job_max_seconds == settings.job_max_seconds == 90
+        assert "job_max_seconds" not in prep.spec.identity()
+
+
+async def test_feature_unsupported_repairs_to_the_unfiltered_backend_list(tmp_path):
+    """#246: the lookup lists every candidate rather than the backend that just failed; the
+    corrected call cannot be named because it would echo the prompt input (ADR 0021)."""
+    out = await _prep(
+        tmp_path,
+        verb="delegate",
+        tool_name="amicus_delegate",
+        backend="codex",
+        registry=BackendRegistry(
+            {"codex": fakeplugin.make_plugin("codex", features=frozenset())}, {}
+        ),
+        task="t",
+        question=None,
+    )
+    assert out["error"]["code"] == "feature_unsupported"
+    repair = out["error"]["repair"]
+    assert repair["next_step"] == "use_allowed_value"
+    assert repair["tool"] == "amicus_backends" and repair["arguments"] == {}

@@ -20,6 +20,32 @@ per-change, as its own lead says.
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking.** A sync paid call that passes its deadline returns `timeout` with `temporary:
+  false`, `retry_after_ms: null` and `repair.next_step: start_new_job` on every backend, where
+  codex and kimi said `temporary: true` / `retry_after_delay` while their own prose said a retry
+  would time out again (#245, ADR 0039). The repair names the verb's `_async` twin in
+  `repair.tool` when `AMICUS_JOB_MAX_SECONDS`, the deadline that twin runs to, exceeds the
+  deadline that passed, and otherwise names no tool; it carries no arguments, since they would
+  echo your inputs. Its text says so and states that any next attempt is a new paid run. Claude's `temporary` and `next_step` are
+  unchanged; it now also names the `_async` tool and shares the new text. A background run (an
+  `_async` job or a keyed sync call) that passes `AMICUS_JOB_MAX_SECONDS` returns `timeout` with
+  no `repair.tool` and prose naming that deadline, since its `_async` twin would hit the same
+  one. Codex's capture-failed timeout, whose repair says to retry the same
+  call once, now says `temporary: true` itself and its repair names no other tool, except on
+  a keyed call, where the same call would replay this error: there it is `temporary: false` and
+  its text first says to retry under a new `idempotency_key`. A keyed sync wait's timeout is
+  unchanged (ADR 0020).
+- **Breaking.** `amicus_delegate`, `amicus_delegate_async` and `amicus_delegate_dry_run`
+  publish `backend` as `codex | kimi`, and `amicus_adversarial_review` and its async twin as
+  `claude`, the sets those verbs accept (#246, ADR 0040). A backend outside the set now fails
+  at the boundary as `invalid_arguments` with `allowed_values`, where it failed after
+  resolution as `feature_unsupported`; that code remains only as a defensive check, returned if
+  the named backend's declared features lack the verb, which no backend a tool's enum accepts
+  does today, and its repair now lists every backend rather than the one that failed.
+  `amicus_capabilities.tool_details[].backends` derives from the same table.
+
 ### Fixed
 
 - A new paid call no longer deletes a finished result nobody has fetched (#244). Every paid call

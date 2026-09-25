@@ -9,7 +9,7 @@ from fastmcp import Context
 from amicus.jobs import lifecycle, lookup
 from amicus.schemas.params import (
     BackendOptionsParam,
-    BackendParam,
+    DelegateBackendParam,
     DetailParam,
     IdempotencyKeyParam,
     ModelParam,
@@ -58,7 +58,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
     )
     @guard("amicus_delegate", settings)
     async def amicus_delegate(
-        backend: BackendParam,
+        backend: DelegateBackendParam,
         task: TaskParam,
         ctx: Context | None = None,
         workspace_root: WorkspaceRootParam = None,
@@ -86,6 +86,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
             reasoning_effort=reasoning_effort,
             timeout_seconds=timeout_seconds,
             background=idempotency_key is not None,
+            keyed=idempotency_key is not None,
             task=task,
         )
         if isinstance(prep, dict):
@@ -112,7 +113,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
     )
     @guard("amicus_delegate_async", settings)
     async def amicus_delegate_async(
-        backend: BackendParam,
+        backend: DelegateBackendParam,
         task: TaskParam,
         ctx: Context | None = None,
         workspace_root: WorkspaceRootParam = None,
@@ -138,6 +139,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
             reasoning_effort=reasoning_effort,
             timeout_seconds=None,
             background=True,
+            keyed=idempotency_key is not None,
             task=task,
         )
         if isinstance(prep, dict):

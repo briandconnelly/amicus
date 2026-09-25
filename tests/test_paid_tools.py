@@ -10,7 +10,7 @@ from tests.support import fakeplugin
 from amicus import config, server, tools
 from amicus.registry import BackendRegistry, UnavailableBackend
 from amicus.schemas import params
-from amicus.tools import _resolve
+from amicus.tools import _resolve, discovery
 
 VALID = {
     "amicus_consult": {"backend": "codex", "question": "q"},
@@ -75,10 +75,32 @@ async def test_eight_paid_tools_exist_with_matrix_params_and_closed_schemas():
         assert desc.startswith(_resolve.PAID_MARKER), name
 
 
-async def test_backend_enum_is_the_v1_set():
+async def test_backend_enums_are_per_verb_and_match_tool_details():
+    """#246 (ADR 0040): a tool's `backend` enum is exactly the set the verb accepts, and it
+    equals the `backends` its amicus_capabilities row publishes."""
     by_name = await _tools(_app())
-    prop = by_name["amicus_consult"].input_schema["properties"]["backend"]
-    assert prop["enum"] == ["codex", "kimi", "claude"]
+    expected = {
+        "amicus_consult": ["codex", "kimi", "claude"],
+        "amicus_consult_async": ["codex", "kimi", "claude"],
+        "amicus_review_changes": ["codex", "kimi", "claude"],
+        "amicus_review_changes_async": ["codex", "kimi", "claude"],
+        "amicus_review_changes_dry_run": ["codex", "kimi", "claude"],
+        "amicus_delegate": ["codex", "kimi"],
+        "amicus_delegate_async": ["codex", "kimi"],
+        "amicus_delegate_dry_run": ["codex", "kimi"],
+        "amicus_adversarial_review": ["claude"],
+        "amicus_adversarial_review_async": ["claude"],
+    }
+    for name, enum in expected.items():
+        prop = by_name[name].input_schema["properties"]["backend"]
+        assert prop["enum"] == enum, name
+        assert enum == discovery.TOOL_DETAILS[name]["backends"], name
+    # The lookup tools keep the whole set: they answer for any known backend.
+    assert by_name["amicus_models"].input_schema["properties"]["backend"]["enum"] == [
+        "codex",
+        "kimi",
+        "claude",
+    ]
 
 
 @pytest.mark.parametrize("name", sorted(VALID))
@@ -155,18 +177,25 @@ async def test_unknown_argument_repair_is_callable_only_without_a_prompt_input()
     assert consult_repair["tool"] == "amicus_consult" and "arguments" not in consult_repair
 
 
-async def test_feature_gating():
+async def test_a_backend_outside_the_verbs_enum_is_rejected_at_the_boundary():
+    """#246: claude on delegate (sync, async and dry run) and codex on adversarial review
+    fail as invalid_arguments with the verb's own allowed_values before any resolution.
+    feature_unsupported stays reachable only through a plugin that lacks the feature
+    (tests/test_prepare.py)."""
     app = _app(registry=_fake_registry())
+    calls = (
+        ("amicus_delegate", {"backend": "claude", "task": "t"}, ["codex", "kimi"]),
+        ("amicus_delegate_async", {"backend": "claude", "task": "t"}, ["codex", "kimi"]),
+        ("amicus_delegate_dry_run", {"backend": "claude", "task": "t"}, ["codex", "kimi"]),
+        ("amicus_adversarial_review", {"backend": "codex", "target": "t"}, ["claude"]),
+        ("amicus_adversarial_review_async", {"backend": "kimi", "target": "t"}, ["claude"]),
+    )
     async with Client(app) as c:
-        res = await c.call_tool(
-            "amicus_delegate", {"backend": "claude", "task": "t"}, raise_on_error=False
-        )
-        adv = await c.call_tool(
-            "amicus_adversarial_review", {"backend": "codex", "target": "t"}, raise_on_error=False
-        )
-    assert res.structured_content["error"]["code"] == "feature_unsupported"
-    assert "delegate" in res.structured_content["error"]["message"]
-    assert adv.structured_content["error"]["code"] == "feature_unsupported"
+        for name, args, allowed in calls:
+            err = (await c.call_tool(name, args, raise_on_error=False)).structured_content["error"]
+            assert err["code"] == "invalid_arguments", name
+            assert err["details"]["field"] == "backend", name
+            assert err["details"]["allowed_values"] == allowed, name
 
 
 async def test_backend_options_are_validated_before_availability():

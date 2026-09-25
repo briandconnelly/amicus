@@ -318,9 +318,57 @@ async def test_timeout_is_not_retryable_and_points_at_a_new_job(
     assert out["ok"] is False and err["code"] == "timeout" and err["temporary"] is False
     assert err["retry_after_ms"] is None
     assert err["repair"]["next_step"] == "start_new_job"
-    assert err["repair"].get("tool") is None
+    assert err["repair"]["tool"] == "amicus_consult_async" and "arguments" not in err["repair"]
     assert "amicus_consult_async" in err["repair"]["alternative"]
     assert "MAY" in err["message"]
+    # The twin runs to the job deadline, so it is named only when that is the longer one
+    # (ADR 0039): a 600 s sync call under AMICUS_JOB_MAX_SECONDS=60 names no tool.
+    import dataclasses
+
+    for job_max, named in ((1800, "amicus_consult_async"), (60, None)):
+        shorter = dataclasses.replace(spec, timeout_seconds=600, job_max_seconds=job_max)
+        repair = (await run_mod.run_request(shorter, plugin))["error"]["repair"]
+        assert repair["next_step"] == "start_new_job" and repair.get("tool") == named
+
+
+async def test_background_timeout_names_no_tool_and_the_job_deadline(
+    pinned_claude_bin, monkeypatch, tmp_path
+):
+    """A background run already had AMICUS_JOB_MAX_SECONDS as its deadline, so its timeout
+    must not point at the _async tool the caller already used (ADR 0039)."""
+    from tests.support import claudefixtures as cf
+
+    from amicus.orchestration import run as run_mod
+    from amicus.request import RunSpec
+    from amicus.sdk.core.runtime import TIMED_OUT
+
+    plugin, _ = cf.make_backend()
+    monkeypatch.setattr(
+        run_mod.runtime,
+        "run_async",
+        cf.scripted_run_async(stdout="", stderr=TIMED_OUT, exit_code=-9, timed_out=True),
+    )
+    spec = RunSpec(
+        backend="claude",
+        kind="consult",
+        tool="amicus_consult_async",
+        cwd=str(tmp_path),
+        workspace_source="param",
+        roots_source="client",
+        host_name="TestHost",
+        timeout_seconds=1800,
+        options={"config_mode": "inherit", "access": "toolless", "max_budget_usd": 1.0},
+        background=True,
+        question="q",
+    )
+    out = await run_mod.run_request(spec, plugin)
+    err = out["error"]
+    assert out["ok"] is False and err["code"] == "timeout" and err["temporary"] is False
+    repair = err["repair"]
+    assert repair["next_step"] == "start_new_job"
+    assert repair.get("tool") is None and "arguments" not in repair
+    assert "AMICUS_JOB_MAX_SECONDS" in repair["alternative"]
+    assert "amicus_consult_async" not in repair["alternative"]
 
 
 async def test_hook_warning_reaches_meta(app, tmp_path, repo):
@@ -566,14 +614,16 @@ async def test_discovery_reads_the_fake(app, monkeypatch):
     assert any("--safe-mode" in w for w in status["warnings"])
 
 
-async def test_delegate_is_feature_gated_and_never_spawns(app, tmp_path, repo):
+async def test_delegate_rejects_claude_at_the_boundary_and_never_spawns(app, tmp_path, repo):
     async with Client(app) as c:
         res = await c.call_tool(
             "amicus_delegate",
             {"backend": "claude", "task": "t", "workspace_root": str(repo)},
             raise_on_error=False,
         )
-    assert res.structured_content["error"]["code"] == "feature_unsupported"
+    err = res.structured_content["error"]
+    assert err["code"] == "invalid_arguments"
+    assert err["details"]["allowed_values"] == ["codex", "kimi"]
     assert _runs(tmp_path) == []
 
 

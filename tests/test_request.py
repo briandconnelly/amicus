@@ -59,10 +59,48 @@ def test_public_half_never_carries_inputs_and_round_trips():
 
 def test_from_parts_tolerates_a_legacy_public_half_missing_optional_keys():
     public = _spec().public()
-    for key in ("focus", "untracked", "max_output_bytes"):
+    for key in (
+        "focus",
+        "untracked",
+        "max_output_bytes",
+        "background",
+        "job_max_seconds",
+        "keyed",
+    ):
         public.pop(key, None)
     spec = RunSpec.from_parts(public, {"question": "q"})
     assert spec.untracked == "explicit_only" and spec.max_output_bytes > 0 and spec.focus is None
+    assert spec.background is False
+    assert spec.job_max_seconds is None
+    assert spec.keyed is False
+
+
+def test_background_leaves_the_idempotency_identity_unchanged():
+    """A keyed record written before `background` existed must still replay, not conflict."""
+    import dataclasses
+
+    spec = _spec()
+    assert spec.arg_hash() == dataclasses.replace(spec, background=True).arg_hash()
+
+
+def test_keyed_leaves_the_idempotency_identity_unchanged():
+    """Whether a key was passed is how the call was made, not what it asks for: a record
+    written before `keyed` existed still replays."""
+    import dataclasses
+
+    spec = _spec()
+    assert spec.arg_hash() == dataclasses.replace(spec, keyed=True).arg_hash()
+    assert "keyed" not in spec.identity()
+
+
+def test_job_max_seconds_leaves_the_idempotency_identity_unchanged():
+    """The job deadline is server config, not what the call asks for: a keyed record
+    written before the field existed, or under another AMICUS_JOB_MAX_SECONDS, replays."""
+    import dataclasses
+
+    spec = _spec()
+    assert spec.arg_hash() == dataclasses.replace(spec, job_max_seconds=90).arg_hash()
+    assert "job_max_seconds" not in spec.identity()
 
 
 def test_meta_for_fingerprints_instructions_and_carries_provenance():

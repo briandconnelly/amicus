@@ -12,6 +12,13 @@ from amicus.sdk.conventions import envelope as pe
 def test_backend_ids_are_the_v1_set_in_order():
     assert codes.BACKEND_IDS == ("codex", "kimi", "claude")
     assert get_args(codes.BackendId) == codes.BACKEND_IDS
+    assert codes.VERB_BACKENDS["delegate"] == ("codex", "kimi")
+    assert codes.VERB_BACKENDS["adversarial_review"] == ("claude",)
+    assert (
+        codes.VERB_BACKENDS["consult"] == codes.VERB_BACKENDS["review_changes"] == codes.BACKEND_IDS
+    )
+    assert get_args(codes.DelegateBackendId) == codes.VERB_BACKENDS["delegate"]
+    assert get_args(codes.AdversarialBackendId) == codes.VERB_BACKENDS["adversarial_review"]
 
 
 def test_verbs_are_the_four_paid_kinds():
@@ -80,7 +87,7 @@ def test_generalize_rewrites_only_the_four_minted_codes():
 
 
 def test_fingerprint_constants():
-    assert fingerprint.FINGERPRINT == "amicus/0.1/schema-44"
+    assert fingerprint.FINGERPRINT == "amicus/0.1/schema-45"
     assert fingerprint.RESULT_FORMAT == 9
     assert fingerprint.JSON_SCHEMA_DIALECT == "https://json-schema.org/draft/2020-12/schema"
     assert fingerprint.LIFECYCLE_META_KEY == "dev.bconnelly.amicus/lifecycle"

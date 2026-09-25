@@ -274,3 +274,134 @@ def test_render_failure_tolerates_bad_details():
     )
     out = errors.render_failure(plugin, failure, Meta())
     assert out["error"]["details"] == {"reason": "field=a fields=['b']", "field_withheld": False}
+
+
+def test_the_timeout_rule_is_never_temporary_for_any_backend():
+    """#245 / ADR 0039: one contract for the deadline timeout whatever the backend. The
+    identical synchronous call spends again and will likely hit the same deadline."""
+    for plugin in (None, fakeplugin.make_plugin()):
+        rule = errors.repair_table(plugin)["timeout"]
+        assert rule.temporary is False and rule.next_step == "start_new_job"
+        assert rule.tool is None
+        assert "NEW paid run" in rule.alternative
+        assert "amicus_delegate_async" in rule.alternative
+    info = errors.make_error("timeout", "t", retry_after_ms=500)
+    assert info.temporary is False and info.retry_after_ms is None
+    assert info.repair is not None and info.repair.next_step == "start_new_job"
+
+
+def test_a_plugin_table_cannot_make_the_timeout_temporary_again():
+    """ADR 0039: amicus's timeout rule is re-applied after a plugin's own table, so neither
+    a repair_overrides entry nor a local_codes entry for `timeout` restores the temporary
+    retry contract (Copilot on PR #253)."""
+    temporary = RepairRule("retry_after_delay", None, True, "x")
+    for plugin in (
+        fakeplugin.make_plugin(repair_overrides={"timeout": temporary}),
+        fakeplugin.make_plugin(local_codes={"timeout": temporary}),
+    ):
+        rule = errors.repair_table(plugin)["timeout"]
+        assert rule.temporary is False
+        assert rule.next_step == "start_new_job"
+        assert rule.alternative == errors.TIMEOUT_ALTERNATIVE
+
+
+def test_async_twin_for_names_the_verbs_async_tool():
+    assert errors.async_twin_for("consult") == "amicus_consult_async"
+    assert errors.async_twin_for("review_changes") == "amicus_review_changes_async"
+    assert errors.async_twin_for("adversarial_review") == "amicus_adversarial_review_async"
+    assert errors.async_twin_for("delegate") == "amicus_delegate_async"
+    assert errors.async_twin_for(None) is None
+    assert errors.async_twin_for("not_a_verb") is None
+
+
+def test_render_failure_names_the_twin_on_a_classified_timeout():
+    """A backend-classified CLI timeout is the same condition as the server deadline: the
+    repair names the verb's _async twin and carries no arguments (rule 18)."""
+    plugin = fakeplugin.make_plugin()
+    failure = ClassifiedFailure(code="timeout", detail="deadline")
+    err = errors.render_failure(plugin, failure, Meta(), kind="review_changes")["error"]
+    assert err["temporary"] is False and err["retry_after_ms"] is None
+    assert err["repair"]["next_step"] == "start_new_job"
+    assert err["repair"]["tool"] == "amicus_review_changes_async"
+    assert "arguments" not in err["repair"]
+    # Without a kind no tool is named, and a non-timeout code is untouched.
+    assert errors.render_failure(plugin, failure, Meta())["error"]["repair"].get("tool") is None
+    other = ClassifiedFailure(code="nonzero_exit", detail="x")
+    assert (
+        errors.render_failure(plugin, other, Meta(), kind="consult")["error"]["repair"].get("tool")
+        is None
+    )
+    # A timeout that carries its own repair (codex's capture-failed retry-once hint) is not
+    # overridden with the async twin: naming a different tool would contradict its next_step.
+    own_repair = ClassifiedFailure(
+        code="timeout",
+        detail="d",
+        retryable=True,
+        repair=RepairHint(next_step="retry_after_delay", alternative="once"),
+    )
+    own_out = errors.render_failure(plugin, own_repair, Meta(), kind="consult")["error"]
+    assert own_out["repair"].get("tool") is None
+    assert own_out["repair"]["next_step"] == "retry_after_delay"
+    # A background run already ran under the job deadline: no tool (the _async twin is
+    # what it already was), the job-deadline prose, still start_new_job and not temporary.
+    bg = errors.render_failure(plugin, failure, Meta(), kind="consult", background=True)["error"]
+    assert bg["temporary"] is False and bg["repair"]["next_step"] == "start_new_job"
+    assert bg["repair"].get("tool") is None and "arguments" not in bg["repair"]
+    assert bg["repair"]["alternative"] == errors.JOB_DEADLINE_TIMEOUT_ALTERNATIVE
+
+
+def test_render_failure_names_the_twin_only_when_its_deadline_is_longer():
+    """ADR 0039 (Copilot on PR #253): timeout_seconds goes to 600 and AMICUS_JOB_MAX_SECONDS
+    down to 60, so the _async twin can have the SHORTER deadline; it is named only when the
+    job deadline exceeds the one that passed, and a record without either (None) keeps it."""
+    plugin = fakeplugin.make_plugin()
+    failure = ClassifiedFailure(code="timeout", detail="deadline")
+
+    def repair(job_max, deadline):
+        return errors.render_failure(
+            plugin,
+            failure,
+            Meta(),
+            kind="consult",
+            job_max_seconds=job_max,
+            deadline_seconds=deadline,
+        )["error"]["repair"]
+
+    shorter = repair(60, 600)
+    assert shorter.get("tool") is None and shorter["next_step"] == "start_new_job"
+    assert shorter["alternative"] == errors.TIMEOUT_ALTERNATIVE
+    assert repair(600, 600).get("tool") is None
+    assert repair(1800, 300)["tool"] == "amicus_consult_async"
+    assert repair(None, 300)["tool"] == "amicus_consult_async"
+    assert repair(1800, None)["tool"] == "amicus_consult_async"
+
+
+def test_render_failure_makes_a_keyed_retryable_timeout_non_temporary():
+    """Copilot on PR #253: codex's capture-failed timeout says to retry the same call once
+    (retryable=True), but a keyed run's same call replays this stored error (ADR 0020), so
+    for a keyed run it is not temporary and the prose says to retry under a new key."""
+    plugin = fakeplugin.make_plugin()
+    own_repair = ClassifiedFailure(
+        code="timeout",
+        detail="d",
+        retryable=True,
+        retry_after_ms=1000,
+        repair=RepairHint(next_step="retry_after_delay", alternative="once"),
+    )
+    keyed = errors.render_failure(
+        plugin, own_repair, Meta(), kind="consult", background=True, keyed=True
+    )["error"]
+    assert keyed["temporary"] is False and keyed["retry_after_ms"] is None
+    assert keyed["repair"]["alternative"] == errors.KEYED_REPLAY_NOTE + "once"
+    assert keyed["repair"]["next_step"] == "retry_after_delay"
+    # Unkeyed, the same failure keeps the backend's own temporary flag and prose.
+    unkeyed = errors.render_failure(plugin, own_repair, Meta(), kind="consult", background=True)[
+        "error"
+    ]
+    assert unkeyed["temporary"] is True and unkeyed["repair"]["alternative"] == "once"
+    # A keyed timeout that was never temporary gets no note: nothing invites a same-key retry.
+    plain = ClassifiedFailure(code="timeout", detail="deadline")
+    keyed_plain = errors.render_failure(
+        plugin, plain, Meta(), kind="consult", background=True, keyed=True
+    )["error"]
+    assert keyed_plain["repair"]["alternative"] == errors.JOB_DEADLINE_TIMEOUT_ALTERNATIVE

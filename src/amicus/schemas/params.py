@@ -12,7 +12,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import Field
 
-from amicus.schemas.codes import BackendId
+from amicus.schemas.codes import AdversarialBackendId, BackendId, DelegateBackendId
 from amicus.schemas.options import BackendOptions
 from amicus.schemas.results import CapabilitiesDetail, Detail, JobState, ReviewScope, Untracked
 
@@ -303,6 +303,31 @@ BackendParam = Annotated[
 OptionalBackendParam = Annotated[
     BackendId | None,
     Field(description="Restrict to one backend: codex | kimi | claude. Omit for all."),
+]
+DelegateBackendParam = Annotated[
+    DelegateBackendId,
+    Field(description="Which backend answers: codex | kimi (claude stays review-only). Required."),
+]
+
+
+def _single_value_as_enum(schema: dict[str, Any]) -> None:
+    """A one-member `Literal` renders as JSON Schema `const` by default; every allowed_values
+    reader here (the validation-error repair, this test suite) reads `enum`, so a single
+    accepted backend must publish the same shape a wider one does."""
+    value = schema.pop("const", None)
+    if value is not None:
+        schema["enum"] = [value]
+
+
+AdversarialBackendParam = Annotated[
+    AdversarialBackendId,
+    Field(
+        description=(
+            "Which backend answers: claude, the only backend with adversarial_review in v1. "
+            "Required."
+        ),
+        json_schema_extra=_single_value_as_enum,
+    ),
 ]
 QuestionParam = Annotated[
     str,

@@ -22,6 +22,7 @@ The maintainer approved decisions 1–4 in the M4 planning session.
 - The zero-exit envelope is an outcome inspection: `ClaudeBackend.inspect_outcome` returns `invalid_json` for a non-JSON zero-exit stdout, classifies an `is_error`/non-success envelope through the same classifier the process-failure path uses, and returns `claude_permission_error` for denials with no answer.
 - `finalize` returns the workspace hook warning as `ExecResult.warnings`, and `orchestration.finalize.apply_exec` copies backend warnings onto `meta.security_warnings` (a loop change every backend may use).
 - Timeout is the first `repair_overrides` entry (`start_new_job`, not temporary); the classifier marks the failure `retryable=False` too.
+  Superseded by [ADR 0039](0039-a-deadline-timeout-is-never-temporary.md): the rule is now amicus-wide and the override is gone.
 - Pre-spend refusals in `validate_request`: effort outside the enumerated levels, `config_mode`/`access` outside the vocabulary, budget outside 0.01–5.00, `bare` without `ANTHROPIC_API_KEY` (`api_key_missing`), any `extra_args`, and the shared `instructions_append` rules for consult and review only.
 - `backend_options.max_budget_usd` is bounded 0.01–5.00 on the wire (the sibling's ceiling) and refused pre-spend outside it; the sibling's configured/effective budget meta is not carried.
 - Names: `AMICUS_CLAUDE_{BIN,CONFIG_MODE,ACCESS,MODEL,REASONING_EFFORT,MAX_BUDGET_USD,SUPPORTED_MAJORS}` with `CLAUDE_IN_CODEX_` twins for all but `BIN`; defaults inherit, toolless, xhigh, 1.00, {2}; no extra-args variable.

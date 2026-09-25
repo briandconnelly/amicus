@@ -8,6 +8,7 @@ from fastmcp import Context
 
 from amicus.jobs import lifecycle, lookup
 from amicus.schemas.params import (
+    AdversarialBackendParam,
     BackendOptionsParam,
     BackendParam,
     BaseParam,
@@ -62,8 +63,9 @@ _ADV_DESC = (
     f"{_resolve.PAID_MARKER} A fixed adversarial critic on `backend` attacks `target` (a "
     "plan, claim or decision) using `evidence` and an optionally attached git diff; the "
     "critic stance is the product, so there is no instructions_append. Claude only in v1 "
-    "(feature adversarial_review). Egress: sends target, evidence, extra_context and the "
-    "redacted diff raw to the backend's provider. An attached scope that gathers nothing "
+    "(feature adversarial_review); listed in every profile, backend_unavailable unless claude "
+    "is enabled. Egress: sends target, evidence, extra_context and the redacted diff raw to "
+    "the backend's provider. An attached scope that gathers nothing "
     f"returns review_status=not_run with no spend. Recorded as a job (meta.job_id). "
     f"{_resolve.RECORD_RETENTION}"
 )
@@ -120,6 +122,7 @@ def register_review_changes(
             reasoning_effort=reasoning_effort,
             timeout_seconds=timeout_seconds,
             background=idempotency_key is not None,
+            keyed=idempotency_key is not None,
             instructions_append=instructions_append,
             extra_context=extra_context,
             focus=focus,
@@ -183,6 +186,7 @@ def register_review_changes(
             reasoning_effort=reasoning_effort,
             timeout_seconds=None,
             background=True,
+            keyed=idempotency_key is not None,
             instructions_append=instructions_append,
             extra_context=extra_context,
             focus=focus,
@@ -220,7 +224,7 @@ def register_adversarial(
     )
     @guard("amicus_adversarial_review", settings)
     async def amicus_adversarial_review(
-        backend: BackendParam,
+        backend: AdversarialBackendParam,
         target: TargetParam,
         ctx: Context | None = None,
         evidence: EvidenceParam = None,
@@ -258,6 +262,7 @@ def register_adversarial(
             reasoning_effort=reasoning_effort,
             timeout_seconds=timeout_seconds,
             background=idempotency_key is not None,
+            keyed=idempotency_key is not None,
             extra_context=extra_context,
             focus=focus,
             scope=scope,
@@ -292,7 +297,7 @@ def register_adversarial(
     )
     @guard("amicus_adversarial_review_async", settings)
     async def amicus_adversarial_review_async(
-        backend: BackendParam,
+        backend: AdversarialBackendParam,
         target: TargetParam,
         ctx: Context | None = None,
         evidence: EvidenceParam = None,
@@ -328,6 +333,7 @@ def register_adversarial(
             reasoning_effort=reasoning_effort,
             timeout_seconds=None,
             background=True,
+            keyed=idempotency_key is not None,
             extra_context=extra_context,
             focus=focus,
             scope=scope,
