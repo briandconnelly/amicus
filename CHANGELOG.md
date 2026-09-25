@@ -33,8 +33,10 @@ per-change, as its own lead says.
   `_async` job or a keyed sync call) that passes `AMICUS_JOB_MAX_SECONDS` returns `timeout` with
   no `repair.tool` and prose naming that deadline, since its `_async` twin would hit the same
   one. Codex's capture-failed timeout, whose repair says to retry the same
-  call once, now says `temporary: true` itself and its repair names no other tool. A keyed sync
-  wait's timeout is unchanged (ADR 0020).
+  call once, now says `temporary: true` itself and its repair names no other tool, except on
+  a keyed call, where the same call would replay this error: there it is `temporary: false` and
+  its text first says to retry under a new `idempotency_key`. A keyed sync wait's timeout is
+  unchanged (ADR 0020).
 - **Breaking.** `amicus_delegate`, `amicus_delegate_async` and `amicus_delegate_dry_run`
   publish `backend` as `codex | kimi`, and `amicus_adversarial_review` and its async twin as
   `claude`, the sets those verbs accept (#246, ADR 0040). A backend outside the set now fails

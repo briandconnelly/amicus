@@ -29,6 +29,9 @@ The arguments would echo prompt inputs (rule 18), and ADR 0021 already accepts a
 **A backend-classified CLI timeout is the same condition.**
 On an unkeyed sync call the worker applies the caller's `timeout_seconds` to the backend subprocess, so there the classifier's `timeout` is the one that fires in practice, and it takes the same rule.
 Codex's capture-failed timeout is the one exception: its hint says to retry the same call once, so it sets `retryable: true` itself, and on that one repair no `_async` tool is named, because its hint prescribes retrying the same call.
+On a keyed call that exception does not hold, because the same call under the same key replays this stored error rather than running again (ADR 0020).
+So `RunSpec.keyed` records whether the call passed an `idempotency_key`, and `render_failure` makes a keyed run's temporary timeout `temporary: false` and leads its prose with `KEYED_REPLAY_NOTE`, which says any retry needs a new key.
+`RunSpec.keyed` is not a prompt input, stays out of the idempotency identity like `background`, and loads as `False` from a record that lacks it.
 
 **A background run's timeout names no tool.**
 A background run, an `_async` job or a keyed sync call, gives the backend subprocess `AMICUS_JOB_MAX_SECONDS` (default 1800s) rather than the caller's wait, so its `_async` twin is the run that already timed out.
