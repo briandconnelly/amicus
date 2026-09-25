@@ -309,6 +309,20 @@ async def test_background_prepare_uses_the_job_deadline_unclamped():
     assert prep.wait_seconds == 10
 
 
+async def test_spec_records_whether_the_run_is_background(tmp_path):
+    """An _async tool and a keyed sync call both run as background jobs (the tool layer
+    passes background=idempotency_key is not None); an unkeyed sync call does not."""
+    for tool_name, background in (
+        ("amicus_consult_async", True),
+        ("amicus_consult", True),
+        ("amicus_consult", False),
+    ):
+        prep = await _prep(tmp_path, tool_name=tool_name, background=background)
+        assert not isinstance(prep, dict)
+        assert prep.spec.background is background
+        assert "background" not in prep.spec.identity()
+
+
 async def test_feature_unsupported_repairs_to_the_unfiltered_backend_list(tmp_path):
     """#246: the lookup lists every candidate rather than the backend that just failed; the
     corrected call cannot be named because it would echo the prompt input (ADR 0021)."""

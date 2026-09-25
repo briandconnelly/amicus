@@ -327,3 +327,9 @@ def test_render_failure_names_the_twin_on_a_classified_timeout():
     own_out = errors.render_failure(plugin, own_repair, Meta(), kind="consult")["error"]
     assert own_out["repair"].get("tool") is None
     assert own_out["repair"]["next_step"] == "retry_after_delay"
+    # A background run already ran under the job deadline: no tool (the _async twin is
+    # what it already was), the job-deadline prose, still start_new_job and not temporary.
+    bg = errors.render_failure(plugin, failure, Meta(), kind="consult", background=True)["error"]
+    assert bg["temporary"] is False and bg["repair"]["next_step"] == "start_new_job"
+    assert bg["repair"].get("tool") is None and "arguments" not in bg["repair"]
+    assert bg["repair"]["alternative"] == errors.JOB_DEADLINE_TIMEOUT_ALTERNATIVE

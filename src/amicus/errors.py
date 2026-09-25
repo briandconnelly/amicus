@@ -58,6 +58,14 @@ TIMEOUT_ALTERNATIVE = (
     "status fetch amicus_job_result. Its arguments are your original call's, which this "
     "repair does not echo. Narrowing the task or raising timeout_seconds spends again too."
 )
+# A background run (an _async job or a keyed sync call) already ran under the job deadline,
+# so its timeout names no tool: an _async twin would hit the same deadline (ADR 0039).
+JOB_DEADLINE_TIMEOUT_ALTERNATIVE = (
+    "The background run passed the job deadline (AMICUS_JOB_MAX_SECONDS, default 1800s); the "
+    "same call, sync or _async, will likely time out again, and any next attempt is a NEW paid "
+    "run, not a recovery of this one (the backend may already have charged this run). Narrow "
+    "the task, or have the operator raise AMICUS_JOB_MAX_SECONDS."
+)
 
 _LOCAL_RULES: dict[str, RepairRule] = {
     "timeout": RepairRule("start_new_job", None, False, TIMEOUT_ALTERNATIVE),
@@ -327,14 +335,20 @@ def _detail_from(raw: dict[str, Any] | None) -> ErrorDetail | None:
 
 
 def render_failure(
-    plugin: BackendPlugin, failure: ClassifiedFailure, meta: Meta, *, kind: str | None = None
+    plugin: BackendPlugin,
+    failure: ClassifiedFailure,
+    meta: Meta,
+    *,
+    kind: str | None = None,
+    background: bool = False,
 ) -> dict[str, Any]:
     """The wire envelope for a backend's classified failure. Minted codes are
     generalized; an uncataloged code is reported as internal_error with the original
     code and detail in the message; `retryable` overrides the rule's `temporary`; a
     backend-supplied repair wins over the table; usage from a failed run is kept. A
-    `timeout` whose repair names no tool of its own gets the verb's _async twin
-    (ADR 0039); a backend that already gave its own repair (e.g. codex's capture-failed
+    `timeout` whose repair names no tool of its own gets the verb's _async twin, unless the
+    run was already a background one (`background`), which gets no tool and the job-deadline
+    prose (ADR 0039); a backend that already gave its own repair (e.g. codex's capture-failed
     retry-once hint) keeps it unchanged."""
     table = repair_table(plugin)
     code = generalize_code(failure.code, plugin.backend_id)
@@ -355,7 +369,10 @@ def render_failure(
         tool, arguments = complete_lookup(rule.tool, None, plugin.backend_id)
         alternative = rule.alternative
     if code == "timeout" and failure.repair is None and tool is None:
-        tool = async_twin_for(kind)
+        if background:
+            alternative = JOB_DEADLINE_TIMEOUT_ALTERNATIVE
+        else:
+            tool = async_twin_for(kind)
     repair: Repair | None = Repair(
         next_step=next_step,  # ty: ignore[invalid-argument-type]
         tool=tool,
