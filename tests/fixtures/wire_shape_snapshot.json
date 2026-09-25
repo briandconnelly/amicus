@@ -858,6 +858,7 @@
         "truncated": false,
         "workspace_source": "param"
       },
+      "next_cursor": null,
       "ok": true,
       "truncated": true,
       "truncation_hint": "showing the 2 newest of more matching jobs; omit `limit` for every retained match, or narrow with `status`, `backend` or `task_id`",

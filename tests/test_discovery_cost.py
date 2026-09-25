@@ -246,6 +246,14 @@ other #250 change kept): 112817 on `all`, so the strip is the whole move; the st
 the template descriptions, the static read TTL and the dropped `logging` capability ride
 resources, capabilities or the handshake, not tools/list. Measured on the wire. MEASURED and
 BUDGET both move down by the 396 bytes, so the budget keeps no headroom.
+
+The schema-48 raise (+530 bytes on every profile: all 112817 -> 113347) is #249, paging
+amicus_job_list by cursor (ADR 0042). Two contributors, the first measured alone (the old
+description restored, the schema kept: 113233): the tool description replaces "truncated:
+true, no cursor" with how to pass next_cursor and names AMICUS_JOB_MAX_COUNT as the bound on
+the whole list, +114 bytes; the new `cursor` input property and `next_cursor` output property,
+each with its description, +416 bytes. 114 + 416 = 530. Measured on the wire. MEASURED and
+BUDGET both move by the 530 bytes, so the budget keeps no headroom.
 """
 
 from __future__ import annotations
@@ -255,7 +263,7 @@ from tests.conftest import spawned_server_env
 
 from amicus import manifest
 
-MEASURED: dict[str, int] = {"all": 112421, "codex-kimi": 112429, "claude": 112421}
+MEASURED: dict[str, int] = {"all": 113347, "codex-kimi": 113355, "claude": 113347}
 # The budget is a literal, not MEASURED rounded up to the next kilobyte as it was until
 # 2026-09-14. The rounding left up to 1 KB of growth per bucket that no PR had to own, and
 # this file records three such accumulations (448 and 12 bytes in the paragraphs above, and
@@ -263,7 +271,7 @@ MEASURED: dict[str, int] = {"all": 112421, "codex-kimi": 112429, "claude": 11242
 # #94 that landed after it), each noticed only when the next deliberate raise re-measured.
 # Any growth now fails until a PR raises BUDGET and says why; a shrink passes and shows as
 # drift against MEASURED. Raising one means re-measuring and moving both.
-BUDGET: dict[str, int] = {"all": 112421, "codex-kimi": 112429, "claude": 112421}
+BUDGET: dict[str, int] = {"all": 113347, "codex-kimi": 113355, "claude": 113347}
 
 
 @pytest.mark.parametrize("profile", sorted(manifest.PROFILES))

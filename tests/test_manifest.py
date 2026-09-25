@@ -21,9 +21,9 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 # sha256 of each profile's canonical manifest JSON; regenerate per the failure message.
 EXPECTED_MANIFEST_HASH: dict[str, str] = {
-    "all": "8c6ebec97aaf198782f2398d7cdd91acbfabd5708f41c139bf97373479dd8a7b",
-    "codex-kimi": "8f41ba6649743a2959df0b7ffd76861363aa0ab2b62ba44a7a2d1039c9424d40",
-    "claude": "35d1b386b92f81a65fef7aa2adeac393dacede7cd53183f15a8942bca27ff394",
+    "all": "e37a4b90b257cc3fb067fa16502dcf26a96d5f6b1b7b5dbda409cf5ce1d20c69",
+    "codex-kimi": "d72db15efa9689deba21804978c1023f0dc573dc701cb7d60342b9500b58fa7a",
+    "claude": "3d9fe3e4f345afdf52acfb15c7d97c752f3679b32055b75540522fc6e0d1db77",
 }
 
 _CACHING_SPEC_LIST_METHODS = (
