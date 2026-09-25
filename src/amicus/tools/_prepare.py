@@ -290,6 +290,7 @@ async def prepare_run(
         max_diff_bytes=settings.max_delegate_diff_bytes,
         max_output_bytes=settings.max_output_bytes,
         background=background,
+        job_max_seconds=settings.job_max_seconds,
         question=question,
         task=task,
         extra_context=extra_context,

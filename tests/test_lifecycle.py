@@ -248,6 +248,35 @@ async def test_grace_exhausted_cancels_and_times_out(tmp_path, monkeypatch):
     assert out["error"]["repair"]["tool"] == "amicus_" + spec.kind + "_async"
 
 
+async def test_grace_exhausted_names_no_twin_when_the_job_deadline_is_no_longer(
+    tmp_path, monkeypatch
+):
+    """ADR 0039 (Copilot on PR #253): the _async twin runs to AMICUS_JOB_MAX_SECONDS, so on
+    an unkeyed wait at least that long it would not outlast the deadline that just passed
+    and is not named. The wait's own deadline is shortened through the grace so the test
+    does not sleep; the job store's deadline (max_seconds) is far away and never reaps."""
+    store = lifecycle.job_store(_settings(tmp_path))
+    timeout = store.max_seconds
+    monkeypatch.setattr(lifecycle, "SYNC_AWAIT_GRACE_S", 0.05 - timeout)
+    monkeypatch.setattr(lifecycle, "SYNC_POLL_INTERVAL_S", 0.01)
+    monkeypatch.setattr(lifecycle, "worker_cmd", _sleeping_worker_cmd())
+    spec = _spec(str(tmp_path), timeout_seconds=timeout)
+    out = await lifecycle.run_sync(
+        store,
+        spec,
+        meta_for(spec),
+        fakeplugin.make_plugin(),
+        timeout=timeout,
+        detail="summary",
+        ctx=None,
+    )
+    assert out["error"]["code"] == "timeout" and "cancelled" in out["error"]["message"]
+    assert out["error"]["temporary"] is False
+    assert out["error"]["repair"]["next_step"] == "start_new_job"
+    assert out["error"]["repair"].get("tool") is None
+    assert "AMICUS_JOB_MAX_SECONDS" in out["error"]["repair"]["alternative"]
+
+
 async def test_cancellation_cancels_the_job(tmp_path, monkeypatch):
     store = lifecycle.job_store(_settings(tmp_path))
     monkeypatch.setattr(lifecycle, "SYNC_POLL_INTERVAL_S", 0.01)

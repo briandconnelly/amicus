@@ -446,7 +446,9 @@ async def await_job_result(
                     f"the run exceeded {timeout}s and the grace window; job cancelled.",
                     meta,
                     plugin=plugin,
-                    repair_tool=async_twin_for(kind),
+                    # The twin runs to the job deadline; it is worth naming only when that
+                    # is longer than the wait that just passed (ADR 0039).
+                    repair_tool=async_twin_for(kind) if store.max_seconds > timeout else None,
                 )
             await asyncio.sleep(SYNC_POLL_INTERVAL_S)
     except asyncio.CancelledError:

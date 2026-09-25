@@ -348,3 +348,29 @@ def test_render_failure_names_the_twin_on_a_classified_timeout():
     assert bg["temporary"] is False and bg["repair"]["next_step"] == "start_new_job"
     assert bg["repair"].get("tool") is None and "arguments" not in bg["repair"]
     assert bg["repair"]["alternative"] == errors.JOB_DEADLINE_TIMEOUT_ALTERNATIVE
+
+
+def test_render_failure_names_the_twin_only_when_its_deadline_is_longer():
+    """ADR 0039 (Copilot on PR #253): timeout_seconds goes to 600 and AMICUS_JOB_MAX_SECONDS
+    down to 60, so the _async twin can have the SHORTER deadline; it is named only when the
+    job deadline exceeds the one that passed, and a record without either (None) keeps it."""
+    plugin = fakeplugin.make_plugin()
+    failure = ClassifiedFailure(code="timeout", detail="deadline")
+
+    def repair(job_max, deadline):
+        return errors.render_failure(
+            plugin,
+            failure,
+            Meta(),
+            kind="consult",
+            job_max_seconds=job_max,
+            deadline_seconds=deadline,
+        )["error"]["repair"]
+
+    shorter = repair(60, 600)
+    assert shorter.get("tool") is None and shorter["next_step"] == "start_new_job"
+    assert shorter["alternative"] == errors.TIMEOUT_ALTERNATIVE
+    assert repair(600, 600).get("tool") is None
+    assert repair(1800, 300)["tool"] == "amicus_consult_async"
+    assert repair(None, 300)["tool"] == "amicus_consult_async"
+    assert repair(1800, None)["tool"] == "amicus_consult_async"

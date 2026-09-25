@@ -47,17 +47,20 @@ _FEATURES = frozenset({"model_validation", "empty_response_detection"})
 # A deadline timeout is never temporary (ADR 0039, #245): the identical synchronous call
 # spends again and will likely hit the same deadline, and a backend may already have charged
 # the run. One prose text for every backend. The repair's tool is the verb's _async twin,
-# set by `async_twin_for` where the verb is known; its arguments are omitted because they
-# would echo prompt inputs (rule 18), and the prose says so.
+# set by `async_twin_for` where the verb is known and only when the job deadline is longer
+# than the one that passed; its arguments are omitted because they would echo prompt inputs
+# (rule 18), and the prose says so.
 TIMEOUT_ALTERNATIVE = (
     "The run passed its deadline; the same synchronous call will likely time out again, and "
     "any next attempt is a NEW paid run, not a recovery of this one (the backend may already "
     "have charged this run). To retry, start the matching _async twin (amicus_consult_async / "
     "amicus_review_changes_async / amicus_adversarial_review_async / amicus_delegate_async), "
-    "which survives the deadline and whose idempotency_key guards that new launch against "
-    "duplicate retries; poll amicus_job_status while status is running, and on any terminal "
-    "status fetch amicus_job_result. Its arguments are your original call's, which this "
-    "repair does not echo. Narrowing the task or raising timeout_seconds spends again too."
+    "which runs to AMICUS_JOB_MAX_SECONDS (default 1800s), not timeout_seconds, and whose "
+    "idempotency_key dedupes retries of that launch; poll amicus_job_status while status is "
+    "running, and on any terminal status fetch amicus_job_result. Its arguments are your "
+    "original call's, which this repair does not echo. If this repair names no tool, the job "
+    "deadline is no longer than this one: narrow the task, or have the operator raise "
+    "AMICUS_JOB_MAX_SECONDS."
 )
 # A background run (an _async job or a keyed sync call) already ran under the job deadline,
 # so its timeout names no tool: an _async twin would hit the same deadline (ADR 0039).
@@ -346,6 +349,8 @@ def render_failure(
     *,
     kind: str | None = None,
     background: bool = False,
+    job_max_seconds: int | None = None,
+    deadline_seconds: int | None = None,
 ) -> dict[str, Any]:
     """The wire envelope for a backend's classified failure. Minted codes are
     generalized; an uncataloged code is reported as internal_error with the original
@@ -353,8 +358,10 @@ def render_failure(
     backend-supplied repair wins over the table; usage from a failed run is kept. A
     `timeout` whose repair names no tool of its own gets the verb's _async twin, unless the
     run was already a background one (`background`), which gets no tool and the job-deadline
-    prose (ADR 0039); a backend that already gave its own repair (e.g. codex's capture-failed
-    retry-once hint) keeps it unchanged."""
+    prose (ADR 0039). A sync run names the twin only when the job deadline
+    (`job_max_seconds`) is longer than the one that passed (`deadline_seconds`); when either
+    is unknown (a record written before they existed) it is named. A backend that already
+    gave its own repair (e.g. codex's capture-failed retry-once hint) keeps it unchanged."""
     table = repair_table(plugin)
     code = generalize_code(failure.code, plugin.backend_id)
     message = failure.detail
@@ -376,7 +383,11 @@ def render_failure(
     if code == "timeout" and failure.repair is None and tool is None:
         if background:
             alternative = JOB_DEADLINE_TIMEOUT_ALTERNATIVE
-        else:
+        elif (
+            job_max_seconds is None
+            or deadline_seconds is None
+            or (job_max_seconds > deadline_seconds)
+        ):
             tool = async_twin_for(kind)
     repair: Repair | None = Repair(
         next_step=next_step,  # ty: ignore[invalid-argument-type]

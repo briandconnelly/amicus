@@ -323,6 +323,17 @@ async def test_spec_records_whether_the_run_is_background(tmp_path):
         assert "background" not in prep.spec.identity()
 
 
+async def test_spec_records_the_job_deadline_for_every_run(tmp_path):
+    """The sync timeout repair compares the job deadline with the one that passed (ADR
+    0039), so every run carries it, sync or background, outside the identity."""
+    settings = config.settings({"AMICUS_JOB_MAX_SECONDS": "90"})
+    for tool_name, background in (("amicus_consult", False), ("amicus_consult_async", True)):
+        prep = await _prep(tmp_path, settings=settings, tool_name=tool_name, background=background)
+        assert not isinstance(prep, dict)
+        assert prep.spec.job_max_seconds == settings.job_max_seconds == 90
+        assert "job_max_seconds" not in prep.spec.identity()
+
+
 async def test_feature_unsupported_repairs_to_the_unfiltered_backend_list(tmp_path):
     """#246: the lookup lists every candidate rather than the backend that just failed; the
     corrected call cannot be named because it would echo the prompt input (ADR 0021)."""

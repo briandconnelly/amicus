@@ -27,11 +27,20 @@ INPUT_FIELDS: tuple[str, ...] = (
 )
 # Public fields that describe HOW a call was resolved, not WHAT it asks for: the index is
 # already keyed by tool and workspace, and the rest is per-connection (a reconnect must
-# replay, not conflict). `background` is excluded too: the tool name already tells a sync
-# call from its _async twin, and keeping it out leaves every existing record's arg_hash as
-# it was before the field existed.
+# replay, not conflict). `background` and `job_max_seconds` are excluded too: the tool name
+# already tells a sync call from its _async twin, the job deadline is server config, and
+# keeping both out leaves every existing record's arg_hash as it was before they existed.
 IDENTITY_EXCLUDE: frozenset[str] = frozenset(
-    {"cwd", "workspace_source", "roots_source", "host_name", "kind", "tool", "background"}
+    {
+        "cwd",
+        "workspace_source",
+        "roots_source",
+        "host_name",
+        "kind",
+        "tool",
+        "background",
+        "job_max_seconds",
+    }
 )
 
 
@@ -61,6 +70,10 @@ class RunSpec:
     # subprocess deadline is AMICUS_JOB_MAX_SECONDS rather than the caller's wait. Not a
     # prompt input; a record written before it existed loads as False (`from_parts`).
     background: bool = False
+    # The server's job deadline (AMICUS_JOB_MAX_SECONDS) when the run was prepared: a sync
+    # timeout names the _async twin only when this exceeds the deadline that passed (ADR
+    # 0039). Not a prompt input; a record written before it existed loads as None.
+    job_max_seconds: int | None = None
     # --- inputs: never persisted, never on argv ---
     question: str | None = None
     task: str | None = None

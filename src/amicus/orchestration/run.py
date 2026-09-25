@@ -320,7 +320,13 @@ async def run_request(
             invalid = plugin.backend.validate_request(request)
             if invalid is not None:
                 return render_failure(
-                    plugin, invalid, meta, kind=spec.kind, background=spec.background
+                    plugin,
+                    invalid,
+                    meta,
+                    kind=spec.kind,
+                    background=spec.background,
+                    job_max_seconds=spec.job_max_seconds,
+                    deadline_seconds=spec.timeout_seconds,
                 )
             if plugin.binary.resolve() is None:
                 missing = RunOutcome(
@@ -333,6 +339,8 @@ async def run_request(
                     meta,
                     kind=spec.kind,
                     background=spec.background,
+                    job_max_seconds=spec.job_max_seconds,
+                    deadline_seconds=spec.timeout_seconds,
                 )
             async with plugin.backend.prepare(request) as prepared:
                 run = await runtime.run_async(
@@ -388,6 +396,8 @@ async def run_request(
                     meta,
                     kind=spec.kind,
                     background=spec.background,
+                    job_max_seconds=spec.job_max_seconds,
+                    deadline_seconds=spec.timeout_seconds,
                 )
             diff = site.capture_diff() if spec.kind == "delegate" else None
             aliases = site.aliases
