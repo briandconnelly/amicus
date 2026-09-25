@@ -7,7 +7,9 @@
 `tools/list` is 112,683 bytes on the `all` profile, 27,975 o200k tokens, for 18 tools, and a preloading host (Codex CLI, `docs/host-captures/install-smoke/codex/0.153.4/transcript.md`) pays it per session (#247).
 Output schemas are 46% of it; the four `_async` records are 26,513 bytes, each carrying an input schema that repeats its sync twin's minus two parameters, and a byte-identical 1,959-byte `JobStarted` output schema.
 The sync and `_async` twins carry identical annotations in every profile, and every sync call already runs as a detached job that the sync tail awaits (`jobs.lifecycle.run_sync` is `start_job` plus `await_job_result`), so the twin is the sync call without the wait.
-ADR 0028 keeps the dry-run tools separate because their `readOnlyHint: true` is the reason they exist; nothing like that separates a twin from its sync tool.
+The two dry-run tools are annotated `readOnlyHint: true` (`ann.free_read()`, free, no model call), while the paid tools are annotated `readOnlyHint: false` (`ann.active()`).
+Hosts gate tool approval on that annotation: the Codex install-smoke capture (`docs/host-captures/install-smoke/codex/0.153.4/notes.md`) observed auto-approval of the read-only-hinted tools and refusal of the others under `approval_policy = "never"`.
+Folding a dry run into its paid tool behind a flag would lose that read-only annotation, which the worst-enabled-backend annotation rule (`[3.ap-mode-annotations]`) requires; nothing like that separates a twin from its sync tool.
 The prose kept on the output schemas by #38, #52 and #65 guards specific misreadings and is not repetition; #41 already compressed the repeated parameter prose behind `amicus://params`.
 
 ## Decision
