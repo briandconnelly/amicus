@@ -413,8 +413,54 @@ async def test_progress_is_reported_throttled_while_running(tmp_path, monkeypatc
     assert reports, "no progress was reported"
     for progress, total, message in reports:
         # #250: elapsed seconds against the deadline, so a host can show a fraction; the
-        # backend event count rides the message, and there is no phase to report.
-        assert total is not None and 0.0 <= progress <= total
+        # backend event count rides the message, and there is no phase to report. Unkeyed:
+        # the job record's own deadline is always the store's max_seconds, so this must
+        # report against the caller's own timeout (10s here), not that record.
+        assert total == 10.0 and 0.0 <= progress <= total
+        assert message and "deadline" in message and "events" in message
+
+
+async def test_keyed_progress_is_reported_against_the_shared_jobs_own_deadline(
+    tmp_path, monkeypatch
+):
+    store = lifecycle.job_store(_settings(tmp_path))
+    monkeypatch.setattr(lifecycle, "SYNC_POLL_INTERVAL_S", 0.01)
+    monkeypatch.setattr(lifecycle, "SYNC_PROGRESS_THROTTLE_S", 0.0)
+    reports: list = []
+
+    class Ctx:
+        async def report_progress(self, progress, total=None, message=None):
+            reports.append((progress, total, message))
+
+    def worker(job_dir):
+        code = (
+            "import json,sys,time,pathlib;d=pathlib.Path(sys.argv[1]);"
+            "(d/'activity.json').write_text(json.dumps({'events_seen':3,'last_event_epoch':time.time()}));time.sleep(0.2);"
+            "(d/'result.json').write_text(sys.argv[2])"
+        )
+        return [sys.executable, "-c", code, str(job_dir), json.dumps(_success(str(tmp_path)))]
+
+    monkeypatch.setattr(lifecycle, "worker_cmd", worker)
+    spec = _spec(str(tmp_path))
+    out = await lifecycle.run_sync(
+        store,
+        spec,
+        meta_for(spec),
+        fakeplugin.make_plugin(),
+        timeout=10,
+        detail="summary",
+        ctx=Ctx(),
+        idempotency_key="k-progress",
+    )
+    assert out["ok"] is True
+    assert reports, "no progress was reported"
+    job_id = out["meta"]["job_id"]
+    job_deadline_seconds = store.status(str(tmp_path), job_id)["deadline_seconds"]
+    assert job_deadline_seconds != 10  # the store's max_seconds, not this waiter's timeout
+    for progress, total, message in reports:
+        # A keyed run is the shared job (ADR 0020): it runs to its own deadline rather than
+        # to this waiter's timeout, so progress must report against that stored deadline.
+        assert total == float(job_deadline_seconds) and 0.0 <= progress <= total
         assert message and "deadline" in message and "events" in message
 
 
