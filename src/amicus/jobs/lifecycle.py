@@ -391,7 +391,13 @@ async def await_job_result(
 ) -> dict[str, Any]:
     """Await this handler's own detached job. Explicit cancellation cancels the job so
     spend stops; a transport drop leaves the record recoverable. Throttled progress rides
-    ctx.report_progress when the caller gave a progress token (a no-op otherwise).
+    ctx.report_progress when the caller gave a progress token (a no-op otherwise): elapsed
+    seconds against the deadline, with the backend event count in the message; the job
+    record has no phase to report (#250). An unkeyed call reports against its own
+    ``timeout``, because the job record's own deadline is always the store's max_seconds
+    (AMICUS_JOB_MAX_SECONDS) regardless of what the caller asked for; a keyed call reports
+    against the shared job's own ``deadline_seconds``, since it runs to that deadline
+    rather than to this waiter's ``timeout`` (#66, ADR 0020).
 
     When ``keyed`` (this call carried an idempotency_key) the job is a durable shared run:
     neither the local grace deadline nor this waiter's own cancellation cancels it, because
@@ -404,7 +410,6 @@ async def await_job_result(
     same code start_async gives an already-evicted key."""
     deadline = time.monotonic() + timeout + SYNC_AWAIT_GRACE_S
     last_progress_at = 0.0
-    last_events = -1
 
     def _vanished(what: str) -> dict[str, Any]:
         if vanished is not None:
@@ -420,20 +425,23 @@ async def await_job_result(
                 break
             events = rec.get("events_seen", 0)
             now = time.monotonic()
-            if (
-                ctx is not None
-                and events != last_events
-                and now - last_progress_at >= SYNC_PROGRESS_THROTTLE_S
-            ):
-                last_events = events
+            if ctx is not None and now - last_progress_at >= SYNC_PROGRESS_THROTTLE_S:
                 last_progress_at = now
+                elapsed_s = rec.get("elapsed_ms", 0) / 1000
+                total_s = float(rec.get("deadline_seconds") or timeout) if keyed else float(timeout)
+                shown = min(elapsed_s, total_s)
                 with contextlib.suppress(Exception):
                     # asyncio.TimeoutError is an Exception subclass on 3.11+, so a hung
                     # report_progress is bounded and still swallowed here, not left to
                     # stall the poll loop past the job's own deadline.
                     await asyncio.wait_for(
                         ctx.report_progress(
-                            progress=float(events), message=f"backend events: {events}"
+                            progress=shown,
+                            total=total_s,
+                            message=(
+                                f"running: {shown:.0f}s of the {total_s:.0f}s deadline; "
+                                f"backend events: {events}"
+                            ),
                         ),
                         timeout=SYNC_PROGRESS_REPORT_TIMEOUT_S,
                     )

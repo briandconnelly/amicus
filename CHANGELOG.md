@@ -22,6 +22,18 @@ per-change, as its own lead says.
 
 ### Changed
 
+- **Surface.** Six minor contract findings of the 2026-09-24 audit (#250). Reads of
+  `amicus://error-envelope`, `amicus://result-meta` and `amicus://params` carry the catalog
+  TTL (`ttlMs: 300000`) where they said `0`; `amicus://capabilities` and the two templates
+  still say `0` (ADR 0041). The `logging` capability is no longer advertised: amicus sends no
+  log message. The two resource templates carry written one-line descriptions, and the models
+  template no longer claims a resource read has no repair carrier. A sync call's progress
+  notifications report elapsed seconds against the deadline as `progress`/`total`, with the
+  backend event count in the message. `amicus_capabilities.tool_details[].stability` is each
+  tool's effective tier rather than `null`, so the two stability surfaces agree. Every tool,
+  resource and template record on the wire no longer carries FastMCP's `_meta.fastmcp` block.
+  Item 1 of the issue, echoing `workspace_root` in `repair.arguments`, was declined under ADR
+  0021.
 - **Breaking.** A sync paid call that passes its deadline returns `timeout` with `temporary:
   false`, `retry_after_ms: null` and `repair.next_step: start_new_job` on every backend, where
   codex and kimi said `temporary: true` / `retry_after_delay` while their own prose said a retry

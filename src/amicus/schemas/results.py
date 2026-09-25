@@ -595,7 +595,7 @@ class TaskSupport(BaseModel):
 
 
 _TOOL_STABILITY_DESC = (
-    "Per-tool maturity override, advisory only. null inherits the top-level `stability`."
+    "The tool's effective maturity tier: its own override, else the top-level `stability`."
 )
 _TOOL_DETAILS_POINTER_DESC = (
     "Per-tool capability records; full schema via "
@@ -641,7 +641,7 @@ class ToolCapability(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str
     cost: Literal["free", "active"]
-    stability: ToolStability | None = Field(default=None, description=_TOOL_STABILITY_DESC)
+    stability: ToolStability = Field(description=_TOOL_STABILITY_DESC)
     deprecation: ToolDeprecation | None = Field(default=None, description=_TOOL_DEPRECATION_DESC)
     backends: list[BackendRef] | None = None
     use_when: str | None = Field(default=None, description=_TOOL_FULL_ONLY_DESC)

@@ -91,9 +91,9 @@ async def test_every_published_stability_tier_is_in_the_closed_set():
     for entry in caps["tool_details"]:
         if entry["stability"] is not None:
             tiers[f"capabilities:tool_details:{entry['name']}"] = entry["stability"]
-    # 25, not 26+: every tool_details override is null today, because the per-tool table
-    # is empty and each tool inherits the server-wide tier.
-    assert len(tiers) == 25, sorted(tiers)
+    # 43 = 24 lifecycle records + capabilities.stability + 18 tool_details rows: every row
+    # now carries its effective tier rather than a null override (#250).
+    assert len(tiers) == 43, sorted(tiers)
     assert {v for v in tiers.values() if v not in set(get_args(results.ToolStability))} == set()
 
 
@@ -372,7 +372,7 @@ async def test_capabilities_summary_full_row_selection_and_include_schemas():
     assert [d["name"] for d in summary["tool_details"]] == [d["name"] for d in full["tool_details"]]
     entry = next(d for d in summary["tool_details"] if d["name"] == "amicus_consult")
     assert set(entry) == {"name", "cost", "stability", "deprecation", "backends"}
-    assert entry["stability"] is None
+    assert entry["stability"] == "experimental"
     entry_full = next(d for d in full["tool_details"] if d["name"] == "amicus_consult")
     assert set(entry_full) == set(entry) | set(results.TOOL_DETAIL_FULL_FIELDS)
     assert entry_full["required_params"] == ["backend", "question"]

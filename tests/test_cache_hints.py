@@ -125,17 +125,23 @@ async def test_the_catalog_methods_advertise_the_ttl_on_the_wire():
         assert _envelope(await client.list_prompts_mcp()) == expected
 
 
-async def test_resource_reads_carry_no_ttl_static_or_volatile():
-    """`resources/read` is cacheable and deliberately unhinted.
-
-    The volatile template read is asserted alongside the static ones because it is the
-    reason for the exclusion: the SDK chooses a hint per METHOD, so a TTL on
-    `resources/read` would have covered a live install-and-auth report too.
-    """
+async def test_static_reads_carry_the_catalog_ttl_and_volatile_reads_none():
+    """`resources/read` is unhinted as a METHOD, because the template reads report live
+    state and the SDK chooses a hint per method; the three static bodies change only with
+    the fingerprint, so their reads carry the catalog TTL per URI (#250, ADR 0041).
+    `amicus://capabilities` embeds the live env report and stays uncached."""
+    cached = {
+        "resultType": "complete",
+        "ttlMs": server.CATALOG_CACHE_TTL_MS,
+        "cacheScope": server.CATALOG_CACHE_SCOPE,
+    }
     uncached = {"resultType": "complete", "ttlMs": 0, "cacheScope": "private"}
     async with Client(_stdio()) as client:
-        for uri in (*STATIC_RESOURCE_URIS, VOLATILE_RESOURCE_URI):
+        for uri in sorted(server.STATIC_READ_TTL_URIS):
+            assert _envelope(await client.read_resource_mcp(uri)) == cached, uri
+        for uri in ("amicus://capabilities", VOLATILE_RESOURCE_URI):
             assert _envelope(await client.read_resource_mcp(uri)) == uncached, uri
+    assert set(STATIC_RESOURCE_URIS) - {"amicus://capabilities"} == server.STATIC_READ_TTL_URIS
 
 
 @pytest.mark.parametrize("mode", ["legacy", None])
@@ -196,3 +202,30 @@ async def test_the_manifest_pins_the_capabilities_the_shipped_transport_sends():
         "the two eras derive listChanged differently; _filter_capabilities exists to make "
         "them agree, so a divergence here is that override having stopped working"
     )
+
+
+async def test_the_logging_capability_is_not_advertised_in_either_era():
+    """#250: amicus never sends a log message and `logging` is deprecated at 2026-07-28, so
+    neither era advertises it; the handler stays registered for a client that still calls
+    logging/setLevel."""
+    async with Client(_stdio(), mode="legacy") as legacy:
+        assert "logging" not in _caps(legacy.initialize_result.capabilities)
+    async with Client(_stdio()) as modern:
+        assert "logging" not in _caps(modern.session.discover_result.capabilities)
+
+
+async def test_no_catalog_record_carries_the_framework_meta_key():
+    """#250: FastMCP stamps `_meta.fastmcp = {"tags": []}` on every record; the digest and the
+    manifest already ignore it, and now the wire does not carry it either. The lifecycle key
+    on the same records is the positive control that `_meta` itself still arrives."""
+    async with Client(_stdio()) as client:
+        records = [
+            *(await client.list_tools_mcp()).tools,
+            *(await client.list_resources_mcp()).resources,
+            *(await client.list_resource_templates_mcp()).resource_templates,
+        ]
+    assert len(records) == 24
+    for record in records:
+        meta = record.model_dump(mode="json", by_alias=True).get("_meta") or {}
+        assert "fastmcp" not in meta, record
+        assert "dev.bconnelly.amicus/lifecycle" in meta, record

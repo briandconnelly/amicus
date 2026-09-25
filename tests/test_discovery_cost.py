@@ -238,6 +238,14 @@ budget keeps no headroom.
 The schema-45 -> schema-46 move (#248) changes nothing here: the new `root_not_a_directory`
 token is in the `workspace_root` contract at `amicus://params`, a resource body, not
 tools/list. Measured on the wire: all 112817, codex-kimi 112825, claude 112817, as before.
+
+The schema-47 drop (-396 bytes on every profile: all 112817 -> 112421) is #250: every tool
+record lost FastMCP's `_meta.fastmcp` block, which `server._install_meta_strip` removes after
+FastMCP adds it, 22 bytes on each of the 18 tools. Measured alone (the strip disabled, every
+other #250 change kept): 112817 on `all`, so the strip is the whole move; the stability tier,
+the template descriptions, the static read TTL and the dropped `logging` capability ride
+resources, capabilities or the handshake, not tools/list. Measured on the wire. MEASURED and
+BUDGET both move down by the 396 bytes, so the budget keeps no headroom.
 """
 
 from __future__ import annotations
@@ -247,7 +255,7 @@ from tests.conftest import spawned_server_env
 
 from amicus import manifest
 
-MEASURED: dict[str, int] = {"all": 112817, "codex-kimi": 112825, "claude": 112817}
+MEASURED: dict[str, int] = {"all": 112421, "codex-kimi": 112429, "claude": 112421}
 # The budget is a literal, not MEASURED rounded up to the next kilobyte as it was until
 # 2026-09-14. The rounding left up to 1 KB of growth per bucket that no PR had to own, and
 # this file records three such accumulations (448 and 12 bytes in the paragraphs above, and
@@ -255,7 +263,7 @@ MEASURED: dict[str, int] = {"all": 112817, "codex-kimi": 112825, "claude": 11281
 # #94 that landed after it), each noticed only when the next deliberate raise re-measured.
 # Any growth now fails until a PR raises BUDGET and says why; a shrink passes and shows as
 # drift against MEASURED. Raising one means re-measuring and moving both.
-BUDGET: dict[str, int] = {"all": 112817, "codex-kimi": 112825, "claude": 112817}
+BUDGET: dict[str, int] = {"all": 112421, "codex-kimi": 112429, "claude": 112421}
 
 
 @pytest.mark.parametrize("profile", sorted(manifest.PROFILES))

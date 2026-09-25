@@ -33,6 +33,18 @@ STATIC_RESOURCE_URIS: tuple[str, ...] = (
     PARAMS_RESOURCE_URI,
 )
 TEMPLATE_URIS: tuple[str, ...] = ("amicus://backends/{backend}", "amicus://models/{backend}")
+# Written descriptions for the two templates (#250): a docstring reaches the wire with its
+# line breaks, and the old models text named internals and claimed a resource read carries
+# no repair, which `error.data.repair` on resource_not_found disproves.
+BACKEND_TEMPLATE_DESC = (
+    "One backend's amicus_backends entry at detail=full, disclosures included; an unknown "
+    "backend id is resource_not_found."
+)
+MODELS_TEMPLATE_DESC = (
+    "One backend's amicus_models payload. Unlike the tool, a known but unavailable backend "
+    "returns the informational available=false payload rather than a backend_unavailable "
+    "error; only an unknown backend id is resource_not_found."
+)
 
 
 def _meta(*, volatile: bool = False) -> dict[str, Any]:
@@ -166,12 +178,12 @@ def register_resources(
         "amicus://backends/{backend}",
         name="amicus-backend",
         title="One backend's catalog entry",
+        description=BACKEND_TEMPLATE_DESC,
         mime_type="application/json",
         meta=_meta(volatile=True),
     )
     def backend_resource(backend: str) -> dict[str, Any]:
-        """The amicus_backends(detail="full") entry for one backend: a single-backend read
-        is the on-demand path to its disclosures, so it never takes the summary projection."""
+        """See BACKEND_TEMPLATE_DESC; a single-backend read never takes the summary projection."""
         payload = discovery.backends_payload(
             settings, registry, state.config_errors, backend, detail="full"
         )
@@ -183,15 +195,12 @@ def register_resources(
         "amicus://models/{backend}",
         name="amicus-models",
         title="One backend's model catalog",
+        description=MODELS_TEMPLATE_DESC,
         mime_type="application/json",
         meta=_meta(volatile=True),
     )
     def models_resource(backend: str) -> dict[str, Any]:
-        """The amicus_models payload for one backend, unlike the `amicus_models` TOOL:
-        for an unavailable (but known) backend id this returns the informational
-        `available: false` payload rather than a `backend_unavailable` error envelope,
-        because a resource read has no repair carrier to put one in. Only an unknown
-        backend id (not in BACKEND_IDS and not a loaded plugin) is resource_not_found."""
+        """See MODELS_TEMPLATE_DESC."""
         if backend not in BACKEND_IDS and registry.get(backend) is None:
             raise _resource_not_found(f"amicus://models/{backend}")
         return discovery.models_payload(registry, backend)

@@ -45,7 +45,6 @@ from amicus.sdk.core.redaction import exc_summary
 from amicus.tools import ACTIVE_TOOLS, FREE_TOOLS, JOB_TOOLS, TOOL_ORDER
 from amicus.tools._guard import guard
 from amicus.tools._meta import (
-    TOOL_STABILITY,
     annotations_for,
     base_meta,
     deprecation_marker,
@@ -53,6 +52,7 @@ from amicus.tools._meta import (
     lifecycle_meta,
     server_stability,
     tool_deprecation,
+    tool_stability,
 )
 from amicus.tools._resolve import FREE_MARKER
 
@@ -537,7 +537,7 @@ async def capabilities_payload(
         ToolCapability(
             name=name,
             cost=TOOL_DETAILS[name]["cost"],
-            stability=TOOL_STABILITY.get(name),
+            stability=tool_stability(name),
             deprecation=tool_deprecation(name),
             backends=TOOL_DETAILS[name]["backends"],
             use_when=TOOL_DETAILS[name]["use_when"],
@@ -653,9 +653,6 @@ async def capabilities_payload(
         caps["tool_details"] = [
             {k: d.get(k) for k in _SUMMARY_FIELDS} for d in caps["tool_details"]
         ]
-    else:
-        for entry in caps["tool_details"]:
-            entry.setdefault("stability", None)
     return caps
 
 
