@@ -106,7 +106,6 @@ def job_store(settings: Settings) -> JobStore:
         ttl_seconds=settings.job_ttl_seconds,
         max_seconds=settings.job_max_seconds,
         max_count=settings.job_max_count,
-        result_format=RESULT_FORMAT,
         cleanup_root=Path(tempfile.gettempdir()),
         cleanup_prefix=WORKTREE_PREFIX,
     )

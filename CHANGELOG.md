@@ -26,13 +26,14 @@ per-change, as its own lead says.
   records a job, and recording one evicted the oldest finished records past the per-workspace
   cap (`AMICUS_JOB_MAX_COUNT`, default 50) whether or not their results had ever been read, while
   the paid tools advertised `destructiveHint: false` in the codex and kimi profile. The cap now
-  evicts only expired records, terminal errors, results amicus has already returned once,
-  results in an older result format, which no server can deliver, and records written by an
-  earlier release, which did not track delivery; a result in a newer format is kept for a newer
-  server sharing the state root. When only running jobs and unfetched results it must keep
-  remain, a new paid call is refused before anything is spent with the new error code
+  evicts only expired records, terminal errors, results amicus has already returned once and
+  records written by an earlier release, which did not track delivery. An unfetched result in
+  another release's result format is kept too, since a server of that release sharing the state
+  root can still deliver it. When only running jobs and unfetched results it must keep remain, a
+  new paid call is refused before anything is spent with the new error code
   `job_cap_reached`, whose repair lists the workspace's jobs: fetch or consume a result, or
-  cancel a running job, then retry. Running jobs now count toward the cap, so a workspace can
+  cancel a running job, then retry; a result another release wrote is fetched by that release, or
+  expires after `AMICUS_JOB_TTL`. Running jobs now count toward the cap, so a workspace can
   no longer run more jobs than the cap at once. "Returned once" means amicus handed the result
   back, from `amicus_job_result`, `amicus_job_consume_result` or the sync call that awaited it,
   not that the client received it (ADR 0038).

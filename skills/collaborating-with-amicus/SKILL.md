@@ -229,8 +229,8 @@ a ceiling ([sync vs async](references/sync-vs-async.md) → Polling); on any ter
 which is why a loop that waits for `result_available` alone never ends for a cancelled or failed
 job. A job handle follows the same rule: a repeated keyed `_async` call replays the existing
 job's handle, which can already be terminal. Records expire (`AMICUS_JOB_TTL`, default 24h) and
-a per-workspace cap evicts the oldest terminal ones, but never a result amicus has not yet
-returned: unfetched results fill the cap and it then refuses new paid calls with
+a per-workspace cap evicts the oldest terminal ones, but never a result amicus has tracked and
+not yet returned: unfetched results fill the cap and it then refuses new paid calls with
 `job_cap_reached`. [sync vs async](references/sync-vs-async.md) has the lifecycle and recovery.
 
 ### Annotations follow the worst enabled backend

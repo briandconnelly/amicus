@@ -1262,48 +1262,19 @@ def test_count_cap_evicts_a_record_that_predates_delivery_tracking(tmp_path):
     assert store.status(cwd, first) is None
 
 
-def test_count_cap_evicts_a_result_this_server_cannot_deliver(tmp_path):
-    # A result stored under another result format can never be delivered, so it never
-    # gets a delivered stamp; it must not hold a cap slot until its TTL.
-    store = _store(tmp_path, max_count=1, result_format=9)
-    cwd = str(tmp_path)
-    first, _ = store.start(_factory(_WRITE_DONE), cwd, kind="k", extra={"result_format": 8})
-    _wait_terminal(store, cwd, first)
-    store.start(_factory(_WRITE_DONE), cwd, kind="k", extra={"result_format": 9})
-    assert store.status(cwd, first) is None
-
-
-def test_count_cap_keeps_a_result_in_a_newer_format(tmp_path):
-    # A server sharing the state root on a newer release can still deliver a record in a
-    # newer format, so an older server must not evict it as undeliverable.
-    store = _store(tmp_path, max_count=1, result_format=9)
-    cwd = str(tmp_path)
-    first, _ = store.start(_factory(_WRITE_DONE), cwd, kind="k", extra={"result_format": 10})
-    _wait_terminal(store, cwd, first)
-    with pytest.raises(JobCapReached):
-        store.start(_factory(_WRITE_DONE), cwd, kind="k", extra={"result_format": 9})
-    assert store.status(cwd, first) is not None
-
-
-@pytest.mark.parametrize("stored", [None, "9", True])
-def test_count_cap_evicts_a_result_with_no_usable_format(tmp_path, stored):
-    store = _store(tmp_path, max_count=1, result_format=9)
+@pytest.mark.parametrize("stored", [8, 9, 10, None])
+def test_count_cap_keeps_an_unreturned_result_whatever_its_format(tmp_path, stored):
+    # A server of the release that wrote a result can still deliver it, whether that
+    # release is older or newer than this one, so the store never reads the format: an
+    # unreturned result stays until it is returned or expires (#244).
+    store = _store(tmp_path, max_count=1)
     cwd = str(tmp_path)
     extra = {} if stored is None else {"result_format": stored}
     first, _ = store.start(_factory(_WRITE_DONE), cwd, kind="k", extra=extra)
     _wait_terminal(store, cwd, first)
-    store.start(_factory(_WRITE_DONE), cwd, kind="k", extra={"result_format": 9})
-    assert store.status(cwd, first) is None
-
-
-def test_count_cap_keeps_a_result_in_the_current_format(tmp_path):
-    # Mutation control for the test above: the same record in the current format is kept.
-    store = _store(tmp_path, max_count=1, result_format=9)
-    cwd = str(tmp_path)
-    first, _ = store.start(_factory(_WRITE_DONE), cwd, kind="k", extra={"result_format": 9})
-    _wait_terminal(store, cwd, first)
     with pytest.raises(JobCapReached):
-        store.start(_factory(_WRITE_DONE), cwd, kind="k")
+        store.start(_factory(_WRITE_DONE), cwd, kind="k", extra={"result_format": 9})
+    assert store.status(cwd, first) is not None
 
 
 def test_count_cap_ignores_a_directory_without_a_record(tmp_path):

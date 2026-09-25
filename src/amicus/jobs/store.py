@@ -354,20 +354,15 @@ class JobStore:
     ttl_seconds: how long a terminal record is kept after completion.
     max_seconds: a job's wall-clock cap (a status poll past it reaps the job).
     max_count: records per workspace. A new start first evicts the oldest records the
-        cap may remove (terminal errors, results already returned once, results in an
-        older or no result format, records that predate delivery tracking) and is refused
+        cap may remove (terminal errors, results already returned once, records that
+        predate delivery tracking) and is refused
         with :class:`JobCapReached` when that cannot make room (#244).
-    result_format: the result format this server delivers; a ``done`` record stamped
-        with an older one (``extra.result_format``), or with none, can never be returned
-        again, so the cap may evict it. A newer one is kept for a newer server sharing the
-        state root. ``None`` disables the check.
     """
 
     root: Path
     ttl_seconds: int
     max_seconds: int
     max_count: int
-    result_format: int | None = None
 
     poll_after_ms: int = DEFAULT_POLL_AFTER_MS
 
@@ -909,17 +904,10 @@ class JobStore:
             return False
         if state != "done" or "delivered_epoch" not in meta:
             return True  # a terminal error, or a record that predates delivery tracking
-        if meta["delivered_epoch"] is not None:
-            return True
-        if self.result_format is None:
-            return False
-        extra = meta.get("extra")
-        stored = extra.get("result_format") if isinstance(extra, dict) else None
-        if not isinstance(stored, int) or isinstance(stored, bool):
-            return True  # no usable format: no release can deliver it
-        # An older format can never be delivered again, since formats only move forward. A
-        # newer one is kept: a newer server sharing this state root can still deliver it.
-        return stored < self.result_format
+        # Returned once, or not: the format is never consulted, because the release that
+        # wrote a result can still deliver it from a server sharing this state root, older
+        # or newer than this one; the same reason a consume keeps an incompatible result.
+        return meta["delivered_epoch"] is not None
 
     def _make_room(self, cwd: str) -> None:
         """Make room for one more record, or refuse. Runs under ``_LOCK`` before a start
