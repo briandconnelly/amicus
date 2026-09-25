@@ -93,8 +93,9 @@ support (where the host tracks a `task_id` rather than the raw tool response) is
 
 Job records expire after `AMICUS_JOB_TTL` (default 24h). A per-workspace cap
 (`AMICUS_JOB_MAX_COUNT`, default 50) evicts the oldest terminal records first, but never a running
-job or a result amicus has not yet returned (records from releases before delivery tracking
-excepted): when only those remain, a new paid call is refused
+job or a result amicus has not yet returned and can still deliver (records from releases before
+delivery tracking, and results in an older result format, are evictable): when only those
+remain, a new paid call is refused
 pre-spend with `job_cap_reached`, whose repair lists the workspace's jobs. Fetch or consume a
 finished result, or cancel a running job, then retry. An `amicus_job_list` result carries its own `truncated` and
 `truncation_hint` when the listing itself was cut.
