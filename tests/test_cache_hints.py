@@ -125,17 +125,23 @@ async def test_the_catalog_methods_advertise_the_ttl_on_the_wire():
         assert _envelope(await client.list_prompts_mcp()) == expected
 
 
-async def test_resource_reads_carry_no_ttl_static_or_volatile():
-    """`resources/read` is cacheable and deliberately unhinted.
-
-    The volatile template read is asserted alongside the static ones because it is the
-    reason for the exclusion: the SDK chooses a hint per METHOD, so a TTL on
-    `resources/read` would have covered a live install-and-auth report too.
-    """
+async def test_static_reads_carry_the_catalog_ttl_and_volatile_reads_none():
+    """`resources/read` is unhinted as a METHOD, because the template reads report live
+    state and the SDK chooses a hint per method; the three static bodies change only with
+    the fingerprint, so their reads carry the catalog TTL per URI (#250, ADR 0041).
+    `amicus://capabilities` embeds the live env report and stays uncached."""
+    cached = {
+        "resultType": "complete",
+        "ttlMs": server.CATALOG_CACHE_TTL_MS,
+        "cacheScope": server.CATALOG_CACHE_SCOPE,
+    }
     uncached = {"resultType": "complete", "ttlMs": 0, "cacheScope": "private"}
     async with Client(_stdio()) as client:
-        for uri in (*STATIC_RESOURCE_URIS, VOLATILE_RESOURCE_URI):
+        for uri in sorted(server.STATIC_READ_TTL_URIS):
+            assert _envelope(await client.read_resource_mcp(uri)) == cached, uri
+        for uri in ("amicus://capabilities", VOLATILE_RESOURCE_URI):
             assert _envelope(await client.read_resource_mcp(uri)) == uncached, uri
+    assert set(STATIC_RESOURCE_URIS) - {"amicus://capabilities"} == server.STATIC_READ_TTL_URIS
 
 
 @pytest.mark.parametrize("mode", ["legacy", None])

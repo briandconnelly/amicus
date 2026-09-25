@@ -141,8 +141,9 @@ async def test_initialize_and_discover_are_captured_without_versions():
 
 
 async def test_modern_result_envelopes_are_pinned_at_the_declared_cache_policy():
-    """The list methods carry the catalog TTL and `resources/read` carries none (ADR 0018);
-    the manifest pins the emitted values so a framework change is reviewed, not silent."""
+    """The list methods carry the catalog TTL; `resources/read` is unhinted as a method and
+    the three static reads carry the TTL per URI (ADR 0018, ADR 0041); the manifest pins the
+    emitted values so a framework change is reviewed, not silent."""
     m = await manifest.build_manifest(manifest.app_for_profile("all"))
     env = m["modern_result_envelopes"]
     assert set(env) == set(_CACHING_SPEC_LIST_METHODS) | {"resources/read", "tools/call"}
@@ -156,8 +157,9 @@ async def test_modern_result_envelopes_are_pinned_at_the_declared_cache_policy()
         assert env[method] == cached, method
     assert "resources/read" in server.UNCACHED_CACHEABLE_METHODS
     assert set(env["resources/read"]) == set(manifest.STATIC_RESOURCE_URIS)
+    assert set(manifest.STATIC_RESOURCE_URIS) == server.STATIC_READ_TTL_URIS
     for uri, fields in env["resources/read"].items():
-        assert fields == {"resultType": "complete", "ttlMs": 0, "cacheScope": "private"}, uri
+        assert fields == cached, uri
     assert env["tools/call"]["resultType"] == "complete"
     listed = {r["uri"] for r in m["resources"]}
     assert listed == set(manifest.STATIC_RESOURCE_URIS) | set(manifest.DYNAMIC_RESOURCE_URIS)

@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from fastmcp import FastMCP
 from mcp.server.caching import CacheHint
+from mcp.types import ReadResourceResult
 
 from amicus import SERVER_NAME, __version__, config, obs, tools
 from amicus.appstate import AppState
@@ -59,11 +60,16 @@ CACHED_CATALOG_METHODS: tuple[str, ...] = (
     "resources/templates/list",
     "prompts/list",
 )
-# `resources/read` is cacheable and deliberately unhinted. The SDK picks a hint per METHOD
-# while the client keys its cache per URI, so every resource read would share one window —
-# and `amicus://backends/{backend}` and `amicus://models/{backend}` report live install,
-# auth and model-catalog state that changes with no restart and no notification.
+# `resources/read` is cacheable and deliberately unhinted as a METHOD. The SDK picks a hint
+# per method while the client keys its cache per URI, so a method hint would put
+# `amicus://backends/{backend}` and `amicus://models/{backend}`, which report live install,
+# auth and model-catalog state, under one window. The three static bodies get the TTL per
+# URI instead (`_install_static_read_ttl`, ADR 0041); `amicus://capabilities` embeds the
+# live env report and surface_digest, so it stays at the SDK default.
 UNCACHED_CACHEABLE_METHODS: frozenset[str] = frozenset({"resources/read"})
+STATIC_READ_TTL_URIS: frozenset[str] = frozenset(
+    {"amicus://error-envelope", "amicus://result-meta", "amicus://params"}
+)
 
 
 def tasks_redelivery_seconds(settings: Settings) -> int:
@@ -198,6 +204,28 @@ def _install_cache_hints(app: FastMCP) -> None:
     )
 
 
+def _install_static_read_ttl(app: FastMCP) -> None:
+    """Re-register `resources/read` with a wrapper that stamps `CATALOG_CACHE_TTL_MS` on the
+    three static bodies (#250, ADR 0041). A handler's own `ttl_ms` wins per field over any
+    method hint, and `resources/read` has none, so every other URI stays at `ttlMs: 0`.
+    FastMCP 4.0.5 offers no per-resource hint, so the low-level entry is wrapped, which is
+    where the SDK invokes it (`mcp.server.lowlevel.Server.add_request_handler` replaces the
+    entry for a method)."""
+    lowlevel = app._mcp_server
+    entry = lowlevel._request_handlers["resources/read"]
+    original = entry.handler
+
+    async def read(ctx: Any, params: Any) -> Any:
+        result = await original(ctx, params)
+        if str(params.uri) in STATIC_READ_TTL_URIS and isinstance(result, ReadResourceResult):
+            return result.model_copy(
+                update={"ttl_ms": CATALOG_CACHE_TTL_MS, "cache_scope": CATALOG_CACHE_SCOPE}
+            )
+        return result
+
+    lowlevel.add_request_handler("resources/read", entry.params_type, read)
+
+
 def create_app(
     settings: Settings | None = None, registry: BackendRegistry | None = None
 ) -> FastMCP:
@@ -211,6 +239,7 @@ def create_app(
     lowlevel = app._mcp_server
     lowlevel.get_capabilities = _filter_capabilities(lowlevel.get_capabilities)  # ty: ignore[invalid-assignment]
     _install_cache_hints(app)
+    _install_static_read_ttl(app)
     app.add_transform(NullDefaultStrip())
     app.add_middleware(ConnectionLogMiddleware())
     app.add_middleware(InputSchemaDialectMiddleware())
