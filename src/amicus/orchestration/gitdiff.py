@@ -91,6 +91,20 @@ class GitUnavailableError(RuntimeError):
     """git executable missing or unlaunchable."""
 
 
+class WorkspaceMissingError(RuntimeError):
+    """The directory git was to run in no longer exists, or is not a directory (#248): it
+    passed workspace resolution and vanished before the spawn, which raises the same
+    FileNotFoundError a missing git executable does."""
+
+
+def _spawn_failure(cwd: str) -> Exception:
+    """The error for a git spawn that raised FileNotFoundError or NotADirectoryError: the
+    directory, when it is gone, else the executable."""
+    if not Path(cwd).is_dir():
+        return WorkspaceMissingError(f"workspace directory no longer exists: {cwd}")
+    return GitUnavailableError("git executable not found")
+
+
 class NotAGitRepoError(RuntimeError):
     """The selected workspace is not a git working tree."""
 
@@ -189,8 +203,8 @@ def _git(
             env=env,
             input=stdin,
         )
-    except FileNotFoundError as exc:
-        raise GitUnavailableError("git executable not found") from exc
+    except (FileNotFoundError, NotADirectoryError) as exc:
+        raise _spawn_failure(cwd) from exc
     except subprocess.TimeoutExpired as exc:
         raise RuntimeError(f"git {' '.join(args)} timed out after {timeout}s") from exc
     if proc.returncode != 0:
@@ -254,7 +268,7 @@ def _run_git_lines(
             consume=consume,
         )
     except gitproc.GitBinaryNotFound as exc:
-        raise GitUnavailableError("git executable not found") from exc
+        raise _spawn_failure(cwd) from exc
     except gitproc.GitStreamTimeout as exc:
         raise RuntimeError(f"git {' '.join(args)} timed out after {timeout}s") from exc
     except gitproc.GitStreamFailed as exc:
@@ -444,7 +458,7 @@ def _global_excludes_flags(cwd: str, timeout: int) -> list[str]:
             consume=_read_value,
         )
     except gitproc.GitBinaryNotFound as exc:
-        raise GitUnavailableError("git executable not found") from exc
+        raise _spawn_failure(cwd) from exc
     except gitproc.GitStreamTimeout as exc:
         raise RuntimeError(f"git config core.excludesFile timed out after {timeout}s") from exc
     except gitproc.GitStreamFailed as exc:
@@ -484,8 +498,8 @@ def _resolve_commit(cwd: str, ref: str, timeout: int) -> str | None:
             check=False,
             env=_base_git_env(),
         )
-    except FileNotFoundError as exc:
-        raise GitUnavailableError("git executable not found") from exc
+    except (FileNotFoundError, NotADirectoryError) as exc:
+        raise _spawn_failure(cwd) from exc
     except subprocess.TimeoutExpired as exc:
         raise RuntimeError(f"git rev-parse timed out after {timeout}s") from exc
     if proc.returncode != 0:
@@ -864,8 +878,8 @@ def _stream_redacted_diff(  # noqa: PLR0915
             env=env,
             start_new_session=True,
         )
-    except FileNotFoundError as exc:
-        raise GitUnavailableError("git executable not found") from exc
+    except (FileNotFoundError, NotADirectoryError) as exc:
+        raise _spawn_failure(cwd) from exc
     deadline = time.monotonic() + timeout
     timed_out = threading.Event()
     stderr_buf: list[str] = []

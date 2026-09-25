@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import subprocess
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from amicus.errors import error_envelope
@@ -258,7 +259,18 @@ async def prepare_run(
             return error_envelope(
                 "worktree_error", redaction.sanitize_echo_prose(str(exc))[:300], meta, plugin=plugin
             )
-        except FileNotFoundError as exc:
+        except (FileNotFoundError, NotADirectoryError) as exc:
+            if not Path(resolution.path).is_dir():
+                # The directory passed resolution and vanished before git ran (#248).
+                return error_envelope(
+                    "invalid_workspace_root",
+                    "the workspace directory no longer exists",
+                    meta,
+                    plugin=plugin,
+                    details=ErrorDetail(
+                        field="workspace_root", reason=ws.vanished_reason(resolution.source)
+                    ),
+                )
             return error_envelope(
                 "git_unavailable",
                 redaction.sanitize_echo_prose(str(exc))[:300],

@@ -2151,3 +2151,32 @@ def test_sum_numstat_counts_reader_truncated_record_exactly():
     # that happens to contain that text.
     truncated = "1\t2\t" + "d" * 64 + "…[line truncated]\n"
     assert gitdiff._sum_numstat(iter([truncated, "5\t5\tb.py\n"])) == (2, 6, 7)
+
+
+def test_a_vanished_workspace_is_not_reported_as_a_missing_git(tmp_path, monkeypatch):
+    """#248: a spawn's FileNotFoundError names the cwd when the cwd is gone, and a cwd that
+    is a file (NotADirectoryError) is the same case; the executable only when the
+    directory is there."""
+    gone = tmp_path / "gone"
+    with pytest.raises(gitdiff.WorkspaceMissingError):
+        gitdiff._git(str(gone), ["status"], 5)
+    a_file = tmp_path / "f"
+    a_file.write_text("x")
+    with pytest.raises(gitdiff.WorkspaceMissingError):
+        gitdiff._git(str(a_file), ["status"], 5)
+    with pytest.raises(gitdiff.WorkspaceMissingError):
+        gitdiff._resolve_commit(str(gone), "HEAD", 5)
+
+    def boom(*_args, **_kwargs):
+        raise gitdiff.gitproc.GitBinaryNotFound("nope")
+
+    monkeypatch.setattr(gitdiff.gitproc, "run_lines", boom)
+    with pytest.raises(gitdiff.WorkspaceMissingError):
+        gitdiff._run_git_lines(
+            ["ls-files"], cwd=str(gone), env={}, timeout=5, sep="\n", consume=list
+        )
+    # Control: with the directory present the same failure is still the executable.
+    with pytest.raises(gitdiff.GitUnavailableError):
+        gitdiff._run_git_lines(
+            ["ls-files"], cwd=str(tmp_path), env={}, timeout=5, sep="\n", consume=list
+        )
