@@ -1081,7 +1081,9 @@ class JobStore:
                     continue
                 state = self._status_of(jd, meta)
                 summaries.append(self._status_dict(jd, meta, state))
-            summaries.sort(key=lambda s: s["started_epoch"], reverse=True)  # newest first
+            summaries.sort(
+                key=lambda s: (s["started_epoch"], s["job_id"]), reverse=True
+            )  # newest first, id breaks ties (#249)
             return summaries
 
     def start_idempotent(
