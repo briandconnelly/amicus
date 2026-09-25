@@ -136,8 +136,13 @@ def resolve(
 def vanished_reason(source: str | None) -> str:
     """The details.reason for a workspace that resolved and then disappeared before git
     could run in it (#248): the token names the source that supplied the directory, so
-    the correction (fix the client's roots, or pass workspace_root) is the right one."""
-    return "root_not_a_directory" if source == "roots" else "not_a_directory"
+    the correction (fix the client's roots, pass another workspace_root, or restore the
+    server's working directory) is the right one."""
+    if source == "roots":
+        return "root_not_a_directory"
+    if source == "cwd":
+        return "cwd_gone"
+    return "not_a_directory"
 
 
 def workspace_warning_for(source: str | None, cwd: str | None) -> str | None:
