@@ -120,3 +120,17 @@ async def test_capabilities_resource_matches_the_tool():
     via_resource = json.loads(block.text)
     assert via_resource["surface_digest"] == via_tool["surface_digest"]
     assert via_resource["error_codes"] == via_tool["error_codes"]
+
+
+async def test_template_descriptions_are_one_line_and_name_no_internals():
+    """#250: the wire carries a written description, not a wrapped docstring; the old
+    models text also claimed a resource read has no repair carrier, which error.data.repair
+    on resource_not_found disproves."""
+    async with Client(_app()) as c:
+        by_uri = {t.uri_template: t.description for t in await c.list_resource_templates()}
+    assert by_uri == {
+        "amicus://backends/{backend}": resources.BACKEND_TEMPLATE_DESC,
+        "amicus://models/{backend}": resources.MODELS_TEMPLATE_DESC,
+    }
+    for text in by_uri.values():
+        assert "\n" not in text and "BACKEND_IDS" not in text and "repair carrier" not in text
