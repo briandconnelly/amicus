@@ -69,7 +69,8 @@ per-change, as its own lead says.
   steering the agent to install git (#248). Only handshake-era clients advertise roots. A
   workspace that vanishes after resolution is now `invalid_workspace_root` too, with the token of
   its source (`root_not_a_directory`, `not_a_directory`, or `cwd_gone` for the cwd opt-in), from
-  every git wrapper and the delegate preflight; a cwd that is a file is handled the same way.
+  every git wrapper, the delegate preflight and dry run, and a delegate job's worktree setup; a
+  cwd that is a file is handled the same way.
   The token list in the `workspace_root` contract at `amicus://params` grew by one.
 
 ## [0.6.0] - 2026-09-24
