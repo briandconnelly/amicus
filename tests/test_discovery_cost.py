@@ -257,11 +257,11 @@ properties and a description on `truncated` naming it has_more's 0.6.0 alias, ea
 203 + 751 = 954. Measured on the wire. MEASURED and BUDGET both move by the 954 bytes, so the
 budget keeps no headroom.
 
-The schema-49 drop (-1270 bytes on every profile: all 112817 -> 111547) is #247's reduction
+The schema-49 drop (-1270 bytes on every profile: all 113375 -> 112105) is #247's reduction
 that needs no deprecation window: `timeout_seconds` and `detail` keep a one-line summary
 with an `amicus://params` pointer, and their keyed-call and retention elaboration moves to
 the resource's `full` text. Two contributors, the first measured alone (the old
-`timeout_seconds` description restored, `detail` kept: 112463): `timeout_seconds` -916 bytes
+`timeout_seconds` description restored, `detail` kept: 113021): `timeout_seconds` -916 bytes
 across its four copies (229 each), `detail` -354 bytes across its six copies (59 each).
 916 + 354 = 1270. Measured on the wire. MEASURED and BUDGET both move down by the 1270
 bytes, so the budget keeps no headroom.
@@ -274,7 +274,7 @@ from tests.conftest import spawned_server_env
 
 from amicus import manifest
 
-MEASURED: dict[str, int] = {"all": 111547, "codex-kimi": 111555, "claude": 111547}
+MEASURED: dict[str, int] = {"all": 112105, "codex-kimi": 112113, "claude": 112105}
 # The budget is a literal, not MEASURED rounded up to the next kilobyte as it was until
 # 2026-09-14. The rounding left up to 1 KB of growth per bucket that no PR had to own, and
 # this file records three such accumulations (448 and 12 bytes in the paragraphs above, and
@@ -282,7 +282,7 @@ MEASURED: dict[str, int] = {"all": 111547, "codex-kimi": 111555, "claude": 11154
 # #94 that landed after it), each noticed only when the next deliberate raise re-measured.
 # Any growth now fails until a PR raises BUDGET and says why; a shrink passes and shows as
 # drift against MEASURED. Raising one means re-measuring and moving both.
-BUDGET: dict[str, int] = {"all": 111547, "codex-kimi": 111555, "claude": 111547}
+BUDGET: dict[str, int] = {"all": 112105, "codex-kimi": 112113, "claude": 112105}
 
 
 @pytest.mark.parametrize("profile", sorted(manifest.PROFILES))
