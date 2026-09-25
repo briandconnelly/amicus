@@ -1542,7 +1542,7 @@
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-44",
+                "default": "amicus/0.1/schema-45",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -2455,7 +2455,7 @@
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-44",
+            "default": "amicus/0.1/schema-45",
             "title": "Fingerprint",
             "type": "string"
           },
@@ -2700,17 +2700,15 @@
         "openWorldHint": true,
         "readOnlyHint": false
       },
-      "description": "PAID — spends the selected backend's quota on every new call. A fixed adversarial critic on `backend` attacks `target` (a plan, claim or decision) using `evidence` and an optionally attached git diff; the critic stance is the product, so there is no instructions_append. Claude only in v1 (feature adversarial_review). Egress: sends target, evidence, extra_context and the redacted diff raw to the backend's provider. An attached scope that gathers nothing returns review_status=not_run with no spend. Recorded as a job (meta.job_id). The job record keeps the whole answer — best-effort secret-redacted, and it can quote your inputs — whatever `detail` delivered, until it expires (AMICUS_JOB_TTL, default 24h; an expired record is removed on a later job call, not by a daemon), the per-workspace cap evicts it once returned, or amicus_job_consume_result removes it.",
+      "description": "PAID — spends the selected backend's quota on every new call. A fixed adversarial critic on `backend` attacks `target` (a plan, claim or decision) using `evidence` and an optionally attached git diff; the critic stance is the product, so there is no instructions_append. Claude only in v1 (feature adversarial_review); listed in every profile, and backend_unavailable while claude is not in AMICUS_BACKENDS. Egress: sends target, evidence, extra_context and the redacted diff raw to the backend's provider. An attached scope that gathers nothing returns review_status=not_run with no spend. Recorded as a job (meta.job_id). The job record keeps the whole answer — best-effort secret-redacted, and it can quote your inputs — whatever `detail` delivered, until it expires (AMICUS_JOB_TTL, default 24h; an expired record is removed on a later job call, not by a daemon), the per-workspace cap evicts it once returned, or amicus_job_consume_result removes it.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "properties": {
           "backend": {
-            "description": "Which backend answers: codex | kimi | claude. Required.",
+            "description": "Which backend answers: claude, the only backend with adversarial_review in v1. Required.",
             "enum": [
-              "claude",
-              "codex",
-              "kimi"
+              "claude"
             ],
             "type": "string"
           },
@@ -3504,11 +3502,9 @@
         "additionalProperties": false,
         "properties": {
           "backend": {
-            "description": "Which backend answers: codex | kimi | claude. Required.",
+            "description": "Which backend answers: claude, the only backend with adversarial_review in v1. Required.",
             "enum": [
-              "claude",
-              "codex",
-              "kimi"
+              "claude"
             ],
             "type": "string"
           },
@@ -5552,9 +5548,8 @@
         "additionalProperties": false,
         "properties": {
           "backend": {
-            "description": "Which backend answers: codex | kimi | claude. Required.",
+            "description": "Which backend answers: codex | kimi (claude stays review-only). Required.",
             "enum": [
-              "claude",
               "codex",
               "kimi"
             ],
@@ -5987,9 +5982,8 @@
         "additionalProperties": false,
         "properties": {
           "backend": {
-            "description": "Which backend answers: codex | kimi | claude. Required.",
+            "description": "Which backend answers: codex | kimi (claude stays review-only). Required.",
             "enum": [
-              "claude",
               "codex",
               "kimi"
             ],
@@ -6340,9 +6334,8 @@
         "additionalProperties": false,
         "properties": {
           "backend": {
-            "description": "Which backend answers: codex | kimi | claude. Required.",
+            "description": "Which backend answers: codex | kimi (claude stays review-only). Required.",
             "enum": [
-              "claude",
               "codex",
               "kimi"
             ],

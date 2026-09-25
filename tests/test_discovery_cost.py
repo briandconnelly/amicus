@@ -218,6 +218,20 @@ results fill the cap and it refuses paid calls (job_cap_reached), 20 bytes over 
 all, after "read results promptly" was dropped as implied. A first draft cost 1338 bytes. The
 new `job_cap_reached` code moves nothing here: error codes do not ride tools/list. Measured on
 the wire. MEASURED and BUDGET both move by the 132 bytes, so the budget keeps no headroom.
+
+The schema-44 -> schema-45 raise (+152 bytes on every profile: all 112683 -> 112835) is #245
+and #246: #245's `timeout` contract change rides error envelopes, not tools/list, so it moves
+nothing here. #246 narrows each paid tool's `backend` enum to the set the verb actually accepts
+(ADR 0040). Two contributors, each measured alone (the other reverted, per profile; the same
+delta on every profile): amicus_delegate, amicus_delegate_async and amicus_delegate_dry_run
+drop `claude` from their `backend` enum and reword its description to name the omission
+("codex | kimi (claude stays review-only)"), +27 bytes net across the three tools.
+amicus_adversarial_review and amicus_adversarial_review_async narrow their `backend` enum to
+`claude` alone, reword its description ("claude, the only backend with adversarial_review in
+v1"), and gain a clause in the tool description itself ("listed in every profile, and
+backend_unavailable while claude is not in AMICUS_BACKENDS"), +125 bytes net across the two
+tools. 27 + 125 = 152. Measured on the wire. MEASURED and BUDGET both move by the 152 bytes,
+so the budget keeps no headroom.
 """
 
 from __future__ import annotations
@@ -227,7 +241,7 @@ from tests.conftest import spawned_server_env
 
 from amicus import manifest
 
-MEASURED: dict[str, int] = {"all": 112683, "codex-kimi": 112691, "claude": 112683}
+MEASURED: dict[str, int] = {"all": 112835, "codex-kimi": 112843, "claude": 112835}
 # The budget is a literal, not MEASURED rounded up to the next kilobyte as it was until
 # 2026-09-14. The rounding left up to 1 KB of growth per bucket that no PR had to own, and
 # this file records three such accumulations (448 and 12 bytes in the paragraphs above, and
@@ -235,7 +249,7 @@ MEASURED: dict[str, int] = {"all": 112683, "codex-kimi": 112691, "claude": 11268
 # #94 that landed after it), each noticed only when the next deliberate raise re-measured.
 # Any growth now fails until a PR raises BUDGET and says why; a shrink passes and shows as
 # drift against MEASURED. Raising one means re-measuring and moving both.
-BUDGET: dict[str, int] = {"all": 112683, "codex-kimi": 112691, "claude": 112683}
+BUDGET: dict[str, int] = {"all": 112835, "codex-kimi": 112843, "claude": 112835}
 
 
 @pytest.mark.parametrize("profile", sorted(manifest.PROFILES))
