@@ -389,7 +389,7 @@ _JOB_PARAMS: dict[str, tuple[list[str], list[str]]] = {
     "amicus_job_result": (["job_id"], ["workspace_root", "detail"]),
     "amicus_job_consume_result": (["job_id"], ["workspace_root", "detail"]),
     "amicus_job_cancel": (["job_id"], ["workspace_root"]),
-    "amicus_job_list": ([], ["workspace_root", "limit", "status", "backend", "task_id"]),
+    "amicus_job_list": ([], ["workspace_root", "limit", "cursor", "status", "backend", "task_id"]),
 }
 
 

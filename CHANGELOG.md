@@ -20,6 +20,18 @@ per-change, as its own lead says.
 
 ## [Unreleased]
 
+### Added
+
+- **Surface.** `amicus_job_list` pages (#249, ADR 0042). A page that omits matching jobs
+  carries `has_more: true` and `next_cursor`; pass it as `cursor` with the same filters for
+  the jobs after it, and a cursor whose job has since been consumed still resolves, because
+  it names the anchor's start time and id rather than a position. `truncated` and
+  `truncation_hint` report what they did in 0.6.0, now documented as an alias of `has_more`
+  on this tool. A cursor not in the form the tool returns is `invalid_arguments`. Omitting
+  `limit` still returns every retained match; the description now names the per-workspace
+  cap `AMICUS_JOB_MAX_COUNT`, which server processes sharing a state root can each exceed by
+  one start.
+
 ### Changed
 
 - **Surface.** Six minor contract findings of the 2026-09-24 audit (#250). Reads of

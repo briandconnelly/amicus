@@ -523,6 +523,17 @@ JobLimitParam = Annotated[
         le=1000,
     ),
 ]
+JobCursorParam = Annotated[
+    str | None,
+    Field(
+        description=(
+            "Opaque page cursor: a previous result's next_cursor, with the same filters. "
+            "Omit to start from the newest job."
+        ),
+        max_length=80,
+        pattern=CONTROL_CHAR_FREE_PATTERN,
+    ),
+]
 JobStatusFilterParam = Annotated[
     JobState | None, Field(description="Only jobs in this state; omit for all.")
 ]

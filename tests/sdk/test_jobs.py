@@ -2032,3 +2032,24 @@ def test_job_dir_accepts_the_minted_shape(tmp_path: Path):
     store = _store(tmp_path)
     jd = store._job_dir(str(tmp_path), "0123456789abcdef0123456789abcdef")
     assert jd.name == "0123456789abcdef0123456789abcdef"
+
+
+def test_list_orders_equal_epochs_by_job_id(tmp_path):
+    """#249: a cursor needs a total order, and started_epoch alone can tie (time.time()
+    resolution), so job_id breaks the tie; both descend. The tie is written into each
+    record rather than by patching time.time, which store.py reaches through the global
+    `time` module, so a patch there would move the whole process's clock."""
+    store = _store(tmp_path)
+    cwd = str(tmp_path)
+    ids = []
+    for _ in range(4):
+        jid, _ = store.start(_factory(_WRITE_DONE), cwd, kind="k")
+        _wait_terminal(store, cwd, jid)
+        ids.append(jid)
+    for jd in store._job_dirs(store._ws_dir(cwd)):
+        meta = store._read_meta(jd)
+        assert meta is not None
+        meta["started_epoch"] = 1_700_000_000.0
+        store._write_meta(jd, meta)
+    listed = [j["job_id"] for j in store.list_jobs(cwd)]
+    assert listed == sorted(ids, reverse=True)

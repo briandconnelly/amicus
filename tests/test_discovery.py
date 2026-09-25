@@ -417,7 +417,7 @@ async def test_capabilities_reports_unknown_include_schemas_as_invalid_arguments
 async def test_job_list_filters_are_advertised():
     by_name = {t.name: t for t in await _tools(_app())}
     props = by_name["amicus_job_list"].input_schema["properties"]
-    assert set(props) == {"workspace_root", "limit", "status", "backend", "task_id"}
+    assert set(props) == {"workspace_root", "limit", "cursor", "status", "backend", "task_id"}
     assert set(by_name["amicus_job_result"].input_schema["properties"]) == {
         "job_id",
         "workspace_root",

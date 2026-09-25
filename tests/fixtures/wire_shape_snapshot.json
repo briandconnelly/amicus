@@ -817,6 +817,7 @@
   },
   "handles": {
     "job_list": {
+      "has_more": true,
       "jobs": [
         {
           "backend": "codex",
@@ -858,9 +859,10 @@
         "truncated": false,
         "workspace_source": "param"
       },
+      "next_cursor": "1700000000.0:00000000000000000000000000000000",
       "ok": true,
       "truncated": true,
-      "truncation_hint": "showing the 2 newest of more matching jobs; omit `limit` for every retained match, or narrow with `status`, `backend` or `task_id`",
+      "truncation_hint": "showing the 2 newest of more matching jobs; pass next_cursor as `cursor` with the same filters for the next page, or narrow with `status`, `backend` or `task_id`",
       "workspace": {
         "cwd": "/repo",
         "workspace_source": "param",

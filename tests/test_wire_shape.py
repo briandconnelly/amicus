@@ -161,8 +161,9 @@ def test_handles_section_pins_the_job_envelopes():
     assert handles["job_status_running"]["poll_after_ms"] == 1000
     assert handles["job_status_cancelled"]["poll_after_ms"] is None
     assert handles["job_status_cancelled"]["cleanup_warnings"] == ["/tmp/amicus-wt-leftover"]
-    assert handles["job_list"]["truncated"] is True
-    assert "omit `limit`" in handles["job_list"]["truncation_hint"]
+    assert handles["job_list"]["truncated"] is True and handles["job_list"]["has_more"] is True
+    assert handles["job_list"]["next_cursor"]
+    assert "next_cursor" in handles["job_list"]["truncation_hint"]
     assert handles["job_list"]["jobs"][0]["task_id"] == "task-0"
     for env in handles.values():
         assert env["meta"]["fingerprint"] == "<fingerprint>"

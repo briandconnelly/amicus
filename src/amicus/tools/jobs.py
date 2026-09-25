@@ -6,10 +6,13 @@ backend tag is foreign and reported not-found (ADR 0008)."""
 from __future__ import annotations
 
 import asyncio
+import math
+import re
 from typing import TYPE_CHECKING, Any
 
 from fastmcp import Context
 
+from amicus.errors import error_envelope
 from amicus.jobs import lifecycle, lookup
 from amicus.jobs.delivery import (
     attach_consume_disposition,
@@ -17,8 +20,10 @@ from amicus.jobs.delivery import (
     finished_job_envelope,
 )
 from amicus.jobs.store import MAX_POLL_AFTER_MS
+from amicus.schemas.envelope import InvalidArgument
 from amicus.schemas.params import (
     DetailParam,
+    JobCursorParam,
     JobIdParam,
     JobLimitParam,
     JobStatusFilterParam,
@@ -46,6 +51,29 @@ _RETENTION = (
     "Records expire after AMICUS_JOB_TTL (default 24h); unfetched results fill a "
     "per-workspace cap that refuses paid calls (job_cap_reached)."
 )
+
+# A cursor is the anchor row's own (started_epoch, job_id), which is the listing's sort key
+# (#249, ADR 0042): a page after it is every row that sorts below it, so an anchor that has
+# since been consumed or evicted still resolves. Opaque to callers; this tool alone mints it.
+_JOB_ID_RE = re.compile(r"[0-9a-f]{32}")
+
+
+def _cursor_for(row: dict[str, Any]) -> str:
+    return f"{row['started_epoch']!r}:{row['job_id']}"
+
+
+def _parse_cursor(cursor: str) -> tuple[float, str] | None:
+    """(started_epoch, job_id) from a cursor in the form this tool issues, else None. Only
+    the form is checked: a well-formed cursor is an anchor whether or not it was issued."""
+    epoch, sep, job_id = cursor.partition(":")
+    if not sep or not _JOB_ID_RE.fullmatch(job_id):
+        return None
+    try:
+        started = float(epoch)
+    except ValueError:
+        return None
+    # `nan` compares false to every row, so it would page to nothing rather than fail.
+    return (started, job_id) if math.isfinite(started) else None
 
 
 def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tuple[str, ...]:
@@ -215,8 +243,10 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
         description=(
             f"{FREE_MARKER} List the jobs known for this workspace, newest first, across all "
             "backends; narrow with `backend`, `status`, or `task_id` (no match is an empty "
-            "list). Only an explicit `limit` "
-            f"truncates (truncated: true, no cursor). {_RETENTION}"
+            "list). Only an explicit `limit` pages (has_more: true; pass next_cursor as "
+            "`cursor` with the same filters for the page after it). The per-workspace cap "
+            "AMICUS_JOB_MAX_COUNT limits how many jobs are kept; server processes sharing a "
+            f"state root can each exceed it by one start. {_RETENTION}"
         ),
     )
     @guard("amicus_job_list", settings)
@@ -224,6 +254,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
         ctx: Context | None = None,
         workspace_root: WorkspaceRootParam = None,
         limit: JobLimitParam = None,
+        cursor: JobCursorParam = None,
         status: JobStatusFilterParam = None,
         backend: OptionalBackendParam = None,
         task_id: TaskIdParam = None,
@@ -233,6 +264,22 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
         if err is not None:
             return err
         assert cwd is not None
+        anchor: tuple[float, str] | None = None
+        if cursor is not None:
+            anchor = _parse_cursor(cursor)
+            if anchor is None:
+                reason = "not in the form of a next_cursor amicus_job_list returns"
+                return error_envelope(
+                    "invalid_arguments",
+                    f"amicus_job_list: 1 invalid argument(s): cursor — {reason}",
+                    lookup.job_meta(settings, cwd, source, roots_source),
+                    repair_tool="amicus_job_list",
+                    repair_alternative=(
+                        "Pass the previous page's next_cursor as `cursor` unchanged, or omit "
+                        "it to start from the newest job."
+                    ),
+                    invalid_arguments=[InvalidArgument(field="cursor", reason=reason)],
+                )
         rows = await asyncio.to_thread(store().list_jobs, cwd)
         tasks = lookup.task_map(settings).entries()
         # First association wins, as TaskJobMap.task_for does: a keyed replay from another
@@ -251,19 +298,24 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
         if task_id is not None:
             wanted = tasks.get(task_id)
             rows = [r for r in rows if wanted is not None and r["job_id"] == wanted]
+        if anchor is not None:
+            rows = [r for r in rows if (r["started_epoch"], r["job_id"]) < anchor]
         truncated = limit is not None and len(rows) > limit
         if limit is not None:
             rows = rows[:limit]
         result = JobListResult(
             jobs=[lookup.summary_model(r, task_by_job.get(r["job_id"])) for r in rows],
             workspace=lookup.workspace_of(cwd, source),
+            has_more=truncated,
             truncated=truncated,
             truncation_hint=(
-                f"showing the {limit} newest of more matching jobs; omit `limit` for every "
-                "retained match, or narrow with `status`, `backend` or `task_id`"
+                f"showing the {limit} newest of more matching jobs; pass next_cursor as "
+                "`cursor` with the same filters for the next page, or narrow with `status`, "
+                "`backend` or `task_id`"
                 if truncated
                 else None
             ),
+            next_cursor=_cursor_for(rows[-1]) if truncated else None,
             meta=lookup.job_meta(settings, cwd, source, roots_source),
         ).model_dump(mode="json")
         return result
