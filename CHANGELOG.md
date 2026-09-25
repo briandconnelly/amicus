@@ -38,8 +38,9 @@ per-change, as its own lead says.
   publish `backend` as `codex | kimi`, and `amicus_adversarial_review` and its async twin as
   `claude`, the sets those verbs accept (#246, ADR 0040). A backend outside the set now fails
   at the boundary as `invalid_arguments` with `allowed_values`, where it failed after
-  resolution as `feature_unsupported`; that code remains for a plugin that does not declare
-  the feature, and its repair now lists every backend rather than the one that failed.
+  resolution as `feature_unsupported`; that code remains only as a defensive check, returned if
+  the named backend's declared features lack the verb, which no backend a tool's enum accepts
+  does today, and its repair now lists every backend rather than the one that failed.
   `amicus_capabilities.tool_details[].backends` derives from the same table.
 
 ### Fixed

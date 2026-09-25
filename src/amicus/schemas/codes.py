@@ -51,7 +51,8 @@ LOCAL_CODES = frozenset(
         "job_cap_reached",
         # The registry recorded the backend as unavailable (import, conformance, config).
         "backend_unavailable",
-        # The backend does not declare the feature this verb needs (e.g. claude+delegate).
+        # The backend does not declare the feature this verb needs: a defensive check, since
+        # each tool's backend enum already rejects such a pairing as invalid_arguments (#246).
         "feature_unsupported",
         # Codex-local (M1): the user's own CLI config carries a key or value the installed
         # CLI refuses at startup; zero spend. Preserved verbatim, never generalized.

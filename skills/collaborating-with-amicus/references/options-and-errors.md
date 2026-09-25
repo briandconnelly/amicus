@@ -104,8 +104,9 @@ best-effort spend threshold stopped the run, and it **may already have spent**. 
 threshold only between model calls, so `meta.usage.cost_usd` can exceed `max_budget_usd`; read
 the threshold as a stop, never as a ceiling.
 
-An in-tree backend a verb does not accept — a delegate routed to `claude`, for example — is
-rejected at the boundary as `invalid_arguments` with `details.allowed_values`: the tool's `backend`
-enum is the accepted set. `feature_unsupported` remains only for a third-party backend plugin that
-does not declare the feature. `amicus_backends`' `features` list answers either for free, before
-the call.
+A backend a verb does not accept — a delegate routed to `claude`, for example, or any id outside
+the tool's `backend` enum, in-tree or not — is rejected at the boundary as `invalid_arguments` with
+`details.allowed_values`: the enum is the accepted set. `feature_unsupported` is only a defensive
+check, returned if the named backend's declared features lack the verb, which no backend a tool's
+enum accepts does today. `amicus_backends`' `features` list answers either for free, before the
+call.

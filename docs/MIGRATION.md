@@ -124,7 +124,7 @@ Most amicus tools take `backend` as a required parameter (no default); pick `"co
 | `claude_job_cancel` | `amicus_job_cancel(...)` |
 | `claude_job_list` | `amicus_job_list(...)` |
 
-`claude-in-codex` had no `claude_delegate`: Claude is review-only in amicus too, so `amicus_delegate` and `amicus_delegate_async` reject `backend="claude"` at the boundary as `invalid_arguments` with `details.allowed_values`, because each tool's `backend` enum is the set it accepts; `feature_unsupported` remains only for a third-party backend plugin that does not declare the feature.
+`claude-in-codex` had no `claude_delegate`: Claude is review-only in amicus too, so `amicus_delegate` and `amicus_delegate_async` reject `backend="claude"` at the boundary as `invalid_arguments` with `details.allowed_values`, because each tool's `backend` enum is the set it accepts, and any backend outside it, in-tree or not, is `invalid_arguments`; `feature_unsupported` is only a defensive check, returned if the named backend's declared features lack the verb, which no backend a tool's enum accepts does today.
 `amicus_adversarial_review(_async)` is the only pair that rejects `backend="codex"` and `backend="kimi"`, because only Claude declares the `adversarial_review` capability.
 
 ## Behavior deltas

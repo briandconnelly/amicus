@@ -21,7 +21,8 @@ Every tool no enabled backend can serve stays listed.
 The adversarial review description says so (its call is `backend_unavailable` unless `claude` is enabled); the delegate descriptions, already long, do not.
 
 **`feature_unsupported` repairs to the unfiltered `amicus_backends` call.**
-The code is now reachable only through a plugin that does not declare the feature.
+The code is now only a defensive check: it is returned if the named backend's declared features lack the verb, which no backend a tool's enum accepts does today.
+A third-party backend cannot reach it either, because `config._profile` drops an id outside `BACKEND_IDS`, each tool's `backend` `Literal` rejects one, and the registry refuses an entry point that claims an in-tree id (`reserved_id`); such a call is `invalid_arguments`.
 ADR 0021 forbids a repair whose `arguments` are not a complete call, and a correction that carries a prompt input cannot be echoed, so the repair lists every candidate rather than naming one.
 
 ## Consequences
