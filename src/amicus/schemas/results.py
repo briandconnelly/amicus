@@ -425,11 +425,19 @@ class JobSummary(BaseModel):
     task_id: str | None = None
 
 
+_NEXT_CURSOR_DESC = (
+    "Pass as `cursor` with the same filters for the jobs after this page; null when this "
+    "page is the last."
+)
+publish.KEPT_DESCRIPTIONS.add(_NEXT_CURSOR_DESC)
+
+
 class JobListResult(SuccessBase):
     jobs: list[JobSummary]
     workspace: Workspace
     truncated: bool = False
     truncation_hint: str | None = None
+    next_cursor: str | None = Field(default=None, description=_NEXT_CURSOR_DESC)
 
 
 # --- previews -------------------------------------------------------------------------

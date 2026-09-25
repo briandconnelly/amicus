@@ -480,7 +480,7 @@ async def test_list_filters_and_the_task_id_lookup(app, store, settings, tmp_pat
         assert listed["jobs"][0]["backend"] == "codex" and listed["jobs"][0]["result_ok"] is True
         limited = (await c.call_tool("amicus_job_list", {"limit": 1, **ws})).structured_content
         assert [j["job_id"] for j in limited["jobs"]] == [second] and limited["truncated"] is True
-        assert "omit `limit`" in limited["truncation_hint"]
+        assert "cursor" in limited["truncation_hint"] and limited["next_cursor"]
         by_task = (
             await c.call_tool("amicus_job_list", {"task_id": "task-xyz", **ws})
         ).structured_content
@@ -720,3 +720,59 @@ async def test_a_full_cap_refuses_a_paid_call_until_the_result_is_fetched(
         await _wait_done(store, tmp_path, second)
         listed = (await c.call_tool("amicus_job_list", ws)).structured_content
         assert [j["job_id"] for j in listed["jobs"]] == [second]
+
+
+async def test_list_pages_by_cursor_and_survives_a_consumed_anchor(app, store, tmp_path):
+    """#249: limit=1 walks three jobs in three pages; the second page still resolves after
+    its anchor (the first page's last job) was consumed, because the cursor is the anchor's
+    (started_epoch, job_id) rather than a position; the last page carries no cursor."""
+    ws = {"workspace_root": str(tmp_path)}
+    async with Client(app) as c:
+        schemas = await _schemas(c)
+        ids = []
+        for _ in range(3):
+            job_id = await _start(c, tmp_path)
+            await _wait_done(store, tmp_path, job_id)
+            ids.append(job_id)
+        first = (await c.call_tool("amicus_job_list", {"limit": 1, **ws})).structured_content
+        schemas["amicus_job_list"].validate(first)
+        assert [j["job_id"] for j in first["jobs"]] == [ids[2]]
+        assert first["truncated"] is True and first["next_cursor"]
+        assert "cursor" in first["truncation_hint"]
+        await c.call_tool("amicus_job_consume_result", {"job_id": ids[2], **ws})
+        second = (
+            await c.call_tool("amicus_job_list", {"limit": 1, "cursor": first["next_cursor"], **ws})
+        ).structured_content
+        assert [j["job_id"] for j in second["jobs"]] == [ids[1]] and second["truncated"] is True
+        third = (
+            await c.call_tool(
+                "amicus_job_list", {"limit": 1, "cursor": second["next_cursor"], **ws}
+            )
+        ).structured_content
+        assert [j["job_id"] for j in third["jobs"]] == [ids[0]]
+        assert third["truncated"] is False and third["next_cursor"] is None
+        assert third["truncation_hint"] is None
+        # A cursor with a filter keeps the filter; omitting limit after a cursor returns the rest.
+        rest = (
+            await c.call_tool("amicus_job_list", {"cursor": first["next_cursor"], **ws})
+        ).structured_content
+        assert [j["job_id"] for j in rest["jobs"]] == [ids[1], ids[0]]
+        filtered = (
+            await c.call_tool(
+                "amicus_job_list", {"cursor": first["next_cursor"], "status": "running", **ws}
+            )
+        ).structured_content
+        assert filtered["jobs"] == [] and filtered["next_cursor"] is None
+
+
+async def test_list_rejects_a_cursor_it_did_not_issue(app, tmp_path):
+    ws = {"workspace_root": str(tmp_path)}
+    async with Client(app) as c:
+        for bad in ("nope", "1.5:short", "x:" + "a" * 32, ":" + "a" * 32):
+            res = await c.call_tool("amicus_job_list", {"cursor": bad, **ws}, raise_on_error=False)
+            err = res.structured_content["error"]
+            assert err["code"] == "invalid_arguments", bad
+            assert (
+                err["details"]["field"] == "cursor" and err["repair"]["tool"] == "amicus_job_list"
+            )
+            assert "cursor" in err["repair"]["alternative"]
