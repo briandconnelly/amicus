@@ -71,6 +71,14 @@ JOB_DEADLINE_TIMEOUT_ALTERNATIVE = (
     "the task, or have the operator raise AMICUS_JOB_MAX_SECONDS."
 )
 
+# A keyed run's same call replays its stored outcome (ADR 0020), so a timeout whose own
+# repair says to retry the same call (codex's capture-failed hint) is not temporary for it,
+# and the prose puts the new key first (ADR 0039).
+KEYED_REPLAY_NOTE = (
+    "This call passed an idempotency_key, and repeating it with the same key replays this "
+    "stored error without running again, so any retry below needs a NEW idempotency_key. "
+)
+
 _LOCAL_RULES: dict[str, RepairRule] = {
     "timeout": RepairRule("start_new_job", None, False, TIMEOUT_ALTERNATIVE),
     "answer_unavailable": RepairRule(
@@ -351,6 +359,7 @@ def render_failure(
     background: bool = False,
     job_max_seconds: int | None = None,
     deadline_seconds: int | None = None,
+    keyed: bool = False,
 ) -> dict[str, Any]:
     """The wire envelope for a backend's classified failure. Minted codes are
     generalized; an uncataloged code is reported as internal_error with the original
@@ -361,7 +370,9 @@ def render_failure(
     prose (ADR 0039). A sync run names the twin only when the job deadline
     (`job_max_seconds`) is longer than the one that passed (`deadline_seconds`); when either
     is unknown (a record written before they existed) it is named. A backend that already
-    gave its own repair (e.g. codex's capture-failed retry-once hint) keeps it unchanged."""
+    gave its own repair (e.g. codex's capture-failed retry-once hint) keeps it, except that a
+    `keyed` run's temporary timeout is made non-temporary and its prose leads with
+    KEYED_REPLAY_NOTE, because the same keyed call would replay this error."""
     table = repair_table(plugin)
     code = generalize_code(failure.code, plugin.backend_id)
     message = failure.detail
@@ -389,6 +400,9 @@ def render_failure(
             or (job_max_seconds > deadline_seconds)
         ):
             tool = async_twin_for(kind)
+    if code == "timeout" and keyed and temporary:
+        temporary = False
+        alternative = KEYED_REPLAY_NOTE + (alternative or "")
     repair: Repair | None = Repair(
         next_step=next_step,  # ty: ignore[invalid-argument-type]
         tool=tool,

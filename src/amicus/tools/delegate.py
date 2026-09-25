@@ -86,6 +86,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
             reasoning_effort=reasoning_effort,
             timeout_seconds=timeout_seconds,
             background=idempotency_key is not None,
+            keyed=idempotency_key is not None,
             task=task,
         )
         if isinstance(prep, dict):
@@ -138,6 +139,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
             reasoning_effort=reasoning_effort,
             timeout_seconds=None,
             background=True,
+            keyed=idempotency_key is not None,
             task=task,
         )
         if isinstance(prep, dict):

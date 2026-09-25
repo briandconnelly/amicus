@@ -59,12 +59,20 @@ def test_public_half_never_carries_inputs_and_round_trips():
 
 def test_from_parts_tolerates_a_legacy_public_half_missing_optional_keys():
     public = _spec().public()
-    for key in ("focus", "untracked", "max_output_bytes", "background", "job_max_seconds"):
+    for key in (
+        "focus",
+        "untracked",
+        "max_output_bytes",
+        "background",
+        "job_max_seconds",
+        "keyed",
+    ):
         public.pop(key, None)
     spec = RunSpec.from_parts(public, {"question": "q"})
     assert spec.untracked == "explicit_only" and spec.max_output_bytes > 0 and spec.focus is None
     assert spec.background is False
     assert spec.job_max_seconds is None
+    assert spec.keyed is False
 
 
 def test_background_leaves_the_idempotency_identity_unchanged():
@@ -73,6 +81,16 @@ def test_background_leaves_the_idempotency_identity_unchanged():
 
     spec = _spec()
     assert spec.arg_hash() == dataclasses.replace(spec, background=True).arg_hash()
+
+
+def test_keyed_leaves_the_idempotency_identity_unchanged():
+    """Whether a key was passed is how the call was made, not what it asks for: a record
+    written before `keyed` existed still replays."""
+    import dataclasses
+
+    spec = _spec()
+    assert spec.arg_hash() == dataclasses.replace(spec, keyed=True).arg_hash()
+    assert "keyed" not in spec.identity()
 
 
 def test_job_max_seconds_leaves_the_idempotency_identity_unchanged():

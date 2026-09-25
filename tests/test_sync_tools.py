@@ -490,3 +490,92 @@ async def test_a_delegate_with_no_diff_and_no_answer_is_an_error(app, repo, monk
             raise_on_error=False,
         )
     assert res.structured_content["error"]["code"] == "answer_unavailable"
+
+
+# --- a keyed run's retry-the-same-call failure (Copilot on PR #253, ADR 0039) ---------------
+
+
+async def test_the_sync_tools_record_whether_the_call_was_keyed(app, tmp_path):
+    args = {"backend": "codex", "question": "why?", "workspace_root": str(tmp_path)}
+    async with Client(app) as c:
+        unkeyed = (await c.call_tool("amicus_consult", args)).structured_content
+        keyed = (
+            await c.call_tool("amicus_consult", {**args, "idempotency_key": "k"})
+        ).structured_content
+        handle = (
+            await c.call_tool("amicus_consult_async", {**args, "idempotency_key": "k2"})
+        ).structured_content
+        bare_handle = (await c.call_tool("amicus_consult_async", args)).structured_content
+    store = lifecycle.job_store(server.state_of(app).settings)
+
+    def keyed_on_disk(job_id):
+        spec = store._job_dir(str(tmp_path), job_id) / "spec.json"
+        return json.loads(spec.read_text())["keyed"]
+
+    assert keyed_on_disk(unkeyed["meta"]["job_id"]) is False
+    assert keyed_on_disk(keyed["meta"]["job_id"]) is True
+    assert keyed_on_disk(handle["job_id"]) is True
+    assert keyed_on_disk(bare_handle["job_id"]) is False
+
+
+async def test_a_keyed_capture_failed_timeout_is_not_temporary(monkeypatch, tmp_path):
+    """Codex's capture-failed timeout says to retry the same call once; under a key that call
+    replays this error, so the keyed run's envelope is non-temporary and names a new key."""
+    from tests.support import codexfixtures as cxf
+
+    from amicus import errors
+    from amicus.orchestration import run as run_mod
+    from amicus.request import RunSpec
+    from amicus.sdk.core.runtime import TIMED_OUT
+
+    plugin, _ = cxf.make_backend()
+    monkeypatch.setattr(plugin.binary, "resolve", lambda *a, **k: "/CODEX")
+    monkeypatch.setattr(
+        run_mod.runtime,
+        "run_async",
+        cxf.scripted_run_async(stderr=TIMED_OUT, exit_code=-9, timed_out=True, capture_failed=True),
+    )
+    spec = RunSpec(
+        backend="codex",
+        kind="consult",
+        tool="amicus_consult_async",
+        cwd=str(tmp_path),
+        workspace_source="param",
+        roots_source="client",
+        host_name="TestHost",
+        timeout_seconds=1800,
+        background=True,
+        question="q",
+    )
+    unkeyed = (await run_mod.run_request(spec, plugin))["error"]
+    assert unkeyed["code"] == "timeout" and unkeyed["temporary"] is True
+    assert not unkeyed["repair"]["alternative"].startswith(errors.KEYED_REPLAY_NOTE)
+    import dataclasses
+
+    keyed = (await run_mod.run_request(dataclasses.replace(spec, keyed=True), plugin))["error"]
+    assert keyed["code"] == "timeout" and keyed["temporary"] is False
+    assert keyed["retry_after_ms"] is None
+    assert keyed["repair"]["next_step"] == "retry_after_delay"
+    assert keyed["repair"]["alternative"] == (
+        errors.KEYED_REPLAY_NOTE + unkeyed["repair"]["alternative"]
+    )
+
+
+async def test_the_same_key_replays_a_failed_keyed_run(app, tmp_path, monkeypatch):
+    """The premise of the test above: a keyed call whose run failed is replayed, error and
+    all, by the same call under the same key, and codex is not spawned again (ADR 0020)."""
+    monkeypatch.setenv("FAKE_CODEX_EXIT", "1")
+    monkeypatch.setenv("FAKE_CODEX_STDERR", "boom")
+    args = {
+        "backend": "codex",
+        "question": "why?",
+        "workspace_root": str(tmp_path),
+        "idempotency_key": "fails",
+    }
+    async with Client(app) as c:
+        first = await c.call_tool("amicus_consult", args, raise_on_error=False)
+        again = await c.call_tool("amicus_consult", args, raise_on_error=False)
+    assert first.is_error and again.is_error
+    assert again.structured_content["error"] == first.structured_content["error"]
+    assert again.structured_content["meta"]["idempotency_replayed"] is True
+    assert len(_argv(tmp_path)) == 1

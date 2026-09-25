@@ -374,3 +374,34 @@ def test_render_failure_names_the_twin_only_when_its_deadline_is_longer():
     assert repair(1800, 300)["tool"] == "amicus_consult_async"
     assert repair(None, 300)["tool"] == "amicus_consult_async"
     assert repair(1800, None)["tool"] == "amicus_consult_async"
+
+
+def test_render_failure_makes_a_keyed_retryable_timeout_non_temporary():
+    """Copilot on PR #253: codex's capture-failed timeout says to retry the same call once
+    (retryable=True), but a keyed run's same call replays this stored error (ADR 0020), so
+    for a keyed run it is not temporary and the prose says to retry under a new key."""
+    plugin = fakeplugin.make_plugin()
+    own_repair = ClassifiedFailure(
+        code="timeout",
+        detail="d",
+        retryable=True,
+        retry_after_ms=1000,
+        repair=RepairHint(next_step="retry_after_delay", alternative="once"),
+    )
+    keyed = errors.render_failure(
+        plugin, own_repair, Meta(), kind="consult", background=True, keyed=True
+    )["error"]
+    assert keyed["temporary"] is False and keyed["retry_after_ms"] is None
+    assert keyed["repair"]["alternative"] == errors.KEYED_REPLAY_NOTE + "once"
+    assert keyed["repair"]["next_step"] == "retry_after_delay"
+    # Unkeyed, the same failure keeps the backend's own temporary flag and prose.
+    unkeyed = errors.render_failure(plugin, own_repair, Meta(), kind="consult", background=True)[
+        "error"
+    ]
+    assert unkeyed["temporary"] is True and unkeyed["repair"]["alternative"] == "once"
+    # A keyed timeout that was never temporary gets no note: nothing invites a same-key retry.
+    plain = ClassifiedFailure(code="timeout", detail="deadline")
+    keyed_plain = errors.render_failure(
+        plugin, plain, Meta(), kind="consult", background=True, keyed=True
+    )["error"]
+    assert keyed_plain["repair"]["alternative"] == errors.JOB_DEADLINE_TIMEOUT_ALTERNATIVE

@@ -27,9 +27,10 @@ INPUT_FIELDS: tuple[str, ...] = (
 )
 # Public fields that describe HOW a call was resolved, not WHAT it asks for: the index is
 # already keyed by tool and workspace, and the rest is per-connection (a reconnect must
-# replay, not conflict). `background` and `job_max_seconds` are excluded too: the tool name
-# already tells a sync call from its _async twin, the job deadline is server config, and
-# keeping both out leaves every existing record's arg_hash as it was before they existed.
+# replay, not conflict). `background`, `job_max_seconds` and `keyed` are excluded too: the
+# tool name already tells a sync call from its _async twin, the job deadline is server
+# config, a key is how the call was made rather than what it asks for, and keeping all three
+# out leaves every existing record's arg_hash as it was before they existed.
 IDENTITY_EXCLUDE: frozenset[str] = frozenset(
     {
         "cwd",
@@ -40,6 +41,7 @@ IDENTITY_EXCLUDE: frozenset[str] = frozenset(
         "tool",
         "background",
         "job_max_seconds",
+        "keyed",
     }
 )
 
@@ -74,6 +76,10 @@ class RunSpec:
     # timeout names the _async twin only when this exceeds the deadline that passed (ADR
     # 0039). Not a prompt input; a record written before it existed loads as None.
     job_max_seconds: int | None = None
+    # True when the call passed an idempotency_key: the same call then replays this run's
+    # stored outcome, so a failure that says "retry the same call" must say to change the key
+    # (ADR 0039). Not a prompt input; a record written before it existed loads as False.
+    keyed: bool = False
     # --- inputs: never persisted, never on argv ---
     question: str | None = None
     task: str | None = None
