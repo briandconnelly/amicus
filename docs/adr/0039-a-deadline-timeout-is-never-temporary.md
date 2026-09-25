@@ -18,8 +18,12 @@ It lives in `amicus.errors._LOCAL_RULES`, above the SDK default; Claude's `repai
 A plugin cannot override it: `repair_table` re-applies it after a plugin's `local_codes` and `repair_overrides`, so only a single failure's own `retryable` or repair, applied in `render_failure`, changes that failure's envelope.
 The prose states the spend, names the four `_async` twins, and gates polling on `status` as the `job_running` repair does.
 
-**On a sync run, the repair names the verb's `_async` twin and carries no arguments.**
+**On a sync run, the repair names the verb's `_async` twin, when its deadline is longer, and carries no arguments.**
 `repair.tool` is set where the verb is known: the sync await in `jobs.lifecycle` and `errors.render_failure`, which now takes the run's `kind` and whether it is a background run.
+The twin runs to `AMICUS_JOB_MAX_SECONDS` (60 to 7200 seconds) rather than `timeout_seconds` (10 to 600), so it can have the shorter deadline; it is named only when `AMICUS_JOB_MAX_SECONDS` exceeds the deadline that passed.
+The sync await compares the job store's `max_seconds` with its wait, and `render_failure` compares `RunSpec.job_max_seconds`, set from the server's settings for every run, with `timeout_seconds`.
+Otherwise no tool is named, and the prose says that when it names none the job deadline is no longer than the one that passed, so narrow the task or have the operator raise `AMICUS_JOB_MAX_SECONDS`.
+`RunSpec.job_max_seconds` is not a prompt input and stays out of the idempotency identity, like `background`; a record that lacks it loads as `None`, and then the twin is named as before.
 The arguments would echo prompt inputs (rule 18), and ADR 0021 already accepts a repair that names a tool without arguments when the correction is not unique; the prose says the arguments are the caller's own.
 
 **A backend-classified CLI timeout is the same condition.**

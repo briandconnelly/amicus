@@ -26,8 +26,9 @@ per-change, as its own lead says.
   false`, `retry_after_ms: null` and `repair.next_step: start_new_job` on every backend, where
   codex and kimi said `temporary: true` / `retry_after_delay` while their own prose said a retry
   would time out again (#245, ADR 0039). The repair names the verb's `_async` twin in
-  `repair.tool` and carries no arguments, since they would echo your inputs; its text says so
-  and states that any next attempt is a new paid run. Claude's `temporary` and `next_step` are
+  `repair.tool` when `AMICUS_JOB_MAX_SECONDS`, the deadline that twin runs to, exceeds the
+  deadline that passed, and otherwise names no tool; it carries no arguments, since they would
+  echo your inputs. Its text says so and states that any next attempt is a new paid run. Claude's `temporary` and `next_step` are
   unchanged; it now also names the `_async` tool and shares the new text. A background run (an
   `_async` job or a keyed sync call) that passes `AMICUS_JOB_MAX_SECONDS` returns `timeout` with
   no `repair.tool` and prose naming that deadline, since its `_async` twin would hit the same
