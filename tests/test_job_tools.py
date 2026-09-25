@@ -765,10 +765,22 @@ async def test_list_pages_by_cursor_and_survives_a_consumed_anchor(app, store, t
         assert filtered["jobs"] == [] and filtered["next_cursor"] is None
 
 
-async def test_list_rejects_a_cursor_it_did_not_issue(app, tmp_path):
+async def test_list_rejects_a_malformed_cursor(app, tmp_path):
+    """Only the shape is checked: a well-formed cursor is an anchor, issued or not. A
+    non-finite epoch is malformed, since `nan` compares false to every row and would return
+    an empty page instead of an error."""
     ws = {"workspace_root": str(tmp_path)}
+    hex32 = "a" * 32
     async with Client(app) as c:
-        for bad in ("nope", "1.5:short", "x:" + "a" * 32, ":" + "a" * 32):
+        for bad in (
+            "nope",
+            "1.5:short",
+            "x:" + hex32,
+            ":" + hex32,
+            "nan:" + hex32,
+            "inf:" + hex32,
+            "-inf:" + hex32,
+        ):
             res = await c.call_tool("amicus_job_list", {"cursor": bad, **ws}, raise_on_error=False)
             err = res.structured_content["error"]
             assert err["code"] == "invalid_arguments", bad

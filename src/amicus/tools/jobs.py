@@ -6,6 +6,7 @@ backend tag is foreign and reported not-found (ADR 0008)."""
 from __future__ import annotations
 
 import asyncio
+import math
 import re
 from typing import TYPE_CHECKING, Any
 
@@ -62,14 +63,17 @@ def _cursor_for(row: dict[str, Any]) -> str:
 
 
 def _parse_cursor(cursor: str) -> tuple[float, str] | None:
-    """(started_epoch, job_id) from a cursor this tool issued, else None."""
+    """(started_epoch, job_id) from a cursor in the form this tool issues, else None. Only
+    the form is checked: a well-formed cursor is an anchor whether or not it was issued."""
     epoch, sep, job_id = cursor.partition(":")
     if not sep or not _JOB_ID_RE.fullmatch(job_id):
         return None
     try:
-        return float(epoch), job_id
+        started = float(epoch)
     except ValueError:
         return None
+    # `nan` compares false to every row, so it would page to nothing rather than fail.
+    return (started, job_id) if math.isfinite(started) else None
 
 
 def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tuple[str, ...]:
@@ -263,7 +267,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
         if cursor is not None:
             anchor = _parse_cursor(cursor)
             if anchor is None:
-                reason = "not a cursor amicus_job_list issued"
+                reason = "not in the form of a next_cursor amicus_job_list returns"
                 return error_envelope(
                     "invalid_arguments",
                     f"amicus_job_list: 1 invalid argument(s): cursor — {reason}",
