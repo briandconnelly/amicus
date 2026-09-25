@@ -234,6 +234,10 @@ clause's first wording ("listed in every profile, and backend_unavailable while 
 in AMICUS_BACKENDS") cost 18 bytes more and was shortened under the same schema-45 number.
 27 + 107 = 134. Measured on the wire. MEASURED and BUDGET both move by the 134 bytes, so the
 budget keeps no headroom.
+
+The schema-45 -> schema-46 move (#248) changes nothing here: the new `root_not_a_directory`
+token is in the `workspace_root` contract at `amicus://params`, a resource body, not
+tools/list. Measured on the wire: all 112817, codex-kimi 112825, claude 112817, as before.
 """
 
 from __future__ import annotations
