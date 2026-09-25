@@ -476,6 +476,7 @@ async def test_list_filters_and_the_task_id_lookup(app, store, settings, tmp_pat
         assert [k for k, v in listed["meta"].items() if v is None] == []
         assert [j["job_id"] for j in listed["jobs"]] == [second, first]
         assert listed["truncated"] is False and listed["truncation_hint"] is None
+        assert listed["has_more"] is False
         assert listed["jobs"][1]["task_id"] == "task-xyz" and listed["jobs"][0]["task_id"] is None
         assert listed["jobs"][0]["backend"] == "codex" and listed["jobs"][0]["result_ok"] is True
         limited = (await c.call_tool("amicus_job_list", {"limit": 1, **ws})).structured_content
@@ -738,6 +739,8 @@ async def test_list_pages_by_cursor_and_survives_a_consumed_anchor(app, store, t
         schemas["amicus_job_list"].validate(first)
         assert [j["job_id"] for j in first["jobs"]] == [ids[2]]
         assert first["truncated"] is True and first["next_cursor"]
+        # has_more is the pagination signal; truncated is its 0.6.0 alias on this tool.
+        assert first["has_more"] is True
         assert "cursor" in first["truncation_hint"]
         await c.call_tool("amicus_job_consume_result", {"job_id": ids[2], **ws})
         second = (
@@ -751,6 +754,7 @@ async def test_list_pages_by_cursor_and_survives_a_consumed_anchor(app, store, t
         ).structured_content
         assert [j["job_id"] for j in third["jobs"]] == [ids[0]]
         assert third["truncated"] is False and third["next_cursor"] is None
+        assert third["has_more"] is False
         assert third["truncation_hint"] is None
         # A cursor with a filter keeps the filter; omitting limit after a cursor returns the rest.
         rest = (

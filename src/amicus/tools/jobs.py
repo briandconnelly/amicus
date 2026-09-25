@@ -243,9 +243,10 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
         description=(
             f"{FREE_MARKER} List the jobs known for this workspace, newest first, across all "
             "backends; narrow with `backend`, `status`, or `task_id` (no match is an empty "
-            "list). Only an explicit `limit` truncates (truncated: true; pass next_cursor as "
-            "`cursor` with the same filters for the page after it). The whole list is bounded "
-            f"by AMICUS_JOB_MAX_COUNT. {_RETENTION}"
+            "list). Only an explicit `limit` pages (has_more: true; pass next_cursor as "
+            "`cursor` with the same filters for the page after it). The per-workspace cap "
+            "AMICUS_JOB_MAX_COUNT limits how many jobs are kept; server processes sharing a "
+            f"state root can each exceed it by one start. {_RETENTION}"
         ),
     )
     @guard("amicus_job_list", settings)
@@ -305,6 +306,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
         result = JobListResult(
             jobs=[lookup.summary_model(r, task_by_job.get(r["job_id"])) for r in rows],
             workspace=lookup.workspace_of(cwd, source),
+            has_more=truncated,
             truncated=truncated,
             truncation_hint=(
                 f"showing the {limit} newest of more matching jobs; pass next_cursor as "

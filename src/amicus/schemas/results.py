@@ -430,14 +430,26 @@ _NEXT_CURSOR_DESC = (
     "page is the last."
 )
 publish.KEPT_DESCRIPTIONS.add(_NEXT_CURSOR_DESC)
+# House pagination convention (ADR 0042), not a protocol field: every job a page omits is
+# reachable through next_cursor, so no cap applies to the listing itself.
+_HAS_MORE_DESC = (
+    "True when more matching jobs follow this page; fetch them with next_cursor. A house "
+    "pagination convention, not a protocol field."
+)
+_TRUNCATED_DESC = (
+    "Kept from 0.6.0 as an alias of has_more on this tool: true when this page omits "
+    "matching jobs, every one of them reachable through next_cursor."
+)
+publish.KEPT_DESCRIPTIONS.update({_HAS_MORE_DESC, _TRUNCATED_DESC})
 
 
 class JobListResult(SuccessBase):
     jobs: list[JobSummary]
     workspace: Workspace
-    truncated: bool = False
-    truncation_hint: str | None = None
+    has_more: bool = Field(default=False, description=_HAS_MORE_DESC)
     next_cursor: str | None = Field(default=None, description=_NEXT_CURSOR_DESC)
+    truncated: bool = Field(default=False, description=_TRUNCATED_DESC)
+    truncation_hint: str | None = None
 
 
 # --- previews -------------------------------------------------------------------------

@@ -370,10 +370,12 @@ def _handles() -> dict[str, Any]:
             lookup.summary_model(_row(), None),
         ],
         workspace=ws,
+        has_more=True,
+        next_cursor=f"1700000000.0:{_JOB_ID_SENTINEL}",
         truncated=True,
         truncation_hint=(
-            "showing the 2 newest of more matching jobs; omit `limit` for every retained match, "
-            "or narrow with `status`, `backend` or `task_id`"
+            "showing the 2 newest of more matching jobs; pass next_cursor as `cursor` with the "
+            "same filters for the next page, or narrow with `status`, `backend` or `task_id`"
         ),
         meta=_handle_meta(),
     ).model_dump(mode="json")
