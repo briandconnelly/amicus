@@ -354,12 +354,13 @@ class JobStore:
     ttl_seconds: how long a terminal record is kept after completion.
     max_seconds: a job's wall-clock cap (a status poll past it reaps the job).
     max_count: records per workspace. A new start first evicts the oldest records the
-        cap may remove (terminal errors, results already returned once, results this
-        server cannot deliver, records that predate delivery tracking) and is refused
+        cap may remove (terminal errors, results already returned once, results in an
+        older or no result format, records that predate delivery tracking) and is refused
         with :class:`JobCapReached` when that cannot make room (#244).
     result_format: the result format this server delivers; a ``done`` record stamped
-        with another (``extra.result_format``) can never be returned, so the cap may
-        evict it. ``None`` disables the check.
+        with an older one (``extra.result_format``), or with none, can never be returned
+        again, so the cap may evict it. A newer one is kept for a newer server sharing the
+        state root. ``None`` disables the check.
     """
 
     root: Path
@@ -914,7 +915,11 @@ class JobStore:
             return False
         extra = meta.get("extra")
         stored = extra.get("result_format") if isinstance(extra, dict) else None
-        return stored != self.result_format  # undeliverable here, so never delivered
+        if not isinstance(stored, int) or isinstance(stored, bool):
+            return True  # no usable format: no release can deliver it
+        # An older format can never be delivered again, since formats only move forward. A
+        # newer one is kept: a newer server sharing this state root can still deliver it.
+        return stored < self.result_format
 
     def _make_room(self, cwd: str) -> None:
         """Make room for one more record, or refuse. Runs under ``_LOCK`` before a start

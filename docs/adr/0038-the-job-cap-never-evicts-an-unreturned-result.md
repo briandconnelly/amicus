@@ -17,8 +17,8 @@ Flipping the hint would have kept the loss and only disclosed it, and would have
 ## Decision
 
 **The cap evicts only what nobody still needs from amicus.**
-It may remove an expired record, a terminal error (`failed`, `cancelled`, `timeout`), a `done` result amicus has already returned once, a `done` result stored under a result format this server cannot deliver, and a record written before delivery tracking existed.
-It never removes a running job or a `done` result that has not been returned.
+It may remove an expired record, a terminal error (`failed`, `cancelled`, `timeout`), a `done` result amicus has already returned once, a `done` result stored under an older result format or none, and a record written before delivery tracking existed.
+It never removes a running job, or a tracked `done` result in this server's result format or a newer one that has not been returned.
 
 **A full cap refuses the new call before anything is spent.**
 The check runs before the worker spawns: it reaps expired records, evicts what it may oldest first, and raises `JobCapReached` when the workspace still holds `AMICUS_JOB_MAX_COUNT` records.
@@ -33,13 +33,18 @@ A status read, a list, a keyed wait that timed out, and a stored result that fai
 A sync response lost in transport after the stamp is therefore evictable, as it was before; the prose says "returned", never "received".
 A record without the key predates this decision and is evicted as before, so an upgrade cannot fill a workspace with protected records until their TTL runs out.
 
+**Servers of different releases can share a state root.**
+Result formats only move forward, so an older format can never be delivered again, and a result in one is evictable.
+A newer format is kept, because a newer server sharing the root can still deliver it; an older server must not delete it as undeliverable.
+A release from before this decision still evicts by age alone, and the records it writes carry no delivery stamp, so they are evicted as before; that is unchanged, and it ends when the old server is upgraded.
+
 **The store alone enforces it, under the process lock.**
 `_LOCK` is process-local, so server processes sharing a state root can each pass the check at once and overshoot the cap by one start per process.
 An overshoot deletes nothing, which is the property the annotation needs.
 
 ## Consequences
 
-`destructiveHint: false` on the paid tools in the codex and kimi profile now holds for the job store: a paid call never deletes a result nobody has fetched.
+`destructiveHint: false` on the paid tools in the codex and kimi profile now holds for the job store: a paid call never deletes a tracked result some server sharing the root can deliver and amicus has not yet returned.
 `annotations_reading`, the paid tools' retention sentence, the `amicus_job_*` retention sentence and the server instructions say so.
 `job_cap_reached` is a new amicus-local error code, so `FINGERPRINT` moves.
 `RESULT_FORMAT` does not: the code is refused before a job record exists, so no stored `result.json` can carry it.

@@ -27,7 +27,8 @@ per-change, as its own lead says.
   cap (`AMICUS_JOB_MAX_COUNT`, default 50) whether or not their results had ever been read, while
   the paid tools advertised `destructiveHint: false` in the codex and kimi profile. The cap now
   evicts only expired records, terminal errors, results amicus has already returned once and
-  results this server cannot deliver. When only running jobs and unfetched results remain, a
+  results in an older result format, which no server can deliver; a newer one is kept for a
+  newer server sharing the state root. When only running jobs and unfetched results remain, a
   new paid call is refused before anything is spent with the new error code `job_cap_reached`,
   whose repair lists the workspace's jobs: fetch or consume a result, or cancel a running job,
   then retry. Running jobs now count toward the cap, so a workspace can no longer run more jobs
