@@ -312,7 +312,7 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
     "amicus_job_status": {
         "cost": "free",
         "backends": list(BACKEND_IDS),
-        "use_when": "Poll a job without fetching its result.",
+        "use_when": "Poll or wait on a job without fetching its result.",
         "returns": "status, result_available, result_ok, poll_after_ms.",
         "error_codes": [
             "job_not_found",

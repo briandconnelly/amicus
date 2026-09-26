@@ -383,3 +383,26 @@ def test_the_carrier_table_names_kimis_session_store():
         "- **Never send `kimi` text you would not leave on this machine's disk.**"
     )
     assert "send nothing" not in row, "the directive belongs under `## Rules`, not in the table"
+
+
+def test_the_jobs_rules_say_to_wait_through_the_tool_never_the_store():
+    # Issue #266: agents with no way to block on a job watched ~/.cache/amicus/jobs from a
+    # shell loop, reading result.json past the delivery path. The binding rule names the tool
+    # parameter that replaces that loop and forbids the store.
+    jobs = _BINDING_RULES.partition("\n### Jobs\n")[2].split("\n### ", 1)[0]
+    assert jobs, "SKILL.md's binding rules have no `### Jobs` section"
+    jobs = " ".join(jobs.split())
+    assert "`wait_seconds`" in jobs, "the jobs rules do not name wait_seconds"
+    assert "job store" in jobs, "the jobs rules do not forbid reading the job store"
+
+
+def test_the_polling_reference_states_the_wait_ceiling():
+    from amicus.schemas.params import MAX_STATUS_WAIT_SECONDS
+
+    polling = _SYNC_REF.partition("\n## Polling\n")[2].split("\n## ", 1)[0]
+    polling = " ".join(polling.split())
+    assert f"`wait_seconds` (up to {MAX_STATUS_WAIT_SECONDS} s)" in polling, (
+        "the polling reference does not state wait_seconds' ceiling from source"
+    )
+    jobs_cmd = (_SKILL.parents[1] / "commands" / "amicus" / "jobs.md").read_text(encoding="utf-8")
+    assert f"`wait_seconds` (up to {MAX_STATUS_WAIT_SECONDS})" in " ".join(jobs_cmd.split())

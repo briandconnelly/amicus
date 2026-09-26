@@ -71,6 +71,15 @@ which case you are in.
 5. Branch on the *fetched envelope's* own `ok`. A `done` job can hold a stored error
    (`result_ok: false`) — see [reading results](reading-results.md).
 
+To wait without spending turns on it, pass `wait_seconds` (up to 50 s) to `amicus_job_status`.
+The call holds while the job is `running` and returns as soon as it is terminal, or when the wait
+runs out with the job still running.
+A call with `wait_seconds` is itself the wait, so call again at once if it returns `running`.
+If your client's MCP request timeout is shorter than the wait, that one status call fails at the
+client and the job is unaffected; pass a smaller `wait_seconds`.
+Never wait by reading or watching amicus's job store from a shell: its files skip the delivery
+checks `amicus_job_result` applies, and their layout is not a contract.
+
 `poll_after_ms` grows with elapsed time — roughly "wait as long as the job has already run" —
 up to `30 s`, amicus's ceiling. Once a job is older than that it is polled about every thirty
 seconds: a two-to-four-minute review costs roughly 9–13 status calls, and a finished job is

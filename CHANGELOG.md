@@ -20,6 +20,15 @@ per-change, as its own lead says.
 
 ## [Unreleased]
 
+### Added
+
+- **Surface.** `amicus_job_status` takes `wait_seconds` (0 to 50, default 0): the call holds
+  while the job is `running` and returns as soon as it is terminal, or when the wait runs out
+  (#266). Agents with no way to block on a job had been watching amicus's job store from shell
+  loops and reading `result.json` past the delivery checks; the collaborating-with-amicus skill
+  and `/amicus:jobs` now say to wait through this parameter and never on the store. The cap
+  stays under the MCP TypeScript SDK's 60 s default request timeout.
+
 ## [0.7.0] - 2026-09-26
 
 Across this release the discovery surface moves `amicus/0.1/schema-43`, what 0.6.0 shipped, to
