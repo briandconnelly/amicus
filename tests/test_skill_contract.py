@@ -407,6 +407,17 @@ def test_the_jobs_rules_do_not_exclude_keyed_sync_reattach():
     assert "repeating the same keyed" in jobs, "the rule does not name keyed-sync reattach"
 
 
+def test_the_jobs_rules_say_a_waited_call_is_repeated_at_once():
+    # Issue #272 (Copilot on PR #273): sync-vs-async.md said to call again at once after a
+    # positive wait_seconds, but that file declares it adds no obligations, and the binding
+    # rule left open whether a waited call still owes poll_after_ms. The rule must settle it.
+    jobs = _BINDING_RULES.partition("\n### Jobs\n")[2].split("\n### ", 1)[0]
+    [pacing] = [b for b in _bullets(jobs) if "`poll_after_ms`" in b]
+    pacing = " ".join(pacing.split())
+    assert "`wait_seconds`" in pacing and "itself the wait" in pacing
+    assert "call again at once" in pacing
+
+
 def test_the_sync_reference_does_not_call_keyed_sync_the_one_way_to_wait():
     # Issue #272: since #266, amicus_job_status(wait_seconds=...) also waits inside one call.
     ref = " ".join(_SYNC_REF.split())

@@ -144,7 +144,8 @@ obligations live in the reference each route names, under that file's own `Rules
 - **Poll only while `status == "running"`.** Once a job is terminal, fetch its result or its
   terminal error instead of polling again.
 - **While `status == "running"`, wait at least the returned `poll_after_ms` before the next
-  poll, or wait inside the call with `amicus_job_status`'s `wait_seconds`.**
+  poll, or pass `amicus_job_status` a positive `wait_seconds`, which is itself the wait: when
+  that call returns `running`, call again at once.**
 - **Never read or watch amicus's job store** (`AMICUS_STATE_DIR`, by default
   `$XDG_CACHE_HOME/amicus/jobs` or `~/.cache/amicus/jobs`) or loop on it in a shell: its files
   skip the delivery checks and their layout is not a contract. Observe a job through
