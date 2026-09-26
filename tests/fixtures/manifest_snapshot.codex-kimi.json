@@ -830,7 +830,7 @@
         ],
         "returns": "status, result_available, result_ok, poll_after_ms.",
         "stability": "experimental",
-        "use_when": "Poll a job without fetching its result."
+        "use_when": "Poll or wait on a job without fetching its result."
       },
       {
         "backends": [
@@ -1542,7 +1542,7 @@
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-50",
+                "default": "amicus/0.1/schema-51",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -4076,7 +4076,7 @@
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-50",
+            "default": "amicus/0.1/schema-51",
             "title": "Fingerprint",
             "type": "string"
           },
@@ -8995,6 +8995,13 @@
             "maxLength": 64,
             "pattern": "^[^\\x00-\\x1F\\x7F-\\x9F]*$",
             "type": "string"
+          },
+          "wait_seconds": {
+            "default": 0,
+            "description": "Hold the call up to this many seconds while the job runs, returning as soon as it is terminal; 0 returns at once. Wait here, never on amicus's job store.",
+            "maximum": 50,
+            "minimum": 0,
+            "type": "integer"
           },
           "workspace_root": {
             "anyOf": [
