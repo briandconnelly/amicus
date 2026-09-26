@@ -2,6 +2,8 @@
 
 **Status:** Accepted (2026-09-19)
 
+On a keyed call, [ADR 0046](0046-a-keyed-runs-stored-error-is-never-temporary.md) makes every stored error non-temporary, including the temporary causes below.
+
 ## Context
 
 amicus reads a backend's answer file through a bounded reader: `O_NOFOLLOW`, regular files only, at most 1,000,000 bytes (ADR 0009).

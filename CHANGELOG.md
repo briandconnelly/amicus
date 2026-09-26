@@ -42,6 +42,17 @@ per-change, as its own lead says.
   find every other place that lists or describes what changed, which is the kind of omission the
   review in #270 missed.
 
+### Fixed
+
+- A keyed paid call whose run ended in a temporary error, such as `backend_rate_limited`,
+  `nonzero_exit` or `internal_error`, said `temporary: true`, though the same call under the
+  same `idempotency_key` only replays that stored error (#254, ADR 0046). Every error a keyed
+  run stores is now `temporary: false` with `retry_after_ms: null`, its text first says to
+  retry under a new `idempotency_key`, a backend's requested delay moves into that text, and a
+  `retry_after_delay` step becomes `use_new_idempotency_key` on the same tool. This extends the
+  rule 0.7.0 gave codex's capture-failed timeout to every code. The same failure on an unkeyed
+  call, and a keyed sync wait's own timeout, are unchanged.
+
 ## [0.7.0] - 2026-09-26
 
 Across this release the discovery surface moves `amicus/0.1/schema-43`, what 0.6.0 shipped, to

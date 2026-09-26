@@ -329,7 +329,6 @@ async def run_request(
                     background=spec.background,
                     job_max_seconds=spec.job_max_seconds,
                     deadline_seconds=spec.timeout_seconds,
-                    keyed=spec.keyed,
                 )
             if plugin.binary.resolve() is None:
                 missing = RunOutcome(
@@ -344,7 +343,6 @@ async def run_request(
                     background=spec.background,
                     job_max_seconds=spec.job_max_seconds,
                     deadline_seconds=spec.timeout_seconds,
-                    keyed=spec.keyed,
                 )
             async with plugin.backend.prepare(request) as prepared:
                 run = await runtime.run_async(
@@ -402,7 +400,6 @@ async def run_request(
                     background=spec.background,
                     job_max_seconds=spec.job_max_seconds,
                     deadline_seconds=spec.timeout_seconds,
-                    keyed=spec.keyed,
                 )
             diff = site.capture_diff() if spec.kind == "delegate" else None
             aliases = site.aliases

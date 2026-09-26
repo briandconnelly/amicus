@@ -15,7 +15,7 @@ import pytest
 from tests.conftest import spawned_server_env
 from tests.support import fakeplugin
 
-from amicus import _worker, obs
+from amicus import _worker, errors, obs
 from amicus.request import RunSpec
 
 _PUBLIC = dict(
@@ -77,6 +77,34 @@ def test_worker_crash_keeps_exception_text_out_of_the_stored_result(tmp_path, mo
         and out["error"]["message"] == "background worker crashed: RuntimeError"
     )
     assert marker not in stored and out["meta"]["backend"] == "fake"
+
+
+@pytest.mark.parametrize("keyed", [False, True])
+def test_worker_stores_a_keyed_runs_temporary_error_as_non_temporary(tmp_path, monkeypatch, keyed):
+    """#254: the same keyed call replays the stored record (ADR 0020), so the worker stores a
+    keyed run's temporary error as non-temporary (ADR 0046); unkeyed, it is left as it was."""
+    _use_fake_plugin(monkeypatch)
+
+    async def boom(spec, *a, **k):
+        raise RuntimeError("x")
+
+    monkeypatch.setattr(_worker, "run_request", boom)
+    jd = _job(tmp_path, keyed=keyed)
+    assert _worker.main([str(jd)], stdin_text=json.dumps({"question": "q"})) == 0
+    error = json.loads((jd / "result.json").read_text())["error"]
+    assert error["code"] == "internal_error" and error["temporary"] is (not keyed)
+    assert error["repair"]["alternative"].startswith(errors.KEYED_REPLAY_NOTE) is keyed
+
+
+def test_worker_stores_a_keyed_error_as_non_temporary_before_its_spec_loads(tmp_path, monkeypatch):
+    """A keyed job whose inputs fail to load never builds a RunSpec, but its spec.json already
+    says it was keyed, so its stored crash is non-temporary too."""
+    _use_fake_plugin(monkeypatch)
+    jd = _job(tmp_path, keyed=True)
+    assert _worker.main([str(jd)], stdin_text="not json") == 0
+    error = json.loads((jd / "result.json").read_text())["error"]
+    assert error["code"] == "internal_error" and error["temporary"] is False
+    assert error["repair"]["alternative"].startswith(errors.KEYED_REPLAY_NOTE)
 
 
 def test_worker_reports_an_unavailable_backend(tmp_path, monkeypatch):

@@ -66,8 +66,8 @@ refused, it is `artifact_oversize` (over the read limit, with `limit_bytes` and,
 For an answer on the output stream (`claude`, and `kimi` when it wrote no answer file), it is
 `stream_truncated`, the output passed `AMICUS_MAX_OUTPUT_BYTES` and the part carrying the answer
 was dropped, or `stream_capture_failed`. Read `error.temporary` rather than assume: it is true
-only for an unreadable file whose cause passes and for a failed stream capture, and even then a
-retry is a new paid run. Otherwise never repeat the identical call: for oversize or a truncated
+only for an unreadable file whose cause passes and for a failed stream capture, never on a keyed
+call (the same key replays the error), and even then a retry is a new paid run. Otherwise never repeat the identical call: for oversize or a truncated
 stream, narrow the task or ask for a shorter answer. A delegate whose summary file was refused, and which has no other whole answer
 from the backend, still comes back `ok: true` when its diff was captured: with the diff,
 amicus's own summary saying the backend's could not be read, a null `raw_response.text`, and a

@@ -41,7 +41,7 @@ because only you hold the directory they need: fix what `error.details` names.
 | `reduce_input` | Make the next attempt smaller. It is a recovery action, **not** a statement about spend — `budget_exceeded` maps here and may already have spent. Read `error.code`. |
 | `retry_after_delay` | Transient; honor `retry_after_ms` when present. |
 | `inspect_and_retry` / `retry_then_report` | No mechanical fix — look before retrying, and report if it recurs. |
-| `use_new_idempotency_key` | The key is bound to different arguments. |
+| `use_new_idempotency_key` | The key is bound to different arguments, or it replays a failed run's stored error. Either way a new key is a new paid run. |
 
 A pre-dispatch rejection — an out-of-set `backend`, a bad `untracked` value, an oversized input —
 costs nothing. Reaching a backend is what spends.
@@ -61,6 +61,8 @@ on another backend is a conflict, not a second run.
 - A reservation still publishing → `idempotency_in_progress` (retry; a sync call waits about a
   second for it first).
 - A completed result stays replayable while its job record lives (its TTL).
+- A failed run is replayed too, error and all. Its stored error is never `temporary`, and
+  its repair says so: a retry needs a new key, which is a new paid run.
 - A keyed sync run gets the job deadline (`AMICUS_JOB_MAX_SECONDS`), as an `_async` run does. A
   keyed wait that hits its `timeout_seconds` bound or is cancelled leaves the run going: the
   `timeout` repair polls `amicus_job_status` for that job, and repeating the same keyed call
