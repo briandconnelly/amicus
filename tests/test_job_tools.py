@@ -868,6 +868,27 @@ async def test_status_wait_does_not_hold_a_missing_job(app, tmp_path):
     assert time.monotonic() - began < 3
 
 
+async def test_status_wait_does_not_hold_a_foreign_running_record(
+    app, store, tmp_path, monkeypatch
+):
+    monkeypatch.setenv("FAKE_CODEX_SLEEP", "10")
+    ws = {"workspace_root": str(tmp_path)}
+    async with Client(app) as c:
+        job_id = await _start(c, tmp_path)
+        meta_path = store._job_dir(str(tmp_path), job_id) / "meta.json"
+        ours = meta_path.read_text()
+        meta_path.write_text(ours.replace('"backend": "codex"', '"backend": "Not Ours"'))
+        began = time.monotonic()
+        res = await c.call_tool(
+            "amicus_job_status", {"job_id": job_id, "wait_seconds": 5, **ws}, raise_on_error=False
+        )
+        waited = time.monotonic() - began
+        meta_path.write_text(ours)
+        await c.call_tool("amicus_job_cancel", {"job_id": job_id, **ws})
+    assert res.structured_content["error"]["code"] == "job_not_found"
+    assert waited < 3, "a record amicus does not own is reported at once, never waited on"
+
+
 @pytest.mark.parametrize("wait", [-1, 51])
 async def test_status_wait_out_of_range_is_invalid(app, tmp_path, wait):
     async with Client(app) as c:
