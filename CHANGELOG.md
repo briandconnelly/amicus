@@ -57,6 +57,11 @@ per-change, as its own lead says.
   whose repair says to install the CLI (#259). It now fails as `invalid_workspace_root` with the
   `details.reason` of the workspace's source, as a vanished workspace already does wherever git
   runs in it (#248). A spawn in an isolated site's own directory is unchanged.
+- A finished job whose stored result was written under this release's result format but did
+  not validate was reported as `internal_error` with `temporary: true`, though reading it
+  again, or repeating the keyed call that made it, reads the same record and fails the same
+  way (#277). It is now `temporary: false` with a `start_new_job` step, and its text says a
+  keyed call needs a new `idempotency_key` for the new job.
 
 ## [0.7.0] - 2026-09-26
 

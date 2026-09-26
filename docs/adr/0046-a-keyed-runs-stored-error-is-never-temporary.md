@@ -34,6 +34,7 @@ Any other step already names a different action and is kept.
 A keyed sync wait that hits its own bound returns a temporary `timeout` whose run is still going (ADR 0020); it is never stored, and the same keyed call does reattach to that run.
 The idempotency errors (`idempotency_in_progress`, the transient index read) are returned before or beside a job, not stored as its outcome, and their same-key retry does work.
 An error amicus builds when it cannot read a stored result back is built at delivery, after the worker's write, and is outside this rule.
+Its own rule reaches the same place for the one case that could mislead: a result stored under this release's result format that fails validation is `internal_error` with `temporary: false` and a `start_new_job` step, keyed or not, because every re-read of that record fails the same way, and its prose says a keyed call needs a new key (#277).
 
 ## Consequences
 
