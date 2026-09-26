@@ -19,9 +19,10 @@ quota runs it, and only after deciding to in the current session.
 Usage:
     AMICUS_REQUIRE_LIVE=1 uv run python scripts/record_live_gate_evidence.py
 
-    It takes no arguments. `--help` prints this text and exits 0, and any other argument exits
-    2; both happen before git is consulted or any gate runs, so asking the script what it
-    does never spends quota (issue #242).
+    It takes no arguments. `-h`/`--help`, or a prefix of it such as `--he`, prints this text
+    and exits 0, even beside other arguments; without it, any argument is refused with exit 2.
+    Both happen before git is consulted or any gate runs, so asking the script what it does
+    never spends quota (issue #242).
 
 Behavior (all-or-nothing):
     - Refuses to run at all on a dirty working tree.

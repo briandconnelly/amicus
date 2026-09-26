@@ -306,6 +306,8 @@ def _never_called(label: str, calls: list[str]):
     [
         (["--help"], 0),
         (["-h"], 0),
+        (["--he"], 0),
+        (["--bogus", "--help"], 0),
         (["--bogus"], 2),
         (["extra-positional"], 2),
     ],
