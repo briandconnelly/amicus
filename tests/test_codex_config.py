@@ -13,7 +13,7 @@ def test_load_config_defaults(clean_env):
     assert cfg.model is None and cfg.reasoning_effort is None
     assert cfg.isolation == "inherit"
     assert cfg.extra_args.configured is False and cfg.extra_args.valid
-    assert {(0, 153), (0, 154), (0, 155), (0, 156)} <= cfg.supported_versions
+    assert {(0, 153), (0, 154), (0, 155), (0, 156), (0, 157)} <= cfg.supported_versions
     assert cfg.warnings == () and cfg.errors == ()
 
 
@@ -62,6 +62,7 @@ def test_version_parsing_and_support():
     assert cc.version_supported("codex-cli 0.154.0", cfg) is True
     assert cc.version_supported("codex-cli 0.155.1", cfg) is True
     assert cc.version_supported("codex-cli 0.156.1", cfg) is True
+    assert cc.version_supported("codex-cli 0.157.0", cfg) is True
     assert cc.version_supported("codex-cli 0.100.0", cfg) is False
     assert cc.version_supported("?", cfg) is None
 

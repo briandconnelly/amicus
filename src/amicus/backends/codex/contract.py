@@ -4,7 +4,9 @@ checked zero-spend only: `--help`, `features list`, the stderr grammars and the 
 tool catalog; 0.155.1 likewise, but narrower: `--help`, the rows of `features list` amicus
 sends, the unknown-feature and strict-config grammars, the four `-c` pins under
 `--strict-config`, and gpt-5.5's tool catalog; 0.156.1 the same checks, plus the tool catalogs
-of gpt-6-astra, gpt-6-sol and gpt-6-luna with and without the disabled features).
+of gpt-6-astra, gpt-6-sol and gpt-6-luna with and without the disabled features; 0.157.0 the
+same checks against 0.156.1, plus the invalid-value and retired-setting grammars and the tool
+catalog of every model in KNOWN_MODEL_SLUGS).
 
 Every assumption amicus makes about the `codex` CLI — subcommands, flags, sandbox values,
 config keys it pins, the event/result extraction surface, and the stderr phrasings that
@@ -48,7 +50,8 @@ VALID_SANDBOXES = (SANDBOX_READ_ONLY, SANDBOX_WORKSPACE_WRITE, SANDBOX_DANGER_FU
 # channel outside the sandbox); sleep_tool (0.152+, a native sleep of up to 12h that can
 # burn a run's budget into `timeout`; 0.154.0's gpt-6-astra advertises `clock`, so its default
 # exec path offers `clock.sleep`); and goals (#222: `stable` on 0.152.0, 0.153.4, 0.154.0,
-# 0.155.1 and 0.156.1, and 0.156.1 also offers its create/get/update_goal tools to gpt-5.5).
+# 0.155.1, 0.156.1 and 0.157.0, and 0.156.1 onward also offers its create/get/update_goal
+# tools to gpt-5.5).
 # Under the `--ephemeral` amicus always sends, create_goal is refused ("Goal tools require a
 # persistent thread"); on a persistent thread an active goal can make exec send a "continue
 # working toward the active thread goal" request after the final answer, a turn its JSONL
@@ -290,7 +293,7 @@ MODELS_CACHE_MAX_ENTRIES = 256
 MODEL_SLUG_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 # Bundled fallback, copied in priority order from the catalog codex-cli 0.156.1 fetched on
 # 2026-09-23 (0.155.1 is served the same list, so gpt-6-sol and gpt-6-luna are a server-side
-# addition, not a 0.156 one).
+# addition, not a 0.156 one). 0.157.0 was served the same list on 2026-09-25.
 KNOWN_MODEL_SLUGS: tuple[str, ...] = (
     "gpt-6-astra",
     "gpt-6-sol",
@@ -306,7 +309,7 @@ KNOWN_MODEL_SLUGS: tuple[str, ...] = (
 HELP_CACHE_TTL_SECONDS = 300
 
 # Advisory: a mismatch warns on amicus_backends, never blocks.
-SUPPORTED_VERSIONS = frozenset({(0, 152), (0, 153), (0, 154), (0, 155), (0, 156)})
+SUPPORTED_VERSIONS = frozenset({(0, 152), (0, 153), (0, 154), (0, 155), (0, 156), (0, 157)})
 
 # --- Result / event extraction surface -----------------------------------------------------
 USAGE_EVENT_MARKERS = ("token_count", "usage")
