@@ -385,7 +385,7 @@ _JOB_PARAMS: dict[str, tuple[list[str], list[str]]] = {
     "amicus_backends": ([], ["backend", "detail"]),
     "amicus_models": (["backend"], []),
     "amicus_capabilities": ([], ["detail", "include_schemas", "include_tool_details"]),
-    "amicus_job_status": (["job_id"], ["workspace_root"]),
+    "amicus_job_status": (["job_id"], ["workspace_root", "wait_seconds"]),
     "amicus_job_result": (["job_id"], ["workspace_root", "detail"]),
     "amicus_job_consume_result": (["job_id"], ["workspace_root", "detail"]),
     "amicus_job_cancel": (["job_id"], ["workspace_root"]),

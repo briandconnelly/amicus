@@ -475,3 +475,22 @@ def test_empty_response_is_listed_exactly_where_kimi_can_run_the_tool():
         assert ("empty_response" in row["error_codes"]) == ("kimi" in row["backends"]), name
     free = [r for r in TOOL_DETAILS.values() if r["cost"] != "active" and "error_codes" in r]
     assert all("empty_response" not in r["error_codes"] for r in free)
+
+
+async def test_hand_listed_params_match_each_tools_input_schema():
+    # The tools _JOB_PARAMS covers are not derived from expected_params, so a parameter added
+    # to one (wait_seconds, #266) would otherwise be missing from amicus_capabilities'
+    # key_optional_params while tools/list and the handler accept it.
+    # The two dry-run rows are a curated subset of their schemas, so they are checked only
+    # for naming parameters that exist; every other row lists its tool's whole schema.
+    schemas = {t.name: t.input_schema for t in await _tools(_app())}
+    for name, (required, optional) in discovery._JOB_PARAMS.items():
+        props = set(schemas[name].get("properties", {}))
+        listed = set(required) | set(optional)
+        assert set(required) == set(schemas[name].get("required", [])), name
+        if name.endswith("_dry_run"):
+            assert listed <= props, f"{name}: lists {sorted(listed - props)}, not in its schema"
+        else:
+            assert listed == props, (
+                f"{name}: discovery lists {sorted(listed)}, the schema declares {sorted(props)}"
+            )

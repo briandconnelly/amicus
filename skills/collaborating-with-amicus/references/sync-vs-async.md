@@ -74,7 +74,8 @@ which case you are in.
 To wait without spending turns on it, pass `wait_seconds` (up to 50 s) to `amicus_job_status`.
 The call holds while the job is `running` and returns as soon as it is terminal, or when the wait
 runs out with the job still running.
-A call with `wait_seconds` is itself the wait, so call again at once if it returns `running`.
+A call with a positive `wait_seconds` is itself the wait, so call again at once if it returns
+`running`; with `wait_seconds` 0 or omitted, honor `poll_after_ms` as before.
 If your client's MCP request timeout is shorter than the wait, that one status call fails at the
 client and the job is unaffected; pass a smaller `wait_seconds`.
 Never wait by reading or watching amicus's job store from a shell: its files skip the delivery

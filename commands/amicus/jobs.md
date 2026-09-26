@@ -12,8 +12,9 @@ Request: $ARGUMENTS
 
 - Poll without fetching the result: `amicus_job_status` with `job_id`. Honor the
   returned `poll_after_ms` rather than polling on a fixed interval, or pass
-  `wait_seconds` (up to 50) to wait inside the call until the job is terminal. Never
-  read or watch amicus's job store directly.
+  `wait_seconds` (up to 50) to wait inside the call: it returns when the job is terminal
+  or when the wait runs out, and then `status` is still `running`. Never read or watch
+  amicus's job store directly.
 - Fetch a finished result, keeping the record: `amicus_job_result` with `job_id`, once
   `amicus_job_status` reports any status but `running`. Do not wait on
   `result_available` for this: it is true only for `done`, so a job that failed, was
