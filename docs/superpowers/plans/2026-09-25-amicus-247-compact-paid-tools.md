@@ -1,6 +1,6 @@
 # Implementation plan: one paid tool per verb with a `wait` flag, and result-field rules published once
 
-**Status:** Draft, second revision of 2026-09-26, adding the output-schema trimming under its own ADR; implementation has not started.
+**Status:** Parked on 2026-09-26 pending the maintainer's decision on whether either change is worth doing; the measured basis, benefits, downsides and how to resume are recorded on [#247](https://github.com/briandconnelly/amicus/issues/247#issuecomment-5848329258); implementation has not started.
 **Issue:** [#247](https://github.com/briandconnelly/amicus/issues/247).
 **Design:** [design spec](../specs/2026-09-04-amicus-design.md), [proposed ADR 0043](../../adr/0043-each-paid-verb-is-one-tool-with-a-wait-flag.md), [proposed ADR 0045](../../adr/0045-result-field-reading-rules-are-published-once.md).
 **Baseline:** `main` at `2ab6a8c`, the tree after v0.7.0 shipped on 2026-09-26; the `all` profile measures 112,105 bytes there, as `MEASURED` in `tests/test_discovery_cost.py` pins.
