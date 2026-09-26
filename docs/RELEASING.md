@@ -148,24 +148,49 @@ The tag therefore deliberately points at a commit that is in `main`'s history bu
    Move README's "Any other MCP client" example to the same pin in this PR; `tests/test_packaging.py::test_readme_example_mirrors_the_mcp_json_pin` fails if the two differ.
    Do **not** touch `.claude-plugin/marketplace.json`: its pointer names the previous release until step 7 advances it.
    Regenerate `uv.lock` with `uv lock` in this same PR, per AGENTS.md rule 19 — `uv.lock` mirrors the version rather than declaring it, and `prek.toml`'s `uv-lock-check` hook runs `uv lock --check` whenever `pyproject.toml` changes, so a release PR that skips this fails its own hook.
-3. Check out the PR C branch tip (not `main`) into a clean tree and confirm `git status --porcelain` is empty.
+3. Run every command from here through step 6 in the PR C worktree, never in the main checkout.
+   Every command below is relative to the directory it runs in, and nothing but the evidence script's own refusal checks which checkout that is.
+   The evidence was recorded in the main checkout for 0.3.0, 0.6.0 and 0.7.0; each time a later check caught it, but only after the quota on all three backends was spent (#241).
+   Start by moving there and confirming where you are:
+
+   ```sh
+   cd ~/projects/amicus-wt-release-X-Y-Z
+   git rev-parse HEAD
+   git status --porcelain
+   grep -m1 '^version' pyproject.toml
+   ```
+
+   `git rev-parse HEAD` must print the PR C branch tip, `git status --porcelain` must print nothing, and `pyproject.toml` must declare the version being released.
    Record the branch tip's SHA; call it the release commit, and note it well — it is the commit that gets tagged, and it will not be `main`'s head after the next step.
    If the PR C branch gains any commit after this point — an "Update branch" click, or a review pushing a change — this step must be redone from the new tip: the evidence would otherwise cover a commit that is no longer what step 4 actually merges.
+   Redoing it after the local tag below exists starts with `git tag -d vX.Y.Z`, because the evidence script refuses to run while that tag exists; delete it only if it was never pushed.
    The evidence run below spends real quota on all three backends; a maintainer who has to redo this step must not reuse the earlier record, even though re-spending that quota is tempting.
    Immediately before it, run the backend-CLI precondition above, `uv run python scripts/check_backend_compat.py` and the rule-18 carrier re-check, because the evidence vouches for exactly the CLI versions installed at this moment.
-   Run `uv run python scripts/record_live_gate_evidence.py`.
-   The script itself forces `AMICUS_REQUIRE_LIVE=1` into each backend's subprocess environment, so prefixing the command with it is optional; its own usage string documents `AMICUS_REQUIRE_LIVE=1 uv run python scripts/record_live_gate_evidence.py`, and either form runs the same live gates.
+   Run `uv run python scripts/record_live_gate_evidence.py --version X.Y.Z`.
+   The script itself forces `AMICUS_REQUIRE_LIVE=1` into each backend's subprocess environment, so prefixing the command with it is optional; its own usage string documents `AMICUS_REQUIRE_LIVE=1 uv run python scripts/record_live_gate_evidence.py --version X.Y.Z`, and either form runs the same live gates.
    This spends real quota on all three backends and requires the maintainer's authorization in the session where it runs.
+   Before any gate runs, it refuses when the checkout declares a version other than `--version`, which is what the main checkout does between releases, and when a local tag `vX.Y.Z` already exists.
+   That tag check reads local tags only: it stops a collision with an earlier attempt, and it is no evidence that `vX.Y.Z` was never published.
+   Neither check establishes that `HEAD` is the PR C branch tip, which is what the `cd` block above is for.
+   Confirm the new record names the release commit before going on:
+
+   ```sh
+   grep '"commit"' .release-evidence/live-gates.json
+   ```
+
    Run `AMICUS_RELEASE_CHECK=1 uv run pytest tests/test_release_evidence.py -v --no-cov` and confirm the freshness assertion passes.
    Create the annotated tag **locally**, exactly as it will be pushed, so the checker can verify the pin and the tag before anything leaves this machine:
 
    ```sh
-   git tag -a vX.Y.Z -F .release-evidence/live-gates.json --cleanup=verbatim <release-sha>
+   git tag -a vX.Y.Z --cleanup=verbatim \
+     -F ~/projects/amicus-wt-release-X-Y-Z/.release-evidence/live-gates.json \
+     <release-sha>
    ```
+
+   The record's path is absolute so that a tag made from any other directory fails for want of the file rather than carrying whatever record that directory holds, which is how 0.3.0 was first tagged with 0.2.0's record.
 
    Run `uv run python scripts/check_release_state.py --tag vX.Y.Z --commit <release-sha>` and confirm it prints `release predicate holds for vX.Y.Z`.
    It needs the local tag: `.mcp.json` pins `vX.Y.Z`, and the checker requires that tag to exist, with no pre-tag exception.
-   If this step must be redone because the branch gained a commit, delete the local tag with `git tag -d vX.Y.Z` first, then recreate it against the new tip.
    That is the same tree check the `verify` job will run after the tag is pushed, so a failure here is a failure you would otherwise discover with an immutable tag already in place.
    Rehearse the real install path against the release commit, which is the check that used to be impossible before the tag existed:
 
@@ -185,8 +210,9 @@ The tag therefore deliberately points at a commit that is in `main`'s history bu
 4. Merge PR C with an ordinary merge commit: `gh pr merge --merge`.
    This is the strategy this repository already uses for its PRs, including #7 through #10.
    Squash and rebase are forbidden here, not merely discouraged: both create a new commit and drop the release commit from `main`'s history entirely, which would destroy the subject the evidence names, leaving no commit in `main`'s history for the tag to legitimately point at.
-   Do not re-run `AMICUS_RELEASE_CHECK=1 uv run pytest tests/test_release_evidence.py` after this merge "just to be sure": the recorded evidence names the release commit, which is no longer `main`'s HEAD once the merge commit exists, so the freshness assertion fails by design from here on.
-   That designed failure is not a stop signal; it is expected, and a cautious re-check at this point will read as one anyway if you are not expecting it.
+   Do not re-run `AMICUS_RELEASE_CHECK=1 uv run pytest tests/test_release_evidence.py` after this merge "just to be sure": it compares the record with the `HEAD` of whichever checkout runs it, so it tells you nothing new.
+   In the PR C worktree it still passes, because that worktree's `HEAD` is still the release commit.
+   In a main checkout updated past the merge it fails by design, because the release commit is no longer `main`'s head; that failure is not a stop signal, and a cautious re-check will read as one anyway if you are not expecting it.
 5. Run `git fetch origin` first.
    `gh pr merge --merge` updates GitHub, not the local `origin/main` remote-tracking ref, so any check below run against a stale local ref can pass while meaning nothing — a check run against a stale ref is worse than no check, because it looks like evidence.
    Run `git merge-base --is-ancestor <release-sha> origin/main && echo ok`.
