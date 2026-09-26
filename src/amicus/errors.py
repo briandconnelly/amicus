@@ -71,9 +71,8 @@ JOB_DEADLINE_TIMEOUT_ALTERNATIVE = (
     "the task, or have the operator raise AMICUS_JOB_MAX_SECONDS."
 )
 
-# A keyed run's same call replays its stored outcome (ADR 0020), so a timeout whose own
-# repair says to retry the same call (codex's capture-failed hint) is not temporary for it,
-# and the prose puts the new key first (ADR 0039).
+# A keyed run's same call replays its stored outcome (ADR 0020), so no stored error of a
+# keyed run is temporary, and the prose puts the new key first (ADR 0039, ADR 0046).
 KEYED_REPLAY_NOTE = (
     "This call passed an idempotency_key, and repeating it with the same key replays this "
     "stored error without running again, so any retry below needs a NEW idempotency_key. "
@@ -379,7 +378,6 @@ def render_failure(
     background: bool = False,
     job_max_seconds: int | None = None,
     deadline_seconds: int | None = None,
-    keyed: bool = False,
 ) -> dict[str, Any]:
     """The wire envelope for a backend's classified failure. Minted codes are
     generalized; an uncataloged code is reported as internal_error with the original
@@ -390,9 +388,8 @@ def render_failure(
     prose (ADR 0039). A sync run names the twin only when the job deadline
     (`job_max_seconds`) is longer than the one that passed (`deadline_seconds`); when either
     is unknown (a record written before they existed) it is named. A backend that already
-    gave its own repair (e.g. codex's capture-failed retry-once hint) keeps it, except that a
-    `keyed` run's temporary timeout is made non-temporary and its prose leads with
-    KEYED_REPLAY_NOTE, because the same keyed call would replay this error."""
+    gave its own repair (e.g. codex's capture-failed retry-once hint) keeps it; a keyed run's
+    stored error is then made non-temporary by `keyed_stored_error` (ADR 0046)."""
     table = repair_table(plugin)
     code = generalize_code(failure.code, plugin.backend_id)
     message = failure.detail
@@ -420,9 +417,6 @@ def render_failure(
             or (job_max_seconds > deadline_seconds)
         ):
             tool = async_twin_for(kind)
-    if code == "timeout" and keyed and temporary:
-        temporary = False
-        alternative = KEYED_REPLAY_NOTE + (alternative or "")
     repair: Repair | None = Repair(
         next_step=next_step,  # ty: ignore[invalid-argument-type]
         tool=tool,
@@ -443,3 +437,39 @@ def render_failure(
         details=_detail_from(failure.details),
     )
     return serialize_error(ErrorResult(error=info, meta=meta))
+
+
+def keyed_stored_error(envelope: dict[str, Any], tool: str) -> dict[str, Any]:
+    """The error a keyed run stores, made honest for the caller who holds its key.
+
+    The same keyed call replays this stored error without running again (ADR 0020), and
+    `temporary` means the identical call may succeed later, so a temporary error is stored
+    as `temporary: false`, its prose leads with KEYED_REPLAY_NOTE, a backend-requested delay
+    moves from `retry_after_ms` (which the schema allows only on a temporary error) into
+    that prose, and a `retry_after_delay` step, which names the same call, becomes
+    `use_new_idempotency_key` on `tool` (ADR 0046). Anything else passes through unchanged:
+    a success, a non-temporary error, or a payload that is not a valid error envelope."""
+    if envelope.get("ok") is not False:
+        return envelope
+    try:
+        result = ErrorResult.model_validate(envelope)
+    except ValidationError:
+        return envelope
+    info = result.error
+    if not info.temporary:
+        return envelope
+    prose = KEYED_REPLAY_NOTE
+    if info.retry_after_ms is not None:
+        prose += (
+            f"The backend asked for a wait of {info.retry_after_ms} ms before a retry, which "
+            "a new key does not shorten. "
+        )
+    repair = info.repair
+    if repair is not None:
+        if repair.next_step == "retry_after_delay":
+            repair = repair.model_copy(
+                update={"next_step": "use_new_idempotency_key", "tool": tool}
+            )
+        repair = repair.model_copy(update={"alternative": prose + (repair.alternative or "")})
+    keyed = info.model_copy(update={"temporary": False, "retry_after_ms": None, "repair": repair})
+    return serialize_error(ErrorResult(error=keyed, meta=result.meta))

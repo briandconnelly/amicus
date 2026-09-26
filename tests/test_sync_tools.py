@@ -552,30 +552,40 @@ async def test_a_keyed_capture_failed_timeout_is_not_temporary(monkeypatch, tmp_
     assert not unkeyed["repair"]["alternative"].startswith(errors.KEYED_REPLAY_NOTE)
     import dataclasses
 
-    keyed = (await run_mod.run_request(dataclasses.replace(spec, keyed=True), plugin))["error"]
+    # The worker stores a keyed run's outcome through keyed_stored_error (ADR 0046).
+    run = await run_mod.run_request(dataclasses.replace(spec, keyed=True), plugin)
+    keyed = errors.keyed_stored_error(run, spec.tool)["error"]
     assert keyed["code"] == "timeout" and keyed["temporary"] is False
     assert keyed["retry_after_ms"] is None
-    assert keyed["repair"]["next_step"] == "retry_after_delay"
-    assert keyed["repair"]["alternative"] == (
-        errors.KEYED_REPLAY_NOTE + unkeyed["repair"]["alternative"]
-    )
+    assert keyed["repair"]["next_step"] == "use_new_idempotency_key"
+    assert keyed["repair"]["tool"] == "amicus_consult_async"
+    assert keyed["repair"]["alternative"].startswith(errors.KEYED_REPLAY_NOTE)
+    assert keyed["repair"]["alternative"].endswith(unkeyed["repair"]["alternative"])
 
 
 async def test_the_same_key_replays_a_failed_keyed_run(app, tmp_path, monkeypatch):
     """The premise of the test above: a keyed call whose run failed is replayed, error and
-    all, by the same call under the same key, and codex is not spawned again (ADR 0020)."""
+    all, by the same call under the same key, and codex is not spawned again (ADR 0020). So
+    the error it replays is not temporary, though the same failure unkeyed is (#254)."""
+    from amicus import errors
+
     monkeypatch.setenv("FAKE_CODEX_EXIT", "1")
     monkeypatch.setenv("FAKE_CODEX_STDERR", "boom")
-    args = {
-        "backend": "codex",
-        "question": "why?",
-        "workspace_root": str(tmp_path),
-        "idempotency_key": "fails",
-    }
+    args = {"backend": "codex", "question": "why?", "workspace_root": str(tmp_path)}
+    keyed = {**args, "idempotency_key": "fails"}
     async with Client(app) as c:
-        first = await c.call_tool("amicus_consult", args, raise_on_error=False)
-        again = await c.call_tool("amicus_consult", args, raise_on_error=False)
-    assert first.is_error and again.is_error
-    assert again.structured_content["error"] == first.structured_content["error"]
+        unkeyed = await c.call_tool("amicus_consult", args, raise_on_error=False)
+        first = await c.call_tool("amicus_consult", keyed, raise_on_error=False)
+        again = await c.call_tool("amicus_consult", keyed, raise_on_error=False)
+    assert unkeyed.is_error and first.is_error and again.is_error
+    plain = unkeyed.structured_content["error"]
+    assert plain["code"] == "nonzero_exit" and plain["temporary"] is True
+    error = first.structured_content["error"]
+    assert error["code"] == "nonzero_exit" and error["temporary"] is False
+    assert error["retry_after_ms"] is None
+    assert (
+        error["repair"]["alternative"] == errors.KEYED_REPLAY_NOTE + plain["repair"]["alternative"]
+    )
+    assert again.structured_content["error"] == error
     assert again.structured_content["meta"]["idempotency_replayed"] is True
-    assert len(_argv(tmp_path)) == 1
+    assert len(_argv(tmp_path)) == 2

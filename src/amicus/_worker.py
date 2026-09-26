@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from amicus import config, obs
-from amicus.errors import error_envelope
+from amicus.errors import error_envelope, keyed_stored_error
 from amicus.jobs.store import ActivityRecorder
 from amicus.orchestration.run import run_request
 from amicus.registry import BackendRegistry
@@ -168,24 +168,26 @@ def main(argv: list[str] | None = None, stdin_text: str | None = None) -> int:
     _hold_job_lock(job_dir)
     spec: RunSpec | None = None
     plugin: BackendPlugin | None = None
+    keyed_tool: str | None = None
     try:
         public = json.loads(spec_path.read_text())
+        # Read raw, so a spec that fails to load below is still stored as keyed (ADR 0046).
+        if isinstance(public, dict) and public.get("keyed") is True:
+            tool = public.get("tool")
+            keyed_tool = tool if isinstance(tool, str) else None
         raw_inputs = stdin_text if stdin_text is not None else sys.stdin.read()
         inputs = _parse_stdin_inputs(raw_inputs)
         spec = RunSpec.from_parts(public, inputs)
         plugin = load_plugin(spec.backend)
         if plugin is None:
-            _atomic_write(
-                job_dir / "result.json",
-                error_envelope(
-                    "backend_unavailable",
-                    f"backend {spec.backend!r} could not be loaded in the worker",
-                    meta_for(spec),
-                    backend=spec.backend,
-                ),
+            payload = error_envelope(
+                "backend_unavailable",
+                f"backend {spec.backend!r} could not be loaded in the worker",
+                meta_for(spec),
+                backend=spec.backend,
             )
-            return 0
-        payload = asyncio.run(_run(job_dir, spec, plugin))
+        else:
+            payload = asyncio.run(_run(job_dir, spec, plugin))
     except asyncio.CancelledError:
         return 0  # graceful termination: the JobStore owns the terminal status
     except Exception as exc:
@@ -195,6 +197,10 @@ def main(argv: list[str] | None = None, stdin_text: str | None = None) -> int:
             meta_for(spec) if spec is not None else Meta(),
             plugin=plugin,
         )
+    if keyed_tool is not None:
+        # The one place a keyed run's outcome is stored, so the one place its replay is
+        # made honest: the same keyed call returns this record rather than running (ADR 0046).
+        payload = keyed_stored_error(payload, keyed_tool)
     _atomic_write(job_dir / "result.json", payload)
     return 0
 

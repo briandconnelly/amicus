@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import json
 from pathlib import Path
 
@@ -376,10 +377,10 @@ def test_render_failure_names_the_twin_only_when_its_deadline_is_longer():
     assert repair(1800, None)["tool"] == "amicus_consult_async"
 
 
-def test_render_failure_makes_a_keyed_retryable_timeout_non_temporary():
-    """Copilot on PR #253: codex's capture-failed timeout says to retry the same call once
-    (retryable=True), but a keyed run's same call replays this stored error (ADR 0020), so
-    for a keyed run it is not temporary and the prose says to retry under a new key."""
+def test_render_failure_leaves_a_retryable_timeout_to_the_worker():
+    """render_failure has no keyed rule of its own: codex's capture-failed timeout keeps the
+    backend's temporary flag and prose, and the worker's keyed_stored_error applies the keyed
+    rule to every stored error (ADR 0046)."""
     plugin = fakeplugin.make_plugin()
     own_repair = ClassifiedFailure(
         code="timeout",
@@ -388,20 +389,58 @@ def test_render_failure_makes_a_keyed_retryable_timeout_non_temporary():
         retry_after_ms=1000,
         repair=RepairHint(next_step="retry_after_delay", alternative="once"),
     )
-    keyed = errors.render_failure(
-        plugin, own_repair, Meta(), kind="consult", background=True, keyed=True
-    )["error"]
-    assert keyed["temporary"] is False and keyed["retry_after_ms"] is None
-    assert keyed["repair"]["alternative"] == errors.KEYED_REPLAY_NOTE + "once"
-    assert keyed["repair"]["next_step"] == "retry_after_delay"
-    # Unkeyed, the same failure keeps the backend's own temporary flag and prose.
-    unkeyed = errors.render_failure(plugin, own_repair, Meta(), kind="consult", background=True)[
-        "error"
-    ]
-    assert unkeyed["temporary"] is True and unkeyed["repair"]["alternative"] == "once"
-    # A keyed timeout that was never temporary gets no note: nothing invites a same-key retry.
-    plain = ClassifiedFailure(code="timeout", detail="deadline")
-    keyed_plain = errors.render_failure(
-        plugin, plain, Meta(), kind="consult", background=True, keyed=True
-    )["error"]
-    assert keyed_plain["repair"]["alternative"] == errors.JOB_DEADLINE_TIMEOUT_ALTERNATIVE
+    err = errors.render_failure(plugin, own_repair, Meta(), kind="consult", background=True)
+    assert err["error"]["temporary"] is True and err["error"]["repair"]["alternative"] == "once"
+    assert "keyed" not in inspect.signature(errors.render_failure).parameters
+
+
+def _rate_limited() -> dict:
+    plugin = fakeplugin.make_plugin()
+    failure = ClassifiedFailure(
+        code=f"{plugin.backend_id}_rate_limited", detail="slow down", retry_after_ms=30_000
+    )
+    return errors.render_failure(plugin, failure, Meta(), kind="consult")
+
+
+def test_a_keyed_stored_temporary_error_is_not_temporary():
+    """#254: the same keyed call replays a stored error (ADR 0020), so a stored temporary
+    error is made non-temporary, its delay moves into the prose, and a retry_after_delay
+    step, which names the same call, becomes a new key on the same tool."""
+    plain = _rate_limited()
+    assert plain["error"]["temporary"] is True and plain["error"]["retry_after_ms"] == 30_000
+    assert plain["error"]["repair"]["next_step"] == "retry_after_delay"
+    keyed = errors.keyed_stored_error(plain, "amicus_consult")
+    error = keyed["error"]
+    assert error["code"] == "backend_rate_limited" and error["message"] == "slow down"
+    assert error["temporary"] is False and error["retry_after_ms"] is None
+    assert error["repair"]["next_step"] == "use_new_idempotency_key"
+    assert error["repair"]["tool"] == "amicus_consult"
+    alt = error["repair"]["alternative"]
+    assert alt.startswith(errors.KEYED_REPLAY_NOTE) and "30000 ms" in alt
+    assert alt.endswith(plain["error"]["repair"]["alternative"])
+    ErrorResult.model_validate(keyed)
+    assert keyed["meta"] == plain["meta"]
+
+
+def test_a_keyed_stored_error_keeps_a_step_that_is_not_a_same_call_retry():
+    """A temporary internal_error's step is not retry_after_delay, so it stays; only the flag
+    and the prose change, and no delay sentence is added when the error carried none."""
+    plain = errors.error_envelope("internal_error", "boom", Meta())
+    assert plain["error"]["temporary"] is True
+    error = errors.keyed_stored_error(plain, "amicus_consult")["error"]
+    assert error["temporary"] is False
+    assert error["repair"]["next_step"] == plain["error"]["repair"]["next_step"]
+    assert error["repair"].get("tool") == plain["error"]["repair"].get("tool")
+    assert error["repair"]["alternative"] == (
+        errors.KEYED_REPLAY_NOTE + plain["error"]["repair"]["alternative"]
+    )
+
+
+def test_keyed_stored_error_passes_everything_else_through():
+    ok = {"ok": True, "tool": "amicus_consult", "summary": "s"}
+    assert errors.keyed_stored_error(ok, "amicus_consult") is ok
+    final = errors.error_envelope("backend_unavailable", "gone", Meta(), backend="codex")
+    assert final["error"]["temporary"] is False
+    assert errors.keyed_stored_error(final, "amicus_consult") is final
+    junk = {"ok": False, "error": "not an object"}
+    assert errors.keyed_stored_error(junk, "amicus_consult") is junk
