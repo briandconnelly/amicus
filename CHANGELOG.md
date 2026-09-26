@@ -32,11 +32,11 @@ per-change, as its own lead says.
 ### Changed
 
 - The `collaborating-with-amicus` skill's brief rules now say that a full review's scope is not
-  the author's own concern list (#270). A list of suspected problems in `extra_context` had
-  steered a full branch review into checking only that list while the result still read as full
-  coverage; a named-concern pass belongs in `focus`, whose coverage records the narrowing. For a
-  change to a published surface, the brief asks the reviewer to find every other place that lists
-  or describes what changed.
+  the author's own concern list (#270): a concern list in `extra_context` narrows a review without
+  its result saying so, while `focus`, the carrier for a named-concern pass, records the
+  narrowing in `coverage`. For a change to a published surface, the brief now asks the reviewer to
+  find every other place that lists or describes what changed, which is the kind of omission the
+  review in #270 missed.
 
 ## [0.7.0] - 2026-09-26
 

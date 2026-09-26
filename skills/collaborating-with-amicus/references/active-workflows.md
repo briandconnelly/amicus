@@ -44,15 +44,15 @@ Include:
 labelled as yours, rather than framing the question so agreement is the only fluent answer. A
 second opinion that can only endorse is not a second opinion.
 
-**Keep your own concerns from becoming the review's scope.** The unknowns and the deliverable
-make a list of what you suspect easy to write in good faith. On a full review that list works
-as an unlabelled `focus`: the reviewer works through the places you already looked, returns
-your blind spots unchecked, and the result still reads as full coverage. `focus` is the honest
-carrier for a named-concern pass, because a focused review's coverage says it was narrowed. On
-a full review, give intent and background; any concern you do name is an addition, and saying
-so is what keeps the rest of the change in scope. When the change touches a published surface,
-the place most often missed is the one outside the diff that still lists or describes the old
-behavior, so ask the reviewer to find those places rather than naming the ones you know.
+**Keep your own concerns from becoming the review's scope.** The unknowns and the deliverable make
+a list of what you suspect easy to write in good faith. On a full review that list can work as an
+unlabelled `focus`: the reviewer can work through the places you already looked and leave your
+blind spots unchecked, while the result still reads as full coverage. `focus` is the honest
+carrier for a named-concern pass, because a focused review's coverage says it was narrowed. On a
+full review, give intent and background; any concern you do name is an addition, and saying so is
+what keeps the rest of the change in scope. When the change touches a published surface, a place
+easily missed is one outside the diff that still lists or describes the old behavior, so ask the
+reviewer to find those places rather than naming the ones you know.
 
 Route the two kinds of text correctly: facts the backend should treat as data go in
 `extra_context` (labelled untrusted, and *not* covered by redaction); *how* the backend should
