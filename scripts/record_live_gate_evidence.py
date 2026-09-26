@@ -19,6 +19,11 @@ quota runs it, and only after deciding to in the current session.
 Usage:
     AMICUS_REQUIRE_LIVE=1 uv run python scripts/record_live_gate_evidence.py
 
+    It takes no arguments. `-h`/`--help`, or a prefix of it such as `--he`, prints this text
+    and exits 0, even beside other arguments; without it, any argument is refused with exit 2.
+    Both happen before git is consulted or any gate runs, so asking the script what it does
+    never spends quota (issue #242).
+
 Behavior (all-or-nothing):
     - Refuses to run at all on a dirty working tree.
     - Runs, for each backend, `AMICUS_REQUIRE_LIVE=1 uv run pytest -m integration --no-cov
@@ -45,6 +50,7 @@ Pure stdlib (no deps): this script must run in any environment without extra set
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import shutil
@@ -214,6 +220,24 @@ def _write_json(repo_root: Path, path: Path, payload: dict[str, object]) -> None
     full_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
+def _parse_args(argv: list[str]) -> int | None:
+    """Parse the command line; return an exit code to stop with, or None to go on.
+
+    argparse exits by raising SystemExit, for `--help` and for a bad argument alike. That is
+    caught and turned into a return value so `main` stays a function tests can call.
+    """
+    parser = argparse.ArgumentParser(
+        prog="record_live_gate_evidence.py",
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    try:
+        parser.parse_args(argv)
+    except SystemExit as exc:
+        return exc.code if isinstance(exc.code, int) else 2
+    return None
+
+
 def main(
     argv: list[str] | None = None,
     *,
@@ -227,9 +251,13 @@ def main(
     `git_head`, `git_dirty_paths` and `run_gate` are injectable seams: tests substitute fakes
     here (no real git repo, no subprocess, no live backend) to exercise the all-or-nothing
     write logic, the dirty-tree refusal and the failure-diagnostics path hermetically. The
-    default arguments are what a real release run uses.
+    default arguments are what a real release run uses. `argv` is the command line without
+    the program name; None means an empty one, not `sys.argv`, so a test calling `main()`
+    never parses pytest's own arguments.
     """
-    del argv  # this script takes no arguments
+    stop = _parse_args([] if argv is None else argv)
+    if stop is not None:
+        return stop
 
     dirty = git_dirty_paths()
     if dirty:
@@ -428,4 +456,4 @@ def validate(
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(main(sys.argv[1:]))

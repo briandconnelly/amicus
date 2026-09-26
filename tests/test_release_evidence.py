@@ -14,6 +14,7 @@ import importlib.util
 import json
 import os
 import subprocess
+import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -290,6 +291,82 @@ def test_main_refuses_on_a_dirty_tree_before_running_anything(tmp_path, capsys):
     err = capsys.readouterr().err
     assert "dirty_file.py" in err
     assert "untracked.py" in err
+
+
+def _never_called(label: str, calls: list[str]):
+    def fake(*args):
+        calls.append(label)
+        raise AssertionError(f"{label} ran; argument parsing must finish before anything else")
+
+    return fake
+
+
+@pytest.mark.parametrize(
+    ("argv", "expected_rc"),
+    [
+        (["--help"], 0),
+        (["-h"], 0),
+        (["--he"], 0),
+        (["--bogus", "--help"], 0),
+        (["--bogus"], 2),
+        (["extra-positional"], 2),
+    ],
+)
+def test_main_parses_arguments_before_touching_git_or_any_gate(tmp_path, argv, expected_rc):
+    """Issue #242: `--help` used to start all three live gates, because `main` ignored argv.
+
+    Neither git nor any gate may run for `--help` or for an argument the script does not
+    accept, and neither may write a record.
+    """
+    calls: list[str] = []
+    rc = evidence.main(
+        argv,
+        repo_root=tmp_path,
+        git_head=_never_called("git_head", calls),
+        git_dirty_paths=_never_called("git_dirty_paths", calls),
+        run_gate=_never_called("run_gate", calls),
+    )
+
+    assert rc == expected_rc
+    assert calls == []
+    assert not (tmp_path / evidence.EVIDENCE_PATH).exists()
+    assert not (tmp_path / evidence.FAILURE_PATH).exists()
+
+
+def test_help_describes_the_spend(tmp_path, capsys):
+    calls: list[str] = []
+    rc = evidence.main(
+        ["--help"],
+        repo_root=tmp_path,
+        git_head=_never_called("git_head", calls),
+        git_dirty_paths=_never_called("git_dirty_paths", calls),
+        run_gate=_never_called("run_gate", calls),
+    )
+    assert rc == 0
+    assert calls == []
+    out = capsys.readouterr().out
+    assert out.startswith("usage: record_live_gate_evidence.py")
+    assert "AMICUS_REQUIRE_LIVE=1" in out
+    assert "quota" in out
+
+
+def test_the_script_entry_point_passes_its_command_line_to_main(tmp_path):
+    """The entry point, not only `main`, must hand over argv: before #242 it called `main()`.
+
+    PATH names an empty directory, so if `--help` were ignored again the script would fail at
+    its first `git` call with no `uv`, `codex`, `kimi` or `claude` reachable, rather than spend.
+    """
+    proc = subprocess.run(
+        [sys.executable, str(_SCRIPT), "--help"],
+        capture_output=True,
+        text=True,
+        env={"PATH": str(tmp_path)},
+        timeout=30,
+        check=False,
+    )
+
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout.startswith("usage: record_live_gate_evidence.py")
 
 
 @pytest.mark.skipif(
