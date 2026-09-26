@@ -821,3 +821,81 @@ async def test_list_pages_through_equal_start_times_without_skipping(app, store,
             if cursor is None:
                 break
     assert walked == sorted(ids, reverse=True)
+
+
+# Issue #266: with no way to block on a job, agents polled ~/.cache/amicus directly from a
+# background shell loop. wait_seconds holds the status call until the job leaves running.
+
+
+async def test_status_wait_returns_when_the_job_finishes(app, tmp_path, monkeypatch):
+    monkeypatch.setenv("FAKE_CODEX_SLEEP", "1")
+    ws = {"workspace_root": str(tmp_path)}
+    async with Client(app) as c:
+        job_id = await _start(c, tmp_path)
+        began = time.monotonic()
+        status = (
+            await c.call_tool("amicus_job_status", {"job_id": job_id, "wait_seconds": 20, **ws})
+        ).structured_content
+        waited = time.monotonic() - began
+    assert status["status"] == "done" and status["result_available"] is True
+    assert waited < 15, "the wait ends when the job does, not when wait_seconds runs out"
+
+
+async def test_status_wait_ends_at_wait_seconds_while_running(app, tmp_path, monkeypatch):
+    monkeypatch.setenv("FAKE_CODEX_SLEEP", "10")
+    ws = {"workspace_root": str(tmp_path)}
+    async with Client(app) as c:
+        job_id = await _start(c, tmp_path)
+        began = time.monotonic()
+        status = (
+            await c.call_tool("amicus_job_status", {"job_id": job_id, "wait_seconds": 1, **ws})
+        ).structured_content
+        waited = time.monotonic() - began
+        await c.call_tool("amicus_job_cancel", {"job_id": job_id, **ws})
+    assert status["status"] == "running" and status["poll_after_ms"] >= 1000
+    assert 0.9 <= waited < 5, "a running job holds the call for wait_seconds, then returns"
+
+
+async def test_status_wait_does_not_hold_a_missing_job(app, tmp_path):
+    began = time.monotonic()
+    async with Client(app) as c:
+        res = await c.call_tool(
+            "amicus_job_status",
+            {"job_id": "0" * 32, "wait_seconds": 5, "workspace_root": str(tmp_path)},
+            raise_on_error=False,
+        )
+    assert res.structured_content["error"]["code"] == "job_not_found"
+    assert time.monotonic() - began < 3
+
+
+async def test_status_wait_does_not_hold_a_foreign_running_record(
+    app, store, tmp_path, monkeypatch
+):
+    monkeypatch.setenv("FAKE_CODEX_SLEEP", "10")
+    ws = {"workspace_root": str(tmp_path)}
+    async with Client(app) as c:
+        job_id = await _start(c, tmp_path)
+        meta_path = store._job_dir(str(tmp_path), job_id) / "meta.json"
+        ours = meta_path.read_text()
+        meta_path.write_text(ours.replace('"backend": "codex"', '"backend": "Not Ours"'))
+        began = time.monotonic()
+        res = await c.call_tool(
+            "amicus_job_status", {"job_id": job_id, "wait_seconds": 5, **ws}, raise_on_error=False
+        )
+        waited = time.monotonic() - began
+        meta_path.write_text(ours)
+        await c.call_tool("amicus_job_cancel", {"job_id": job_id, **ws})
+    assert res.structured_content["error"]["code"] == "job_not_found"
+    assert waited < 3, "a record amicus does not own is reported at once, never waited on"
+
+
+@pytest.mark.parametrize("wait", [-1, 51])
+async def test_status_wait_out_of_range_is_invalid(app, tmp_path, wait):
+    async with Client(app) as c:
+        res = await c.call_tool(
+            "amicus_job_status",
+            {"job_id": "0" * 32, "wait_seconds": wait, "workspace_root": str(tmp_path)},
+            raise_on_error=False,
+        )
+    err = res.structured_content["error"]
+    assert err["code"] == "invalid_arguments" and err["details"]["field"] == "wait_seconds"

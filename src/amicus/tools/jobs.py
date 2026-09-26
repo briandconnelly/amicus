@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import math
 import re
+import time
 from typing import TYPE_CHECKING, Any
 
 from fastmcp import Context
@@ -29,6 +30,7 @@ from amicus.schemas.params import (
     JobStatusFilterParam,
     OptionalBackendParam,
     TaskIdParam,
+    WaitSecondsParam,
     WorkspaceRootParam,
 )
 from amicus.schemas.results import (
@@ -56,6 +58,8 @@ _RETENTION = (
 # (#249, ADR 0042): a page after it is every row that sorts below it, so an anchor that has
 # since been consumed or evicted still resolves. Opaque to callers; this tool alone mints it.
 _JOB_ID_RE = re.compile(r"[0-9a-f]{32}")
+# How often a status wait re-reads the record; a read is a local file stat, not a spend.
+_WAIT_POLL_SECONDS = 0.25
 
 
 def _cursor_for(row: dict[str, Any]) -> str:
@@ -87,7 +91,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
         return lookup.task_map(settings).task_for(job_id)
 
     async def read_status(
-        ctx: Any, workspace_root: str | None, job_id: str, *, cancel: bool
+        ctx: Any, workspace_root: str | None, job_id: str, *, cancel: bool, wait: int = 0
     ) -> dict[str, Any]:
         cwd, source, roots_source, err = await resolve(ctx, workspace_root)
         if err is not None:
@@ -95,6 +99,15 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
         assert cwd is not None
         # Read first, even for a cancel: a foreign record is never signalled (decision 6).
         row = await asyncio.to_thread(store().status, cwd, job_id)
+        deadline = time.monotonic() + wait
+        while (
+            row is not None
+            and row["status"] == "running"
+            and lookup.backend_of(row) is not None
+            and (remaining := deadline - time.monotonic()) > 0
+        ):
+            await asyncio.sleep(min(_WAIT_POLL_SECONDS, remaining))
+            row = await asyncio.to_thread(store().status, cwd, job_id)
         if row is not None and cancel and lookup.backend_of(row) is not None:
             row = await asyncio.to_thread(store().cancel, cwd, job_id)
         if row is None or lookup.backend_of(row) is None:
@@ -161,10 +174,13 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
     )
     @guard("amicus_job_status", settings)
     async def amicus_job_status(
-        job_id: JobIdParam, ctx: Context | None = None, workspace_root: WorkspaceRootParam = None
+        job_id: JobIdParam,
+        ctx: Context | None = None,
+        workspace_root: WorkspaceRootParam = None,
+        wait_seconds: WaitSecondsParam = 0,
     ) -> dict[str, Any]:
         """Poll a background job."""
-        return await read_status(ctx, workspace_root, job_id, cancel=False)
+        return await read_status(ctx, workspace_root, job_id, cancel=False, wait=wait_seconds)
 
     @app.tool(
         name="amicus_job_result",

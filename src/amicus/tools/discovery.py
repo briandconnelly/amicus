@@ -312,7 +312,7 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
     "amicus_job_status": {
         "cost": "free",
         "backends": list(BACKEND_IDS),
-        "use_when": "Poll a job without fetching its result.",
+        "use_when": "Poll or wait on a job without fetching its result.",
         "returns": "status, result_available, result_ok, poll_after_ms.",
         "error_codes": [
             "job_not_found",
@@ -385,7 +385,7 @@ _JOB_PARAMS: dict[str, tuple[list[str], list[str]]] = {
     "amicus_backends": ([], ["backend", "detail"]),
     "amicus_models": (["backend"], []),
     "amicus_capabilities": ([], ["detail", "include_schemas", "include_tool_details"]),
-    "amicus_job_status": (["job_id"], ["workspace_root"]),
+    "amicus_job_status": (["job_id"], ["workspace_root", "wait_seconds"]),
     "amicus_job_result": (["job_id"], ["workspace_root", "detail"]),
     "amicus_job_consume_result": (["job_id"], ["workspace_root", "detail"]),
     "amicus_job_cancel": (["job_id"], ["workspace_root"]),

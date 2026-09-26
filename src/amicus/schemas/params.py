@@ -83,6 +83,9 @@ def expected_required(tool_name: str) -> frozenset[str]:
 # --- shape facts ------------------------------------------------------------------------
 
 MIN_TIMEOUT_SECONDS, MAX_TIMEOUT_SECONDS = 10, 600
+# Under the MCP TypeScript SDK's 60 s default request timeout, so a status wait returns
+# before a client on that default abandons the call (#266).
+MAX_STATUS_WAIT_SECONDS = 50
 # No Unicode Cc code point (C0, DEL, C1). ECMA-safe; deliberately names no surrogates.
 CONTROL_CHAR_FREE_PATTERN = r"^[^\x00-\x1F\x7F-\x9F]*$"
 REASONING_EFFORT_MAX_LENGTH = 128
@@ -515,6 +518,17 @@ JobIdParam = Annotated[
         description="Job id from an _async call or meta.job_id. Control characters rejected.",
         pattern=CONTROL_CHAR_FREE_PATTERN,
         max_length=64,
+    ),
+]
+WaitSecondsParam = Annotated[
+    int,
+    Field(
+        description=(
+            "Hold the call up to this many seconds while the job runs, returning as soon as "
+            "it is terminal; 0 returns at once. Wait here, never on amicus's job store."
+        ),
+        ge=0,
+        le=MAX_STATUS_WAIT_SECONDS,
     ),
 ]
 TaskIdParam = Annotated[
