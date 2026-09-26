@@ -145,12 +145,14 @@ def test_the_async_description_instrument_can_fail():
 # Issue #272: a status call with a positive wait_seconds is itself the wait, and the skill says
 # to call again at once. Server text that only said "honor poll_after_ms" sent an agent reading
 # nothing else to sleep up to 30 s more after every call that had already waited, so every
-# server text that says to honor poll_after_ms must offer the wait alternative beside it.
+# server text that paces polling by poll_after_ms must offer the wait alternative beside it.
 _WAIT_PHRASE = "or pass a positive wait_seconds, which is itself the wait"
-_HONOR = re.compile(r"\bhonou?r", re.IGNORECASE)
+_FIELD_WAIT_PHRASE = "unless that poll passes a positive wait_seconds, which is itself the wait"
+_PACING = re.compile(r"\bhonou?r|before the next poll", re.IGNORECASE)
 _WAIT_SURFACES: frozenset[str] = frozenset(
     {
         "amicus_job_status description",
+        "poll_after_ms field",
         "job_running repair",
         "lifecycle.POLL_FOLLOW_UP",
         "lifecycle.KEYED_TIMEOUT_ALTERNATIVE",
@@ -163,6 +165,10 @@ _WAIT_SUPERSEDED: dict[str, str] = {
         "elapsed time, result_available, result_ok, and poll_after_ms to honor before the "
         "next poll while status is running (it grows with elapsed time, up to 30 s; null on "
         "any terminal status)."
+    ),
+    "poll_after_ms field": (
+        "Milliseconds to wait before the next poll while status is running; null on any "
+        "terminal status."
     ),
     "job_running repair": (
         "Poll amicus_job_status while status is running, honoring poll_after_ms. On any "
@@ -182,16 +188,32 @@ _WAIT_SUPERSEDED: dict[str, str] = {
 
 
 def _says_to_honor_the_poll_hint(text: str) -> bool:
-    return "poll_after_ms" in text and _HONOR.search(text) is not None
+    return "poll" in text and _PACING.search(text) is not None
+
+
+def _wire_strings(node: object, keys: tuple[str, ...] = ()):
+    if isinstance(node, dict):
+        for key, value in node.items():
+            yield from _wire_strings(value, (*keys, str(key)))
+    elif isinstance(node, list):
+        for value in node:
+            yield from _wire_strings(value, keys)
+    elif isinstance(node, str):
+        yield keys, node
 
 
 def _poll_hint_texts(wire) -> dict[str, str]:
-    """Every server text that tells an agent to honor poll_after_ms, found by sweep."""
-    found = {
-        f"{t['name']} description": t["description"]
-        for t in wire["tools"]
-        if _says_to_honor_the_poll_hint(t["description"])
-    }
+    """Every server text that paces polling by poll_after_ms, found by sweep: each tool's
+    description, every string in its schemas, the repair table and lifecycle's constants."""
+    found: dict[str, str] = {}
+    for tool in wire["tools"]:
+        for keys, text in _wire_strings(tool):
+            if not _says_to_honor_the_poll_hint(text):
+                continue
+            if keys == ("description",):
+                found[f"{tool['name']} description"] = text
+            else:  # a schema property's description, which the published schemas repeat
+                found[f"{keys[-2]} field"] = text
     found |= {
         f"{code} repair": repair.alternative
         for code, repair in errors.repair_table().items()
@@ -210,14 +232,15 @@ def test_every_poll_hint_text_offers_the_wait_alternative(wire):
     # The sweep must still find every known surface, or a reworded one escapes the check.
     assert set(texts) == _WAIT_SURFACES
     for name, text in texts.items():
-        assert _WAIT_PHRASE in " ".join(text.split()), f"{name} omits the wait_seconds option"
+        phrase = _FIELD_WAIT_PHRASE if name == "poll_after_ms field" else _WAIT_PHRASE
+        assert phrase in " ".join(text.split()), f"{name} omits the wait_seconds option"
 
 
 def test_the_wait_alternative_instrument_can_fail():
     """The sweep matches each superseded string and the phrase check fails on it (#272)."""
     for name, old in _WAIT_SUPERSEDED.items():
         assert _says_to_honor_the_poll_hint(old), name
-        assert _WAIT_PHRASE not in old, name
+        assert _WAIT_PHRASE not in old and _FIELD_WAIT_PHRASE not in old, name
 
 
 # Issue #44: consume promised job_not_found on every repeat call, while a failed delete

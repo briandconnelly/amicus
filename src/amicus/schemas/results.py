@@ -375,8 +375,8 @@ class JobResultFollowUp(BaseModel):
 
 
 _POLL_AFTER_DESC = (
-    "Milliseconds to wait before the next poll while status is running; null on any "
-    "terminal status."
+    "Milliseconds to wait before the next poll while status is running, unless that poll "
+    "passes a positive wait_seconds, which is itself the wait; null on any terminal status."
 )
 publish.KEPT_DESCRIPTIONS.add(_POLL_AFTER_DESC)
 

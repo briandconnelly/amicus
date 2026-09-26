@@ -27,11 +27,11 @@ per-change, as its own lead says.
   (#266). Agents with no way to block on a job had been watching amicus's job store from shell
   loops and reading `result.json` past the delivery checks; the collaborating-with-amicus skill
   and `/amicus:jobs` now say to wait through this parameter and never on the store. The cap
-  stays under the MCP TypeScript SDK's 60 s default request timeout. Every text that says to
-  honor `poll_after_ms` — `amicus_job_status`'s description, an async start's `follow_up`,
-  the `job_running` repair and a keyed sync timeout's alternative — also offers a positive
-  `wait_seconds`, which is itself the wait, so the call is repeated at once rather than after
-  `poll_after_ms` (#272).
+  stays under the MCP TypeScript SDK's 60 s default request timeout. Every text that paces
+  polling by `poll_after_ms` — `amicus_job_status`'s description, the `poll_after_ms` field's
+  own description, an async start's `follow_up`, the `job_running` repair and a keyed sync
+  timeout's alternative — also offers a positive `wait_seconds`, which is itself the wait, so
+  the call is repeated at once rather than after `poll_after_ms` (#272).
 
 ### Changed
 
