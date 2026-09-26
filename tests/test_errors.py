@@ -422,6 +422,24 @@ def test_a_keyed_stored_temporary_error_is_not_temporary():
     assert keyed["meta"] == plain["meta"]
 
 
+def test_a_keyed_new_key_repair_carries_no_arguments():
+    """A backend's own retry_after_delay repair may carry arguments for the same call; the new
+    key repair names the tool only, since the arguments would echo prompt inputs (ADR 0046)."""
+    plugin = fakeplugin.make_plugin()
+    failure = ClassifiedFailure(
+        code="internal_error",
+        detail="d",
+        retryable=True,
+        repair=RepairHint(
+            next_step="retry_after_delay", tool="amicus_consult", arguments={"backend": "fake"}
+        ),
+    )
+    plain = errors.render_failure(plugin, failure, Meta(), kind="consult")
+    assert plain["error"]["repair"]["arguments"] == {"backend": "fake"}
+    repair = errors.keyed_stored_error(plain, "amicus_consult")["error"]["repair"]
+    assert repair["next_step"] == "use_new_idempotency_key" and "arguments" not in repair
+
+
 def test_a_keyed_stored_error_keeps_a_step_that_is_not_a_same_call_retry():
     """A temporary internal_error's step is not retry_after_delay, so it stays; only the flag
     and the prose change, and no delay sentence is added when the error carried none."""

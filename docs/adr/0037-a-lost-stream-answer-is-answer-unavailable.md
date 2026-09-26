@@ -2,6 +2,8 @@
 
 **Status:** Accepted (2026-09-23)
 
+On a keyed call, [ADR 0046](0046-a-keyed-runs-stored-error-is-never-temporary.md) makes every stored error non-temporary, including the temporary causes below.
+
 ## Context
 
 amicus captures a backend's stdout under `AMICUS_MAX_OUTPUT_BYTES` (10 MB by default) so a runaway process cannot exhaust memory.

@@ -447,8 +447,9 @@ def keyed_stored_error(envelope: dict[str, Any], tool: str) -> dict[str, Any]:
     as `temporary: false`, its prose leads with KEYED_REPLAY_NOTE, a backend-requested delay
     moves from `retry_after_ms` (which the schema allows only on a temporary error) into
     that prose, and a `retry_after_delay` step, which names the same call, becomes
-    `use_new_idempotency_key` on `tool` (ADR 0046). Anything else passes through unchanged:
-    a success, a non-temporary error, or a payload that is not a valid error envelope."""
+    `use_new_idempotency_key` on `tool`, with no arguments (ADR 0046). Anything else passes
+    through unchanged: a success, a non-temporary error, or a payload that is not a valid
+    error envelope."""
     if envelope.get("ok") is not False:
         return envelope
     try:
@@ -468,7 +469,7 @@ def keyed_stored_error(envelope: dict[str, Any], tool: str) -> dict[str, Any]:
     if repair is not None:
         if repair.next_step == "retry_after_delay":
             repair = repair.model_copy(
-                update={"next_step": "use_new_idempotency_key", "tool": tool}
+                update={"next_step": "use_new_idempotency_key", "tool": tool, "arguments": None}
             )
         repair = repair.model_copy(update={"alternative": prose + (repair.alternative or "")})
     keyed = info.model_copy(update={"temporary": False, "retry_after_ms": None, "repair": repair})
