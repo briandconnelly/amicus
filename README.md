@@ -44,7 +44,7 @@ The plugins launch the server from a published release tag, pinned in
   "mcpServers": {
     "amicus": {
       "command": "uvx",
-      "args": ["--from", "git+https://github.com/briandconnelly/amicus.git@v0.6.0", "amicus-mcp"]
+      "args": ["--from", "git+https://github.com/briandconnelly/amicus.git@v0.7.0", "amicus-mcp"]
     }
   }
 }
@@ -158,13 +158,13 @@ the new ones.
 
 ## Status and known limits
 
-0.6.0 is the current release. The discovery surface moved from `amicus/0.1/schema-39` to
-`amicus/0.1/schema-43`, and `RESULT_FORMAT` did not move, so a job result 0.5.0 stored can still be
-read. Two changes ask something of a caller: `amicus_job_consume_result` now deletes a failed,
-cancelled or timed-out job's record and reports `state_changed` where it reported `not_done`, and
-an answer the output capture cut is `answer_unavailable` rather than a shorter or earlier answer.
-One change asks something of an operator: a `CODEX_HOME` that is not an absolute path is now
-refused. [`docs/MIGRATION.md`](docs/MIGRATION.md#upgrading-from-050) explains how to upgrade, and
+0.7.0 is the current release. The discovery surface moved from `amicus/0.1/schema-43` to
+`amicus/0.1/schema-50`, and `RESULT_FORMAT` did not move, so a job result 0.6.0 stored can still be
+read. Two changes ask something of a caller: a sync call past its deadline returns a `timeout`
+that is never temporary and whose repair names the verb's `_async` twin, and a backend a verb
+never accepts fails as `invalid_arguments` rather than `feature_unsupported`. A new paid call can
+also be refused as `job_cap_reached` rather than evicting a result nobody has fetched.
+[`docs/MIGRATION.md`](docs/MIGRATION.md#upgrading-from-060) explains how to upgrade, and
 [`CHANGELOG.md`](CHANGELOG.md) lists every user-visible change.
 
 One known limit: a third-party backend distribution can load through the `amicus.backends`
