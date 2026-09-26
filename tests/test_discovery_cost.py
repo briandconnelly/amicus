@@ -273,6 +273,14 @@ default and 0-50 bounds) plus the comma that joins it to `workspace_root`. The d
 says to wait there and never on amicus's job store, which is the misuse the issue measured in
 ten sessions; a bare integer with bounds would not have said why it exists. Measured on the
 wire. MEASURED and BUDGET both move by the 241 bytes, so the budget keeps no headroom.
+
+The schema-52 raise (+101 bytes on every profile: all 112346 -> 112447) is #272. All of it
+is one clause on amicus_job_status's description: ", or pass a positive wait_seconds, which
+is itself the wait: call again at once if it returns running". The description told an agent
+only to honor poll_after_ms, and an agent that honors it after a call that already waited
+sleeps up to 30 s more for nothing; the skill said to call again at once, so the two
+disagreed. Measured on the wire. MEASURED and BUDGET both move by the 101 bytes, so the
+budget keeps no headroom.
 """
 
 from __future__ import annotations
@@ -282,7 +290,7 @@ from tests.conftest import spawned_server_env
 
 from amicus import manifest
 
-MEASURED: dict[str, int] = {"all": 112346, "codex-kimi": 112354, "claude": 112346}
+MEASURED: dict[str, int] = {"all": 112447, "codex-kimi": 112455, "claude": 112447}
 # The budget is a literal, not MEASURED rounded up to the next kilobyte as it was until
 # 2026-09-14. The rounding left up to 1 KB of growth per bucket that no PR had to own, and
 # this file records three such accumulations (448 and 12 bytes in the paragraphs above, and
@@ -290,7 +298,7 @@ MEASURED: dict[str, int] = {"all": 112346, "codex-kimi": 112354, "claude": 11234
 # #94 that landed after it), each noticed only when the next deliberate raise re-measured.
 # Any growth now fails until a PR raises BUDGET and says why; a shrink passes and shows as
 # drift against MEASURED. Raising one means re-measuring and moving both.
-BUDGET: dict[str, int] = {"all": 112346, "codex-kimi": 112354, "claude": 112346}
+BUDGET: dict[str, int] = {"all": 112447, "codex-kimi": 112455, "claude": 112447}
 
 
 @pytest.mark.parametrize("profile", sorted(manifest.PROFILES))

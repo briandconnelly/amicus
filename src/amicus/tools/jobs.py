@@ -169,7 +169,9 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
             f"{FREE_MARKER} Poll a job's state without fetching its result: status, elapsed "
             "time, result_available, result_ok, and poll_after_ms to honor before the next "
             "poll while status is running (it grows with elapsed time, up to "
-            f"{MAX_POLL_AFTER_MS / 1000:g} s; null on any terminal status). {_RETENTION}"
+            f"{MAX_POLL_AFTER_MS / 1000:g} s; null on any terminal status), or pass a positive "
+            "wait_seconds, which is itself the wait: call again at once if it returns running. "
+            f"{_RETENTION}"
         ),
     )
     @guard("amicus_job_status", settings)

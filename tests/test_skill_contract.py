@@ -396,6 +396,25 @@ def test_the_jobs_rules_say_to_wait_through_the_tool_never_the_store():
     assert "job store" in jobs, "the jobs rules do not forbid reading the job store"
 
 
+def test_the_jobs_rules_do_not_exclude_keyed_sync_reattach():
+    # Issue #272: "Wait on a job only through amicus_job_status" contradicted the Spend rule
+    # and the keyed-sync section, which both say repeating a keyed sync call reattaches to its
+    # run. The rule exists to keep agents off the job store, so it must say that and no more.
+    jobs = _BINDING_RULES.partition("\n### Jobs\n")[2].split("\n### ", 1)[0]
+    jobs = " ".join(jobs.split())
+    assert "only through `amicus_job_status`" not in jobs
+    assert "**Never read or watch amicus's job store**" in jobs
+    assert "repeating the same keyed" in jobs, "the rule does not name keyed-sync reattach"
+
+
+def test_the_sync_reference_does_not_call_keyed_sync_the_one_way_to_wait():
+    # Issue #272: since #266, amicus_job_status(wait_seconds=...) also waits inside one call.
+    ref = " ".join(_SYNC_REF.split())
+    assert "the one way to wait" not in ref
+    keyed = ref.partition("A sync call made with an `idempotency_key` is the exception.")[2]
+    assert "`wait_seconds`" in keyed.split(" ## ", 1)[0]
+
+
 def test_the_polling_reference_states_the_wait_ceiling():
     from amicus.schemas.params import MAX_STATUS_WAIT_SECONDS
 
