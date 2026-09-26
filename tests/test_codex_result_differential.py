@@ -34,12 +34,12 @@ KNOWN_TEMPORARY_DEVIATIONS: dict[str, tuple[bool, bool]] = {
 KNOWN_UNSTRUCTURED_DEVIATIONS = frozenset({"review_invalid_json", "review_non_object"})
 
 
-def _spec(kind, effort):
+def _spec(kind, effort, cwd):
     return RunSpec(
         backend="codex",
         kind=kind,
         tool=f"amicus_{kind}",
-        cwd="/repo",
+        cwd=cwd,
         workspace_source="param",
         roots_source="client",
         host_name="Claude Code",
@@ -52,7 +52,9 @@ def _spec(kind, effort):
 
 
 @pytest.mark.parametrize("case", sorted(cf.FIXTURE["envelopes"]))
-async def test_envelope_projection_matches_the_sibling(pinned_codex_bin, monkeypatch, case):
+async def test_envelope_projection_matches_the_sibling(
+    pinned_codex_bin, monkeypatch, tmp_path, case
+):
     entry = cf.FIXTURE["envelopes"][case]
     inp, theirs = entry["input"], entry["sibling"]
     plugin, _ = cf.make_backend()
@@ -75,7 +77,8 @@ async def test_envelope_projection_matches_the_sibling(pinned_codex_bin, monkeyp
                 text="DIFF", summary=DiffSummary(1, 1, 0), untracked_detected=0
             ),
         )
-    ours = await run_mod.run_request(_spec(inp["kind"], inp.get("effort")), plugin)
+    # A live workspace: binary_missing in a vanished one is invalid_workspace_root (#259).
+    ours = await run_mod.run_request(_spec(inp["kind"], inp.get("effort"), str(tmp_path)), plugin)
     if case in KNOWN_UNSTRUCTURED_DEVIATIONS:
         assert theirs["ok"] is False and not theirs["message_has_secret"]
         assert ours["ok"] is True and ours["review_status"] == "unstructured", ours
