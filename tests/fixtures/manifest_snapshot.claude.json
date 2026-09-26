@@ -5485,7 +5485,7 @@
                     "type": "null"
                   }
                 ],
-                "description": "Milliseconds to wait before the next poll while status is running; null on any terminal status."
+                "description": "Milliseconds to wait before the next poll while status is running, unless that poll passes a positive wait_seconds, which is itself the wait; null on any terminal status."
               },
               "started_at": {
                 "type": "string"
@@ -7078,7 +7078,7 @@
                     "type": "null"
                   }
                 ],
-                "description": "Milliseconds to wait before the next poll while status is running; null on any terminal status."
+                "description": "Milliseconds to wait before the next poll while status is running, unless that poll passes a positive wait_seconds, which is itself the wait; null on any terminal status."
               },
               "started_at": {
                 "type": "string"
@@ -7866,7 +7866,7 @@
                     "type": "null"
                   }
                 ],
-                "description": "Milliseconds to wait before the next poll while status is running; null on any terminal status."
+                "description": "Milliseconds to wait before the next poll while status is running, unless that poll passes a positive wait_seconds, which is itself the wait; null on any terminal status."
               },
               "started_at": {
                 "type": "string"
@@ -8335,7 +8335,7 @@
                     "type": "null"
                   }
                 ],
-                "description": "Milliseconds to wait before the next poll while status is running; null on any terminal status."
+                "description": "Milliseconds to wait before the next poll while status is running, unless that poll passes a positive wait_seconds, which is itself the wait; null on any terminal status."
               },
               "result_available": {
                 "type": "boolean"
@@ -9074,7 +9074,7 @@
                     "type": "null"
                   }
                 ],
-                "description": "Milliseconds to wait before the next poll while status is running; null on any terminal status."
+                "description": "Milliseconds to wait before the next poll while status is running, unless that poll passes a positive wait_seconds, which is itself the wait; null on any terminal status."
               },
               "result_available": {
                 "type": "boolean"
@@ -10525,7 +10525,7 @@
                     "type": "null"
                   }
                 ],
-                "description": "Milliseconds to wait before the next poll while status is running; null on any terminal status."
+                "description": "Milliseconds to wait before the next poll while status is running, unless that poll passes a positive wait_seconds, which is itself the wait; null on any terminal status."
               },
               "started_at": {
                 "type": "string"
