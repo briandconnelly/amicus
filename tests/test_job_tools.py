@@ -723,6 +723,38 @@ async def test_a_full_cap_refuses_a_paid_call_until_the_result_is_fetched(
         assert [j["job_id"] for j in listed["jobs"]] == [second]
 
 
+async def test_an_unreadable_result_holds_its_cap_slot_and_both_repairs_say_so(
+    tmp_path, fake_codex, monkeypatch
+):
+    """#277: a current-format result that fails validation is never delivered, so a consume
+    keeps it and the cap never evicts it. Its non-temporary internal_error and the
+    job_cap_reached that refuses the new job it prescribes both say it only expires."""
+    app = _make_app(tmp_path, fake_codex, monkeypatch, AMICUS_JOB_MAX_COUNT="1")
+    store = lifecycle.job_store(server.state_of(app).settings)
+    ws = {"workspace_root": str(tmp_path)}
+    async with Client(app) as c:
+        first = await _start(c, tmp_path)
+        await _wait_done(store, tmp_path, first)
+        result = store._job_dir(str(tmp_path), first) / "result.json"
+        result.write_text(json.dumps({"ok": True, "tool": "amicus_consult"}))
+        consumed = await c.call_tool(
+            "amicus_job_consume_result", {"job_id": first, **ws}, raise_on_error=False
+        )
+        err = consumed.structured_content["error"]
+        assert err["code"] == "internal_error" and err["temporary"] is False
+        assert err["repair"]["next_step"] == "start_new_job"
+        assert "AMICUS_JOB_TTL" in err["repair"]["alternative"]
+        assert result.exists()
+        refused = await c.call_tool(
+            "amicus_consult_async",
+            {"backend": "codex", "question": "again?", **ws},
+            raise_on_error=False,
+        )
+        err = refused.structured_content["error"]
+        assert err["code"] == "job_cap_reached"
+        assert "internal_error here" in err["repair"]["alternative"]
+
+
 async def test_list_pages_by_cursor_and_survives_a_consumed_anchor(app, store, tmp_path):
     """#249: limit=1 walks three jobs in three pages; the second page still resolves after
     its anchor (the first page's last job) was consumed, because the cursor is the anchor's

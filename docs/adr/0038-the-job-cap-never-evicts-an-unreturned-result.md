@@ -23,7 +23,7 @@ It never removes a running job, or a tracked `done` result that has not been ret
 **A full cap refuses the new call before anything is spent.**
 The check runs before the worker spawns: it reaps expired records, evicts what it may oldest first, and raises `JobCapReached` when the workspace still holds `AMICUS_JOB_MAX_COUNT` records.
 The tool returns `job_cap_reached`, temporary with no `retry_after_ms`, because the room comes from the caller's own next step rather than from time: fetch or consume a result, or cancel a running job.
-Its repair lists the workspace's jobs with `amicus_job_list`, and says that a result another release wrote, which this server reports as `job_result_incompatible` and a consume keeps, is fetched by a server of that release or expires after `AMICUS_JOB_TTL`.
+Its repair lists the workspace's jobs with `amicus_job_list`, and says that a result another release wrote, which this server reports as `job_result_incompatible` and a consume keeps, is fetched by a server of that release or expires after `AMICUS_JOB_TTL`, and that one this release wrote but cannot read back, reported as `internal_error` and also kept by a consume, only expires (#277).
 Running jobs count toward the cap, so within one server process the cap bounds how many records a workspace holds, where running jobs used to overshoot it; across processes it is bounded as the last decision below says.
 A refused keyed call leaves its idempotency key unreserved, so the same key works once there is room.
 

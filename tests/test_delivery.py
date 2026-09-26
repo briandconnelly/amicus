@@ -115,7 +115,8 @@ def test_an_unreadable_current_format_result_is_not_temporary():
         assert error["temporary"] is False and error["retry_after_ms"] is None, kind
         assert error["repair"]["next_step"] == "start_new_job", kind
         assert error["repair"].get("tool") is None, kind
-        assert "idempotency_key" in error["repair"]["alternative"], kind
+        alternative = error["repair"]["alternative"]
+        assert "idempotency_key" in alternative and "AMICUS_JOB_TTL" in alternative, kind
 
 
 def test_job_running_retry_follows_the_grown_poll_hint():

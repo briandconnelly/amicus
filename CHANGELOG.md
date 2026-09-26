@@ -61,7 +61,9 @@ per-change, as its own lead says.
   not validate was reported as `internal_error` with `temporary: true`, though reading it
   again, or repeating the keyed call that made it, reads the same record and fails the same
   way (#277). It is now `temporary: false` with a `start_new_job` step, and its text says a
-  keyed call needs a new `idempotency_key` for the new job.
+  keyed call needs a new `idempotency_key` for the new job. Since a consume keeps such a
+  record and the job cap never evicts it, it holds a cap slot until `AMICUS_JOB_TTL`, and
+  that error's text and `job_cap_reached`'s now both say so.
 
 ## [0.7.0] - 2026-09-26
 

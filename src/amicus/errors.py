@@ -104,7 +104,8 @@ _LOCAL_RULES: dict[str, RepairRule] = {
         "Fetch a finished result (amicus_job_result, or amicus_job_consume_result to delete "
         "it) or cancel a running job, then retry. A result another amicus release wrote "
         "(job_result_incompatible here) is fetched by a server of that release, or expires "
-        "after AMICUS_JOB_TTL.",
+        "after AMICUS_JOB_TTL; one this release wrote but cannot read back (internal_error "
+        "here) is kept by a consume too, and only expires.",
     ),
     "feature_unsupported": RepairRule(
         "use_allowed_value",

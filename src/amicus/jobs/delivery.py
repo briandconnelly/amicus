@@ -97,7 +97,9 @@ def _corrupt(detail: str, meta: Meta) -> dict[str, Any]:
             "Reading this job's result again returns this same error, and so does repeating "
             "a call made with an idempotency_key under the same key. Start a new job, with a "
             "new idempotency_key if the call passed one; if this persists, run "
-            "amicus_backends and check the server logs."
+            "amicus_backends and check the server logs. A consume keeps this record, and until "
+            "AMICUS_JOB_TTL expires it, it holds a slot of the per-workspace job cap that no "
+            "fetch or consume frees."
         ),
     )
 
