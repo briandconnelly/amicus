@@ -20,6 +20,20 @@ per-change, as its own lead says.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-09-26
+
+Across this release the discovery surface moves `amicus/0.1/schema-43`, what 0.6.0 shipped, to
+`amicus/0.1/schema-50`, and `RESULT_FORMAT` stays 9, so a job result 0.6.0 stored can still be
+delivered. Two entries are labelled **Breaking**: a sync paid call past its deadline returns a
+`timeout` that is never temporary and whose repair names the verb's `_async` twin when
+`AMICUS_JOB_MAX_SECONDS` exceeds the deadline that passed (#245); and a backend a verb never
+accepts fails at the boundary as `invalid_arguments` rather than `feature_unsupported` (#246). A
+new paid call can now be refused with the new code `job_cap_reached` rather than evicting a
+result nobody has fetched, though a result 0.6.0 stored is still evictable (#244), and a stale
+client root is `invalid_workspace_root` rather than `git_unavailable` (#248).
+`docs/MIGRATION.md` ("Upgrading from 0.6.0") says what to do for each. It was checked against
+codex-cli 0.157.0, Kimi Code 2.1.1 and Claude Code 2.1.283.
+
 ### Added
 
 - **Surface.** `amicus_job_list` pages (#249, ADR 0042). A page that omits matching jobs
@@ -49,7 +63,6 @@ per-change, as its own lead says.
   `repair.arguments`, as the envelope carries them by default for each in-tree backend, are
   now part of what the fingerprint guards, so a change to any of them moves `fingerprint`.
   The repair prose (`alternative`) is not. No error envelope changes.
-
 - **Surface.** Six minor contract findings of the 2026-09-24 audit (#250). Reads of
   `amicus://error-envelope`, `amicus://result-meta` and `amicus://params` carry the catalog
   TTL (`ttlMs: 300000`) where they said `0`; `amicus://capabilities` and the two templates
@@ -1067,7 +1080,8 @@ per-change rather than net, so they also name intermediate states that no releas
 - The tagged publish path to pypi.org has never run. Only the TestPyPI dispatch path has been exercised.
 - Eval scenario S6 in `skills/collaborating-with-amicus/tests/scenarios.md` passed on one run (status: `pass`, validated by that run alone); an M7 follow-up run against the current skill text did not isolate the still-open F3 finding, so F3 remains open. S7 (real-host approval friction) has failed both of its recorded runs (status: `fail`); an M7 zero-spend recheck reached neither a pass nor a fail and is recorded as inconclusive, so it does not move S7's status. See their `status` fields and ADR 0012.
 
-[Unreleased]: https://github.com/briandconnelly/amicus/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/briandconnelly/amicus/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/briandconnelly/amicus/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/briandconnelly/amicus/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/briandconnelly/amicus/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/briandconnelly/amicus/compare/v0.3.0...v0.4.0

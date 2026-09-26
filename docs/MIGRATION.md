@@ -195,8 +195,8 @@ The `amicus://backends/{backend}` resource is always the full entry.
 
 ## Upgrading from 0.6.0
 
-The changes below are the ones a caller using amicus 0.6.0 may have to handle before running the next release.
-`CHANGELOG.md`'s section for that release lists every user-visible change since 0.6.0, including the ones that require no migration.
+The changes below are the ones a caller using amicus 0.6.0 may have to handle before running 0.7.0.
+`CHANGELOG.md`'s 0.7.0 section lists every user-visible change since 0.6.0, including the ones that require no migration.
 A job result stored by 0.6.0 is still readable: `RESULT_FORMAT` did not move.
 
 **A sync `timeout` is never temporary, and its repair names the `_async` twin (#245).**
@@ -209,6 +209,12 @@ A caller that retried the same sync call on `temporary: true` should start the `
 **A backend a verb never accepts is rejected at the boundary (#246).**
 `amicus_delegate` with `claude`, or `amicus_adversarial_review` with `codex` or `kimi`, now fails as `invalid_arguments` with `details.allowed_values`, where it failed as `feature_unsupported`.
 A caller that branched on `feature_unsupported` for those picks should read the tool's `backend` enum, which is now the accepted set.
+
+**A new paid call can be refused as `job_cap_reached` (#244).**
+0.6.0 made room under the per-workspace cap (`AMICUS_JOB_MAX_COUNT`, default 50) by evicting the oldest finished records, including results nobody had fetched.
+0.7.0 evicts only expired records, terminal errors, results it has already returned once and records an earlier release wrote, counts running jobs toward the cap, and refuses a new paid call before anything is spent when only running jobs and unfetched results remain.
+A result 0.6.0 stored carries no delivery record, so 0.7.0 still evicts it at the cap like any other earlier-release record: fetch any 0.6.0 result you still need before the upgraded server starts another paid call in that workspace.
+A caller that starts many jobs without fetching their results should fetch or consume them, or cancel a running job, and then retry; the error's repair lists the workspace's jobs.
 
 **A stale client root is refused as `invalid_workspace_root`, reason `root_not_a_directory` (#248).**
 A handshake-era client whose advertised first root no longer exists used to get `git_unavailable` from the first git-based call; it now gets the workspace refusal, with no repair, before any work.
