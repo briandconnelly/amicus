@@ -187,7 +187,7 @@ The tag therefore deliberately points at a commit that is in `main`'s history bu
      <release-sha>
    ```
 
-   The record's path is absolute so that a tag made from any other directory fails for want of the file rather than carrying whatever record that directory holds, which is how 0.3.0 was first tagged with 0.2.0's record.
+   The record's path is absolute so that the tag carries the release worktree's record whatever directory the command runs in, rather than whatever record the current directory holds, which is how 0.3.0 was first tagged with 0.2.0's record.
 
    Run `uv run python scripts/check_release_state.py --tag vX.Y.Z --commit <release-sha>` and confirm it prints `release predicate holds for vX.Y.Z`.
    It needs the local tag: `.mcp.json` pins `vX.Y.Z`, and the checker requires that tag to exist, with no pre-tag exception.
