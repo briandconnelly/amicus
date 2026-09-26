@@ -406,3 +406,18 @@ def test_the_polling_reference_states_the_wait_ceiling():
     )
     jobs_cmd = (_SKILL.parents[1] / "commands" / "amicus" / "jobs.md").read_text(encoding="utf-8")
     assert f"`wait_seconds` (up to {MAX_STATUS_WAIT_SECONDS})" in " ".join(jobs_cmd.split())
+
+
+def test_the_brief_rules_keep_a_full_reviews_scope_out_of_extra_context():
+    # Issue #270: a host's own risk list in extra_context steered a "full" branch review into
+    # checking only that list, and the result still read as full coverage. The rule must bind
+    # (sit under `## Rules`, not the brief prose) and route a named-concern pass to `focus`,
+    # the one carrier whose coverage records the narrowing.
+    ref = (_SKILL / "references" / "active-workflows.md").read_text(encoding="utf-8")
+    rules = ref.partition("\n## Rules\n")[2].split("\n## ", 1)[0]
+    bullets = [" ".join(b.split()) for b in _bullets(rules)]
+    [scope] = [b for b in bullets if b.startswith("- **In a full review, never make your own")]
+    assert "`extra_context`" in scope and "`focus`" in scope
+    assert "additions to a full review" in scope
+    [surface] = [b for b in bullets if b.startswith("- **For a change to a published surface")]
+    assert "every other place" in surface

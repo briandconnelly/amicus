@@ -29,6 +29,15 @@ per-change, as its own lead says.
   and `/amicus:jobs` now say to wait through this parameter and never on the store. The cap
   stays under the MCP TypeScript SDK's 60 s default request timeout.
 
+### Changed
+
+- The `collaborating-with-amicus` skill's brief rules now say that a full review's scope is not
+  the author's own concern list (#270). A list of suspected problems in `extra_context` had
+  steered a full branch review into checking only that list while the result still read as full
+  coverage; a named-concern pass belongs in `focus`, whose coverage records the narrowing. For a
+  change to a published surface, the brief asks the reviewer to find every other place that lists
+  or describes what changed.
+
 ## [0.7.0] - 2026-09-26
 
 Across this release the discovery surface moves `amicus/0.1/schema-43`, what 0.6.0 shipped, to
