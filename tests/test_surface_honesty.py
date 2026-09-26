@@ -202,38 +202,42 @@ def _wire_strings(node: object, keys: tuple[str, ...] = ()):
         yield keys, node
 
 
-def _poll_hint_texts(wire) -> dict[str, str]:
+def _poll_hint_texts(wire) -> list[tuple[str, str, str]]:
     """Every server text that paces polling by poll_after_ms, found by sweep: each tool's
-    description, every string in its schemas, the repair table and lifecycle's constants."""
-    found: dict[str, str] = {}
+    description, every string in its schemas, the repair table and lifecycle's constants.
+    Each copy is its own (surface, where, text) row: the published schemas repeat a field's
+    description on every tool that carries it, and one copy must not stand in for another."""
+    found: list[tuple[str, str, str]] = []
     for tool in wire["tools"]:
         for keys, text in _wire_strings(tool):
             if not _says_to_honor_the_poll_hint(text):
                 continue
             if keys == ("description",):
-                found[f"{tool['name']} description"] = text
-            else:  # a schema property's description, which the published schemas repeat
-                found[f"{keys[-2]} field"] = text
-    found |= {
-        f"{code} repair": repair.alternative
+                found.append((f"{tool['name']} description", tool["name"], text))
+            else:  # a schema property's description
+                found.append((f"{keys[-2]} field", f"{tool['name']}:{'.'.join(keys)}", text))
+    found += [
+        (f"{code} repair", code, repair.alternative)
         for code, repair in errors.repair_table().items()
         if repair.alternative and _says_to_honor_the_poll_hint(repair.alternative)
-    }
-    found |= {
-        f"lifecycle.{name}": value
+    ]
+    found += [
+        (f"lifecycle.{name}", name, value)
         for name, value in vars(lifecycle).items()
         if isinstance(value, str) and _says_to_honor_the_poll_hint(value)
-    }
+    ]
     return found
 
 
 def test_every_poll_hint_text_offers_the_wait_alternative(wire):
-    texts = _poll_hint_texts(wire)
+    rows = _poll_hint_texts(wire)
     # The sweep must still find every known surface, or a reworded one escapes the check.
-    assert set(texts) == _WAIT_SURFACES
-    for name, text in texts.items():
-        phrase = _FIELD_WAIT_PHRASE if name == "poll_after_ms field" else _WAIT_PHRASE
-        assert phrase in " ".join(text.split()), f"{name} omits the wait_seconds option"
+    assert {surface for surface, _, _ in rows} == _WAIT_SURFACES
+    # Every tool publishing poll_after_ms (four async starts, status, cancel) is one copy.
+    assert sum(surface == "poll_after_ms field" for surface, _, _ in rows) == 6
+    for surface, where, text in rows:
+        phrase = _FIELD_WAIT_PHRASE if surface == "poll_after_ms field" else _WAIT_PHRASE
+        assert phrase in " ".join(text.split()), f"{where} omits the wait_seconds option"
 
 
 def test_the_wait_alternative_instrument_can_fail():
