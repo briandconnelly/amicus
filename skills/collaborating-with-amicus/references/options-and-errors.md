@@ -61,6 +61,8 @@ on another backend is a conflict, not a second run.
 - A reservation still publishing → `idempotency_in_progress` (retry; a sync call waits about a
   second for it first).
 - A completed result stays replayable while its job record lives (its TTL).
+- A failed run is replayed too, error and all. Its stored error is never `temporary`, and
+  its repair says so: a retry needs a new key, which is a new paid run.
 - A keyed sync run gets the job deadline (`AMICUS_JOB_MAX_SECONDS`), as an `_async` run does. A
   keyed wait that hits its `timeout_seconds` bound or is cancelled leaves the run going: the
   `timeout` repair polls `amicus_job_status` for that job, and repeating the same keyed call

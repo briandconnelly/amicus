@@ -30,7 +30,8 @@ The arguments would echo prompt inputs (rule 18), and ADR 0021 already accepts a
 On an unkeyed sync call the worker applies the caller's `timeout_seconds` to the backend subprocess, so there the classifier's `timeout` is the one that fires in practice, and it takes the same rule.
 Codex's capture-failed timeout is the one exception: its hint says to retry the same call once, so it sets `retryable: true` itself, and on that one repair no `_async` tool is named, because its hint prescribes retrying the same call.
 On a keyed call that exception does not hold, because the same call under the same key replays this stored error rather than running again (ADR 0020).
-So `RunSpec.keyed` records whether the call passed an `idempotency_key`, and `render_failure` makes a keyed run's temporary timeout `temporary: false` and leads its prose with `KEYED_REPLAY_NOTE`, which says any retry needs a new key.
+So `RunSpec.keyed` records whether the call passed an `idempotency_key`, and `render_failure` made a keyed run's temporary timeout `temporary: false` and led its prose with `KEYED_REPLAY_NOTE`, which says any retry needs a new key.
+ADR 0046 generalizes that to every error a keyed run stores and moves it from `render_failure` to the job worker.
 `RunSpec.keyed` is not a prompt input, stays out of the idempotency identity like `background`, and loads as `False` from a record that lacks it.
 
 **A background run's timeout names no tool.**

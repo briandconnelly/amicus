@@ -27,7 +27,7 @@ It is prose an agent reads rather than a field it branches on, and pinning it wo
 Prose that must name a particular tool is held by its own tests, such as `tests/test_surface_honesty.py`.
 
 **What a single failure changes at render time is not in the pin.**
-`render_failure` lets a failure's own `retryable` and repair win over the table, names the verb's `_async` twin on a sync timeout, and makes a keyed run's temporary timeout non-temporary (ADR 0039).
+`render_failure` lets a failure's own `retryable` and repair win over the table and names the verb's `_async` twin on a sync timeout, and the job worker makes a keyed run's stored temporary error non-temporary (ADR 0046).
 Those depend on the call rather than the code, so a static per-code table cannot enumerate them; their unit tests hold them.
 
 **The manifest builds each in-tree plugin with an empty environ.**
