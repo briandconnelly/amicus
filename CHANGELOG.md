@@ -25,13 +25,14 @@ per-change, as its own lead says.
 Across this release the discovery surface moves `amicus/0.1/schema-43`, what 0.6.0 shipped, to
 `amicus/0.1/schema-50`, and `RESULT_FORMAT` stays 9, so a job result 0.6.0 stored can still be
 delivered. Two entries are labelled **Breaking**: a sync paid call past its deadline returns a
-`timeout` that is never temporary and whose repair names the verb's `_async` twin (#245); and a
-backend a verb never accepts fails at the boundary as `invalid_arguments` rather than
-`feature_unsupported` (#246). A new paid call can now be refused with the new code
-`job_cap_reached` rather than evicting a result nobody has fetched (#244), and a stale client
-root is `invalid_workspace_root` rather than `git_unavailable` (#248). `docs/MIGRATION.md`
-("Upgrading from 0.6.0") says what to do for each. It was checked against codex-cli 0.157.0,
-Kimi Code 2.1.1 and Claude Code 2.1.283.
+`timeout` that is never temporary and whose repair names the verb's `_async` twin when
+`AMICUS_JOB_MAX_SECONDS` exceeds the deadline that passed (#245); and a backend a verb never
+accepts fails at the boundary as `invalid_arguments` rather than `feature_unsupported` (#246). A
+new paid call can now be refused with the new code `job_cap_reached` rather than evicting a
+result nobody has fetched, though a result 0.6.0 stored is still evictable (#244), and a stale
+client root is `invalid_workspace_root` rather than `git_unavailable` (#248).
+`docs/MIGRATION.md` ("Upgrading from 0.6.0") says what to do for each. It was checked against
+codex-cli 0.157.0, Kimi Code 2.1.1 and Claude Code 2.1.283.
 
 ### Added
 

@@ -161,9 +161,10 @@ the new ones.
 0.7.0 is the current release. The discovery surface moved from `amicus/0.1/schema-43` to
 `amicus/0.1/schema-50`, and `RESULT_FORMAT` did not move, so a job result 0.6.0 stored can still be
 read. Two changes ask something of a caller: a sync call past its deadline returns a `timeout`
-that is never temporary and whose repair names the verb's `_async` twin, and a backend a verb
-never accepts fails as `invalid_arguments` rather than `feature_unsupported`. A new paid call can
-also be refused as `job_cap_reached` rather than evicting a result nobody has fetched.
+that is never temporary and whose repair names the verb's `_async` twin when
+`AMICUS_JOB_MAX_SECONDS` exceeds the deadline that passed, and a backend a verb never accepts
+fails as `invalid_arguments` rather than `feature_unsupported`. A new paid call can also be
+refused as `job_cap_reached` rather than evicting a result nobody has fetched.
 [`docs/MIGRATION.md`](docs/MIGRATION.md#upgrading-from-060) explains how to upgrade, and
 [`CHANGELOG.md`](CHANGELOG.md) lists every user-visible change.
 

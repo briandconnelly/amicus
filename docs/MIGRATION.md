@@ -212,7 +212,8 @@ A caller that branched on `feature_unsupported` for those picks should read the 
 
 **A new paid call can be refused as `job_cap_reached` (#244).**
 0.6.0 made room under the per-workspace cap (`AMICUS_JOB_MAX_COUNT`, default 50) by evicting the oldest finished records, including results nobody had fetched.
-0.7.0 evicts only records it no longer needs to keep, counts running jobs toward the cap, and refuses a new paid call before anything is spent when only running jobs and unfetched results remain.
+0.7.0 evicts only expired records, terminal errors, results it has already returned once and records an earlier release wrote, counts running jobs toward the cap, and refuses a new paid call before anything is spent when only running jobs and unfetched results remain.
+A result 0.6.0 stored carries no delivery record, so 0.7.0 still evicts it at the cap like any other earlier-release record: fetch any 0.6.0 result you still need before the upgraded server starts another paid call in that workspace.
 A caller that starts many jobs without fetching their results should fetch or consume them, or cancel a running job, and then retry; the error's repair lists the workspace's jobs.
 
 **A stale client root is refused as `invalid_workspace_root`, reason `root_not_a_directory` (#248).**
