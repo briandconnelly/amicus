@@ -823,7 +823,8 @@
           "workspace_outside_roots"
         ],
         "key_optional_params": [
-          "workspace_root"
+          "workspace_root",
+          "wait_seconds"
         ],
         "name": "amicus_job_status",
         "required_params": [
