@@ -43,7 +43,8 @@ SYNC_PROGRESS_REPORT_TIMEOUT_S = 5.0
 # tests/test_surface_honesty.py holds them to it.
 POLL_FOLLOW_UP = (
     "Poll amicus_job_status with these arguments while status is running, honoring "
-    "poll_after_ms. On any terminal status, call amicus_job_result for the stored result "
+    "poll_after_ms, or pass a positive wait_seconds, which is itself the wait, and poll again "
+    "at once. On any terminal status, call amicus_job_result for the stored result "
     "or the terminal error. Recover a lost job_id with amicus_job_list."
 )
 
@@ -69,7 +70,8 @@ IDEM_SYNC_INPROGRESS_POLL_S = 0.05
 # would start a SECOND paid run while this one completes unobserved.
 KEYED_TIMEOUT_ALTERNATIVE = (
     "This keyed run continues in the background to its own deadline. Poll amicus_job_status "
-    "with the arguments above while status is running, honoring poll_after_ms; on any "
+    "with the arguments above while status is running, honoring poll_after_ms, or pass a "
+    "positive wait_seconds, which is itself the wait, and poll again at once; on any "
     "terminal status call amicus_job_result. Do not switch to the async twin or drop the "
     "idempotency_key: either starts a new paid run under a different dedup identity. "
     "Repeating this exact keyed call reattaches to the same run without new spend (it may "

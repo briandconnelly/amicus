@@ -39,7 +39,8 @@ A sync call made with an `idempotency_key` is the exception. Its run gets the jo
 at that bound the call returns `timeout` with a `poll_job_status` repair for the job, which keeps
 going, and repeating the same keyed call reattaches to it without new spend. Starting the `_async`
 twin or dropping the key there is a second paid run; the Spend rules in SKILL.md say what to do
-with that repair. This is the one way to wait for a long run inside a single call. Sync and
+with that repair. A keyed sync call waits for a long run inside a single call, as does
+`amicus_job_status` with a positive `wait_seconds` (see Polling below). Sync and
 `_async` are separate identities (ADR 0020), so a keyed sync call cannot wait on a job you
 started with the `_async` twin.
 
@@ -62,7 +63,8 @@ which case you are in.
    `result_available`, so step 4's branches are for `amicus_job_status` responses only. Otherwise
    wait at least the returned `poll_after_ms`, then call `amicus_job_status` with the same
    `job_id` and the same absolute `workspace_root`.
-3. **While `status` is `running`**, honor each new `poll_after_ms` and poll again.
+3. **While `status` is `running`**, honor each new `poll_after_ms` and poll again, or poll with
+   a positive `wait_seconds` and call again at once.
 4. **Once `status` is terminal** — `done`, `failed`, `cancelled`, or `timeout` — stop polling and
    branch:
    - `done` with `result_available: true` → fetch it.

@@ -164,7 +164,8 @@ _PROSE_OVERRIDES: dict[str, str] = {
     ),
     "job_not_found": "Call amicus_job_list to recover known job_ids in this workspace.",
     "job_running": (
-        "Poll amicus_job_status while status is running, honoring poll_after_ms. On any "
+        "Poll amicus_job_status while status is running, honoring poll_after_ms, or pass a "
+        "positive wait_seconds, which is itself the wait, and poll again at once. On any "
         "terminal status, call amicus_job_result for the stored result or the terminal error."
     ),
 }

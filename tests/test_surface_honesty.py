@@ -142,6 +142,111 @@ def test_the_async_description_instrument_can_fail():
     assert _ASYNC_POLL_PHRASE not in old
 
 
+# Issue #272: a status call with a positive wait_seconds is itself the wait, and the skill says
+# to call again at once. Server text that only said "honor poll_after_ms" sent an agent reading
+# nothing else to sleep up to 30 s more after every call that had already waited, so every
+# server text that paces polling by poll_after_ms must offer the wait alternative beside it.
+_WAIT_PHRASE = "or pass a positive wait_seconds, which is itself the wait"
+_FIELD_WAIT_PHRASE = "unless that poll passes a positive wait_seconds, which is itself the wait"
+_PACING = re.compile(r"\bhonou?r|before the next poll", re.IGNORECASE)
+_WAIT_SURFACES: frozenset[str] = frozenset(
+    {
+        "amicus_job_status description",
+        "poll_after_ms field",
+        "job_running repair",
+        "lifecycle.POLL_FOLLOW_UP",
+        "lifecycle.KEYED_TIMEOUT_ALTERNATIVE",
+    }
+)
+# The wording each surface carried before #272, frozen as the instrument's known positive.
+_WAIT_SUPERSEDED: dict[str, str] = {
+    "amicus_job_status description": (
+        "Free — no model call. Poll a job's state without fetching its result: status, "
+        "elapsed time, result_available, result_ok, and poll_after_ms to honor before the "
+        "next poll while status is running (it grows with elapsed time, up to 30 s; null on "
+        "any terminal status)."
+    ),
+    "poll_after_ms field": (
+        "Milliseconds to wait before the next poll while status is running; null on any "
+        "terminal status."
+    ),
+    "job_running repair": (
+        "Poll amicus_job_status while status is running, honoring poll_after_ms. On any "
+        "terminal status, call amicus_job_result for the stored result or the terminal error."
+    ),
+    "lifecycle.POLL_FOLLOW_UP": (
+        "Poll amicus_job_status with these arguments while status is running, honoring "
+        "poll_after_ms. On any terminal status, call amicus_job_result for the stored result "
+        "or the terminal error. Recover a lost job_id with amicus_job_list."
+    ),
+    "lifecycle.KEYED_TIMEOUT_ALTERNATIVE": (
+        "This keyed run continues in the background to its own deadline. Poll "
+        "amicus_job_status with the arguments above while status is running, honoring "
+        "poll_after_ms; on any terminal status call amicus_job_result."
+    ),
+}
+
+
+def _says_to_honor_the_poll_hint(text: str) -> bool:
+    return "poll" in text and _PACING.search(text) is not None
+
+
+def _wire_strings(node: object, keys: tuple[str, ...] = ()):
+    if isinstance(node, dict):
+        for key, value in node.items():
+            yield from _wire_strings(value, (*keys, str(key)))
+    elif isinstance(node, list):
+        for value in node:
+            yield from _wire_strings(value, keys)
+    elif isinstance(node, str):
+        yield keys, node
+
+
+def _poll_hint_texts(wire) -> list[tuple[str, str, str]]:
+    """Every server text that paces polling by poll_after_ms, found by sweep: each tool's
+    description, every string in its schemas, the repair table and lifecycle's constants.
+    Each copy is its own (surface, where, text) row: the published schemas repeat a field's
+    description on every tool that carries it, and one copy must not stand in for another."""
+    found: list[tuple[str, str, str]] = []
+    for tool in wire["tools"]:
+        for keys, text in _wire_strings(tool):
+            if not _says_to_honor_the_poll_hint(text):
+                continue
+            if keys == ("description",):
+                found.append((f"{tool['name']} description", tool["name"], text))
+            else:  # a schema property's description
+                found.append((f"{keys[-2]} field", f"{tool['name']}:{'.'.join(keys)}", text))
+    found += [
+        (f"{code} repair", code, repair.alternative)
+        for code, repair in errors.repair_table().items()
+        if repair.alternative and _says_to_honor_the_poll_hint(repair.alternative)
+    ]
+    found += [
+        (f"lifecycle.{name}", name, value)
+        for name, value in vars(lifecycle).items()
+        if isinstance(value, str) and _says_to_honor_the_poll_hint(value)
+    ]
+    return found
+
+
+def test_every_poll_hint_text_offers_the_wait_alternative(wire):
+    rows = _poll_hint_texts(wire)
+    # The sweep must still find every known surface, or a reworded one escapes the check.
+    assert {surface for surface, _, _ in rows} == _WAIT_SURFACES
+    # Every tool publishing poll_after_ms (four async starts, status, cancel) is one copy.
+    assert sum(surface == "poll_after_ms field" for surface, _, _ in rows) == 6
+    for surface, where, text in rows:
+        phrase = _FIELD_WAIT_PHRASE if surface == "poll_after_ms field" else _WAIT_PHRASE
+        assert phrase in " ".join(text.split()), f"{where} omits the wait_seconds option"
+
+
+def test_the_wait_alternative_instrument_can_fail():
+    """The sweep matches each superseded string and the phrase check fails on it (#272)."""
+    for name, old in _WAIT_SUPERSEDED.items():
+        assert _says_to_honor_the_poll_hint(old), name
+        assert _WAIT_PHRASE not in old and _FIELD_WAIT_PHRASE not in old, name
+
+
 # Issue #44: consume promised job_not_found on every repeat call, while a failed delete
 # made that false and was reported as plain success. The description must condition the
 # promise on the outcome and point at the follow_up.
