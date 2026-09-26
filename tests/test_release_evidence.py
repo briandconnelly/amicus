@@ -194,6 +194,12 @@ def test_a_codex_entry_duplicated_from_kimis_is_rejected():
 # out. No real git repo mutation and no `-m integration` anywhere below.
 
 
+VERSION = "9.9.9"
+_ARGV = ["--version", VERSION]
+# The wrong-checkout seams, answering as the release worktree for VERSION would.
+_RELEASE_TREE = {"declared_version": lambda: VERSION, "tag_exists": lambda tag: False}
+
+
 def _passing_gate(backend, batch_id):
     return {
         "test_file": f"tests/test_{backend}_live.py",
@@ -218,7 +224,9 @@ def _failing_gate(failing_backend):
 
 def test_main_writes_evidence_when_all_three_pass_on_a_clean_tree(tmp_path):
     rc = evidence.main(
+        _ARGV,
         repo_root=tmp_path,
+        **_RELEASE_TREE,
         git_head=lambda: HEAD,
         git_dirty_paths=list,
         run_gate=_passing_gate,
@@ -238,7 +246,9 @@ def test_main_writes_evidence_when_all_three_pass_on_a_clean_tree(tmp_path):
 
 def test_main_writes_failure_not_evidence_when_one_backend_fails(tmp_path):
     rc = evidence.main(
+        _ARGV,
         repo_root=tmp_path,
+        **_RELEASE_TREE,
         git_head=lambda: HEAD,
         git_dirty_paths=list,
         run_gate=_failing_gate("kimi"),
@@ -259,7 +269,9 @@ def test_main_does_not_clobber_a_stale_success_file_on_a_failed_run(tmp_path):
     evidence_path.write_bytes(stale_bytes)
 
     rc = evidence.main(
+        _ARGV,
         repo_root=tmp_path,
+        **_RELEASE_TREE,
         git_head=lambda: HEAD,
         git_dirty_paths=list,
         run_gate=_failing_gate("claude"),
@@ -278,7 +290,9 @@ def test_main_refuses_on_a_dirty_tree_before_running_anything(tmp_path, capsys):
         return _passing_gate(backend, batch_id)
 
     rc = evidence.main(
+        _ARGV,
         repo_root=tmp_path,
+        **_RELEASE_TREE,
         git_head=lambda: HEAD,
         git_dirty_paths=lambda: [" M dirty_file.py", "?? untracked.py"],
         run_gate=run_gate,
@@ -310,6 +324,12 @@ def _never_called(label: str, calls: list[str]):
         (["--bogus", "--help"], 0),
         (["--bogus"], 2),
         (["extra-positional"], 2),
+        ([], 2),
+        (["--version"], 2),
+        (["--version", "1.2"], 2),
+        (["--version", "v1.2.3"], 2),
+        (["--version", "1.2.3rc1"], 2),
+        (["--version", "1.2.3", "extra-positional"], 2),
     ],
 )
 def test_main_parses_arguments_before_touching_git_or_any_gate(tmp_path, argv, expected_rc):
@@ -325,12 +345,109 @@ def test_main_parses_arguments_before_touching_git_or_any_gate(tmp_path, argv, e
         git_head=_never_called("git_head", calls),
         git_dirty_paths=_never_called("git_dirty_paths", calls),
         run_gate=_never_called("run_gate", calls),
+        declared_version=_never_called("declared_version", calls),
+        tag_exists=_never_called("tag_exists", calls),
     )
 
     assert rc == expected_rc
     assert calls == []
     assert not (tmp_path / evidence.EVIDENCE_PATH).exists()
     assert not (tmp_path / evidence.FAILURE_PATH).exists()
+
+
+def _refused_before_any_gate(tmp_path, capsys, **seams):
+    """Run main as the release tree would, with `seams` overridden; return stderr.
+
+    Asserts the run was refused with exit 1 before any gate ran or any record was written.
+    """
+    calls: list[str] = []
+    rc = evidence.main(
+        _ARGV,
+        repo_root=tmp_path,
+        git_head=lambda: HEAD,
+        git_dirty_paths=list,
+        run_gate=_never_called("run_gate", calls),
+        **{**_RELEASE_TREE, **seams},
+    )
+    assert rc == 1
+    assert calls == []
+    assert not (tmp_path / evidence.EVIDENCE_PATH).exists()
+    assert not (tmp_path / evidence.FAILURE_PATH).exists()
+    return capsys.readouterr().err
+
+
+def test_main_refuses_in_a_checkout_declaring_another_version(tmp_path, capsys):
+    """Issue #241: the main checkout between releases still declares the previous release."""
+    err = _refused_before_any_gate(tmp_path, capsys, declared_version=lambda: "9.9.8")
+    assert "declares version 9.9.8, not 9.9.9" in err
+    assert "worktree" in err
+
+
+def test_main_refuses_when_the_release_tag_already_exists(tmp_path, capsys):
+    asked: list[str] = []
+
+    def tag_exists(tag):
+        asked.append(tag)
+        return True
+
+    err = _refused_before_any_gate(tmp_path, capsys, tag_exists=tag_exists)
+    assert asked == ["v9.9.9"]
+    assert "v9.9.9 already exists" in err
+    assert "git tag -d v9.9.9" in err
+
+
+def _raises(exc):
+    def fake(*args):
+        raise exc
+
+    return fake
+
+
+@pytest.mark.parametrize(
+    "exc", [FileNotFoundError("pyproject.toml"), KeyError("project"), ValueError("bad toml")]
+)
+def test_main_refuses_when_the_declared_version_cannot_be_read(tmp_path, capsys, exc):
+    err = _refused_before_any_gate(tmp_path, capsys, declared_version=_raises(exc))
+    assert "cannot read this checkout's declared version" in err
+
+
+@pytest.mark.parametrize(
+    "exc", [subprocess.CalledProcessError(128, ["git"]), FileNotFoundError("git")]
+)
+def test_main_refuses_when_the_tag_lookup_fails(tmp_path, capsys, exc):
+    """A failed lookup is not an absent tag: treating it as one would let the run go on."""
+    err = _refused_before_any_gate(tmp_path, capsys, tag_exists=_raises(exc))
+    assert "cannot tell whether the tag v9.9.9 exists" in err
+
+
+def test_the_declared_version_is_this_checkouts_project_version():
+    import tomllib
+
+    pyproject = Path(__file__).resolve().parent.parent / "pyproject.toml"
+    expected = tomllib.loads(pyproject.read_text())["project"]["version"]
+    assert evidence._declared_version() == expected
+
+
+def test_tag_exists_sees_annotated_and_lightweight_tags_only_when_present(tmp_path, monkeypatch):
+    def git(*args):
+        subprocess.run(["git", *args], cwd=tmp_path, capture_output=True, check=True)
+
+    git("init", "-q")
+    git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "c")
+    git("tag", "v1.0.0")
+    git("-c", "user.name=t", "-c", "user.email=t@t", "tag", "-a", "v1.1.0", "-m", "record")
+    monkeypatch.setattr(evidence, "REPO_ROOT", tmp_path)
+
+    assert evidence._tag_exists("v1.0.0") is True
+    assert evidence._tag_exists("v1.1.0") is True
+    assert evidence._tag_exists("v1.2.0") is False
+
+
+def test_tag_exists_raises_outside_a_repository(tmp_path, monkeypatch):
+    monkeypatch.setattr(evidence, "REPO_ROOT", tmp_path)
+    monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(tmp_path.parent))
+    with pytest.raises(subprocess.CalledProcessError):
+        evidence._tag_exists("v1.0.0")
 
 
 def test_help_describes_the_spend(tmp_path, capsys):
@@ -341,12 +458,15 @@ def test_help_describes_the_spend(tmp_path, capsys):
         git_head=_never_called("git_head", calls),
         git_dirty_paths=_never_called("git_dirty_paths", calls),
         run_gate=_never_called("run_gate", calls),
+        declared_version=_never_called("declared_version", calls),
+        tag_exists=_never_called("tag_exists", calls),
     )
     assert rc == 0
     assert calls == []
     out = capsys.readouterr().out
     assert out.startswith("usage: record_live_gate_evidence.py")
     assert "AMICUS_REQUIRE_LIVE=1" in out
+    assert "--version X.Y.Z" in out
     assert "quota" in out
 
 
@@ -377,7 +497,7 @@ def test_the_recorded_evidence_covers_this_exact_commit():
     """Run with AMICUS_RELEASE_CHECK=1 on the commit about to be tagged."""
     path = Path(__file__).resolve().parent.parent / evidence.EVIDENCE_PATH
     assert path.exists(), (
-        f"no live-gate evidence at {path}; run scripts/record_live_gate_evidence.py"
+        f"no live-gate evidence at {path}; run scripts/record_live_gate_evidence.py --version X.Y.Z"
     )
     head = subprocess.run(
         ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True

@@ -17,15 +17,30 @@ hook, CI, or anything else automatic. Only a maintainer choosing to spend the li
 quota runs it, and only after deciding to in the current session.
 
 Usage:
-    AMICUS_REQUIRE_LIVE=1 uv run python scripts/record_live_gate_evidence.py
+    AMICUS_REQUIRE_LIVE=1 uv run python scripts/record_live_gate_evidence.py --version X.Y.Z
 
-    It takes no arguments. `-h`/`--help`, or a prefix of it such as `--he`, prints this text
-    and exits 0, even beside other arguments; without it, any argument is refused with exit 2.
-    Both happen before git is consulted or any gate runs, so asking the script what it does
+    `--version` is required and names the release being made, as X.Y.Z. `-h`/`--help`, or a
+    prefix of it such as `--he`, prints this text and exits 0, even beside other arguments;
+    without it, a missing or malformed `--version` or any other argument is refused with exit
+    2. Both happen before git is consulted or any gate runs, so asking the script what it does
     never spends quota (issue #242).
 
+Where it runs (issue #241):
+    Run it from the release PR's worktree, never from the main checkout. Release evidence was
+    recorded in the main checkout three releases running, and each time the quota for all
+    three backends was spent before a later check noticed. So before any gate runs, the
+    script refuses when:
+    - the checkout's declared version (`project.version` in its pyproject.toml) is not
+      `--version`, which is the main checkout between releases, since it still declares the
+      previous release; or
+    - a local tag `v<version>` already exists, which is a rerun after the local tag was
+      created, or a version that was already released. This reads local tags only, so a
+      clone without that tag passes it: it guards against a collision, not against releasing
+      a published version again.
+    Neither establishes that HEAD is the release PR's branch tip; the runbook's own checks do.
+
 Behavior (all-or-nothing):
-    - Refuses to run at all on a dirty working tree.
+    - Refuses to run at all on a dirty working tree, or from the wrong checkout (above).
     - Runs, for each backend, `AMICUS_REQUIRE_LIVE=1 uv run pytest -m integration --no-cov
       <test_file>` as a subprocess and captures its exit status and CLI version.
     - Writes EVIDENCE_PATH only when every exit status is 0 and the tree is still clean
@@ -53,10 +68,12 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
 import tempfile
+import tomllib
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -96,6 +113,9 @@ _REPORT_KEYS = ("total", "not_passed", "counts")
 # cap is generous against that and still bounds a wrapper that prints something else entirely.
 _VERSION_MAX_CHARS = 120
 
+# The shape of a release version, as `--version` accepts it and as the `v*` tags carry it.
+_RELEASE_VERSION = re.compile(r"\d+\.\d+\.\d+")
+
 
 def _git(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(["git", *args], cwd=REPO_ROOT, capture_output=True, text=True, check=True)
@@ -108,6 +128,39 @@ def _git_head() -> str:
 def _git_dirty_paths() -> list[str]:
     status = _git("status", "--porcelain").stdout
     return [line for line in status.splitlines() if line.strip()]
+
+
+def _declared_version() -> str:
+    """The version this checkout declares, from `project.version` in its pyproject.toml.
+
+    Raises OSError, ValueError (tomllib's decode error is one) or KeyError when it cannot be
+    read; `main` refuses on any of them rather than spend.
+    """
+    with (REPO_ROOT / "pyproject.toml").open("rb") as f:
+        version = tomllib.load(f)["project"]["version"]
+    if not isinstance(version, str):
+        raise ValueError(f"project.version is not a string: {version!r}")
+    return version
+
+
+def _tag_exists(tag: str) -> bool:
+    """Whether a local tag of this name exists, annotated or lightweight.
+
+    `rev-parse -q --verify` exits 1 for a ref that does not exist and 128 for anything else it
+    cannot do; only the first means absent, so any other failure raises instead of passing.
+    """
+    proc = subprocess.run(
+        ["git", "rev-parse", "-q", "--verify", f"refs/tags/{tag}"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if proc.returncode == 0:
+        return True
+    if proc.returncode == 1:
+        return False
+    raise subprocess.CalledProcessError(proc.returncode, proc.args, proc.stdout, proc.stderr)
 
 
 def _cli_version(backend: str) -> str | None:
@@ -220,8 +273,14 @@ def _write_json(repo_root: Path, path: Path, payload: dict[str, object]) -> None
     full_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
-def _parse_args(argv: list[str]) -> int | None:
-    """Parse the command line; return an exit code to stop with, or None to go on.
+def _release_version(value: str) -> str:
+    if not _RELEASE_VERSION.fullmatch(value):
+        raise argparse.ArgumentTypeError(f"expected X.Y.Z, got {value!r}")
+    return value
+
+
+def _parse_args(argv: list[str]) -> argparse.Namespace | int:
+    """Parse the command line; return the parsed arguments, or an exit code to stop with.
 
     argparse exits by raising SystemExit, for `--help` and for a bad argument alike. That is
     caught and turned into a return value so `main` stays a function tests can call.
@@ -231,11 +290,45 @@ def _parse_args(argv: list[str]) -> int | None:
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
+    parser.add_argument(
+        "--version",
+        required=True,
+        type=_release_version,
+        metavar="X.Y.Z",
+        help="the version being released; the checkout must declare it and must not tag it yet",
+    )
     try:
-        parser.parse_args(argv)
+        return parser.parse_args(argv)
     except SystemExit as exc:
         return exc.code if isinstance(exc.code, int) else 2
-    return None
+
+
+def _wrong_checkout(
+    version: str, declared_version: Callable[[], str], tag_exists: Callable[[str], bool]
+) -> list[str]:
+    """Why this checkout cannot be the release tree for `version`; empty when it can be."""
+    try:
+        declared = declared_version()
+    except (OSError, ValueError, KeyError) as exc:
+        return [f"cannot read this checkout's declared version from pyproject.toml: {exc}"]
+    if declared != version:
+        return [
+            f"this checkout declares version {declared}, not {version}.",
+            "Run this from the release PR's worktree, not the main checkout (issue #241).",
+        ]
+    tag = f"v{version}"
+    try:
+        exists = tag_exists(tag)
+    except (OSError, subprocess.CalledProcessError) as exc:
+        return [f"cannot tell whether the tag {tag} exists: {exc}"]
+    if exists:
+        return [
+            f"the tag {tag} already exists in this repository.",
+            "If it is a local tag from an earlier attempt at this release that was never "
+            f"pushed, delete it with `git tag -d {tag}` and rerun; if {tag} was released, "
+            "this version cannot be released again.",
+        ]
+    return []
 
 
 def main(
@@ -245,25 +338,33 @@ def main(
     git_head: Callable[[], str] = _git_head,
     git_dirty_paths: Callable[[], list[str]] = _git_dirty_paths,
     run_gate: Callable[[str, str], dict[str, object]] = _run_backend_gate,
+    declared_version: Callable[[], str] = _declared_version,
+    tag_exists: Callable[[str], bool] = _tag_exists,
 ) -> int:
     """Run all three live gates and write EVIDENCE_PATH or FAILURE_PATH under `repo_root`.
 
-    `git_head`, `git_dirty_paths` and `run_gate` are injectable seams: tests substitute fakes
-    here (no real git repo, no subprocess, no live backend) to exercise the all-or-nothing
-    write logic, the dirty-tree refusal and the failure-diagnostics path hermetically. The
+    `git_head`, `git_dirty_paths`, `run_gate`, `declared_version` and `tag_exists` are
+    injectable seams: tests substitute fakes here (no real git repo, no subprocess, no live
+    backend) to exercise the all-or-nothing write logic, the dirty-tree and wrong-checkout
+    refusals and the failure-diagnostics path hermetically. The
     default arguments are what a real release run uses. `argv` is the command line without
     the program name; None means an empty one, not `sys.argv`, so a test calling `main()`
     never parses pytest's own arguments.
     """
-    stop = _parse_args([] if argv is None else argv)
-    if stop is not None:
-        return stop
+    args = _parse_args([] if argv is None else argv)
+    if isinstance(args, int):
+        return args
 
     dirty = git_dirty_paths()
     if dirty:
         print("refusing to run: the working tree is dirty:", file=sys.stderr)
         for line in dirty:
             print(f"  {line}", file=sys.stderr)
+        return 1
+
+    wrong = _wrong_checkout(args.version, declared_version, tag_exists)
+    if wrong:
+        print("refusing to run:", *wrong, file=sys.stderr)
         return 1
 
     commit = git_head()
