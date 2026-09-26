@@ -524,9 +524,8 @@ WaitSecondsParam = Annotated[
     int,
     Field(
         description=(
-            "Hold the call up to this many seconds while the job is running, returning as "
-            "soon as it reaches a terminal status; 0 (default) returns at once. Use it to "
-            "wait for a job instead of reading amicus's job store."
+            "Hold the call up to this many seconds while the job runs, returning as soon as "
+            "it is terminal; 0 returns at once. Wait here, never on amicus's job store."
         ),
         ge=0,
         le=MAX_STATUS_WAIT_SECONDS,
