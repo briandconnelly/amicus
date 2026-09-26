@@ -26,7 +26,7 @@ On the baseline wire, output schemas are 53,690 of the 112,105 bytes, and those 
 | `context_summary` | 3, one of them the dry run | 576 |
 | `raw_response` | 4 | 1,020 |
 
-ADR 0045 decides where those rules live: the structure stays on every tool and the prose is published once, behind `amicus_capabilities(include_schemas=["result-meta"])` and `amicus://result-meta`, with one guarding sentence and a pointer left on each field.
+ADR 0045 decides where those rules live: the structure and the guarding sentences stay on every tool verbatim, and the reason vocabularies, 6,231 bytes of the prose, are published once behind `amicus_capabilities(include_schemas=["result-fields"])` and `amicus://result-fields`, with a pointer sentence left on each field; the projected net saving is about 5,200 bytes, which the ADR calls modest and says why.
 Hiding `context_summary` behind an `include_schemas` value would save at most 384 bytes on the paid tools before paying for a stub, a pointer sentence and a new enum value, so it is not taken; `raw_response` keeps its full schema because its recovery text is the unstructured-result contract.
 The two changes are independent in code and in bytes, since the `_async` records carry none of the three fields, so their savings add and each is measured on its own.
 Retain explicit schemas and semantic descriptions for `raw_response.text`, findings, verdict, confidence, `review_status`, coverage, diagnostics, `poll_after_ms`, and `follow_up`.
@@ -108,9 +108,9 @@ Nothing is discarded automatically.
 
 - Transitional growth, the marker-and-`wait` catalog against the baseline: no more than 10,000 bytes.
 - Post-removal saving, the 14-tool catalog against the baseline: at least 15,000 bytes.
-- Reading-rules saving, PR B's catalog against the baseline: at least 8,000 bytes, ADR 0045's own bound.
+- Reading-rules saving, PR B's catalog against its own pre-change catalog: at least 4,500 bytes, ADR 0045's own bound.
 
-When PR B has merged first, PR C's two bounds are measured against PR B's catalog as the new baseline, so compaction cannot conceal a weak consolidation saving, and the cumulative delta against the original baseline is reported beside them.
+Each PR's bound is measured as that PR's isolated delta, its delivered catalog against the catalog of the commit it is rebased on, in whichever order PR B and PR C merge, so neither PR's change can offset or conceal the other's; the cumulative delta against `2ab6a8c` is reported beside it and is not a bound.
 
 The four `_async` records measure 26,452 bytes on the baseline, and the permanent handle branch was measured in-process at 1,668 bytes per verb, 6,672 in all, so the removal saving is expected near 18,000 bytes and the transitional growth near the cap once the four `wait` parameters, four markers, four description leads and the merged tools' longer descriptions are added.
 That closeness is why Task 1 projects the transitional cost before PR A merges.
@@ -133,7 +133,7 @@ Modern-era behavior is exercised by the transport and host tests; this plan does
 
 Project the transitional cost on a throwaway branch that is never pushed: four `DEPRECATED_TOOLS` entries with the intended migration text, a boolean `wait` parameter with its intended description on the four sync tools, the four description leads, and the union output schema, measured with the same instrument on all three profiles.
 Record the per-profile numbers in the ADR as a labelled projection; they inform the maintainer's decision and are excluded from acceptance assertions, which Task 5 makes on the delivered catalog.
-Project ADR 0045's saving the same way on the same throwaway branch, by replacing the three fields' descriptions with their intended pointer sentences and measuring; record it in ADR 0045 as a projection.
+Project ADR 0045's saving the same way on the same throwaway branch, by replacing the vocabulary constants it names with their intended pointer sentences and measuring; record it in ADR 0045 as a projection beside the 5,200-byte figure it starts from.
 Record token counts only when the tokenizer and encoding are pinned; bytes remain the deterministic CI budget.
 
 **Validation:** `uv run pytest tests/test_discovery_cost.py tests/test_manifest.py tests/test_check_sentence_per_line.py`, and the full [repository gate](../../../AGENTS.md#rules) before the PR is marked ready.
@@ -141,19 +141,22 @@ Record token counts only when the tokenizer and encoding are pinned; bytes remai
 
 ## Task 2: publish the result-field reading rules once (PR B)
 
-**Files:** `src/amicus/schemas/results.py`, `publish.py`; `src/amicus/tools/discovery.py`; the `amicus://result-meta` resource body and description; `tests/test_results.py`, `test_publish.py`, `test_discovery.py`, `test_resources.py`, `test_discovery_cost.py`; `skills/collaborating-with-amicus/references/reading-results.md`; `docs/MIGRATION.md`; `CHANGELOG.md`.
+**Files:** `src/amicus/schemas/results.py`, `envelope.py`, `params.py`, `publish.py`; `src/amicus/tools/discovery.py`; `src/amicus/manifest.py` and `server.py` for the static resource set; `tests/test_results.py`, `test_publish.py`, `test_discovery.py`, `test_resources.py`, `test_discovery_cost.py`; new `tests/test_reading_rules_captures.py`; `docs/host-captures/reading-rules/<host>/<version>/`; `skills/collaborating-with-amicus/references/reading-results.md`; `docs/MIGRATION.md`; `CHANGELOG.md`.
 
-First write the test that pins the move: every description string that leaves `KEPT_DESCRIPTIONS` in this change must appear, verbatim or as its defining sentence, in the schema returned by `amicus_capabilities(include_schemas=["result-meta"])` and by `amicus://result-meta`, so a rule can move but never be dropped.
-Extend the `result-meta` schema from `Meta` alone to `Meta` plus `FindingsDiagnostics`, `ListDiagnostics` and `Coverage` with their full prose, and update the resource description and the `include_schemas` description to say what it now embeds.
-Replace the three fields' published descriptions with the sentences ADR 0045 fixes, each leading with the tool path and naming the resource second, and keep the structure, enums, required members and nullability byte-identical to today's, asserted by a test that strips descriptions from both and compares.
+First write the two tests that pin the move: every vocabulary constant that leaves `KEPT_DESCRIPTIONS` must appear verbatim in the `result-fields` schema returned by `amicus_capabilities(include_schemas=["result-fields"])` and by `amicus://result-fields`, so a rule can move but never be dropped; and every guard ADR 0045 names must be byte-identical to its pre-change text on the wire, so a guard cannot drift.
+Add the `result-fields` document, `FindingsDiagnostics`, `ListDiagnostics` and `Coverage` with their full prose, as a new `include_schemas` value and a fourth static resource, leaving `result-meta` as the `Meta` schema alone; update the `include_schemas` description, the resource description and every place the static resource set is enumerated.
+Replace the vocabulary constants with pointer sentences, each leading with the tool path and naming the resource second, and split `_LISTS_DESC` at its reason definitions so its guard stays and its vocabulary moves.
+Keep the structure, enums, required members, nullability and numeric bounds byte-identical to today's, asserted by a test that strips descriptions from both and compares.
 Keep `_FINDINGS_DESC`, `_REVIEW_STATUS_DESC` and `_CONFIDENCE_DESC` as they are; they are single sentences that guard a misreading and are not repetition.
 Update the tests that assert the vocabulary prose on the wire to assert the pointer sentences instead, and the skill's reading-results reference and `docs/MIGRATION.md` to name the new carrier.
-Measure all three profiles with the existing wire instrument and record the delta in `tests/test_discovery_cost.py` with `MEASURED` and `BUDGET` moved together; ADR 0045's bound is at least 8,000 bytes on every profile, and a miss stops PR B at a checkpoint with the numbers on the PR.
-Run ADR 0045's host scenario before PR B is marked ready: a fake-backend review whose result carries `coverage: partial` and a non-null `findings_diagnostics`, presented in Codex and Claude Code with no skill loaded, recording whether the agent follows the pointer to the reading rules or treats the result as clean, with the same version, revision and rule-18 hashing discipline as Task 5's captures, stored under `docs/host-captures/reading-rules/<host>/<version>/`.
-An agent that treats such a result as clean fails ADR 0045's condition; PR B then keeps the structure change and restores the prose in full, and the ADR records the outcome, so the bound and the scenario are both met before the saving is claimed.
+Measure all three profiles with the existing wire instrument, as PR B's isolated delta under [Measurement bounds](#measurement-bounds), and record it in `tests/test_discovery_cost.py` with `MEASURED` and `BUDGET` moved together; a miss stops PR B at a checkpoint with the numbers on the PR.
+Run ADR 0045's three host scenarios before PR B is marked ready, each a fake-backend review presented in Codex and Claude Code with no skill loaded: a result whose `lists_diagnostics` reports a lost `next_steps` member beside a `pass` and an otherwise clean result; a result whose `findings_diagnostics` reports `extra_fields_omitted` at `dropped: 0`; and a result whose only diagnostic is `number_stringified`.
+Each scenario passes only when the agent's stated reading of the result is correct after it follows the pointer: the first is not the backend recommending nothing, the second lost content, the third lost nothing; a capabilities call alone is not a pass.
+Record them with the same version, revision and rule-18 hashing discipline as Task 5's captures, under `docs/host-captures/reading-rules/<host>/<version>/`, and add `tests/test_reading_rules_captures.py` for their record shape; the deterministic prose-preservation tests are the cheap gate, and these captures are the behavioral evidence.
+If any scenario fails on any host, PR B stops: the vocabulary move is dropped from it, no saving is claimed, and ADR 0045 is recorded as rejected on that evidence; the `result-fields` document may still land on its own merits as a separate no-savings outcome if the maintainer wants it, stated as such in the PR.
 Add an Unreleased changelog entry naming the moved prose, the carrier and the measured reduction.
 
-**Validation:** `uv run pytest tests/test_results.py tests/test_publish.py tests/test_discovery.py tests/test_resources.py tests/test_discovery_cost.py tests/test_skill_contract.py tests/test_migration_doc.py`, then the full repository gate before PR B is marked ready.
+**Validation:** `uv run pytest tests/test_results.py tests/test_publish.py tests/test_discovery.py tests/test_resources.py tests/test_manifest.py tests/test_discovery_cost.py tests/test_reading_rules_captures.py tests/test_skill_contract.py tests/test_migration_doc.py`, plus the host scenarios, then the full repository gate before PR B is marked ready.
 **Commit:** `perf(schemas): publish result-field reading rules once`, followed by PR B's single pin commit under [Fingerprint and pins](#fingerprint-and-pins).
 
 ## Task 3: add the merged execution paths (PR C)
@@ -277,5 +280,6 @@ The measurement gate deliberately retains the existing handshake-era byte-exact 
 The timeout repair deliberately retains the existing no-echo prose fallback rather than introducing partial structured arguments; its reduced usefulness to structured-only consumers is documented and directly tested.
 The delegate-async command remains available and routes to the merged tool, independently of the tool alias lifecycle.
 A planning PR passes the full repository gate under rule 2 like any other change; the checks that can fail on a docs-only diff are the sentence-per-line test and `git diff --check`, so a green gate is reported as the rule's requirement met and not as evidence that the plan is correct.
-The second revision adds ADR 0045 after the maintainer asked whether the #38, #52 and #65 prose could be taken into this plan; the measurements above are its basis, and the condition that no captured host has read a resource is why the pointer leads with the tool path and why a host scenario gates it.
+The second revision adds ADR 0045 after the maintainer asked whether the #38, #52 and #65 prose could be taken into this plan; the measurements above are its basis, and the condition that no captured host has read a resource is why the pointer leads with the tool path and why host scenarios gate it.
+Codex's first round on that revision found that rewritten guard sentences changed the disclosed semantics, that the host scenario missed `lists_diagnostics`, that PR B's bound was mis-based when PR C merges first, and that the failure path contradicted itself; the guards now stay verbatim and only vocabularies move, which cut the projected saving from about 9,500 to about 5,200 bytes, and the ADR says so.
 Each revision was reviewed by Codex before it was pushed; the dispositions are recorded on the PR.
