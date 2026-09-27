@@ -31,6 +31,20 @@ _PUBLIC = dict(
 )
 
 
+@pytest.fixture(autouse=True)
+def _release_job_locks():
+    """Close the job-lock descriptors `_worker.main` takes in this process. A real worker
+    holds its lock until it exits; a test is not a worker process, so without this each one
+    that runs `main` on a job directory leaves an open descriptor for the session (#152)."""
+    before = list(_worker._held_locks)
+    try:
+        yield
+    finally:
+        for fd in [fd for fd in _worker._held_locks if fd not in before]:
+            _worker._held_locks.remove(fd)
+            os.close(fd)
+
+
 def _job(tmp_path, **over):
     jd = tmp_path / "job"
     jd.mkdir()
