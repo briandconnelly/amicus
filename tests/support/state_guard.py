@@ -15,9 +15,10 @@ What is compared, and why each is here:
   `monkeypatch` undoes its own writes, so what remains is a direct write.
 - The handlers of the signals a process running amicus installs or a test arms.
 - Every logger that existed before the test: level, `propagate`, `disabled`, handlers and
-  filters; and every `amicus.*` logger the test created, against a fresh logger's defaults.
-  A logger another library creates and configures on first use (FastMCP's `to_client`
-  clamp) is not a leak, so a new logger outside amicus's namespace is not compared.
+  filters; and every new logger `obs.configure` owns (`amicus.*` and the dependency
+  loggers it takes over by name), against a fresh logger's defaults. A logger another
+  library creates and configures on first use (FastMCP's `to_client` clamp) is not a leak,
+  so any other new logger is not compared.
 - `obs._configured`, FastMCP's settings, and the worker's held job-lock descriptors.
 
 pytest's own capture handlers are excluded: pytest adds and removes them per phase.
@@ -77,8 +78,15 @@ def _loggers() -> dict[str, logging.Logger]:
     return found
 
 
+# The loggers `obs.configure` configures by name. A new one of these is compared, because in
+# a process that has not imported the library yet, `configure` is what creates it.
+_OWNED_LOGGERS = frozenset(
+    {obs.ROOT_LOGGER_NAME, *obs.DEPENDENCY_LOGGER_NAMES, obs.FASTMCP_SERVER_LOGGER_NAME}
+)
+
+
 def _is_owned(name: str) -> bool:
-    return name == obs.ROOT_LOGGER_NAME or name.startswith(obs.ROOT_LOGGER_NAME + ".")
+    return name in _OWNED_LOGGERS or name.startswith(obs.ROOT_LOGGER_NAME + ".")
 
 
 def _cwd() -> str:
