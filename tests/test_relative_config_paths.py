@@ -66,7 +66,9 @@ def test_a_relative_state_dir_is_fatal_not_a_silent_move_to_the_default(clean_en
     assert s.state_dir.is_absolute(), "whatever an embedder does, no cwd-relative store"
 
 
-def test_main_refuses_to_start_on_a_relative_state_dir(clean_env, monkeypatch, capsys):
+def test_main_refuses_to_start_on_a_relative_state_dir(
+    clean_env, monkeypatch, capsys, restored_signal_handlers
+):
     from amicus import server
 
     started = []

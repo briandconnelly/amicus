@@ -6,11 +6,13 @@ import contextlib
 import logging
 import os
 import shutil
+import signal
 import stat
 from pathlib import Path
 
 import fastmcp
 import pytest
+from tests.support import state_guard
 
 from amicus import config, obs
 from amicus.sdk.core.runtime import CommandRun
@@ -162,6 +164,49 @@ def _restore_dependency_logging():
     """Restore dependency logging after every test; see `restored_dependency_logging`."""
     with restored_dependency_logging():
         yield
+
+
+@pytest.fixture
+def restored_signal_handlers():
+    """Put SIGINT and SIGTERM back after a test that calls `server.main()` in this process:
+    `_install_signal_logging` wraps whatever handler it finds, so each call leaves one more
+    layer installed for the rest of the session (#152)."""
+    saved = {signum: signal.getsignal(signum) for signum in (signal.SIGINT, signal.SIGTERM)}
+    try:
+        yield
+    finally:
+        for signum, handler in saved.items():
+            signal.signal(signum, handler)
+
+
+_STATE_BEFORE = pytest.StashKey[state_guard.Snapshot]()
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_runtest_setup(item: pytest.Item) -> None:
+    """Snapshot process-global state before any of this test's fixtures is set up (#152)."""
+    item.stash[_STATE_BEFORE] = state_guard.snapshot()
+
+
+@pytest.hookimpl(wrapper=True, tryfirst=True)
+def pytest_runtest_teardown(item: pytest.Item, nextitem: pytest.Item | None):
+    """Fail the test that leaves process-global state behind, after every fixture it used has
+    been torn down, including the logging restore above; see `tests/support/state_guard.py`.
+
+    A teardown that already raised is reported as that error and not checked, so the leak
+    report never masks it. A module- or session-scoped fixture that changes guarded state
+    fails the first test that requests it: none does today, and one that must would need
+    this check to learn about scopes first."""
+    result = yield
+    before = item.stash.get(_STATE_BEFORE, None)
+    if before is not None:
+        leaks = state_guard.leaks(before, state_guard.snapshot())
+        if leaks:
+            pytest.fail(
+                "test left process-global state behind (#152):\n  " + "\n  ".join(leaks),
+                pytrace=False,
+            )
+    return result
 
 
 @pytest.fixture

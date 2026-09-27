@@ -173,7 +173,7 @@ def test_tasks_flag_without_the_extension_is_a_config_error(clean_env, monkeypat
     assert any("fastmcp[tasks]" in e for e in state.config_errors)
 
 
-def test_main_handles_disconnects_and_crashes(monkeypatch, clean_env):
+def test_main_handles_disconnects_and_crashes(monkeypatch, clean_env, restored_signal_handlers):
     calls = []
 
     class FakeApp:
