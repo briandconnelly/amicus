@@ -44,7 +44,7 @@ The plugins launch the server from a published release tag, pinned in
   "mcpServers": {
     "amicus": {
       "command": "uvx",
-      "args": ["--from", "git+https://github.com/briandconnelly/amicus.git@v0.7.0", "amicus-mcp"]
+      "args": ["--from", "git+https://github.com/briandconnelly/amicus.git@v0.8.0", "amicus-mcp"]
     }
   }
 }
@@ -158,14 +158,13 @@ the new ones.
 
 ## Status and known limits
 
-0.7.0 is the current release. The discovery surface moved from `amicus/0.1/schema-43` to
-`amicus/0.1/schema-50`, and `RESULT_FORMAT` did not move, so a job result 0.6.0 stored can still be
-read. Two changes ask something of a caller: a sync call past its deadline returns a `timeout`
-that is never temporary and whose repair names the verb's `_async` twin when
-`AMICUS_JOB_MAX_SECONDS` exceeds the deadline that passed, and a backend a verb never accepts
-fails as `invalid_arguments` rather than `feature_unsupported`. A new paid call can also be
-refused as `job_cap_reached` rather than evicting a result nobody has fetched.
-[`docs/MIGRATION.md`](docs/MIGRATION.md#upgrading-from-060) explains how to upgrade, and
+0.8.0 is the current release. The discovery surface moved from `amicus/0.1/schema-50` to
+`amicus/0.1/schema-53`, and `RESULT_FORMAT` did not move, so a job result 0.7.0 stored can still be
+read. No change rejects a call 0.7.0 accepted. `amicus_job_status` can now wait for a job to
+finish through `wait_seconds`. An error a keyed run stores, and a job result that cannot be read,
+are no longer reported as temporary, and a workspace deleted just before the backend started now
+fails as `invalid_workspace_root` rather than `<backend>_not_found`.
+[`docs/MIGRATION.md`](docs/MIGRATION.md#upgrading-from-070) explains how to upgrade, and
 [`CHANGELOG.md`](CHANGELOG.md) lists every user-visible change.
 
 One known limit: a third-party backend distribution can load through the `amicus.backends`
