@@ -83,6 +83,9 @@ MANDATORY_PROBES = ("cold-start", "first-repair")
 # and digits removed, so `N/A.`, `(none)` and `` `TBD` `` are placeholders while
 # "None applied, and ..." is a value.
 PLACEHOLDER_VALUES = frozenset({"na", "none", "tbd", "todo", "tba"})
+# A Markdown link or image renders as its label alone, so its target must not count toward
+# the value: `[N/A](https://example.com)` and `[TBD][1]` render as bare placeholders.
+LINK_RE = re.compile(r"!?\[([^\]]*)\](?:\([^)]*\)|\[[^\]]*\])")
 
 
 def _ids(docs: list[Path]) -> list[str]:
@@ -125,7 +128,7 @@ def _finding_problems(finding: str) -> list[str]:
             problems.append(f"finding carries {field} {len(values)} times")
         for raw in values:
             value = raw.strip()
-            letters = re.sub(r"[\W_]", "", value.lower())
+            letters = re.sub(r"[\W_]", "", LINK_RE.sub(r"\1", value).lower())
             if not letters or letters in PLACEHOLDER_VALUES:
                 problems.append(f"finding has {field} with no value: {value!r}")
     return problems
@@ -234,6 +237,12 @@ def test_the_finding_check_accepts_a_well_formed_finding():
     assert _finding_problems(_GOOD_FINDING) == []
 
 
+def test_a_value_that_contains_a_link_is_still_a_value():
+    """The link reduction must not turn a real value into a placeholder."""
+    linked = _GOOD_FINDING.replace("Name the tool that does.", "See [ADR 0012](docs/adr/0012.md).")
+    assert _finding_problems(linked) == []
+
+
 @pytest.mark.parametrize(
     ("mutated", "field"),
     [
@@ -246,6 +255,12 @@ def test_the_finding_check_accepts_a_well_formed_finding():
         (_GOOD_FINDING.replace("Name the tool that does.", "TODO:"), "remediation:"),
         (_GOOD_FINDING.replace("Name the tool that does.", "(none)"), "remediation:"),
         (_GOOD_FINDING.replace("Name the tool that does.", "`[TBD]`"), "remediation:"),
+        (
+            _GOOD_FINDING.replace("Name the tool that does.", "[N/A](https://example.com)"),
+            "remediation:",
+        ),
+        (_GOOD_FINDING.replace("Name the tool that does.", "[TBD][1]"), "remediation:"),
+        (_GOOD_FINDING.replace("Name the tool that does.", "![none](x.png)"), "remediation:"),
         (_GOOD_FINDING + "- **Summary:** A second, different summary.\n", "summary: 2 times"),
         (_GOOD_FINDING + "- **Summary:**\n", "summary:"),
         (_GOOD_FINDING + "- **Summary:** -\n", "summary:"),
@@ -261,6 +276,9 @@ def test_the_finding_check_accepts_a_well_formed_finding():
         "todo-colon",
         "parenthesized-none",
         "formatted-tbd",
+        "inline-link",
+        "reference-link",
+        "image",
         "second-copy-nonempty",
         "second-copy-empty",
         "second-copy-dash",
