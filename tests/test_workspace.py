@@ -287,9 +287,14 @@ def test_a_forged_worktree_link_is_not_believed(tmp_path):
     (forged / ".git").write_text((wt / ".git").read_text())
     assert ws.linked_worktree_checkout(str(forged), [str(main)]) is None
     gitdir = Path((wt / ".git").read_text().removeprefix("gitdir:").strip())
-    for name, body in (("commondir", b"\xff\xfe"), ("commondir", b"x" * 5000)):
+    for name, body in (("commondir", b"\xff\xfe"), ("commondir", b"../.." + b" " * 5000)):
         (gitdir / name).write_bytes(body)
         assert ws.linked_worktree_checkout(str(wt), [str(main)]) is None, body[:4]
+    # A common dir that is missing, or is a bare repository's, names no checkout.
+    (main / "bare.git").mkdir()
+    for common in ("../../../nowhere/.git", "../../../bare.git"):
+        (gitdir / "commondir").write_text(common)
+        assert ws.linked_worktree_checkout(str(wt), [str(tmp_path)]) is None, common
     (gitdir / "commondir").write_text("../..\n")
     assert ws.linked_worktree_checkout(str(wt), [str(main)]) == str(main)  # control
     (wt / ".git").unlink()
