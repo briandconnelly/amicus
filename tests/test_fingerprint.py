@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from amicus import manifest, surface
-from amicus.schemas.fingerprint import FINGERPRINT
+from amicus.schemas.fingerprint import FINGERPRINT, parse_fingerprint
 
 EXPECTED_SURFACE_DIGEST: dict[str, str] = {
     "all": "4be5e7a98eb1ff453a600884ba1c9b038115e54f4ab99c56f2c9f20062ccd31f",
@@ -35,3 +35,10 @@ async def test_digest_moves_when_a_description_changes():
         tool.description = original
     assert after != before
     assert await surface.surface_digest(app) == before
+
+
+def test_fingerprint_has_the_documented_shape():
+    # ADR 0006 and the design spec promise clients `amicus/0.1/schema-N`; FINGERPRINT is
+    # bumped by hand, so this is what stops a typo'd bump from reaching the wire.
+    name, major, _revision = parse_fingerprint(FINGERPRINT)
+    assert (name, major) == ("amicus", "0.1")
