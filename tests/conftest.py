@@ -194,9 +194,10 @@ def pytest_runtest_teardown(item: pytest.Item, nextitem: pytest.Item | None):
     been torn down, including the logging restore above; see `tests/support/state_guard.py`.
 
     A teardown that already raised is reported as that error and not checked, so the leak
-    report never masks it. A module- or session-scoped fixture that changes guarded state
-    fails the first test that requests it: none does today, and one that must would need
-    this check to learn about scopes first."""
+    report never masks it. Snapshots are per test, so a module- or session-scoped fixture
+    that changes guarded state is blamed twice: on the first test that requests it, which
+    ends with the change in place, and on the test whose teardown undoes it. None does
+    today; one that must would need this check to learn about fixture scopes first."""
     result = yield
     before = item.stash.get(_STATE_BEFORE, None)
     if before is not None:

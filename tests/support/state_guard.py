@@ -14,14 +14,17 @@ What is compared, and why each is here:
 - `os.environ`, minus `PYTEST_CURRENT_TEST`, which pytest itself sets and clears per phase:
   `monkeypatch` undoes its own writes, so what remains is a direct write.
 - The handlers of the signals a process running amicus installs or a test arms.
-- Every logger that existed before the test: level, `propagate`, `disabled`, handlers and
-  filters; and every new logger `obs.configure` owns (`amicus.*` and the dependency
-  loggers it takes over by name), against a fresh logger's defaults. A logger another
-  library creates and configures on first use (FastMCP's `to_client` clamp) is not a leak,
-  so any other new logger is not compared.
+- Every logger: level, `propagate`, `disabled`, handlers and filters, and a logger the test
+  created against a fresh logger's defaults. A library that configures a logger it creates
+  on first import would look like a leak in whichever test imported it first, so this
+  module imports the one that does (FastMCP's `to_client` clamp) before any snapshot.
 - `obs._configured`, FastMCP's settings, and the worker's held job-lock descriptors.
 
 pytest's own capture handlers are excluded: pytest adds and removes them per phase.
+
+Only state a test changes between its setup and its teardown is seen. What a module does
+while it is imported, at collection, is outside it: `tests/test_check_backend_compat.py`
+registers the script it loads in `sys.modules`, for one.
 """
 
 from __future__ import annotations
@@ -35,6 +38,7 @@ from pathlib import Path
 from typing import Any
 
 import fastmcp
+import fastmcp.server.context  # creates and clamps `...context.to_client`; see above
 
 from amicus import _worker, obs
 
@@ -76,17 +80,6 @@ def _loggers() -> dict[str, logging.Logger]:
     }
     found["<root>"] = logging.getLogger()
     return found
-
-
-# The loggers `obs.configure` configures by name. A new one of these is compared, because in
-# a process that has not imported the library yet, `configure` is what creates it.
-_OWNED_LOGGERS = frozenset(
-    {obs.ROOT_LOGGER_NAME, *obs.DEPENDENCY_LOGGER_NAMES, obs.FASTMCP_SERVER_LOGGER_NAME}
-)
-
-
-def _is_owned(name: str) -> bool:
-    return name in _OWNED_LOGGERS or name.startswith(obs.ROOT_LOGGER_NAME + ".")
 
 
 def _cwd() -> str:
@@ -148,13 +141,7 @@ def leaks(before: Snapshot, after: Snapshot) -> list[str]:
         for k in _changed_keys(before.signals, after.signals)
     ]
     for name, state in sorted(after.loggers.items()):
-        if name in before.loggers:
-            baseline = before.loggers[name]
-        elif _is_owned(name):
-            baseline = _FRESH_LOGGER
-        else:
-            continue
-        if state != baseline:
+        if state != before.loggers.get(name, _FRESH_LOGGER):
             found.append(
                 f"logger {name!r} changed: level, propagate, disabled, handlers or filters"
             )

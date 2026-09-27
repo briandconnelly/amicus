@@ -52,8 +52,8 @@ def test_the_146_leak_is_seen_on_the_amicus_logger():
     ]
 
 
-def test_a_new_amicus_logger_is_compared_against_a_fresh_ones_defaults():
-    name = "amicus.state_guard_probe"
+def test_a_logger_the_test_created_and_configured_is_a_leak():
+    name = "state_guard_third_party.probe"
     assert name not in logging.Logger.manager.loggerDict
     handler = logging.NullHandler()
 
@@ -69,8 +69,8 @@ def test_a_new_amicus_logger_is_compared_against_a_fresh_ones_defaults():
     ]
 
 
-def test_a_new_amicus_logger_left_at_its_defaults_is_not_a_leak():
-    name = "amicus.state_guard_quiet_probe"
+def test_a_logger_the_test_created_and_left_at_its_defaults_is_not_a_leak():
+    name = "state_guard_third_party.quiet_probe"
 
     def undo():
         del logging.Logger.manager.loggerDict[name]
@@ -78,18 +78,12 @@ def test_a_new_amicus_logger_left_at_its_defaults_is_not_a_leak():
     assert _leaks_while(lambda: logging.getLogger(name), undo) == []
 
 
-def test_a_new_third_party_logger_configured_on_first_use_is_not_a_leak():
-    # FastMCP attaches its to_client clamp to a logger it creates on import; that is the
-    # library's own setup, not a test leaking.
-    name = "state_guard_third_party.to_client"
-
-    def mutate():
-        logging.getLogger(name).addFilter(logging.Filter())
-
-    def undo():
-        del logging.Logger.manager.loggerDict[name]
-
-    assert _leaks_while(mutate, undo) == []
+def test_fastmcps_first_use_logger_exists_before_any_snapshot():
+    # FastMCP clamps `to_client` on first import; state_guard imports it, so no test that
+    # happens to import it first is blamed for the library's own setup.
+    to_client = logging.Logger.manager.loggerDict.get("fastmcp.server.context.to_client")
+    assert isinstance(to_client, logging.Logger)
+    assert any(type(f).__name__ == "_ClampedLogFilter" for f in to_client.filters)
 
 
 def test_an_existing_third_party_logger_changing_is_a_leak():
@@ -263,7 +257,6 @@ def test_the_guard_fails_the_leaking_test_and_not_the_one_after_it(tmp_path):
     assert "PASSED test_child.py::test_a_clean_test_after_it" in out, out
     assert "logger 'amicus' changed" in out, out
     assert "obs._configured changed" in out, out
-    # A fresh child has not imported mcp, so configure creates that logger: still owned.
     assert "logger 'mcp' changed" in out, out
 
 
