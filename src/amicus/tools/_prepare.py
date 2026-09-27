@@ -87,6 +87,22 @@ def _placeholder_error(
     )
 
 
+def _worktree_hint(workspace_root: str, roots: list[str]) -> str:
+    """The recovery a linked worktree of a rooted checkout has (#267), or "". It names
+    scope=commit alone: branch and working_tree scopes read the rooted checkout's own HEAD
+    and working tree, not the worktree's."""
+    checkout = ws.linked_worktree_checkout(workspace_root, roots)
+    if checkout is None:
+        return ""
+    return (
+        f"; it is in a linked git worktree of {checkout}, which is inside them and shares "
+        f"its commits. To review a worktree commit, pass workspace_root={checkout} with "
+        "scope=commit and that commit's sha. From there the backend reads that checkout's "
+        "files, and scope=branch and working_tree read its own HEAD and working tree, so the "
+        "worktree's uncommitted changes are not reachable"
+    )
+
+
 async def prepare_run(
     *,
     registry: BackendRegistry,
@@ -156,9 +172,12 @@ async def prepare_run(
     if placeholder is not None:
         return placeholder
     if resolution.error_code is not None:
+        detail = resolution.error_detail
+        if resolution.error_code == "workspace_outside_roots" and workspace_root is not None:
+            detail = f"{detail}{_worktree_hint(workspace_root, roots)}"
         return error_envelope(
             resolution.error_code,
-            redaction.sanitize_echo_prose(resolution.error_detail) or "invalid workspace",
+            redaction.sanitize_echo_prose(detail) or "invalid workspace",
             meta,
             plugin=plugin,
             details=ErrorDetail(field="workspace_root", reason=resolution.reason),

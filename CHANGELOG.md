@@ -48,6 +48,15 @@ per-change, as its own lead says.
   `invalid_arguments` repair for an over-long string now asks for a value within the field's
   `maxLength`, and, when `focus` itself is too long, names the cap and says to keep `focus` to a
   short concern and move the supporting detail to `extra_context`.
+- A paid call or dry run refused as `workspace_outside_roots` because its `workspace_root` is in
+  a linked git worktree of a checkout inside the client's roots now says so in its message, and
+  names that checkout and `scope=commit` with the worktree commit's sha as the way to review the
+  worktree's work (#267). The code, the `outside_roots` token and the absent repair are
+  unchanged. amicus decides this by reading git's worktree link files in both directions, and it
+  runs no git in the refused directory. The `collaborating-with-amicus` skill states the same
+  recovery, how to confirm the worktree link with git rather than from the message, and its
+  limits: `scope=commit` shows one commit, the backend reads the rooted checkout's files, and
+  uncommitted worktree changes are not reachable from there.
 
 ### Fixed
 

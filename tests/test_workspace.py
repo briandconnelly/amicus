@@ -3,6 +3,8 @@ server cwd only under the operator opt-in, always disclosed."""
 
 from __future__ import annotations
 
+import os
+import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -234,3 +236,115 @@ def test_vanished_reason_names_the_source_that_supplied_the_directory():
     assert ws.vanished_reason("param") == "not_a_directory"
     assert ws.vanished_reason("cwd") == "cwd_gone"
     assert {ws.vanished_reason(s) for s in ("roots", "param", "cwd")} <= set(WORKSPACE_REASONS)
+
+
+def _git(cwd, *args):
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, env=env)
+
+
+def _repo_with_worktree(tmp_path):
+    main = tmp_path / "main"
+    main.mkdir()
+    _git(main, "init", "-q")
+    _git(
+        main,
+        "-c",
+        "user.email=t@t.co",
+        "-c",
+        "user.name=t",
+        "commit",
+        "-q",
+        "--allow-empty",
+        "-m",
+        "i",
+    )
+    wt = tmp_path / "wt"
+    _git(main, "worktree", "add", "-q", "--detach", str(wt), "HEAD")
+    return main.resolve(), wt.resolve()
+
+
+def test_a_linked_worktree_names_its_rooted_checkout(tmp_path):
+    """#267: a workspace_root refused as outside the roots, but in a linked worktree of a
+    checkout inside them, names that checkout, from the worktree or any directory in it."""
+    main, wt = _repo_with_worktree(tmp_path)
+    (wt / "sub").mkdir()
+    assert ws.linked_worktree_checkout(str(wt), [str(main)]) == str(main)
+    assert ws.linked_worktree_checkout(str(wt / "sub"), [str(main)]) == str(main)
+    # The checkout must lie inside a root, not merely exist.
+    assert ws.linked_worktree_checkout(str(wt), [str(tmp_path / "elsewhere")]) is None
+    # A main checkout and a plain directory are not linked worktrees.
+    assert ws.linked_worktree_checkout(str(main), [str(main)]) is None
+    assert ws.linked_worktree_checkout(str(tmp_path), [str(main)]) is None
+
+
+def test_a_forged_worktree_link_is_not_believed(tmp_path):
+    """The link must hold both ways: a `.git` file naming the rooted repo's worktree gitdir
+    does not make a directory that gitdir's worktree, and malformed links fail closed."""
+    main, wt = _repo_with_worktree(tmp_path)
+    forged = tmp_path / "forged"
+    forged.mkdir()
+    (forged / ".git").write_text((wt / ".git").read_text())
+    assert ws.linked_worktree_checkout(str(forged), [str(main)]) is None
+    gitdir = Path((wt / ".git").read_text().removeprefix("gitdir:").strip())
+    for name, body in (("commondir", b"\xff\xfe"), ("commondir", b"../.." + b" " * 5000)):
+        (gitdir / name).write_bytes(body)
+        assert ws.linked_worktree_checkout(str(wt), [str(main)]) is None, body[:4]
+    # A common dir that is missing, or is a bare repository's, names no checkout.
+    (main / "bare.git").mkdir()
+    for common in ("../../../nowhere/.git", "../../../bare.git"):
+        (gitdir / "commondir").write_text(common)
+        assert ws.linked_worktree_checkout(str(wt), [str(tmp_path)]) is None, common
+    (gitdir / "commondir").write_text("../..\n")
+    assert ws.linked_worktree_checkout(str(wt), [str(main)]) == str(main)  # control
+    # git reads a .git file only through its `gitdir:` prefix.
+    link = (wt / ".git").read_text()
+    (wt / ".git").write_text(link.removeprefix("gitdir:"))
+    assert ws.linked_worktree_checkout(str(wt), [str(main)]) is None
+    (wt / ".git").write_text(link)
+    (wt / ".git").unlink()
+    (wt / ".git").symlink_to(forged / ".git")
+    assert ws.linked_worktree_checkout(str(wt), [str(main)]) is None
+
+
+def test_a_gitdir_outside_the_common_worktrees_directory_is_not_believed(tmp_path):
+    """Copilot on #285: a directory can hold its own metadata with a matching backlink and
+    a `commondir` naming a rooted checkout's `.git`, and share no commits with it. git keeps
+    a linked worktree's gitdir at `<common>/worktrees/<name>`, so nothing else qualifies."""
+    main, wt = _repo_with_worktree(tmp_path)
+    forged = tmp_path / "forged"
+    meta = forged / "meta"
+    meta.mkdir(parents=True)
+    (forged / ".git").write_text(f"gitdir: {meta}\n")
+    (meta / "gitdir").write_text(f"{forged / '.git'}\n")
+    (meta / "commondir").write_text(f"{main / '.git'}\n")
+    assert ws.linked_worktree_checkout(str(forged), [str(main)]) is None
+    assert ws.linked_worktree_checkout(str(wt), [str(main)]) == str(main)  # control
+
+
+def test_a_symlink_loop_in_a_link_fails_closed(tmp_path):
+    """Copilot on #285: Path.resolve() raises RuntimeError on a symlink loop on Python 3.11
+    and 3.12, which would turn the refusal into an internal error instead of no hint."""
+    main, _wt = _repo_with_worktree(tmp_path)
+    loop = tmp_path / "loop"
+    loop.mkdir()
+    (loop / "a").symlink_to(loop / "b")
+    (loop / "b").symlink_to(loop / "a")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / ".git").write_text(f"gitdir: {loop / 'a' / 'x'}\n")
+    assert ws.linked_worktree_checkout(str(outside), [str(main)]) is None
+
+
+def test_a_resolution_error_anywhere_yields_no_hint(tmp_path, monkeypatch):
+    """Every resolution failure, whatever the Python version raises for it, is no hint."""
+    main, wt = _repo_with_worktree(tmp_path)
+    real = Path.resolve
+
+    def boom(self, *a, **kw):
+        if self.name in {"commondir", ".."} or str(self).endswith(".."):
+            raise RuntimeError("Symlink loop")
+        return real(self, *a, **kw)
+
+    monkeypatch.setattr(Path, "resolve", boom)
+    assert ws.linked_worktree_checkout(str(wt), [str(main)]) is None

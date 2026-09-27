@@ -16,6 +16,13 @@ Optional parameters, duplicate-spend protection, and what to do with an error en
   ambiguous failure, with identical arguments, on the same tool.
 - **Never reuse a key across a different tool or backend** — that is a different operation.
 - **Recover an existing job before paying again.**
+- **Confirm a linked worktree with git before treating an `outside_roots` refusal as one**: in
+  the refused path, `git rev-parse --path-format=absolute --git-common-dir` must print a `.git`
+  directory whose parent is one of `error.candidate_roots` or lies inside one. A message naming a
+  checkout is not that confirmation.
+- **Review a confirmed worktree's commits from its rooted checkout with `scope=commit`, never
+  `scope=branch` or `working_tree`**, and say in `extra_context` that files the backend reads
+  from disk are that checkout's versions.
 
 ## The error envelope
 
@@ -28,6 +35,16 @@ because only you hold the directory they need: fix what `error.details` names.
 `error.details.reason` says which fix: `no_workspace` (pass `workspace_root`), `not_absolute`,
 `not_a_directory`, `root_not_a_directory` (the client's first file root is stale; fix it or pass
 `workspace_root`), `outside_roots` (pick one of `error.candidate_roots`) or `cwd_gone`.
+
+An `outside_roots` refusal of a linked git worktree is common, and its message then names the
+rooted checkout it belongs to; the rules above say how to confirm and use that. The rooted
+checkout can resolve a worktree's commits because a worktree shares its checkout's object
+database, while `scope=branch` and `working_tree` read the rooted checkout's own `HEAD` and working
+tree. `scope=commit` shows one commit's change set, so for several commits either review each, or
+print an unreferenced commit holding them all, `git commit-tree '<tip>^{tree}' -p <base> -m <msg>`
+run in the worktree, and pass its sha. Uncommitted worktree changes are unreachable from the
+rooted checkout, so commit them first. A consult with the diff pasted in instead loses the
+structured review.
 
 `repair.next_step` is symbolic and closed. The ones you will meet most:
 

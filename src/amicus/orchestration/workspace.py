@@ -133,6 +133,70 @@ def resolve(
     return resolve_workspace(explicit, roots, server_cwd if allow_cwd else None)
 
 
+# Git's worktree link files each hold one path; anything larger is not one.
+_GIT_LINK_MAX_BYTES = 4096
+
+
+def _read_git_link(path: Path) -> str | None:
+    """The stripped text of a small file, or None."""
+    try:
+        if not path.is_file():
+            return None
+        with path.open("rb") as f:
+            raw = f.read(_GIT_LINK_MAX_BYTES + 1)
+        text = raw.decode("utf-8").strip()
+    except (OSError, UnicodeDecodeError):
+        return None
+    return text if text and len(raw) <= _GIT_LINK_MAX_BYTES else None
+
+
+def linked_worktree_checkout(path: str, roots: list[str]) -> str | None:
+    """The checkout inside `roots` that `path` lies in a linked git worktree of, or None
+    (#267). Advisory, and it fails closed: None on anything it cannot confirm.
+
+    It reads git's worktree link files and runs no git, because `path` lies outside the
+    client's roots and git there could run repo-configured code. The link must hold both
+    ways, so a stray `.git` file cannot claim a rooted repository: the nearest `.git` is a
+    file naming a gitdir, that gitdir's `gitdir` file names this very `.git` back (not its
+    symlink target), its `commondir` names an existing `.git` directory whose `worktrees/`
+    holds that gitdir, as git lays it out, and the checkout holding that directory lies
+    inside a root. A submodule's gitdir has no `commondir`, and a bare repository's common
+    dir is not named `.git`, so neither qualifies. A path that cannot be resolved is no
+    hint: Python 3.11 and 3.12 raise RuntimeError on a symlink loop, later ones OSError."""
+    try:
+        return _linked_worktree_checkout(path, roots)
+    except (OSError, RuntimeError, ValueError):
+        return None
+
+
+def _linked_worktree_checkout(path: str, roots: list[str]) -> str | None:
+    start = Path(path).resolve()
+    for directory in (start, *start.parents):
+        dot_git = directory / ".git"
+        if not dot_git.exists() and not dot_git.is_symlink():
+            continue
+        # The nearest .git decides: a main checkout's directory, or anything unreadable,
+        # means `path` is not in a linked worktree.
+        link = _read_git_link(dot_git)
+        if link is None or not link.startswith("gitdir:"):
+            return None
+        gitdir = (directory / link.removeprefix("gitdir:").strip()).resolve()
+        back = _read_git_link(gitdir / "gitdir")
+        common = _read_git_link(gitdir / "commondir")
+        if back is None or common is None or (gitdir / back).resolve() != dot_git:
+            return None
+        common_dir = (gitdir / common).resolve()
+        checkout = common_dir.parent
+        if common_dir.name != ".git" or not common_dir.is_dir():
+            return None
+        if gitdir.parent != common_dir / "worktrees":
+            return None
+        if not any(_is_within(checkout, Path(r).resolve()) for r in roots):
+            return None
+        return str(checkout)
+    return None
+
+
 def vanished_reason(source: str | None) -> str:
     """The details.reason for a workspace that resolved and then disappeared before git
     could run in it (#248): the token names the source that supplied the directory, so
