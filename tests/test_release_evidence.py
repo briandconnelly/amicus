@@ -144,6 +144,34 @@ def test_a_malformed_record_is_rejected_without_raising():
     assert problems, "a record missing every required field must be rejected, not accepted"
 
 
+@pytest.mark.parametrize("bad", [123, None, ["a" * 40], {"sha": "a" * 40}])
+def test_a_non_string_commit_is_rejected(bad):
+    """Issue #19 item 1: `_check_commit`'s wrong-type branch, which a missing `commit` never
+    reaches (that is reported as a missing required field instead)."""
+    problems = evidence.validate(_record(commit=bad), head=HEAD, tree_clean=True, now=NOW)
+    assert "record 'commit' is not a string" in problems, problems
+
+
+@pytest.mark.parametrize("bad", [[], "codex kimi claude", None, 0])
+def test_a_non_object_backends_is_rejected(bad):
+    """Issue #19 item 1: a present `backends` that is not an object is named as such, and
+    still leaves every backend reported missing rather than raising."""
+    problems = evidence.validate(_record(backends=bad), head=HEAD, tree_clean=True, now=NOW)
+    assert "record 'backends' is not an object" in problems, problems
+    for name in evidence.BACKENDS:
+        assert f"record is missing an entry for backend '{name}'" in problems, problems
+
+
+@pytest.mark.parametrize("bad", [[], "passed", 0, True])
+def test_a_non_object_backend_entry_is_rejected(bad):
+    """Issue #19 item 1: an entry that is not an object is rejected by name, and only that
+    backend is: the other two entries are still read and still pass."""
+    record = _record()
+    record["backends"]["kimi"] = bad
+    problems = evidence.validate(record, head=HEAD, tree_clean=True, now=NOW)
+    assert problems == ["record entry for backend 'kimi' is not an object"], problems
+
+
 def test_a_future_timestamp_is_rejected():
     record = _record(recorded_at=(NOW + timedelta(hours=2)).isoformat())
     problems = evidence.validate(record, head=HEAD, tree_clean=True, now=NOW)
