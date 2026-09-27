@@ -33,6 +33,9 @@ MAX_ARG_REASON_LEN = 300
 MAX_ARG_FIELD_LEN = 128
 WITHHELD_FIELD = "<withheld>"
 _MISSING_TYPES = frozenset({"missing", "missing_argument"})
+# A capped short-text field and where its longer material belongs (issue #268). Only a
+# scalar failure of the field itself on a tool that declares the alternative gets the hint.
+_LONG_TEXT_ALTERNATIVE = {"focus": "extra_context"}
 RESOURCE_NOT_FOUND_HANDSHAKE = -32002
 RESOURCE_NOT_FOUND_MODERN = INVALID_PARAMS
 TASKS_EXTENSION_ID = "io.modelcontextprotocol/tasks"
@@ -144,6 +147,24 @@ def corrected_arguments(
     return fixed
 
 
+def _long_text_hints(errors: list[Any], param_names: set[str]) -> list[str]:
+    hints: list[str] = []
+    for field, alternative in _LONG_TEXT_ALTERNATIVE.items():
+        if alternative not in param_names:
+            continue
+        for err in errors:
+            if err.get("type") != "string_too_long" or tuple(err.get("loc") or ()) != (field,):
+                continue
+            limit = (err.get("ctx") or {}).get("max_length")
+            cap = f" (at most {limit} characters)" if type(limit) is int else ""
+            hints.append(
+                f"keep {field} to a short concern{cap} and move the supporting detail to "
+                f"{alternative}"
+            )
+            break
+    return hints
+
+
 def invalid_arguments_envelope(
     tool_name: str,
     *,
@@ -190,6 +211,9 @@ def invalid_arguments_envelope(
         hints.append("provide the required argument(s)")
     if "literal_error" in types:
         hints.append("use one of the field's allowed_values")
+    if "string_too_long" in types:
+        hints.append("supply each over-long string within its field's maxLength")
+        hints.extend(_long_text_hints(errors, param_names))
     detail = f" — {'; '.join(hints)}" if hints else ""
     alternative = (
         f"Correct the argument(s) first{detail}. Consult each tool's inputSchema "

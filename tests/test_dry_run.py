@@ -407,3 +407,24 @@ async def test_a_marker_without_a_successor_keeps_its_null_on_the_capability_row
             ).structured_content["tool_details"]
             row = next(r for r in rows if r["name"] == "amicus_models")
             assert row["deprecation"] == expected, detail
+
+
+async def test_every_focus_states_its_cap_and_points_long_text_to_extra_context(app, repo):
+    # Issue #268: the cap is in the prose, not only maxLength, and an over-long focus is
+    # told where the supporting detail belongs on every tool that declares focus.
+    async with Client(app) as c:
+        focused = [t for t in await c.list_tools() if "focus" in t.input_schema["properties"]]
+        res = await c.call_tool(
+            "amicus_review_changes_dry_run",
+            {"backend": "codex", "workspace_root": str(repo), "focus": "x" * 501},
+            raise_on_error=False,
+        )
+    assert len(focused) == 5
+    for tool in focused:
+        props = tool.input_schema["properties"]
+        assert "at most 500 characters" in props["focus"]["description"], tool.name
+        assert "extra_context" in props["focus"]["description"], tool.name
+        assert "extra_context" in props, tool.name
+    alternative = res.structured_content["error"]["repair"]["alternative"]
+    assert "keep focus to a short concern (at most 500 characters)" in alternative
+    assert "move the supporting detail to extra_context" in alternative
