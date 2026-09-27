@@ -297,6 +297,11 @@ def test_a_forged_worktree_link_is_not_believed(tmp_path):
         assert ws.linked_worktree_checkout(str(wt), [str(tmp_path)]) is None, common
     (gitdir / "commondir").write_text("../..\n")
     assert ws.linked_worktree_checkout(str(wt), [str(main)]) == str(main)  # control
+    # git reads a .git file only through its `gitdir:` prefix.
+    link = (wt / ".git").read_text()
+    (wt / ".git").write_text(link.removeprefix("gitdir:"))
+    assert ws.linked_worktree_checkout(str(wt), [str(main)]) is None
+    (wt / ".git").write_text(link)
     (wt / ".git").unlink()
     (wt / ".git").symlink_to(forged / ".git")
     assert ws.linked_worktree_checkout(str(wt), [str(main)]) is None
