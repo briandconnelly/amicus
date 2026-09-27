@@ -3,6 +3,8 @@ server cwd only under the operator opt-in, always disclosed."""
 
 from __future__ import annotations
 
+import os
+import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -234,3 +236,62 @@ def test_vanished_reason_names_the_source_that_supplied_the_directory():
     assert ws.vanished_reason("param") == "not_a_directory"
     assert ws.vanished_reason("cwd") == "cwd_gone"
     assert {ws.vanished_reason(s) for s in ("roots", "param", "cwd")} <= set(WORKSPACE_REASONS)
+
+
+def _git(cwd, *args):
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, env=env)
+
+
+def _repo_with_worktree(tmp_path):
+    main = tmp_path / "main"
+    main.mkdir()
+    _git(main, "init", "-q")
+    _git(
+        main,
+        "-c",
+        "user.email=t@t.co",
+        "-c",
+        "user.name=t",
+        "commit",
+        "-q",
+        "--allow-empty",
+        "-m",
+        "i",
+    )
+    wt = tmp_path / "wt"
+    _git(main, "worktree", "add", "-q", "--detach", str(wt), "HEAD")
+    return main.resolve(), wt.resolve()
+
+
+def test_a_linked_worktree_names_its_rooted_checkout(tmp_path):
+    """#267: a workspace_root refused as outside the roots, but in a linked worktree of a
+    checkout inside them, names that checkout, from the worktree or any directory in it."""
+    main, wt = _repo_with_worktree(tmp_path)
+    (wt / "sub").mkdir()
+    assert ws.linked_worktree_checkout(str(wt), [str(main)]) == str(main)
+    assert ws.linked_worktree_checkout(str(wt / "sub"), [str(main)]) == str(main)
+    # The checkout must lie inside a root, not merely exist.
+    assert ws.linked_worktree_checkout(str(wt), [str(tmp_path / "elsewhere")]) is None
+    # A main checkout and a plain directory are not linked worktrees.
+    assert ws.linked_worktree_checkout(str(main), [str(main)]) is None
+    assert ws.linked_worktree_checkout(str(tmp_path), [str(main)]) is None
+
+
+def test_a_forged_worktree_link_is_not_believed(tmp_path):
+    """The link must hold both ways: a `.git` file naming the rooted repo's worktree gitdir
+    does not make a directory that gitdir's worktree, and malformed links fail closed."""
+    main, wt = _repo_with_worktree(tmp_path)
+    forged = tmp_path / "forged"
+    forged.mkdir()
+    (forged / ".git").write_text((wt / ".git").read_text())
+    assert ws.linked_worktree_checkout(str(forged), [str(main)]) is None
+    gitdir = Path((wt / ".git").read_text().removeprefix("gitdir:").strip())
+    for name, body in (("commondir", b"\xff\xfe"), ("commondir", b"x" * 5000)):
+        (gitdir / name).write_bytes(body)
+        assert ws.linked_worktree_checkout(str(wt), [str(main)]) is None, body[:4]
+    (gitdir / "commondir").write_text("../..\n")
+    assert ws.linked_worktree_checkout(str(wt), [str(main)]) == str(main)  # control
+    (wt / ".git").unlink()
+    (wt / ".git").symlink_to(forged / ".git")
+    assert ws.linked_worktree_checkout(str(wt), [str(main)]) is None

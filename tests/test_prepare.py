@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 
 from tests.support import fakeplugin
@@ -176,6 +177,44 @@ async def test_outside_roots_names_its_cause_in_details_reason(tmp_path, monkeyp
         "reason": "outside_roots",
         "field_withheld": False,
     }
+
+
+async def test_outside_roots_names_the_worktree_recovery(tmp_path, monkeypatch):
+    """#267: a workspace_root in a linked worktree of a rooted checkout keeps the same code,
+    token and absent repair, and its message names the checkout and scope=commit, the one
+    recovery that keeps a review structured. A plain outside directory gets no such hint."""
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    main = (tmp_path / "main").resolve()
+    main.mkdir()
+    for args in (
+        ["init", "-q"],
+        [
+            "-c",
+            "user.email=t@t.co",
+            "-c",
+            "user.name=t",
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            "i",
+        ],
+        ["worktree", "add", "-q", "--detach", str(tmp_path / "wt"), "HEAD"],
+    ):
+        subprocess.run(["git", *args], cwd=main, check=True, capture_output=True, env=env)
+
+    async def roots(_ctx):
+        return [str(main)], "client"
+
+    monkeypatch.setattr(_prepare.ws, "roots_from_ctx", roots)
+    err = (await _prep(tmp_path, workspace_root=str(tmp_path / "wt")))["error"]
+    assert err["code"] == "workspace_outside_roots" and "repair" not in err
+    assert err["details"]["reason"] == "outside_roots" and err["candidate_roots"] == [str(main)]
+    msg = err["message"]
+    assert f"linked git worktree of {main}" in msg and f"workspace_root={main}" in msg
+    assert "scope=commit" in msg and "uncommitted changes are not reachable" in msg
+    plain = (await _prep(tmp_path, workspace_root=str(tmp_path)))["error"]
+    assert plain["code"] == "workspace_outside_roots" and "worktree" not in plain["message"]
 
 
 async def test_workspace_resolution_errors(tmp_path):
