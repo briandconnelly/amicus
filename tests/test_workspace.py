@@ -305,3 +305,46 @@ def test_a_forged_worktree_link_is_not_believed(tmp_path):
     (wt / ".git").unlink()
     (wt / ".git").symlink_to(forged / ".git")
     assert ws.linked_worktree_checkout(str(wt), [str(main)]) is None
+
+
+def test_a_gitdir_outside_the_common_worktrees_directory_is_not_believed(tmp_path):
+    """Copilot on #285: a directory can hold its own metadata with a matching backlink and
+    a `commondir` naming a rooted checkout's `.git`, and share no commits with it. git keeps
+    a linked worktree's gitdir at `<common>/worktrees/<name>`, so nothing else qualifies."""
+    main, wt = _repo_with_worktree(tmp_path)
+    forged = tmp_path / "forged"
+    meta = forged / "meta"
+    meta.mkdir(parents=True)
+    (forged / ".git").write_text(f"gitdir: {meta}\n")
+    (meta / "gitdir").write_text(f"{forged / '.git'}\n")
+    (meta / "commondir").write_text(f"{main / '.git'}\n")
+    assert ws.linked_worktree_checkout(str(forged), [str(main)]) is None
+    assert ws.linked_worktree_checkout(str(wt), [str(main)]) == str(main)  # control
+
+
+def test_a_symlink_loop_in_a_link_fails_closed(tmp_path):
+    """Copilot on #285: Path.resolve() raises RuntimeError on a symlink loop on Python 3.11
+    and 3.12, which would turn the refusal into an internal error instead of no hint."""
+    main, _wt = _repo_with_worktree(tmp_path)
+    loop = tmp_path / "loop"
+    loop.mkdir()
+    (loop / "a").symlink_to(loop / "b")
+    (loop / "b").symlink_to(loop / "a")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / ".git").write_text(f"gitdir: {loop / 'a' / 'x'}\n")
+    assert ws.linked_worktree_checkout(str(outside), [str(main)]) is None
+
+
+def test_a_resolution_error_anywhere_yields_no_hint(tmp_path, monkeypatch):
+    """Every resolution failure, whatever the Python version raises for it, is no hint."""
+    main, wt = _repo_with_worktree(tmp_path)
+    real = Path.resolve
+
+    def boom(self, *a, **kw):
+        if self.name in {"commondir", ".."} or str(self).endswith(".."):
+            raise RuntimeError("Symlink loop")
+        return real(self, *a, **kw)
+
+    monkeypatch.setattr(Path, "resolve", boom)
+    assert ws.linked_worktree_checkout(str(wt), [str(main)]) is None

@@ -158,9 +158,18 @@ def linked_worktree_checkout(path: str, roots: list[str]) -> str | None:
     client's roots and git there could run repo-configured code. The link must hold both
     ways, so a stray `.git` file cannot claim a rooted repository: the nearest `.git` is a
     file naming a gitdir, that gitdir's `gitdir` file names this very `.git` back (not its
-    symlink target), its `commondir` names an existing `.git` directory, and the checkout
-    holding that directory lies inside a root. A submodule's gitdir has no `commondir`,
-    and a bare repository's common dir is not named `.git`, so neither qualifies."""
+    symlink target), its `commondir` names an existing `.git` directory whose `worktrees/`
+    holds that gitdir, as git lays it out, and the checkout holding that directory lies
+    inside a root. A submodule's gitdir has no `commondir`, and a bare repository's common
+    dir is not named `.git`, so neither qualifies. A path that cannot be resolved is no
+    hint: Python 3.11 and 3.12 raise RuntimeError on a symlink loop, later ones OSError."""
+    try:
+        return _linked_worktree_checkout(path, roots)
+    except (OSError, RuntimeError, ValueError):
+        return None
+
+
+def _linked_worktree_checkout(path: str, roots: list[str]) -> str | None:
     start = Path(path).resolve()
     for directory in (start, *start.parents):
         dot_git = directory / ".git"
@@ -179,6 +188,8 @@ def linked_worktree_checkout(path: str, roots: list[str]) -> str | None:
         common_dir = (gitdir / common).resolve()
         checkout = common_dir.parent
         if common_dir.name != ".git" or not common_dir.is_dir():
+            return None
+        if gitdir.parent != common_dir / "worktrees":
             return None
         if not any(_is_within(checkout, Path(r).resolve()) for r in roots):
             return None
