@@ -20,6 +20,18 @@ per-change, as its own lead says.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-09-27
+
+Across this release the discovery surface moves `amicus/0.1/schema-50`, what 0.7.0 shipped, to
+`amicus/0.1/schema-53`, and `RESULT_FORMAT` stays 9, so a job result 0.7.0 stored can still be
+delivered. No entry is labelled **Breaking**. `amicus_job_status` can now hold until a job
+finishes, through `wait_seconds` (#266). Two errors that said `temporary: true`, though the same
+call could only fail the same way again, now say `temporary: false`: any error a keyed run
+stores (#254), and a finished job whose stored result does not validate (#277). A workspace
+deleted just before the backend CLI started now fails as `invalid_workspace_root` rather than
+`<backend>_not_found` (#259). `docs/MIGRATION.md` ("Upgrading from 0.7.0") says what to do for
+each. It was checked against codex-cli 0.157.1, Kimi Code 2.1.1 and Claude Code 2.1.283.
+
 ### Added
 
 - **Surface.** `amicus_job_status` takes `wait_seconds` (0 to 50, default 0): the call holds
@@ -1142,7 +1154,8 @@ per-change rather than net, so they also name intermediate states that no releas
 - The tagged publish path to pypi.org has never run. Only the TestPyPI dispatch path has been exercised.
 - Eval scenario S6 in `skills/collaborating-with-amicus/tests/scenarios.md` passed on one run (status: `pass`, validated by that run alone); an M7 follow-up run against the current skill text did not isolate the still-open F3 finding, so F3 remains open. S7 (real-host approval friction) has failed both of its recorded runs (status: `fail`); an M7 zero-spend recheck reached neither a pass nor a fail and is recorded as inconclusive, so it does not move S7's status. See their `status` fields and ADR 0012.
 
-[Unreleased]: https://github.com/briandconnelly/amicus/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/briandconnelly/amicus/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/briandconnelly/amicus/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/briandconnelly/amicus/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/briandconnelly/amicus/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/briandconnelly/amicus/compare/v0.4.0...v0.5.0

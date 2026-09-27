@@ -193,6 +193,29 @@ A `null` there means no loaded plugin declares one.
 The `amicus://backends/{backend}` resource is always the full entry.
 `amicus_capabilities(detail="contracts")` is removed: pass `include_tool_details=false` for the same rowless payload, and `detail` now selects only how much each `tool_details` row carries (`summary` is `name`, `cost`, `stability`, `backends`; `full` adds the rest, including `error_codes`).
 
+## Upgrading from 0.7.0
+
+The changes below are the ones a caller using amicus 0.7.0 may have to handle before running 0.8.0.
+`CHANGELOG.md`'s 0.8.0 section lists every user-visible change since 0.7.0, including the ones that require no migration.
+A job result stored by 0.7.0 is still readable: `RESULT_FORMAT` did not move.
+No change in 0.8.0 rejects a call 0.7.0 accepted.
+
+**An error a keyed run stores is never temporary (#254).**
+A paid call made with an `idempotency_key` whose run ends in an error that was temporary, such as `backend_rate_limited`, `nonzero_exit` or `internal_error`, now returns it with `temporary: false` and `retry_after_ms: null`, because repeating the call under the same key only replays that stored error.
+Where the repair said `retry_after_delay`, it now says `use_new_idempotency_key` on the same tool, and a delay the backend asked for is stated in the repair's text instead of `retry_after_ms`.
+A caller that retried a keyed call under the same key on `temporary: true` should retry under a new `idempotency_key`, after any delay the text names; the retry is a new paid run.
+The same failure on an unkeyed call is unchanged.
+
+**A job result that cannot be read is never temporary (#277).**
+A finished job whose stored result does not validate returns `internal_error` with `temporary: false` and `start_new_job`, where it said `temporary: true`.
+Start a new job, with a new `idempotency_key` if the call passed one, rather than reading the result again.
+Such a record holds a slot of the per-workspace job cap until `AMICUS_JOB_TTL` expires it, and neither a fetch nor a consume frees it.
+
+**A workspace deleted before the backend started is `invalid_workspace_root` (#259).**
+A consult or review whose workspace directory vanished between resolving it and starting the backend CLI failed as `<backend>_not_found`, such as `codex_not_found`, whose repair says to install the CLI.
+It now fails as `invalid_workspace_root`, with the `details.reason` of the workspace's source, as a vanished workspace already did wherever amicus runs git in it.
+A caller that branched on `<backend>_not_found` for that case should pass an existing `workspace_root` instead of reinstalling the CLI.
+
 ## Upgrading from 0.6.0
 
 The changes below are the ones a caller using amicus 0.6.0 may have to handle before running 0.7.0.
