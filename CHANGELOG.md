@@ -52,6 +52,11 @@ per-change, as its own lead says.
   `retry_after_delay` step becomes `use_new_idempotency_key` on the same tool. This extends the
   rule 0.7.0 gave codex's capture-failed timeout to every code. The same failure on an unkeyed
   call, and a keyed sync wait's own timeout, are unchanged.
+- A consult or review whose workspace directory was deleted after it resolved, but before the
+  backend CLI started in it, failed as `<backend>_not_found` (for example `codex_not_found`),
+  whose repair says to install the CLI (#259). It now fails as `invalid_workspace_root` with the
+  `details.reason` of the workspace's source, as a vanished workspace already does wherever git
+  runs in it (#248). A spawn in an isolated site's own directory is unchanged.
 
 ## [0.7.0] - 2026-09-26
 

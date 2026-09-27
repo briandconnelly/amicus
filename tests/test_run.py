@@ -635,3 +635,77 @@ def test_an_unreadable_file_is_temporary_only_when_the_cause_is(
     assert err["temporary"] is transient
     assert err["repair"]["next_step"] == ("retry_after_delay" if transient else "inspect_and_retry")
     assert code not in json.dumps(out) and "injected" not in json.dumps(out)
+
+
+class _SpawnsIn(fakeplugin.FakeBackend):
+    """Spawns a real argv (the real runtime, not a script) in a chosen cwd, and classifies
+    the spawn failure the way every in-tree backend does."""
+
+    def __init__(self, argv: tuple[str, ...], cwd: str | None = None) -> None:
+        self._argv = argv
+        self._cwd = cwd
+
+    def prepare(self, request):
+        import contextlib
+
+        from amicus.sdk.backend.protocol import PreparedRun
+
+        @contextlib.asynccontextmanager
+        async def _cm():
+            yield PreparedRun(
+                argv=self._argv, env={}, cwd=self._cwd or request.cwd, stdin_text=request.prompt
+            )
+
+        return _cm()
+
+    def classify_failure(self, outcome, request):
+        code = "fake_not_found" if outcome.run.binary_missing else "nonzero_exit"
+        return ClassifiedFailure(code=code, detail="missing")
+
+
+@pytest.mark.parametrize(
+    ("source", "reason"),
+    [("param", "not_a_directory"), ("roots", "root_not_a_directory"), ("cwd", "cwd_gone")],
+)
+async def test_a_workspace_that_vanished_before_the_spawn_is_not_a_missing_binary(
+    tmp_path, source, reason
+):
+    """#259: the spawn fails with OSError on a vanished cwd, which the runtime reports as
+    BINARY_NOT_FOUND; the run must name the workspace, not tell the caller to reinstall."""
+    import sys
+
+    gone = tmp_path / "ws"
+    gone.mkdir()
+    gone.rmdir()
+    out = await run_mod.run_request(
+        _spec(cwd=str(gone), workspace_source=source),
+        fakeplugin.make_plugin(backend=_SpawnsIn((sys.executable, "-c", "pass"))),
+    )
+    err = out["error"]
+    assert out["ok"] is False and err["code"] == "invalid_workspace_root", err
+    assert err["details"]["field"] == "workspace_root" and err["details"]["reason"] == reason
+    # The attempted spawn's accounting still reaches the envelope.
+    assert out["meta"]["command_exit_code"] == 127
+
+
+async def test_a_missing_binary_in_a_live_workspace_is_still_not_found(tmp_path):
+    out = await run_mod.run_request(
+        _spec(cwd=str(tmp_path)),
+        fakeplugin.make_plugin(backend=_SpawnsIn((str(tmp_path / "no-such-cli"),))),
+    )
+    assert out["error"]["code"] == "backend_not_found"
+
+
+async def test_a_vanished_workspace_does_not_explain_a_spawn_elsewhere(tmp_path):
+    """An isolated site spawns in its own directory, so a workspace that vanished is not
+    why that spawn failed: a binary missing there is still a missing binary."""
+    gone = tmp_path / "ws"
+    gone.mkdir()
+    gone.rmdir()
+    site = tmp_path / "site"
+    site.mkdir()
+    out = await run_mod.run_request(
+        _spec(cwd=str(gone)),
+        fakeplugin.make_plugin(backend=_SpawnsIn((str(tmp_path / "no-such-cli"),), str(site))),
+    )
+    assert out["error"]["code"] == "backend_not_found"

@@ -9,6 +9,7 @@ from __future__ import annotations
 import dataclasses
 import errno
 import os
+from pathlib import Path
 from stat import S_ISREG
 from typing import TYPE_CHECKING, Any, NamedTuple
 
@@ -231,6 +232,24 @@ def _site_error(exc: SiteError, meta: Any, plugin: BackendPlugin) -> dict[str, A
     )
 
 
+def _stamp_spawn(
+    meta: Meta, run: runtime.CommandRun, prepared: PreparedRun, workspace: str
+) -> None:
+    """Stamp the process facts, then refuse a spawn that failed because the workspace is gone.
+    The runtime reports every spawn OSError as a missing binary, an unusable cwd included
+    (#259). A workspace that resolved and was gone when the backend spawned in it is the
+    workspace's fault, as it is for git (#248); a spawn in an isolated site's own directory
+    says nothing about the workspace."""
+    finalize.stamp_run(meta, run, prepared.dropped_flags)
+    if run.binary_missing and prepared.cwd == workspace and not Path(workspace).is_dir():
+        raise SiteError(
+            "invalid_workspace_root",
+            "the workspace directory no longer exists",
+            field="workspace_root",
+            vanished=True,
+        )
+
+
 def _compose(
     spec: RunSpec, meta: Meta, plugin: BackendPlugin
 ) -> tuple[str, dict[str, Any] | None, Coverage] | dict[str, Any]:
@@ -360,7 +379,7 @@ async def run_request(
             if plugin.contract.needs_orphan_sweep and prepared.orphan_marker:
                 runtime.sweep_orphans(prepared.orphan_marker)
             outcome = RunOutcome(run=run, events=run.stdout, artifact_texts=artifact_texts)
-            finalize.stamp_run(meta, run, prepared.dropped_flags)
+            _stamp_spawn(meta, run, prepared, spec.cwd)
             # Parse usage/session_id from the process output BEFORE classifying: a run
             # can fail (or, like kimi's empty_response, be reclassified from an exit-0
             # outcome) after the model already reported a session id or token count, and
