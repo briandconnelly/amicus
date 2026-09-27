@@ -755,6 +755,39 @@ async def test_an_unreadable_result_holds_its_cap_slot_and_both_repairs_say_so(
         assert "internal_error here" in err["repair"]["alternative"]
 
 
+async def test_an_unreadable_result_under_a_replayed_key(tmp_path, fake_codex, monkeypatch):
+    """#277, as its repair states it: a same-key sync replay re-reads the record and returns
+    the non-temporary internal_error, and a same-key _async replay hands back the finished
+    job, whose result returns it. Neither spends again."""
+    app = _make_app(tmp_path, fake_codex, monkeypatch)
+    store = lifecycle.job_store(server.state_of(app).settings)
+    ws = {"workspace_root": str(tmp_path)}
+    args = {"backend": "codex", "question": "why?", "idempotency_key": "k", **ws}
+
+    def corrupt(job_id: str) -> None:
+        result = store._job_dir(str(tmp_path), job_id) / "result.json"
+        result.write_text(json.dumps({"ok": True, "tool": "amicus_consult"}))
+
+    async with Client(app) as c:
+        first = (await c.call_tool("amicus_consult", args)).structured_content
+        corrupt(first["meta"]["job_id"])
+        again = await c.call_tool("amicus_consult", args, raise_on_error=False)
+        err = again.structured_content["error"]
+        assert err["code"] == "internal_error" and err["temporary"] is False
+
+        job_id = await _start(c, tmp_path, idempotency_key="k")
+        await _wait_done(store, tmp_path, job_id)
+        corrupt(job_id)
+        handle = (await c.call_tool("amicus_consult_async", args)).structured_content
+        assert handle["job_id"] == job_id and handle["status"] == "done"
+        fetched = await c.call_tool(
+            "amicus_job_result", {"job_id": job_id, **ws}, raise_on_error=False
+        )
+        err = fetched.structured_content["error"]
+        assert err["code"] == "internal_error" and err["temporary"] is False
+    assert (tmp_path / "argv.jsonl").read_text().count("\n") == 2
+
+
 async def test_list_pages_by_cursor_and_survives_a_consumed_anchor(app, store, tmp_path):
     """#249: limit=1 walks three jobs in three pages; the second page still resolves after
     its anchor (the first page's last job) was consumed, because the cursor is the anchor's

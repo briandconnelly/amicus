@@ -84,9 +84,10 @@ def _stored_result_format(rec: dict[str, Any]) -> int | None:
 
 def _corrupt(detail: str, meta: Meta) -> dict[str, Any]:
     # Never temporary (#277): result.json and meta.json are each written atomically and
-    # this one parsed, so the identical call, a re-read or a keyed replay, reads the same
-    # record and this release fails it the same way. A transient read never reaches here:
-    # `_read_envelope` returns None for it.
+    # this one parsed, so a re-read, including the one a same-key sync replay makes, reads
+    # the same record and this release fails it the same way. A same-key _async replay
+    # hands back the finished job, whose result then fails again. A transient read never
+    # reaches here: `_read_envelope` returns None for it.
     return error_envelope(
         "internal_error",
         f"job result could not be returned: {redaction.sanitize_echo_prose(detail)}"[:300],
@@ -95,8 +96,9 @@ def _corrupt(detail: str, meta: Meta) -> dict[str, Any]:
         repair_next_step="start_new_job",
         repair_alternative=(
             "Reading this job's result again returns this same error, and so does repeating "
-            "a call made with an idempotency_key under the same key. Start a new job, with a "
-            "new idempotency_key if the call passed one; if this persists, run "
+            "a sync call under the same idempotency_key; repeating an _async call under it "
+            "hands back this finished job, whose result fails the same way. Start a new job, "
+            "with a new idempotency_key if the call passed one; if this persists, run "
             "amicus_backends and check the server logs. A consume keeps this record, and until "
             "AMICUS_JOB_TTL expires it, it holds a slot of the per-workspace job cap that no "
             "fetch or consume frees."

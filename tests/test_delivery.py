@@ -117,6 +117,7 @@ def test_an_unreadable_current_format_result_is_not_temporary():
         assert error["repair"].get("tool") is None, kind
         alternative = error["repair"]["alternative"]
         assert "idempotency_key" in alternative and "AMICUS_JOB_TTL" in alternative, kind
+        assert "_async" in alternative, kind  # its keyed replay returns a handle, not this
 
 
 def test_job_running_retry_follows_the_grown_poll_hint():
