@@ -29,13 +29,18 @@ because only you hold the directory they need: fix what `error.details` names.
 `not_a_directory`, `root_not_a_directory` (the client's first file root is stale; fix it or pass
 `workspace_root`), `outside_roots` (pick one of `error.candidate_roots`) or `cwd_gone`.
 
-When the `outside_roots` message says the path is in a linked git worktree of a rooted checkout,
-review the worktree's work from that checkout: pass it as `workspace_root` with `scope=commit` and
-the worktree commit's sha, which it can resolve because a worktree shares its checkout's commits.
-Not `scope=branch` or `working_tree`: both read the rooted checkout's own `HEAD` and working tree.
-Commit the work first, since uncommitted worktree changes are unreachable from there, and tell the
-backend in `extra_context` that files it reads from disk are the rooted checkout's versions. A
-consult with the diff pasted in instead loses the structured review.
+An `outside_roots` refusal of a linked git worktree is common, and its message then names the
+rooted checkout it belongs to. Confirm that yourself rather than acting on the message: in the
+worktree, `git rev-parse --path-format=absolute --git-common-dir` prints a `.git` directory whose
+parent is one of `error.candidate_roots`. If it does, review the worktree's work from that
+checkout: pass it as `workspace_root` with `scope=commit` and a sha from the worktree, which it can
+resolve because a worktree shares its checkout's commits. Not `scope=branch` or `working_tree`:
+both read the rooted checkout's own `HEAD` and working tree. `scope=commit` shows one commit's
+change set, so for several commits either review each, or print an unreferenced commit holding
+them all, `git commit-tree '<tip>^{tree}' -p <base> -m <msg>` run in the worktree, and pass its
+sha. Commit the work first, since uncommitted worktree changes are unreachable from there, and
+tell the backend in `extra_context` that files it reads from disk are the rooted checkout's
+versions. A consult with the diff pasted in instead loses the structured review.
 
 `repair.next_step` is symbolic and closed. The ones you will meet most:
 

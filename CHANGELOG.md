@@ -54,8 +54,9 @@ per-change, as its own lead says.
   worktree's work (#267). The code, the `outside_roots` token and the absent repair are
   unchanged. amicus decides this by reading git's worktree link files in both directions, and it
   runs no git in the refused directory. The `collaborating-with-amicus` skill states the same
-  recovery and its limits: the backend reads the rooted checkout's files, and uncommitted
-  worktree changes are not reachable from there.
+  recovery, how to confirm the worktree link with git rather than from the message, and its
+  limits: `scope=commit` shows one commit, the backend reads the rooted checkout's files, and
+  uncommitted worktree changes are not reachable from there.
 
 ### Fixed
 
