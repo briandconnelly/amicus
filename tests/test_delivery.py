@@ -98,6 +98,28 @@ def test_done_error_is_validated_and_keeps_the_producer_version():
     assert not delivered and env["error"]["code"] == "internal_error"
 
 
+def test_an_unreadable_current_format_result_is_not_temporary():
+    # The identical call re-reads the same stored file and gets the same error, so it must
+    # not be offered as a retry (#277). Every route into `_corrupt` is checked.
+    cases = [
+        (_stored_success(), "delegate"),
+        ({"ok": True, "tool": "amicus_consult"}, "unknown_kind"),
+        ({"ok": False, "error": {"code": "nope"}}, "consult"),
+    ]
+    for payload, kind in cases:
+        env, delivered = delivery.finished_job_envelope(
+            _rec(), payload, _JOB, kind, Meta(), "full", None
+        )
+        error = env["error"]
+        assert not delivered and error["code"] == "internal_error", kind
+        assert error["temporary"] is False and error["retry_after_ms"] is None, kind
+        assert error["repair"]["next_step"] == "start_new_job", kind
+        assert error["repair"].get("tool") is None, kind
+        alternative = error["repair"]["alternative"]
+        assert "idempotency_key" in alternative and "AMICUS_JOB_TTL" in alternative, kind
+        assert "_async" in alternative, kind  # its keyed replay returns a handle, not this
+
+
 def test_job_running_retry_follows_the_grown_poll_hint():
     # retry_after_ms matches amicus_job_status's own hint, not the record's stale one (#95).
     rec = _rec("running", elapsed_ms=240_000, poll_after_ms=10000)
