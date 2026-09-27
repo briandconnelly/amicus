@@ -78,6 +78,10 @@ SKIP_RE = re.compile(r"\*\*Skipped\b[.:]?", re.I)
 CAPTURE_RE = re.compile(r"docs/host-captures/")
 RERUN_RE = re.compile(r"\*\*Re-run:\*\*\s*`[^`]+`")
 MANDATORY_PROBES = ("cold-start", "first-repair")
+# A value with no letter or digit carries nothing (`-`, `.`, `…`), and these carry only the
+# claim that a value is absent. Compared against the whole value, so "None applied, and ..."
+# is a value and bare "None" is not.
+PLACEHOLDER_VALUES = frozenset({"n/a", "na", "none", "tbd", "todo", "tba"})
 
 
 def _ids(docs: list[Path]) -> list[str]:
@@ -101,6 +105,28 @@ def _probes(text: str) -> list[tuple[str, str]]:
 
 def _is_skipped(body: str) -> bool:
     return SKIP_RE.search(body) is not None
+
+
+def _finding_problems(finding: str) -> list[str]:
+    """What keeps one finding from carrying all five labeled lines, each with a value.
+
+    Every bullet line for a label is read, not the first: `re.search` returns the leftmost
+    match, so a label written twice with its SECOND value empty passed. A label may now
+    appear once, and its value must say something (`PLACEHOLDER_VALUES`, and at least one
+    letter or digit)."""
+    problems = []
+    for field in FINDING_FIELDS:
+        values = re.findall(rf"^- \*\*{re.escape(field)}\*\*(.*)$", finding, re.I | re.M)
+        if not values:
+            problems.append(f"finding missing {field}")
+            continue
+        if len(values) > 1:
+            problems.append(f"finding carries {field} {len(values)} times")
+        for raw in values:
+            value = raw.strip()
+            if not re.search(r"[^\W_]", value) or value.lower() in PLACEHOLDER_VALUES:
+                problems.append(f"finding has {field} with no value: {value!r}")
+    return problems
 
 
 @pytest.mark.parametrize("doc", DOCS, ids=_ids(DOCS))
@@ -188,10 +214,52 @@ def test_every_finding_carries_all_five_labeled_lines(doc):
     findings = re.findall(r"#### Finding \d+(.+?)(?=\n#### |\n## |\Z)", _text(doc), re.S)
     assert findings, f"{doc.name}: the walk records no findings at all"
     for finding in findings:
-        for field in FINDING_FIELDS:
-            match = re.search(rf"^- \*\*{re.escape(field)}\*\*(.*)$", finding, re.I | re.M)
-            assert match, f"{doc.name}: finding missing {field}"
-            assert match.group(1).strip(), f"{doc.name}: finding has {field} with an empty value"
+        problems = _finding_problems(finding)
+        assert not problems, f"{doc.name}: {problems}"
+
+
+_GOOD_FINDING = """
+- **Severity:** Minor
+- **Section:** `§6`
+- **Summary:** A repair names a tool that does not exist.
+- **Evidence:** Captured from a stdio subprocess.
+- **Remediation:** Name the tool that does.
+"""
+
+
+def test_the_finding_check_accepts_a_well_formed_finding():
+    """Known positive for the controls below: they must fail for their mutation alone."""
+    assert _finding_problems(_GOOD_FINDING) == []
+
+
+@pytest.mark.parametrize(
+    ("mutated", "field"),
+    [
+        (_GOOD_FINDING.replace("Name the tool that does.", ""), "remediation:"),
+        (_GOOD_FINDING.replace("Name the tool that does.", "-"), "remediation:"),
+        (_GOOD_FINDING.replace("Name the tool that does.", "."), "remediation:"),
+        (_GOOD_FINDING.replace("Name the tool that does.", "N/A"), "remediation:"),
+        (_GOOD_FINDING.replace("Name the tool that does.", "TBD"), "remediation:"),
+        (_GOOD_FINDING + "- **Summary:**\n", "summary:"),
+        (_GOOD_FINDING + "- **Summary:** -\n", "summary:"),
+        (_GOOD_FINDING.replace("- **Severity:** Minor", "note **Severity:** Minor"), "severity:"),
+    ],
+    ids=[
+        "empty",
+        "dash-only",
+        "period-only",
+        "n/a",
+        "tbd",
+        "second-copy-empty",
+        "second-copy-dash",
+        "inline-label",
+    ],
+)
+def test_the_finding_check_rejects_a_degenerate_field(mutated, field):
+    """Negative controls for issue #19 item 2, and for the six earlier holes in this check:
+    each mutation of `_GOOD_FINDING` must be caught, and caught on the field it touched."""
+    problems = _finding_problems(mutated)
+    assert [p for p in problems if field in p], problems
 
 
 @pytest.mark.parametrize("doc", DOCS, ids=_ids(DOCS))
