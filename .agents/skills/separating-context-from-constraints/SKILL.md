@@ -4,7 +4,7 @@ metadata:
     github-path: separating-context-from-constraints
     github-ref: refs/heads/main
     github-repo: https://github.com/briandconnelly/skills
-    github-tree-sha: e871e6f0e3ea9f37d5d3a5771e73303a6946be1e
+    github-tree-sha: f75cfe33fffd5507af9ea78b0830a7e032b0f60c
 name: separating-context-from-constraints
 ---
 # Separating Context from Constraints
@@ -18,10 +18,11 @@ The product is a structural clarity audit; behavioral risk is the rationale for 
 Every statement in an instruction document plays one of three roles:
 
 1. **Binding rules** — statements that direct behavior; if the agent ignores one, its behavior is wrong.
+   Defaults and defeasible guidance (prefer X unless Y) are binding rules, not failed constraints.
 2. **Load-bearing facts** — definitions, domain facts, tool semantics, and environment details that inform correctness; not rules, but their loss makes output wrong.
 3. **Discretionary context** — rationale, examples, background, and framing; degrades gracefully if lost.
 
-Apply this two-question litmus test to each statement:
+The two-question litmus test classifies a statement:
 
 1. Does this statement *direct* behavior or *inform* it?
    Direct means go to the binding-rules class; inform means go to question 2.
@@ -52,7 +53,6 @@ Each rule below has an id and is checkable by an auditing agent.
   A "rule" that cannot fail is context in disguise and belongs elsewhere.
 - **R2 Explicit strength.**
   Every rule signals whether it is mandatory (must/never) or a default with override conditions (prefer X unless Y).
-  Defaults and defeasible guidance are legitimate rules, not failed constraints.
   Only ambiguous strength is a finding — a hedge ("generally", "try to") that leaves the reader unable to tell whether the statement binds.
 - **R3 Verifiability.**
   Judge the rule's obligation, not every term inside it: a rule is verifiable when its satisfaction or violation could be checked against output, tool calls, repository state, or process artifacts.
