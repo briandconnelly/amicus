@@ -5,14 +5,14 @@ from __future__ import annotations
 import logging
 import re
 from types import SimpleNamespace
-from typing import Literal
+from typing import Annotated, Literal
 
 import pytest
 from fastmcp import Client, FastMCP
 from fastmcp.client import extension_hooks
 from fastmcp.exceptions import ResourceError
 from mcp import MCPError
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from amicus import config, middleware
 from amicus.schemas.envelope import Meta
@@ -310,3 +310,54 @@ def test_connection_facts_tolerate_a_context_whose_session_raises():
     facts = middleware.connection_facts(SimpleNamespace(fastmcp_context=_Ctx()))
     assert facts["protocol"] == "2025-11-25" and facts["client"] == "unknown"
     assert facts["tasks"] is False
+
+
+def _length_app() -> FastMCP:
+    settings = config.settings({})
+    app = FastMCP(name="scratch")
+    app.add_middleware(middleware.ValidationEnvelopeMiddleware(app, settings))
+
+    @app.tool(name="review")
+    async def review(
+        focus: Annotated[str | None, Field(max_length=5)] = None,
+        commit: Annotated[str | None, Field(max_length=5)] = None,
+        extra_context: str | None = None,
+    ) -> dict:
+        return {"ok": True}
+
+    @app.tool(name="narrow")
+    async def narrow(focus: Annotated[str | None, Field(max_length=5)] = None) -> dict:
+        return {"ok": True}
+
+    return app
+
+
+async def test_overlong_focus_points_to_extra_context():
+    # Issue #268: the repair names the cap and where the longer text belongs.
+    async with Client(_length_app()) as c:
+        res = await c.call_tool("review", {"focus": "SECRETTEXT"}, raise_on_error=False)
+    err = res.structured_content["error"]
+    assert err["code"] == "invalid_arguments" and err["details"]["field"] == "focus"
+    alternative = err["repair"]["alternative"]
+    assert "within its field's maxLength" in alternative
+    assert "keep focus to a short concern (at most 5 characters)" in alternative
+    assert "supporting detail to extra_context" in alternative
+    assert "arguments" not in err["repair"]
+    assert "SECRETTEXT" not in str(res.structured_content)
+
+
+async def test_overlong_identifier_is_not_told_to_move_to_extra_context():
+    async with Client(_length_app()) as c:
+        res = await c.call_tool("review", {"commit": "abcdef0"}, raise_on_error=False)
+    alternative = res.structured_content["error"]["repair"]["alternative"]
+    assert "within its field's maxLength" in alternative
+    assert "extra_context" not in alternative
+    assert "shorten" not in alternative
+
+
+async def test_overlong_focus_on_a_tool_without_extra_context_names_no_alternative():
+    async with Client(_length_app()) as c:
+        res = await c.call_tool("narrow", {"focus": "toolong"}, raise_on_error=False)
+    alternative = res.structured_content["error"]["repair"]["alternative"]
+    assert "within its field's maxLength" in alternative
+    assert "extra_context" not in alternative

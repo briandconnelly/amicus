@@ -90,6 +90,7 @@ MAX_STATUS_WAIT_SECONDS = 50
 CONTROL_CHAR_FREE_PATTERN = r"^[^\x00-\x1F\x7F-\x9F]*$"
 REASONING_EFFORT_MAX_LENGTH = 128
 MAX_INSTRUCTIONS_APPEND_BYTES = 4096
+FOCUS_MAX_LENGTH = 500
 
 
 def reasoning_effort_shape_error(value: str) -> str | None:
@@ -506,10 +507,11 @@ FocusParam = Annotated[
     str | None,
     Field(
         description=(
-            "Narrow the review to one concern (e.g. 'locking'). UNTRUSTED caller text; a "
-            "focused pass is never a full review."
+            "A short label narrowing the review to one concern (e.g. 'locking'), at most "
+            f"{FOCUS_MAX_LENGTH} characters; put supporting detail in extra_context. UNTRUSTED "
+            "caller text; a focused pass is never a full review."
         ),
-        max_length=500,
+        max_length=FOCUS_MAX_LENGTH,
     ),
 ]
 JobIdParam = Annotated[

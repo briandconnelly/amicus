@@ -41,6 +41,13 @@ per-change, as its own lead says.
   narrowing in `coverage`. For a change to a published surface, the brief now asks the reviewer to
   find every other place that lists or describes what changed, which is the kind of omission the
   review in #270 missed.
+- **Surface.** `focus`'s description on the review, adversarial-review and review dry-run tools
+  now states its 500-character cap and says supporting detail belongs in `extra_context`
+  (#268). The cap had been only a `maxLength`, and an agent that sent a 2,364-character review
+  brief as `focus` was refused with a repair that said only to correct the argument. An
+  `invalid_arguments` repair for an over-long string now asks for a value within the field's
+  `maxLength`, and, when `focus` itself is too long, names the cap and says to keep `focus` to a
+  short concern and move the supporting detail to `extra_context`.
 
 ### Fixed
 
