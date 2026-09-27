@@ -1544,7 +1544,7 @@
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-52",
+                "default": "amicus/0.1/schema-53",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -4078,7 +4078,7 @@
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-52",
+            "default": "amicus/0.1/schema-53",
             "title": "Fingerprint",
             "type": "string"
           },
@@ -4479,7 +4479,7 @@
                 "type": "null"
               }
             ],
-            "description": "Narrow the review to one concern (e.g. 'locking'). UNTRUSTED caller text; a focused pass is never a full review."
+            "description": "A short label narrowing the review to one concern (e.g. 'locking'), at most 500 characters; put supporting detail in extra_context. UNTRUSTED caller text; a focused pass is never a full review."
           },
           "idempotency_key": {
             "anyOf": [
@@ -5266,7 +5266,7 @@
                 "type": "null"
               }
             ],
-            "description": "Narrow the review to one concern (e.g. 'locking'). UNTRUSTED caller text; a focused pass is never a full review."
+            "description": "A short label narrowing the review to one concern (e.g. 'locking'), at most 500 characters; put supporting detail in extra_context. UNTRUSTED caller text; a focused pass is never a full review."
           },
           "idempotency_key": {
             "anyOf": [
@@ -9528,7 +9528,7 @@
                 "type": "null"
               }
             ],
-            "description": "Narrow the review to one concern (e.g. 'locking'). UNTRUSTED caller text; a focused pass is never a full review."
+            "description": "A short label narrowing the review to one concern (e.g. 'locking'), at most 500 characters; put supporting detail in extra_context. UNTRUSTED caller text; a focused pass is never a full review."
           },
           "idempotency_key": {
             "anyOf": [
@@ -10306,7 +10306,7 @@
                 "type": "null"
               }
             ],
-            "description": "Narrow the review to one concern (e.g. 'locking'). UNTRUSTED caller text; a focused pass is never a full review."
+            "description": "A short label narrowing the review to one concern (e.g. 'locking'), at most 500 characters; put supporting detail in extra_context. UNTRUSTED caller text; a focused pass is never a full review."
           },
           "idempotency_key": {
             "anyOf": [
@@ -10748,7 +10748,7 @@
                 "type": "null"
               }
             ],
-            "description": "Narrow the review to one concern (e.g. 'locking'). UNTRUSTED caller text; a focused pass is never a full review."
+            "description": "A short label narrowing the review to one concern (e.g. 'locking'), at most 500 characters; put supporting detail in extra_context. UNTRUSTED caller text; a focused pass is never a full review."
           },
           "instructions_append": {
             "anyOf": [
