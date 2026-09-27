@@ -79,9 +79,10 @@ CAPTURE_RE = re.compile(r"docs/host-captures/")
 RERUN_RE = re.compile(r"\*\*Re-run:\*\*\s*`[^`]+`")
 MANDATORY_PROBES = ("cold-start", "first-repair")
 # A value with no letter or digit carries nothing (`-`, `.`, `…`), and these carry only the
-# claim that a value is absent. Compared against the whole value, so "None applied, and ..."
-# is a value and bare "None" is not.
-PLACEHOLDER_VALUES = frozenset({"n/a", "na", "none", "tbd", "todo", "tba"})
+# claim that a value is absent. Compared against the whole value with everything but letters
+# and digits removed, so `N/A.`, `(none)` and `` `TBD` `` are placeholders while
+# "None applied, and ..." is a value.
+PLACEHOLDER_VALUES = frozenset({"na", "none", "tbd", "todo", "tba"})
 
 
 def _ids(docs: list[Path]) -> list[str]:
@@ -124,7 +125,8 @@ def _finding_problems(finding: str) -> list[str]:
             problems.append(f"finding carries {field} {len(values)} times")
         for raw in values:
             value = raw.strip()
-            if not re.search(r"[^\W_]", value) or value.lower() in PLACEHOLDER_VALUES:
+            letters = re.sub(r"[\W_]", "", value.lower())
+            if not letters or letters in PLACEHOLDER_VALUES:
                 problems.append(f"finding has {field} with no value: {value!r}")
     return problems
 
@@ -240,6 +242,11 @@ def test_the_finding_check_accepts_a_well_formed_finding():
         (_GOOD_FINDING.replace("Name the tool that does.", "."), "remediation:"),
         (_GOOD_FINDING.replace("Name the tool that does.", "N/A"), "remediation:"),
         (_GOOD_FINDING.replace("Name the tool that does.", "TBD"), "remediation:"),
+        (_GOOD_FINDING.replace("Name the tool that does.", "N/A."), "remediation:"),
+        (_GOOD_FINDING.replace("Name the tool that does.", "TODO:"), "remediation:"),
+        (_GOOD_FINDING.replace("Name the tool that does.", "(none)"), "remediation:"),
+        (_GOOD_FINDING.replace("Name the tool that does.", "`[TBD]`"), "remediation:"),
+        (_GOOD_FINDING + "- **Summary:** A second, different summary.\n", "summary: 2 times"),
         (_GOOD_FINDING + "- **Summary:**\n", "summary:"),
         (_GOOD_FINDING + "- **Summary:** -\n", "summary:"),
         (_GOOD_FINDING.replace("- **Severity:** Minor", "note **Severity:** Minor"), "severity:"),
@@ -250,6 +257,11 @@ def test_the_finding_check_accepts_a_well_formed_finding():
         "period-only",
         "n/a",
         "tbd",
+        "n/a-period",
+        "todo-colon",
+        "parenthesized-none",
+        "formatted-tbd",
+        "second-copy-nonempty",
         "second-copy-empty",
         "second-copy-dash",
         "inline-label",
