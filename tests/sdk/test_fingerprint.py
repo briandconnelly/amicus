@@ -42,6 +42,9 @@ def test_parse_accepts_canonical_integers(good: str, parts: tuple[str, str, int]
         "b/0.1/schema-7\n",
         " b/0.1/schema-7",
         "b/0.1/schema-7/",
+        "b/0.1/schema-1\u0661",
+        "b/1\u0660.1/schema-7",
+        "b/0.1\u0660/schema-7",
     ],
 )
 def test_parse_rejects_malformed(bad: str):

@@ -87,11 +87,11 @@ FINGERPRINT_COVERS_DESC = (
 )
 
 
-# Integers are canonical (no leading zero, a revision of at least 1), so one revision has
+# Integers are canonical ASCII (no leading zero, a revision of at least 1), so one revision has
 # exactly one spelling.
 _FINGERPRINT_RE = re.compile(
-    r"(?P<name>[a-z0-9][a-z0-9-]*)/(?P<major>(?:0|[1-9]\d*)\.(?:0|[1-9]\d*))"
-    r"/schema-(?P<rev>[1-9]\d*)"
+    r"(?P<name>[a-z0-9][a-z0-9-]*)/(?P<major>(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*))"
+    r"/schema-(?P<rev>[1-9][0-9]*)"
 )
 
 
