@@ -145,6 +145,8 @@ def leaks(before: Snapshot, after: Snapshot) -> list[str]:
             found.append(
                 f"logger {name!r} changed: level, propagate, disabled, handlers or filters"
             )
+    # A deleted logger comes back from getLogger fresh and unconfigured, so removal is a change.
+    found += [f"logger {name!r} removed" for name in sorted(before.loggers.keys() - after.loggers)]
     if before.logging_disable != after.logging_disable:
         found.append("logging.disable level changed")
     if before.obs_configured != after.obs_configured:

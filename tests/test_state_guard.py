@@ -69,6 +69,20 @@ def test_a_logger_the_test_created_and_configured_is_a_leak():
     ]
 
 
+def test_a_deleted_logger_is_a_leak():
+    # getLogger would hand the next test a fresh, unconfigured `mcp` in its place.
+    logging.getLogger("mcp")
+    saved = {}
+
+    def mutate():
+        saved["mcp"] = logging.Logger.manager.loggerDict.pop("mcp")
+
+    def undo():
+        logging.Logger.manager.loggerDict["mcp"] = saved["mcp"]
+
+    assert _leaks_while(mutate, undo) == ["logger 'mcp' removed"]
+
+
 def test_a_logger_the_test_created_and_left_at_its_defaults_is_not_a_leak():
     name = "state_guard_third_party.quiet_probe"
 
@@ -236,7 +250,10 @@ def _run_child(tmp_path, tests: str = _CHILD_TESTS) -> subprocess.CompletedProce
     (tmp_path / "conftest.py").write_text(_CHILD_CONFTEST)
     (tmp_path / "test_child.py").write_text(textwrap.dedent(tests))
     (tmp_path / "pytest.ini").write_text("[pytest]\n")
-    env = spawned_server_env() | {"PYTHONPATH": str(REPO)}
+    # The child runs its own options: an inherited PYTEST_ADDOPTS such as -x would stop it
+    # after the leaking test, before the clean one could show it is not blamed.
+    env = {k: v for k, v in spawned_server_env().items() if not k.startswith("PYTEST_")}
+    env["PYTHONPATH"] = str(REPO)
     return subprocess.run(
         [sys.executable, "-m", "pytest", "-p", "no:cacheprovider", "-rA", "test_child.py"],
         cwd=tmp_path,
@@ -248,7 +265,8 @@ def _run_child(tmp_path, tests: str = _CHILD_TESTS) -> subprocess.CompletedProce
     )
 
 
-def test_the_guard_fails_the_leaking_test_and_not_the_one_after_it(tmp_path):
+def test_the_guard_fails_the_leaking_test_and_not_the_one_after_it(tmp_path, monkeypatch):
+    monkeypatch.setenv("PYTEST_ADDOPTS", "-x")  # control: an inherited option must not reach it
     run = _run_child(tmp_path)
     out = run.stdout
     assert run.returncode == 1, out + run.stderr
