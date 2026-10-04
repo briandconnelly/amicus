@@ -16,7 +16,8 @@ What a clean result is evidence of, and what it is not (#127):
   code. It probes only a backend that accepts a plain request: one that refuses
   every request pre-spend is reporting its own state, which is not a fault, so the
   probes are skipped rather than failed, and a clean result then says nothing
-  about its effort gate. The inspector probe proves tolerance, not accuracy.
+  about its effort gate; the same holds when the configured default effort is
+  itself invalid. The inspector probe proves tolerance, not accuracy.
   It runs at registry load, so it stays synchronous and stages nothing.
 * ``check_prepared_run`` proves that one request's ``prepare()`` carries the flags
   the caller names, drops only help-gated ones, and cleans its staging up. Which
@@ -114,19 +115,14 @@ def _check_effort_validation(contract: BackendContract, backend: AgentBackend) -
         if contract.effort_silently_ignored_upstream
         else f"the contract declares {contract.effort_validation} effort validation"
     )
-    baseline = backend.validate_request(_effort_probe(None))
-    if baseline is not None:
-        # A backend may refuse every request pre-spend by design (Codex refuses a relative
-        # CODEX_HOME, which amicus_backends then reports): that is its state, not a
-        # conformance fault, and this runs at registry load, so it must not keep such a
-        # backend from loading. The effort probes are skipped, because a refusal of the
-        # bogus effort would then say nothing. Calling the ABSENT effort invalid is the
-        # one baseline refusal that is about the gate itself.
-        if baseline.code == _EFFORT_CODE:
-            out.append(
-                "validate_request refused the baseline probe, which names no "
-                f"reasoning_effort, as {_EFFORT_CODE!r}; an omitted effort is the default"
-            )
+    if backend.validate_request(_effort_probe(None)) is not None:
+        # A backend may refuse every request pre-spend by design: Codex refuses a relative
+        # CODEX_HOME, and any adapter refuses an omitted effort when the CONFIGURED default
+        # it resolves to is invalid (an operator's typo). That is its state, not a fault,
+        # and this runs at registry load, so it must not keep such a backend from loading:
+        # the probes are skipped, since a refusal of the bogus effort would then say
+        # nothing. The kit knows no level valid for every backend, so it cannot probe past
+        # the refusal; a plugin's own tests, which know one, can.
         return out
     probes = [("malformed", _MALFORMED_EFFORT)]
     if contract.effort_validation != "shape_only":
@@ -223,8 +219,8 @@ async def check_prepared_run(
     dropped; a forbidden one present; a dropped flag the contract does not gate on help
     (a guarantee-bearing flag may never be dropped); a flag both on argv and dropped;
     a named artifact path that ``artifacts`` does not enumerate, or a staged path that
-    survives the context; a cwd
-    that is not the request's; an argv or env of the wrong shape.
+    survives the context, on a normal exit or an exceptional one (a second pass raises
+    inside it); a cwd that is not the request's; an argv or env of the wrong shape.
 
     ``required_flags`` is the plugin's statement of which of its always-send flags this
     request must carry, because that set is conditional on the request. Call it with a
@@ -241,8 +237,8 @@ async def check_prepared_run(
             out.append(f"prepare yielded {type(prepared).__name__}, not a PreparedRun")
             return out
         argv = prepared.argv
-        if not argv or not all(isinstance(t, str) for t in argv):
-            out.append("argv must be a non-empty tuple of str")
+        if not isinstance(argv, tuple) or not argv or not all(isinstance(t, str) for t in argv):
+            out.append("argv must be a non-empty tuple of str")  # a bare str iterates as str
             return out
         if prepared.cwd != request.cwd:
             out.append(f"prepared cwd {prepared.cwd!r} is not the request's {request.cwd!r}")
@@ -275,9 +271,34 @@ async def check_prepared_run(
         unlisted = sorted(set(prepared.artifact_paths.values()) - set(staged))
         if unlisted:
             out.append(f"artifact_paths names {len(unlisted)} path(s) that artifacts does not list")
+    out.extend(_survivors(staged, staging_dir, "the prepare context"))
+    # The protocol promises cleanup however the run ended, and a cleanup written after the
+    # yield with no finally passes the exit above, so a second pass leaves by exception.
+    staged = ()
+    staging_dir = None
+    raised_through = False
+    try:
+        async with backend.prepare(request) as prepared:
+            staged = tuple(prepared.artifacts)
+            staging_dir = prepared.staging_dir
+            raise _ProbeExit
+    except _ProbeExit:
+        raised_through = True
+    if not raised_through:
+        out.append("prepare swallowed the exception raised inside its context")
+    out.extend(_survivors(staged, staging_dir, "an exceptional exit from the prepare context"))
+    return out
+
+
+class _ProbeExit(Exception):
+    """Raised inside ``prepare`` by ``check_prepared_run``'s second pass; never a run."""
+
+
+def _survivors(staged: tuple[str, ...], staging_dir: str | None, exit_kind: str) -> list[str]:
+    out: list[str] = []
     leftover = [p for p in staged if Path(p).exists()]
     if leftover:
-        out.append(f"{len(leftover)} staged artifact path(s) survived the prepare context")
+        out.append(f"{len(leftover)} staged artifact path(s) survived {exit_kind}")
     if staging_dir is not None and Path(staging_dir).exists():
-        out.append("staging_dir survived the prepare context")
+        out.append(f"staging_dir survived {exit_kind}")
     return out

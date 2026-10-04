@@ -363,3 +363,14 @@ async def test_prepared_runs_carry_the_contract_flags(pinned_codex_bin, tmp_path
     assert await conformance.check_prepared_run(
         c, backend, delegate, required_flags=("--output-schema",)
     ) == ["required flag --output-schema is not an option on argv"]
+
+
+def test_an_invalid_configured_effort_does_not_fail_conformance(pinned_codex_bin):
+    """Review of PR #297: a configured effort that fails the transport shape makes the
+    adapter refuse the kit's baseline probe; that is the operator's state, reported
+    pre-spend on each call, so the kit skips its probes and the backend still loads."""
+    plugin, backend = cf.make_backend({"AMICUS_CODEX_REASONING_EFFORT": "lo\nw"})
+    refused = backend.validate_request(_req())
+    assert refused is not None and refused.code == "invalid_reasoning_effort", "control"
+    assert backend.validate_request(_req(reasoning_effort="high")) is None
+    assert conformance.check_backend(plugin.contract, backend) == []

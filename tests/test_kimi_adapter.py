@@ -306,3 +306,15 @@ async def test_prepared_runs_carry_the_contract_flags(pinned_kimi_bin, tmp_path)
     assert await conformance.check_prepared_run(
         c, backend, delegate, required_flags=(contract.AGENT_FILE_FLAG,)
     ) == [f"required flag {contract.AGENT_FILE_FLAG} is not an option on argv"]
+
+
+def test_an_invalid_configured_effort_does_not_fail_conformance(pinned_kimi_bin):
+    """Review of PR #297: an omitted effort resolves to the configured default, so with a
+    typo there the adapter refuses the kit's baseline probe. That is the operator's
+    state, which each call then reports pre-spend; the kit skips its effort probes rather
+    than keeping the backend from loading, and an explicit valid effort still passes."""
+    plugin, backend = kf.make_backend({"AMICUS_KIMI_REASONING_EFFORT": "typo"})
+    refused = backend.validate_request(_req())
+    assert refused is not None and refused.code == "invalid_reasoning_effort", "control"
+    assert backend.validate_request(_req(reasoning_effort="high")) is None
+    assert conformance.check_backend(plugin.contract, backend) == []

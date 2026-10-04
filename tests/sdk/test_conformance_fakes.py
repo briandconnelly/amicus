@@ -545,24 +545,19 @@ def test_effort_probe_requires_the_refusal_code():
     assert violations and all("not 'invalid_reasoning_effort'" in v for v in violations)
 
 
-def test_effort_probe_is_skipped_for_a_backend_that_refuses_the_baseline():
+@pytest.mark.parametrize("code", ["user_config_rejected", "invalid_reasoning_effort"])
+def test_effort_probe_is_skipped_for_a_backend_that_refuses_the_baseline(code):
     """An adapter that refuses every request pre-spend (a config error it reports by
-    design) would 'refuse' the bogus effort too, so the probes would say nothing: they
-    are skipped, and the kit does not keep such a backend from loading. Only a baseline
-    refused AS an effort problem is the gate's own fault."""
+    design, or a configured default effort that is itself invalid) would 'refuse' the
+    bogus effort too, so the probes would say nothing: they are skipped, and the kit does
+    not keep such a backend from loading. The real adapters pin the configured-default
+    case in their own tests."""
 
     class RefusesAll(KimiLikeBackend):
         def validate_request(self, request: RunRequest) -> ClassifiedFailure | None:
-            return ClassifiedFailure(code="user_config_rejected", detail="no")
+            return ClassifiedFailure(code=code, detail="no")
 
     assert conformance.check_backend(KIMI_CONTRACT, RefusesAll()) == []
-
-    class OmittedEffortIsInvalid(KimiLikeBackend):
-        def validate_request(self, request: RunRequest) -> ClassifiedFailure | None:
-            return ClassifiedFailure(code="invalid_reasoning_effort", detail="no")
-
-    violations = conformance.check_backend(KIMI_CONTRACT, OmittedEffortIsInvalid())
-    assert len(violations) == 1 and "omitted effort is the default" in violations[0]
 
 
 def test_shape_only_declaration_is_held_to_the_shape():
@@ -681,4 +676,54 @@ async def test_prepared_run_reports_staging_that_survives_and_a_foreign_cwd(tmp_
         f"prepared cwd '/somewhere/else' is not the request's {str(tmp_path)!r}",
         "artifact_paths names 1 path(s) that artifacts does not list",
         "1 staged artifact path(s) survived the prepare context",
+        "1 staged artifact path(s) survived an exceptional exit from the prepare context",
     ]
+
+
+async def test_prepared_run_reports_cleanup_that_runs_only_after_a_successful_yield(tmp_path):
+    """The protocol promises cleanup however the run ended; a cleanup written after the
+    yield with no finally keeps that promise only on a normal exit."""
+
+    class CleansOnlyOnSuccess(KimiLikeBackend):
+        @contextlib.asynccontextmanager
+        async def prepare(self, request: RunRequest):
+            staged = tmp_path / "staged.md"
+            staged.write_text("x")
+            async with super().prepare(request) as prepared:
+                yield dataclasses.replace(prepared, artifacts=(*prepared.artifacts, str(staged)))
+            staged.unlink()  # reached on a normal exit only
+
+    violations = await conformance.check_prepared_run(
+        KIMI_CONTRACT, CleansOnlyOnSuccess(), _probe(cwd=str(tmp_path))
+    )
+    assert violations == [
+        "1 staged artifact path(s) survived an exceptional exit from the prepare context"
+    ]
+
+
+async def test_prepared_run_reports_a_swallowed_exception(tmp_path):
+    class Swallows(ClaudeLikeBackend):
+        @contextlib.asynccontextmanager
+        async def prepare(self, request: RunRequest):
+            with contextlib.suppress(Exception):
+                async with super().prepare(request) as prepared:
+                    yield prepared
+
+    violations = await conformance.check_prepared_run(
+        CLAUDE_CONTRACT, Swallows(), _probe(cwd=str(tmp_path))
+    )
+    assert violations == ["prepare swallowed the exception raised inside its context"]
+
+
+async def test_prepared_run_rejects_a_bare_string_argv(tmp_path):
+    """A str iterates as str, so an element check alone would pass it."""
+
+    class BareArgv(ClaudeLikeBackend):
+        @contextlib.asynccontextmanager
+        async def prepare(self, request: RunRequest):
+            yield PreparedRun(argv="fakecli -p", env={}, cwd=request.cwd)  # type: ignore[arg-type]
+
+    violations = await conformance.check_prepared_run(
+        CLAUDE_CONTRACT, BareArgv(), _probe(cwd=str(tmp_path))
+    )
+    assert violations == ["argv must be a non-empty tuple of str"]
