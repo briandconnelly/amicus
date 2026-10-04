@@ -37,6 +37,28 @@ per-change, as its own lead says.
   offers to codex-cli 0.159 and later. It gets the same tools as `gpt-6-sol`, and the disables
   still remove `clock.sleep` from it.
 
+### Changed
+
+- The conformance kit a backend plugin must pass (`amicus.sdk.testing.conformance`) now
+  reads as strong as its name (#127). `check_backend`'s effort probe follows the
+  contract's declared `effort_validation` (a malformed level for every declared gate, an
+  unknown well-formed one for `enumerated` and `token_floor_plus_catalog`), requires the
+  refusal to be `invalid_reasoning_effort`, and runs only once a plain request is accepted:
+  a backend that refuses every request pre-spend is reporting its own state (Codex with a
+  relative `CODEX_HOME`), so the probes are skipped, not failed, and the backend still loads;
+  `check_contract` refuses
+  the pairing of `effort_silently_ignored_upstream` with `shape_only`. A new async
+  `check_prepared_run(contract, backend, request, required_flags=, forbidden_flags=)`
+  stages one request through `prepare()` without spawning and holds it to the contract:
+  the named flags present as options and not reported dropped, only help-gated flags
+  dropped, named artifact paths enumerated, and no staged path (a dangling symlink
+  included) surviving the context, on a normal exit or an exceptional one. Each bundled
+  backend's offline tests call it per request shape with a help probe that advertises no
+  flags, so a dropped flag is really dropped. The kit's docstring now says what a clean
+  result is evidence of: it corroborates an adapter against its declarations and cannot
+  establish a declaration about the CLI itself. `check_backend` still runs at registry
+  load; `check_prepared_run` never does.
+
 ## [0.8.0] - 2026-09-27
 
 Across this release the discovery surface moves `amicus/0.1/schema-50`, what 0.7.0 shipped, to

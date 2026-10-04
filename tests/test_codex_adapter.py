@@ -14,6 +14,7 @@ from amicus.backends.codex import contract
 from amicus.schemas import instructions as ins
 from amicus.schemas.envelope import Meta
 from amicus.sdk.backend.protocol import AgentBackend, RunOutcome, RunRequest
+from amicus.sdk.conventions.preflight import FlagSupport
 from amicus.sdk.core import pathalias
 from amicus.sdk.core.runtime import CommandRun
 from amicus.sdk.testing import conformance
@@ -296,3 +297,80 @@ async def test_non_absolute_codex_home_is_refused_pre_spend(pinned_codex_bin, va
     with pytest.raises(ValueError, match="CODEX_HOME"):
         async with backend.prepare(_req()):
             pass  # pragma: no cover
+
+
+_NO_FLAGS = FlagSupport(supported=frozenset(), help_parsed=True)
+
+
+async def test_prepared_runs_carry_the_contract_flags(pinned_codex_bin, tmp_path):
+    """#127: the kit stages each request shape and holds argv to the contract, with a help
+    probe that advertises nothing, so the one help-gated flag is really dropped and every
+    always-send flag this shape carries must still be there."""
+    plugin, backend = cf.make_backend(flags=_NO_FLAGS)
+    c = plugin.contract
+    common = (
+        "--json",
+        "--sandbox",
+        "--cd",
+        "--output-last-message",
+        "--ephemeral",
+        contract.DISABLE_FEATURE_FLAG,
+    )
+    consult = _req(
+        cwd=str(tmp_path),
+        schema={"type": "object"},
+        model="m",
+        reasoning_effort="high",
+        isolation="ignore-rules",
+    )
+    assert (
+        await conformance.check_prepared_run(
+            c,
+            backend,
+            consult,
+            required_flags=(
+                *common,
+                "--skip-git-repo-check",
+                "--output-schema",
+                "--ignore-user-config",  # ignore-rules isolation sends both
+                "--ignore-rules",
+                contract.STRICT_CONFIG_FLAG,
+            ),
+            forbidden_flags=("--add-dir", contract.MODEL_FLAG),
+        )
+        == []
+    )
+    async with backend.prepare(consult) as prepared:
+        assert prepared.dropped_flags == (contract.MODEL_FLAG,)
+    delegate = _req(kind="delegate", prompt="do", cwd=str(tmp_path))
+    assert (
+        await conformance.check_prepared_run(
+            c,
+            backend,
+            delegate,
+            required_flags=(*common, contract.STRICT_CONFIG_FLAG),
+            forbidden_flags=(
+                "--skip-git-repo-check",
+                "--output-schema",
+                "--ignore-user-config",
+                "--ignore-rules",
+            ),
+        )
+        == []
+    )
+    # Instrument control: a flag this shape does not carry is reported, so a clean result
+    # above is the kit reading this adapter's argv, not a kit that reports nothing.
+    assert await conformance.check_prepared_run(
+        c, backend, delegate, required_flags=("--output-schema",)
+    ) == ["required flag --output-schema is not an option on argv"]
+
+
+def test_an_invalid_configured_effort_does_not_fail_conformance(pinned_codex_bin):
+    """Review of PR #297: a configured effort that fails the transport shape makes the
+    adapter refuse the kit's baseline probe; that is the operator's state, reported
+    pre-spend on each call, so the kit skips its probes and the backend still loads."""
+    plugin, backend = cf.make_backend({"AMICUS_CODEX_REASONING_EFFORT": "lo\nw"})
+    refused = backend.validate_request(_req())
+    assert refused is not None and refused.code == "invalid_reasoning_effort", "control"
+    assert backend.validate_request(_req(reasoning_effort="high")) is None
+    assert conformance.check_backend(plugin.contract, backend) == []
