@@ -193,6 +193,26 @@ A `null` there means no loaded plugin declares one.
 The `amicus://backends/{backend}` resource is always the full entry.
 `amicus_capabilities(detail="contracts")` is removed: pass `include_tool_details=false` for the same rowless payload, and `detail` now selects only how much each `tool_details` row carries (`summary` is `name`, `cost`, `stability`, `backends`; `full` adds the rest, including `error_codes`).
 
+## Upgrading from 0.8.0
+
+The changes below are the ones a caller using amicus 0.8.0 may have to handle before running 0.8.1.
+`CHANGELOG.md`'s 0.8.1 section lists every user-visible change since 0.8.0, including the ones that require no migration.
+A job result stored by 0.8.0 is still readable: `RESULT_FORMAT` did not move, and a record 0.8.0 finalized gains the `done` stamp 0.8.1 writes on its next successful read.
+No change in 0.8.1 rejects a call 0.8.0 accepted.
+
+**A stored result that cannot be read is a temporary error, not a failed job (#280).**
+A finished job whose `result.json` exists but cannot be opened, as after a permission blip or an `EIO` or `EMFILE` error, read as `failed`, and `amicus_job_result` returned `job_failed` with a repair that says to start a new job.
+It now returns `internal_error` with `temporary: true`, a `retry_after_ms`, and a repair naming the same free call with the same arguments, including the `detail` a result fetch or consume was asked for; the message says the job is not failed and not to start a new one.
+On a record not yet stamped `done`, `amicus_job_status`, `amicus_job_cancel` and `amicus_job_list` can return the same error, and a sync call or a keyed replay that meets it returns it instead of a result; on a stamped record only a result fetch opens the file, so the others answer from the stamp.
+A caller that branched on `job_failed` to start a new paid job should instead repeat the free call named in `error.repair` after `retry_after_ms`; the record is kept, a consume on it deletes nothing, and it holds a slot of the per-workspace job cap until it reads back or `AMICUS_JOB_TTL` expires it.
+A result that parses but does not validate is unchanged from 0.8.0: `internal_error` with `temporary: false` and `start_new_job`.
+
+**The conformance kit refuses more plugins (#127).**
+This reaches only code that loads a backend plugin directly, since `AMICUS_BACKENDS` still accepts the three in-tree ids alone.
+`check_backend` now probes the effort gate as the contract declares it, so a plugin whose contract declares `shape_only` validation but whose `validate_request` accepts a malformed level, or whose refusal is not `invalid_reasoning_effort`, reports a violation and does not load; `check_contract` refuses a contract that pairs `effort_silently_ignored_upstream` with `shape_only`.
+A plugin that refuses every request pre-spend, for a configuration error it reports itself, still loads: the probes are skipped for it.
+The new `check_prepared_run` is for a plugin's own tests and is never called at load.
+
 ## Upgrading from 0.7.0
 
 The changes below are the ones a caller using amicus 0.7.0 may have to handle before running 0.8.0.

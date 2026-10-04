@@ -20,6 +20,19 @@ per-change, as its own lead says.
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-10-04
+
+Across this release the discovery surface stays at `amicus/0.1/schema-53` and `RESULT_FORMAT`
+stays 9, so a job result 0.8.0 stored can still be delivered, and no entry is labelled
+**Breaking**. It exists so that an installed server stops warning that codex-cli 0.158 to
+0.160 are outside the versions it was built against (#293). It also fixes the one open bug
+triaged for it: a transient read error on a finished job's stored result no longer reports the
+job as `failed` with a repair that pays again, but as a temporary error naming the same free
+call (#280), and `docs/MIGRATION.md` ("Upgrading from 0.8.0") says what a caller that branched
+on `job_failed` should do. The conformance kit a backend plugin must pass now means what its
+clean result says (#127). It was checked against codex-cli 0.160.0, Kimi Code 2.1.1 and
+Claude Code 2.1.289.
+
 ### Changed
 
 - codex-cli 0.158, 0.159 and 0.160 are supported versions, so `amicus_backends` no longer warns on
@@ -1211,7 +1224,8 @@ per-change rather than net, so they also name intermediate states that no releas
 - The tagged publish path to pypi.org has never run. Only the TestPyPI dispatch path has been exercised.
 - Eval scenario S6 in `skills/collaborating-with-amicus/tests/scenarios.md` passed on one run (status: `pass`, validated by that run alone); an M7 follow-up run against the current skill text did not isolate the still-open F3 finding, so F3 remains open. S7 (real-host approval friction) has failed both of its recorded runs (status: `fail`); an M7 zero-spend recheck reached neither a pass nor a fail and is recorded as inconclusive, so it does not move S7's status. See their `status` fields and ADR 0012.
 
-[Unreleased]: https://github.com/briandconnelly/amicus/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/briandconnelly/amicus/compare/v0.8.1...HEAD
+[0.8.1]: https://github.com/briandconnelly/amicus/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/briandconnelly/amicus/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/briandconnelly/amicus/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/briandconnelly/amicus/compare/v0.5.0...v0.6.0
