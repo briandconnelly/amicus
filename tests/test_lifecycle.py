@@ -10,6 +10,7 @@ import logging
 import sys
 import threading
 import time
+from pathlib import Path
 
 import pytest
 from tests.support import fakeplugin
@@ -1522,3 +1523,46 @@ async def test_a_failed_delivery_stamp_does_not_fail_the_delivery(tmp_path, monk
     monkeypatch.setattr(store, "mark_delivered", fail)
     out = await _run_keyed(store, _spec(cwd), None)
     assert out["ok"] is True and out["summary"] == "Looks fine"
+
+
+def _deny_result_read(monkeypatch, jd):
+    """#280: result.json is present but cannot be opened. Returns a restore callable,
+    used instead of monkeypatch.undo() so no other patch is reverted with it."""
+    real_read_text = Path.read_text
+
+    def denied(self, *args, **kwargs):
+        if self == jd / "result.json":
+            raise PermissionError("result read denied")
+        return real_read_text(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", denied)
+    return lambda: monkeypatch.setattr(Path, "read_text", real_read_text)
+
+
+async def test_unreadable_result_is_a_temporary_error_naming_the_job(tmp_path, monkeypatch):
+    """#280: the sync wait meets a finished worker whose result it cannot read. It must not
+    say failed (whose repair pays again): the job is left as it is and the envelope names
+    the free fetch, which delivers the result once the file reads back."""
+    store = lifecycle.job_store(_settings(tmp_path))
+    monkeypatch.setattr(lifecycle, "SYNC_POLL_INTERVAL_S", 0.01)
+    cwd = str(tmp_path)
+    job_id, _ = store.start(
+        _fake_worker_cmd(_success(cwd)), cwd, kind="consult", extra={"result_format": RESULT_FORMAT}
+    )
+    restore = _deny_result_read(monkeypatch, store._job_dir(cwd, job_id))
+    args = (store, cwd, job_id, "consult", Meta(), "summary", 10, None, fakeplugin.make_plugin())
+    out = await lifecycle.await_job_result(*args)
+    err = out["error"]
+    assert out["ok"] is False and err["code"] == "internal_error"
+    assert err["temporary"] is True and err["retry_after_ms"] == 1000
+    assert err["repair"]["next_step"] == "fetch_job_result"
+    assert err["repair"]["tool"] == "amicus_job_result"
+    assert err["repair"]["arguments"] == {"job_id": job_id, "workspace_root": cwd}
+    assert out["meta"]["job_id"] == job_id
+    assert "not failed" in err["message"] and "do not start a new job" in err["message"]
+    assert cwd not in err["message"], "the path never leaves the store (rule 18)"
+    meta = json.loads((store._job_dir(cwd, job_id) / "meta.json").read_text())
+    assert meta["terminal_status"] is None and meta["completed_epoch"] is None
+    restore()
+    again = await lifecycle.await_job_result(*args)
+    assert again["ok"] is True and again["summary"] == "Looks fine"

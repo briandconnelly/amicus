@@ -37,6 +37,22 @@ per-change, as its own lead says.
   offers to codex-cli 0.159 and later. It gets the same tools as `gpt-6-sol`, and the disables
   still remove `clock.sleep` from it.
 
+### Fixed
+
+- A transient read error on a finished job's stored result no longer reports the job as
+  `failed`, whose repair tells the caller to start a new paid job for a result that still
+  exists (#280). A finished job is now stamped `done` on first observation, as a cancelled
+  one always was, so later reads never re-read `result.json`; and a result that exists but
+  cannot be opened (a permission blip, `EIO`, `EMFILE`) is reported by `amicus_job_status`,
+  `amicus_job_result`, `amicus_job_consume_result`, `amicus_job_cancel`, `amicus_job_list`, a
+  sync wait and a keyed replay as `internal_error` with `temporary: true`, `retry_after_ms`
+  and a repair naming the same free call, while the record is kept: a consume deletes
+  nothing, the per-workspace cap counts it as held and never evicts it, the reaper keeps it
+  until its retention bound, and no cancel or deadline finalizes it. An absent `result.json`
+  still reads as `failed`, and a result that parses but does not validate is still the
+  non-temporary error #277 made it. Records finalized by 0.8.0 or earlier gain the `done`
+  stamp on their next successful read. Neither `RESULT_FORMAT` nor `FINGERPRINT` moves.
+
 ## [0.8.0] - 2026-09-27
 
 Across this release the discovery surface moves `amicus/0.1/schema-50`, what 0.7.0 shipped, to

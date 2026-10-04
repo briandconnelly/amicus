@@ -7,6 +7,7 @@ worker does.
 
 from __future__ import annotations
 
+import errno
 import json
 import os
 import sys
@@ -16,7 +17,7 @@ from pathlib import Path
 import pytest
 
 from amicus.jobs import idempotency
-from amicus.jobs.store import DiscardOutcome, JobCapReached, JobStore
+from amicus.jobs.store import DiscardOutcome, JobCapReached, JobStore, ResultUnreadable
 
 # A snippet (run with cwd=job_dir) that writes the final envelope to result.json.
 _WRITE_DONE = "import json; open('result.json','w').write(json.dumps({'ok': True, 'tool': 't'}))"
@@ -1361,9 +1362,13 @@ def test_status_running_poll_after_ms_grows(tmp_path):
 
 
 def test_read_envelope_oserror(tmp_path):
-    # result.json is a directory -> reading raises OSError, handled as None
+    # result.json is present but cannot be opened (here: it is a directory). That is not
+    # an absent result (#280): the reader raises, carrying the errno and never the path.
     (tmp_path / "result.json").mkdir()
-    assert JobStore._read_envelope(tmp_path) is None
+    with pytest.raises(ResultUnreadable) as info:
+        JobStore._read_envelope(tmp_path)
+    assert info.value.errno == errno.EISDIR
+    assert str(tmp_path) not in str(info.value)
 
 
 def test_reap_and_list_skip_unparseable_meta(tmp_path):
@@ -2053,3 +2058,261 @@ def test_list_orders_equal_epochs_by_job_id(tmp_path):
         store._write_meta(jd, meta)
     listed = [j["job_id"] for j in store.list_jobs(cwd)]
     assert listed == sorted(ids, reverse=True)
+
+
+# ---------------------------------------------------------------------------
+# #280: a finished job's done outcome is stamped once and never re-derived from
+# result.json, so a transient read error on the stored result cannot turn it failed.
+
+
+def _deny_result_read(monkeypatch, jd: Path, exc: type[OSError] = PermissionError) -> None:
+    """Make result.json unreadable the way a permission blip or EIO would: the file is
+    present, the open fails. FileNotFoundError is deliberately not an option here, since
+    an absent result is a different fact (the job produced none)."""
+    real_read_text = Path.read_text
+
+    def denied(self, *args, **kwargs):
+        if self == jd / "result.json":
+            raise exc("result read denied")
+        return real_read_text(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", denied)
+
+
+def test_done_stamps_terminal_status(tmp_path):
+    # The one done-transition in _status_of stamps the outcome, as cancel's already does,
+    # so later reads short-circuit on the stamp rather than re-reading result.json.
+    _store_, _cwd, _job_id, jd = _done_job(tmp_path)
+    meta = json.loads((jd / "meta.json").read_text())
+    assert meta["terminal_status"] == "done"
+    assert meta["result_ok"] is True
+    assert meta["completed_epoch"] is not None
+
+
+def test_done_record_stays_done_when_its_result_is_unreadable(tmp_path, monkeypatch):
+    # #280: before the stamp, this read returned failed, and amicus_job_result then told
+    # the caller to start a new paid job for a result that still existed.
+    store, cwd, job_id, jd = _done_job(tmp_path)
+    _deny_result_read(monkeypatch, jd)
+    st = store.status(cwd, job_id)
+    assert st["status"] == "done"
+    assert st["result_available"] is True
+    assert st["result_ok"] is True
+    assert [j["status"] for j in store.list_jobs(cwd)] == ["done"]
+    monkeypatch.undo()
+    _assert_still_done(store, cwd, job_id)
+
+
+def test_count_cap_never_evicts_an_undelivered_result_it_cannot_read(tmp_path, monkeypatch):
+    # The #244 guarantee must hold through a read error too: an undelivered done result
+    # is neither reclassified as evictable nor deleted; the new start is refused.
+    store = _store(tmp_path, max_count=1)
+    cwd = str(tmp_path)
+    first, _ = store.start(_factory(_WRITE_DONE), cwd, kind="k")
+    assert _wait_terminal(store, cwd, first) == "done"
+    jd = store._job_dir(cwd, first)
+    _deny_result_read(monkeypatch, jd)
+    with pytest.raises(JobCapReached):
+        store.start(_factory(_WRITE_DONE), cwd, kind="k")
+    monkeypatch.undo()
+    _assert_still_done(store, cwd, first)
+
+
+def test_done_marker_backfilled_onto_prestamp_record(tmp_path):
+    # A record finalized by a release before the stamp has completed_epoch and a readable
+    # result but no terminal_status. The marker is written on the next read, and nothing
+    # else is: the completion clock is kept and result_ok stays as it was, which for a
+    # record that never had one is absent (never backfilled, as the test above pins).
+    store, cwd, job_id, jd = _done_job(tmp_path)
+    meta = json.loads((jd / "meta.json").read_text())
+    completed = meta["completed_epoch"]
+    meta["terminal_status"] = None
+    del meta["result_ok"]
+    (jd / "meta.json").write_text(json.dumps(meta))
+    st = store.status(cwd, job_id)
+    assert st["status"] == "done" and st["result_ok"] is None
+    after = json.loads((jd / "meta.json").read_text())
+    assert after["terminal_status"] == "done"
+    assert after["completed_epoch"] == completed
+    assert "result_ok" not in after
+
+
+def _unobserved_done(store: JobStore, cwd: str, job_id: str, monkeypatch) -> Path:
+    """Let a worker finish while every read of its result.json is denied, so the record
+    is the one #280 is about on its first observation: result present, nothing stamped.
+    Returns once a status read raises; a read before the worker exits says running."""
+    jd = store._job_dir(cwd, job_id)
+    _deny_result_read(monkeypatch, jd)
+    deadline = time.monotonic() + 5.0
+    while time.monotonic() < deadline:
+        try:
+            st = store.status(cwd, job_id)
+        except ResultUnreadable:
+            return jd
+        assert st is not None and st["status"] == "running"
+        time.sleep(0.02)
+    raise AssertionError("worker did not finish in time")
+
+
+def _unstamped(jd: Path) -> None:
+    meta = json.loads((jd / "meta.json").read_text())
+    assert meta["terminal_status"] is None
+    assert meta["completed_epoch"] is None
+    assert "result_ok" not in meta
+
+
+def test_first_observation_of_an_unreadable_result_stamps_nothing(tmp_path, monkeypatch):
+    # The record is neither finalized as failed (its completion clock is not started) nor
+    # served; once the file reads back, the first successful read stamps done with its
+    # own result_ok, exactly as if the blip had never happened.
+    store = _store(tmp_path)
+    cwd = str(tmp_path)
+    job_id, _ = store.start(_factory(_WRITE_DONE), cwd, kind="k")
+    jd = _unobserved_done(store, cwd, job_id, monkeypatch)
+    _unstamped(jd)
+    with pytest.raises(ResultUnreadable):
+        store.result_payload(cwd, job_id)
+    with pytest.raises(ResultUnreadable):
+        store.list_jobs(cwd)
+    _unstamped(jd)
+    monkeypatch.undo()
+    st = store.status(cwd, job_id)
+    assert st["status"] == "done" and st["result_ok"] is True
+    assert json.loads((jd / "meta.json").read_text())["terminal_status"] == "done"
+    _assert_still_done(store, cwd, job_id)
+
+
+def test_unreadable_result_is_not_finalized_as_timeout(tmp_path, monkeypatch):
+    # The deadline path's result-first read (test_timeout_grace_completion_prefers_result)
+    # must not read an unreadable result as absent and stamp timeout over it.
+    store = _store(tmp_path)
+    cwd = str(tmp_path)
+    job_id, _ = store.start(_factory(_SLEEP), cwd, kind="k")
+    jd = store._job_dir(cwd, job_id)
+    meta = store._read_meta(jd)
+    pid = meta["pid"]
+    try:
+        meta["deadline_epoch"] = time.time() - 1  # already overran
+        store._write_meta(jd, meta)
+        (jd / "result.json").write_text('{"ok": true, "tool": "t"}')
+        monkeypatch.setattr(job_store, "_terminate_pid_tree", lambda *a, **k: None)
+        _deny_result_read(monkeypatch, jd)
+        with pytest.raises(ResultUnreadable):
+            store.status(cwd, job_id)
+        _unstamped(jd)
+        monkeypatch.undo()
+        monkeypatch.setattr(job_store, "_terminate_pid_tree", lambda *a, **k: None)
+        assert store.status(cwd, job_id)["status"] == "done"
+    finally:
+        job_store._kill_pid_tree(pid)
+
+
+def test_discard_never_deletes_a_record_whose_result_it_cannot_read(tmp_path, monkeypatch):
+    # A consume that read the record as failed (as it did before #280) and now revalidates
+    # under a read error must not delete the result: the named state is unverifiable.
+    store = _store(tmp_path)
+    cwd = str(tmp_path)
+    job_id, _ = store.start(_factory(_WRITE_DONE), cwd, kind="k")
+    jd = _unobserved_done(store, cwd, job_id, monkeypatch)
+    assert store.discard(cwd, job_id, expected="failed") is DiscardOutcome.DELETE_FAILED
+    assert store.discard(cwd, job_id) is DiscardOutcome.DELETE_FAILED
+    assert (jd / "result.json").exists()
+    _unstamped(jd)
+    monkeypatch.undo()
+    _assert_still_done(store, cwd, job_id)
+    assert store.discard(cwd, job_id) is DiscardOutcome.REMOVED
+
+
+def test_cancel_does_not_finalize_a_stopped_worker_whose_result_is_unreadable(
+    tmp_path, monkeypatch
+):
+    # The post-termination read (test_result_ok_stamped_when_worker_completes_during_
+    # cancel_grace) finds a result it cannot read: the record is left unfinalized rather
+    # than stamped cancelled over a result that is there.
+    store = _store(tmp_path)
+    cwd = str(tmp_path)
+    job_id, _ = store.start(_factory(_SLEEP), cwd, kind="k")
+    jd = store._job_dir(cwd, job_id)
+
+    def fake_terminate(pid, grace_seconds, **kwargs):
+        (jd / "result.json").write_text('{"ok": true, "tool": "t"}')
+        job_store._kill_pid_tree(pid)
+        _deny_result_read(monkeypatch, jd)
+
+    monkeypatch.setattr(job_store, "_terminate_pid_tree", fake_terminate)
+    with pytest.raises(ResultUnreadable):
+        store.cancel(cwd, job_id)
+    _unstamped(jd)
+    monkeypatch.undo()
+    st = store.cancel(cwd, job_id)  # idempotent: a finished job is returned, not signalled
+    assert st["status"] == "done" and st["result_ok"] is True
+
+
+def test_cancel_propagates_an_unreadable_result_before_signalling(tmp_path, monkeypatch):
+    store = _store(tmp_path)
+    cwd = str(tmp_path)
+    job_id, _ = store.start(_factory(_WRITE_DONE), cwd, kind="k")
+    jd = _unobserved_done(store, cwd, job_id, monkeypatch)
+    with pytest.raises(ResultUnreadable):
+        store.cancel(cwd, job_id)
+    _unstamped(jd)
+
+
+def test_unreadable_record_is_held_by_the_cap_and_never_evicted(tmp_path, monkeypatch):
+    # Unobserved, it may be exactly the undelivered result #244 protects, so it counts
+    # as held and the new start is refused rather than paid for over its deletion.
+    store = _store(tmp_path, max_count=1)
+    cwd = str(tmp_path)
+    first, _ = store.start(_factory(_WRITE_DONE), cwd, kind="k")
+    jd = _unobserved_done(store, cwd, first, monkeypatch)
+    with pytest.raises(JobCapReached):
+        store.start(_factory(_WRITE_DONE), cwd, kind="k")
+    assert (jd / "result.json").exists()
+    monkeypatch.undo()
+    _assert_still_done(store, cwd, first)
+
+
+def test_unreadable_record_is_kept_until_its_retention_bound(tmp_path, monkeypatch):
+    # Before the TTL the reaper keeps it (nothing has been able to say it is not a
+    # result); past it, aged from its start since no completion clock was stamped, it
+    # goes like any finalized record, so it cannot outlive the disclosed retention.
+    store = _store(tmp_path, ttl_seconds=3600)
+    cwd = str(tmp_path)
+    job_id, _ = store.start(_factory(_WRITE_DONE), cwd, kind="k")
+    jd = _unobserved_done(store, cwd, job_id, monkeypatch)
+    store._reap_workspace(cwd)
+    assert (jd / "result.json").exists()
+    meta = json.loads((jd / "meta.json").read_text())
+    meta["started_epoch"] = time.time() - 10_000
+    store._write_meta(jd, meta)
+    store._reap_workspace(cwd)
+    assert store._gone(jd)
+
+
+def test_expired_legacy_record_with_an_unreadable_result_is_reaped_on_read(tmp_path, monkeypatch):
+    # A record finalized by an older release (completed_epoch set, no terminal_status)
+    # whose result stops reading back past its TTL is removed on the next read, as any
+    # expired record is, instead of raising forever.
+    store, cwd, job_id, jd = _done_job(tmp_path)
+    meta = json.loads((jd / "meta.json").read_text())
+    meta["terminal_status"] = None
+    meta["completed_epoch"] = time.time() - 10_000
+    store._write_meta(jd, meta)
+    _deny_result_read(monkeypatch, jd)
+    assert store.status(cwd, job_id) is None
+    assert store._gone(jd)
+
+
+def test_idempotent_key_keeps_replaying_a_job_whose_result_is_unreadable(tmp_path, monkeypatch):
+    # The index asks the store whether the backing job exists; an unreadable result is
+    # reported as live, so the key replays to it (whose own reads say what is wrong)
+    # rather than classifying it gone and letting a new paid run start under the key.
+    store = _store(tmp_path)
+    cwd = str(tmp_path)
+    kw = dict(kind="k", tool="consult", key="k1", arg_hash="AH")
+    first = store.start_idempotent(_factory(_WRITE_DONE), cwd, **kw)
+    assert first["kind"] == "created"
+    _unobserved_done(store, cwd, first["job_id"], monkeypatch)
+    again = store.start_idempotent(_factory(_WRITE_DONE), cwd, **kw)
+    assert again == {"kind": "replay", "job_id": first["job_id"]}
+    assert len(store._job_dirs(store._ws_dir(cwd))) == 1
