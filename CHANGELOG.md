@@ -20,6 +20,23 @@ per-change, as its own lead says.
 
 ## [Unreleased]
 
+### Changed
+
+- codex-cli 0.158, 0.159 and 0.160 are supported versions, so `amicus_backends` no longer warns on
+  them (#293). 0.158.0, 0.159.3 and 0.160.0 were each checked against 0.157.1 at zero spend:
+  top-level `--help`, `exec --help`, `exec review --help` and `login --help` are identical. The
+  unknown-feature error, the logged-out `login status` line, and the strict-config,
+  invalid-value and retired-setting rejections are unchanged; the four config keys amicus pins
+  with `-c` are still accepted, and all three features amicus disables on every run are still
+  `stable`. The tool list sent to each bundled model is the same as 0.157.1's with and without
+  those disables. Of the features that changed, `write_stdin_approval` is now on by default; it
+  only adds an approval review before input is written to a running terminal that was launched
+  with extra grants or whose policy has changed since, so it is neither enabled nor disabled here. No paid call was part of
+  the check.
+- The bundled Codex model list gains `gpt-6.1-sol`, first in priority, which the served catalog
+  offers to codex-cli 0.159 and later. It gets the same tools as `gpt-6-sol`, and the disables
+  still remove `clock.sleep` from it.
+
 ## [0.8.0] - 2026-09-27
 
 Across this release the discovery surface moves `amicus/0.1/schema-50`, what 0.7.0 shipped, to
