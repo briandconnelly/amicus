@@ -151,13 +151,14 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
             rec, payload = await asyncio.to_thread(store().result_payload, cwd, job_id)
         except ResultUnreadable as exc:
             # Either read (status, then the payload) found a result that exists but cannot
-            # be read (#280). The repair names the call made, which is free either way; a
-            # consume deleted nothing.
+            # be read (#280). The repair names the call made, which is free either way, with
+            # the detail asked for: followed at the default, a full-detail consume would
+            # deliver the summary and then delete the record. A consume deleted nothing.
             return unreadable_result_envelope(
                 lookup.job_meta(settings, cwd, source, roots_source),
                 tool="amicus_job_consume_result" if consume else "amicus_job_result",
                 next_step="fetch_job_result",
-                arguments=job_status_arguments(job_id, workspace_root),
+                arguments={**job_status_arguments(job_id, workspace_root), "detail": detail},
                 job_id=job_id,
                 errno=exc.errno,
             )

@@ -999,12 +999,13 @@ async def _unobserved(store, cwd, job_id, monkeypatch):
     raise AssertionError("worker did not finish in time")
 
 
-def _assert_unreadable(body, *, repair_tool, job_id, ws):
+def _assert_unreadable(body, *, repair_tool, job_id, ws, detail=None):
     err = body["error"]
     assert body["ok"] is False and err["code"] == "internal_error"
     assert err["temporary"] is True and err["retry_after_ms"] == delivery.RESULT_READ_RETRY_MS
     assert err["repair"]["tool"] == repair_tool
-    assert err["repair"]["arguments"] == {"job_id": job_id, **ws}
+    expected = {"job_id": job_id, **ws} | ({"detail": detail} if detail else {})
+    assert err["repair"]["arguments"] == expected
     assert body["meta"]["job_id"] == job_id
     assert "not failed" in err["message"] and "do not start a new job" in err["message"]
     assert ws["workspace_root"] not in err["message"]
@@ -1033,7 +1034,8 @@ async def test_job_tools_report_an_unreadable_result_as_temporary(
             assert res.is_error, tool
             body = res.structured_content
             schemas[tool].validate(body)
-            _assert_unreadable(body, repair_tool=repair_tool, job_id=job_id, ws=ws)
+            detail = "summary" if "result" in tool else None
+            _assert_unreadable(body, repair_tool=repair_tool, job_id=job_id, ws=ws, detail=detail)
             assert ("no further cancel" in body["error"]["message"]) is (
                 tool == "amicus_job_cancel"
             )
@@ -1115,3 +1117,33 @@ async def test_keyed_sync_replay_of_an_unreadable_result_is_temporary(
         assert (
             json.loads((jd / "meta.json").read_text(encoding="utf-8"))["terminal_status"] == "done"
         )
+
+
+async def test_unreadable_consume_repair_keeps_the_requested_detail(
+    app, store, tmp_path, monkeypatch
+):
+    """Review finding: followed at the default detail, the repair of a full-detail consume
+    would deliver the summary and then delete the record, losing the text the caller
+    asked for. The repair carries the detail, so following it verbatim delivers it."""
+    cwd = str(tmp_path)
+    ws = {"workspace_root": cwd}
+    async with Client(app) as c:
+        job_id = await _start(c, tmp_path)
+        _jd, restore = await _unobserved(store, cwd, job_id, monkeypatch)
+        res = await c.call_tool(
+            "amicus_job_consume_result",
+            {"job_id": job_id, "detail": "full", **ws},
+            raise_on_error=False,
+        )
+        _assert_unreadable(
+            res.structured_content,
+            repair_tool="amicus_job_consume_result",
+            job_id=job_id,
+            ws=ws,
+            detail="full",
+        )
+        restore()
+        repair = res.structured_content["error"]["repair"]
+        again = (await c.call_tool(repair["tool"], repair["arguments"])).structured_content
+        assert again["ok"] is True and again["raw_response"]["text"]
+        assert again["meta"]["consume"] == {"discard_outcome": "removed"}

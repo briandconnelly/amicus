@@ -470,11 +470,11 @@ async def await_job_result(
                 await asyncio.shield(asyncio.to_thread(store.cancel, cwd, job_id))
         raise
     except ResultUnreadable as exc:
-        return _unreadable_result(job_id, cwd, meta, plugin, exc)
+        return _unreadable_result(job_id, cwd, meta, plugin, exc, detail=detail)
     try:
         rec2, payload = await asyncio.to_thread(store.result_payload, cwd, job_id)
     except ResultUnreadable as exc:
-        return _unreadable_result(job_id, cwd, meta, plugin, exc)
+        return _unreadable_result(job_id, cwd, meta, plugin, exc, detail=detail)
     if rec2 is None:
         return _vanished("job record expired before its result was read")
     envelope, delivered = finished_job_envelope(rec2, payload, job_id, kind, meta, detail, cwd)
@@ -492,16 +492,26 @@ async def mark_delivered(store: JobStore, cwd: str, job_id: str) -> None:
 
 
 def _unreadable_result(
-    job_id: str, cwd: str, meta: Meta, plugin: BackendPlugin, exc: ResultUnreadable
+    job_id: str,
+    cwd: str,
+    meta: Meta,
+    plugin: BackendPlugin,
+    exc: ResultUnreadable,
+    *,
+    detail: str | None = None,
 ) -> dict[str, Any]:
     """A sync wait or a keyed replay met a stored result that could not be read (#280).
     The store raises only once the worker is stopped, so the job is left exactly as it
-    is, keyed or not, and the caller fetches it free once the file reads back."""
+    is, keyed or not, and the caller fetches it free once the file reads back, at the
+    detail the wait was asked for where that is known (a replay's start has none)."""
+    arguments = job_status_arguments(job_id, cwd)
+    if detail is not None:
+        arguments["detail"] = detail
     return unreadable_result_envelope(
         meta,
         tool="amicus_job_result",
         next_step="fetch_job_result",
-        arguments=job_status_arguments(job_id, cwd),
+        arguments=arguments,
         job_id=job_id,
         errno=exc.errno,
         plugin=plugin,

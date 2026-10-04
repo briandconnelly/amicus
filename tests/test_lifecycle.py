@@ -1557,7 +1557,11 @@ async def test_unreadable_result_is_a_temporary_error_naming_the_job(tmp_path, m
     assert err["temporary"] is True and err["retry_after_ms"] == 1000
     assert err["repair"]["next_step"] == "fetch_job_result"
     assert err["repair"]["tool"] == "amicus_job_result"
-    assert err["repair"]["arguments"] == {"job_id": job_id, "workspace_root": cwd}
+    assert err["repair"]["arguments"] == {
+        "job_id": job_id,
+        "workspace_root": cwd,
+        "detail": "summary",
+    }
     assert out["meta"]["job_id"] == job_id
     assert "not failed" in err["message"] and "do not start a new job" in err["message"]
     assert cwd not in err["message"], "the path never leaves the store (rule 18)"

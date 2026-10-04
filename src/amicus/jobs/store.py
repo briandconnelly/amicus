@@ -858,6 +858,15 @@ class JobStore:
             return False
         return time.time() - completed > self.ttl_seconds
 
+    def _past_retention(self, meta: dict) -> bool:
+        """Whether a record whose outcome could not be read is past its retention bound
+        (#280): its worker is stopped, so it ages like a finalized one, from its
+        completion clock if one was stamped and else from its start. One clock for the
+        reaper and for a direct read, so a record the reaper would remove cannot keep
+        raising on ``status`` instead."""
+        end = meta.get("completed_epoch") or meta.get("started_epoch")
+        return end is not None and time.time() - end > self.ttl_seconds
+
     def _status_dict(self, jd: Path, meta: dict, state: str) -> dict:
         elapsed_ms = self._elapsed_ms(meta)
         # Running jobs get a growing poll hint so a polling agent backs off; terminal
@@ -926,7 +935,7 @@ class JobStore:
             # Unknowable, not failed: served to no one until it reads back, but held to
             # the same retention bound as any finalized record, so a result that never
             # reads back again cannot outlive what the tool surface discloses.
-            if self._expired(meta):
+            if self._past_retention(meta):
                 self._rmtree(jd)
                 return None, not self._gone(jd)
             raise
@@ -947,11 +956,12 @@ class JobStore:
             try:
                 state = self._status_of(jd, meta)
             except ResultUnreadable:
-                # Its worker is stopped, so it ages like a finalized record (from its
-                # completion clock if one was stamped, else from its start); before that
-                # bound it is kept, since nothing has been able to tell whether it is done.
-                state = None
-            if state is None or state in _TERMINAL:
+                # Kept until its retention bound, since nothing has been able to tell
+                # whether it is done; past it, it goes like any finalized record.
+                if self._past_retention(meta):
+                    self._rmtree(jd)
+                continue
+            if state in _TERMINAL:
                 end = meta.get("completed_epoch") or meta.get("started_epoch") or now
                 if now - end > self.ttl_seconds:
                     self._rmtree(jd)

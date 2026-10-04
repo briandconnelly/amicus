@@ -2316,3 +2316,20 @@ def test_idempotent_key_keeps_replaying_a_job_whose_result_is_unreadable(tmp_pat
     again = store.start_idempotent(_factory(_WRITE_DONE), cwd, **kw)
     assert again == {"kind": "replay", "job_id": first["job_id"]}
     assert len(store._job_dirs(store._ws_dir(cwd))) == 1
+
+
+def test_expired_unstamped_record_with_an_unreadable_result_is_reaped_on_read(
+    tmp_path, monkeypatch
+):
+    # Review finding: the direct read used the completion clock alone, which an unstamped
+    # record has not got, so it raised on status forever where the reaper (aged from the
+    # start) would have removed it. Both now apply one retention bound.
+    store = _store(tmp_path, ttl_seconds=3600)
+    cwd = str(tmp_path)
+    job_id, _ = store.start(_factory(_WRITE_DONE), cwd, kind="k")
+    jd = _unobserved_done(store, cwd, job_id, monkeypatch)
+    meta = json.loads((jd / "meta.json").read_text())
+    meta["started_epoch"] = time.time() - 10_000
+    store._write_meta(jd, meta)
+    assert store.status(cwd, job_id) is None
+    assert store._gone(jd)
