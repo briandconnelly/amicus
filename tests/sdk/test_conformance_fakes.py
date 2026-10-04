@@ -20,6 +20,7 @@ before changing anything these fakes implement.
 from __future__ import annotations
 
 import contextlib
+import dataclasses
 import json
 import re
 import tempfile
@@ -109,7 +110,14 @@ CODEX_CONTRACT = make_contract(
 
 class CodexLikeBackend:
     def validate_request(self, request: RunRequest) -> ClassifiedFailure | None:
-        return None  # upstream rejects bad values loudly; nothing to pre-empt
+        # Upstream rejects a bad value loudly, so only the transport shape is checked
+        # here (the contract's shape_only), as the real Codex adapter does.
+        effort = request.reasoning_effort
+        if effort is not None and any(ord(c) < 0x20 or 0x7F <= ord(c) <= 0x9F for c in effort):
+            return ClassifiedFailure(
+                code="invalid_reasoning_effort", detail="effort contains a control character"
+            )
+        return None
 
     @contextlib.asynccontextmanager
     async def prepare(self, request: RunRequest):
@@ -508,3 +516,250 @@ def test_claudelike_bare_mode_keeps_key():
     env = {"PROVIDER_API_KEY": "k", "PATH": "/bin"}
     assert "PROVIDER_API_KEY" in backend.scrub_env(env, "bare")
     assert "PROVIDER_API_KEY" not in backend.scrub_env(env, "scoped")
+
+
+# ----------------------------------------------------- the kit's own evidence (#127)
+
+
+def test_contract_cannot_pair_silent_ignore_with_shape_only():
+    """A CLI that silently ignores an unknown level needs a gate that knows the levels;
+    shape validation would pay for a well-formed unknown one at the default effort."""
+    contradictory = make_contract(
+        effort_silently_ignored_upstream=True, effort_validation="shape_only"
+    )
+    assert any("shape_only" in v for v in conformance.check_contract(contradictory))
+    assert conformance.check_contract(KIMI_CONTRACT) == []
+
+
+def test_effort_probe_requires_the_refusal_code():
+    """Refusing the bogus effort is not enough: the refusal must say the effort was the
+    problem, or the caller cannot correct it."""
+
+    class WrongCode(KimiLikeBackend):
+        def validate_request(self, request: RunRequest) -> ClassifiedFailure | None:
+            if request.reasoning_effort is not None:
+                return ClassifiedFailure(code="invalid_arguments", detail="no")
+            return None
+
+    violations = conformance.check_backend(KIMI_CONTRACT, WrongCode())
+    assert violations and all("not 'invalid_reasoning_effort'" in v for v in violations)
+
+
+@pytest.mark.parametrize("code", ["user_config_rejected", "invalid_reasoning_effort"])
+def test_effort_probe_is_skipped_for_a_backend_that_refuses_the_baseline(code):
+    """An adapter that refuses every request pre-spend (a config error it reports by
+    design, or a configured default effort that is itself invalid) would 'refuse' the
+    bogus effort too, so the probes would say nothing: they are skipped, and the kit does
+    not keep such a backend from loading. The real adapters pin the configured-default
+    case in their own tests."""
+
+    class RefusesAll(KimiLikeBackend):
+        def validate_request(self, request: RunRequest) -> ClassifiedFailure | None:
+            return ClassifiedFailure(code=code, detail="no")
+
+    assert conformance.check_backend(KIMI_CONTRACT, RefusesAll()) == []
+
+
+def test_shape_only_declaration_is_held_to_the_shape():
+    """A declared shape_only gate is probed with a malformed value only: an unknown but
+    well-formed level is upstream's to refuse, so accepting it is not a violation."""
+
+    class AcceptsAnything(CodexLikeBackend):
+        def validate_request(self, request: RunRequest) -> ClassifiedFailure | None:
+            return None
+
+    violations = conformance.check_backend(CODEX_CONTRACT, AcceptsAnything())
+    assert len(violations) == 1 and "(malformed)" in violations[0]
+    assert conformance.check_backend(CODEX_CONTRACT, CodexLikeBackend()) == []
+    unknown = RunRequest(
+        kind="consult", prompt="q", cwd=".", timeout_seconds=1, reasoning_effort="ultra"
+    )
+    assert CodexLikeBackend().validate_request(unknown) is None, "control: shape only"
+
+
+def test_option_tokens_reads_options_by_position():
+    argv = ("cli", "exec", "-c", "key=value", "--flag=v", "--out", "-weird", "plain")
+    assert conformance.option_tokens(argv) == frozenset({"-c", "--flag", "--out", "-weird"})
+    assert conformance.option_tokens(("cli",)) == frozenset()
+
+
+def _probe(**kw) -> RunRequest:
+    base = dict(kind="consult", prompt="conformance probe", cwd=".", timeout_seconds=1)
+    base.update(kw)
+    return RunRequest(**base)
+
+
+async def test_prepared_run_passes_for_each_fake(tmp_path):
+    cwd = str(tmp_path)
+    assert (
+        await conformance.check_prepared_run(
+            CODEX_CONTRACT,
+            CodexLikeBackend(),
+            _probe(cwd=cwd, schema={"type": "object"}),
+            required_flags=("--sandbox", "--output-last-message", "--output-schema"),
+        )
+        == []
+    )
+    assert (
+        await conformance.check_prepared_run(
+            KIMI_CONTRACT,
+            KimiLikeBackend(),
+            _probe(cwd=cwd),
+            required_flags=("--prompt", "--agent-file"),
+        )
+        == []
+    )
+    assert (
+        await conformance.check_prepared_run(
+            CLAUDE_CONTRACT,
+            ClaudeLikeBackend(),
+            _probe(cwd=cwd, access="readonly"),
+            required_flags=("--output-format", "--tools"),
+        )
+        == []
+    )
+
+
+async def test_prepared_run_reports_a_missing_or_forbidden_flag(tmp_path):
+    """The instrument control: the same call with a flag this request does not carry
+    named as required, and one it does carry named as forbidden."""
+    violations = await conformance.check_prepared_run(
+        CODEX_CONTRACT,
+        CodexLikeBackend(),
+        _probe(cwd=str(tmp_path)),  # no schema, so no --output-schema
+        required_flags=("--sandbox", "--output-schema"),
+        forbidden_flags=("--sandbox",),
+    )
+    assert violations == [
+        "required flag --output-schema is not an option on argv",
+        "forbidden flag --sandbox is an option on argv",
+    ]
+
+
+async def test_prepared_run_reports_a_dropped_guarantee_and_a_flag_dropped_yet_sent(tmp_path):
+    class DropsAGuarantee(CodexLikeBackend):
+        @contextlib.asynccontextmanager
+        async def prepare(self, request: RunRequest):
+            async with super().prepare(request) as prepared:
+                # --sandbox is not help-gated, so it may never be reported dropped; and
+                # it is still on argv, so it cannot be dropped at all.
+                yield dataclasses.replace(prepared, dropped_flags=("--sandbox",))
+
+    violations = await conformance.check_prepared_run(
+        CODEX_CONTRACT, DropsAGuarantee(), _probe(cwd=str(tmp_path)), required_flags=("--sandbox",)
+    )
+    assert [v.split(";")[0] for v in violations] == [
+        "dropped_flags ['--sandbox'] are not help-gated",
+        "flags ['--sandbox'] are on argv and reported dropped at once",
+        "required flag --sandbox was dropped",
+    ]
+
+
+async def test_prepared_run_reports_staging_that_survives_and_a_foreign_cwd(tmp_path):
+    class LeavesStaging(KimiLikeBackend):
+        @contextlib.asynccontextmanager
+        async def prepare(self, request: RunRequest):
+            keep = tmp_path / "kept.md"
+            keep.write_text("left behind")
+            async with super().prepare(request) as prepared:
+                yield dataclasses.replace(
+                    prepared,
+                    artifacts=(*prepared.artifacts, str(keep)),
+                    artifact_paths={"answer": str(tmp_path / "elsewhere.md")},
+                    cwd="/somewhere/else",
+                )
+
+    violations = await conformance.check_prepared_run(
+        KIMI_CONTRACT, LeavesStaging(), _probe(cwd=str(tmp_path))
+    )
+    assert violations == [
+        f"prepared cwd '/somewhere/else' is not the request's {str(tmp_path)!r}",
+        "artifact_paths names 1 path(s) that artifacts does not list",
+        "1 staged artifact path(s) survived the prepare context",
+        "1 staged artifact path(s) survived an exceptional exit from the prepare context",
+    ]
+
+
+async def test_prepared_run_reports_cleanup_that_runs_only_after_a_successful_yield(tmp_path):
+    """The protocol promises cleanup however the run ended; a cleanup written after the
+    yield with no finally keeps that promise only on a normal exit."""
+
+    class CleansOnlyOnSuccess(KimiLikeBackend):
+        @contextlib.asynccontextmanager
+        async def prepare(self, request: RunRequest):
+            staged = tmp_path / "staged.md"
+            staged.write_text("x")
+            async with super().prepare(request) as prepared:
+                yield dataclasses.replace(prepared, artifacts=(*prepared.artifacts, str(staged)))
+            staged.unlink()  # reached on a normal exit only
+
+    violations = await conformance.check_prepared_run(
+        KIMI_CONTRACT, CleansOnlyOnSuccess(), _probe(cwd=str(tmp_path))
+    )
+    assert violations == [
+        "1 staged artifact path(s) survived an exceptional exit from the prepare context"
+    ]
+
+
+async def test_prepared_run_reports_a_swallowed_exception(tmp_path):
+    class Swallows(ClaudeLikeBackend):
+        @contextlib.asynccontextmanager
+        async def prepare(self, request: RunRequest):
+            with contextlib.suppress(Exception):
+                async with super().prepare(request) as prepared:
+                    yield prepared
+
+    violations = await conformance.check_prepared_run(
+        CLAUDE_CONTRACT, Swallows(), _probe(cwd=str(tmp_path))
+    )
+    assert violations == ["prepare swallowed the exception raised inside its context"]
+
+
+async def test_prepared_run_rejects_a_bare_string_argv(tmp_path):
+    """A str iterates as str, so an element check alone would pass it."""
+
+    class BareArgv(ClaudeLikeBackend):
+        @contextlib.asynccontextmanager
+        async def prepare(self, request: RunRequest):
+            yield PreparedRun(argv="fakecli -p", env={}, cwd=request.cwd)  # type: ignore[arg-type]
+
+    violations = await conformance.check_prepared_run(
+        CLAUDE_CONTRACT, BareArgv(), _probe(cwd=str(tmp_path))
+    )
+    assert violations == ["argv must be a non-empty tuple of str"]
+
+
+async def test_prepared_run_rejects_a_non_mapping_env(tmp_path):
+    """The diagnostic must not itself crash on the shape it diagnoses (PR #297 review)."""
+
+    class NoEnv(ClaudeLikeBackend):
+        @contextlib.asynccontextmanager
+        async def prepare(self, request: RunRequest):
+            yield PreparedRun(argv=("fakecli", "-p"), env=None, cwd=request.cwd)  # type: ignore[arg-type]
+
+    violations = await conformance.check_prepared_run(
+        CLAUDE_CONTRACT, NoEnv(), _probe(cwd=str(tmp_path))
+    )
+    assert violations == ["env must map str to str"]
+
+
+async def test_prepared_run_counts_a_dangling_symlink_as_a_survivor(tmp_path):
+    """``exists()`` follows a symlink, so a dangling one left at an artifact path would
+    read as cleaned up (PR #297 review)."""
+    dangling = tmp_path / "answer.md"
+    dangling.symlink_to(tmp_path / "never-written.md")
+    assert not dangling.exists() and dangling.is_symlink(), "control: dangling"
+
+    class LeavesASymlink(KimiLikeBackend):
+        @contextlib.asynccontextmanager
+        async def prepare(self, request: RunRequest):
+            async with super().prepare(request) as prepared:
+                yield dataclasses.replace(prepared, artifacts=(*prepared.artifacts, str(dangling)))
+
+    violations = await conformance.check_prepared_run(
+        KIMI_CONTRACT, LeavesASymlink(), _probe(cwd=str(tmp_path))
+    )
+    assert violations == [
+        "1 staged artifact path(s) survived the prepare context",
+        "1 staged artifact path(s) survived an exceptional exit from the prepare context",
+    ]

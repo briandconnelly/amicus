@@ -10,6 +10,7 @@ from amicus.backends.claude import adversarial, contract
 from amicus.backends.claude import config as claude_config
 from amicus.backends.claude.binary import BinaryNotFoundError
 from amicus.sdk.backend.protocol import AgentBackend, OutcomeInspector, RunOutcome, RunRequest
+from amicus.sdk.conventions.preflight import FlagSupport
 from amicus.sdk.core.runtime import BINARY_NOT_FOUND, TIMED_OUT, CommandRun
 from amicus.sdk.testing import conformance
 
@@ -375,3 +376,58 @@ def test_guardrails_are_host_neutral_and_carry_the_sibling_rules():
     assert "untrusted DATA" in text and "Do not rewrite or implement changes." in text
     assert "recursive handoffs" in text
     assert "\x00" not in text and text == text.strip()
+
+
+_NO_FLAGS = FlagSupport(supported=frozenset(), help_parsed=True)
+_MODE_FLAG = {
+    "inherit": None,
+    "scoped": contract.SETTING_SOURCES_FLAG,
+    "safe": contract.SAFE_MODE_FLAG,
+    "bare": contract.BARE_FLAG,
+}
+
+
+@pytest.mark.parametrize("mode", ["inherit", "scoped", "safe", "bare"])
+async def test_prepared_runs_carry_the_contract_flags(pinned_claude_bin, monkeypatch, mode):
+    """#127: the mode flags are alternatives, not simultaneous obligations, so each mode is
+    held to its own flag and forbidden the others'; the help probe advertises nothing, so
+    the help-gated effort and model flags are really dropped."""
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    plugin, backend = cf.make_backend(flags=_NO_FLAGS)
+    c = plugin.contract
+    own = _MODE_FLAG[mode]
+    others = tuple(f for m, f in _MODE_FLAG.items() if f is not None and m != mode)
+    review = _req(
+        kind="review_changes",
+        config_mode=mode,
+        schema={"type": "object"},
+        model="m",
+        reasoning_effort="high",
+    )
+    assert (
+        await conformance.check_prepared_run(
+            c,
+            backend,
+            review,
+            required_flags=(
+                "--output-format",
+                contract.NO_CHROME_FLAG,
+                contract.APPEND_SYSTEM_PROMPT_FLAG,
+                contract.MAX_BUDGET_FLAG,
+                contract.NO_SESSION_PERSISTENCE_FLAG,
+                contract.TOOLS_FLAG,
+                contract.STRICT_MCP_FLAG,
+                contract.MCP_CONFIG_FLAG,
+                *((own,) if own else ()),
+            ),
+            forbidden_flags=(*others, contract.EFFORT_FLAG, contract.MODEL_FLAG),
+        )
+        == []
+    )
+    async with backend.prepare(review) as prepared:
+        assert {contract.EFFORT_FLAG, contract.MODEL_FLAG} <= set(prepared.dropped_flags)
+    # Instrument control: another mode's flag named as required is reported.
+    if others:
+        assert await conformance.check_prepared_run(
+            c, backend, review, required_flags=(others[0],)
+        ) == [f"required flag {others[0]} is not an option on argv"]
