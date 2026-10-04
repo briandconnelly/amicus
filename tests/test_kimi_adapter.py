@@ -11,6 +11,7 @@ from tests.support import kimifixtures as kf
 from amicus.backends.kimi import cli, contract
 from amicus.schemas import instructions as ins
 from amicus.sdk.backend.protocol import AgentBackend, OutcomeInspector, RunOutcome, RunRequest
+from amicus.sdk.conventions.preflight import FlagSupport
 from amicus.sdk.core.runtime import CommandRun
 from amicus.sdk.testing import conformance
 
@@ -259,3 +260,49 @@ def test_list_models_and_auth_probe(pinned_kimi_bin, monkeypatch):
     _, unresolved = kf.make_backend({"AMICUS_KIMI_BIN": "/definitely/not/here"})
     assert unresolved.auth_probe() is None
     assert backend.scrub_env({"A": "1"}, None) == {"A": "1"}
+
+
+_NO_FLAGS = FlagSupport(supported=frozenset(), help_parsed=True)
+
+
+async def test_prepared_runs_carry_the_contract_flags(pinned_kimi_bin, tmp_path):
+    """#127: each request shape held to the contract by the kit, with a help probe that
+    advertises nothing, so the two help-gated flags are really dropped and the always-send
+    ones this shape carries must still be there. The agent file is read-only's guarantee,
+    so a delegate must not carry it."""
+    plugin, backend = kf.make_backend(
+        {"AMICUS_STATE_DIR": str(tmp_path / "state")}, flags=_NO_FLAGS
+    )
+    c = plugin.contract
+    consult = _req(cwd=str(tmp_path), model="k3", isolation="ignore-skills")
+    assert (
+        await conformance.check_prepared_run(
+            c,
+            backend,
+            consult,
+            required_flags=(
+                contract.PROMPT_FLAG,
+                contract.OUTPUT_FORMAT_FLAG,
+                contract.AGENT_FILE_FLAG,
+            ),
+            forbidden_flags=(contract.MODEL_FLAG, contract.SKILLS_DIR_FLAG),
+        )
+        == []
+    )
+    async with backend.prepare(consult) as prepared:
+        assert set(prepared.dropped_flags) == {contract.MODEL_FLAG, contract.SKILLS_DIR_FLAG}
+    delegate = _req(kind="delegate", prompt="do", cwd=str(tmp_path))
+    assert (
+        await conformance.check_prepared_run(
+            c,
+            backend,
+            delegate,
+            required_flags=(contract.PROMPT_FLAG, contract.OUTPUT_FORMAT_FLAG),
+            forbidden_flags=(contract.AGENT_FILE_FLAG,),
+        )
+        == []
+    )
+    # Instrument control: the guarantee flag a delegate does not carry is reported.
+    assert await conformance.check_prepared_run(
+        c, backend, delegate, required_flags=(contract.AGENT_FILE_FLAG,)
+    ) == [f"required flag {contract.AGENT_FILE_FLAG} is not an option on argv"]
