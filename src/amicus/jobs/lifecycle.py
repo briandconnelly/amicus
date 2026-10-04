@@ -15,9 +15,9 @@ from typing import TYPE_CHECKING, Any
 
 from amicus import obs
 from amicus.errors import async_twin_for, error_envelope
-from amicus.jobs.delivery import finished_job_envelope
+from amicus.jobs.delivery import finished_job_envelope, unreadable_result_envelope
 from amicus.jobs.polling import job_status_arguments, poll_hint_ms
-from amicus.jobs.store import JobCapReached, JobStore
+from amicus.jobs.store import JobCapReached, JobStore, ResultUnreadable
 from amicus.orchestration.isolation import WORKTREE_PREFIX
 from amicus.schemas.fingerprint import RESULT_FORMAT
 from amicus.schemas.results import JobFollowUp, JobResultFollowUp, JobStarted
@@ -354,7 +354,10 @@ async def start_async(
             meta=meta,
         )
     if result_kind == "replay":
-        snap = await asyncio.to_thread(store.status, spec.cwd, outcome["job_id"])
+        try:
+            snap = await asyncio.to_thread(store.status, spec.cwd, outcome["job_id"])
+        except ResultUnreadable as exc:
+            return _unreadable_result(outcome["job_id"], spec.cwd, meta, plugin, exc)
         if snap is None:
             return idem_error("idempotency_result_unavailable", meta, plugin, tool=spec.tool)
         return mark_replayed(
@@ -466,7 +469,12 @@ async def await_job_result(
             with contextlib.suppress(Exception):
                 await asyncio.shield(asyncio.to_thread(store.cancel, cwd, job_id))
         raise
-    rec2, payload = await asyncio.to_thread(store.result_payload, cwd, job_id)
+    except ResultUnreadable as exc:
+        return _unreadable_result(job_id, cwd, meta, plugin, exc, detail=detail)
+    try:
+        rec2, payload = await asyncio.to_thread(store.result_payload, cwd, job_id)
+    except ResultUnreadable as exc:
+        return _unreadable_result(job_id, cwd, meta, plugin, exc, detail=detail)
     if rec2 is None:
         return _vanished("job record expired before its result was read")
     envelope, delivered = finished_job_envelope(rec2, payload, job_id, kind, meta, detail, cwd)
@@ -477,9 +485,37 @@ async def await_job_result(
 
 async def mark_delivered(store: JobStore, cwd: str, job_id: str) -> None:
     """Let the count cap evict a result amicus has now returned once (#244). A failed
-    stamp only keeps the record protected until its TTL, so it never fails the delivery."""
-    with contextlib.suppress(OSError):
+    stamp only keeps the record protected until its TTL, so it never fails the delivery;
+    nor does a record that stopped reading back between the delivery and the stamp."""
+    with contextlib.suppress(OSError, ResultUnreadable):
         await asyncio.to_thread(store.mark_delivered, cwd, job_id)
+
+
+def _unreadable_result(
+    job_id: str,
+    cwd: str,
+    meta: Meta,
+    plugin: BackendPlugin,
+    exc: ResultUnreadable,
+    *,
+    detail: str | None = None,
+) -> dict[str, Any]:
+    """A sync wait or a keyed replay met a stored result that could not be read (#280).
+    The store raises only once the worker is stopped, so the job is left exactly as it
+    is, keyed or not, and the caller fetches it free once the file reads back, at the
+    detail the wait was asked for where that is known (a replay's start has none)."""
+    arguments = job_status_arguments(job_id, cwd)
+    if detail is not None:
+        arguments["detail"] = detail
+    return unreadable_result_envelope(
+        meta,
+        tool="amicus_job_result",
+        next_step="fetch_job_result",
+        arguments=arguments,
+        job_id=job_id,
+        errno=exc.errno,
+        plugin=plugin,
+    )
 
 
 def _keyed_timeout(
@@ -566,7 +602,10 @@ async def _start_keyed_sync(
         if result_kind in ("created", "replay"):
             job_id = outcome["job_id"]
             if result_kind == "replay":
-                snap = await asyncio.to_thread(store.status, spec.cwd, job_id)
+                try:
+                    snap = await asyncio.to_thread(store.status, spec.cwd, job_id)
+                except ResultUnreadable as exc:
+                    return _unreadable_result(job_id, spec.cwd, meta, plugin, exc), True
                 if snap is None:
                     return idem_error(
                         "idempotency_result_unavailable", meta, plugin, tool=spec.tool

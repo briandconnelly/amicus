@@ -19,8 +19,10 @@ from amicus.jobs.delivery import (
     attach_consume_disposition,
     consumable_state,
     finished_job_envelope,
+    unreadable_result_envelope,
 )
-from amicus.jobs.store import MAX_POLL_AFTER_MS
+from amicus.jobs.polling import job_status_arguments
+from amicus.jobs.store import MAX_POLL_AFTER_MS, ResultUnreadable
 from amicus.schemas.envelope import InvalidArgument
 from amicus.schemas.params import (
     DetailParam,
@@ -98,18 +100,32 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
             return err
         assert cwd is not None
         # Read first, even for a cancel: a foreign record is never signalled (decision 6).
-        row = await asyncio.to_thread(store().status, cwd, job_id)
-        deadline = time.monotonic() + wait
-        while (
-            row is not None
-            and row["status"] == "running"
-            and lookup.backend_of(row) is not None
-            and (remaining := deadline - time.monotonic()) > 0
-        ):
-            await asyncio.sleep(min(_WAIT_POLL_SECONDS, remaining))
+        try:
             row = await asyncio.to_thread(store().status, cwd, job_id)
-        if row is not None and cancel and lookup.backend_of(row) is not None:
-            row = await asyncio.to_thread(store().cancel, cwd, job_id)
+            deadline = time.monotonic() + wait
+            while (
+                row is not None
+                and row["status"] == "running"
+                and lookup.backend_of(row) is not None
+                and (remaining := deadline - time.monotonic()) > 0
+            ):
+                await asyncio.sleep(min(_WAIT_POLL_SECONDS, remaining))
+                row = await asyncio.to_thread(store().status, cwd, job_id)
+            if row is not None and cancel and lookup.backend_of(row) is not None:
+                row = await asyncio.to_thread(store().cancel, cwd, job_id)
+        except ResultUnreadable as exc:
+            # The store raises only for a stopped worker whose result exists but cannot
+            # be read (#280): report that, never a state. A cancel's worker is stopped
+            # whether this came from its first read or its post-termination one.
+            return unreadable_result_envelope(
+                lookup.job_meta(settings, cwd, source, roots_source),
+                tool="amicus_job_status",
+                next_step="poll_job_status",
+                arguments=job_status_arguments(job_id, workspace_root),
+                job_id=job_id,
+                errno=exc.errno,
+                signalled=cancel,
+            )
         if row is None or lookup.backend_of(row) is None:
             return lookup.job_not_found(
                 job_id, lookup.job_meta(settings, cwd, source, roots_source), workspace_root
@@ -131,7 +147,21 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
         if err is not None:
             return err
         assert cwd is not None
-        rec, payload = await asyncio.to_thread(store().result_payload, cwd, job_id)
+        try:
+            rec, payload = await asyncio.to_thread(store().result_payload, cwd, job_id)
+        except ResultUnreadable as exc:
+            # Either read (status, then the payload) found a result that exists but cannot
+            # be read (#280). The repair names the call made, which is free either way, with
+            # the detail asked for: followed at the default, a full-detail consume would
+            # deliver the summary and then delete the record. A consume deleted nothing.
+            return unreadable_result_envelope(
+                lookup.job_meta(settings, cwd, source, roots_source),
+                tool="amicus_job_consume_result" if consume else "amicus_job_result",
+                next_step="fetch_job_result",
+                arguments={**job_status_arguments(job_id, workspace_root), "detail": detail},
+                job_id=job_id,
+                errno=exc.errno,
+            )
         backend = lookup.backend_of(rec) if rec is not None else None
         if rec is None or backend is None:
             return lookup.job_not_found(
@@ -298,7 +328,31 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
                     ),
                     invalid_arguments=[InvalidArgument(field="cursor", reason=reason)],
                 )
-        rows = await asyncio.to_thread(store().list_jobs, cwd)
+        try:
+            rows = await asyncio.to_thread(store().list_jobs, cwd)
+        except ResultUnreadable as exc:
+            # One record's result exists but cannot be read (#280). The whole listing is
+            # refused rather than served without that row: a page that silently omits a
+            # job would let the next cursor step past it, and the schema has no way to
+            # say a row is missing. The repair repeats this exact call.
+            filters = {
+                "limit": limit,
+                "cursor": cursor,
+                "status": status,
+                "backend": backend,
+                "task_id": task_id,
+            }
+            return unreadable_result_envelope(
+                lookup.job_meta(settings, cwd, source, roots_source),
+                tool="amicus_job_list",
+                next_step="list_jobs",
+                arguments={
+                    "workspace_root": workspace_root,
+                    **{k: v for k, v in filters.items() if v is not None},
+                },
+                job_id=None,
+                errno=exc.errno,
+            )
         tasks = lookup.task_map(settings).entries()
         # First association wins, as TaskJobMap.task_for does: a keyed replay from another
         # task adds a forward entry for recovery, and the job's own task_id is the first

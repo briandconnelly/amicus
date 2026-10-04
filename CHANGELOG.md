@@ -37,8 +37,6 @@ per-change, as its own lead says.
   offers to codex-cli 0.159 and later. It gets the same tools as `gpt-6-sol`, and the disables
   still remove `clock.sleep` from it.
 
-### Changed
-
 - The conformance kit a backend plugin must pass (`amicus.sdk.testing.conformance`) now
   reads as strong as its name (#127). `check_backend`'s effort probe follows the
   contract's declared `effort_validation` (a malformed level for every declared gate, an
@@ -46,8 +44,8 @@ per-change, as its own lead says.
   refusal to be `invalid_reasoning_effort`, and runs only once a plain request is accepted:
   a backend that refuses every request pre-spend is reporting its own state (Codex with a
   relative `CODEX_HOME`), so the probes are skipped, not failed, and the backend still loads;
-  `check_contract` refuses
-  the pairing of `effort_silently_ignored_upstream` with `shape_only`. A new async
+  `check_contract` refuses the
+  pairing of `effort_silently_ignored_upstream` with `shape_only`. A new async
   `check_prepared_run(contract, backend, request, required_flags=, forbidden_flags=)`
   stages one request through `prepare()` without spawning and holds it to the contract:
   the named flags present as options and not reported dropped, only help-gated flags
@@ -58,6 +56,26 @@ per-change, as its own lead says.
   result is evidence of: it corroborates an adapter against its declarations and cannot
   establish a declaration about the CLI itself. `check_backend` still runs at registry
   load; `check_prepared_run` never does.
+
+### Fixed
+
+- A transient read error on a finished job's stored result no longer reports the job as
+  `failed`, whose repair tells the caller to start a new paid job for a result that still
+  exists (#280). A finished job is now stamped `done` on first observation, as a cancelled
+  one always was, so later reads never re-read `result.json`; and a result that exists but
+  cannot be opened (a permission blip, `EIO`, `EMFILE`) is reported by whichever call opens
+  it as `internal_error` with `temporary: true`, `retry_after_ms` and a repair naming the
+  same free call: on a record not yet stamped `done`, every read (`amicus_job_status`,
+  `amicus_job_result`, `amicus_job_consume_result`, `amicus_job_cancel`, `amicus_job_list`,
+  a sync wait and a keyed replay); on a stamped one, only the result fetch, since the
+  others answer from the stamp. The record is kept: a consume deletes nothing, the
+  per-workspace cap counts it as held and never evicts it, the reaper keeps it until its
+  retention bound (aged from its completion clock, else from its deadline, so a job that
+  outran the TTL is not expired the moment it finishes), and no cancel or deadline
+  finalizes it. An absent `result.json` still
+  reads as `failed`, and a result that parses but does not validate is still the
+  non-temporary error #277 made it. Records finalized by 0.8.0 or earlier gain the `done`
+  stamp on their next successful read. Neither `RESULT_FORMAT` nor `FINGERPRINT` moves.
 
 ## [0.8.0] - 2026-09-27
 

@@ -76,6 +76,24 @@ _LOCK = threading.RLock()
 _JOB_ID_RE = re.compile(r"[0-9a-f]{32}")
 
 
+class ResultUnreadable(Exception):
+    """A job's ``result.json`` exists but could not be read (``EACCES``, ``EIO``,
+    ``EMFILE``, ...), so whether the job is done is not knowable right now (#280).
+
+    Distinct from an absent result, which ``_read_envelope`` reports as ``None`` and
+    which means the job produced none. Raised by every read that would otherwise have
+    to invent a terminal state: nothing is stamped on the record, nothing is deleted or
+    finalized, and the same read can succeed once the file is readable again, which is
+    why a caller reports it as a temporary error naming a free re-read, never as
+    ``failed`` (whose repair says to pay again). Carries ``errno`` only: the message of
+    an ``OSError`` can name a path, which never leaves the store.
+    """
+
+    def __init__(self, errno: int | None) -> None:
+        super().__init__(f"result unreadable (errno {errno})")
+        self.errno = errno
+
+
 class DiscardOutcome(StrEnum):
     """What ``JobStore.discard`` did, so callers never have to re-derive it from a
     post-hoc ``status`` read (a partial deletion can make the record unreadable
@@ -412,7 +430,13 @@ class JobStore:
         """Injected into the index: does this job still exist and is it terminal? Uses
         the same live-read (and expiry reaping) as every other lookup, so a terminal
         job past its TTL reads as gone (→ result-unavailable), never as replayable."""
-        live = self._read_live_job(cwd, job_id)
+        try:
+            live = self._read_live_job(cwd, job_id)
+        except ResultUnreadable:
+            # The record is there; only its outcome is unreadable. Reported as live and
+            # not terminal: the key keeps replaying to this job (whose own reads say what
+            # is wrong) and the index never reclaims it as a missing backing job.
+            return idempotency.JobFacts(exists=True, terminal=False)
         if live is None:
             return None
         _jd, _meta, state = live
@@ -438,11 +462,15 @@ class JobStore:
     @staticmethod
     def _read_envelope(jd: Path) -> dict | None:
         """Parse the final result envelope from result.json, or None if absent/
-        partial/non-object."""
+        partial/non-object. A result that exists but cannot be read is neither: it
+        raises ``ResultUnreadable`` (#280), because reporting it as absent turned a done
+        job into ``failed`` on every transient read error."""
         try:
             text = (jd / "result.json").read_text()
-        except OSError:
+        except FileNotFoundError:
             return None
+        except OSError as exc:
+            raise ResultUnreadable(exc.errno) from None
         text = text.strip()
         if not text:
             return None
@@ -461,14 +489,24 @@ class JobStore:
         return ok if isinstance(ok, bool) else None
 
     def _mark_done(self, jd: Path, meta: dict, env: dict) -> None:
-        """Stamp the terminal ``done`` outcome on first observation only: the
-        completion clock (drives expiry) and ``result_ok`` (the envelope's ``ok``
-        discriminator). Guarded by ``completed_epoch`` so it writes meta once and
-        never re-derives — a record already finalized (including by a release that
-        predates ``result_ok``) is left untouched, so the field is never backfilled."""
+        """Stamp the terminal ``done`` outcome on first observation: the completion
+        clock (drives expiry), ``result_ok`` (the envelope's ``ok`` discriminator) and
+        ``terminal_status`` itself, so every later read short-circuits on the stamp and
+        never re-reads result.json (#280: re-deriving it turned a read error into
+        ``failed``). The clock and ``result_ok`` are guarded by ``completed_epoch`` so
+        they are written once and never re-derived — a record already finalized
+        (including by a release that predates ``result_ok``) keeps what it has, so that
+        field is never backfilled. The marker alone is backfilled onto such a record,
+        because it is what keeps the record ``done`` through a later read error."""
+        changed = False
         if meta.get("completed_epoch") is None:
             meta["completed_epoch"] = time.time()
             meta["result_ok"] = self._envelope_ok(env)
+            changed = True
+        if meta.get("terminal_status") != "done":
+            meta["terminal_status"] = "done"
+            changed = True
+        if changed:
             self._write_meta(jd, meta)
 
     @staticmethod
@@ -753,7 +791,12 @@ class JobStore:
         return _worker_lock_held(jd / "worker.lock") is False and not _pid_alive(pid)
 
     def _status_of(self, jd: Path, meta: dict) -> str:
-        """Compute the live status, killing + marking jobs that overran."""
+        """Compute the live status, killing + marking jobs that overran.
+
+        Raises ``ResultUnreadable`` when a stopped worker's result.json exists but cannot
+        be read (#280): the job is then neither finalized nor reported, since reading it
+        as absent would stamp ``timeout`` or report ``failed`` for a result that is still
+        there. A record already stamped terminal never reads the file at all."""
         terminal = meta.get("terminal_status")
         if terminal:
             return terminal
@@ -765,7 +808,9 @@ class JobStore:
                     is_alive=lambda: self._job_running(jd, meta),
                 )
                 # The worker may have completed during the grace window — prefer its
-                # result over masking it as a timeout (result-first finalization).
+                # result over masking it as a timeout (result-first finalization). An
+                # unreadable one propagates: the worker is stopped either way, and the
+                # next read finalizes whichever of done or timeout it can then see.
                 env = self._read_envelope(jd)
                 if env is not None:
                     self._mark_done(jd, meta, env)
@@ -812,6 +857,19 @@ class JobStore:
         if completed is None:
             return False
         return time.time() - completed > self.ttl_seconds
+
+    def _past_retention(self, meta: dict) -> bool:
+        """Whether a record whose outcome could not be read is past its retention bound
+        (#280): its worker is stopped, so it ages like a finalized one, from its
+        completion clock if one was stamped. An unstamped record has none, and its start
+        would understate it: a job that ran longer than the TTL would be past retention
+        the moment it finished (PR #296 review). Its deadline cannot precede its
+        completion, since the store stops a worker past it, so that is the clock, with
+        the start only for a record that recorded no deadline. One rule for the reaper
+        and for a direct read, so a record the reaper would remove cannot keep raising
+        on ``status`` instead."""
+        end = meta.get("completed_epoch") or meta.get("deadline_epoch") or meta.get("started_epoch")
+        return end is not None and time.time() - end > self.ttl_seconds
 
     def _status_dict(self, jd: Path, meta: dict, state: str) -> dict:
         elapsed_ms = self._elapsed_ms(meta)
@@ -875,7 +933,16 @@ class JobStore:
         meta = self._read_meta(jd)
         if meta is None:
             return None, False
-        state = self._status_of(jd, meta)
+        try:
+            state = self._status_of(jd, meta)
+        except ResultUnreadable:
+            # Unknowable, not failed: served to no one until it reads back, but held to
+            # the same retention bound as any finalized record, so a result that never
+            # reads back again cannot outlive what the tool surface discloses.
+            if self._past_retention(meta):
+                self._rmtree(jd)
+                return None, not self._gone(jd)
+            raise
         if state in _TERMINAL and self._expired(meta):
             self._rmtree(jd)
             return None, not self._gone(jd)
@@ -890,16 +957,24 @@ class JobStore:
             meta = self._read_meta(jd)
             if meta is None:
                 continue
-            state = self._status_of(jd, meta)
+            try:
+                state = self._status_of(jd, meta)
+            except ResultUnreadable:
+                # Kept until its retention bound, since nothing has been able to tell
+                # whether it is done; past it, it goes like any finalized record.
+                if self._past_retention(meta):
+                    self._rmtree(jd)
+                continue
             if state in _TERMINAL:
                 end = meta.get("completed_epoch") or meta.get("started_epoch") or now
                 if now - end > self.ttl_seconds:
                     self._rmtree(jd)
 
-    def _evictable(self, meta: dict, state: str) -> bool:
-        """Whether the count cap may delete this record. Never a running job, and never
-        a ``done`` result that has not been returned once (#244); everything else
-        terminal is fair game."""
+    def _evictable(self, meta: dict, state: str | None) -> bool:
+        """Whether the count cap may delete this record. Never a running job, never a
+        ``done`` result that has not been returned once (#244), and never a record whose
+        state could not be read (``None``: it may be exactly such a result); everything
+        else terminal is fair game."""
         if state not in _TERMINAL:
             return False
         if state != "done" or "delivered_epoch" not in meta:
@@ -918,11 +993,16 @@ class JobStore:
         sharing a state root can each pass this check at once and overshoot the cap by
         one start per process; an overshoot deletes nothing."""
         self._reap_workspace(cwd)
-        records = []
+        records: list[tuple[Path, dict, str | None]] = []
         for jd in self._job_dirs(self._ws_dir(cwd)):
             meta = self._read_meta(jd)
-            if meta is not None:
-                records.append((jd, meta, self._status_of(jd, meta)))
+            if meta is None:
+                continue
+            try:
+                state: str | None = self._status_of(jd, meta)
+            except ResultUnreadable:
+                state = None  # counted as held, never evicted: it may be an unreturned result
+            records.append((jd, meta, state))
         held = len(records)
         if held < self.max_count:
             return
@@ -953,6 +1033,9 @@ class JobStore:
         parsed result.json (only when status == done), else None. Deletion is a
         separate, explicit step — ``discard`` — so a caller can validate the
         payload it was handed before destroying the only copy of it (#306).
+        Raises ``ResultUnreadable`` when either read (the status, then the payload)
+        finds a result that exists but cannot be opened (#280), as ``status``,
+        ``list_jobs`` and ``cancel`` do; ``discard`` reports it as DELETE_FAILED.
         """
         with _LOCK:
             live = self._read_live_job(cwd, job_id)
@@ -1009,19 +1092,26 @@ class JobStore:
         if expected not in _TERMINAL:
             raise ValueError(f"expected must be a terminal state, not {expected!r}")
         with _LOCK:
-            live, left = self._read_or_expire(cwd, job_id)
-            if live is None:
-                return DiscardOutcome.DELETE_FAILED if left else DiscardOutcome.MISSING
-            jd, meta, state = live
-            if state != expected:
-                return DiscardOutcome.STATE_CHANGED
-            # Prove a failed job's worker gone, THEN read again: a worker running without
-            # its lock can write result.json and exit after the first read, and only once it
-            # is gone can no result appear (PR #238 review).
-            if state == "failed" and (
-                not self._worker_gone(jd, meta) or self._status_of(jd, meta) != "failed"
-            ):
-                return DiscardOutcome.STATE_CHANGED
+            try:
+                live, left = self._read_or_expire(cwd, job_id)
+                if live is None:
+                    return DiscardOutcome.DELETE_FAILED if left else DiscardOutcome.MISSING
+                jd, meta, state = live
+                if state != expected:
+                    return DiscardOutcome.STATE_CHANGED
+                # Prove a failed job's worker gone, THEN read again: a worker running
+                # without its lock can write result.json and exit after the first read, and
+                # only once it is gone can no result appear (PR #238 review).
+                if state == "failed" and (
+                    not self._worker_gone(jd, meta) or self._status_of(jd, meta) != "failed"
+                ):
+                    return DiscardOutcome.STATE_CHANGED
+            except ResultUnreadable:
+                # Either read found a result that could not be read back (#280): the state
+                # the caller named is not verifiable, so nothing is deleted. DELETE_FAILED
+                # rather than STATE_CHANGED, because the record is left exactly as it was
+                # for a retry, which is what that outcome promises.
+                return DiscardOutcome.DELETE_FAILED
             self._rmtree(jd)
             return DiscardOutcome.REMOVED if self._gone(jd) else DiscardOutcome.DELETE_FAILED
 
@@ -1051,7 +1141,11 @@ class JobStore:
             if meta is None:
                 return None  # consumed or expired while we waited
             terminal = meta.get("terminal_status")
-            env = self._read_envelope(jd)
+            # A stamped record is authoritative and its file is never read. An unstamped
+            # one whose result cannot be read back propagates ResultUnreadable (#280): the
+            # worker was signalled, but finalizing it as cancelled would mask a result
+            # that is there, so nothing is written and the next read finalizes it.
+            env = self._read_envelope(jd) if terminal is None else None
             if terminal is None and env is not None:
                 # The worker completed during the window — preserve its result
                 # rather than masking it as cancelled, stamping its outcome if the

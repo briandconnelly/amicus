@@ -23,6 +23,7 @@ from amicus.schemas.results import (
 from amicus.sdk.core import redaction
 
 if TYPE_CHECKING:  # pragma: no cover
+    from amicus.plugin import BackendPlugin
     from amicus.schemas.envelope import Meta
 
 JOB_RESULT_MODELS: dict[str, type[BaseModel]] = {
@@ -102,6 +103,66 @@ def _corrupt(detail: str, meta: Meta) -> dict[str, Any]:
             "amicus_backends and check the server logs. A consume keeps this record, and until "
             "AMICUS_JOB_TTL expires it, it holds a slot of the per-workspace job cap that no "
             "fetch or consume frees."
+        ),
+    )
+
+
+# How soon a reader may retry after a stored result could not be read (#280): the causes
+# amicus can name (EMFILE, EIO, a permission blip) clear in moments or not at all, so a
+# short fixed delay beats echoing a terminal record's poll hint, which assumes a running job.
+RESULT_READ_RETRY_MS = 1000
+
+
+def unreadable_result_envelope(
+    meta: Meta,
+    *,
+    tool: str,
+    next_step: str,
+    arguments: dict[str, Any],
+    job_id: str | None,
+    errno: int | None,
+    plugin: BackendPlugin | None = None,
+    signalled: bool = False,
+) -> dict[str, Any]:
+    """The envelope for ``ResultUnreadable`` (#280): a stored result exists but could not
+    be read just now. Temporary, with a repair naming the FREE read to repeat (``tool``
+    with ``arguments``), because the one thing a caller must not do is what ``job_failed``'s
+    repair tells it: start a new paid job for a result that is still there. Never
+    ``_corrupt`` (#277): that one parsed and fails the same way on every re-read; this one
+    did not parse because it could not be opened, and the identical read can succeed.
+    ``signalled`` is for a cancel whose worker was stopped before the read failed; it
+    promises no outcome, because an unreadable file may still parse as no result."""
+    if job_id is not None:
+        meta.job_id = job_id
+    subject = f"job {job_id}" if job_id is not None else "a job record in this workspace"
+    cause = (
+        f"a transient storage error, errno {errno}"
+        if errno is not None
+        else ("a transient storage error")
+    )
+    stopped = (
+        " The worker is stopped, so no further cancel is needed; its outcome is read once "
+        "the file reads back."
+        if signalled
+        else ""
+    )
+    return error_envelope(
+        "internal_error",
+        f"{subject}: its stored result exists but could not be read ({cause}). The job is "
+        f"not failed and the record is kept; do not start a new job.{stopped}",
+        meta,
+        plugin=plugin,
+        temporary=True,
+        retry_after_ms=RESULT_READ_RETRY_MS,
+        repair_next_step=next_step,
+        repair_tool=tool,
+        repair_arguments=arguments,
+        repair_alternative=(
+            f"Retry {tool} with these arguments after retry_after_ms; it is free and reads "
+            "the same record. If this persists, the file is unreadable to this server "
+            "(permissions, a full descriptor table, a failing disk): fix that, then retry. "
+            "The record stays until AMICUS_JOB_TTL expires it and holds a slot of the "
+            "per-workspace job cap meanwhile; a consume keeps it."
         ),
     )
 
@@ -244,8 +305,10 @@ def finished_job_envelope(
             )
         return serialize_error(error), True
     if state == "done":
-        # done but payload is None: the record itself could not be read back, distinct
-        # from STATE_TO_ERROR's "failed" (the job ran and produced no result).
+        # done but payload is None: result.json was gone by the payload read, which only a
+        # concurrent delete (#237) leaves behind, distinct from STATE_TO_ERROR's "failed"
+        # (the job ran and produced no result). A result that is there but cannot be opened
+        # never reaches here: the store raises ResultUnreadable for it (#280).
         code, message = "job_failed", "The job finished but its stored result could not be read."
     else:
         code, message = STATE_TO_ERROR.get(state, ("job_failed", "The job did not complete."))

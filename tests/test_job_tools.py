@@ -16,7 +16,7 @@ from jsonschema import Draft202012Validator
 
 from amicus import config, server
 from amicus.jobs import delivery, lifecycle, lookup
-from amicus.jobs.store import DiscardOutcome, JobStore
+from amicus.jobs.store import DiscardOutcome, JobStore, ResultUnreadable
 from amicus.registry import BackendRegistry
 
 
@@ -964,3 +964,186 @@ async def test_status_wait_out_of_range_is_invalid(app, tmp_path, wait):
         )
     err = res.structured_content["error"]
     assert err["code"] == "invalid_arguments" and err["details"]["field"] == "wait_seconds"
+
+
+# --- #280: a stored result that exists but cannot be read ------------------------------
+
+
+def _deny_result_read(monkeypatch, jd):
+    """result.json is present but cannot be opened. Returns a restore callable, used instead
+    of monkeypatch.undo() so the app fixture's environment patches stay in place."""
+    real_read_text = Path.read_text
+
+    def denied(self, *args, **kwargs):
+        if self == jd / "result.json":
+            raise PermissionError("result read denied")
+        return real_read_text(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", denied)
+    return lambda: monkeypatch.setattr(Path, "read_text", real_read_text)
+
+
+async def _unobserved(store, cwd, job_id, monkeypatch):
+    """Let the worker finish while every read of its result is denied, so no read has
+    stamped the record done: the first-observation case. Returns (job_dir, restore)."""
+    jd = store._job_dir(cwd, job_id)
+    restore = _deny_result_read(monkeypatch, jd)
+    deadline = time.monotonic() + 15
+    while time.monotonic() < deadline:
+        try:
+            st = store.status(cwd, job_id)
+        except ResultUnreadable:
+            return jd, restore
+        assert st["status"] == "running"
+        await asyncio.sleep(0.02)
+    raise AssertionError("worker did not finish in time")
+
+
+def _assert_unreadable(body, *, repair_tool, job_id, ws, detail=None):
+    err = body["error"]
+    assert body["ok"] is False and err["code"] == "internal_error"
+    assert err["temporary"] is True and err["retry_after_ms"] == delivery.RESULT_READ_RETRY_MS
+    assert err["repair"]["tool"] == repair_tool
+    expected = {"job_id": job_id, **ws} | ({"detail": detail} if detail else {})
+    assert err["repair"]["arguments"] == expected
+    assert body["meta"]["job_id"] == job_id
+    assert "not failed" in err["message"] and "do not start a new job" in err["message"]
+    assert ws["workspace_root"] not in err["message"]
+
+
+async def test_job_tools_report_an_unreadable_result_as_temporary(
+    app, store, tmp_path, monkeypatch
+):
+    """Every job tool meets the record #280 is about and reports the read error, never a
+    state: not failed (whose repair pays again), not done (whose result it cannot hand
+    over). A consume deletes nothing, and the result is delivered once the file reads back."""
+    cwd = str(tmp_path)
+    ws = {"workspace_root": cwd}
+    async with Client(app) as c:
+        schemas = await _schemas(c)
+        job_id = await _start(c, tmp_path)
+        jd, restore = await _unobserved(store, cwd, job_id, monkeypatch)
+        repairs = {
+            "amicus_job_status": "amicus_job_status",
+            "amicus_job_result": "amicus_job_result",
+            "amicus_job_consume_result": "amicus_job_consume_result",
+            "amicus_job_cancel": "amicus_job_status",
+        }
+        for tool, repair_tool in repairs.items():
+            res = await c.call_tool(tool, {"job_id": job_id, **ws}, raise_on_error=False)
+            assert res.is_error, tool
+            body = res.structured_content
+            schemas[tool].validate(body)
+            detail = "summary" if "result" in tool else None
+            _assert_unreadable(body, repair_tool=repair_tool, job_id=job_id, ws=ws, detail=detail)
+            assert ("no further cancel" in body["error"]["message"]) is (
+                tool == "amicus_job_cancel"
+            )
+        listed = await c.call_tool(
+            "amicus_job_list", {**ws, "limit": 5, "status": "done"}, raise_on_error=False
+        )
+        assert listed.is_error
+        body = listed.structured_content
+        schemas["amicus_job_list"].validate(body)
+        err = body["error"]
+        assert err["code"] == "internal_error" and err["temporary"] is True
+        assert err["repair"]["next_step"] == "list_jobs"
+        assert err["repair"]["tool"] == "amicus_job_list"
+        assert err["repair"]["arguments"] == {**ws, "limit": 5, "status": "done"}
+        assert "job_id" not in body["meta"]
+        assert (jd / "result.json").exists(), "a consume deleted nothing"
+        meta = json.loads((jd / "meta.json").read_text(encoding="utf-8"))
+        assert meta["terminal_status"] is None and meta["completed_epoch"] is None
+        restore()
+        res = (await c.call_tool("amicus_job_result", {"job_id": job_id, **ws})).structured_content
+        assert res["ok"] is True and res["summary"] == "Looks fine"
+        assert [
+            j["status"]
+            for j in (await c.call_tool("amicus_job_list", ws)).structured_content["jobs"]
+        ] == ["done"]
+
+
+async def test_keyed_async_replay_of_an_unreadable_result_is_temporary(
+    app, store, tmp_path, monkeypatch
+):
+    """A replayed key hands back the existing job; when its result cannot be read, the
+    _async replay reports the read error against that job and spawns nothing."""
+    cwd = str(tmp_path)
+    ws = {"workspace_root": cwd}
+    call = {"backend": "codex", "question": "why?", **ws, "idempotency_key": "k-280"}
+    async with Client(app) as c:
+        job_id = await _start(c, tmp_path, idempotency_key="k-280")
+        _jd, restore = await _unobserved(store, cwd, job_id, monkeypatch)
+        res = await c.call_tool("amicus_consult_async", call, raise_on_error=False)
+        assert res.is_error
+        _assert_unreadable(
+            res.structured_content, repair_tool="amicus_job_result", job_id=job_id, ws=ws
+        )
+        assert len(store._job_dirs(store._ws_dir(cwd))) == 1, "nothing new was spawned"
+        restore()
+        again = (await c.call_tool("amicus_consult_async", call)).structured_content
+        assert again["ok"] is True and again["job_id"] == job_id and again["status"] == "done"
+
+
+async def test_keyed_sync_replay_of_an_unreadable_result_is_temporary(
+    app, store, tmp_path, monkeypatch
+):
+    """The sync replay's snapshot read (keys are scoped per tool, so this needs a job the
+    sync tool created). The first call stamps the record done; a record finalized by an
+    older release carries no stamp, which is simulated by clearing it, and then its
+    result stops reading back: the replay reports that, and the key spawns nothing."""
+    cwd = str(tmp_path)
+    ws = {"workspace_root": cwd}
+    call = {"backend": "codex", "question": "why?", **ws, "idempotency_key": "k-280-sync"}
+    async with Client(app) as c:
+        first = (await c.call_tool("amicus_consult", call)).structured_content
+        assert first["ok"] is True
+        job_id = first["meta"]["job_id"]
+        jd = store._job_dir(cwd, job_id)
+        meta = json.loads((jd / "meta.json").read_text(encoding="utf-8"))
+        assert meta["terminal_status"] == "done", "control: the sync delivery stamped it"
+        meta["terminal_status"] = None
+        (jd / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
+        restore = _deny_result_read(monkeypatch, jd)
+        res = await c.call_tool("amicus_consult", call, raise_on_error=False)
+        assert res.is_error
+        _assert_unreadable(
+            res.structured_content, repair_tool="amicus_job_result", job_id=job_id, ws=ws
+        )
+        assert len(store._job_dirs(store._ws_dir(cwd))) == 1, "nothing new was spawned"
+        restore()
+        again = (await c.call_tool("amicus_consult", call)).structured_content
+        assert again["ok"] is True and again["meta"]["idempotency_replayed"] is True
+        assert (
+            json.loads((jd / "meta.json").read_text(encoding="utf-8"))["terminal_status"] == "done"
+        )
+
+
+async def test_unreadable_consume_repair_keeps_the_requested_detail(
+    app, store, tmp_path, monkeypatch
+):
+    """Review finding: followed at the default detail, the repair of a full-detail consume
+    would deliver the summary and then delete the record, losing the text the caller
+    asked for. The repair carries the detail, so following it verbatim delivers it."""
+    cwd = str(tmp_path)
+    ws = {"workspace_root": cwd}
+    async with Client(app) as c:
+        job_id = await _start(c, tmp_path)
+        _jd, restore = await _unobserved(store, cwd, job_id, monkeypatch)
+        res = await c.call_tool(
+            "amicus_job_consume_result",
+            {"job_id": job_id, "detail": "full", **ws},
+            raise_on_error=False,
+        )
+        _assert_unreadable(
+            res.structured_content,
+            repair_tool="amicus_job_consume_result",
+            job_id=job_id,
+            ws=ws,
+            detail="full",
+        )
+        restore()
+        repair = res.structured_content["error"]["repair"]
+        again = (await c.call_tool(repair["tool"], repair["arguments"])).structured_content
+        assert again["ok"] is True and again["raw_response"]["text"]
+        assert again["meta"]["consume"] == {"discard_outcome": "removed"}
