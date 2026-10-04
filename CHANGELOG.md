@@ -51,7 +51,8 @@ per-change, as its own lead says.
   `check_prepared_run(contract, backend, request, required_flags=, forbidden_flags=)`
   stages one request through `prepare()` without spawning and holds it to the contract:
   the named flags present as options and not reported dropped, only help-gated flags
-  dropped, staged artifacts present inside the context and gone after it. Each bundled
+  dropped, named artifact paths enumerated, and no staged path (a dangling symlink
+  included) surviving the context, on a normal exit or an exceptional one. Each bundled
   backend's offline tests call it per request shape with a help probe that advertises no
   flags, so a dropped flag is really dropped. The kit's docstring now says what a clean
   result is evidence of: it corroborates an adapter against its declarations and cannot

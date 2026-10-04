@@ -196,9 +196,14 @@ def check_backend(contract: BackendContract, backend: object) -> list[str]:
 
 def option_tokens(argv: Iterable[str]) -> frozenset[str]:
     """The option names on an argv, by position: every token after the program that
-    starts with ``-``, cut at ``=``. A value that happens to start with ``-`` is read as
-    an option too, which errs toward reporting a flag present, never absent; a flag's
-    value is never read as the flag (``-c key=value`` names ``-c``, not ``key``)."""
+    starts with ``-``, cut at ``=``. A flag's value is never read as the flag (``-c
+    key=value`` names ``-c``, not ``key``). A value that happens to start with ``-`` is
+    read as an option too, and argv has no universal arity grammar that could tell the
+    two apart, so the error is one-directional: a required flag can be reported present
+    when only a value spells it, and a forbidden one present for the same reason, but a
+    required flag is never reported absent. No bundled backend puts a flag-shaped value
+    on argv (prompts ride stdin or a file; the other values are paths, words and
+    ``key=value`` pairs), and a plugin's test names its own flags knowing their values."""
     names = set()
     for token in list(argv)[1:]:
         if token.startswith("-"):
@@ -242,7 +247,10 @@ async def check_prepared_run(
             return out
         if prepared.cwd != request.cwd:
             out.append(f"prepared cwd {prepared.cwd!r} is not the request's {request.cwd!r}")
-        if not all(isinstance(k, str) and isinstance(v, str) for k, v in prepared.env.items()):
+        env = prepared.env
+        if not isinstance(env, dict) or not all(
+            isinstance(k, str) and isinstance(v, str) for k, v in env.items()
+        ):
             out.append("env must map str to str")
         options = option_tokens(argv)
         dropped = tuple(prepared.dropped_flags)
@@ -294,11 +302,17 @@ class _ProbeExit(Exception):
     """Raised inside ``prepare`` by ``check_prepared_run``'s second pass; never a run."""
 
 
+def _left_behind(path: str) -> bool:
+    """``exists()`` follows a symlink, so a dangling one would read as gone."""
+    p = Path(path)
+    return p.exists() or p.is_symlink()
+
+
 def _survivors(staged: tuple[str, ...], staging_dir: str | None, exit_kind: str) -> list[str]:
     out: list[str] = []
-    leftover = [p for p in staged if Path(p).exists()]
+    leftover = [p for p in staged if _left_behind(p)]
     if leftover:
         out.append(f"{len(leftover)} staged artifact path(s) survived {exit_kind}")
-    if staging_dir is not None and Path(staging_dir).exists():
+    if staging_dir is not None and _left_behind(staging_dir):
         out.append(f"staging_dir survived {exit_kind}")
     return out

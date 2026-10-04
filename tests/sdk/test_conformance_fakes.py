@@ -727,3 +727,39 @@ async def test_prepared_run_rejects_a_bare_string_argv(tmp_path):
         CLAUDE_CONTRACT, BareArgv(), _probe(cwd=str(tmp_path))
     )
     assert violations == ["argv must be a non-empty tuple of str"]
+
+
+async def test_prepared_run_rejects_a_non_mapping_env(tmp_path):
+    """The diagnostic must not itself crash on the shape it diagnoses (PR #297 review)."""
+
+    class NoEnv(ClaudeLikeBackend):
+        @contextlib.asynccontextmanager
+        async def prepare(self, request: RunRequest):
+            yield PreparedRun(argv=("fakecli", "-p"), env=None, cwd=request.cwd)  # type: ignore[arg-type]
+
+    violations = await conformance.check_prepared_run(
+        CLAUDE_CONTRACT, NoEnv(), _probe(cwd=str(tmp_path))
+    )
+    assert violations == ["env must map str to str"]
+
+
+async def test_prepared_run_counts_a_dangling_symlink_as_a_survivor(tmp_path):
+    """``exists()`` follows a symlink, so a dangling one left at an artifact path would
+    read as cleaned up (PR #297 review)."""
+    dangling = tmp_path / "answer.md"
+    dangling.symlink_to(tmp_path / "never-written.md")
+    assert not dangling.exists() and dangling.is_symlink(), "control: dangling"
+
+    class LeavesASymlink(KimiLikeBackend):
+        @contextlib.asynccontextmanager
+        async def prepare(self, request: RunRequest):
+            async with super().prepare(request) as prepared:
+                yield dataclasses.replace(prepared, artifacts=(*prepared.artifacts, str(dangling)))
+
+    violations = await conformance.check_prepared_run(
+        KIMI_CONTRACT, LeavesASymlink(), _probe(cwd=str(tmp_path))
+    )
+    assert violations == [
+        "1 staged artifact path(s) survived the prepare context",
+        "1 staged artifact path(s) survived an exceptional exit from the prepare context",
+    ]
