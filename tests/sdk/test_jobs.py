@@ -2274,8 +2274,10 @@ def test_unreadable_record_is_held_by_the_cap_and_never_evicted(tmp_path, monkey
 
 def test_unreadable_record_is_kept_until_its_retention_bound(tmp_path, monkeypatch):
     # Before the TTL the reaper keeps it (nothing has been able to say it is not a
-    # result); past it, aged from its start since no completion clock was stamped, it
-    # goes like any finalized record, so it cannot outlive the disclosed retention.
+    # result); past it, aged from its deadline since no completion clock was stamped, it
+    # goes like any finalized record, so it cannot outlive the disclosed retention. A
+    # start older than the TTL alone is not past it: a job that ran longer than the TTL
+    # would otherwise be expired the moment it finished (PR #296 review).
     store = _store(tmp_path, ttl_seconds=3600)
     cwd = str(tmp_path)
     job_id, _ = store.start(_factory(_WRITE_DONE), cwd, kind="k")
@@ -2283,7 +2285,13 @@ def test_unreadable_record_is_kept_until_its_retention_bound(tmp_path, monkeypat
     store._reap_workspace(cwd)
     assert (jd / "result.json").exists()
     meta = json.loads((jd / "meta.json").read_text())
-    meta["started_epoch"] = time.time() - 10_000
+    meta["started_epoch"] = time.time() - 10_000  # outran the TTL; deadline still ahead
+    store._write_meta(jd, meta)
+    store._reap_workspace(cwd)
+    assert (jd / "result.json").exists()
+    with pytest.raises(ResultUnreadable):
+        store.status(cwd, job_id)
+    meta["deadline_epoch"] = time.time() - 10_000
     store._write_meta(jd, meta)
     store._reap_workspace(cwd)
     assert store._gone(jd)
@@ -2330,6 +2338,7 @@ def test_expired_unstamped_record_with_an_unreadable_result_is_reaped_on_read(
     jd = _unobserved_done(store, cwd, job_id, monkeypatch)
     meta = json.loads((jd / "meta.json").read_text())
     meta["started_epoch"] = time.time() - 10_000
+    meta["deadline_epoch"] = time.time() - 10_000
     store._write_meta(jd, meta)
     assert store.status(cwd, job_id) is None
     assert store._gone(jd)

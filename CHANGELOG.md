@@ -43,12 +43,16 @@ per-change, as its own lead says.
   `failed`, whose repair tells the caller to start a new paid job for a result that still
   exists (#280). A finished job is now stamped `done` on first observation, as a cancelled
   one always was, so later reads never re-read `result.json`; and a result that exists but
-  cannot be opened (a permission blip, `EIO`, `EMFILE`) is reported by `amicus_job_status`,
-  `amicus_job_result`, `amicus_job_consume_result`, `amicus_job_cancel`, `amicus_job_list`, a
-  sync wait and a keyed replay as `internal_error` with `temporary: true`, `retry_after_ms`
-  and a repair naming the same free call, while the record is kept: a consume deletes
-  nothing, the per-workspace cap counts it as held and never evicts it, the reaper keeps it
-  until its retention bound, and no cancel or deadline finalizes it. An absent `result.json`
+  cannot be opened (a permission blip, `EIO`, `EMFILE`) is reported by whichever call opens
+  it as `internal_error` with `temporary: true`, `retry_after_ms` and a repair naming the
+  same free call: on a record not yet stamped `done`, every read (`amicus_job_status`,
+  `amicus_job_result`, `amicus_job_consume_result`, `amicus_job_cancel`, `amicus_job_list`,
+  a sync wait and a keyed replay); on a stamped one, only the result fetch, since the
+  others answer from the stamp. The record is kept: a consume deletes nothing, the
+  per-workspace cap counts it as held and never evicts it, the reaper keeps it until its
+  retention bound (aged from its completion clock, else from its deadline, so a job that
+  outran the TTL is not expired the moment it finishes), and no cancel or deadline
+  finalizes it. An absent `result.json`
   still reads as `failed`, and a result that parses but does not validate is still the
   non-temporary error #277 made it. Records finalized by 0.8.0 or earlier gain the `done`
   stamp on their next successful read. Neither `RESULT_FORMAT` nor `FINGERPRINT` moves.

@@ -130,7 +130,8 @@ def unreadable_result_envelope(
     repair tells it: start a new paid job for a result that is still there. Never
     ``_corrupt`` (#277): that one parsed and fails the same way on every re-read; this one
     did not parse because it could not be opened, and the identical read can succeed.
-    ``signalled`` is for a cancel whose worker was stopped before the read failed."""
+    ``signalled`` is for a cancel whose worker was stopped before the read failed; it
+    promises no outcome, because an unreadable file may still parse as no result."""
     if job_id is not None:
         meta.job_id = job_id
     subject = f"job {job_id}" if job_id is not None else "a job record in this workspace"
@@ -140,8 +141,8 @@ def unreadable_result_envelope(
         else ("a transient storage error")
     )
     stopped = (
-        " The worker is stopped, so no further cancel is needed; the job reads as done "
-        "once its result reads back."
+        " The worker is stopped, so no further cancel is needed; its outcome is read once "
+        "the file reads back."
         if signalled
         else ""
     )

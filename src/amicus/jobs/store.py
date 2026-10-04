@@ -861,10 +861,14 @@ class JobStore:
     def _past_retention(self, meta: dict) -> bool:
         """Whether a record whose outcome could not be read is past its retention bound
         (#280): its worker is stopped, so it ages like a finalized one, from its
-        completion clock if one was stamped and else from its start. One clock for the
-        reaper and for a direct read, so a record the reaper would remove cannot keep
-        raising on ``status`` instead."""
-        end = meta.get("completed_epoch") or meta.get("started_epoch")
+        completion clock if one was stamped. An unstamped record has none, and its start
+        would understate it: a job that ran longer than the TTL would be past retention
+        the moment it finished (PR #296 review). Its deadline cannot precede its
+        completion, since the store stops a worker past it, so that is the clock, with
+        the start only for a record that recorded no deadline. One rule for the reaper
+        and for a direct read, so a record the reaper would remove cannot keep raising
+        on ``status`` instead."""
+        end = meta.get("completed_epoch") or meta.get("deadline_epoch") or meta.get("started_epoch")
         return end is not None and time.time() - end > self.ttl_seconds
 
     def _status_dict(self, jd: Path, meta: dict, state: str) -> dict:
