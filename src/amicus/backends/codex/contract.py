@@ -353,7 +353,18 @@ AUTH_FAILURE_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"\b(?:access token|authentication session) could not be refreshed\b", re.I),
 )
 
-RATE_LIMIT_PATTERNS = ("rate limit", "too many requests", "usage limit", "quota", "retry-after")
+# The capacity and overload phrases are codex-cli 0.160.1's own (#302). The capacity one is
+# matched whole: the same binary prints tokio's "timer is at capacity", which is not one.
+MODEL_AT_CAPACITY_PATTERN = "selected model is at capacity"
+RATE_LIMIT_PATTERNS = (
+    "rate limit",
+    "too many requests",
+    "usage limit",
+    "quota",
+    "retry-after",
+    MODEL_AT_CAPACITY_PATTERN,
+    "server overloaded",
+)
 _HTTP_429_PATTERN = re.compile(r"\b429\b")
 RATE_LIMIT_DEFAULT_BACKOFF_MS = 60_000
 _SECOND_UNITS = frozenset({"", "s", "sec", "secs", "second", "seconds"})
@@ -387,6 +398,10 @@ def is_rate_limited(*texts: str | None) -> bool:
     if any(p in blob for p in RATE_LIMIT_PATTERNS):
         return True
     return _HTTP_429_PATTERN.search(blob) is not None
+
+
+def is_model_at_capacity(*texts: str | None) -> bool:
+    return MODEL_AT_CAPACITY_PATTERN in _blob(texts).lower()
 
 
 def parse_retry_after_ms(*texts: str | None) -> int | None:

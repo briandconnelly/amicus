@@ -131,6 +131,13 @@ def test_signature_predicates():
     assert c.is_auth_failure("HTTP 401 Unauthorized")
     assert c.is_rate_limited("Too Many Requests") and c.is_rate_limited("status 429")
     assert not c.is_rate_limited("file429.py")
+    # codex-cli's own capacity and overload texts (#302), and a tokio runtime error from the
+    # same binary that a bare "at capacity" would have misread as one.
+    assert c.is_rate_limited("Selected model is at capacity. Please try a different model.")
+    assert c.is_rate_limited("Server overloaded; retry later.")
+    assert not c.is_rate_limited("timer is at capacity and cannot create a new entry")
+    assert c.is_model_at_capacity("selected model is at capacity")
+    assert not c.is_model_at_capacity("Server overloaded; retry later.")
     assert c.is_reasoning_effort_rejection("[reasoning.effort] [ReasoningEffortParam] bad")
     assert not c.is_reasoning_effort_rejection("reasoning.effort ReasoningEffortParam")
 

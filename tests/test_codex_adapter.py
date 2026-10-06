@@ -250,6 +250,37 @@ def test_usage_limit_retry_guidance_reaches_wire(pinned_codex_bin, source, messa
         assert reset is None
 
 
+@pytest.mark.parametrize("source", ["stderr", "error", "turn.failed"])
+@pytest.mark.parametrize(
+    ("message", "suggests_model"),
+    [
+        ("Selected model is at capacity. Please try a different model.", True),
+        ("Server overloaded; retry later.", False),
+    ],
+)
+def test_capacity_reaches_wire_as_rate_limited(pinned_codex_bin, source, message, suggests_model):
+    """#302: a capacity or overload failure is transient, so it carries the default backoff,
+    and a keyed run is steered to a new key rather than a generic inspect_and_retry."""
+    plugin, backend = cf.make_backend()
+    event = {"type": source, "error": {"message": message}}
+    stdout = json.dumps(event) if source != "stderr" else ""
+    stderr = message if source == "stderr" else ""
+    failure = backend.classify_failure(
+        RunOutcome(run=CommandRun(stdout, stderr, 1, 5, False)), _req()
+    )
+    envelope = errors.render_failure(plugin, failure, Meta())
+    error = envelope["error"]
+    assert error["code"] == "backend_rate_limited"
+    assert error["temporary"] is True
+    assert error["retry_after_ms"] == contract.RATE_LIMIT_DEFAULT_BACKOFF_MS
+    assert error["repair"]["next_step"] == "retry_after_delay"
+    assert ("different model" in (error["repair"].get("alternative") or "")) is suggests_model
+    keyed = errors.keyed_stored_error(envelope, "amicus_consult_async")["error"]
+    assert keyed["temporary"] is False
+    assert keyed["repair"]["next_step"] == "use_new_idempotency_key"
+    assert ("different model" in keyed["repair"]["alternative"]) is suggests_model
+
+
 def test_list_models_auth_probe_and_scrub_env(pinned_codex_bin, monkeypatch):
     from amicus.backends.codex import adapter
 
