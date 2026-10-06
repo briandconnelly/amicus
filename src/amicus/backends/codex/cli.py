@@ -443,6 +443,21 @@ def classify_failure(
             )
         if retry_after is None:
             retry_after = contract.RATE_LIMIT_DEFAULT_BACKOFF_MS
+        if contract.is_model_at_capacity(run.stderr, diagnostics, event_error):
+            # codex's own advice is to switch models, so it reaches the caller beside the
+            # backoff (#302).
+            return ClassifiedFailure(
+                code="codex_rate_limited",
+                detail="codex reported the selected model is at capacity.",
+                retry_after_ms=retry_after,
+                repair=RepairHint(
+                    next_step="retry_after_delay",
+                    alternative=(
+                        "The selected model is at capacity, which is usually brief. Retry "
+                        "after the delay, or call again with a different model."
+                    ),
+                ),
+            )
         return ClassifiedFailure(
             code="codex_rate_limited",
             detail="codex hit a usage/rate limit.",

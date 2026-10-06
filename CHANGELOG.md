@@ -20,6 +20,15 @@ per-change, as its own lead says.
 
 ## [Unreleased]
 
+### Fixed
+
+- A Codex run that fails because the selected model is at capacity, or because the server is
+  overloaded, is now `backend_rate_limited` with the default 60 s `retry_after_ms` rather than a
+  generic `nonzero_exit` (#302). A keyed run's stored error therefore steers the caller to a new
+  `idempotency_key` instead of `inspect_and_retry`, and the capacity case passes on Codex's own
+  advice to try a different model. Both phrases are matched as codex-cli 0.160.1 prints them, so
+  the tokio "timer is at capacity" error from the same binary is not mistaken for one.
+
 ## [0.8.1] - 2026-10-04
 
 Across this release the discovery surface stays at `amicus/0.1/schema-53` and `RESULT_FORMAT`
