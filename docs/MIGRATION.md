@@ -1,6 +1,7 @@
 # Migration guide
 
 amicus replaces three older single-model servers: `codex-in-claude`, `moonbridge`, and `claude-in-codex`.
+All three are archived, and their final releases are `codex-in-claude` 0.24.0, `moonbridge` 0.4.0 and `claude-in-codex` 0.10.0.
 Each sibling's tools, environment variables, and jobs now live behind one server with `backend` as a parameter.
 This guide covers the environment-variable renames, the tool-name mapping for each sibling, and the behavior changes a migrating user actually hits.
 
