@@ -44,7 +44,7 @@ The plugins launch the server from a published release tag, pinned in
   "mcpServers": {
     "amicus": {
       "command": "uvx",
-      "args": ["--from", "git+https://github.com/briandconnelly/amicus.git@v0.8.1", "amicus-mcp"]
+      "args": ["--from", "git+https://github.com/briandconnelly/amicus.git@v0.9.0", "amicus-mcp"]
     }
   }
 }
@@ -176,11 +176,13 @@ the new ones.
 
 ## Status and known limits
 
-0.8.1 is the current release. The discovery surface stays at `amicus/0.1/schema-53` and
-`RESULT_FORMAT` did not move, so a job result 0.8.0 stored can still be read. No change rejects a
-call 0.8.0 accepted. codex-cli 0.158 to 0.160 are supported versions, so `amicus_backends` no
-longer warns on them. A stored job result that exists but cannot be opened is now reported as a
-temporary error naming the same free call, never as a failed job whose repair pays again.
+0.9.0 is the current release. The discovery surface moves from `amicus/0.1/schema-53` to
+`amicus/0.1/schema-55` and `RESULT_FORMAT` did not move, so a job result 0.8.1 stored can still be
+read. No tool call 0.8.1 accepted is rejected, but an explicit `AMICUS_BACKENDS` that names no
+backend now stops the server from starting instead of enabling all three. An unstructured review
+carries its answer at either `detail`, so the default consume no longer deletes the only copy;
+`amicus_capabilities` names where a defect in amicus is reported; and codex-cli 0.161 is a
+supported version.
 [`docs/MIGRATION.md`](docs/MIGRATION.md#upgrading-from-080) explains how to upgrade, and
 [`CHANGELOG.md`](CHANGELOG.md) lists every user-visible change.
 

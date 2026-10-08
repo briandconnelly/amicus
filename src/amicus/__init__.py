@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-__version__ = "0.8.1"
+__version__ = "0.9.0"
 SERVER_NAME = "amicus"
 # Where a defect in amicus itself is reported; tests/test_discovery.py pins it to the
 # `Issues` URL pyproject.toml publishes.
