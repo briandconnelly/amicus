@@ -20,6 +20,14 @@ per-change, as its own lead says.
 
 ## [Unreleased]
 
+### Changed
+
+- An explicit `AMICUS_BACKENDS` that names no in-tree backend (a typo, or `Codex` for
+  `codex`: names are case-sensitive) now enables nothing and `amicus-mcp` refuses to start,
+  naming the variable on stderr, where it used to enable all three backends and report only
+  a non-fatal `config_errors` entry (#308). Unset still enables all three; a list with at
+  least one valid name still drops the wrong ones with a non-fatal error.
+
 ### Fixed
 
 - A Codex run that fails because the selected model is at capacity, or because the server is

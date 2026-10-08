@@ -226,3 +226,25 @@ def test_tasks_extension_redelivery_covers_a_large_job_deadline():
     # AMICUS_JOB_MAX_SECONDS (1800) exceeds MAX_TIMEOUT_SECONDS (600), so the configured
     # job deadline is the bound, proving the max() picks whichever side is larger.
     assert server.tasks_redelivery_seconds(settings) == 1830
+
+
+def test_main_refuses_to_start_on_a_profile_with_no_backend(
+    clean_env, monkeypatch, capsys, restored_signal_handlers
+):
+    started = []
+
+    class FakeApp:
+        def run(self):
+            started.append("run")
+
+    monkeypatch.setattr(server, "create_app", lambda *a, **k: FakeApp())
+    # Control: with a valid profile main() reaches the transport loop.
+    monkeypatch.setenv("AMICUS_BACKENDS", "codex")
+    server.main()
+    assert started == ["run"]
+
+    monkeypatch.setenv("AMICUS_BACKENDS", "bogus")
+    with pytest.raises(SystemExit) as exc:
+        server.main()
+    assert exc.value.code == 1 and started == ["run"], "the app must never run"
+    assert "AMICUS_BACKENDS" in capsys.readouterr().err

@@ -30,6 +30,32 @@ def test_profile_parsing_keeps_order_and_drops_unknown_with_an_error(clean_env):
     assert s.enabled_backends == ("codex", "kimi", "claude")
 
 
+def test_profile_with_no_valid_backend_enables_none_and_is_fatal(clean_env):
+    """#308: explicit and wrong is not unset. The all-backends default would enable what
+    the operator tried to restrict, so nothing is enabled and main() refuses to start."""
+    for raw in ("bogus", "Codex", "gemini, "):
+        s = config.settings({"AMICUS_BACKENDS": raw})
+        assert s.enabled_backends == (), raw
+        [problem] = s.fatal_errors
+        assert problem in s.config_errors
+        assert "AMICUS_BACKENDS" in problem and "case-sensitive" in problem
+    # Blank tokens are not wrong tokens: only separators is still unset.
+    s = config.settings({"AMICUS_BACKENDS": " , "})
+    assert s.enabled_backends == ("codex", "kimi", "claude") and s.fatal_errors == ()
+    # One valid name beside a wrong one stays a non-fatal error, as before.
+    s = config.settings({"AMICUS_BACKENDS": "codex,gemini"})
+    assert s.enabled_backends == ("codex",) and s.fatal_errors == ()
+
+
+def test_an_embedder_still_gets_an_app_on_a_fatal_profile(clean_env):
+    from amicus import server
+    from amicus.registry import BackendRegistry
+
+    s = config.settings({"AMICUS_BACKENDS": "bogus"})
+    app = server.create_app(s, BackendRegistry.load(s.enabled_backends, entry_points=()))
+    assert server.state_of(app).settings.enabled_backends == ()
+
+
 def test_clamps_and_bad_ints_warn(clean_env):
     s = config.settings({"AMICUS_TIMEOUT_SECONDS": "5", "AMICUS_JOB_MAX_SECONDS": "99999"})
     assert s.timeout_seconds == 10 and s.job_max_seconds == 7_200
