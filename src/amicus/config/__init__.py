@@ -45,7 +45,9 @@ GLOBAL_ENV = EnvNamespace(
     prefix="AMICUS_",
     vars=(
         EnvVar(
-            "AMICUS_BACKENDS", "Comma-separated enabled backends; default: every in-tree backend."
+            "AMICUS_BACKENDS",
+            "Comma-separated enabled backends; default: every in-tree backend. "
+            "Names are case-sensitive; unset enables all three.",
         ),
         EnvVar(
             "AMICUS_TIMEOUT_SECONDS",
@@ -166,19 +168,32 @@ def _bounded_int(
     return max(lo, min(hi, parsed))
 
 
-def _profile(raw: str | None, errors: list[str]) -> tuple[str, ...]:
+def _profile(raw: str | None, errors: list[str], fatal: list[str]) -> tuple[str, ...]:
     if raw is None or not raw.strip():
         return PROFILE_DEFAULT
     out: list[str] = []
+    saw_token = False
     for token in (t.strip() for t in raw.split(",")):
         if not token:
             continue
+        saw_token = True
         if token not in BACKEND_IDS:
             errors.append(f"AMICUS_BACKENDS entry {token!r} is not an in-tree backend")
             continue
         if token not in out:
             out.append(token)
-    return tuple(out) or PROFILE_DEFAULT
+    if out or not saw_token:
+        return tuple(out) or PROFILE_DEFAULT
+    # Explicit and wrong is not the same as unset (#308): the all-backends default would
+    # enable exactly what the operator tried to restrict, so nothing is enabled and the
+    # server refuses to start, as it does for a relative AMICUS_STATE_DIR.
+    problem = (
+        "AMICUS_BACKENDS names no in-tree backend (the names are codex, kimi and claude, "
+        "case-sensitive); amicus will not start with every backend enabled in its place"
+    )
+    errors.append(problem)
+    fatal.append(problem)
+    return ()
 
 
 def settings(environ: Mapping[str, str] | None = None) -> Settings:
@@ -228,7 +243,7 @@ def settings(environ: Mapping[str, str] | None = None) -> Settings:
         state_dir = cache / "amicus" / "jobs"
     level = (get("AMICUS_LOG_LEVEL") or DEFAULT_LOG_LEVEL).strip().upper()
     return Settings(
-        enabled_backends=_profile(get("AMICUS_BACKENDS"), errors),
+        enabled_backends=_profile(get("AMICUS_BACKENDS"), errors, fatal),
         timeout_seconds=_bounded_int(
             "AMICUS_TIMEOUT_SECONDS",
             get("AMICUS_TIMEOUT_SECONDS"),
