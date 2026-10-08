@@ -32,7 +32,8 @@ three gaps in what a first-time reader and a maintainer are told (#309, #310, #3
 where a defect in amicus is reported (#320), repairs the skill's frontmatter for strict YAML
 parsers (#319), and makes codex-cli 0.161 a supported version. `docs/MIGRATION.md` ("Upgrading
 from 0.8.1") covers the three changes a caller may branch on. It was checked against codex-cli
-0.161.0, Kimi Code 2.1.1 and Claude Code 2.1.293.
+0.161.0, Kimi Code 2.1.1 and Claude Code 2.1.294 (the lead said 2.1.293 when v0.9.0 was tagged;
+the rule-20 record on the tag names 2.1.294, which the CLI had updated itself to).
 
 ### Added
 
