@@ -46,8 +46,8 @@ GLOBAL_ENV = EnvNamespace(
     vars=(
         EnvVar(
             "AMICUS_BACKENDS",
-            "Comma-separated enabled backends; default: every in-tree backend. "
-            "Names are case-sensitive; unset enables all three.",
+            "Comma-separated enabled backends; unset, every in-tree backend is enabled. "
+            "Names are case-sensitive.",
         ),
         EnvVar(
             "AMICUS_TIMEOUT_SECONDS",
@@ -100,7 +100,8 @@ GLOBAL_ENV = EnvNamespace(
         ),
         EnvVar(
             "AMICUS_STATE_DIR",
-            "Absolute directory for job records; default $XDG_CACHE_HOME/amicus/jobs.",
+            "Absolute directory for job records; unset, it is `$XDG_CACHE_HOME/amicus/jobs`, "
+            "or `~/.cache/amicus/jobs` when `XDG_CACHE_HOME` is not an absolute path.",
         ),
         EnvVar(
             "AMICUS_LOG_LEVEL",
@@ -114,7 +115,9 @@ GLOBAL_ENV = EnvNamespace(
             None,
             removed=_retired("LOG_FILE", "CODEX_IN_CLAUDE_", "MOONBRIDGE_"),
         ),
-        EnvVar("AMICUS_TASKS", "1 to register the paid sync tools with the tasks extension.", "0"),
+        EnvVar(
+            "AMICUS_TASKS", "`1` to register the paid sync tools with the tasks extension.", "0"
+        ),
         EnvVar(
             "AMICUS_TASKS_BACKEND_URL",
             "Docket backend for the tasks extension (memory:// or redis://).",
@@ -123,7 +126,7 @@ GLOBAL_ENV = EnvNamespace(
         EnvVar("AMICUS_HOST_NAME", "Override the host name used in prompt framing."),
         EnvVar(
             "AMICUS_ALLOW_CWD_WORKSPACE",
-            "1 to allow falling back to the server cwd (disclosed).",
+            "`1` to allow falling back to the server cwd (disclosed).",
             "0",
         ),
     ),

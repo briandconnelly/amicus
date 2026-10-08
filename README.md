@@ -162,7 +162,7 @@ does today.
 `AMICUS_BACKENDS` is the one most people set. Beyond it, each backend takes an optional model,
 reasoning effort, and binary path (`AMICUS_CODEX_MODEL`, `AMICUS_KIMI_REASONING_EFFORT`,
 `AMICUS_CLAUDE_BIN`, and so on), and there are limits for timeouts, job retention and payload
-sizes. The full list is the `env_vars` array in [`.mcp.json`](.mcp.json).
+sizes. Every variable, what it does and its default is in [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md), rendered from the declarations in the code.
 
 Logging goes to stderr, and `AMICUS_LOG_FILE` mirrors amicus's own records to a file. To reduce
 the risk of prompt text leaking through dependency logs, `fastmcp` and `mcp` records are limited
@@ -204,6 +204,7 @@ version.
 | How milestones are executed by agents | `docs/superpowers/plans/2026-09-04-amicus-execution-model.md` |
 | Architecture decisions | `docs/adr/` |
 | How a release is cut | `docs/RELEASING.md` |
+| Every environment variable, its meaning and default | `docs/CONFIGURATION.md` |
 | The router skill an agent loads to call amicus | `skills/collaborating-with-amicus/` |
 | Host captures and CLI evidence | `docs/host-captures/`, `docs/claude-help/`, `docs/kimi-help/` |
 | How past milestones were built | git history — executed plans are removed once merged |

@@ -38,8 +38,9 @@ ENV = EnvNamespace(
         ),
         EnvVar(
             f"{PREFIX}ACCESS",
-            "Default backend_options.access: toolless | readonly. Unset, reviews default to "
-            "readonly and other verbs to toolless; set, it applies to every verb.",
+            "Default `backend_options.access`: toolless | readonly. Unset, `amicus_review_changes` "
+            "runs readonly and every other verb runs the declared default, toolless. Set to any "
+            "value, even toolless, that value applies to every verb, including reviews.",
             contract.DEFAULT_ACCESS,
             removed=(f"{_RETIRED}ACCESS",),
         ),

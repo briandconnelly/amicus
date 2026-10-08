@@ -32,8 +32,8 @@ ENV = EnvNamespace(
         ),
         EnvVar(
             f"{PREFIX}EXTRA_ARGS",
-            "Operator passthrough of extra kimi options. kimi exposes no option amicus can "
-            "pass safely, so any value is refused and reported by amicus_backends.",
+            "Operator passthrough of extra kimi options; kimi exposes no option amicus can "
+            "pass safely, so any value is refused and reported by `amicus_backends`.",
             None,
             removed=(f"{_RETIRED}EXTRA_ARGS",),
         ),
