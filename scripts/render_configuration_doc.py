@@ -38,9 +38,14 @@ HEADER = "\n".join(
     (
         "# Configuration reference",
         "",
-        "Every environment variable amicus reads, rendered from its declaration in the code by "
+        "Every environment variable amicus declares, rendered from its declaration in the code by "
         "`scripts/render_configuration_doc.py`; edit the declaration, not this file.",
+        "After changing a declaration, run "
+        "`uv run python scripts/render_configuration_doc.py --write` and commit the result.",
         "A value is read once at startup.",
+        "`AMICUS_ALLOW_UNSUPPORTED_PLATFORM` is the one variable read outside the declarations: "
+        "an unsupported escape hatch for the POSIX startup check, "
+        "left undeclared on purpose so that no reference or host passthrough advertises it.",
         "`AMICUS_BACKENDS` is the one most installs set; "
         "see the README for where a client sets environment variables.",
         "Former sibling names are listed in `docs/MIGRATION.md` and are not read.",
