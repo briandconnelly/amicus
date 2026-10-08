@@ -40,6 +40,12 @@ per-change, as its own lead says.
   longer block the server's event loop while a backend CLI probe or git runs (#307); a
   concurrent call, an `amicus_job_status` wait or a transport ping is no longer held for up
   to the probe's 10 s timeout per subprocess.
+- `amicus_job_consume_result` at its default `detail=summary` no longer deletes the only copy
+  of an unstructured review's answer (#306). A review or adversarial review whose answer amicus
+  could not parse now carries `raw_response.text` at either detail, on the sync call, on
+  `amicus_job_result` and on consume, and its fixed summary no longer promises a later fetch.
+  The `detail` parameter description and `review_status` description say so. **Surface**:
+  schema-54; tools/list grows by 454 bytes per profile.
 
 ## [0.8.1] - 2026-10-04
 
