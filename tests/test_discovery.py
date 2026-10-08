@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+import time
 from typing import get_args
 
 import pytest
@@ -11,6 +13,7 @@ from jsonschema import Draft202012Validator
 from tests.support import fakeplugin
 
 from amicus import config, server, tools
+from amicus.plugin import StatusReport
 from amicus.registry import BackendRegistry, UnavailableBackend
 from amicus.schemas import field_policy, results
 from amicus.schemas.codes import ERROR_CODES
@@ -236,6 +239,42 @@ async def test_backends_catalog_reports_enabled_available_and_unavailable():
         "MOONBRIDGE_TIMEOUT_SECONDS is set but not read" in w for w in payload["env_warnings"]
     )
     assert [b["id"] for b in only.structured_content["backends"]] == ["kimi"]
+
+
+async def test_backends_status_probe_does_not_stall_the_event_loop():
+    """#307: a status probe spawns up to three CLI subprocesses, each bounded at 10 s; run
+    inline it froze every concurrent call, poll and ping for that long."""
+
+    class SlowStatus:
+        def probe(self) -> StatusReport:
+            time.sleep(0.3)
+            return StatusReport(installed=True, version="slow 1.0", authenticated=True)
+
+    registry = BackendRegistry(
+        {
+            "codex": fakeplugin.make_plugin(
+                "codex", status=SlowStatus(), egress="x", carriers="argv"
+            )
+        },
+        {},
+    )
+    app = _app(env={"AMICUS_BACKENDS": "codex"}, registry=registry)
+
+    async def ticker() -> float:
+        worst = 0.0
+        for _ in range(10):
+            t0 = time.perf_counter()
+            await asyncio.sleep(0.03)
+            worst = max(worst, time.perf_counter() - t0 - 0.03)
+        return worst
+
+    async with Client(app) as c:
+        tick = asyncio.create_task(ticker())
+        res = await c.call_tool("amicus_backends", {})
+        worst = await tick
+    [entry] = [b for b in res.structured_content["backends"] if b["id"] == "codex"]
+    assert entry["status"]["installed"] is True
+    assert worst < 0.15, f"the loop stalled {worst:.3f}s while a status probe ran"
 
 
 async def test_a_backend_tombstone_is_reported_only_through_that_backend_s_status():

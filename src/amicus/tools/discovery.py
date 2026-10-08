@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING, Any
 
 from amicus import SERVER_NAME, __version__, surface
@@ -680,7 +681,9 @@ def register(
         backend: OptionalBackendParam = None, detail: BackendsDetailParam = "summary"
     ) -> dict[str, Any]:
         """List backends."""
-        return backends_payload(settings, registry, state.config_errors, backend, detail=detail)
+        return await asyncio.to_thread(
+            backends_payload, settings, registry, state.config_errors, backend, detail=detail
+        )
 
     @app.tool(
         name="amicus_models",
@@ -708,7 +711,7 @@ def register(
                 base_meta(settings, backend=backend),
                 backend=backend,
             )
-        return models_payload(registry, backend)
+        return await asyncio.to_thread(models_payload, registry, backend)
 
     @app.tool(
         name="amicus_capabilities",

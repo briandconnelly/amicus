@@ -5,6 +5,7 @@ preflight. Returns a `Prepared` (spec + meta + plugin) or a ready error envelope
 
 from __future__ import annotations
 
+import asyncio
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -265,7 +266,11 @@ async def prepare_run(
         )
     if verb == "delegate":
         try:
-            worktree.ensure_repo_with_head(resolution.path, timeout=settings.git_timeout_seconds)
+            await asyncio.to_thread(
+                worktree.ensure_repo_with_head,
+                resolution.path,
+                timeout=settings.git_timeout_seconds,
+            )
         except worktree.NotAGitRepoError as exc:
             return error_envelope(
                 "not_a_git_repo",
