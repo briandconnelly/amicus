@@ -308,3 +308,30 @@ def test_the_latest_release_is_reported_as_npm_printed_it(monkeypatch):
     assert compat.problems(report) == [], "control"
     report.latest = "0.155.1-beta.1"
     assert len(compat.problems(report)) == 1 and "0.155.1-beta.1" in compat.problems(report)[0]
+
+
+def test_an_installed_version_ahead_of_latest_says_pin_back_not_upgrade():
+    """#323: when the installed CLI is ahead of npm's latest tag, the message must say
+    "ahead of" and suggest pinning back, not "upgrade"."""
+    report = compat.Report("claude", installed=True, version="2.1.294", authenticated=True)
+    report.builtin_supported = report.help_ok = True
+    report.latest = "2.1.293"
+    problems = compat.problems(report)
+    assert len(problems) == 1
+    assert "2.1.294" in problems[0]
+    assert "2.1.293" in problems[0]
+    assert "ahead of" in problems[0], problems[0]
+    assert "upgrade" not in problems[0], problems[0]
+
+
+def test_an_installed_version_behind_latest_says_upgrade():
+    """#323: when the installed CLI is behind npm's latest, the message says "behind"."""
+    report = compat.Report("claude", installed=True, version="2.1.292", authenticated=True)
+    report.builtin_supported = report.help_ok = True
+    report.latest = "2.1.293"
+    problems = compat.problems(report)
+    assert len(problems) == 1
+    assert "2.1.292" in problems[0]
+    assert "2.1.293" in problems[0]
+    assert "behind" in problems[0], problems[0]
+    assert "upgrade" in problems[0], problems[0]

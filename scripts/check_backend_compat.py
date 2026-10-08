@@ -270,10 +270,24 @@ def problems(report: Report) -> list[str]:
             "release evidence"
         )
     elif report.latest and release(report.version) != release(report.latest):
-        found.append(
-            f"{report.backend}: installed {report.version} is not the latest release "
-            f"({report.latest}); upgrade before recording release evidence"
-        )
+        installed_ver = semver(report.version)
+        latest_ver = semver(report.latest)
+        if installed_ver and latest_ver:
+            if installed_ver > latest_ver:
+                found.append(
+                    f"{report.backend}: installed {report.version} is ahead of the latest release "
+                    f"({report.latest}); pin back to the release version, or wait for latest to advance"
+                )
+            else:
+                found.append(
+                    f"{report.backend}: installed {report.version} is behind the latest release "
+                    f"({report.latest}); upgrade before recording release evidence"
+                )
+        else:
+            found.append(
+                f"{report.backend}: installed {report.version} is not the latest release "
+                f"({report.latest}); upgrade before recording release evidence"
+            )
     elif report.latest is None and report.backend in NPM_PACKAGES and not report.offline:
         # Every backend is on npm, so an unreadable latest is a lookup that failed, and a
         # lookup that failed must not look like a version that matched.
