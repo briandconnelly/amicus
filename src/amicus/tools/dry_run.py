@@ -4,6 +4,7 @@ paid call would."""
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING, Any
 
 from fastmcp import Context
@@ -133,7 +134,7 @@ def _register_review_preview(
         if isinstance(prep, dict):
             return prep
         spec, meta = prep.spec, prep.meta
-        gathered = review.gather(spec, meta, prep.plugin)
+        gathered = await asyncio.to_thread(review.gather, spec, meta, prep.plugin)
         warnings: list[str] = []
         if isinstance(gathered, dict):
             if gathered.get("ok") is not True:
@@ -233,7 +234,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
             return prep
         spec, meta = prep.spec, prep.meta
         try:
-            plan = worktree.plan(spec.cwd, timeout=spec.git_timeout)
+            plan = await asyncio.to_thread(worktree.plan, spec.cwd, timeout=spec.git_timeout)
         except worktree.NotAGitRepoError as exc:
             return error_envelope(
                 "not_a_git_repo",
