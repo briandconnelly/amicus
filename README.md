@@ -50,8 +50,22 @@ The plugins launch the server from a published release tag, pinned in
 }
 ```
 
+Environment variables go wherever your client sets them for a stdio server (most accept an
+`"env"` object beside `"command"`; check your client's documentation). A first session from a
+client that has no notion of a working directory looks like this:
+
+1. Set `AMICUS_BACKENDS` to the backends you have installed and logged in to.
+2. Call `amicus_backends` with `detail: "full"`. It is free, and it reports each backend's
+   installed and authenticated state plus the disclosures you should read before spending.
+3. Call `amicus_consult` with `backend`, `question` and an absolute `workspace_root`. Every paid
+   tool needs `workspace_root` from such a client; the three free discovery tools reject it.
+4. If a result has `ok: false`, branch on `error.code` and, when present, follow
+   `error.repair`: it names the tool and arguments that recover from that refusal.
+
 ### Requirements
 
+- macOS or Linux: amicus refuses to start on a non-POSIX platform, because its background-job
+  safety layer depends on POSIX process semantics.
 - Python 3.11 or newer, and [`uv`](https://docs.astral.sh/uv/).
 - The CLI for each backend you enable, installed and authenticated: `codex`, `kimi`, `claude`.
   amicus drives those CLIs; it does not talk to the providers itself, and it stores no credentials.
@@ -59,7 +73,9 @@ The plugins launch the server from a published release tag, pinned in
 ## Using it
 
 Choose which backends are available with `AMICUS_BACKENDS` — a comma-separated list of `codex`,
-`kimi` and `claude`. Only the backends you name are enabled.
+`kimi` and `claude` (case-sensitive). Unset, all three are enabled; set, only the backends you
+name are. An enabled backend whose CLI is missing or not logged in still appears in
+`amicus_backends`, with `status.installed` and `status.authenticated` saying so.
 
 Then just ask, in your own words:
 
