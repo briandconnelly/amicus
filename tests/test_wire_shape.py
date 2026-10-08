@@ -81,7 +81,10 @@ def test_one_envelope_stays_sparse_and_payload_keys_survive():
         for env in snap["delivered"][detail].values():
             assert set(env["raw_response"]) == {"text", "session_id", "model"}
     for name in snap["delivered"]["summary"]:
-        assert snap["delivered"]["summary"][name]["raw_response"]["text"] is None
+        # An unstructured review has nowhere else to put its answer (#306).
+        summary_text = snap["delivered"]["summary"][name]["raw_response"]["text"]
+        unstructured = snap["delivered"]["summary"][name].get("review_status") == "unstructured"
+        assert summary_text == ("RAW MODEL TEXT" if unstructured else None)
         assert snap["delivered"]["full"][name]["raw_response"]["text"] == "RAW MODEL TEXT"
 
 
