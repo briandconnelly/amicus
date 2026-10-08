@@ -243,6 +243,7 @@ def test_static_catalog_and_version_pins():
         (0, 158),
         (0, 159),
         (0, 160),
+        (0, 161),
     } <= c.SUPPORTED_VERSIONS
     assert c.RATE_LIMIT_DEFAULT_BACKOFF_MS == 60_000
 
