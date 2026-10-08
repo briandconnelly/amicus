@@ -20,6 +20,10 @@ per-change, as its own lead says.
 
 ## [Unreleased]
 
+### Added
+
+- `docs/CONFIGURATION.md`, a reference for every environment variable with its description and default, rendered from the code's declarations and held current by a test (#310); README links it.
+
 ### Changed
 
 - An explicit `AMICUS_BACKENDS` that names no in-tree backend (a typo, or `Codex` for

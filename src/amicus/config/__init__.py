@@ -46,8 +46,8 @@ GLOBAL_ENV = EnvNamespace(
     vars=(
         EnvVar(
             "AMICUS_BACKENDS",
-            "Comma-separated enabled backends; default: every in-tree backend. "
-            "Names are case-sensitive; unset enables all three.",
+            "Comma-separated enabled backends; unset, every in-tree backend is enabled. "
+            "Names are case-sensitive.",
         ),
         EnvVar(
             "AMICUS_TIMEOUT_SECONDS",
@@ -100,7 +100,7 @@ GLOBAL_ENV = EnvNamespace(
         ),
         EnvVar(
             "AMICUS_STATE_DIR",
-            "Absolute directory for job records; default $XDG_CACHE_HOME/amicus/jobs.",
+            "Absolute directory for job records; unset, it is $XDG_CACHE_HOME/amicus/jobs.",
         ),
         EnvVar(
             "AMICUS_LOG_LEVEL",
