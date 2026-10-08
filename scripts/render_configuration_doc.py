@@ -7,8 +7,10 @@ reference: `--write` rewrites the file, `--check` exits 1 when the committed fil
 and tests/test_configuration_doc.py runs the check in the gate so the doc cannot drift.
 
 Rule 16 (AGENTS.md) holds under docs/, so a description is split one sentence per line at
-the boundary scripts/check_sentence_per_line.py recognises: a `.`, `?` or `!`, whitespace,
-then a capital, a code span, a link or emphasis.
+the boundary scripts/check_sentence_per_line.py recognises: a `.`, `?` or `!`, a single space,
+then a capital, a code span, a link or emphasis. The splitter has no abbreviation guard and
+cannot see a second sentence that starts lowercase, so a declaration must keep a capital, a
+code span, a link or emphasis after each full stop.
 """
 
 from __future__ import annotations

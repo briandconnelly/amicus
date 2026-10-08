@@ -62,7 +62,7 @@ Former names, no longer read: `CODEX_IN_CLAUDE_GIT_TIMEOUT_SECONDS`, `MOONBRIDGE
 
 ### `AMICUS_STATE_DIR`
 
-Absolute directory for job records; unset, it is $XDG_CACHE_HOME/amicus/jobs.
+Absolute directory for job records; unset, it is `$XDG_CACHE_HOME/amicus/jobs`, or `~/.cache/amicus/jobs` when `XDG_CACHE_HOME` is not an absolute path.
 Unset by default.
 
 ### `AMICUS_LOG_LEVEL`
@@ -79,7 +79,7 @@ Former names, no longer read: `CODEX_IN_CLAUDE_LOG_FILE`, `MOONBRIDGE_LOG_FILE`.
 
 ### `AMICUS_TASKS`
 
-1 to register the paid sync tools with the tasks extension.
+`1` to register the paid sync tools with the tasks extension.
 Default: `0`.
 
 ### `AMICUS_TASKS_BACKEND_URL`
@@ -94,7 +94,7 @@ Unset by default.
 
 ### `AMICUS_ALLOW_CWD_WORKSPACE`
 
-1 to allow falling back to the server cwd (disclosed).
+`1` to allow falling back to the server cwd (disclosed).
 Default: `0`.
 
 ## Codex
@@ -144,7 +144,7 @@ Unset by default.
 
 ### `AMICUS_KIMI_EXTRA_ARGS`
 
-Operator passthrough of extra kimi options; kimi exposes no option amicus can pass safely, so any value is refused and reported by amicus_backends.
+Operator passthrough of extra kimi options; kimi exposes no option amicus can pass safely, so any value is refused and reported by `amicus_backends`.
 Unset by default.
 Former names, no longer read: `MOONBRIDGE_EXTRA_ARGS`.
 
@@ -189,8 +189,9 @@ Former names, no longer read: `CLAUDE_IN_CODEX_CLAUDE_CONFIG`.
 
 ### `AMICUS_CLAUDE_ACCESS`
 
-Default backend_options.access: toolless | readonly.
-Unset, reviews default to readonly and other verbs to toolless; set, it applies to every verb.
+Default `backend_options.access`: toolless | readonly.
+Unset, `amicus_review_changes` runs readonly and every other verb runs the declared default, toolless.
+Set to any value, even toolless, that value applies to every verb, including reviews.
 Default: `toolless`.
 Former names, no longer read: `CLAUDE_IN_CODEX_ACCESS`.
 
