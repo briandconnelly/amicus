@@ -113,8 +113,10 @@ Those are held by the platform controls around the release — rule 21's ruleset
 
 ### Siblings
 
-The sibling checkouts named in rule 17 are read for porting, and their virtualenvs are used to capture differential fixtures (`scripts/capture_codex_differentials.py` runs inside codex-in-claude's).
-`~/projects/pontonier` is a sibling in the same sense: amicus no longer depends on it, its `v0.9.0` tag is where `amicus.sdk` came from, and it stays published only for the three older siblings until they are archived (ADR 0029).
+The four repositories named in rule 17 are deprecated and archived on GitHub, each at a final release: `codex-in-claude` 0.24.0, `moonbridge` 0.4.0, `claude-in-codex` 0.10.0 and `pontonier` 0.9.1.
+amicus was ported from the first three, and `amicus.sdk` came from pontonier's `v0.9.0` tag; amicus depends on none of them (ADR 0029).
+The differential fixtures under `tests/fixtures/` were captured inside the siblings' checkouts by `scripts/capture_*_differentials.py`, and each records the sibling commit it came from.
+Re-running one means cloning that sibling back to the path rule 17 names and running the script inside it, as the script's docstring shows; rule 17 binds that clone like any other.
 
 ### Local hooks
 
