@@ -28,6 +28,10 @@ per-change, as its own lead says.
   `idempotency_key` instead of `inspect_and_retry`, and the capacity case passes on Codex's own
   advice to try a different model. Both phrases are matched as codex-cli 0.160.1 prints them, so
   the tokio "timer is at capacity" error from the same binary is not mistaken for one.
+- `amicus_backends`, `amicus_models`, the two dry-run tools and delegate's git preflight no
+  longer block the server's event loop while a backend CLI probe or git runs (#307); a
+  concurrent call, an `amicus_job_status` wait or a transport ping is no longer held for up
+  to the probe's 10 s timeout per subprocess.
 
 ## [0.8.1] - 2026-10-04
 
