@@ -194,6 +194,28 @@ A `null` there means no loaded plugin declares one.
 The `amicus://backends/{backend}` resource is always the full entry.
 `amicus_capabilities(detail="contracts")` is removed: pass `include_tool_details=false` for the same rowless payload, and `detail` now selects only how much each `tool_details` row carries (`summary` is `name`, `cost`, `stability`, `backends`; `full` adds the rest, including `error_codes`).
 
+## Upgrading from 0.8.1
+
+The changes below are the ones a caller using amicus 0.8.1 may have to handle before running 0.9.0.
+`CHANGELOG.md`'s 0.9.0 section lists every user-visible change since 0.8.1, including the ones that require no migration.
+A job result stored by 0.8.1 is still readable: `RESULT_FORMAT` did not move.
+The discovery surface moves from `amicus/0.1/schema-53` to `amicus/0.1/schema-55`, both labelled **Surface**: a fingerprint-aware client re-reads the catalog and nothing else has to change.
+No tool call 0.8.1 accepted is rejected.
+
+**An explicit `AMICUS_BACKENDS` that names no backend refuses to start (#308).**
+A value whose every entry is unknown, such as a typo or `Codex` for `codex` (names are case-sensitive), used to enable all three backends and report a non-fatal `config_errors` entry; it now enables none and `amicus-mcp` exits 1 naming the variable on stderr, as a relative `AMICUS_STATE_DIR` does.
+Unset still enables all three, and a list with at least one valid name still drops the wrong ones with a non-fatal error.
+An operator whose configuration started before should check `amicus_backends`' `config_errors` on 0.8.1 for an `AMICUS_BACKENDS entry ... is not an in-tree backend` line, which is the case that now refuses.
+
+**An unstructured review carries its answer at either `detail` (#306).**
+A review or adversarial review whose answer amicus could not parse (`review_status: unstructured`) returned `raw_response.text` only at `detail=full`, and `amicus_job_consume_result` at its default `detail=summary` deleted the record after delivering a result with that text nulled.
+The text is now delivered at either detail, on the sync call, on `amicus_job_result` and on consume, and the fixed summary no longer promises a later fetch.
+A caller that read an unstructured summary and then fetched the record at `detail=full` can drop the second call; one that consumed at summary and lost the answer no longer does.
+
+**`amicus_capabilities` carries `issues_url` (#320).**
+A new field on both detail levels names where a defect in amicus itself is reported, with its obligations in the field description: offer it to the user with `error.code`, `fingerprint` and `server_version` rather than opening an issue unasked, and put no prompt input or backend answer in a report.
+A client with a closed schema for `amicus_capabilities` must admit the field.
+
 ## Upgrading from 0.8.0
 
 The changes below are the ones a caller using amicus 0.8.0 may have to handle before running 0.8.1.

@@ -20,6 +20,20 @@ per-change, as its own lead says.
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-08
+
+Across this release the discovery surface moves from `amicus/0.1/schema-53`, what 0.8.1 shipped,
+to `amicus/0.1/schema-55`, both steps labelled **Surface**, and `RESULT_FORMAT` stays 9, so a job
+result 0.8.1 stored can still be delivered; no entry is labelled **Breaking**. It closes the six
+findings of the 2026-10-07 external review: the one that lost paid output, a consume of an
+unstructured review at the default detail (#306); the server blocking its event loop on backend
+probes and git (#307); an invalid `AMICUS_BACKENDS` silently enabling every backend (#308); and
+three gaps in what a first-time reader and a maintainer are told (#309, #310, #311). It also names
+where a defect in amicus is reported (#320), repairs the skill's frontmatter for strict YAML
+parsers (#319), and makes codex-cli 0.161 a supported version. `docs/MIGRATION.md` ("Upgrading
+from 0.8.1") covers the three changes a caller may branch on. It was checked against codex-cli
+0.161.0, Kimi Code 2.1.1 and Claude Code 2.1.293.
+
 ### Added
 
 - `docs/CONFIGURATION.md`, a reference for every environment variable with its description and default, rendered from the code's declarations and held current by a test (#310); README links it.
@@ -1274,7 +1288,8 @@ per-change rather than net, so they also name intermediate states that no releas
 - The tagged publish path to pypi.org has never run. Only the TestPyPI dispatch path has been exercised.
 - Eval scenario S6 in `skills/collaborating-with-amicus/tests/scenarios.md` passed on one run (status: `pass`, validated by that run alone); an M7 follow-up run against the current skill text did not isolate the still-open F3 finding, so F3 remains open. S7 (real-host approval friction) has failed both of its recorded runs (status: `fail`); an M7 zero-spend recheck reached neither a pass nor a fail and is recorded as inconclusive, so it does not move S7's status. See their `status` fields and ADR 0012.
 
-[Unreleased]: https://github.com/briandconnelly/amicus/compare/v0.8.1...HEAD
+[Unreleased]: https://github.com/briandconnelly/amicus/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/briandconnelly/amicus/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/briandconnelly/amicus/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/briandconnelly/amicus/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/briandconnelly/amicus/compare/v0.6.0...v0.7.0
