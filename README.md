@@ -186,7 +186,6 @@ version.
 | How milestones are executed by agents | `docs/superpowers/plans/2026-09-04-amicus-execution-model.md` |
 | Architecture decisions | `docs/adr/` |
 | How a release is cut | `docs/RELEASING.md` |
-| Deprecating the sibling projects | `docs/DEPRECATING-SIBLINGS.md` |
 | The router skill an agent loads to call amicus | `skills/collaborating-with-amicus/` |
 | Host captures and CLI evidence | `docs/host-captures/`, `docs/claude-help/`, `docs/kimi-help/` |
 | How past milestones were built | git history — executed plans are removed once merged |
