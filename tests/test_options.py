@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+from typing import Literal, get_args, get_origin
+
 import pytest
 from pydantic import ValidationError
 
+from amicus.backends.claude import contract as claude_contract
+from amicus.backends.codex import config as codex_config
+from amicus.backends.kimi import config as kimi_config
 from amicus.schemas import options as o
 
 
@@ -26,6 +31,28 @@ def test_applicability_table():
     }
     assert o.OPTION_ALLOWED_VALUES["access"] == {"claude": ("toolless", "readonly")}
     assert o.OPTION_ALLOWED_VALUES["max_budget_usd"] == {"claude": None}
+
+
+def _literal_values(annotation: object) -> set[str]:
+    """The members of the Literal inside `Literal[...] | None`."""
+    for arg in get_args(annotation):
+        if get_origin(arg) is Literal:
+            return set(get_args(arg))
+    raise AssertionError(f"{annotation!r} carries no Literal")
+
+
+def test_allowed_values_agree_across_every_source():
+    """#311: the table, the schema's Literal and each backend's own constant are written
+    separately; this holds them equal so a value added to one cannot drift from the rest."""
+    fields = o.BackendOptions.model_fields
+    for name, per_backend in o.OPTION_ALLOWED_VALUES.items():
+        table_values = {v for values in per_backend.values() if values for v in values}
+        if table_values:
+            assert _literal_values(fields[name].annotation) == table_values, name
+    assert o.OPTION_ALLOWED_VALUES["isolation"]["codex"] == codex_config.VALID_ISOLATIONS
+    assert o.OPTION_ALLOWED_VALUES["isolation"]["kimi"] == kimi_config.VALID_ISOLATIONS
+    assert o.OPTION_ALLOWED_VALUES["config_mode"]["claude"] == claude_contract.CONFIG_MODES
+    assert o.OPTION_ALLOWED_VALUES["access"]["claude"] == claude_contract.ACCESS_MODES
 
 
 def test_no_options_is_no_violation():
