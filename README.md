@@ -55,12 +55,14 @@ Environment variables go wherever your client sets them for a stdio server (most
 client that has no notion of a working directory looks like this:
 
 1. Set `AMICUS_BACKENDS` to the backends you have installed and logged in to.
-2. Call `amicus_backends` with `detail: "full"`. It is free, and it reports each backend's
-   installed and authenticated state plus the disclosures you should read before spending.
+2. Call `amicus_backends` with `detail: "full"`. It is free, and it reports each enabled
+   backend's installed and authenticated state plus the disclosures you should read before
+   spending; a backend you did not enable is listed with `status: null`.
 3. Call `amicus_consult` with `backend`, `question` and an absolute `workspace_root`. Every paid
    tool needs `workspace_root` from such a client; the three free discovery tools reject it.
 4. If a result has `ok: false`, branch on `error.code` and, when present, follow
-   `error.repair`: it names the tool and arguments that recover from that refusal.
+   `error.repair`: its `next_step` says what to do, and when one call recovers, its `tool` and
+   `arguments` name that call.
 
 ### Requirements
 
