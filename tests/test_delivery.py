@@ -53,6 +53,18 @@ def test_apply_detail_and_slim_meta():
     )
 
 
+def test_apply_detail_keeps_an_unstructured_reviews_text_at_summary():
+    """The fixed unstructured summary describes nothing: raw_response.text is the whole
+    result, so nulling it at summary delivers an empty success (#306)."""
+    env = _stored_success()
+    env["review_status"] = "unstructured"
+    kept = delivery.apply_detail(dict(env), "summary")
+    assert kept["raw_response"]["text"] == "RAW"
+    structured = _stored_success()
+    structured["review_status"] = "completed"
+    assert delivery.apply_detail(dict(structured), "summary")["raw_response"]["text"] is None
+
+
 def test_done_success_is_validated_stamped_and_slimmed():
     env, delivered = delivery.finished_job_envelope(
         _rec(), _stored_success(), _JOB, "consult", Meta(), "summary", None

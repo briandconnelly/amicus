@@ -42,8 +42,13 @@ _STORED_PRESENTATION_KEYS = ("summary", "findings", "questions", "next_steps", "
 
 
 def apply_detail(envelope: dict[str, Any], detail: str) -> dict[str, Any]:
-    """summary nulls raw_response.text; full keeps it; errors pass through. Mutates."""
+    """summary nulls raw_response.text; full keeps it; errors pass through. An unstructured
+    review keeps it at either detail: its summary is fixed text that describes nothing, so
+    the raw text is the whole result and nulling it would deliver an empty success and, on
+    a consume, delete the only copy (#306). Mutates."""
     if detail == "full" or envelope.get("ok") is not True:
+        return envelope
+    if envelope.get("review_status") == "unstructured":
         return envelope
     raw = envelope.get("raw_response")
     if isinstance(raw, dict):

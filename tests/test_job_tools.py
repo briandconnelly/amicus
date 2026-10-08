@@ -6,6 +6,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import subprocess
 import tempfile
 import time
 from pathlib import Path
@@ -226,6 +227,47 @@ async def test_consume_reports_a_record_already_gone_as_missing(app, store, tmp_
             "amicus_job_consume_result", {"job_id": job_id, **ws}, raise_on_error=False
         )
         assert again.structured_content["error"]["code"] == "job_not_found"
+
+
+def _git(cwd, *args):
+    subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True)
+
+
+@pytest.fixture
+def repo(tmp_path):
+    r = tmp_path / "repo"
+    r.mkdir()
+    _git(r, "init", "-q")
+    _git(r, "config", "user.email", "t@t.co")
+    _git(r, "config", "user.name", "t")
+    (r / "a.py").write_text("x = 1\n")
+    _git(r, "add", "-A")
+    _git(r, "commit", "-qm", "init")
+    return r
+
+
+async def test_consume_at_summary_returns_an_unstructured_reviews_answer(
+    app, store, repo, monkeypatch
+):
+    """#306: the default-detail consume of an unstructured review used to null the only
+    copy of the answer and then delete the record."""
+    answer = "Just prose, no JSON object. The lock looks wrong."
+    monkeypatch.setenv("FAKE_CODEX_ANSWER", answer)
+    (repo / "a.py").write_text("x = 2\n")
+    ws = {"workspace_root": str(repo)}
+    async with Client(app) as c:
+        started = (
+            await c.call_tool("amicus_review_changes_async", {"backend": "codex", **ws})
+        ).structured_content
+        job_id = started["job_id"]
+        await _wait_done(store, repo, job_id)
+        consumed = (
+            await c.call_tool("amicus_job_consume_result", {"job_id": job_id, **ws})
+        ).structured_content
+    assert consumed["ok"] is True and consumed["review_status"] == "unstructured"
+    assert consumed["raw_response"]["text"] == answer
+    assert "amicus_job_result" not in consumed["summary"], "the summary no longer promises a fetch"
+    assert consumed["meta"]["consume"] == {"discard_outcome": "removed"}
 
 
 @pytest.mark.parametrize("outcome", [DiscardOutcome.DELETE_FAILED, DiscardOutcome.STATE_CHANGED])

@@ -49,7 +49,7 @@ how many untracked files were detected and omitted, and the remedy.
 The review ran and was paid for, and nothing was parsed from it: `verdict` and `confidence` are
 `unknown`, `findings` and the prose lists are empty, and both diagnostics report every member
 missing. The answer itself is kept, not discarded: it is `raw_response.text`, delivered at
-`detail="full"` on the call and free from `amicus_job_result` for `meta.job_id` while the record
+either `detail`, on the call and from `amicus_job_result` for `meta.job_id` while the record
 exists. Read it before deciding anything or paying for the same review again; a prose answer
 often holds the review, and an identical retry can fail the same way. An answer that encloses
 one object in a preamble, a fence or a sign-off is read as that object and stays `completed`;
