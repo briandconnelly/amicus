@@ -27,6 +27,8 @@ per-change, as its own lead says.
   naming the variable on stderr, where it used to enable all three backends and report only
   a non-fatal `config_errors` entry (#308). Unset still enables all three; a list with at
   least one valid name still drops the wrong ones with a non-fatal error.
+- README states the POSIX requirement, the unset `AMICUS_BACKENDS` default, and a first-run
+  sequence for a generic MCP client (#309).
 
 ### Fixed
 
