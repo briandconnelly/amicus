@@ -647,8 +647,8 @@ async def test_an_unreadable_review_is_delivered_and_its_text_recovered_from_the
     app, tmp_path, repo, monkeypatch
 ):
     """#139 end to end: tool-call prose instead of the review object (#116's failure) is an
-    `ok: true` unstructured review, its text stripped at detail=summary and returned whole,
-    free, by amicus_job_result at detail=full."""
+    `ok: true` unstructured review whose text is delivered at either detail (#306): on the sync
+    call at summary, and again by amicus_job_result at full while the record exists."""
     answer = 'I\'ll read a.py first.\n<invoke name="Read"><parameter name="file_path">a.py'
     monkeypatch.setenv("FAKE_CLAUDE_ANSWER", answer)
     (repo / "a.py").write_text("x = 2\n")
@@ -670,7 +670,8 @@ async def test_an_unreadable_review_is_delivered_and_its_text_recovered_from_the
         ).structured_content
     assert review["ok"] is True and review["review_status"] == "unstructured"
     assert (review["verdict"], review["confidence"]) == ("unknown", "unknown")
-    assert review["raw_response"]["text"] is None and answer not in json.dumps(review)
+    # An unstructured review carries its answer at summary too (#306): it has nowhere else.
+    assert review["raw_response"]["text"] == answer
     assert stored["ok"] is True and stored["review_status"] == "unstructured"
     assert stored["raw_response"]["text"] == answer
     assert len(_runs(tmp_path)) == 1

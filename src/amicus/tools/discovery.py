@@ -166,8 +166,8 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
         "use_when": "A structured review of changes that live in git.",
         "returns": (
             "verdict, confidence, findings, review_status, coverage, context_summary, "
-            "raw_response (detail=full; the whole answer when review_status is unstructured) "
-            "and meta."
+            "raw_response (detail=full, or at either detail the whole answer when review_status "
+            "is unstructured) and meta."
         ),
         "error_codes": (
             _COMMON_PAID_CODES
@@ -228,8 +228,8 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
         "backends": list(VERB_BACKENDS["adversarial_review"]),
         "use_when": "A fixed critic attacking a plan, claim or decision before you commit to it.",
         "returns": (
-            "verdict, confidence, findings, review_status, coverage, raw_response (detail=full; "
-            "the whole answer when review_status is unstructured) and meta."
+            "verdict, confidence, findings, review_status, coverage, raw_response (detail=full, "
+            "or at either detail the whole answer when review_status is unstructured) and meta."
         ),
         "error_codes": _COMMON_PAID_CODES
         + _ANSWER_UNAVAILABLE_CODES

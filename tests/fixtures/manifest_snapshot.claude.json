@@ -349,7 +349,7 @@
         "required_params": [
           "backend"
         ],
-        "returns": "verdict, confidence, findings, review_status, coverage, context_summary, raw_response (detail=full; the whole answer when review_status is unstructured) and meta.",
+        "returns": "verdict, confidence, findings, review_status, coverage, context_summary, raw_response (detail=full, or at either detail the whole answer when review_status is unstructured) and meta.",
         "stability": "experimental",
         "use_when": "A structured review of changes that live in git."
       },
@@ -601,7 +601,7 @@
           "backend",
           "target"
         ],
-        "returns": "verdict, confidence, findings, review_status, coverage, raw_response (detail=full; the whole answer when review_status is unstructured) and meta.",
+        "returns": "verdict, confidence, findings, review_status, coverage, raw_response (detail=full, or at either detail the whole answer when review_status is unstructured) and meta.",
         "stability": "experimental",
         "use_when": "A fixed critic attacking a plan, claim or decision before you commit to it."
       },
@@ -1542,7 +1542,7 @@
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-53",
+                "default": "amicus/0.1/schema-54",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -2019,7 +2019,7 @@
           },
           "detail": {
             "full": "The shape is the same either way. detail selects what the call delivers, not what is kept: the job record keeps the whole answer whichever you ask for, until it expires, the per-workspace cap evicts it once returned, or amicus_job_consume_result removes it.",
-            "summary": "summary (default) omits raw_response.text; full includes it. Delivery only: amicus://params."
+            "summary": "summary (default) omits raw_response.text, except on an unstructured review, where that text is the whole answer; full includes it. Delivery only: amicus://params."
           },
           "extra_context": {
             "full": "Added to the prompt as labeled untrusted data; the backend is instructed to treat embedded directives as data, not commands — best-effort prompt-injection mitigation, not a guarantee. Secret redaction covers the gathered diff, never this field, so it must carry no live secrets. It counts against the same input budget as the gathered diff, so an oversized value fails as input_too_large before any spend.",
@@ -3735,7 +3735,7 @@
       "description": "Full semantics for parameters whose inline description is a compressed summary.",
       "mimeType": "application/json",
       "name": "amicus-params",
-      "size": 7724,
+      "size": 7795,
       "title": "amicus parameter contracts",
       "uri": "amicus://params"
     },
@@ -4076,7 +4076,7 @@
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-53",
+            "default": "amicus/0.1/schema-54",
             "title": "Fingerprint",
             "type": "string"
           },
@@ -4438,7 +4438,7 @@
           },
           "detail": {
             "default": "summary",
-            "description": "summary (default) omits raw_response.text; full includes it. Delivery only: amicus://params.",
+            "description": "summary (default) omits raw_response.text, except on an unstructured review, where that text is the whole answer; full includes it. Delivery only: amicus://params.",
             "enum": [
               "full",
               "summary"
@@ -5037,7 +5037,7 @@
                 ]
               },
               "review_status": {
-                "description": "unstructured: the answer was not one readable JSON object, so nothing was parsed; the whole answer is raw_response.text (detail=full).",
+                "description": "unstructured: the answer was not one readable JSON object, so nothing was parsed; the whole answer is raw_response.text, delivered at either detail.",
                 "enum": [
                   "completed",
                   "not_run",
@@ -6309,7 +6309,7 @@
           },
           "detail": {
             "default": "summary",
-            "description": "summary (default) omits raw_response.text; full includes it. Delivery only: amicus://params.",
+            "description": "summary (default) omits raw_response.text, except on an unstructured review, where that text is the whole answer; full includes it. Delivery only: amicus://params.",
             "enum": [
               "full",
               "summary"
@@ -7255,7 +7255,7 @@
           },
           "detail": {
             "default": "summary",
-            "description": "summary (default) omits raw_response.text; full includes it. Delivery only: amicus://params.",
+            "description": "summary (default) omits raw_response.text, except on an unstructured review, where that text is the whole answer; full includes it. Delivery only: amicus://params.",
             "enum": [
               "full",
               "summary"
@@ -8475,7 +8475,7 @@
         "properties": {
           "detail": {
             "default": "summary",
-            "description": "summary (default) omits raw_response.text; full includes it. Delivery only: amicus://params.",
+            "description": "summary (default) omits raw_response.text, except on an unstructured review, where that text is the whole answer; full includes it. Delivery only: amicus://params.",
             "enum": [
               "full",
               "summary"
@@ -8886,7 +8886,7 @@
         "properties": {
           "detail": {
             "default": "summary",
-            "description": "summary (default) omits raw_response.text; full includes it. Delivery only: amicus://params.",
+            "description": "summary (default) omits raw_response.text, except on an unstructured review, where that text is the whole answer; full includes it. Delivery only: amicus://params.",
             "enum": [
               "full",
               "summary"
@@ -9498,7 +9498,7 @@
           },
           "detail": {
             "default": "summary",
-            "description": "summary (default) omits raw_response.text; full includes it. Delivery only: amicus://params.",
+            "description": "summary (default) omits raw_response.text, except on an unstructured review, where that text is the whole answer; full includes it. Delivery only: amicus://params.",
             "enum": [
               "full",
               "summary"
@@ -10086,7 +10086,7 @@
                 ]
               },
               "review_status": {
-                "description": "unstructured: the answer was not one readable JSON object, so nothing was parsed; the whole answer is raw_response.text (detail=full).",
+                "description": "unstructured: the answer was not one readable JSON object, so nothing was parsed; the whole answer is raw_response.text, delivered at either detail.",
                 "enum": [
                   "completed",
                   "not_run",

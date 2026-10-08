@@ -806,7 +806,7 @@
         "raw_response": {
           "model": "a-model",
           "session_id": "sess-1",
-          "text": null
+          "text": "RAW MODEL TEXT"
         },
         "review_status": "unstructured",
         "summary": "s",

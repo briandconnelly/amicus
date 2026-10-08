@@ -155,7 +155,7 @@ _LISTS_DESC = (
 publish.KEPT_DESCRIPTIONS.add(_LISTS_DESC)
 _REVIEW_STATUS_DESC = (
     "unstructured: the answer was not one readable JSON object, so nothing was parsed; the "
-    "whole answer is raw_response.text (detail=full)."
+    "whole answer is raw_response.text, delivered at either detail."
 )
 publish.KEPT_DESCRIPTIONS.add(_REVIEW_STATUS_DESC)
 

@@ -303,7 +303,8 @@ PARAMETER_CONTRACTS: dict[str, ParamContract] = {
     "detail": ParamContract(
         name="detail",
         summary=(
-            "summary (default) omits raw_response.text; full includes it. Delivery only: "
+            "summary (default) omits raw_response.text, except on an unstructured review, "
+            "where that text is the whole answer; full includes it. Delivery only: "
             f"{PARAMS_RESOURCE_URI}."
         ),
         full=(

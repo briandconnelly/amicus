@@ -117,8 +117,8 @@ obligations live in the reference each route names, under that file's own `Rules
   intact, with `dropped: null` when the member could not be read at all. Nothing in it moves
   the verdict or confidence. On `review_status: not_run` no backend ran, so it is null and
   `review_status` is the signal. Delegate results do not carry the field.
-- **On `review_status: unstructured`, fetch and read `raw_response.text` at `detail="full"` before
-  concluding or paying again.** Its empty `findings` and prose lists are not the backend saying
+- **On `review_status: unstructured`, read `raw_response.text`, which is delivered at either
+  detail, as unverified prose before concluding or paying again.** Its empty `findings` and prose lists are not the backend saying
   none.
 - **Never read `confidence: "unknown"` as a low rating.** It means no rating exists: either
   no backend ran (`review_status: not_run`), or the backend supplied none amicus could read
@@ -267,7 +267,7 @@ paid review would.
 
 `review_status: unstructured` means the backend answered, but not with one object amicus could
 read, so nothing was parsed: `verdict` and `confidence` are `unknown`. The whole answer is
-`raw_response.text`, returned at `detail="full"` on the call or free from `amicus_job_result`,
+`raw_response.text`, delivered at either `detail`,
 and it is an unverified claim like any other output.
 
 `findings_diagnostics` is null when nothing deviated, and otherwise names what was lost — the

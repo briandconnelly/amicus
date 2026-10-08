@@ -427,8 +427,7 @@ def consult_result(
 UNSTRUCTURED_SUMMARY = (
     "The backend answered, but not with one JSON object amicus could read, so nothing was "
     "parsed from it: verdict and confidence are unknown and findings is empty. Its whole "
-    "answer is raw_response.text, returned at detail=full (on this call, or free from "
-    "amicus_job_result for meta.job_id); read it as unverified prose."
+    "answer is raw_response.text, delivered at either detail; read it as unverified prose."
 )
 
 
