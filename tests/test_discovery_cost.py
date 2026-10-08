@@ -298,6 +298,15 @@ The schema-54 raise (+454 bytes on every profile: all 113302 -> 113756) is #306.
 `detail` contract's `summary` and the `review_status` description say an unstructured review
 carries raw_response.text at either detail, where each used to point at detail=full. Measured
 on the wire. MEASURED and BUDGET both move by the 454 bytes, so the budget keeps no headroom.
+
+The schema-55 raise (+419 bytes on every profile: all 113756 -> 114175) is the issues pointer.
+All of it is one property on amicus_capabilities's output schema: `issues_url`, 418 bytes on
+the wire (its string type and its 371-byte description) plus the comma that joins it to its
+neighbour. The description is kept rather than stripped because it carries the obligations
+that make the pointer safe to act on - offer it to the user rather than file, and put no
+prompt input in a report - and a bare URL would have read as "file an issue". The Reference
+sentence in the server instructions and the skill rule are not on tools/list. Measured on the
+wire. MEASURED and BUDGET both move by the 419 bytes, so the budget keeps no headroom.
 """
 
 from __future__ import annotations
@@ -307,7 +316,7 @@ from tests.conftest import spawned_server_env
 
 from amicus import manifest
 
-MEASURED: dict[str, int] = {"all": 113756, "codex-kimi": 113764, "claude": 113756}
+MEASURED: dict[str, int] = {"all": 114175, "codex-kimi": 114183, "claude": 114175}
 # The budget is a literal, not MEASURED rounded up to the next kilobyte as it was until
 # 2026-09-14. The rounding left up to 1 KB of growth per bucket that no PR had to own, and
 # this file records three such accumulations (448 and 12 bytes in the paragraphs above, and
@@ -315,7 +324,7 @@ MEASURED: dict[str, int] = {"all": 113756, "codex-kimi": 113764, "claude": 11375
 # #94 that landed after it), each noticed only when the next deliberate raise re-measured.
 # Any growth now fails until a PR raises BUDGET and says why; a shrink passes and shows as
 # drift against MEASURED. Raising one means re-measuring and moving both.
-BUDGET: dict[str, int] = {"all": 113756, "codex-kimi": 113764, "claude": 113756}
+BUDGET: dict[str, int] = {"all": 114175, "codex-kimi": 114183, "claude": 114175}
 
 
 @pytest.mark.parametrize("profile", sorted(manifest.PROFILES))

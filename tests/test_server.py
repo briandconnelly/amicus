@@ -248,3 +248,16 @@ def test_main_refuses_to_start_on_a_profile_with_no_backend(
         server.main()
     assert exc.value.code == 1 and started == ["run"], "the app must never run"
     assert "AMICUS_BACKENDS" in capsys.readouterr().err
+
+
+def test_reference_names_where_a_defect_is_reported():
+    """The Reference block, the only part of the instructions a host may cut (ADR 0027),
+    carries the issue tracker for hosts that show the whole text; the obligations ride with
+    it so a pointer alone cannot read as "file an issue"."""
+    import amicus
+
+    reference = server.CAPABILITY_SUMMARY.split("\n\n")[2]
+    assert amicus.ISSUES_URL in reference
+    assert "amicus_capabilities.issues_url" in reference
+    for phrase in ("rather than filing unasked", "no prompt input"):
+        assert phrase in reference, phrase

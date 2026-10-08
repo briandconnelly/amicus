@@ -23,6 +23,13 @@ per-change, as its own lead says.
 ### Added
 
 - `docs/CONFIGURATION.md`, a reference for every environment variable with its description and default, rendered from the code's declarations and held current by a test (#310); README links it.
+- **Surface.** `amicus_capabilities` carries `issues_url`, where a defect in amicus itself is
+  reported, and its description, the server instructions' Reference paragraph and the skill's
+  Results rules all say how: offer it to the user with `error.code`, `fingerprint` and
+  `server_version` rather than opening an issue unasked, and put no prompt input or backend
+  answer in a report.
+  Until now the tracker was named only in `pyproject.toml` and `plugin.json`, which no agent
+  reads mid-failure.
 
 ### Changed
 

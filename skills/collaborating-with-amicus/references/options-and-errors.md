@@ -57,7 +57,7 @@ structured review.
 | `start_new_job` | The prior job is unrecoverable; a new one is the correct action. |
 | `reduce_input` | Make the next attempt smaller. It is a recovery action, **not** a statement about spend — `budget_exceeded` maps here and may already have spent. Read `error.code`. |
 | `retry_after_delay` | Transient; honor `retry_after_ms` when present. |
-| `inspect_and_retry` / `retry_then_report` | No mechanical fix — look before retrying, and report if it recurs. |
+| `inspect_and_retry` / `retry_then_report` | No mechanical fix — look before retrying, and report if it recurs: tell the user, who decides whether it goes to the `issues_url` that `amicus_capabilities` reports (Binding rules → Results). |
 | `use_new_idempotency_key` | The key is bound to different arguments, or it replays a failed run's stored error. Either way a new key is a new paid run. |
 
 A pre-dispatch rejection — an out-of-set `backend`, a bad `untracked` value, an oversized input —

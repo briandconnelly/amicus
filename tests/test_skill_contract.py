@@ -451,3 +451,24 @@ def test_the_brief_rules_keep_a_full_reviews_scope_out_of_extra_context():
     assert "additions to a full review" in scope
     [surface] = [b for b in bullets if b.startswith("- **For a change to a published surface")]
     assert "every other place" in surface
+
+
+def test_the_results_rules_name_where_a_defect_is_reported():
+    """A Claude Code host shows the model none of the instructions' Reference block, so the
+    skill is the carrier that reaches it: one binding rule in Results names `issues_url` on
+    `amicus_capabilities`, binds the offer-do-not-file obligation and keeps prompt inputs
+    out of a report. It lives in Results because that is where a failure is read."""
+    section = _BINDING_RULES.partition("\n### Results\n")[2].split("\n### ", 1)[0]
+    assert section, "no `### Results` section in the binding rules"
+    [rule] = [b for b in _bullets(section) if "`issues_url`" in b]
+    bold = re.match(r"- \*\*(.+?)\*\*", rule, re.DOTALL)
+    assert bold, "the issues rule must open with a bolded obligation"
+    for phrase in (
+        "`amicus_capabilities`",
+        "`error.code`",
+        "`fingerprint`",
+        "`server_version`",
+        "rather than opening one yourself",
+        "no prompt input",
+    ):
+        assert phrase in bold.group(1), phrase
