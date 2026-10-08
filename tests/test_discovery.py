@@ -533,3 +533,30 @@ async def test_hand_listed_params_match_each_tools_input_schema():
             assert listed == props, (
                 f"{name}: discovery lists {sorted(listed)}, the schema declares {sorted(props)}"
             )
+
+
+async def test_capabilities_names_where_a_defect_is_reported():
+    """`issues_url` is the one place on the tool surface that names the issue tracker. It is
+    pinned to the `Issues` URL `pyproject.toml` publishes so the two cannot drift, it rides
+    both detail levels (a summary reader is the one most likely to be mid-failure), and its
+    description survives schema publication, because it carries the obligations - offer, do
+    not file; no prompt input in a report - that make the pointer safe to act on."""
+    import tomllib
+    from pathlib import Path
+
+    import amicus
+
+    pyproject = tomllib.loads(
+        (Path(__file__).resolve().parents[1] / "pyproject.toml").read_text(encoding="utf-8")
+    )
+    assert pyproject["project"]["urls"]["Issues"] == amicus.ISSUES_URL
+    app = _app()
+    async with Client(app) as c:
+        summary = (await c.call_tool("amicus_capabilities", {})).structured_content
+        full = (await c.call_tool("amicus_capabilities", {"detail": "full"})).structured_content
+    assert summary["issues_url"] == amicus.ISSUES_URL
+    assert full["issues_url"] == amicus.ISSUES_URL
+    desc = results.CAPABILITIES_SCHEMA["anyOf"][0]["properties"]["issues_url"]["description"]
+    assert desc == results.ISSUES_URL_DESC
+    for phrase in ("rather than opening one unasked", "no prompt input"):
+        assert phrase in desc, phrase

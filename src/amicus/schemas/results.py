@@ -6,6 +6,7 @@ from typing import Any, Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 
+from amicus import ISSUES_URL
 from amicus.schemas import publish
 from amicus.schemas.codes import ErrorCode  # noqa: TC001 - pydantic needs this at runtime
 from amicus.schemas.envelope import (
@@ -683,6 +684,15 @@ RESULT_FORMAT_DESC = (
 )
 
 
+ISSUES_URL_DESC = (
+    "Where a defect in amicus itself is reported: a malformed envelope, a repair that cannot "
+    "be followed, a result that contradicts its own schema. Offer it to the user with "
+    "error.code, fingerprint and server_version rather than opening one unasked, and put "
+    "no prompt input (question, task, extra_context and the other fields you supplied) and "
+    "no backend answer into a report."
+)
+
+
 class CapabilitiesResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
     ok: Literal[True] = True
@@ -696,6 +706,7 @@ class CapabilitiesResult(BaseModel):
     )
     protocol_revision: str = PROTOCOL_REVISION
     result_format: int = Field(default=RESULT_FORMAT, description=RESULT_FORMAT_DESC)
+    issues_url: str = Field(default=ISSUES_URL, description=ISSUES_URL_DESC)
     transport: str
     stability: ToolStability
     enabled_backends: list[BackendRef]
@@ -721,6 +732,7 @@ class CapabilitiesResult(BaseModel):
 
 publish.KEPT_DESCRIPTIONS.add(FINGERPRINT_COVERS_DESC)
 publish.KEPT_DESCRIPTIONS.add(RESULT_FORMAT_DESC)
+publish.KEPT_DESCRIPTIONS.add(ISSUES_URL_DESC)
 
 CONSULT_RESULT_SCHEMA = publish.published_schema(ConsultResult)
 REVIEW_RESULT_SCHEMA = publish.published_schema(ReviewResult)

@@ -131,6 +131,14 @@ obligations live in the reference each route names, under that file's own `Rules
 - **Verify a claim against the evidence its kind requires before acting on it**, and run this
   project's full gate before you call implementation work complete — see
   [reading results](references/reading-results.md) for which is which.
+- **On a failure that looks like a defect in amicus itself — a malformed envelope, a `repair`
+  that cannot be followed, a result that contradicts its own schema — offer the user the
+  `issues_url` that `amicus_capabilities` reports, with `error.code`, `fingerprint` and
+  `server_version`, rather than opening one yourself, and put no prompt input and no backend
+  answer into the report.** Quote `error.code`, `fingerprint`, `server_version` and
+  `meta.job_id`; treat `error.message`, `error.details` and `repair.alternative` like the
+  answer, because a backend's own error text can echo what you sent. What you supplied and
+  what the backend returned travel to the maintainer only if the user chooses to send them.
 
 ### Delegated diffs
 
