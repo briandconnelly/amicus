@@ -33,6 +33,14 @@ per-change, as its own lead says.
 
 ### Changed
 
+- codex-cli 0.161 is a supported version, so `amicus_backends` no longer warns on it. 0.161.0 was
+  checked against 0.160.0 at zero spend: top-level `--help`, `exec review --help` and
+  `login --help` are identical, and `exec --help` adds one flag, `--cyber-access-program`, which
+  amicus does not send. The unknown-feature error, the strict-config and invalid-value rejections
+  and the logged-out `login status` line are unchanged; the four config keys amicus pins with
+  `-c` and the three features it disables on every run are still accepted under
+  `--strict-config`, and those three features are still `stable`. The retired-setting rejection
+  and the model-facing tool catalog were not re-probed. No paid call was part of the check.
 - An explicit `AMICUS_BACKENDS` that names no in-tree backend (a typo, or `Codex` for
   `codex`: names are case-sensitive) now enables nothing and `amicus-mcp` refuses to start,
   naming the variable on stderr, where it used to enable all three backends and report only
