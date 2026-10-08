@@ -52,6 +52,8 @@ per-change, as its own lead says.
   `amicus_job_result` and on consume, and its fixed summary no longer promises a later fetch.
   The `detail` parameter description and `review_status` description say so. **Surface**:
   schema-54; tools/list grows by 454 bytes per profile.
+- The `collaborating-with-amicus` skill's frontmatter is valid YAML: an unquoted `: `
+  inside its `description` made strict parsers, GitHub's among them, reject the file.
 
 ## [0.8.1] - 2026-10-04
 
