@@ -307,6 +307,14 @@ that make the pointer safe to act on - offer it to the user rather than file, an
 prompt input in a report - and a bare URL would have read as "file an issue". The Reference
 sentence in the server instructions and the skill rule are not on tools/list. Measured on the
 wire. MEASURED and BUDGET both move by the 419 bytes, so the budget keeps no headroom.
+
+The schema-56 raise (+214 bytes on every profile: all 114175 -> 114389) is #326. All of it is
+the `issues_url` description: a defect report now names the symbolic error code (a tool
+failure's error.code, a resource-read failure's error.data.machine_code) rather than
+error.code, which a resource read carries as an era-bound number; a backend's poor answer or a
+correctly reported backend CLI failure is scoped out; and the report is said to be public.
+Measured on the wire. MEASURED and BUDGET both move by the 214 bytes, so the budget keeps no
+headroom.
 """
 
 from __future__ import annotations
@@ -316,7 +324,7 @@ from tests.conftest import spawned_server_env
 
 from amicus import manifest
 
-MEASURED: dict[str, int] = {"all": 114175, "codex-kimi": 114183, "claude": 114175}
+MEASURED: dict[str, int] = {"all": 114389, "codex-kimi": 114397, "claude": 114389}
 # The budget is a literal, not MEASURED rounded up to the next kilobyte as it was until
 # 2026-09-14. The rounding left up to 1 KB of growth per bucket that no PR had to own, and
 # this file records three such accumulations (448 and 12 bytes in the paragraphs above, and
@@ -324,7 +332,7 @@ MEASURED: dict[str, int] = {"all": 114175, "codex-kimi": 114183, "claude": 11417
 # #94 that landed after it), each noticed only when the next deliberate raise re-measured.
 # Any growth now fails until a PR raises BUDGET and says why; a shrink passes and shows as
 # drift against MEASURED. Raising one means re-measuring and moving both.
-BUDGET: dict[str, int] = {"all": 114175, "codex-kimi": 114183, "claude": 114175}
+BUDGET: dict[str, int] = {"all": 114389, "codex-kimi": 114397, "claude": 114389}
 
 
 @pytest.mark.parametrize("profile", sorted(manifest.PROFILES))
