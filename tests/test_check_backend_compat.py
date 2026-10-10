@@ -335,3 +335,25 @@ def test_an_installed_version_behind_latest_says_upgrade():
     assert "2.1.293" in problems[0]
     assert "behind" in problems[0], problems[0]
     assert "upgrade" in problems[0], problems[0]
+
+
+def test_equal_core_versions_no_problem():
+    """When installed == latest (no prerelease suffix), no problem is raised."""
+    report = compat.Report("claude", installed=True, version="2.1.292", authenticated=True)
+    report.builtin_supported = report.help_ok = True
+    report.latest = "2.1.292"
+    assert compat.problems(report) == [], (
+        f"Expected no problems for equal versions, got: {compat.problems(report)}"
+    )
+
+
+def test_prerelease_edge_equal_core_says_same():
+    """#323: installed=0.155.1, latest=0.155.1-beta.1 should say 'the same as', not 'behind'."""
+    report = compat.Report("codex", installed=True, version="0.155.1", authenticated=True)
+    report.builtin_supported = report.help_ok = True
+    report.latest = "0.155.1-beta.1"
+    problems = compat.problems(report)
+    assert len(problems) == 1
+    assert "the same as" in problems[0], problems[0]
+    assert "behind" not in problems[0], problems[0]
+    assert "upgrade" not in problems[0], problems[0]
