@@ -133,12 +133,16 @@ obligations live in the reference each route names, under that file's own `Rules
   [reading results](references/reading-results.md) for which is which.
 - **On a failure that looks like a defect in amicus itself — a malformed envelope, a `repair`
   that cannot be followed, a result that contradicts its own schema — offer the user the
-  `issues_url` that `amicus_capabilities` reports, with `error.code`, `fingerprint` and
-  `server_version`, rather than opening one yourself, and put no prompt input and no backend
-  answer into the report.** Quote `error.code`, `fingerprint`, `server_version` and
-  `meta.job_id`; treat `error.message`, `error.details` and `repair.alternative` like the
-  answer, because a backend's own error text can echo what you sent. What you supplied and
-  what the backend returned travel to the maintainer only if the user chooses to send them.
+  `issues_url` that `amicus_capabilities` reports, with the symbolic error code (a tool
+  failure's `error.code`, a resource-read failure's `error.data.machine_code`), `fingerprint`
+  and `server_version`, rather than opening one yourself, and put no prompt input and no
+  backend answer into the report.** A backend's wrong or poor answer, or a backend CLI failure
+  amicus reports correctly, is not an amicus defect. Quote that code, `fingerprint`,
+  `server_version` and `meta.job_id`, never a resource-read failure's numeric JSON-RPC
+  `error.code`, which depends on the protocol era; treat `error.message`, `error.details` and
+  `repair.alternative` like the answer, because a backend's own error text can echo what you
+  sent. The issue tracker is public, so what you supplied and what the backend returned travel
+  to the maintainer only if the user chooses to send them.
 
 ### Delegated diffs
 

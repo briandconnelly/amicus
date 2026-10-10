@@ -558,5 +558,11 @@ async def test_capabilities_names_where_a_defect_is_reported():
     assert full["issues_url"] == amicus.ISSUES_URL
     desc = results.CAPABILITIES_SCHEMA["anyOf"][0]["properties"]["issues_url"]["description"]
     assert desc == results.ISSUES_URL_DESC
-    for phrase in ("rather than opening one unasked", "no prompt input"):
+    for phrase in (
+        "rather than opening one unasked",
+        "no prompt input",
+        "a resource-read failure's error.data.machine_code",
+        "A backend's wrong or poor answer, or a backend CLI failure amicus reports "
+        "correctly, is not one.",
+    ):
         assert phrase in desc, phrase

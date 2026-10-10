@@ -686,10 +686,12 @@ RESULT_FORMAT_DESC = (
 
 ISSUES_URL_DESC = (
     "Where a defect in amicus itself is reported: a malformed envelope, a repair that cannot "
-    "be followed, a result that contradicts its own schema. Offer it to the user with "
-    "error.code, fingerprint and server_version rather than opening one unasked, and put "
-    "no prompt input (question, task, extra_context and the other fields you supplied) and "
-    "no backend answer into a report."
+    "be followed, a result that contradicts its own schema. A backend's wrong or poor "
+    "answer, or a backend CLI failure amicus reports correctly, is not one. Offer it to the "
+    "user with the symbolic error code (a tool failure's error.code, a resource-read "
+    "failure's error.data.machine_code), fingerprint and server_version rather than "
+    "opening one unasked, and put no prompt input (question, task, extra_context and the "
+    "other fields you supplied) and no backend answer into a report: the tracker is public."
 )
 
 

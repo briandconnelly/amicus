@@ -259,5 +259,10 @@ def test_reference_names_where_a_defect_is_reported():
     reference = server.CAPABILITY_SUMMARY.split("\n\n")[2]
     assert amicus.ISSUES_URL in reference
     assert "amicus_capabilities.issues_url" in reference
-    for phrase in ("rather than filing unasked", "no prompt input"):
+    for phrase in (
+        "rather than filing unasked",
+        "no prompt input",
+        "error.data.machine_code on a resource read",
+        "not a backend's answer or a backend CLI failure amicus reports correctly",
+    ):
         assert phrase in reference, phrase

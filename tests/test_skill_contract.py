@@ -463,12 +463,19 @@ def test_the_results_rules_name_where_a_defect_is_reported():
     [rule] = [b for b in _bullets(section) if "`issues_url`" in b]
     bold = re.match(r"- \*\*(.+?)\*\*", rule, re.DOTALL)
     assert bold, "the issues rule must open with a bolded obligation"
+    obligation = " ".join(bold.group(1).split())
     for phrase in (
         "`amicus_capabilities`",
-        "`error.code`",
+        "a tool failure's `error.code`",
+        "a resource-read failure's `error.data.machine_code`",
         "`fingerprint`",
         "`server_version`",
         "rather than opening one yourself",
         "no prompt input",
     ):
-        assert phrase in bold.group(1), phrase
+        assert phrase in obligation, phrase
+    # A backend's poor answer is not an amicus defect (#326); the rule scopes it out.
+    assert (
+        "A backend's wrong or poor answer, or a backend CLI failure amicus reports "
+        "correctly, is not an amicus defect." in " ".join(rule.split())
+    )

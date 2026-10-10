@@ -137,10 +137,12 @@ CAPABILITY_SUMMARY = (
     "job unless the call carried an idempotency_key; and amicus_capabilities.tasks.fallback "
     "states how long a task result and its job are retained and how to recover them. "
     "Transport: stdio. Target protocol: MCP 2026-07-28; 2025-11-25 clients are served "
-    "through the initialize handshake. Defects in amicus itself go to "
-    f"{ISSUES_URL} (amicus_capabilities.issues_url): offer it to the user with error.code, "
+    "through the initialize handshake. Defects in amicus itself, not a backend's answer or a "
+    "backend CLI failure amicus reports correctly, go to "
+    f"{ISSUES_URL} (amicus_capabilities.issues_url): offer it to the user with the "
+    "symbolic error code (error.code, or error.data.machine_code on a resource read), "
     "fingerprint and server_version rather than filing unasked, and put no prompt input "
-    "or backend answer in a report."
+    "or backend answer in a report, which is public."
 )
 
 

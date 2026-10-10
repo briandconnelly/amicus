@@ -20,6 +20,16 @@ per-change, as its own lead says.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Surface.** The defect-report guidance on `issues_url`'s description, the server
+  instructions' Reference paragraph and the skill's Results rules asked for `error.code`, which
+  on a resource-read failure is the era-bound numeric JSON-RPC code. All three now ask for the
+  symbolic code: a tool failure's `error.code`, a resource-read failure's
+  `error.data.machine_code`. They also say that a backend's wrong or poor answer, or a backend
+  CLI failure amicus reports correctly, is not an amicus defect, and that the tracker is public
+  (#326).
+
 ## [0.9.0] - 2026-10-08
 
 Across this release the discovery surface moves from `amicus/0.1/schema-53`, what 0.8.1 shipped,
