@@ -475,4 +475,7 @@ def test_the_results_rules_name_where_a_defect_is_reported():
     ):
         assert phrase in obligation, phrase
     # A backend's poor answer is not an amicus defect (#326); the rule scopes it out.
-    assert "is not an amicus defect" in rule
+    assert (
+        "A backend's wrong or poor answer, or a backend CLI failure amicus reports "
+        "correctly, is not an amicus defect." in " ".join(rule.split())
+    )
