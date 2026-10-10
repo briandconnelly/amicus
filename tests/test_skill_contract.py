@@ -479,3 +479,5 @@ def test_the_results_rules_name_where_a_defect_is_reported():
         "A backend's wrong or poor answer, or a backend CLI failure amicus reports "
         "correctly, is not an amicus defect." in " ".join(rule.split())
     )
+    # A resource-read failure has no job; its correlation id is error.data.request_id.
+    assert "a resource-read failure's `error.data.request_id`" in " ".join(rule.split())
