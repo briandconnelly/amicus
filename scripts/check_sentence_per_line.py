@@ -20,7 +20,10 @@ Not prose, so never checked: fenced code blocks, HTML comments (only the comment
 so prose beside one on the same line is still checked), YAML front matter,
 tables (from the header row above a delimiter row to the next blank line, with or
 without leading pipes), link reference definitions and blockquotes, which in this
-repository carry captured output verbatim. On a checked line, inline code spans,
+repository carry captured output verbatim. A ``<!--`` inside a code span, an HTML
+tag or after a backslash is not a comment opener, as in CommonMark; a code span is
+followed only within one line. A file that ends inside a comment fails, because
+nothing after the opener was checked. On a checked line, inline code spans,
 link targets, URLs and double-quoted text are masked before segmenting, and a
 leading heading marker, list marker or bold run-in label (``**Label.**``) is
 not counted as a sentence. A quotation keeps a terminator it closes on, because
@@ -33,7 +36,8 @@ Usage:
 
 Exit codes:
     0  every checked line under ROOT/docs holds at most one sentence
-    1  at least one line holds two or more sentences
+    1  at least one line holds two or more sentences, or a file ends inside an
+       HTML comment
     2  nothing to scan (no docs/**/*.md under ROOT) — verify nothing
 """
 
@@ -52,6 +56,15 @@ WARN = "WARN"
 _FENCE_RE = re.compile(r"^\s*(`{3,}|~{3,})")
 # An inline code span: a run of N backticks closed by a run of exactly N.
 _CODE_SPAN_RE = re.compile(r"(?<!`)(`+)(?!`)(.+?)(?<!`)\1(?!`)")
+# A whole backtick run, which a code span opens and closes on.
+_BACKTICK_RUN_RE = re.compile(r"`+")
+# An inline HTML open or closing tag, which CommonMark reads as one token, so a
+# backtick in an attribute value cannot open a code span.
+_HTML_TAG_RE = re.compile(
+    r"</?[A-Za-z][A-Za-z0-9-]*"
+    r"(?:\s+[A-Za-z_:][A-Za-z0-9_.:-]*(?:\s*=\s*(?:[^\s\"'=<>`]+|'[^']*'|\"[^\"]*\"))?)*"
+    r"\s*/?>"
+)
 # An inline link or image target, with an optional title: ``](target "title")``.
 _LINK_TARGET_RE = re.compile(r"\]\([^)\s]*(?:\s+\"[^\"]*\")?\)")
 # A bare or angle-bracketed URL; a trailing sentence terminator is not part of it.
@@ -96,11 +109,39 @@ def _fill_quote(match: re.Match[str]) -> str:
     return _fill(match)
 
 
+def _comment_start(line: str, pos: int) -> int:
+    """Return where the next ``<!--`` at or after ``pos`` opens a comment, or -1.
+
+    Scans left to right as CommonMark does: a backslash makes the next character
+    literal, an HTML tag is skipped whole, and a backtick run opens a code span,
+    whose text is code, only if a run of the same length closes it later on the line.
+    """
+    while pos < len(line):
+        if line[pos] == "\\":
+            pos += 2
+        elif run := _BACKTICK_RUN_RE.match(line, pos):
+            closer = next(
+                (m for m in _BACKTICK_RUN_RE.finditer(line, run.end()) if m.group() == run.group()),
+                None,
+            )
+            pos = closer.end() if closer else run.end()
+        elif line.startswith("<!--", pos):
+            return pos
+        elif tag := _HTML_TAG_RE.match(line, pos):
+            pos = tag.end()
+        else:
+            pos += 1
+    return -1
+
+
 def _hide_comments(line: str, in_comment: bool) -> tuple[str, bool]:
     """Blank every HTML comment span in ``line``, carrying an open comment across lines.
 
     Returns the line with comment text replaced by spaces, so what is left is the
     visible prose at its own offsets, and whether a comment is still open at its end.
+    A code span and a comment are taken in the order they open, as CommonMark does:
+    a ``<!--`` inside a code span or after a backslash opens nothing, and a
+    backtick inside a comment is comment text, so only ``-->`` closes one.
     """
     out: list[str] = []
     pos = 0
@@ -113,7 +154,7 @@ def _hide_comments(line: str, in_comment: bool) -> tuple[str, bool]:
             out.append(" " * (end + 3 - pos))
             pos, in_comment = end + 3, False
         else:
-            start = line.find("<!--", pos)
+            start = _comment_start(line, pos)
             if start < 0:
                 out.append(line[pos:])
                 break
@@ -145,12 +186,13 @@ def sentence_breaks(line: str) -> list[int]:
     return breaks
 
 
-def iter_violations(text: str) -> list[tuple[int, str]]:
-    """Return ``(lineno, line)`` for every prose line holding two or more sentences."""
+def _scan(text: str) -> tuple[list[tuple[int, str]], int | None]:
+    """Return the violations in ``text`` and the line of a comment it never closes."""
     found: list[tuple[int, str]] = []
     lines = text.splitlines()
     fence: str | None = None  # the fence run that opened the current code block
     in_comment = False
+    comment_line = 0  # the line that opened the comment still open, if one is
     in_table = False
     in_front_matter = bool(lines) and lines[0].strip() == "---"
     for lineno, line in enumerate(lines, start=1):
@@ -169,7 +211,10 @@ def iter_violations(text: str) -> list[tuple[int, str]]:
             ):
                 fence = None
             continue
+        was_in_comment = in_comment
         visible, in_comment = _hide_comments(line, in_comment)
+        if in_comment and not was_in_comment:
+            comment_line = lineno
         if in_table:
             in_table = bool(visible.strip())
             continue
@@ -185,7 +230,20 @@ def iter_violations(text: str) -> list[tuple[int, str]]:
             continue
         if sentence_breaks(visible):
             found.append((lineno, line))
-    return found
+    return found, comment_line if in_comment else None
+
+
+def iter_violations(text: str) -> list[tuple[int, str]]:
+    """Return ``(lineno, line)`` for every prose line holding two or more sentences."""
+    return _scan(text)[0]
+
+
+def unclosed_comment(text: str) -> int | None:
+    """Return the line that opens an HTML comment ``text`` never closes, or None.
+
+    Everything after that line went unchecked, so a run must not pass on it.
+    """
+    return _scan(text)[1]
 
 
 def _doc_files(root: Path) -> list[Path]:
@@ -205,15 +263,24 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     violations: list[str] = []
+    unclosed: list[str] = []
     for path in files:
         rel = path.relative_to(root)
-        for lineno, line in iter_violations(path.read_text(encoding="utf-8")):
-            violations.append(f"{rel}:{lineno}: {line.strip()}")
+        found, comment_line = _scan(path.read_text(encoding="utf-8"))
+        violations.extend(f"{rel}:{lineno}: {line.strip()}" for lineno, line in found)
+        if comment_line is not None:
+            unclosed.append(
+                f"{rel}:{comment_line}: an HTML comment opens here and never closes, "
+                "so nothing after it was checked"
+            )
 
+    for v in violations + unclosed:
+        print(f"{FAIL}: {v}")
     if violations:
-        for v in violations:
-            print(f"{FAIL}: {v}")
         print(f"\n{len(violations)} line(s) under docs/ hold two or more sentences (rule 16).")
+    if unclosed:
+        print(f"\n{len(unclosed)} file(s) under docs/ end inside an unclosed HTML comment.")
+    if violations or unclosed:
         return 1
 
     print(
