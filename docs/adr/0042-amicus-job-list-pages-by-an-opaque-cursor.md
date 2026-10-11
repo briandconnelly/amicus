@@ -1,11 +1,12 @@
 # ADR 0042: amicus_job_list pages by an opaque cursor
 
-**Status:** Accepted (2026-09-25)
+**Status:** Accepted (2026-09-25); amended 2026-10-11 for issue #237
 
 ## Context
 
 `amicus_job_list` could not page: omitting `limit` returned every retained match, and setting it truncated to the newest N with `truncated: true` and no way to reach an older job except fetching them all (#249, `[8.house-pagination]`).
-The 2026-09-07 review judged house pagination unnecessary because no tool returned an unbounded list; the list is held to the per-workspace cap `AMICUS_JOB_MAX_COUNT`, which an operator may raise to 1,000, and which server processes sharing a state root can each exceed by one start, because the lock that enforces it is process-local (`JobStore._make_room`).
+The 2026-09-07 review judged house pagination unnecessary because no tool returned an unbounded list; the list is held to the per-workspace cap `AMICUS_JOB_MAX_COUNT`, which an operator may raise to 1,000, and which server processes sharing a state root could each exceed by one start, because the lock that enforced it was process-local (`JobStore._make_room`).
+Since #237 the cap is enforced under a cross-process lock as well, so only a server from an earlier release, which does not take it, can still exceed it, and the description keeps naming the overshoot for that case.
 
 ## Decision
 

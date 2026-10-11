@@ -50,7 +50,7 @@ import signal
 import subprocess
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -65,8 +65,20 @@ logger = logging.getLogger(__name__)
 # a job and must be excluded from every job-directory iteration.
 _IDEM_DIRNAME = ".idem"
 
+# Reserved file (in a workspace dir) that every server process sharing the state root
+# flocks around each read, write and delete of that workspace's records (#237). A file,
+# so ``_job_dirs`` never takes it for a job; never deleted, so every process locks the
+# same inode.
+_RECORD_LOCK_NAME = ".records.lock"
+
 _TERMINAL = frozenset({"done", "failed", "cancelled", "timeout"})
 _LOCK = threading.RLock()
+
+# This process's hold on each workspace's record lock: the open fd and how many nested
+# sections hold it. Touched only under ``_LOCK``, which serializes this process's threads,
+# so a nested section reuses the fd: a second open file description would block on the
+# flock this process already holds.
+_RECORD_LOCKS: dict[Path, list[int]] = {}
 
 # The only job-id shape this store ever mints (``uuid4().hex``). A job id is used
 # verbatim as a path component under the workspace directory, so its shape is
@@ -138,6 +150,10 @@ MAX_POLL_AFTER_MS = 30_000
 ACTIVITY_WRITE_THROTTLE_S = 0.5
 
 CmdFactory = Callable[[Path], list[str]]
+
+
+def _is_job_id(job_id: str) -> bool:
+    return _JOB_ID_RE.fullmatch(job_id) is not None
 
 
 def _usable_epoch(epoch: int | float) -> bool:
@@ -416,6 +432,45 @@ class JobStore:
             return []
         return [d for d in ws.iterdir() if d.is_dir() and d.name != _IDEM_DIRNAME]
 
+    @contextlib.contextmanager
+    def _record_lock(self, cwd: str, *, timeout: float | None = None) -> Iterator[None]:
+        """Hold the workspace's cross-process record lock; the caller holds ``_LOCK``.
+
+        ``_LOCK`` serializes this process's threads only. Without this lock a server
+        process sharing the state root could read a record while another deletes it,
+        between ``result.json`` going and ``meta.json`` going, and report a finished
+        job as ``failed`` (#237). Every section that reads, writes or deletes records
+        takes it, so a delete and its restore are atomic to every reader. Lock order
+        is ``_LOCK``, then the idempotency index's flock, then this; nothing takes them
+        in another order. The workspace directory is created if it is missing, since
+        another process can create it, and records in it, during this section; a lock
+        that cannot be opened or taken raises rather than letting the section run
+        unlocked. ``timeout`` bounds the wait as ``IdempotencyIndex.lock``'s does,
+        raising ``idempotency.LockTimeout``; a nested section never waits."""
+        ws = self._ws_dir(cwd)
+        held = _RECORD_LOCKS.get(ws)
+        if held is not None:
+            held[1] += 1
+            try:
+                yield
+            finally:
+                held[1] -= 1
+            return
+        ws.mkdir(parents=True, exist_ok=True)
+        fd = os.open(ws / _RECORD_LOCK_NAME, os.O_CREAT | os.O_RDWR, 0o600)
+        try:
+            idempotency._acquire_flock(fd, timeout)
+        except BaseException:
+            os.close(fd)
+            raise
+        _RECORD_LOCKS[ws] = [fd, 1]
+        try:
+            yield
+        finally:
+            del _RECORD_LOCKS[ws]
+            idempotency._release_flock(fd)
+            os.close(fd)
+
     def _idem_index(self, cwd: str) -> idempotency.IdempotencyIndex:
         """The dedup index for a workspace. The horizon is a conservative floor: a job's
         whole wall-clock life (max_seconds) plus its terminate grace plus the terminal
@@ -431,7 +486,8 @@ class JobStore:
         the same live-read (and expiry reaping) as every other lookup, so a terminal
         job past its TTL reads as gone (→ result-unavailable), never as replayable."""
         try:
-            live = self._read_live_job(cwd, job_id)
+            with self._record_lock(cwd):
+                live = self._read_live_job(cwd, job_id)
         except ResultUnreadable:
             # The record is there; only its outcome is unreadable. Reported as live and
             # not terminal: the key keeps replaying to this job (whose own reads say what
@@ -677,7 +733,7 @@ class JobStore:
         design). With ``None`` (the default) the worker gets ``DEVNULL``,
         byte-identical to the prior behavior.
         """
-        with _LOCK:
+        with _LOCK, self._record_lock(cwd):
             self._make_room(cwd)
             job_id = uuid4().hex
             jd = self._job_dir(cwd, job_id)
@@ -925,9 +981,10 @@ class JobStore:
         """``_read_live_job``, plus whether an expired record's cleanup failed. Such a
         record is never served, like any expired one, but its files remain, which a
         caller reporting what it deleted must not call absent (#125)."""
-        if _JOB_ID_RE.fullmatch(job_id) is None:
+        if not _is_job_id(job_id):
             # A malformed id (wrong shape, traversal, empty) is by construction not a
             # job this store started: report not-found without touching the filesystem.
+            # The public callers check it before taking the record lock, which would.
             return None, False
         jd = self._job_dir(cwd, job_id)
         meta = self._read_meta(jd)
@@ -989,9 +1046,11 @@ class JobStore:
         spawns anything: reap expired records, then evict evictable ones oldest first
         until the workspace holds fewer than ``max_count``. A directory without
         ``meta.json`` is not a record (it may be another process's start mid-spawn), so
-        it is neither counted nor deleted. ``_LOCK`` is process-local, so server processes
-        sharing a state root can each pass this check at once and overshoot the cap by
-        one start per process; an overshoot deletes nothing."""
+        it is neither counted nor deleted. ``start`` holds the workspace's record lock from
+        this check until the new record is written, so server processes sharing a state
+        root that all take it never overshoot the cap; an older release sharing the root
+        does not take it, and can overshoot by one start per process. An overshoot deletes
+        nothing."""
         self._reap_workspace(cwd)
         records: list[tuple[Path, dict, str | None]] = []
         for jd in self._job_dirs(self._ws_dir(cwd)):
@@ -1019,7 +1078,9 @@ class JobStore:
 
     # -------------------------------------------------------------- public API
     def status(self, cwd: str, job_id: str) -> dict | None:
-        with _LOCK:
+        if not _is_job_id(job_id):
+            return None  # before the lock: a malformed id touches nothing
+        with _LOCK, self._record_lock(cwd):
             live = self._read_live_job(cwd, job_id)
             if live is None:
                 return None
@@ -1037,7 +1098,9 @@ class JobStore:
         finds a result that exists but cannot be opened (#280), as ``status``,
         ``list_jobs`` and ``cancel`` do; ``discard`` reports it as DELETE_FAILED.
         """
-        with _LOCK:
+        if not _is_job_id(job_id):
+            return None, None  # before the lock: a malformed id touches nothing
+        with _LOCK, self._record_lock(cwd):
             live = self._read_live_job(cwd, job_id)
             if live is None:
                 return None, None
@@ -1053,7 +1116,9 @@ class JobStore:
         records that amicus returned the result, never that the client received it.
         Returns True only when this call wrote the stamp; a missing, non-``done``,
         untracked or already-stamped record is left unchanged."""
-        with _LOCK:
+        if not _is_job_id(job_id):
+            return False  # before the lock: a malformed id touches nothing
+        with _LOCK, self._record_lock(cwd):
             live = self._read_live_job(cwd, job_id)
             if live is None:
                 return False
@@ -1084,14 +1149,16 @@ class JobStore:
         whose cleanup failed is no longer served but its files remain (#125).
         Verification is ``_gone``'s ``stat`` probe, so an unverifiable removal is
         never REMOVED.
-        The one-caller-wins guarantee is process-local: ``_LOCK`` serializes
-        threads in this process, but two server processes sharing a state root
-        can each observe the record before either deletes it (unchanged from
-        the pre-split read+delete, which held the same process-local lock).
+        One caller wins across server processes too: the read and the delete both
+        run under the workspace's record lock, so a second process sharing the
+        state root finds the record gone (MISSING), never half-deleted (#237). An
+        older release sharing the root does not take that lock.
         """
         if expected not in _TERMINAL:
             raise ValueError(f"expected must be a terminal state, not {expected!r}")
-        with _LOCK:
+        if not _is_job_id(job_id):
+            return DiscardOutcome.MISSING  # before the lock: a malformed id touches nothing
+        with _LOCK, self._record_lock(cwd):
             try:
                 live, left = self._read_or_expire(cwd, job_id)
                 if live is None:
@@ -1116,7 +1183,9 @@ class JobStore:
             return DiscardOutcome.REMOVED if self._gone(jd) else DiscardOutcome.DELETE_FAILED
 
     def cancel(self, cwd: str, job_id: str) -> dict | None:
-        with _LOCK:
+        if not _is_job_id(job_id):
+            return None  # before the lock: a malformed id touches nothing
+        with _LOCK, self._record_lock(cwd):
             live = self._read_live_job(cwd, job_id)
             if live is None:
                 return None
@@ -1133,7 +1202,7 @@ class JobStore:
             self.terminate_grace_seconds,
             is_alive=lambda m=meta: self._job_running(jd, m),
         )
-        with _LOCK:
+        with _LOCK, self._record_lock(cwd):
             # Re-validate: during the unlocked grace window the record may have been
             # consumed/evicted, finalized by another path, or the worker may have
             # finished on its own. Re-read fresh state and never clobber it.
@@ -1165,7 +1234,7 @@ class JobStore:
             return self._status_dict(jd, meta, "cancelled")
 
     def list_jobs(self, cwd: str) -> list[dict]:
-        with _LOCK:
+        with _LOCK, self._record_lock(cwd):
             self._reap_workspace(cwd)
             ws = self._ws_dir(cwd)
             summaries: list[dict] = []
@@ -1245,11 +1314,18 @@ class JobStore:
             # Hold the index's cross-process lock across sweep → reserve → spawn →
             # publish so a stale-entry reclaim (unlink + re-create) or a late publish
             # cannot interleave with another process and let two callers both win. The
-            # flock is taken on `with` entry, so its bounded LockTimeout surfaces here;
+            # record lock is taken next, under what is left of the same deadline, so the
+            # resolve and start inside reuse it rather than wait unbounded (#237). Both
+            # flocks are taken on `with` entry, so a bounded LockTimeout surfaces here;
             # nothing inside the body raises LockTimeout, so catching it is unambiguous.
-            lock_wait = None if deadline is None else max(0.0, deadline - time.monotonic())
+            def lock_wait() -> float | None:
+                return None if deadline is None else max(0.0, deadline - time.monotonic())
+
             try:
-                with index.lock(timeout=lock_wait):
+                with (
+                    index.lock(timeout=lock_wait()),
+                    self._record_lock(cwd, timeout=lock_wait()),
+                ):
                     index.sweep(resolve)  # bounded maintenance: drop entries past horizon
                     outcome = index.reserve(tool, key, arg_hash, resolve)
                     if outcome.kind != idempotency.WON:

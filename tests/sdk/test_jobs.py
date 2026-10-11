@@ -10,7 +10,9 @@ from __future__ import annotations
 import errno
 import json
 import os
+import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -1115,6 +1117,165 @@ def test_read_envelope_garbage_and_nonobject(tmp_path):
     assert JobStore._read_envelope(tmp_path) is None
 
 
+# A second server process sharing the state root: it discards the record, and pauses
+# once result.json is gone but meta.json is not, the window #237 is about, until a line
+# arrives on its stdin.
+_PAUSED_DISCARD = """
+import sys
+from pathlib import Path
+from amicus.jobs.store import JobStore
+
+root, cwd, job_id = sys.argv[1:4]
+store = JobStore(root=Path(root), ttl_seconds=3600, max_seconds=60, max_count=50)
+real_unlink = Path.unlink
+
+def paused(self, *args, **kwargs):
+    real_unlink(self, *args, **kwargs)
+    if self.name == "result.json":
+        print("mid-delete", flush=True)
+        sys.stdin.readline()
+
+Path.unlink = paused
+print(store.discard(cwd, job_id).value, flush=True)
+"""
+
+
+@pytest.mark.parametrize(
+    ("read", "expected"),
+    [
+        ("result_payload", (None, None)),
+        ("status", None),
+        ("discard", DiscardOutcome.MISSING),
+        ("list_jobs", []),
+    ],
+)
+def test_a_record_mid_delete_in_another_process_is_never_read_as_failed(tmp_path, read, expected):
+    # #237: a reader in another process landed between result.json and meta.json going,
+    # and read a finished job as failed (a consume answered job_failed). The record lock
+    # makes it wait for the delete, then find nothing.
+    store, cwd, job_id, jd = _done_job(tmp_path)
+    other = subprocess.Popen(
+        [sys.executable, "-c", _PAUSED_DISCARD, str(store.root), cwd, job_id],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        assert other.stdout.readline() == "mid-delete\n"
+        assert (jd / "meta.json").exists() and not (jd / "result.json").exists()
+        outcome: list = []
+        args = (cwd,) if read == "list_jobs" else (cwd, job_id)
+        reader = threading.Thread(target=lambda: outcome.append(getattr(store, read)(*args)))
+        reader.start()
+        reader.join(0.5)
+        assert reader.is_alive(), f"{read} did not wait for the delete: {outcome}"
+        other.stdin.write("\n")
+        other.stdin.flush()
+        assert other.stdout.readline() == "removed\n"
+        reader.join(10)
+        assert not reader.is_alive()
+        assert outcome == [expected]
+    finally:
+        other.kill()
+        other.wait()
+
+
+# A second server process whose start pauses after its cap check, where it names the
+# new record's directory and before it creates it, until a line arrives on its stdin.
+_PAUSED_START = """
+import sys
+from pathlib import Path
+from amicus.jobs.store import JobStore
+
+root, cwd = sys.argv[1:3]
+store = JobStore(root=Path(root), ttl_seconds=3600, max_seconds=60, max_count=1)
+real_job_dir = JobStore._job_dir
+
+def paused(self, cwd, job_id):
+    print("checked", flush=True)
+    sys.stdin.readline()
+    return real_job_dir(self, cwd, job_id)
+
+JobStore._job_dir = paused
+code = "import json; open('result.json','w').write(json.dumps({'ok': True, 'tool': 't'}))"
+print(store.start(lambda _jd: [sys.executable, "-c", code], cwd, kind="k")[0], flush=True)
+"""
+
+
+def test_two_processes_never_overshoot_the_job_cap(tmp_path):
+    # start holds the record lock from its cap check until its record is written, so a
+    # second process cannot pass the check in between and overshoot the cap (#237).
+    store = _store(tmp_path, max_count=1)
+    cwd = str(tmp_path)
+    other = subprocess.Popen(
+        [sys.executable, "-c", _PAUSED_START, str(store.root), cwd],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        assert other.stdout.readline() == "checked\n"
+        outcome: list = []
+
+        def start():
+            try:
+                outcome.append(store.start(_factory(_WRITE_DONE), cwd, kind="k"))
+            except JobCapReached as exc:
+                outcome.append(exc)
+
+        starter = threading.Thread(target=start)
+        starter.start()
+        starter.join(0.5)
+        assert starter.is_alive(), f"start passed the cap check mid-start: {outcome}"
+        other.stdin.write("\n")
+        other.stdin.flush()
+        assert len(other.stdout.readline().strip()) == 32  # its record is written
+        starter.join(10)
+        assert not starter.is_alive()
+        # Past the check, this start either finds the other record held (JobCapReached)
+        # or, if it read that record as failed before its result landed, evicts it and
+        # starts. Unlocked, its check ran on an empty workspace and both records stayed.
+        assert len(outcome) == 1
+        assert len(store.list_jobs(cwd)) == 1
+    finally:
+        other.kill()
+        other.wait()
+
+
+@pytest.mark.parametrize(
+    "call", ["status", "result_payload", "mark_delivered", "discard", "cancel"]
+)
+def test_a_malformed_job_id_touches_nothing_before_the_record_lock(tmp_path, call):
+    # Copilot on #336: the lock creates the workspace dir and its lock file, so a malformed
+    # id must be refused first, as not-found, without touching the filesystem.
+    store = _store(tmp_path)
+    expected = {
+        "status": None,
+        "result_payload": (None, None),
+        "mark_delivered": False,
+        "discard": DiscardOutcome.MISSING,
+        "cancel": None,
+    }[call]
+    assert getattr(store, call)(str(tmp_path), "../x") == expected
+    assert not store.root.exists()
+
+
+def test_a_nested_record_lock_section_reuses_the_held_lock(tmp_path):
+    # A second open file description would block on the flock this process already holds,
+    # so a store call made inside a held section must reuse it rather than deadlock.
+    store, cwd, job_id, _jd = _done_job(tmp_path)
+    outcome: list = []
+
+    def nested():
+        with store._record_lock(cwd), store._record_lock(cwd):
+            outcome.append(store.status(cwd, job_id)["status"])
+
+    worker = threading.Thread(target=nested, daemon=True)
+    worker.start()
+    worker.join(10)
+    assert outcome == ["done"]
+
+
 def test_rmtree_missing_is_silent(tmp_path):
     JobStore._rmtree(tmp_path / "does-not-exist")  # must not raise
 
@@ -1706,6 +1867,59 @@ def test_idempotent_lock_timeout_degrades_to_in_progress(tmp_path):
         fcntl.flock(fd, fcntl.LOCK_UN)
         os.close(fd)
     assert store.list_jobs(cwd) == []  # no paid job spawned under contention
+
+
+@pytest.mark.parametrize("existing", [False, True], ids=["fresh", "replay"])
+def test_idempotent_record_lock_contention_degrades_to_in_progress(tmp_path, existing):
+    # The record lock is bounded by the same lock_timeout (#237): a sibling holding only
+    # .records.lock must not park a keyed start, whether it would spawn or replay.
+    import fcntl
+
+    store = _store(tmp_path)
+    cwd = str(tmp_path)
+    if existing:
+        first = store.start_idempotent(
+            _factory(_WRITE_DONE), cwd, kind="k", tool="consult", key="k1", arg_hash="AH"
+        )
+        assert _wait_terminal(store, cwd, first["job_id"]) == "done"
+    store._ws_dir(cwd).mkdir(parents=True, exist_ok=True)
+    fd = os.open(store._ws_dir(cwd) / ".records.lock", os.O_CREAT | os.O_RDWR, 0o600)
+    fcntl.flock(fd, fcntl.LOCK_EX)  # stand in for a sibling process mid-delete
+    try:
+        start = time.monotonic()
+        out = store.start_idempotent(
+            _factory(_SLEEP),
+            cwd,
+            kind="k",
+            tool="consult",
+            key="k1",
+            arg_hash="AH",
+            lock_timeout=0.2,
+        )
+        assert out["kind"] == "in_progress"
+        assert time.monotonic() - start < 2.0  # bounded, not hung on the record lock
+    finally:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        os.close(fd)
+    assert len(store.list_jobs(cwd)) == int(existing)  # nothing spawned under contention
+
+
+def test_a_record_lock_that_cannot_be_opened_never_runs_the_section_unlocked(tmp_path, monkeypatch):
+    # Running unlocked would reopen the #237 window against every other process, so a
+    # lock file that cannot be opened fails the call instead.
+    store, cwd, job_id, jd = _done_job(tmp_path)
+    real_open = os.open
+
+    def no_lock(path, *args, **kwargs):
+        if Path(path).name == ".records.lock":
+            raise PermissionError("open denied")
+        return real_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(os, "open", no_lock)
+    with pytest.raises(PermissionError):
+        store.discard(cwd, job_id)
+    monkeypatch.undo()
+    assert {"meta.json", "result.json"} <= {p.name for p in jd.iterdir()}
 
 
 def test_idempotent_process_lock_contention_degrades_to_in_progress(tmp_path):

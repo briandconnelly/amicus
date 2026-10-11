@@ -1,6 +1,6 @@
 # ADR 0038: the job cap never evicts an unreturned result
 
-**Status:** Accepted (2026-09-24)
+**Status:** Accepted (2026-09-24); amended 2026-10-11 for issue #237
 
 ## Context
 
@@ -39,8 +39,9 @@ This is the rule `amicus_job_consume_result` already follows: it keeps a result 
 The cost is that unfetched results in a format no running server reads hold their slots until `AMICUS_JOB_TTL` expires them.
 A release from before this decision still evicts by age alone, and the records it writes carry no delivery stamp, so they are evicted as before; that is unchanged, and it ends when the old server is upgraded.
 
-**The store alone enforces it, under the process lock.**
-`_LOCK` is process-local, so server processes sharing a state root can each pass the check at once and overshoot the cap by one start per process.
+**The store alone enforces it, under the process lock and the record lock.**
+`_LOCK` is process-local, so server processes sharing a state root could each pass the check at once and overshoot the cap by one start per process.
+Since #237 a start also holds the workspace's cross-process record lock from the check until its record is written, so processes that all take it never overshoot; a server from an earlier release does not take it, and can still overshoot by one start.
 An overshoot deletes nothing, which is the property the annotation needs.
 
 ## Consequences
