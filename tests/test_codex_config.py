@@ -23,6 +23,7 @@ def test_load_config_defaults(clean_env):
         (0, 159),
         (0, 160),
         (0, 161),
+        (0, 162),
     } <= cfg.supported_versions
     assert cfg.warnings == () and cfg.errors == ()
 
@@ -75,6 +76,7 @@ def test_version_parsing_and_support():
     assert cc.version_supported("codex-cli 0.157.0", cfg) is True
     assert cc.version_supported("codex-cli 0.160.0", cfg) is True
     assert cc.version_supported("codex-cli 0.161.0", cfg) is True
+    assert cc.version_supported("codex-cli 0.162.1", cfg) is True
     assert cc.version_supported("codex-cli 0.100.0", cfg) is False
     assert cc.version_supported("?", cfg) is None
 
