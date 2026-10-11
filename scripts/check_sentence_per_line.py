@@ -52,8 +52,10 @@ FAIL = "FAIL"
 WARN = "WARN"
 
 # An opening or closing code fence: three or more backticks or tildes, at any
-# indentation so a fence nested in a list item is recognised too.
-_FENCE_RE = re.compile(r"^\s*(`{3,}|~{3,})")
+# indentation so a fence nested in a list item is recognised too. A backtick run
+# with a backtick later on its line is not one, because a backtick fence's info
+# string cannot hold a backtick: ```` ```a``` ```` is a code span.
+_FENCE_RE = re.compile(r"^\s*(`{3,}(?!.*`)|~{3,})")
 # An inline code span: a run of N backticks closed by a run of exactly N.
 _CODE_SPAN_RE = re.compile(r"(?<!`)(`+)(?!`)(.+?)(?<!`)\1(?!`)")
 # A whole backtick run, which a code span opens and closes on.

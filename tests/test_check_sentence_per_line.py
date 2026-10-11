@@ -140,6 +140,31 @@ def test_a_fence_closes_only_on_its_own_character_and_length():
 @pytest.mark.parametrize(
     ("text", "lineno"),
     [
+        # A backtick fence's info string cannot hold a backtick, so these are code spans.
+        ("```a``` is inline code.\n\nOne. Two.\n", 3),
+        ("```` ``` ```` is inline code.\n\nOne. Two.\n", 3),
+        ("  ```a``` in a list item.\n\nOne. Two.\n", 3),
+    ],
+)
+def test_a_backtick_run_with_a_backtick_after_it_opens_no_fence(text, lineno):
+    assert [n for n, _ in check.iter_violations(text)] == [lineno]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "```sh\nOne. Two.\n```\nThree. Four.\n",
+        # A tilde fence's info string may hold a backtick.
+        "~~~ `x`\nOne. Two.\n~~~\nThree. Four.\n",
+    ],
+)
+def test_a_fence_with_an_allowed_info_string_still_opens(text):
+    assert check.iter_violations(text) == [(4, "Three. Four.")]
+
+
+@pytest.mark.parametrize(
+    ("text", "lineno"),
+    [
         ("<!-- note --> One. Two.\n", 1),
         ("One. Two. <!-- note -->\n", 1),
         ("<!--\nHidden. Hidden.\n--> One. Two.\n", 3),
