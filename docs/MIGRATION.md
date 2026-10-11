@@ -194,6 +194,20 @@ A `null` there means no loaded plugin declares one.
 The `amicus://backends/{backend}` resource is always the full entry.
 `amicus_capabilities(detail="contracts")` is removed: pass `include_tool_details=false` for the same rowless payload, and `detail` now selects only how much each `tool_details` row carries (`summary` is `name`, `cost`, `stability`, `backends`; `full` adds the rest, including `error_codes`).
 
+## Upgrading from 0.9.0
+
+The change below is the one an operator running amicus 0.9.0 may have to handle before running 0.10.0.
+`CHANGELOG.md`'s 0.10.0 section lists every user-visible change since 0.9.0, including the ones that require no migration.
+A job result stored by 0.9.0 is still readable: `RESULT_FORMAT` did not move.
+The discovery surface moves from `amicus/0.1/schema-55` to `amicus/0.1/schema-56`, labelled **Surface**: a fingerprint-aware client re-reads the catalog and nothing else has to change.
+No tool call 0.9.0 accepted is rejected.
+
+**Upgrade every server that shares a state root (#237).**
+0.10.0 serializes every read, write and delete of a workspace's job records across server processes with a lock file, `.records.lock`, in that workspace's directory under the state root.
+A 0.9.0 server sharing the same `AMICUS_STATE_DIR` does not take it, so against that server a status or consume call can still briefly read a finished job as failed, and the per-workspace job cap can still be exceeded by one start per process.
+Like the per-job worker lock, it is an advisory `flock` and needs a local filesystem to be reliable.
+A job list, or a job call with a well-formed job id, for a workspace with no records now creates that workspace's directory to hold the lock file, and one whose lock file cannot be created fails rather than running unlocked.
+
 ## Upgrading from 0.8.1
 
 The changes below are the ones a caller using amicus 0.8.1 may have to handle before running 0.9.0.

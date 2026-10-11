@@ -44,7 +44,7 @@ The plugins launch the server from a published release tag, pinned in
   "mcpServers": {
     "amicus": {
       "command": "uvx",
-      "args": ["--from", "git+https://github.com/briandconnelly/amicus.git@v0.9.0", "amicus-mcp"]
+      "args": ["--from", "git+https://github.com/briandconnelly/amicus.git@v0.10.0", "amicus-mcp"]
     }
   }
 }
@@ -176,14 +176,13 @@ the new ones.
 
 ## Status and known limits
 
-0.9.0 is the current release. The discovery surface moves from `amicus/0.1/schema-53` to
-`amicus/0.1/schema-55` and `RESULT_FORMAT` did not move, so a job result 0.8.1 stored can still be
-read. No tool call 0.8.1 accepted is rejected, but an explicit `AMICUS_BACKENDS` that names no
-backend now stops the server from starting instead of enabling all three. An unstructured review
-carries its answer at either `detail`, so the default consume no longer deletes the only copy;
-`amicus_capabilities` names where a defect in amicus is reported; and codex-cli 0.161 is a
-supported version.
-[`docs/MIGRATION.md`](docs/MIGRATION.md#upgrading-from-080) explains how to upgrade, and
+0.10.0 is the current release. The discovery surface moves from `amicus/0.1/schema-55` to
+`amicus/0.1/schema-56` and `RESULT_FORMAT` did not move, so a job result 0.9.0 stored can still be
+read. No tool call 0.9.0 accepted is rejected. Server processes sharing a state root now lock each
+workspace's job records, so one no longer reads a job another is deleting as failed; a defect
+report names a resource-read failure by its symbolic code and correlation id; and codex-cli 0.162
+is a supported version.
+[`docs/MIGRATION.md`](docs/MIGRATION.md#upgrading-from-090) explains how to upgrade, and
 [`CHANGELOG.md`](CHANGELOG.md) lists every user-visible change.
 
 One known limit: a third-party backend distribution can load through the `amicus.backends`
