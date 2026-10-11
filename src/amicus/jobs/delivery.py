@@ -310,8 +310,10 @@ def finished_job_envelope(
             )
         return serialize_error(error), True
     if state == "done":
-        # done but payload is None: result.json was gone by the payload read, which only a
-        # concurrent delete (#237) leaves behind, distinct from STATE_TO_ERROR's "failed"
+        # done but payload is None: result.json was gone by the payload read. The record
+        # lock keeps a delete from another server process out of that read (#237), so only
+        # an older release sharing the state root, which does not take it, leaves this
+        # behind; distinct from STATE_TO_ERROR's "failed"
         # (the job ran and produced no result). A result that is there but cannot be opened
         # never reaches here: the store raises ResultUnreadable for it (#280).
         code, message = "job_failed", "The job finished but its stored result could not be read."

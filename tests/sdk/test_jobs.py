@@ -10,7 +10,9 @@ from __future__ import annotations
 import errno
 import json
 import os
+import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -1113,6 +1115,85 @@ def test_read_envelope_garbage_and_nonobject(tmp_path):
     assert JobStore._read_envelope(tmp_path) is None
     (tmp_path / "result.json").write_text("   ")  # blank
     assert JobStore._read_envelope(tmp_path) is None
+
+
+# A second server process sharing the state root: it discards the record, and pauses
+# once result.json is gone but meta.json is not, the window #237 is about, until a line
+# arrives on its stdin.
+_PAUSED_DISCARD = """
+import sys
+from pathlib import Path
+from amicus.jobs.store import JobStore
+
+root, cwd, job_id = sys.argv[1:4]
+store = JobStore(root=Path(root), ttl_seconds=3600, max_seconds=60, max_count=50)
+real_unlink = Path.unlink
+
+def paused(self, *args, **kwargs):
+    real_unlink(self, *args, **kwargs)
+    if self.name == "result.json":
+        print("mid-delete", flush=True)
+        sys.stdin.readline()
+
+Path.unlink = paused
+print(store.discard(cwd, job_id).value, flush=True)
+"""
+
+
+@pytest.mark.parametrize(
+    ("read", "expected"),
+    [
+        ("result_payload", (None, None)),
+        ("status", None),
+        ("discard", DiscardOutcome.MISSING),
+        ("list_jobs", []),
+    ],
+)
+def test_a_record_mid_delete_in_another_process_is_never_read_as_failed(tmp_path, read, expected):
+    # #237: a reader in another process landed between result.json and meta.json going,
+    # and read a finished job as failed (a consume answered job_failed). The record lock
+    # makes it wait for the delete, then find nothing.
+    store, cwd, job_id, jd = _done_job(tmp_path)
+    other = subprocess.Popen(
+        [sys.executable, "-c", _PAUSED_DISCARD, str(store.root), cwd, job_id],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        assert other.stdout.readline() == "mid-delete\n"
+        assert (jd / "meta.json").exists() and not (jd / "result.json").exists()
+        outcome: list = []
+        args = (cwd,) if read == "list_jobs" else (cwd, job_id)
+        reader = threading.Thread(target=lambda: outcome.append(getattr(store, read)(*args)))
+        reader.start()
+        reader.join(0.5)
+        assert reader.is_alive(), f"{read} did not wait for the delete: {outcome}"
+        other.stdin.write("\n")
+        other.stdin.flush()
+        assert other.stdout.readline() == "removed\n"
+        reader.join(10)
+        assert not reader.is_alive()
+        assert outcome == [expected]
+    finally:
+        other.kill()
+        other.wait()
+
+
+def test_a_nested_record_lock_section_reuses_the_held_lock(tmp_path):
+    # A second open file description would block on the flock this process already holds,
+    # so a store call made inside a held section must reuse it rather than deadlock.
+    store, cwd, job_id, _jd = _done_job(tmp_path)
+    outcome: list = []
+
+    def nested():
+        with store._record_lock(cwd), store._record_lock(cwd):
+            outcome.append(store.status(cwd, job_id)["status"])
+
+    worker = threading.Thread(target=nested, daemon=True)
+    worker.start()
+    worker.join(10)
+    assert outcome == ["done"]
 
 
 def test_rmtree_missing_is_silent(tmp_path):

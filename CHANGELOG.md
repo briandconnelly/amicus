@@ -43,6 +43,13 @@ per-change, as its own lead says.
   `error.data.machine_code`. They also say that a backend's wrong or poor answer, or a backend
   CLI failure amicus reports correctly, is not an amicus defect, and that the tracker is public
   (#326).
+- A status, result or consume call no longer reports a finished job as failed when another
+  amicus server process sharing the state root is deleting that job at the same moment (#237).
+  Server processes now take a per-workspace lock file, `.records.lock`, around every read, write
+  and delete of a workspace's job records. The same lock means two processes discarding one
+  record see one `removed` and one `missing`, and processes sharing a state root no longer
+  overshoot the per-workspace job cap. A server from an earlier release sharing the same state
+  root does not take the lock, so the old window and overshoot remain against it.
 
 ## [0.9.0] - 2026-10-08
 
