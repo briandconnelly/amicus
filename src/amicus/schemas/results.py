@@ -35,7 +35,7 @@ CapabilitiesDetail = Literal["summary", "full"]
 JobState = Literal["running", "done", "failed", "cancelled", "timeout"]
 ToolStability = Literal["stable", "preview", "experimental"]
 ReviewStatus = Literal["completed", "not_run", "unstructured"]
-# Why a backend finding did not reach the caller intact, in this fixed order. A fixed
+# What amicus changed in a backend finding or could not carry, in this fixed order. A fixed
 # vocabulary, never the omitted content: backend output can echo caller input (rule 18).
 FindingReason = Literal[
     "severity_normalized",
@@ -45,8 +45,8 @@ FindingReason = Literal[
     "invalid_container",
     "missing_findings",
 ]
-# Why a prose-list entry (questions, assumptions, next_steps) did not reach the caller
-# intact, in this fixed order (issue #52). The same discipline as FindingReason: a fixed
+# What amicus changed in a prose-list entry (questions, assumptions, next_steps) or could
+# not carry, in this fixed order (issue #52). The same discipline as FindingReason: a fixed
 # vocabulary, never the omitted content.
 ListReason = Literal[
     "number_stringified",
@@ -91,9 +91,9 @@ _DROPPED_DESC = (
     "all. Read `reasons`, never this count alone."
 )
 _REASONS_DESC = (
-    "Why findings did not reach you intact. severity_normalized: case/space only, finding "
-    "intact. extra_fields_omitted: unrecognized keys and their content are gone, the rest "
-    "of the finding survives. backend_artifact_reference_removed: the finding cited an "
+    "Why findings were changed or not carried intact. severity_normalized: case/space only, "
+    "finding intact. extra_fields_omitted: unrecognized keys and their content are gone, the "
+    "rest of the finding survives. backend_artifact_reference_removed: the finding cited an "
     "amicus temp file; its text names a placeholder and a `file` naming it is null with its "
     "`line`. Nothing you could open was lost. invalid_entry: an entry was dropped whole. "
     "invalid_container: the findings member was present but not a list. missing_findings: "
@@ -101,10 +101,11 @@ _REASONS_DESC = (
     "from standing, which is delivered as unknown/low instead."
 )
 _DIAGNOSTICS_DESC = (
-    "What the backend reported that amicus could not carry intact; null when nothing "
-    "deviated. Read this before acting on an empty or short `findings` list. On a "
-    "review_status of not_run no backend ran: this is null and review_status is the signal. "
-    "On unstructured nothing was parsed, so it reports missing_findings."
+    "What amicus changed or could not carry intact in the backend's findings; null when "
+    "nothing deviated; `reasons` says which. Read this before acting on an empty or short "
+    "`findings` list. On a review_status of not_run no backend ran: this is null and "
+    "review_status is the signal. On unstructured nothing was parsed, so it reports "
+    "missing_findings."
 )
 _CONFIDENCE_DESC = (
     "How sure this review is. Usually the backend's own low|medium|high. amicus substitutes "
@@ -126,7 +127,7 @@ publish.KEPT_DESCRIPTIONS.update(
 
 
 class FindingsDiagnostics(BaseModel):
-    """What amicus could not carry from the backend's own findings list (issue #38).
+    """What amicus changed or could not carry in the backend's own findings list (issue #38).
 
     Present only when the backend's output deviated from the finding shape. `dropped`
     counts whole entries that could not be represented, so 0 does not mean nothing was
@@ -143,9 +144,9 @@ class FindingsDiagnostics(BaseModel):
 # One description on the field, not on each member's `reasons`: the member schema is
 # inlined three times per tool, and the prose must reach an MCP-only caller exactly once.
 _LISTS_DESC = (
-    "What the backend put in `questions`, `assumptions` or `next_steps` that amicus could "
-    "not carry intact; null when all three were clean, and a null member is a clean list. "
-    "Per member, `dropped` counts entries dropped whole (null: the member could not be read "
+    "What the backend put in `questions`, `assumptions` or `next_steps` that amicus changed "
+    "or could not carry intact; null when all three were clean, and a null member is a clean "
+    "list. Per member, `dropped` counts entries dropped whole (null: the member could not be read "
     "at all) and `reasons` says why. number_stringified: a number delivered as its string, "
     "nothing lost. invalid_entry: an entry that was not a string or number, dropped whole. "
     "invalid_container: present but not a list. missing_member: the required member was "
@@ -162,7 +163,7 @@ publish.KEPT_DESCRIPTIONS.add(_REVIEW_STATUS_DESC)
 
 
 class ListDiagnostics(BaseModel):
-    """What amicus could not carry from one prose list (issue #52). `dropped` counts the
+    """What amicus changed or could not carry in one prose list (issue #52). `dropped` counts the
     entries dropped whole; it is 0 under `number_stringified` alone, and null when the
     member was absent or not a list, so the count is unknowable."""
 

@@ -28,6 +28,12 @@ per-change, as its own lead says.
   `typing.no_type_check_decorator`; a fresh install resolves that already, and this repository's
   lock moved to it in #346. PyYAML, a runtime dependency through fastmcp, has no 3.15 wheel yet,
   so installing on 3.15 builds it from source.
+- The `findings_diagnostics`, `findings_diagnostics.reasons` and `lists_diagnostics`
+  descriptions no longer open by calling every non-null diagnostic a loss (#338). Some reasons
+  lose nothing: `severity_normalized` leaves the finding intact and `number_stringified` keeps
+  the value as its string. Each now says what amicus changed or could not carry, and that
+  `reasons` says which, as the skill already did. **Surface**: schema-57; tools/list grows by
+  205 bytes per profile.
 
 ## [0.10.0] - 2026-10-11
 

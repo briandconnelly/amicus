@@ -315,6 +315,16 @@ error.code, which a resource read carries as an era-bound number; a backend's po
 correctly reported backend CLI failure is scoped out; and the report is said to be public.
 Measured on the wire. MEASURED and BUDGET both move by the 214 bytes, so the budget keeps no
 headroom.
+
+The schema-57 raise (+205 bytes on every profile: all 114389 -> 114594) is #338. The three
+diagnostics descriptions opened by calling every non-null reason a loss, though
+severity_normalized and number_stringified lose nothing. `_REASONS_DESC` now leads "Why findings
+were changed or not carried intact" (+10 bytes), `_DIAGNOSTICS_DESC` "What amicus changed or
+could not carry intact in the backend's findings" and adds "`reasons` says which" (+33), each on
+four copies, and `_LISTS_DESC` gains "changed or" (+11) on three: 4 x 43 + 3 x 11 = 205.
+"Changed" rather than "normalized", because backend_artifact_reference_removed clears a `file`
+and its `line`, which is not lossless. Measured on the wire. MEASURED and BUDGET both move by
+the 205 bytes, so the budget keeps no headroom.
 """
 
 from __future__ import annotations
@@ -324,7 +334,7 @@ from tests.conftest import spawned_server_env
 
 from amicus import manifest
 
-MEASURED: dict[str, int] = {"all": 114389, "codex-kimi": 114397, "claude": 114389}
+MEASURED: dict[str, int] = {"all": 114594, "codex-kimi": 114602, "claude": 114594}
 # The budget is a literal, not MEASURED rounded up to the next kilobyte as it was until
 # 2026-09-14. The rounding left up to 1 KB of growth per bucket that no PR had to own, and
 # this file records three such accumulations (448 and 12 bytes in the paragraphs above, and
@@ -332,7 +342,7 @@ MEASURED: dict[str, int] = {"all": 114389, "codex-kimi": 114397, "claude": 11438
 # #94 that landed after it), each noticed only when the next deliberate raise re-measured.
 # Any growth now fails until a PR raises BUDGET and says why; a shrink passes and shows as
 # drift against MEASURED. Raising one means re-measuring and moving both.
-BUDGET: dict[str, int] = {"all": 114389, "codex-kimi": 114397, "claude": 114389}
+BUDGET: dict[str, int] = {"all": 114594, "codex-kimi": 114602, "claude": 114594}
 
 
 @pytest.mark.parametrize("profile", sorted(manifest.PROFILES))
