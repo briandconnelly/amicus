@@ -94,7 +94,7 @@ obligations live in the reference each route names, under that file's own `Rules
   calls.
 - **Read [active workflows](references/active-workflows.md) → Rules before every paid call,
   whatever the route.** Its brief and input-placement rules bind every paid verb, the delegate and
-  `_async` routes included.
+  `_async` routes included, except where a composed workflow's reference overrides one by name.
 - **Decide `access` and `config_mode` before the call, from the evidence the task needs, and
   state that need.** Raising either in response to a result that came back short of evidence is
   the case this forbids; choosing `readonly` up front because the backend must read a named file

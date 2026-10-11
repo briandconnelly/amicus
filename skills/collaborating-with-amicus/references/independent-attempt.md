@@ -8,6 +8,13 @@ the other before that other attempt is finalized.
 
 ## Rules
 
+One inherited rule is overridden here: the belief-disclosure rule in
+[active workflows](active-workflows.md) → Rules does not apply to the call fields of an independent
+attempt, as the framing rule below states. These are this file's own:
+
+- **Put no belief, preference or part of your own attempt in any call field.** The framing is the
+  neutral task, the shared facts and the acceptance criteria; this overrides the belief-disclosure
+  rule for this pattern.
 - **Declare the pattern and its cap before the first paid call.** One worker attempt is one paid
   call.
 - **Finalize your own attempt before any call that can return the backend's answer.**

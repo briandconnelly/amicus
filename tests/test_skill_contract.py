@@ -538,3 +538,22 @@ def test_a_matching_draft_is_never_called_proof_of_contact():
     rules = _flat(attempt.partition("\n## Rules\n")[2].split("\n## ", 1)[0])
     assert "A match is evidence of possible contact, not proof of it" in rules
     assert _flat(attempt).count("evidence of possible contact") == 1
+
+
+def test_composed_workflow_overrides_of_the_shared_brief_rules_hold():
+    # Codex on #339: binding active-workflows.md's rules on every paid call imported two
+    # conflicts. Delegate has no extra_context, and an independent attempt cannot state the
+    # host's belief in a call field.
+    workflows = _flat((_SKILL / "references" / "active-workflows.md").read_text(encoding="utf-8"))
+    assert "or in `task` on `amicus_delegate`, which takes no `extra_context`" in workflows
+    scope = _flat(_BINDING_RULES.partition("\n### Scope and inputs\n")[2].split("\n### ", 1)[0])
+    assert "except where a composed workflow's reference overrides one by name" in scope
+    attempt = (_SKILL / "references" / "independent-attempt.md").read_text(encoding="utf-8")
+    rules = _flat(attempt.partition("\n## Rules\n")[2].split("\n## ", 1)[0])
+    assert "the belief-disclosure rule in" in rules
+    assert "**Put no belief, preference or part of your own attempt in any call field.**" in rules
+
+
+def test_reading_results_does_not_call_every_diagnostic_a_loss():
+    # Codex on #339: the reference kept a loss-only lead beside the corrected wording.
+    assert "amicus could not relay all of what it said intact" not in _flat(_RESULTS_REF)

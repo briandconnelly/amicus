@@ -24,7 +24,9 @@ per-change, as its own lead says.
 
 - The `collaborating-with-amicus` skill, after a review on 2026-10-11. Its brief and
   input-placement rules (`active-workflows.md` → Rules) now bind before every paid call. The
-  router used to send a delegate, or an `_async` call, past them. The rule against sending `kimi`
+  router used to send a delegate, or an `_async` call, past them. On a delegate, facts go in
+  `task`, since it takes no `extra_context`. An independent attempt overrides the belief-disclosure
+  rule and keeps the host's view out of every call field. The rule against sending `kimi`
   text you would not keep on local disk moved into the root's binding rules for the same reason.
   The root's ban on retrying an unchanged call now names its one exception: the keyed replay that
   the error rules and a keyed timeout's repair direct. Reaching a linked worktree's uncommitted

@@ -108,8 +108,8 @@ tell you.
 ## `findings_diagnostics`: what amicus normalized or could not carry of what the backend said
 
 Coverage is about how complete the review was: what amicus left out or narrowed before the backend
-ran. This is the opposite axis: the backend ran over what it was given, and amicus could not relay
-all of what it said intact. `findings_diagnostics` is `null` when nothing deviated, and
+ran. This is the opposite axis: the backend ran over what it was given, and amicus normalized what
+it said or could not relay all of it intact. `findings_diagnostics` is `null` when nothing deviated, and
 otherwise carries a `dropped` count and reasons from a fixed vocabulary, some of which leave every
 finding intact:
 
