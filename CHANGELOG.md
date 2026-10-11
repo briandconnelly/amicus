@@ -42,7 +42,9 @@ per-change, as its own lead says.
   symbolic code: a tool failure's `error.code`, a resource-read failure's
   `error.data.machine_code`. They also say that a backend's wrong or poor answer, or a backend
   CLI failure amicus reports correctly, is not an amicus defect, and that the tracker is public
-  (#326).
+  (#326). The skill's rule also names the correlation id to quote, since a resource-read failure
+  has no `meta.job_id`: a tool result's `meta.job_id` when it carries one, else its
+  `error.request_id`, and a resource-read failure's `error.data.request_id`.
 - A status, result or consume call no longer reports a finished job as failed when another
   amicus server process sharing the state root is deleting that job at the same moment (#237).
   Server processes now take a per-workspace lock file, `.records.lock`, around every read, write
