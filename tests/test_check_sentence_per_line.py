@@ -184,6 +184,30 @@ def test_an_escaped_backtick_opens_no_code_span_before_a_comment():
     assert check.iter_violations(text) == []
 
 
+def test_a_backtick_inside_an_html_tag_opens_no_code_span():
+    # The tag is one inline token, so its backtick cannot pair with one past ``<!--``.
+    text = '<span title="`"> <!-- ` Hidden. Hidden. -->\n'
+    assert check.iter_violations(text) == []
+
+
+@pytest.mark.parametrize(
+    ("text", "lineno"),
+    [
+        ("Intro.\n<!-- never closed\nOne. Two.\n", 2),
+        # A span closing on a later line is not followed, so its ``<!--`` opens one.
+        ("Start `code <!-- still\ncode end`.\n\nOne. Two.\n", 1),
+        ("<!-- a -->\n\nText <!-- b\n", 3),
+    ],
+)
+def test_unclosed_comment_names_the_line_that_opened_it(text, lineno):
+    assert check.unclosed_comment(text) == lineno
+
+
+@pytest.mark.parametrize("text", ["Fine.\n", "<!--\nHidden.\n-->\n", "`<!--` is code.\n"])
+def test_unclosed_comment_is_none_when_every_comment_closes(text):
+    assert check.unclosed_comment(text) is None
+
+
 @pytest.mark.parametrize(
     "text",
     [
@@ -234,6 +258,16 @@ def test_main_exits_1_and_names_each_violation(tmp_path, capsys):
     out = capsys.readouterr().out
     assert "FAIL: docs/sub/b.md:2: One. Two." in out
     assert "1 line(s)" in out
+
+
+def test_main_exits_1_when_a_file_ends_inside_a_comment(tmp_path, capsys):
+    # Everything after the opener went unchecked, so the run must not pass.
+    _write(tmp_path, "docs/a.md", "Fine.\nIt opens with <!-- here.\n\nOne. Two.\n")
+    assert check.main([str(tmp_path)]) == 1
+    out = capsys.readouterr().out
+    assert "FAIL: docs/a.md:2: an HTML comment opens here and never closes" in out
+    assert "1 file(s)" in out
+    assert "line(s) under docs/ hold" not in out
 
 
 def test_main_exits_2_when_there_is_nothing_to_scan(tmp_path, capsys):
