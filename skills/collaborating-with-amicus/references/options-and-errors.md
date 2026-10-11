@@ -24,10 +24,12 @@ Optional parameters, duplicate-spend protection, and what to do with an error en
 - **Review a confirmed worktree's commits from its rooted checkout with `scope=commit`, never
   `scope=branch` or `working_tree`**, and say in `extra_context` that files the backend reads
   from disk are that checkout's versions.
-- **Never commit, stash or otherwise change git state solely to make a worktree's uncommitted
-  changes reachable from its rooted checkout.** Put the choice to the user instead: they commit,
-  or approve a commit you make; the client's roots are fixed so the worktree is itself rooted; or
-  `amicus_consult` takes the diff pasted inline, without the structured review.
+- **Never commit a worktree's uncommitted changes to make them reachable from its rooted checkout
+  without the user's explicit approval of that commit, and never stash or otherwise change git
+  state for that purpose.**
+- **When a confirmed worktree's changes are uncommitted, put the choice to the user:** they
+  commit, or approve a commit you make; the client's roots are fixed so the worktree is itself
+  rooted; or `amicus_consult` takes the diff pasted inline, without the structured review.
 
 ## The error envelope
 
@@ -48,7 +50,7 @@ database, while `scope=branch` and `working_tree` read the rooted checkout's own
 tree. `scope=commit` shows one commit's change set, so for several commits either review each, or
 print an unreferenced commit holding them all, `git commit-tree '<tip>^{tree}' -p <base> -m <msg>`
 run in the worktree, and pass its sha. Uncommitted worktree changes are unreachable from the
-rooted checkout, which is why the last rule above puts committing them to the user. A consult
+rooted checkout, which is why the last two rules above put committing them to the user. A consult
 with the diff pasted in instead loses the structured review.
 
 `repair.next_step` is symbolic and closed. The ones you will meet most:

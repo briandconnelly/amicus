@@ -514,7 +514,11 @@ def test_reaching_the_roots_never_commits_on_the_users_behalf():
     # Finding 3: "commit them first" was a git mutation in explanatory prose (ADR 0016). It is
     # now a rule, and committing is the user's choice.
     rules = _flat(_OPTIONS_RULES)
-    assert "**Never commit, stash or otherwise change git state solely to make" in rules
+    assert "without the user's explicit approval of that commit, and never stash" in rules
+    assert (
+        "**When a confirmed worktree's changes are uncommitted, put the choice to the user:**"
+        in rules
+    )
     assert "commit them first" not in _OPTIONS_REF
 
 
@@ -528,6 +532,9 @@ def test_a_non_null_diagnostic_is_not_read_as_loss_alone():
 
 def test_a_matching_draft_is_never_called_proof_of_contact():
     # Finding 5: a distinctive match is evidence of possible contact, not proof.
+    # Copilot on #339: the semantics live once, in the rule; the ordered step points to it.
     attempt = (_SKILL / "references" / "independent-attempt.md").read_text(encoding="utf-8")
     assert "*prove* contact" not in attempt
-    assert "evidence of possible contact, not proof" in _flat(attempt)
+    rules = _flat(attempt.partition("\n## Rules\n")[2].split("\n## ", 1)[0])
+    assert "A match is evidence of possible contact, not proof of it" in rules
+    assert _flat(attempt).count("evidence of possible contact") == 1

@@ -15,8 +15,9 @@ the other before that other attempt is finalized.
   job**; hold it in context entirely when it is small enough.
 - **Omit `instructions_append`, or restrict it to neutral output-shape guidance fixed before
   either attempt begins.**
-- **Check the returned output for distinctive content of your draft before comparing.** Matching
-  content is evidence of possible contact, not proof of its absence when nothing matches.
+- **Check the returned output for distinctive content of your draft before comparing.** A match
+  is evidence of possible contact, not proof of it, since shared requirements or convergent
+  reasoning can produce one; and no match is not proof that there was none.
 - **Reclassify the operation as ordinary critique** — and stop claiming independence — when any
   reclassification trigger below holds.
 - **Never alter git state — stash, commit, branch switch, new worktree — solely to manufacture
@@ -38,10 +39,8 @@ Synthesis itself is governed by SKILL.md → Binding rules → Composed workflow
    do not poll for the result yet.
 4. Produce and finalize your own attempt in full, before any call that can return the backend's.
 5. Only then poll and fetch, per [sync vs async](sync-vs-async.md).
-6. Check the returned output for distinctive content of your draft before comparing. It is the
-   one free check for contact after the fact, and a match is evidence of possible contact, not
-   proof: shared requirements or convergent reasoning can produce one. Either way, a match is a
-   reclassification trigger below.
+6. Run the contact check from the rules above before comparing. It is the one free check for
+   contact after the fact.
 7. Compare assumptions, evidence, trade-offs, and failure modes. Verify the load-bearing
    differences against the code or a test, and synthesize one decision.
 
