@@ -96,7 +96,7 @@ Expect a major version number to mean less than it says: 0.43.1 was followed dir
 "Latest" means npm's `latest` dist-tag, never another tag such as `next`.
 Claude Code's native installer updates itself between runs and can land on a `next` build ahead of `latest` (#323), and an npm upgrade does not move a native install.
 Installing one version does not stop that: a Claude Code session checks for updates while it runs, so one left open elsewhere on the machine can move the install again mid-procedure.
-So for the evidence window, close every Claude Code session on the machine or restart it with `DISABLE_AUTOUPDATER=1`, then run `claude install <version>`, naming the version `latest` reports, immediately before the evidence run.
+So for the evidence window, close every Claude Code session on the machine, including any that is coordinating the release, or restart it with `DISABLE_AUTOUPDATER=1`, then run `claude install <version>`, naming the version `latest` reports, immediately before the evidence run.
 Confirm `claude --version` reports that version, and record the version the evidence run saw.
 
 Then run the mechanical half, which spends nothing: it runs `--version`, `--help` and each backend's free login probe, and sends no prompt.
