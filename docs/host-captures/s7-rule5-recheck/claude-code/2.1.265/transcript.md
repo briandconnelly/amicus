@@ -5,7 +5,7 @@ Mode: treatment, real host, zero-spend design.
 `AMICUS_CODEX_BIN`/`AMICUS_KIMI_BIN`/`AMICUS_CLAUDE_BIN` pointed at this repo's `tests/support/fake_codex.py`/`fake_kimi.py`/`fake_claude.py` (copied to a scratch directory and made executable, since the tree copies are not `chmod +x` and a non-executable path makes `amicus_backends` report the backend as not installed — see "A first, failed attempt" below).
 Harness: `claude -p --strict-mcp-config --mcp-config <scratch>/.mcp.json --plugin-dir <scratch
 plugin> --allowedTools "mcp__amicus__amicus_backends,mcp__amicus__amicus_capabilities,mcp__amicus__amicus_delegate_dry_run"`, fresh context, cwd a scratch git repo seeded with two commits.
-No `--permission-mode` flag was passed (default mode), deliberately, since `docs/host-captures/install-smoke/claude-code/2.1.263/notes.md` records that this host's `-p` mode refuses every MCP tool call not present in `--allowedTools` — `amicus_delegate` was left out of that list on purpose, to reproduce the refused-before-dispatch condition the existing S7 baseline row and this repo's own zero-spend design both rely on.
+No `--permission-mode` flag was passed, deliberately (this is not default mode: see "Correction" below), since `docs/host-captures/install-smoke/claude-code/2.1.263/notes.md` records that this host's `-p` mode refuses every MCP tool call not present in `--allowedTools` — `amicus_delegate` was left out of that list on purpose, to reproduce the refused-before-dispatch condition the existing S7 baseline row and this repo's own zero-spend design both rely on.
 
 ## Prompt used, and why it is a reconstruction
 
@@ -86,3 +86,12 @@ This is reported back rather than resolved unilaterally.
 
 Zero.
 Every dispatched call in this capture (the first attempt's `amicus_backends`, and this run's `amicus_backends` + `amicus_delegate`) reached only free tools or the fake `codex` stand-in, never the real Codex CLI or any other real provider.
+
+## Correction
+
+Added 2026-10-10 from the probe recorded on #14; the run above is unchanged.
+Passing no `--permission-mode` is not default mode: `claude -p` then inherits `permissions.defaultMode` from the user's `~/.claude/settings.json`, and this harness did not exclude user settings.
+Under `auto`, an MCP tool missing from `--allowedTools` can be dispatched rather than refused.
+On Claude Code 2.1.291 the probe reproduced this run's non-refusal by inheriting `auto` (2 of 2 runs), and restored the refusal with `--permission-mode default` (2 of 2) or `--setting-sources project,local` (1 of 1).
+That makes the inherited mode the likely cause, not the host version; it is inference for this run, because `defaultMode` on 2026-09-08 cannot be read back and neither 2.1.263 nor 2.1.265 was re-run.
+A capture that relies on a refusal pins `--permission-mode default` and records it in its transcript.

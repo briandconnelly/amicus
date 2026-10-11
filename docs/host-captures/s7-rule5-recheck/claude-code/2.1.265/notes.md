@@ -42,4 +42,6 @@ This capture's own prose was checked against rule 18's amended wording (`INPUT_F
 - Why the host did not refuse an ungranted, non-read-only MCP tool call in `-p` mode here, where the 2.1.263 captures show it consistently did.
   Candidate explanations: the host version drift itself (2.1.265 vs. 2.1.263), a difference in how this session's `--allowedTools` wildcard vs. explicit tool names is parsed, or some other configuration difference not yet identified.
   Not resolved here.
+  Resolved since, as far as it can be: the likely cause is the inherited `permissions.defaultMode` (`auto` on the maintainer's machine), not the host version; see "Correction" in `transcript.md` and #14.
 - The actual S7 remedy check (does the model narrate worst-enabled-backend attribution when a real approval prompt occurs) is still outstanding and still zero-spend-achievable in principle — it just needs a harness configuration on this host version that reliably reproduces the refusal, which this round did not find.
+  That configuration is `--permission-mode default`, found by the #14 probe on 2.1.291; the re-run is tracked on #18.
