@@ -54,6 +54,20 @@ def test_python_floor_matches_classifiers():
     assert minors == list(range(minors[0], minors[-1] + 1))
 
 
+def test_classifiers_name_exactly_the_ci_matrix():
+    # A classifier claims support, and the CI gate matrix is what tests it, so the two list
+    # the same versions: neither may name a Python the other does not.
+    classified = sorted(
+        c.rsplit(" :: ", 1)[1]
+        for c in _pyproject()["project"]["classifiers"]
+        if c.startswith("Programming Language :: Python :: 3.")
+    )
+    workflow = (ROOT / ".github" / "workflows" / "test.yml").read_text(encoding="utf-8")
+    [matrix] = re.findall(r"^\s*python-version:\s*\[([^\]]*)\]", workflow, flags=re.MULTILINE)
+    tested = sorted(v.strip().strip("\"'") for v in matrix.split(","))
+    assert classified == tested
+
+
 def test_runtime_dependencies_are_exactly_the_spec_set():
     deps = _pyproject()["project"]["dependencies"]
     names = sorted(re.split(r"[<>=!\[]", d, maxsplit=1)[0] for d in deps)
