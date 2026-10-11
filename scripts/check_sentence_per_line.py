@@ -101,6 +101,9 @@ def _hide_comments(line: str, in_comment: bool) -> tuple[str, bool]:
 
     Returns the line with comment text replaced by spaces, so what is left is the
     visible prose at its own offsets, and whether a comment is still open at its end.
+    A code span and a comment are taken in the order they open, as CommonMark does:
+    a ``<!--`` inside a code span is code, and a backtick inside a comment is
+    comment text, so only ``-->`` closes an open comment.
     """
     out: list[str] = []
     pos = 0
@@ -117,6 +120,11 @@ def _hide_comments(line: str, in_comment: bool) -> tuple[str, bool]:
             if start < 0:
                 out.append(line[pos:])
                 break
+            span = _CODE_SPAN_RE.search(line, pos)
+            if span and span.start() < start:
+                out.append(line[pos : span.end()])
+                pos = span.end()
+                continue
             out.append(line[pos:start] + " " * 4)
             pos, in_comment = start + 4, True
     return "".join(out), in_comment

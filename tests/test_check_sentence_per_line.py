@@ -156,6 +156,24 @@ def test_a_fence_inside_a_comment_does_not_open_a_code_block():
 
 
 @pytest.mark.parametrize(
+    ("text", "lineno"),
+    [
+        ("A comment opens with `<!--`.\nThen it closes.\n\nOne. Two.\n", 4),
+        ("Write `<!--` here. Then this.\n", 1),
+        ("Use ``a `<!--` b`` here.\n\nOne. Two.\n", 3),
+    ],
+)
+def test_a_comment_opener_in_a_code_span_opens_no_comment(text, lineno):
+    assert [n for n, _ in check.iter_violations(text)] == [lineno]
+
+
+def test_a_backtick_inside_a_comment_does_not_hide_its_close():
+    # Whichever opens first wins, so a backtick after ``<!--`` is comment text.
+    text = "<!-- a ` --> One. Two. `\n"
+    assert [n for n, _ in check.iter_violations(text)] == [1]
+
+
+@pytest.mark.parametrize(
     "text",
     [
         "| A | B |\n| --- | --- |\n| One. Two. | Three |\n",
