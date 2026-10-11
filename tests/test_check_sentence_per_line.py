@@ -144,6 +144,8 @@ def test_a_fence_closes_only_on_its_own_character_and_length():
         ("```a``` is inline code.\n\nOne. Two.\n", 3),
         ("```` ``` ```` is inline code.\n\nOne. Two.\n", 3),
         ("  ```a``` in a list item.\n\nOne. Two.\n", 3),
+        # The info string is the raw text, so a backtick in a comment counts too.
+        ("```sh <!-- ` -->\nOne. Two.\n", 2),
     ],
 )
 def test_a_backtick_run_with_a_backtick_after_it_opens_no_fence(text, lineno):
