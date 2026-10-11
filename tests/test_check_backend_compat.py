@@ -308,3 +308,48 @@ def test_the_latest_release_is_reported_as_npm_printed_it(monkeypatch):
     assert compat.problems(report) == [], "control"
     report.latest = "0.155.1-beta.1"
     assert len(compat.problems(report)) == 1 and "0.155.1-beta.1" in compat.problems(report)[0]
+
+
+def _off_latest(backend: str, installed: str, latest: str) -> list[str]:
+    report = compat.Report(backend, installed=True, version=installed, authenticated=True)
+    report.builtin_supported = report.help_ok = True
+    report.latest = latest
+    return compat.problems(report)
+
+
+def test_a_cli_ahead_of_latest_is_told_to_pin_back_not_to_upgrade():
+    """#323: claude self-updated to 2.1.294 on npm's `next` while `latest` was 2.1.293, and
+    the failure said "upgrade", which cannot fix a CLI that is already ahead."""
+    assert _off_latest("claude", "2.1.293", "2.1.293") == [], "control"
+    (ahead,) = _off_latest("claude", "2.1.294", "2.1.293")
+    assert "ahead of" in ahead and "`latest` dist-tag (2.1.293)" in ahead, ahead
+    assert "claude install 2.1.293" in ahead and "upgrade" not in ahead, ahead
+    (codex,) = _off_latest("codex", "0.163.0", "0.162.0")
+    assert "npm install -g @openai/codex@0.162.0" in codex, codex
+    (kimi,) = _off_latest("kimi", "2.2.0", "2.1.1")
+    assert "ahead of" in kimi and "install 2.1.1" in kimi, kimi
+
+
+def test_a_cli_behind_latest_is_told_to_upgrade():
+    (behind,) = _off_latest("claude", "2.1.292", "2.1.293")
+    assert "behind" in behind and "upgrade" in behind and "ahead" not in behind, behind
+    # Ordered as numbers, not text: 2.1.10 is ahead of 2.1.9.
+    (numeric,) = _off_latest("codex", "0.10.0", "0.9.0")
+    assert "ahead of" in numeric, numeric
+
+
+def test_a_latest_that_differs_only_by_suffix_is_neither_ahead_nor_behind():
+    (found,) = _off_latest("codex", "0.155.1", "0.155.1-beta.1")
+    assert "does not match" in found and "ahead" not in found and "behind" not in found, found
+
+
+def test_the_lookup_names_the_latest_dist_tag(monkeypatch):
+    seen: list[list[str]] = []
+
+    def run(argv, **_kwargs):
+        seen.append(argv)
+        return compat.subprocess.CompletedProcess(argv, 0, stdout="2.1.293\n", stderr="")
+
+    monkeypatch.setattr(compat.subprocess, "run", run)
+    assert compat.latest_upstream("claude") == "2.1.293"
+    assert seen == [["npm", "view", "@anthropic-ai/claude-code@latest", "version"]]

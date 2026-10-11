@@ -13,8 +13,9 @@ checked"): for every in-tree backend it reports
       `docs/<backend>-help/<version>/` does not, and the reverse. Flags, not text: claude
       wraps its help to the terminal width and a capture may have been trimmed, so a text
       diff reports a change on every run. `--diff` prints the text diff for a reader;
-    * the latest upstream release, from `npm view` for all three. A lookup that fails is
-      reported as unknown, never guessed, and fails the check unless `--offline` was given.
+    * the latest upstream release, npm's `latest` dist-tag for all three, and whether the
+      installed CLI is behind it or ahead of it. A lookup that fails is reported as unknown,
+      never guessed, and fails the check unless `--offline` was given.
 
 It runs `--version`, `--help` and each backend's free login probe, and nothing else: no
 prompt is sent, so no quota is spent. It cannot do the other half of the precondition, the
@@ -62,6 +63,15 @@ NPM_PACKAGES: dict[str, str] = {
     "codex": "@openai/codex",
     "kimi": "@moonshot-ai/kimi-code",
     "claude": "@anthropic-ai/claude-code",
+}
+# The dist-tag read as "the latest release". npm also publishes builds under other tags
+# (claude's `next`), and a CLI that self-updates can land on one of those, ahead of this (#323).
+NPM_DIST_TAG = "latest"
+# How to install one exact release, where that is known. Claude Code's native installer pins
+# with `claude install`; an npm upgrade does not move the native install.
+PIN_COMMANDS: dict[str, str] = {
+    "codex": "npm install -g @openai/codex@{version}",
+    "claude": "claude install {version}",
 }
 _SEMVER = re.compile(r"(\d+)\.(\d+)\.(\d+)")
 # The same core with whatever semver prerelease or build suffix is attached to it. A product
@@ -144,7 +154,7 @@ def latest_upstream(backend: str) -> str | None:
         return None
     try:
         done = subprocess.run(
-            ["npm", "view", package, "version"],
+            ["npm", "view", f"{package}@{NPM_DIST_TAG}", "version"],
             capture_output=True,
             text=True,
             timeout=30,
@@ -270,10 +280,7 @@ def problems(report: Report) -> list[str]:
             "release evidence"
         )
     elif report.latest and release(report.version) != release(report.latest):
-        found.append(
-            f"{report.backend}: installed {report.version} is not the latest release "
-            f"({report.latest}); upgrade before recording release evidence"
-        )
+        found.append(not_latest(report))
     elif report.latest is None and report.backend in NPM_PACKAGES and not report.offline:
         # Every backend is on npm, so an unreadable latest is a lookup that failed, and a
         # lookup that failed must not look like a version that matched.
@@ -283,6 +290,27 @@ def problems(report: Report) -> list[str]:
             "the check was skipped"
         )
     return found
+
+
+def not_latest(report: Report) -> str:
+    """Which way the installed CLI is off npm's latest, since the fix is opposite (#323):
+    behind, upgrade; ahead, the build came from another dist-tag, so pin back or wait."""
+    installed, latest = semver(report.version), semver(report.latest)
+    head = f"{report.backend}: installed {report.version}"
+    tag = f"npm's `{NPM_DIST_TAG}` dist-tag ({report.latest})"
+    if installed is not None and latest is not None and installed > latest:
+        pin = PIN_COMMANDS.get(report.backend, "install {version}").format(version=report.latest)
+        return (
+            f"{head} is ahead of {tag}, so it is not the latest release (a build from another "
+            f"dist-tag, such as `next`); pin back with `{pin}` or wait for `{NPM_DIST_TAG}` to "
+            "advance, then rerun before recording release evidence"
+        )
+    if installed is not None and latest is not None and installed < latest:
+        return f"{head} is behind {tag}; upgrade before recording release evidence"
+    return (
+        f"{head} does not match {tag}; install the release `{NPM_DIST_TAG}` names before "
+        "recording release evidence"
+    )
 
 
 def write_capture(report: Report, docs_root: Path) -> Path:
