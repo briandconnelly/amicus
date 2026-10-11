@@ -1180,6 +1180,86 @@ def test_a_record_mid_delete_in_another_process_is_never_read_as_failed(tmp_path
         other.wait()
 
 
+# A second server process whose start pauses after its cap check, where it names the
+# new record's directory and before it creates it, until a line arrives on its stdin.
+_PAUSED_START = """
+import sys
+from pathlib import Path
+from amicus.jobs.store import JobStore
+
+root, cwd = sys.argv[1:3]
+store = JobStore(root=Path(root), ttl_seconds=3600, max_seconds=60, max_count=1)
+real_job_dir = JobStore._job_dir
+
+def paused(self, cwd, job_id):
+    print("checked", flush=True)
+    sys.stdin.readline()
+    return real_job_dir(self, cwd, job_id)
+
+JobStore._job_dir = paused
+code = "import json; open('result.json','w').write(json.dumps({'ok': True, 'tool': 't'}))"
+print(store.start(lambda _jd: [sys.executable, "-c", code], cwd, kind="k")[0], flush=True)
+"""
+
+
+def test_two_processes_never_overshoot_the_job_cap(tmp_path):
+    # start holds the record lock from its cap check until its record is written, so a
+    # second process cannot pass the check in between and overshoot the cap (#237).
+    store = _store(tmp_path, max_count=1)
+    cwd = str(tmp_path)
+    other = subprocess.Popen(
+        [sys.executable, "-c", _PAUSED_START, str(store.root), cwd],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        assert other.stdout.readline() == "checked\n"
+        outcome: list = []
+
+        def start():
+            try:
+                outcome.append(store.start(_factory(_WRITE_DONE), cwd, kind="k"))
+            except JobCapReached as exc:
+                outcome.append(exc)
+
+        starter = threading.Thread(target=start)
+        starter.start()
+        starter.join(0.5)
+        assert starter.is_alive(), f"start passed the cap check mid-start: {outcome}"
+        other.stdin.write("\n")
+        other.stdin.flush()
+        assert len(other.stdout.readline().strip()) == 32  # its record is written
+        starter.join(10)
+        assert not starter.is_alive()
+        # Past the check, this start either finds the other record held (JobCapReached)
+        # or, if it read that record as failed before its result landed, evicts it and
+        # starts. Unlocked, its check ran on an empty workspace and both records stayed.
+        assert len(outcome) == 1
+        assert len(store.list_jobs(cwd)) == 1
+    finally:
+        other.kill()
+        other.wait()
+
+
+@pytest.mark.parametrize(
+    "call", ["status", "result_payload", "mark_delivered", "discard", "cancel"]
+)
+def test_a_malformed_job_id_touches_nothing_before_the_record_lock(tmp_path, call):
+    # Copilot on #336: the lock creates the workspace dir and its lock file, so a malformed
+    # id must be refused first, as not-found, without touching the filesystem.
+    store = _store(tmp_path)
+    expected = {
+        "status": None,
+        "result_payload": (None, None),
+        "mark_delivered": False,
+        "discard": DiscardOutcome.MISSING,
+        "cancel": None,
+    }[call]
+    assert getattr(store, call)(str(tmp_path), "../x") == expected
+    assert not store.root.exists()
+
+
 def test_a_nested_record_lock_section_reuses_the_held_lock(tmp_path):
     # A second open file description would block on the flock this process already holds,
     # so a store call made inside a held section must reuse it rather than deadlock.

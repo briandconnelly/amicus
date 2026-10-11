@@ -152,6 +152,10 @@ ACTIVITY_WRITE_THROTTLE_S = 0.5
 CmdFactory = Callable[[Path], list[str]]
 
 
+def _is_job_id(job_id: str) -> bool:
+    return _JOB_ID_RE.fullmatch(job_id) is not None
+
+
 def _usable_epoch(epoch: int | float) -> bool:
     """True if ``epoch`` is finite AND in range for datetime.fromtimestamp().
 
@@ -977,9 +981,10 @@ class JobStore:
         """``_read_live_job``, plus whether an expired record's cleanup failed. Such a
         record is never served, like any expired one, but its files remain, which a
         caller reporting what it deleted must not call absent (#125)."""
-        if _JOB_ID_RE.fullmatch(job_id) is None:
+        if not _is_job_id(job_id):
             # A malformed id (wrong shape, traversal, empty) is by construction not a
             # job this store started: report not-found without touching the filesystem.
+            # The public callers check it before taking the record lock, which would.
             return None, False
         jd = self._job_dir(cwd, job_id)
         meta = self._read_meta(jd)
@@ -1073,6 +1078,8 @@ class JobStore:
 
     # -------------------------------------------------------------- public API
     def status(self, cwd: str, job_id: str) -> dict | None:
+        if not _is_job_id(job_id):
+            return None  # before the lock: a malformed id touches nothing
         with _LOCK, self._record_lock(cwd):
             live = self._read_live_job(cwd, job_id)
             if live is None:
@@ -1091,6 +1098,8 @@ class JobStore:
         finds a result that exists but cannot be opened (#280), as ``status``,
         ``list_jobs`` and ``cancel`` do; ``discard`` reports it as DELETE_FAILED.
         """
+        if not _is_job_id(job_id):
+            return None, None  # before the lock: a malformed id touches nothing
         with _LOCK, self._record_lock(cwd):
             live = self._read_live_job(cwd, job_id)
             if live is None:
@@ -1107,6 +1116,8 @@ class JobStore:
         records that amicus returned the result, never that the client received it.
         Returns True only when this call wrote the stamp; a missing, non-``done``,
         untracked or already-stamped record is left unchanged."""
+        if not _is_job_id(job_id):
+            return False  # before the lock: a malformed id touches nothing
         with _LOCK, self._record_lock(cwd):
             live = self._read_live_job(cwd, job_id)
             if live is None:
@@ -1145,6 +1156,8 @@ class JobStore:
         """
         if expected not in _TERMINAL:
             raise ValueError(f"expected must be a terminal state, not {expected!r}")
+        if not _is_job_id(job_id):
+            return DiscardOutcome.MISSING  # before the lock: a malformed id touches nothing
         with _LOCK, self._record_lock(cwd):
             try:
                 live, left = self._read_or_expire(cwd, job_id)
@@ -1170,6 +1183,8 @@ class JobStore:
             return DiscardOutcome.REMOVED if self._gone(jd) else DiscardOutcome.DELETE_FAILED
 
     def cancel(self, cwd: str, job_id: str) -> dict | None:
+        if not _is_job_id(job_id):
+            return None  # before the lock: a malformed id touches nothing
         with _LOCK, self._record_lock(cwd):
             live = self._read_live_job(cwd, job_id)
             if live is None:
