@@ -89,10 +89,16 @@ A release vouches for the `codex`, `kimi` and `claude` that are installed when i
 Do this last among the preconditions, immediately before the evidence run in the release sequence, because a check done a week earlier describes CLIs that have since moved.
 
 First bring each CLI to its latest release on the machine that will record the evidence.
-`codex` and `claude` are npm packages, so `npm view @openai/codex version` and `npm view @anthropic-ai/claude-code version` name the latest and the usual npm upgrade installs it.
+`codex` is an npm package, so `npm view @openai/codex version` names its latest and `npm install -g @openai/codex@<version>` installs it.
+`claude` is Claude Code, whose native installer does not follow npm: `npm view @anthropic-ai/claude-code version` still names its latest, and `claude install <version>` installs it, as below.
 `kimi` is Kimi Code, which updates itself: run `kimi upgrade`.
 It is also published to npm, so `npm view @moonshot-ai/kimi-code version` names its latest; PyPI's `kimi-cli` is a different distribution whose version says nothing about it.
 Expect a major version number to mean less than it says: 0.43.1 was followed directly by 2.0.0, whose only major change was a command that opens the desktop app's page.
+"Latest" means npm's `latest` dist-tag, never another tag such as `next`.
+Claude Code's native installer updates itself between runs and can land on a `next` build ahead of `latest` (#323), and an npm upgrade does not move a native install.
+Installing one version does not stop that: a Claude Code session checks for updates while it runs, so one left open elsewhere on the machine can move the install again mid-procedure.
+So for the evidence window, close every Claude Code session on the machine, including any that is coordinating the release, or restart it with `DISABLE_AUTOUPDATER=1`, then run `claude install <version>`, naming the version `latest` reports, immediately before the evidence run.
+Confirm `claude --version` reports that version, and record the version the evidence run saw.
 
 Then run the mechanical half, which spends nothing: it runs `--version`, `--help` and each backend's free login probe, and sends no prompt.
 
@@ -101,11 +107,12 @@ uv run python scripts/check_backend_compat.py
 ```
 
 Yes is exit status 0, with each backend reported as installed and authenticated, no `FAIL` line, and `same flags` against its newest committed capture.
-A `FAIL` line names what is wrong: a CLI that is not installed or not authenticated, a `--help` that could not be read, an installed version outside the supported versions of the contract amicus ships (read from the contract itself, so a `AMICUS_*_SUPPORTED_*` override in the environment cannot vouch for it), any warning `amicus_backends` would raise, a flag amicus always sends that `--help` no longer declares as an option, an installed prerelease or development build (`0.155.1-beta.1`, `0.155.1+local`), which is not the published release even where its numbers match, an installed version behind the latest release npm reports, or an npm lookup that failed.
+A `FAIL` line names what is wrong: a CLI that is not installed or not authenticated, a `--help` that could not be read, an installed version outside the supported versions of the contract amicus ships (read from the contract itself, so a `AMICUS_*_SUPPORTED_*` override in the environment cannot vouch for it), any warning `amicus_backends` would raise, a flag amicus always sends that `--help` no longer declares as an option, an installed prerelease or development build (`0.155.1-beta.1`, `0.155.1+local`), which is not the published release even where its numbers match, an installed version behind or ahead of npm's `latest` dist-tag, or an npm lookup that failed.
 It fails closed: help that cannot be read, or a latest release that cannot be looked up, is a failure rather than a pass, and `--offline` exists to say out loud that the lookup was skipped, which is not good enough for a release.
 A flag counts only where `--help` declares it as an option, never where another option's description happens to name it.
 `FLAGS DIFFER` is not by itself a failure, since upstream adds flags constantly, but every removed flag must be looked up in that backend's `contract.py` before going on.
 `latest unknown` fails the check for every backend, because all three are on npm and it means the lookup failed rather than that the version matched.
+A version `FAIL` says which way the installed version is off and how to install the version `latest` names: behind means upgrade to it, and ahead means a build from another dist-tag, so pin back to it or wait for `latest` to advance.
 
 When a CLI's version has no capture of its own, commit one with the change that adds support for it, so the next release has something to compare against.
 
