@@ -105,12 +105,13 @@ concrete finding stands on its own. So a `concerns` verdict over a truncated dif
 like a `concerns` verdict over a complete one. Read `coverage` yourself; the verdict will not
 tell you.
 
-## `findings_diagnostics`: what the backend said that amicus could not carry
+## `findings_diagnostics`: what amicus normalized or could not carry of what the backend said
 
 Coverage is about how complete the review was: what amicus left out or narrowed before the backend
 ran. This is the opposite axis: the backend ran over what it was given, and amicus could not relay
-all of what it said. `findings_diagnostics` is `null` when nothing was
-lost, and otherwise carries a `dropped` count and reasons from a fixed vocabulary:
+all of what it said intact. `findings_diagnostics` is `null` when nothing deviated, and
+otherwise carries a `dropped` count and reasons from a fixed vocabulary, some of which leave every
+finding intact:
 
 | Reason | What it means |
 | --- | --- |
@@ -134,7 +135,7 @@ delivered as `unknown`/`low` with its own sentence in the summary, separate from
 sentence. A `fail` or `concerns` keeps its verdict **and its confidence** — missing output does not
 refute a negative the model did reach, so read `findings_diagnostics` on those yourself.
 
-## `lists_diagnostics`: the prose lists amicus could not carry
+## `lists_diagnostics`: the prose lists amicus normalized or could not carry
 
 The same disclosure for `questions`, `assumptions` and `next_steps` on consult, review and
 adversarial results. The output schema asks for each as an array of strings. A number in one

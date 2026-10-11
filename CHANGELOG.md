@@ -22,6 +22,17 @@ per-change, as its own lead says.
 
 ### Changed
 
+- The `collaborating-with-amicus` skill, after a review on 2026-10-11. Its brief and
+  input-placement rules (`active-workflows.md` → Rules) now bind before every paid call. The
+  router used to send a delegate, or an `_async` call, past them. The rule against sending `kimi`
+  text you would not keep on local disk moved into the root's binding rules for the same reason.
+  The root's ban on retrying an unchanged call now names its one exception: the keyed replay that
+  the error rules and a keyed timeout's repair direct. Reaching a linked worktree's uncommitted
+  changes no longer means committing them on the user's behalf; the choice is put to the user.
+  A non-null `findings_diagnostics` or `lists_diagnostics` is read as normalization or loss,
+  whichever its `reasons` say, rather than always as loss. A draft's distinctive content found in
+  a backend's independent attempt is evidence of possible contact, no longer called proof. The
+  skill is outside the fingerprint, so `FINGERPRINT` does not move.
 - codex-cli 0.162 is a supported version, so `amicus_backends` no longer warns on it. 0.162.1 was
   checked against 0.161.0 at zero spend: top-level `--help`, `exec --help`, `exec review --help`
   and `login --help` are identical. The unknown-feature error, the strict-config,

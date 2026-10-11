@@ -38,8 +38,10 @@ Synthesis itself is governed by SKILL.md → Binding rules → Composed workflow
    do not poll for the result yet.
 4. Produce and finalize your own attempt in full, before any call that can return the backend's.
 5. Only then poll and fetch, per [sync vs async](sync-vs-async.md).
-6. Check the returned output for distinctive content of your draft before comparing. This is the
-   one channel that can *prove* contact after the fact, and it is free.
+6. Check the returned output for distinctive content of your draft before comparing. It is the
+   one free check for contact after the fact, and a match is evidence of possible contact, not
+   proof: shared requirements or convergent reasoning can produce one. Either way, a match is a
+   reclassification trigger below.
 7. Compare assumptions, evidence, trade-offs, and failure modes. Verify the load-bearing
    differences against the code or a test, and synthesize one decision.
 

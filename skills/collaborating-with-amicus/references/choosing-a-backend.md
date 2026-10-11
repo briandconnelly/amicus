@@ -6,8 +6,9 @@ evidence the task needs**.
 
 ## Rules
 
-Eligibility, freshness and authority are governed by SKILL.md → Binding rules → Discovery; they
-are not restated here. These are this file's own:
+Eligibility, freshness and authority are governed by SKILL.md → Binding rules → Discovery, and
+what may be sent to `kimi` by SKILL.md → Binding rules → Data exposure; they are not restated
+here. These are this file's own:
 
 - **Decide `access` from the evidence the task needs, before the call.** Choosing `readonly` up
   front because the backend must read a named file is correct; raising it *afterwards*, because a
@@ -17,9 +18,6 @@ are not restated here. These are this file's own:
   underlying models.
 - **Never inspect a user's provider configuration to establish model identity.** Report the
   diversity as unverified instead.
-- **Never send `kimi` text you would not leave on this machine's disk.** What is acceptable to
-  hand a provider is not thereby acceptable to keep locally: the kimi CLI's own session store
-  outlives the run and amicus does not delete it (see the carrier table below).
 
 ## What `amicus_backends` reports
 
