@@ -1,6 +1,6 @@
 # ADR 0022: A consume reports its discard outcome as delivery-only metadata
 
-**Status:** Accepted (2026-09-13); amended 2026-09-14 for issue #94, 2026-09-24 for issues #124 and #125, and 2026-09-24 for issue #126
+**Status:** Accepted (2026-09-13); amended 2026-09-14 for issue #94, 2026-09-24 for issues #124 and #125, 2026-09-24 for issue #126, and 2026-10-11 for issue #237
 
 ## Context
 
@@ -81,7 +81,8 @@ It names the two records a retry never deletes, and says to stop retrying them: 
 A consume can also land while a cancel waits, unlocked, for the worker to exit.
 If the worker exits without a result, the consume reads `failed`, the worker is provably gone, and the record is deleted before the cancel can stamp `cancelled`; the cancel then returns `job_not_found`.
 No result is lost, because none existed, so this is accepted.
-The one-caller-wins guarantee stays process-local, as it was for a `done` record, because the store's lock serializes only threads in one process; issue #237 tracks the related cross-process window during a delete.
+One caller wins across server processes too, because the read and the delete run under the workspace's cross-process record lock (#237), so a second process sharing the state root finds the record gone rather than half-deleted.
+A server from a release before that lock does not take it, and against one the guarantee stays process-local.
 
 ## Consequences
 

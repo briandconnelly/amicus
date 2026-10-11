@@ -429,7 +429,7 @@ class JobStore:
         return [d for d in ws.iterdir() if d.is_dir() and d.name != _IDEM_DIRNAME]
 
     @contextlib.contextmanager
-    def _record_lock(self, cwd: str, *, create: bool = False) -> Iterator[None]:
+    def _record_lock(self, cwd: str, *, timeout: float | None = None) -> Iterator[None]:
         """Hold the workspace's cross-process record lock; the caller holds ``_LOCK``.
 
         ``_LOCK`` serializes this process's threads only. Without this lock a server
@@ -438,9 +438,11 @@ class JobStore:
         job as ``failed`` (#237). Every section that reads, writes or deletes records
         takes it, so a delete and its restore are atomic to every reader. Lock order
         is ``_LOCK``, then the idempotency index's flock, then this; nothing takes them
-        in another order. A workspace with no directory has no records, so nothing is
-        locked unless ``create`` makes it; nor when the lock file cannot be opened,
-        which leaves the store as it was before this lock existed."""
+        in another order. The workspace directory is created if it is missing, since
+        another process can create it, and records in it, during this section; a lock
+        that cannot be opened or taken raises rather than letting the section run
+        unlocked. ``timeout`` bounds the wait as ``IdempotencyIndex.lock``'s does,
+        raising ``idempotency.LockTimeout``; a nested section never waits."""
         ws = self._ws_dir(cwd)
         held = _RECORD_LOCKS.get(ws)
         if held is not None:
@@ -450,15 +452,10 @@ class JobStore:
             finally:
                 held[1] -= 1
             return
-        if create:
-            ws.mkdir(parents=True, exist_ok=True)
+        ws.mkdir(parents=True, exist_ok=True)
+        fd = os.open(ws / _RECORD_LOCK_NAME, os.O_CREAT | os.O_RDWR, 0o600)
         try:
-            fd = os.open(ws / _RECORD_LOCK_NAME, os.O_CREAT | os.O_RDWR, 0o600)
-        except OSError:
-            yield
-            return
-        try:
-            idempotency._acquire_flock(fd, None)
+            idempotency._acquire_flock(fd, timeout)
         except BaseException:
             os.close(fd)
             raise
@@ -732,7 +729,7 @@ class JobStore:
         design). With ``None`` (the default) the worker gets ``DEVNULL``,
         byte-identical to the prior behavior.
         """
-        with _LOCK, self._record_lock(cwd, create=True):
+        with _LOCK, self._record_lock(cwd):
             self._make_room(cwd)
             job_id = uuid4().hex
             jd = self._job_dir(cwd, job_id)
@@ -1302,11 +1299,18 @@ class JobStore:
             # Hold the index's cross-process lock across sweep → reserve → spawn →
             # publish so a stale-entry reclaim (unlink + re-create) or a late publish
             # cannot interleave with another process and let two callers both win. The
-            # flock is taken on `with` entry, so its bounded LockTimeout surfaces here;
+            # record lock is taken next, under what is left of the same deadline, so the
+            # resolve and start inside reuse it rather than wait unbounded (#237). Both
+            # flocks are taken on `with` entry, so a bounded LockTimeout surfaces here;
             # nothing inside the body raises LockTimeout, so catching it is unambiguous.
-            lock_wait = None if deadline is None else max(0.0, deadline - time.monotonic())
+            def lock_wait() -> float | None:
+                return None if deadline is None else max(0.0, deadline - time.monotonic())
+
             try:
-                with index.lock(timeout=lock_wait):
+                with (
+                    index.lock(timeout=lock_wait()),
+                    self._record_lock(cwd, timeout=lock_wait()),
+                ):
                     index.sweep(resolve)  # bounded maintenance: drop entries past horizon
                     outcome = index.reserve(tool, key, arg_hash, resolve)
                     if outcome.kind != idempotency.WON:

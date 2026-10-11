@@ -1789,6 +1789,59 @@ def test_idempotent_lock_timeout_degrades_to_in_progress(tmp_path):
     assert store.list_jobs(cwd) == []  # no paid job spawned under contention
 
 
+@pytest.mark.parametrize("existing", [False, True], ids=["fresh", "replay"])
+def test_idempotent_record_lock_contention_degrades_to_in_progress(tmp_path, existing):
+    # The record lock is bounded by the same lock_timeout (#237): a sibling holding only
+    # .records.lock must not park a keyed start, whether it would spawn or replay.
+    import fcntl
+
+    store = _store(tmp_path)
+    cwd = str(tmp_path)
+    if existing:
+        first = store.start_idempotent(
+            _factory(_WRITE_DONE), cwd, kind="k", tool="consult", key="k1", arg_hash="AH"
+        )
+        assert _wait_terminal(store, cwd, first["job_id"]) == "done"
+    store._ws_dir(cwd).mkdir(parents=True, exist_ok=True)
+    fd = os.open(store._ws_dir(cwd) / ".records.lock", os.O_CREAT | os.O_RDWR, 0o600)
+    fcntl.flock(fd, fcntl.LOCK_EX)  # stand in for a sibling process mid-delete
+    try:
+        start = time.monotonic()
+        out = store.start_idempotent(
+            _factory(_SLEEP),
+            cwd,
+            kind="k",
+            tool="consult",
+            key="k1",
+            arg_hash="AH",
+            lock_timeout=0.2,
+        )
+        assert out["kind"] == "in_progress"
+        assert time.monotonic() - start < 2.0  # bounded, not hung on the record lock
+    finally:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        os.close(fd)
+    assert len(store.list_jobs(cwd)) == int(existing)  # nothing spawned under contention
+
+
+def test_a_record_lock_that_cannot_be_opened_never_runs_the_section_unlocked(tmp_path, monkeypatch):
+    # Running unlocked would reopen the #237 window against every other process, so a
+    # lock file that cannot be opened fails the call instead.
+    store, cwd, job_id, jd = _done_job(tmp_path)
+    real_open = os.open
+
+    def no_lock(path, *args, **kwargs):
+        if Path(path).name == ".records.lock":
+            raise PermissionError("open denied")
+        return real_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(os, "open", no_lock)
+    with pytest.raises(PermissionError):
+        store.discard(cwd, job_id)
+    monkeypatch.undo()
+    assert {"meta.json", "result.json"} <= {p.name for p in jd.iterdir()}
+
+
 def test_idempotent_process_lock_contention_degrades_to_in_progress(tmp_path):
     # The process-local _LOCK is bounded too (#199): if a peer thread holds it (itself
     # likely stuck on the cross-process flock), a keyed start degrades to in_progress
