@@ -8,6 +8,13 @@ the other before that other attempt is finalized.
 
 ## Rules
 
+One inherited rule is overridden here: the belief-disclosure rule in
+[active workflows](active-workflows.md) → Rules does not apply to the call fields of an independent
+attempt, as the framing rule below states. These are this file's own:
+
+- **Put no belief, preference or part of your own attempt in any call field.** The framing is the
+  neutral task, the shared facts and the acceptance criteria; this overrides the belief-disclosure
+  rule for this pattern.
 - **Declare the pattern and its cap before the first paid call.** One worker attempt is one paid
   call.
 - **Finalize your own attempt before any call that can return the backend's answer.**
@@ -15,8 +22,9 @@ the other before that other attempt is finalized.
   job**; hold it in context entirely when it is small enough.
 - **Omit `instructions_append`, or restrict it to neutral output-shape guidance fixed before
   either attempt begins.**
-- **Check the returned output for distinctive content of your draft before comparing.** Matching
-  content is evidence of possible contact, not proof of its absence when nothing matches.
+- **Check the returned output for distinctive content of your draft before comparing.** A match
+  is evidence of possible contact, not proof of it, since shared requirements or convergent
+  reasoning can produce one; and no match is not proof that there was none.
 - **Reclassify the operation as ordinary critique** — and stop claiming independence — when any
   reclassification trigger below holds.
 - **Never alter git state — stash, commit, branch switch, new worktree — solely to manufacture
@@ -38,8 +46,8 @@ Synthesis itself is governed by SKILL.md → Binding rules → Composed workflow
    do not poll for the result yet.
 4. Produce and finalize your own attempt in full, before any call that can return the backend's.
 5. Only then poll and fetch, per [sync vs async](sync-vs-async.md).
-6. Check the returned output for distinctive content of your draft before comparing. This is the
-   one channel that can *prove* contact after the fact, and it is free.
+6. Run the contact check from the rules above before comparing. It is the one free check for
+   contact after the fact.
 7. Compare assumptions, evidence, trade-offs, and failure modes. Verify the load-bearing
    differences against the code or a test, and synthesize one decision.
 

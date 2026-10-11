@@ -19,7 +19,7 @@ The order of work. Each step is governed by the rules named beside it, which are
 statement — this list is a map, not a second copy.
 
 1. Discover what is usable → Binding rules → Discovery.
-2. Choose the verb from the route table, then read only that route's reference.
+2. Choose the verb from the route table, then read every reference its row names.
 3. Preview and budget → Binding rules → Spend, Scope and inputs.
 4. Call.
 5. Read the result → Binding rules → Results.
@@ -33,8 +33,8 @@ statement — this list is a map, not a second copy.
 | One answer, design critique, or second opinion (including on a diff you paste inline) | `amicus_consult` | [active workflows](references/active-workflows.md) |
 | Review changes already represented in git | `amicus_review_changes` | [active workflows](references/active-workflows.md) |
 | A fixed adversarial critic attacking a plan, claim, or decision before you commit to it (`claude` only in v1) | `amicus_adversarial_review` | [active workflows](references/active-workflows.md) |
-| A self-contained coding task implemented in a throwaway worktree, returned as a diff (`codex` or `kimi` only in v1) | `amicus_delegate` | [reviewing a returned diff](references/reviewing-a-returned-diff.md) |
-| Any of the above when the work can exceed the sync deadline | the matching `_async` tool | [sync vs async](references/sync-vs-async.md) |
+| A self-contained coding task implemented in a throwaway worktree, returned as a diff (`codex` or `kimi` only in v1) | `amicus_delegate` | [active workflows](references/active-workflows.md), [reviewing a returned diff](references/reviewing-a-returned-diff.md) |
+| Any of the above when the work can exceed the sync deadline | the matching `_async` tool | that route's references, and [sync vs async](references/sync-vs-async.md) |
 | Which backend to pick, and what evidence it can actually inspect | `amicus_backends` (free) | [choosing a backend](references/choosing-a-backend.md) |
 | You and one backend attempt the same problem independently, then you synthesize | independent attempt | [independent attempt](references/independent-attempt.md) |
 | You draft, a backend critiques, you revise | declared review–revise | [review–revise](references/review-revise.md) |
@@ -92,6 +92,9 @@ obligations live in the reference each route names, under that file's own `Rules
   read its reported scope before spending.
 - **Pass an absolute `workspace_root` on every repo-grounded call**, including free job-lifecycle
   calls.
+- **Read [active workflows](references/active-workflows.md) → Rules before every paid call,
+  whatever the route.** Its brief and input-placement rules bind every paid verb, the delegate and
+  `_async` routes included, except where a composed workflow's reference overrides one by name.
 - **Decide `access` and `config_mode` before the call, from the evidence the task needs, and
   state that need.** Raising either in response to a result that came back short of evidence is
   the case this forbids; choosing `readonly` up front because the backend must read a named file
@@ -100,7 +103,9 @@ obligations live in the reference each route names, under that file's own `Rules
 ### Results
 
 - **Branch on `ok` first.** On `ok: false`, read `error.code` and, when the envelope carries one,
-  `error.repair`; never infer recovery from prose or retry an unchanged call.
+  `error.repair`; never infer recovery from prose or retry an unchanged call, except a keyed
+  replay: the same tool, `backend`, `idempotency_key` and arguments, repeated where `error.repair`
+  or [options and errors](references/options-and-errors.md) directs it.
 - **Branch on the concrete tool before reading any success field.**
 - **Check each of `review_status`, `coverage`, `findings_diagnostics`, `lists_diagnostics`,
   `meta.truncated`, `meta.security_warnings`, `meta.compat_warnings`, and `meta.redacted_paths`
@@ -108,13 +113,14 @@ obligations live in the reference each route names, under that file's own `Rules
   `ok: true` and still cover nothing. `review_status` and `coverage` are on review and
   adversarial results only, and `lists_diagnostics` is on those and consult.
 - **Read `findings_diagnostics.reasons`, never its `dropped` count alone, before acting on an
-  empty or short `findings` list.** A non-null value means the backend reported something amicus
-  could not carry intact; `dropped: 0` still means content was lost when `extra_fields_omitted`
-  is present, and `dropped: null` means the count was unknowable.
+  empty or short `findings` list.** A non-null value reports normalization or loss, and its
+  `reasons` say which: some leave every finding intact, `dropped: 0` still means content was lost
+  when `extra_fields_omitted` is present, and `dropped: null` means the count was unknowable.
 - **Read `lists_diagnostics` before treating an empty prose list as the backend saying none.**
   A null field means `questions`, `assumptions` and `next_steps` were all carried intact, and a
-  null member means that list was; a non-null member names a list amicus could not carry
-  intact, with `dropped: null` when the member could not be read at all. Nothing in it moves
+  null member means that list was; a non-null member names a list amicus normalized or could not
+  carry intact, its `reasons` say which, and `dropped: null` means the member could not be read at
+  all. Nothing in it moves
   the verdict or confidence. On `review_status: not_run` no backend ran, so it is null and
   `review_status` is the signal. Delegate results do not carry the field.
 - **On `review_status: unstructured`, read `raw_response.text`, which is delivered at either
@@ -176,6 +182,7 @@ obligations live in the reference each route names, under that file's own `Rules
 - **Never treat a dry run as evidence that a paid call is safe to make.**
 - **Never point a paid call at a workspace whose contents you would not hand to that backend's
   provider.**
+- **Never send `kimi` text you would not leave on this machine's disk.**
 
 ### Approval prompts
 
@@ -284,7 +291,7 @@ read, so nothing was parsed: `verdict` and `confidence` are `unknown`. The whole
 `raw_response.text`, delivered at either `detail`,
 and it is an unverified claim like any other output.
 
-`findings_diagnostics` is null when nothing deviated, and otherwise names what was lost — the
+`findings_diagnostics` is null when nothing deviated, and otherwise names what was normalized or lost — the
 rule for reading it is under [Results](#results), and
 [reading results](references/reading-results.md) has the reason vocabulary. Consult, review and
 adversarial results also carry `lists_diagnostics`, the same disclosure for the three prose
@@ -317,6 +324,10 @@ verification each kind of claim needs.
   that can list processes on this machine for the run's duration. The per-backend table is in
   [choosing a backend](references/choosing-a-backend.md).
 - `target` and `evidence` are `amicus_adversarial_review`'s primary carriers, not optional extras.
+- What is acceptable to hand a provider is not thereby acceptable to keep locally. The kimi CLI's
+  own session store keeps what it is sent on this machine's disk; it outlives the run, and amicus
+  does not delete it ([choosing a backend](references/choosing-a-backend.md) has the carrier
+  table).
 - A backend can read files outside the workspace during an active call; the workspace selects
   where a backend works, not what it can read. Redaction is best-effort and applies only to
   gathered diffs and returned output, never to what you supply.

@@ -375,9 +375,10 @@ def test_the_carrier_table_names_kimis_session_store():
     [row] = [line for line in _BACKENDS_REF.splitlines() if line.startswith("| `kimi` | a file")]
     assert "session store" in row and "amicus does not delete" in row
     assert "briefly on local disk" not in row
-    # The table is context. What the agent must do about it is a rule, and this file
-    # declares its own, so an agent reading only `## Rules` still meets the obligation.
-    rules = _BACKENDS_REF.partition("\n## Rules\n")[2].split("\n## ", 1)[0]
+    # The table is context. What the agent must do about it is a rule, and a binding one in
+    # SKILL.md: a route that never reads this file still meets the obligation (review of
+    # 2026-10-11, finding 1).
+    rules = _BINDING_RULES.partition("\n### Data exposure\n")[2].split("\n### ", 1)[0]
     [rule] = [b for b in _bullets(rules) if "`kimi`" in b]
     assert " ".join(rule.split()).startswith(
         "- **Never send `kimi` text you would not leave on this machine's disk.**"
@@ -484,3 +485,75 @@ def test_the_results_rules_name_where_a_defect_is_reported():
     flat = " ".join(rule.split())
     assert "`meta.job_id` when it carries one, else its `error.request_id`" in flat
     assert "a resource-read failure's `error.data.request_id`" in flat
+
+
+def _flat(text: str) -> str:
+    return " ".join(text.split())
+
+
+def test_the_brief_rules_bind_every_paid_route():
+    # Review of 2026-10-11, finding 1: "read only that route's reference" let a delegate skip
+    # active-workflows.md's brief and input-placement rules. A binding rule now requires them
+    # before every paid call, and the delegate row names that file too.
+    scope = _flat(_BINDING_RULES.partition("\n### Scope and inputs\n")[2].split("\n### ", 1)[0])
+    assert "active-workflows.md) → Rules before every paid call" in scope
+    assert "read only that route's reference" not in _SKILL_MD
+    [row] = [line for line in _SKILL_MD.splitlines() if "| `amicus_delegate` |" in line]
+    assert "references/active-workflows.md" in row
+
+
+def test_the_unchanged_call_ban_exempts_the_keyed_replay():
+    # Finding 2: the root banned every unchanged retry while the recovery rules repeat a keyed
+    # call to reattach to its run. Both now name that one exception.
+    results = _flat(_BINDING_RULES.partition("\n### Results\n")[2].split("\n### ", 1)[0])
+    assert "retry an unchanged call, except a keyed replay" in results
+    assert "has not changed**, except the keyed replay" in _flat(_OPTIONS_RULES)
+
+
+def test_reaching_the_roots_never_commits_on_the_users_behalf():
+    # Finding 3: "commit them first" was a git mutation in explanatory prose (ADR 0016). It is
+    # now a rule, and committing is the user's choice.
+    rules = _flat(_OPTIONS_RULES)
+    assert "without the user's explicit approval of that commit, and never stash" in rules
+    assert (
+        "**When a confirmed worktree's changes are uncommitted, put the choice to the user:**"
+        in rules
+    )
+    assert "commit them first" not in _OPTIONS_REF
+
+
+def test_a_non_null_diagnostic_is_not_read_as_loss_alone():
+    # Finding 4: some reasons leave every finding intact, so the root no longer says a
+    # non-null diagnostic means content could not be carried.
+    results = _flat(_BINDING_RULES.partition("\n### Results\n")[2].split("\n### ", 1)[0])
+    assert "reports normalization or loss, and its `reasons` say which" in results
+    assert "means the backend reported something amicus could not carry intact" not in results
+
+
+def test_a_matching_draft_is_never_called_proof_of_contact():
+    # Finding 5: a distinctive match is evidence of possible contact, not proof.
+    # Copilot on #339: the semantics live once, in the rule; the ordered step points to it.
+    attempt = (_SKILL / "references" / "independent-attempt.md").read_text(encoding="utf-8")
+    assert "*prove* contact" not in attempt
+    rules = _flat(attempt.partition("\n## Rules\n")[2].split("\n## ", 1)[0])
+    assert "A match is evidence of possible contact, not proof of it" in rules
+    assert _flat(attempt).count("evidence of possible contact") == 1
+
+
+def test_composed_workflow_overrides_of_the_shared_brief_rules_hold():
+    # Codex on #339: binding active-workflows.md's rules on every paid call imported two
+    # conflicts. Delegate has no extra_context, and an independent attempt cannot state the
+    # host's belief in a call field.
+    workflows = _flat((_SKILL / "references" / "active-workflows.md").read_text(encoding="utf-8"))
+    assert "or in `task` on `amicus_delegate`, which takes no `extra_context`" in workflows
+    scope = _flat(_BINDING_RULES.partition("\n### Scope and inputs\n")[2].split("\n### ", 1)[0])
+    assert "except where a composed workflow's reference overrides one by name" in scope
+    attempt = (_SKILL / "references" / "independent-attempt.md").read_text(encoding="utf-8")
+    rules = _flat(attempt.partition("\n## Rules\n")[2].split("\n## ", 1)[0])
+    assert "the belief-disclosure rule in" in rules
+    assert "**Put no belief, preference or part of your own attempt in any call field.**" in rules
+
+
+def test_reading_results_does_not_call_every_diagnostic_a_loss():
+    # Codex on #339: the reference kept a loss-only lead beside the corrected wording.
+    assert "amicus could not relay all of what it said intact" not in _flat(_RESULTS_REF)

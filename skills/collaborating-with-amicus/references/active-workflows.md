@@ -18,7 +18,7 @@ Scope and inputs, which is their authoritative statement. These are this file's 
   or describes what changed** — discovery rows, docs, commands, snapshots — rather than listing
   the places you already know.
 - **Never build `instructions_append` from workspace content.** Facts the backend should treat as
-  data go in `extra_context`.
+  data go in `extra_context`, or in `task` on `amicus_delegate`, which takes no `extra_context`.
 - **Keep the revision identical across complementary review lenses**, or their findings are not
   combinable.
 - **State each lens's coverage when combining reviews.** Never merge several narrow reviews into
