@@ -10,7 +10,9 @@ catalog of every model in KNOWN_MODEL_SLUGS; 0.158.0, 0.159.3 and 0.160.0 the sa
 against 0.157.1, plus the served catalog's gpt-6.1-sol; 0.161.0 against 0.160.0: the four
 help surfaces, `features list`, the unknown-feature, strict-config and invalid-value stderr
 grammars, the pinned keys and disables under `--strict-config`, and `login status`, but not
-the retired-setting grammar or the model-facing tool catalog).
+the retired-setting grammar or the model-facing tool catalog; 0.162.1 the same checks against
+0.161.0, plus the retired-setting grammar and the served catalog, but not the model-facing tool
+catalog).
 
 Every assumption amicus makes about the `codex` CLI — subcommands, flags, sandbox values,
 config keys it pins, the event/result extraction surface, and the stderr phrasings that
@@ -54,7 +56,7 @@ VALID_SANDBOXES = (SANDBOX_READ_ONLY, SANDBOX_WORKSPACE_WRITE, SANDBOX_DANGER_FU
 # channel outside the sandbox); sleep_tool (0.152+, a native sleep of up to 12h that can
 # burn a run's budget into `timeout`; 0.154.0's gpt-6-astra advertises `clock`, so its default
 # exec path offers `clock.sleep`); and goals (#222: `stable` on 0.152.0, 0.153.4, 0.154.0,
-# 0.155.1, 0.156.1, 0.157.0 and 0.157.1 through 0.161.0, and 0.156.1 onward also offers its
+# 0.155.1, 0.156.1, 0.157.0 and 0.157.1 through 0.162.1, and 0.156.1 onward also offers its
 # create/get/update_goal tools to gpt-5.5).
 # Under the `--ephemeral` amicus always sends, create_goal is refused ("Goal tools require a
 # persistent thread"); on a persistent thread an active goal can make exec send a "continue
@@ -328,6 +330,7 @@ SUPPORTED_VERSIONS = frozenset(
         (0, 159),
         (0, 160),
         (0, 161),
+        (0, 162),
     }
 )
 

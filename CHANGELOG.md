@@ -20,6 +20,20 @@ per-change, as its own lead says.
 
 ## [Unreleased]
 
+### Changed
+
+- codex-cli 0.162 is a supported version, so `amicus_backends` no longer warns on it. 0.162.1 was
+  checked against 0.161.0 at zero spend: top-level `--help`, `exec --help`, `exec review --help`
+  and `login --help` are identical. The unknown-feature error, the strict-config,
+  invalid-value and retired-setting rejections, and the logged-out `login status` line are
+  unchanged. The four config keys amicus pins with `-c` and the three features it disables on
+  every run are still accepted under `--strict-config`, and those three features are still
+  `stable`. Both versions are served the same model catalog. `features list` adds
+  `ultrafast_mode` (stable, on), which only gates a `service_tier = "ultrafast"` set in the
+  operator's own config, a key amicus never sends. It also turns on `instant_interrupt`, which
+  preempts a model request when user input arrives mid-turn, and `codex exec` receives no such
+  input. The model-facing tool catalog was not re-probed. No paid call was part of the check.
+
 ### Fixed
 
 - **Surface.** The defect-report guidance on `issues_url`'s description, the server
