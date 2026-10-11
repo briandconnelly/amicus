@@ -95,7 +95,9 @@ It is also published to npm, so `npm view @moonshot-ai/kimi-code version` names 
 Expect a major version number to mean less than it says: 0.43.1 was followed directly by 2.0.0, whose only major change was a command that opens the desktop app's page.
 "Latest" means npm's `latest` dist-tag, never another tag such as `next`.
 Claude Code's native installer updates itself between runs and can land on a `next` build ahead of `latest` (#323), and an npm upgrade does not move a native install.
-So pin it with `claude install <version>`, naming the version `latest` reports, immediately before the evidence run, and record the version that run saw.
+Installing one version does not stop that: a Claude Code session checks for updates while it runs, so one left open elsewhere on the machine can move the install again mid-procedure.
+So for the evidence window, close every Claude Code session on the machine or restart it with `DISABLE_AUTOUPDATER=1`, then run `claude install <version>`, naming the version `latest` reports, immediately before the evidence run.
+Confirm `claude --version` reports that version, and record the version the evidence run saw.
 
 Then run the mechanical half, which spends nothing: it runs `--version`, `--help` and each backend's free login probe, and sends no prompt.
 
