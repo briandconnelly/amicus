@@ -161,6 +161,8 @@ def test_a_fence_inside_a_comment_does_not_open_a_code_block():
         ("A comment opens with `<!--`.\nThen it closes.\n\nOne. Two.\n", 4),
         ("Write `<!--` here. Then this.\n", 1),
         ("Use ``a `<!--` b`` here.\n\nOne. Two.\n", 3),
+        # An escaped backslash leaves the backtick after it free to open a span.
+        ("A path ends in \\\\`<!--` here.\n\nOne. Two.\n", 3),
     ],
 )
 def test_a_comment_opener_in_a_code_span_opens_no_comment(text, lineno):
@@ -171,6 +173,11 @@ def test_a_backtick_inside_a_comment_does_not_hide_its_close():
     # Whichever opens first wins, so a backtick after ``<!--`` is comment text.
     text = "<!-- a ` --> One. Two. `\n"
     assert [n for n, _ in check.iter_violations(text)] == [1]
+
+
+def test_an_escaped_backtick_opens_no_code_span_before_a_comment():
+    text = "Literal \\`<!-- hidden ` One. Two. -->\n"
+    assert check.iter_violations(text) == []
 
 
 @pytest.mark.parametrize(

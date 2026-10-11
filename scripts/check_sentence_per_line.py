@@ -52,6 +52,9 @@ WARN = "WARN"
 _FENCE_RE = re.compile(r"^\s*(`{3,}|~{3,})")
 # An inline code span: a run of N backticks closed by a run of exactly N.
 _CODE_SPAN_RE = re.compile(r"(?<!`)(`+)(?!`)(.+?)(?<!`)\1(?!`)")
+# The same span, opened only by a backtick no backslash escapes; the match takes in
+# any escaped backslashes before it. Only comment detection needs the distinction.
+_UNESCAPED_CODE_SPAN_RE = re.compile(r"(?<!\\)(?:\\\\)*" + _CODE_SPAN_RE.pattern)
 # An inline link or image target, with an optional title: ``](target "title")``.
 _LINK_TARGET_RE = re.compile(r"\]\([^)\s]*(?:\s+\"[^\"]*\")?\)")
 # A bare or angle-bracketed URL; a trailing sentence terminator is not part of it.
@@ -120,7 +123,7 @@ def _hide_comments(line: str, in_comment: bool) -> tuple[str, bool]:
             if start < 0:
                 out.append(line[pos:])
                 break
-            span = _CODE_SPAN_RE.search(line, pos)
+            span = _UNESCAPED_CODE_SPAN_RE.search(line, pos)
             if span and span.start() < start:
                 out.append(line[pos : span.end()])
                 pos = span.end()
