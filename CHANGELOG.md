@@ -22,9 +22,9 @@ per-change, as its own lead says.
 
 ### Changed
 
-- Python 3.15 is a supported version. CI runs the full gate on CPython 3.15.0 (#347), and the
-  package now carries the 3.15 classifier. On 3.15, beartype, which fastmcp's client reaches
-  through py-key-value, must be 0.23.1 or newer, because 3.15 removed
+- Python 3.15 is a supported version. CI runs the full gate on Python 3.15, whose first run used
+  CPython 3.15.0 (#347), and the package now carries the 3.15 classifier. On 3.15, beartype, which
+  fastmcp's client reaches through py-key-value, must be 0.23.1 or newer, because 3.15 removed
   `typing.no_type_check_decorator`; a fresh install resolves that already, and this repository's
   lock moved to it in #346. PyYAML, a runtime dependency through fastmcp, has no 3.15 wheel yet,
   so installing on 3.15 builds it from source.
