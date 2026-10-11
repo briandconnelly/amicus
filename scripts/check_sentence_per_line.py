@@ -52,9 +52,8 @@ WARN = "WARN"
 _FENCE_RE = re.compile(r"^\s*(`{3,}|~{3,})")
 # An inline code span: a run of N backticks closed by a run of exactly N.
 _CODE_SPAN_RE = re.compile(r"(?<!`)(`+)(?!`)(.+?)(?<!`)\1(?!`)")
-# The same span, opened only by a backtick no backslash escapes; the match takes in
-# any escaped backslashes before it. Only comment detection needs the distinction.
-_UNESCAPED_CODE_SPAN_RE = re.compile(r"(?<!\\)(?:\\\\)*" + _CODE_SPAN_RE.pattern)
+# A whole backtick run, which a code span opens and closes on.
+_BACKTICK_RUN_RE = re.compile(r"`+")
 # An inline link or image target, with an optional title: ``](target "title")``.
 _LINK_TARGET_RE = re.compile(r"\]\([^)\s]*(?:\s+\"[^\"]*\")?\)")
 # A bare or angle-bracketed URL; a trailing sentence terminator is not part of it.
@@ -99,14 +98,37 @@ def _fill_quote(match: re.Match[str]) -> str:
     return _fill(match)
 
 
+def _comment_start(line: str, pos: int) -> int:
+    """Return where the next ``<!--`` at or after ``pos`` opens a comment, or -1.
+
+    Scans left to right as CommonMark does: a backslash makes the next character
+    literal, and a backtick run opens a code span, whose text is code, only if a
+    run of the same length closes it later on the line.
+    """
+    while pos < len(line):
+        if line[pos] == "\\":
+            pos += 2
+        elif run := _BACKTICK_RUN_RE.match(line, pos):
+            closer = next(
+                (m for m in _BACKTICK_RUN_RE.finditer(line, run.end()) if m.group() == run.group()),
+                None,
+            )
+            pos = closer.end() if closer else run.end()
+        elif line.startswith("<!--", pos):
+            return pos
+        else:
+            pos += 1
+    return -1
+
+
 def _hide_comments(line: str, in_comment: bool) -> tuple[str, bool]:
     """Blank every HTML comment span in ``line``, carrying an open comment across lines.
 
     Returns the line with comment text replaced by spaces, so what is left is the
     visible prose at its own offsets, and whether a comment is still open at its end.
     A code span and a comment are taken in the order they open, as CommonMark does:
-    a ``<!--`` inside a code span is code, and a backtick inside a comment is
-    comment text, so only ``-->`` closes an open comment.
+    a ``<!--`` inside a code span or after a backslash opens nothing, and a
+    backtick inside a comment is comment text, so only ``-->`` closes one.
     """
     out: list[str] = []
     pos = 0
@@ -119,15 +141,10 @@ def _hide_comments(line: str, in_comment: bool) -> tuple[str, bool]:
             out.append(" " * (end + 3 - pos))
             pos, in_comment = end + 3, False
         else:
-            start = line.find("<!--", pos)
+            start = _comment_start(line, pos)
             if start < 0:
                 out.append(line[pos:])
                 break
-            span = _UNESCAPED_CODE_SPAN_RE.search(line, pos)
-            if span and span.start() < start:
-                out.append(line[pos : span.end()])
-                pos = span.end()
-                continue
             out.append(line[pos:start] + " " * 4)
             pos, in_comment = start + 4, True
     return "".join(out), in_comment

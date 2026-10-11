@@ -163,6 +163,10 @@ def test_a_fence_inside_a_comment_does_not_open_a_code_block():
         ("Use ``a `<!--` b`` here.\n\nOne. Two.\n", 3),
         # An escaped backslash leaves the backtick after it free to open a span.
         ("A path ends in \\\\`<!--` here.\n\nOne. Two.\n", 3),
+        # An escaped backtick is literal, and the backtick after it still opens a span.
+        ("Use \\``<!--` and ``.\n\nOne. Two.\n", 3),
+        # An escaped ``<`` is literal, so it opens no comment either.
+        ("Write \\<!-- literally.\n\nOne. Two.\n", 3),
     ],
 )
 def test_a_comment_opener_in_a_code_span_opens_no_comment(text, lineno):
