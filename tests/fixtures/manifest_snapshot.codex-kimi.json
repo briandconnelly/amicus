@@ -1544,7 +1544,7 @@
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-56",
+                "default": "amicus/0.1/schema-57",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -4078,7 +4078,7 @@
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-56",
+            "default": "amicus/0.1/schema-57",
             "title": "Fingerprint",
             "type": "string"
           },
@@ -4818,7 +4818,7 @@
                         "description": "Whole findings entries that could not be represented. 0 does NOT mean nothing was lost: `extra_fields_omitted` reports content dropped from a finding that survived. null means the count is unknowable because the findings member could not be read at all. Read `reasons`, never this count alone."
                       },
                       "reasons": {
-                        "description": "Why findings did not reach you intact. severity_normalized: case/space only, finding intact. extra_fields_omitted: unrecognized keys and their content are gone, the rest of the finding survives. backend_artifact_reference_removed: the finding cited an amicus temp file; its text names a placeholder and a `file` naming it is null with its `line`. Nothing you could open was lost. invalid_entry: an entry was dropped whole. invalid_container: the findings member was present but not a list. missing_findings: the required findings member was absent. The last three also stop a `pass` verdict from standing, which is delivered as unknown/low instead.",
+                        "description": "Why findings were changed or not carried intact. severity_normalized: case/space only, finding intact. extra_fields_omitted: unrecognized keys and their content are gone, the rest of the finding survives. backend_artifact_reference_removed: the finding cited an amicus temp file; its text names a placeholder and a `file` naming it is null with its `line`. Nothing you could open was lost. invalid_entry: an entry was dropped whole. invalid_container: the findings member was present but not a list. missing_findings: the required findings member was absent. The last three also stop a `pass` verdict from standing, which is delivered as unknown/low instead.",
                         "items": {
                           "enum": [
                             "backend_artifact_reference_removed",
@@ -4839,7 +4839,7 @@
                     "type": "null"
                   }
                 ],
-                "description": "What the backend reported that amicus could not carry intact; null when nothing deviated. Read this before acting on an empty or short `findings` list. On a review_status of not_run no backend ran: this is null and review_status is the signal. On unstructured nothing was parsed, so it reports missing_findings."
+                "description": "What amicus changed or could not carry intact in the backend's findings; null when nothing deviated; `reasons` says which. Read this before acting on an empty or short `findings` list. On a review_status of not_run no backend ran: this is null and review_status is the signal. On unstructured nothing was parsed, so it reports missing_findings."
               },
               "lists_diagnostics": {
                 "anyOf": [
@@ -4973,7 +4973,7 @@
                     "type": "null"
                   }
                 ],
-                "description": "What the backend put in `questions`, `assumptions` or `next_steps` that amicus could not carry intact; null when all three were clean, and a null member is a clean list. Per member, `dropped` counts entries dropped whole (null: the member could not be read at all) and `reasons` says why. number_stringified: a number delivered as its string, nothing lost. invalid_entry: an entry that was not a string or number, dropped whole. invalid_container: present but not a list. missing_member: the required member was absent. None of these touches the verdict or confidence. On a review_status of not_run no backend ran: this is null and review_status is the signal. On unstructured nothing was parsed, so every member reports missing_member."
+                "description": "What the backend put in `questions`, `assumptions` or `next_steps` that amicus changed or could not carry intact; null when all three were clean, and a null member is a clean list. Per member, `dropped` counts entries dropped whole (null: the member could not be read at all) and `reasons` says why. number_stringified: a number delivered as its string, nothing lost. invalid_entry: an entry that was not a string or number, dropped whole. invalid_container: present but not a list. missing_member: the required member was absent. None of these touches the verdict or confidence. On a review_status of not_run no backend ran: this is null and review_status is the signal. On unstructured nothing was parsed, so every member reports missing_member."
               },
               "meta": {
                 "description": "Result metadata; schema at amicus://result-meta",
@@ -6512,7 +6512,7 @@
                         "description": "Whole findings entries that could not be represented. 0 does NOT mean nothing was lost: `extra_fields_omitted` reports content dropped from a finding that survived. null means the count is unknowable because the findings member could not be read at all. Read `reasons`, never this count alone."
                       },
                       "reasons": {
-                        "description": "Why findings did not reach you intact. severity_normalized: case/space only, finding intact. extra_fields_omitted: unrecognized keys and their content are gone, the rest of the finding survives. backend_artifact_reference_removed: the finding cited an amicus temp file; its text names a placeholder and a `file` naming it is null with its `line`. Nothing you could open was lost. invalid_entry: an entry was dropped whole. invalid_container: the findings member was present but not a list. missing_findings: the required findings member was absent. The last three also stop a `pass` verdict from standing, which is delivered as unknown/low instead.",
+                        "description": "Why findings were changed or not carried intact. severity_normalized: case/space only, finding intact. extra_fields_omitted: unrecognized keys and their content are gone, the rest of the finding survives. backend_artifact_reference_removed: the finding cited an amicus temp file; its text names a placeholder and a `file` naming it is null with its `line`. Nothing you could open was lost. invalid_entry: an entry was dropped whole. invalid_container: the findings member was present but not a list. missing_findings: the required findings member was absent. The last three also stop a `pass` verdict from standing, which is delivered as unknown/low instead.",
                         "items": {
                           "enum": [
                             "backend_artifact_reference_removed",
@@ -6533,7 +6533,7 @@
                     "type": "null"
                   }
                 ],
-                "description": "What the backend reported that amicus could not carry intact; null when nothing deviated. Read this before acting on an empty or short `findings` list. On a review_status of not_run no backend ran: this is null and review_status is the signal. On unstructured nothing was parsed, so it reports missing_findings."
+                "description": "What amicus changed or could not carry intact in the backend's findings; null when nothing deviated; `reasons` says which. Read this before acting on an empty or short `findings` list. On a review_status of not_run no backend ran: this is null and review_status is the signal. On unstructured nothing was parsed, so it reports missing_findings."
               },
               "lists_diagnostics": {
                 "anyOf": [
@@ -6667,7 +6667,7 @@
                     "type": "null"
                   }
                 ],
-                "description": "What the backend put in `questions`, `assumptions` or `next_steps` that amicus could not carry intact; null when all three were clean, and a null member is a clean list. Per member, `dropped` counts entries dropped whole (null: the member could not be read at all) and `reasons` says why. number_stringified: a number delivered as its string, nothing lost. invalid_entry: an entry that was not a string or number, dropped whole. invalid_container: present but not a list. missing_member: the required member was absent. None of these touches the verdict or confidence. On a review_status of not_run no backend ran: this is null and review_status is the signal. On unstructured nothing was parsed, so every member reports missing_member."
+                "description": "What the backend put in `questions`, `assumptions` or `next_steps` that amicus changed or could not carry intact; null when all three were clean, and a null member is a clean list. Per member, `dropped` counts entries dropped whole (null: the member could not be read at all) and `reasons` says why. number_stringified: a number delivered as its string, nothing lost. invalid_entry: an entry that was not a string or number, dropped whole. invalid_container: present but not a list. missing_member: the required member was absent. None of these touches the verdict or confidence. On a review_status of not_run no backend ran: this is null and review_status is the signal. On unstructured nothing was parsed, so every member reports missing_member."
               },
               "meta": {
                 "description": "Result metadata; schema at amicus://result-meta",
@@ -7456,7 +7456,7 @@
                         "description": "Whole findings entries that could not be represented. 0 does NOT mean nothing was lost: `extra_fields_omitted` reports content dropped from a finding that survived. null means the count is unknowable because the findings member could not be read at all. Read `reasons`, never this count alone."
                       },
                       "reasons": {
-                        "description": "Why findings did not reach you intact. severity_normalized: case/space only, finding intact. extra_fields_omitted: unrecognized keys and their content are gone, the rest of the finding survives. backend_artifact_reference_removed: the finding cited an amicus temp file; its text names a placeholder and a `file` naming it is null with its `line`. Nothing you could open was lost. invalid_entry: an entry was dropped whole. invalid_container: the findings member was present but not a list. missing_findings: the required findings member was absent. The last three also stop a `pass` verdict from standing, which is delivered as unknown/low instead.",
+                        "description": "Why findings were changed or not carried intact. severity_normalized: case/space only, finding intact. extra_fields_omitted: unrecognized keys and their content are gone, the rest of the finding survives. backend_artifact_reference_removed: the finding cited an amicus temp file; its text names a placeholder and a `file` naming it is null with its `line`. Nothing you could open was lost. invalid_entry: an entry was dropped whole. invalid_container: the findings member was present but not a list. missing_findings: the required findings member was absent. The last three also stop a `pass` verdict from standing, which is delivered as unknown/low instead.",
                         "items": {
                           "enum": [
                             "backend_artifact_reference_removed",
@@ -7477,7 +7477,7 @@
                     "type": "null"
                   }
                 ],
-                "description": "What the backend reported that amicus could not carry intact; null when nothing deviated. Read this before acting on an empty or short `findings` list. On a review_status of not_run no backend ran: this is null and review_status is the signal. On unstructured nothing was parsed, so it reports missing_findings."
+                "description": "What amicus changed or could not carry intact in the backend's findings; null when nothing deviated; `reasons` says which. Read this before acting on an empty or short `findings` list. On a review_status of not_run no backend ran: this is null and review_status is the signal. On unstructured nothing was parsed, so it reports missing_findings."
               },
               "meta": {
                 "description": "Result metadata; schema at amicus://result-meta",
@@ -9871,7 +9871,7 @@
                         "description": "Whole findings entries that could not be represented. 0 does NOT mean nothing was lost: `extra_fields_omitted` reports content dropped from a finding that survived. null means the count is unknowable because the findings member could not be read at all. Read `reasons`, never this count alone."
                       },
                       "reasons": {
-                        "description": "Why findings did not reach you intact. severity_normalized: case/space only, finding intact. extra_fields_omitted: unrecognized keys and their content are gone, the rest of the finding survives. backend_artifact_reference_removed: the finding cited an amicus temp file; its text names a placeholder and a `file` naming it is null with its `line`. Nothing you could open was lost. invalid_entry: an entry was dropped whole. invalid_container: the findings member was present but not a list. missing_findings: the required findings member was absent. The last three also stop a `pass` verdict from standing, which is delivered as unknown/low instead.",
+                        "description": "Why findings were changed or not carried intact. severity_normalized: case/space only, finding intact. extra_fields_omitted: unrecognized keys and their content are gone, the rest of the finding survives. backend_artifact_reference_removed: the finding cited an amicus temp file; its text names a placeholder and a `file` naming it is null with its `line`. Nothing you could open was lost. invalid_entry: an entry was dropped whole. invalid_container: the findings member was present but not a list. missing_findings: the required findings member was absent. The last three also stop a `pass` verdict from standing, which is delivered as unknown/low instead.",
                         "items": {
                           "enum": [
                             "backend_artifact_reference_removed",
@@ -9892,7 +9892,7 @@
                     "type": "null"
                   }
                 ],
-                "description": "What the backend reported that amicus could not carry intact; null when nothing deviated. Read this before acting on an empty or short `findings` list. On a review_status of not_run no backend ran: this is null and review_status is the signal. On unstructured nothing was parsed, so it reports missing_findings."
+                "description": "What amicus changed or could not carry intact in the backend's findings; null when nothing deviated; `reasons` says which. Read this before acting on an empty or short `findings` list. On a review_status of not_run no backend ran: this is null and review_status is the signal. On unstructured nothing was parsed, so it reports missing_findings."
               },
               "lists_diagnostics": {
                 "anyOf": [
@@ -10026,7 +10026,7 @@
                     "type": "null"
                   }
                 ],
-                "description": "What the backend put in `questions`, `assumptions` or `next_steps` that amicus could not carry intact; null when all three were clean, and a null member is a clean list. Per member, `dropped` counts entries dropped whole (null: the member could not be read at all) and `reasons` says why. number_stringified: a number delivered as its string, nothing lost. invalid_entry: an entry that was not a string or number, dropped whole. invalid_container: present but not a list. missing_member: the required member was absent. None of these touches the verdict or confidence. On a review_status of not_run no backend ran: this is null and review_status is the signal. On unstructured nothing was parsed, so every member reports missing_member."
+                "description": "What the backend put in `questions`, `assumptions` or `next_steps` that amicus changed or could not carry intact; null when all three were clean, and a null member is a clean list. Per member, `dropped` counts entries dropped whole (null: the member could not be read at all) and `reasons` says why. number_stringified: a number delivered as its string, nothing lost. invalid_entry: an entry that was not a string or number, dropped whole. invalid_container: present but not a list. missing_member: the required member was absent. None of these touches the verdict or confidence. On a review_status of not_run no backend ran: this is null and review_status is the signal. On unstructured nothing was parsed, so every member reports missing_member."
               },
               "meta": {
                 "description": "Result metadata; schema at amicus://result-meta",

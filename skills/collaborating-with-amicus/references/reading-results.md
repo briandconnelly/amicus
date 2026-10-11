@@ -141,8 +141,8 @@ The same disclosure for `questions`, `assumptions` and `next_steps` on consult, 
 adversarial results. The output schema asks for each as an array of strings. A number in one
 is delivered as its string and reported; anything else amicus cannot carry is dropped and
 counted, never guessed at. The field is
-`null` when all three lists were carried intact. Otherwise it has one member per list, `null`
-for a list that was clean and `{dropped, reasons}` for one that was not:
+`null` when no list deviated. Otherwise it has one member per list, `null` for a list that was
+clean and `{dropped, reasons}` for one that deviated:
 
 | Reason | What it means |
 | --- | --- |

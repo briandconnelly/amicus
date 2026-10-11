@@ -295,8 +295,8 @@ and it is an unverified claim like any other output.
 rule for reading it is under [Results](#results), and
 [reading results](references/reading-results.md) has the reason vocabulary. Consult, review and
 adversarial results also carry `lists_diagnostics`, the same disclosure for the three prose
-lists: null when all three were carried intact, otherwise one `{dropped, reasons}` member per
-list that was not. Delegate does not carry it, because its `next_steps` is amicus's own text
+lists: null when no list deviated, otherwise one `{dropped, reasons}` member per list that
+did. Delegate does not carry it, because its `next_steps` is amicus's own text
 rather than backend output.
 
 `confidence` is two things at once. Usually it is the backend's own `low|medium|high`. amicus

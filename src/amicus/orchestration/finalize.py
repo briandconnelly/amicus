@@ -267,7 +267,7 @@ def scrub_failure(failure: ClassifiedFailure, refs: ArtifactRefs) -> ClassifiedF
 def coerce_findings(
     raw: object, scrubbed: frozenset[int] = frozenset()
 ) -> tuple[list[Finding], FindingsDiagnostics | None]:
-    """The backend's findings list, plus what could not be carried from it (issue #38).
+    """The backend's findings list, plus what was changed or could not be carried (issue #38).
 
     Returns diagnostics of None only when nothing deviated, so a caller can distinguish a
     genuinely clean list from one amicus failed to relay. The findings member is required
@@ -324,8 +324,8 @@ def _enum(value: object, allowed: tuple[str, ...], default: str) -> Any:
 
 
 def coerce_str_list(raw: object) -> tuple[list[str], ListDiagnostics | None]:
-    """One prose list (questions, assumptions, next_steps), plus what could not be carried
-    from it (issue #52). The output schema requires each as an array of strings, so an
+    """One prose list (questions, assumptions, next_steps), plus what was changed or could
+    not be carried (issue #52). The output schema requires each as an array of strings, so an
     absent member (`missing_member`, pass ABSENT) and a present non-list one
     (`invalid_container`, which an explicit null reaches) both deviate and leave the count
     unknowable. A number is kept as its string and said so (`number_stringified`); a bool,
