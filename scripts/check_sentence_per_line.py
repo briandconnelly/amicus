@@ -218,8 +218,11 @@ def _scan(text: str) -> tuple[list[tuple[int, str]], int | None]:
         if in_table:
             in_table = bool(visible.strip())
             continue
+        # A fence inside a comment opens nothing, so the run is found in ``visible``.
+        # A backtick fence's info string cannot hold a backtick, so a run with one
+        # after it in the raw line, comments included, is a code span: ```a```.
         opening = _FENCE_RE.match(visible)
-        if opening:
+        if opening and not (opening.group(1)[0] == "`" and "`" in line[opening.end() :]):
             fence = opening.group(1)
             continue
         following = lines[lineno] if lineno < len(lines) else ""
