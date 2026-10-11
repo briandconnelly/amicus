@@ -25,7 +25,7 @@ from amicus.sdk.backend.protocol import (
 from amicus.sdk.core import pathalias
 
 if TYPE_CHECKING:  # pragma: no cover
-    from collections.abc import AsyncIterator, Callable
+    from collections.abc import AsyncGenerator, Callable
 
     from amicus.backends.claude.binary import ClaudeBinary
     from amicus.backends.claude.config import ClaudeConfig
@@ -164,7 +164,7 @@ class ClaudeBackend:
         return None
 
     @contextlib.asynccontextmanager
-    async def prepare(self, request: RunRequest) -> AsyncIterator[PreparedRun]:
+    async def prepare(self, request: RunRequest) -> AsyncGenerator[PreparedRun]:
         """Stage the invocation: constant argv (guardrails, mode/access flags, budget, the
         help-gated effort/model), a per-mode scrubbed environment, and the prompt over stdin
         with any caller instructions composed in front of it. No file artifacts: answer, cost

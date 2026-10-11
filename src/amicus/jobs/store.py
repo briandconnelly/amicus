@@ -50,7 +50,7 @@ import signal
 import subprocess
 import threading
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Generator
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -433,7 +433,7 @@ class JobStore:
         return [d for d in ws.iterdir() if d.is_dir() and d.name != _IDEM_DIRNAME]
 
     @contextlib.contextmanager
-    def _record_lock(self, cwd: str, *, timeout: float | None = None) -> Iterator[None]:
+    def _record_lock(self, cwd: str, *, timeout: float | None = None) -> Generator[None]:
         """Hold the workspace's cross-process record lock; the caller holds ``_LOCK``.
 
         ``_LOCK`` serializes this process's threads only. Without this lock a server

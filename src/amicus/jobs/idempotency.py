@@ -29,7 +29,7 @@ import math
 import os
 import tempfile
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Generator
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -245,7 +245,7 @@ class IdempotencyIndex:
         return "ok", rec
 
     @contextlib.contextmanager
-    def lock(self, timeout: float | None = None) -> Iterator[None]:
+    def lock(self, timeout: float | None = None) -> Generator[None]:
         """Exclusive cross-process lock over this index directory, held across a full
         reserve → spawn → publish cycle. ``O_EXCL`` alone makes a *first* create atomic,
         but a stale-entry reclaim (unlink + re-create) and a publish are multi-step: two
