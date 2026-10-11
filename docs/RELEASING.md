@@ -89,7 +89,8 @@ A release vouches for the `codex`, `kimi` and `claude` that are installed when i
 Do this last among the preconditions, immediately before the evidence run in the release sequence, because a check done a week earlier describes CLIs that have since moved.
 
 First bring each CLI to its latest release on the machine that will record the evidence.
-`codex` and `claude` are npm packages, so `npm view @openai/codex version` and `npm view @anthropic-ai/claude-code version` name the latest and the usual npm upgrade installs it.
+`codex` is an npm package, so `npm view @openai/codex version` names its latest and `npm install -g @openai/codex@<version>` installs it.
+`claude` is Claude Code, whose native installer does not follow npm: `npm view @anthropic-ai/claude-code version` still names its latest, and `claude install <version>` installs it, as below.
 `kimi` is Kimi Code, which updates itself: run `kimi upgrade`.
 It is also published to npm, so `npm view @moonshot-ai/kimi-code version` names its latest; PyPI's `kimi-cli` is a different distribution whose version says nothing about it.
 Expect a major version number to mean less than it says: 0.43.1 was followed directly by 2.0.0, whose only major change was a command that opens the desktop app's page.
@@ -111,7 +112,7 @@ It fails closed: help that cannot be read, or a latest release that cannot be lo
 A flag counts only where `--help` declares it as an option, never where another option's description happens to name it.
 `FLAGS DIFFER` is not by itself a failure, since upstream adds flags constantly, but every removed flag must be looked up in that backend's `contract.py` before going on.
 `latest unknown` fails the check for every backend, because all three are on npm and it means the lookup failed rather than that the version matched.
-A version `FAIL` says which way the installed version is off: behind means upgrade, and ahead means a build from another dist-tag, so pin back to the version it names or wait for `latest` to advance.
+A version `FAIL` says which way the installed version is off and how to install the version `latest` names: behind means upgrade to it, and ahead means a build from another dist-tag, so pin back to it or wait for `latest` to advance.
 
 When a CLI's version has no capture of its own, commit one with the change that adds support for it, so the next release has something to compare against.
 

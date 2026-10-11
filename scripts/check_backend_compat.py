@@ -149,7 +149,9 @@ def declared_flags(help_text: str) -> frozenset[str]:
 
 
 def latest_upstream(backend: str) -> str | None:
-    """The newest published release, or None when it cannot be read. Never a guess."""
+    """The release npm's `latest` dist-tag names, or None when it cannot be read. Never a
+    guess. Not necessarily the newest published build: another tag such as `next` can be
+    ahead of it, and `latest` is the one a release vouches for (#323)."""
     package = NPM_PACKAGES.get(backend)
     if package is None:
         return None
@@ -299,20 +301,20 @@ def not_latest(report: Report) -> str:
     installed, latest = semver(report.version), semver(report.latest)
     head = f"{report.backend}: installed {report.version}"
     tag = f"npm's `{NPM_DIST_TAG}` dist-tag ({report.latest})"
+    command = PIN_COMMANDS.get(report.backend)
+    install = (
+        f"`{command.format(version=report.latest)}`"
+        if command
+        else f"installing {report.latest} however this CLI was installed"
+    )
     if installed is not None and latest is not None and installed > latest:
-        command = PIN_COMMANDS.get(report.backend)
-        pin = (
-            f"pin back with `{command.format(version=report.latest)}`"
-            if command
-            else f"install {report.latest} by however this CLI was installed"
-        )
         return (
             f"{head} is ahead of {tag}, so it is not the latest release (a build from another "
-            f"dist-tag, such as `next`); {pin}, or wait for `{NPM_DIST_TAG}` to advance, then "
-            "rerun before recording release evidence"
+            f"dist-tag, such as `next`); pin back with {install}, or wait for `{NPM_DIST_TAG}` "
+            "to advance, then rerun before recording release evidence"
         )
     if installed is not None and latest is not None and installed < latest:
-        return f"{head} is behind {tag}; upgrade before recording release evidence"
+        return f"{head} is behind {tag}; upgrade with {install} before recording release evidence"
     return (
         f"{head} does not match {tag}; install the release `{NPM_DIST_TAG}` names before "
         "recording release evidence"

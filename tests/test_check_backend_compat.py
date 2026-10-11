@@ -327,13 +327,15 @@ def test_a_cli_ahead_of_latest_is_told_to_pin_back_not_to_upgrade():
     (codex,) = _off_latest("codex", "0.163.0", "0.162.0")
     assert "npm install -g @openai/codex@0.162.0" in codex, codex
     (kimi,) = _off_latest("kimi", "2.2.0", "2.1.1")
-    assert "ahead of" in kimi and "install 2.1.1 by however" in kimi, kimi
+    assert "ahead of" in kimi and "installing 2.1.1 however" in kimi, kimi
     assert "`install" not in kimi, "no command is offered where none is known"
 
 
 def test_a_cli_behind_latest_is_told_to_upgrade():
     (behind,) = _off_latest("claude", "2.1.292", "2.1.293")
     assert "behind" in behind and "upgrade" in behind and "ahead" not in behind, behind
+    # A native Claude Code install does not follow an npm upgrade, so name the command.
+    assert "`claude install 2.1.293`" in behind, behind
     # Ordered as numbers, not text: 2.1.10 is ahead of 2.1.9.
     (numeric,) = _off_latest("codex", "0.10.0", "0.9.0")
     assert "ahead of" in numeric, numeric
