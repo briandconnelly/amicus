@@ -26,7 +26,7 @@ from amicus.sdk.backend.protocol import (
 from amicus.sdk.core import pathalias
 
 if TYPE_CHECKING:  # pragma: no cover
-    from collections.abc import AsyncIterator
+    from collections.abc import AsyncGenerator
 
     from amicus.backends.codex.binary import CodexBinary
     from amicus.backends.codex.config import CodexConfig
@@ -113,7 +113,7 @@ class CodexBackend:
         return None
 
     @contextlib.asynccontextmanager
-    async def prepare(self, request: RunRequest) -> AsyncIterator[PreparedRun]:
+    async def prepare(self, request: RunRequest) -> AsyncGenerator[PreparedRun]:
         # Fail closed for a direct caller that skipped validate_request.
         if (invalid := self.validate_request(request)) is not None:
             raise ValueError(invalid.detail)

@@ -26,7 +26,7 @@ from amicus.sdk.backend.protocol import (
 from amicus.sdk.core import pathalias, runtime
 
 if TYPE_CHECKING:  # pragma: no cover
-    from collections.abc import AsyncIterator
+    from collections.abc import AsyncGenerator
 
     from amicus.backends.kimi.binary import KimiBinary
     from amicus.backends.kimi.config import KimiConfig
@@ -165,7 +165,7 @@ class KimiBackend:
         return None
 
     @contextlib.asynccontextmanager
-    async def prepare(self, request: RunRequest) -> AsyncIterator[PreparedRun]:
+    async def prepare(self, request: RunRequest) -> AsyncGenerator[PreparedRun]:
         """Stage the out-of-workspace handshake dir (prompt file; read-only agent profile or
         answer file), the argv pointer, and the effort/output-format environment; tear the
         dir down on exit, so the answer file must be read inside the context."""
