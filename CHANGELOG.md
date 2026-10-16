@@ -34,6 +34,12 @@ per-change, as its own lead says.
   the value as its string. Each now says what amicus changed or could not carry, and that
   `reasons` says which, as the skill already did. **Surface**: schema-57; tools/list grows by
   205 bytes per profile.
+- The `issues_url` description and the server instructions' Reference sentence now name the
+  correlation id a defect report should carry, as the skill's rule already did (#351): when
+  present, a tool failure's `meta.job_id`, else its `error.request_id`, and a resource-read
+  failure's `error.data.request_id`. An agent that reads only the tool surface was told to offer
+  the error code, `fingerprint` and `server_version`, which leaves out the id that finds the job
+  record. **Surface**: schema-58; tools/list grows by 142 bytes per profile.
 
 ## [0.10.0] - 2026-10-11
 
