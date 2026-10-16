@@ -562,6 +562,8 @@ async def test_capabilities_names_where_a_defect_is_reported():
         "rather than opening one unasked",
         "no prompt input",
         "a resource-read failure's error.data.machine_code",
+        "a tool failure's meta.job_id, else its error.request_id",
+        "a resource-read failure's error.data.request_id",
         "A backend's wrong or poor answer, or a backend CLI failure amicus reports "
         "correctly, is not one.",
     ):

@@ -263,6 +263,8 @@ def test_reference_names_where_a_defect_is_reported():
         "rather than filing unasked",
         "no prompt input",
         "error.data.machine_code on a resource read",
+        "meta.job_id, else error.request_id",
+        "error.data.request_id on a resource read",
         "not a backend's answer or a backend CLI failure amicus reports correctly",
     ):
         assert phrase in reference, phrase

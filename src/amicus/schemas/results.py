@@ -690,9 +690,11 @@ ISSUES_URL_DESC = (
     "be followed, a result that contradicts its own schema. A backend's wrong or poor "
     "answer, or a backend CLI failure amicus reports correctly, is not one. Offer it to the "
     "user with the symbolic error code (a tool failure's error.code, a resource-read "
-    "failure's error.data.machine_code), fingerprint and server_version rather than "
-    "opening one unasked, and put no prompt input (question, task, extra_context and the "
-    "other fields you supplied) and no backend answer into a report: the tracker is public."
+    "failure's error.data.machine_code), fingerprint, server_version and, when present, the "
+    "correlation id (a tool failure's meta.job_id, else its error.request_id; a "
+    "resource-read failure's error.data.request_id) rather than opening one unasked, and "
+    "put no prompt input (question, task, extra_context and the other fields you "
+    "supplied) and no backend answer into a report: the tracker is public."
 )
 
 

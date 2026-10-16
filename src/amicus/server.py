@@ -141,7 +141,9 @@ CAPABILITY_SUMMARY = (
     "backend CLI failure amicus reports correctly, go to "
     f"{ISSUES_URL} (amicus_capabilities.issues_url): offer it to the user with the "
     "symbolic error code (error.code, or error.data.machine_code on a resource read), "
-    "fingerprint and server_version rather than filing unasked, and put no prompt input "
+    "fingerprint, server_version and, when present, correlation id (meta.job_id, else "
+    "error.request_id; error.data.request_id on a resource read) rather than filing "
+    "unasked, and put no prompt input "
     "or backend answer in a report, which is public."
 )
 
