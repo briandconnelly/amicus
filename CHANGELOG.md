@@ -20,6 +20,18 @@ per-change, as its own lead says.
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-10-18
+
+Across this release the discovery surface moves from `amicus/0.1/schema-56`, what 0.10.0
+shipped, to `amicus/0.1/schema-58`, both labelled **Surface**, and `RESULT_FORMAT` stays 9, so a
+job result 0.10.0 stored can still be delivered; no entry is labelled **Breaking**. A paid kimi
+run no longer inherits `KIMI_CODE_TRUST_WORKSPACE` from the server's environment (#354), and
+`docs/MIGRATION.md` ("Upgrading from 0.10.0") covers the one case an operator may notice. Two
+descriptions are reworded so an agent reading only the tool surface is told what a diagnostic
+means (#338) and which correlation id a defect report carries (#351). codex-cli 0.163, Kimi
+Code 2.2 and Python 3.15 are supported versions. It was checked against codex-cli 0.163.0, Kimi
+Code 2.2.0 and Claude Code 2.1.302.
+
 ### Changed
 
 - codex-cli 0.163 is a supported version, so `amicus_backends` no longer warns on it. 0.163.0 was
@@ -40,7 +52,7 @@ per-change, as its own lead says.
   unchanged, and of the prompt-mode source files only a warning's wording and the new
   subcommand's registration changed. The rule-18 session-store re-check found no way to switch
   the store off. The record also notes that 2.1.1 rolled back the 2.1.0 trust hardening the 2.1.0
-  record described, which nothing in amicus relied on. The kimi live gate was not run.
+  record described, which nothing in amicus relied on. No live gate was part of that check.
 - Python 3.15 is a supported version. CI runs the full gate on Python 3.15, whose first run used
   CPython 3.15.0 (#347), and the package now carries the 3.15 classifier. On 3.15, beartype, which
   fastmcp's client reaches through py-key-value, must be 0.23.1 or newer, because 3.15 removed
@@ -1399,7 +1411,8 @@ per-change rather than net, so they also name intermediate states that no releas
 - The tagged publish path to pypi.org has never run. Only the TestPyPI dispatch path has been exercised.
 - Eval scenario S6 in `skills/collaborating-with-amicus/tests/scenarios.md` passed on one run (status: `pass`, validated by that run alone); an M7 follow-up run against the current skill text did not isolate the still-open F3 finding, so F3 remains open. S7 (real-host approval friction) has failed both of its recorded runs (status: `fail`); an M7 zero-spend recheck reached neither a pass nor a fail and is recorded as inconclusive, so it does not move S7's status. See their `status` fields and ADR 0012.
 
-[Unreleased]: https://github.com/briandconnelly/amicus/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/briandconnelly/amicus/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/briandconnelly/amicus/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/briandconnelly/amicus/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/briandconnelly/amicus/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/briandconnelly/amicus/compare/v0.8.0...v0.8.1

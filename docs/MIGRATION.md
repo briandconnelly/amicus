@@ -194,6 +194,20 @@ A `null` there means no loaded plugin declares one.
 The `amicus://backends/{backend}` resource is always the full entry.
 `amicus_capabilities(detail="contracts")` is removed: pass `include_tool_details=false` for the same rowless payload, and `detail` now selects only how much each `tool_details` row carries (`summary` is `name`, `cost`, `stability`, `backends`; `full` adds the rest, including `error_codes`).
 
+## Upgrading from 0.10.0
+
+The change below is the one an operator running amicus 0.10.0 may have to handle before running 0.11.0.
+`CHANGELOG.md`'s 0.11.0 section lists every user-visible change since 0.10.0, including the ones that require no migration.
+A job result stored by 0.10.0 is still readable: `RESULT_FORMAT` did not move.
+The discovery surface moves from `amicus/0.1/schema-56` to `amicus/0.1/schema-58`, both labelled **Surface**: a fingerprint-aware client re-reads the catalog and nothing else has to change.
+No tool call 0.10.0 accepted is rejected.
+
+**A paid kimi run no longer inherits `KIMI_CODE_TRUST_WORKSPACE` (#354).**
+Kimi Code 2.2.0 treats its cwd as trusted while that variable is truthy, and a trusted workspace starts the repository's project-level MCP servers.
+amicus now drops the variable from every paid kimi run, whatever its value, so a repository amicus runs kimi in is no longer trusted because the server's environment set it.
+An operator who set it in the server's environment so kimi would trust the workspaces amicus runs it in no longer gets that, and amicus offers no setting to restore it.
+The free probes (`--version`, `--help`, `provider list` and the login probe) still inherit it, and the server's own environment is left alone.
+
 ## Upgrading from 0.9.0
 
 The change below is the one an operator running amicus 0.9.0 may have to handle before running 0.10.0.
