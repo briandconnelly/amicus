@@ -22,6 +22,18 @@ per-change, as its own lead says.
 
 ### Changed
 
+- codex-cli 0.163 is a supported version, so `amicus_backends` no longer warns on it. 0.163.0 was
+  checked against 0.162.1 at zero spend: top-level `--help`, `exec --help`, `exec review --help`
+  and `login --help` are identical. The unknown-feature error, the strict-config,
+  invalid-value and retired-setting rejections, and the logged-out `login status` line are
+  unchanged. The four config keys amicus pins with `-c` and the three features it disables on
+  every run are still accepted under `--strict-config`, and those three features are still
+  `stable`. Both versions are served the same model catalog. `features list` turns on
+  `cli_daybreak`, which only the interactive TUI reads; `code_mode_interrupt`, which acts only
+  when a running turn is interrupted; and `api_key_cyber_access_programs`, which forwards an
+  access program only when a request names one. `unified_exec_zsh_fork` is now removed and
+  ignored, and amicus never set it. The model-facing tool catalog was not re-probed. No paid
+  call was part of the check.
 - Kimi Code 2.2 is a supported version, so `amicus_backends` no longer warns on it. 2.2.0 was
   checked against 2.1.0 at zero spend, as `docs/kimi-help/2.2.0/FINDINGS.md` records: `--help`
   adds only the `app` subcommand, the provider-list shape and the session subcommand are
