@@ -34,6 +34,15 @@ per-change, as its own lead says.
   access program only when a request names one. `unified_exec_zsh_fork` is now removed and
   ignored, and amicus never set it. The model-facing tool catalog was not re-probed. No paid
   call was part of the check.
+- Kimi Code 2.2 is a supported version, so `amicus_backends` no longer warns on it. 2.2.0 was
+  checked against 2.1.0 at zero spend, as `docs/kimi-help/2.2.0/FINDINGS.md` records: `--help`
+  adds only the `app` subcommand, the provider-list shape and the session subcommand are
+  unchanged, and of the prompt-mode source files only a warning's wording and the new
+  subcommand's registration changed. The rule-18 session-store re-check found no way to switch
+  the store off. The record also notes that 2.1.1 rolled back the 2.1.0 trust hardening the 2.1.0
+  record described, which nothing in amicus relied on, and that the new
+  `KIMI_CODE_TRUST_WORKSPACE` reaches kimi from the server's environment unchanged. The kimi live
+  gate was not run.
 - Python 3.15 is a supported version. CI runs the full gate on Python 3.15, whose first run used
   CPython 3.15.0 (#347), and the package now carries the 3.15 classifier. On 3.15, beartype, which
   fastmcp's client reaches through py-key-value, must be 0.23.1 or newer, because 3.15 removed
