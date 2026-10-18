@@ -41,6 +41,18 @@ per-change, as its own lead says.
   the error code, `fingerprint` and `server_version`, which leaves out the id that finds the job
   record. **Surface**: schema-58; tools/list grows by 142 bytes per profile.
 
+### Fixed
+
+- The kimi worker no longer inherits `KIMI_CODE_TRUST_WORKSPACE` from the server's environment
+  (#354). Kimi Code 2.2.0 added it: while it is truthy, kimi treats its cwd as trusted, and a
+  trusted workspace loads the repository's project-level MCP servers (`.mcp.json`,
+  `.kimi-code/mcp.json`), whose stdio entries are commands kimi starts with the session. An
+  operator who set it for their own headless kimi use would have extended that trust to every
+  repository amicus ran kimi in, including one under review. amicus now drops it from every paid
+  kimi run, whatever its value, and leaves the server's own environment alone. The free probes
+  (`--version`, `--help`, `provider list`, the login probe) still inherit it; they start no
+  session. Nothing else about the environment kimi runs in changed.
+
 ## [0.10.0] - 2026-10-11
 
 Across this release the discovery surface moves from `amicus/0.1/schema-55`, what 0.9.0 shipped,

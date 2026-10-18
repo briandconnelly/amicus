@@ -82,6 +82,11 @@ MAX_ARGV_PROMPT_CHARS = 8_000  # far below the ~950k crash edge
 # kimi has no effort FLAG; effort rides an env var and the accepted values are per model.
 REASONING_EFFORT_ENV = "KIMI_MODEL_THINKING_EFFORT"
 MODEL_OUTPUT_FORMAT_ENV = "KIMI_MODEL_OUTPUT_FORMAT"
+# Kimi Code 2.2.0+ treats the cwd as trusted for the process while this is truthy, and a trusted
+# workspace loads the repository's project-level MCP servers, whose stdio entries are commands
+# kimi starts with the session (#354). The run's cwd is a worktree of a repository amicus was
+# pointed at, never one the operator trusted, so the child never inherits it, whatever its value.
+WORKSPACE_TRUST_ENV = "KIMI_CODE_TRUST_WORKSPACE"
 # Shape of an effort token (our policy, not a kimi claim): anything that could be a level.
 REASONING_EFFORT_TOKEN_PATTERN = re.compile(r"[A-Za-z][A-Za-z0-9._-]{0,31}")
 # Used ONLY when the catalog is silent: kimi silently ignores an unrecognized effort, so
