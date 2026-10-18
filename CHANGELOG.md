@@ -40,9 +40,7 @@ per-change, as its own lead says.
   unchanged, and of the prompt-mode source files only a warning's wording and the new
   subcommand's registration changed. The rule-18 session-store re-check found no way to switch
   the store off. The record also notes that 2.1.1 rolled back the 2.1.0 trust hardening the 2.1.0
-  record described, which nothing in amicus relied on, and that the new
-  `KIMI_CODE_TRUST_WORKSPACE` reaches kimi from the server's environment unchanged. The kimi live
-  gate was not run.
+  record described, which nothing in amicus relied on. The kimi live gate was not run.
 - Python 3.15 is a supported version. CI runs the full gate on Python 3.15, whose first run used
   CPython 3.15.0 (#347), and the package now carries the 3.15 classifier. On 3.15, beartype, which
   fastmcp's client reaches through py-key-value, must be 0.23.1 or newer, because 3.15 removed
