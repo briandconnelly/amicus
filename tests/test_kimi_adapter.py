@@ -3,6 +3,7 @@ answer inspection, and classification with the site sanitizer."""
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
@@ -260,6 +261,37 @@ def test_list_models_and_auth_probe(pinned_kimi_bin, monkeypatch):
     _, unresolved = kf.make_backend({"AMICUS_KIMI_BIN": "/definitely/not/here"})
     assert unresolved.auth_probe() is None
     assert backend.scrub_env({"A": "1"}, None) == {"A": "1"}
+
+
+@pytest.mark.parametrize("value", ["1", "true", "YES", "on", "0", "false", "", "maybe"])
+def test_scrub_env_drops_the_workspace_trust_override_whatever_its_value(pinned_kimi_bin, value):
+    # #354: kimi parses the value itself, so amicus strips the name rather than judging it.
+    _, backend = kf.make_backend()
+    env = {"HOME": "/h", "KIMI_API_KEY": "k", contract.WORKSPACE_TRUST_ENV: value}
+    assert backend.scrub_env(env, None) == {"HOME": "/h", "KIMI_API_KEY": "k"}
+    assert env[contract.WORKSPACE_TRUST_ENV] == value
+
+
+@pytest.mark.parametrize(
+    "kw",
+    [
+        {"kind": "consult"},
+        {"kind": "review"},
+        {"kind": "delegate", "prompt": "do"},
+        {"kind": "delegate", "prompt": "do", "access": "read-only"},
+    ],
+    ids=["consult", "review", "delegate", "delegate-read-only"],
+)
+async def test_no_paid_run_inherits_the_workspace_trust_override(
+    pinned_kimi_bin, tmp_path, monkeypatch, kw
+):
+    monkeypatch.setenv(contract.WORKSPACE_TRUST_ENV, "1")
+    monkeypatch.setenv("AMICUS_TEST_SURVIVOR", "kept")
+    _, backend = kf.make_backend({"AMICUS_STATE_DIR": str(tmp_path / "state")})
+    async with backend.prepare(_req(cwd=str(tmp_path), **kw)) as p:
+        assert contract.WORKSPACE_TRUST_ENV not in p.env
+        assert p.env["AMICUS_TEST_SURVIVOR"] == "kept"
+    assert os.environ[contract.WORKSPACE_TRUST_ENV] == "1"
 
 
 _NO_FLAGS = FlagSupport(supported=frozenset(), help_parsed=True)

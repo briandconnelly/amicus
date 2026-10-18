@@ -274,5 +274,6 @@ class KimiBackend:
 
     def scrub_env(self, env: dict[str, str], config_mode: str | None) -> dict[str, str]:  # noqa: ARG002
         # kimi inherits the caller's environment: the provider credentials in the user's
-        # config are what authenticate the run; kimi has no config modes.
-        return env
+        # config are what authenticate the run; kimi has no config modes. The one exception is
+        # the workspace-trust override, which would load the repository's own MCP servers.
+        return {k: v for k, v in env.items() if k != contract.WORKSPACE_TRUST_ENV}

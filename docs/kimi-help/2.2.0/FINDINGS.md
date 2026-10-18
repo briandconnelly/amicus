@@ -68,6 +68,7 @@ amicus never writes `.kimi-code/local.toml` or sends `--add-dir`, and with no sa
   In a trusted workspace kimi loads the repository's project-level MCP servers (`.mcp.json`, `.kimi-code/mcp.json`); in an untrusted one, such as a fresh delegate worktree, it skips them and prints the warning above.
   amicus passes kimi the caller's environment unchanged (`KimiBackend.scrub_env`), so a server started with this variable set would load the project-level MCP servers of every repository it runs kimi in.
   amicus does not set it.
+  Since #354, amicus drops it from the environment of every paid kimi run, whatever its value, so a server started with it set no longer passes that trust on.
 - The agent's in-turn wait for background tasks is capped at 90 seconds (#4061).
   This bounds a wait inside one turn, not the run, which amicus's own deadline still bounds.
 - `executor = "kaos"` is removed from MCP stdio server configuration (#4184), and a config that uses it now fails validation at load time.

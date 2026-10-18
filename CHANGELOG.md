@@ -40,9 +40,7 @@ per-change, as its own lead says.
   unchanged, and of the prompt-mode source files only a warning's wording and the new
   subcommand's registration changed. The rule-18 session-store re-check found no way to switch
   the store off. The record also notes that 2.1.1 rolled back the 2.1.0 trust hardening the 2.1.0
-  record described, which nothing in amicus relied on, and that the new
-  `KIMI_CODE_TRUST_WORKSPACE` reaches kimi from the server's environment unchanged. The kimi live
-  gate was not run.
+  record described, which nothing in amicus relied on. The kimi live gate was not run.
 - Python 3.15 is a supported version. CI runs the full gate on Python 3.15, whose first run used
   CPython 3.15.0 (#347), and the package now carries the 3.15 classifier. On 3.15, beartype, which
   fastmcp's client reaches through py-key-value, must be 0.23.1 or newer, because 3.15 removed
@@ -61,6 +59,18 @@ per-change, as its own lead says.
   failure's `error.data.request_id`. An agent that reads only the tool surface was told to offer
   the error code, `fingerprint` and `server_version`, which leaves out the id that finds the job
   record. **Surface**: schema-58; tools/list grows by 142 bytes per profile.
+
+### Fixed
+
+- The kimi worker no longer inherits `KIMI_CODE_TRUST_WORKSPACE` from the server's environment
+  (#354). Kimi Code 2.2.0 added it: while it is truthy, kimi treats its cwd as trusted, and a
+  trusted workspace loads the repository's project-level MCP servers (`.mcp.json`,
+  `.kimi-code/mcp.json`), whose stdio entries are commands kimi starts with the session. An
+  operator who set it for their own headless kimi use would have extended that trust to every
+  repository amicus ran kimi in, including one under review. amicus now drops it from every paid
+  kimi run, whatever its value, and leaves the server's own environment alone. The free probes
+  (`--version`, `--help`, `provider list`, the login probe) still inherit it; they start no
+  session. Nothing else about the environment kimi runs in changed.
 
 ## [0.10.0] - 2026-10-11
 
