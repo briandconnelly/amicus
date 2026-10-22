@@ -20,14 +20,21 @@ per-change, as its own lead says.
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-10-22
+
+This release leaves the discovery surface at `amicus/0.1/schema-58`, what 0.11.0 shipped, and
+`RESULT_FORMAT` stays 9, so a job result 0.11.0 stored can still be delivered; no entry is
+labelled **Breaking** or **Surface**. Kimi Code 2.3 is a supported version. It was checked
+against codex-cli 0.163.0, Kimi Code 2.3.0 and Claude Code 2.1.308.
+
 ### Changed
 
 - Kimi Code 2.3 is a supported version, so `amicus_backends` no longer warns on it. 2.3.0 was
   checked against 2.2.0 at zero spend, as `docs/kimi-help/2.3.0/FINDINGS.md` records: `--help`
   and the provider-list shape are unchanged, and the one prompt-mode change is a cross-process
   session occupancy lock whose two new outcomes need a resumed session, which amicus never runs.
-  The rule-18 session-store re-check found no way to switch the store off. The kimi live gate was
-  not run.
+  The rule-18 session-store re-check found no way to switch the store off. No live gate was part
+  of that check.
 - `docs/claude-help/2.1.308/` records the `--help` of Claude Code 2.1.308, which every 2.x
   release already satisfied: it adds `--desktop`, which amicus never sends, and rewords rows
   including `--bare` without changing what amicus relies on. No paid call was made.
@@ -1423,7 +1430,8 @@ per-change rather than net, so they also name intermediate states that no releas
 - The tagged publish path to pypi.org has never run. Only the TestPyPI dispatch path has been exercised.
 - Eval scenario S6 in `skills/collaborating-with-amicus/tests/scenarios.md` passed on one run (status: `pass`, validated by that run alone); an M7 follow-up run against the current skill text did not isolate the still-open F3 finding, so F3 remains open. S7 (real-host approval friction) has failed both of its recorded runs (status: `fail`); an M7 zero-spend recheck reached neither a pass nor a fail and is recorded as inconclusive, so it does not move S7's status. See their `status` fields and ADR 0012.
 
-[Unreleased]: https://github.com/briandconnelly/amicus/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/briandconnelly/amicus/compare/v0.11.1...HEAD
+[0.11.1]: https://github.com/briandconnelly/amicus/compare/v0.11.0...v0.11.1
 [0.11.0]: https://github.com/briandconnelly/amicus/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/briandconnelly/amicus/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/briandconnelly/amicus/compare/v0.8.1...v0.9.0

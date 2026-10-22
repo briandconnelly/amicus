@@ -194,6 +194,14 @@ A `null` there means no loaded plugin declares one.
 The `amicus://backends/{backend}` resource is always the full entry.
 `amicus_capabilities(detail="contracts")` is removed: pass `include_tool_details=false` for the same rowless payload, and `detail` now selects only how much each `tool_details` row carries (`summary` is `name`, `cost`, `stability`, `backends`; `full` adds the rest, including `error_codes`).
 
+## Upgrading from 0.11.0
+
+Nothing an operator running amicus 0.11.0 has to handle before running 0.11.1.
+`CHANGELOG.md`'s 0.11.1 section lists every user-visible change since 0.11.0.
+A job result stored by 0.11.0 is still readable: `RESULT_FORMAT` did not move.
+The discovery surface stays `amicus/0.1/schema-58`, so a fingerprint-aware client has nothing to re-read.
+No tool call 0.11.0 accepted is rejected.
+
 ## Upgrading from 0.10.0
 
 The change below is the one an operator running amicus 0.10.0 may have to handle before running 0.11.0.
