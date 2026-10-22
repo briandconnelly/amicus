@@ -20,6 +20,18 @@ per-change, as its own lead says.
 
 ## [Unreleased]
 
+### Changed
+
+- Kimi Code 2.3 is a supported version, so `amicus_backends` no longer warns on it. 2.3.0 was
+  checked against 2.2.0 at zero spend, as `docs/kimi-help/2.3.0/FINDINGS.md` records: `--help`
+  and the provider-list shape are unchanged, and the one prompt-mode change is a cross-process
+  session occupancy lock whose two new outcomes need a resumed session, which amicus never runs.
+  The rule-18 session-store re-check found no way to switch the store off. The kimi live gate was
+  not run.
+- `docs/claude-help/2.1.308/` records the `--help` of Claude Code 2.1.308, which every 2.x
+  release already satisfied: it adds `--desktop`, which amicus never sends, and rewords rows
+  including `--bare` without changing what amicus relies on. No paid call was made.
+
 ## [0.11.0] - 2026-10-18
 
 Across this release the discovery surface moves from `amicus/0.1/schema-56`, what 0.10.0
