@@ -35,7 +35,16 @@ per-change, as its own lead says.
   carried, not which tools are offered; `mcp_oauth_refresh_coordination`, which only changes how
   an MCP server's OAuth tokens are refreshed; and `bedrock_setup_wizard`, which only the
   interactive TUI reads. `realtime_conversation`, `stable_environment_tools`, `transcript_v2` and
-  `worktrees` are now removed, and amicus never set them. The model-facing tool catalog was not re-probed. No paid call was part of the check.
+  `worktrees` are now removed, and amicus never set them. The model-facing tool catalog was not
+  re-probed. No paid call was part of the check.
+
+### Fixed
+
+- `amicus_models(backend="codex")` no longer lists `gpt-5.5` when it falls back to its bundled
+  list (`source: "static"`), because the backend stopped serving it to codex. The fallback now
+  also has `gpt-reserve` ahead of `gpt-6-luna`, following the served priority order. The list
+  matches what codex-cli 0.163.0 and 0.164.0 were both served on 2026-10-24. A listing read from
+  codex's own models cache is unchanged (#368).
 
 ## [0.11.1] - 2026-10-22
 
