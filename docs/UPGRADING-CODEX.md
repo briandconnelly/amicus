@@ -22,6 +22,8 @@ A patch release within a supported minor needs no change to the set, though the 
   Everything below verifies this installed binary; the scratch binaries in step 2 exist only as a comparison baseline.
 - `npm` and `jq` are available, for step 2's comparison against the previous version.
 - You are on a clean branch named `chore/codex-<major>-<minor>`, such as `chore/codex-0-164`, which is what the earlier support PRs used.
+- `AMICUS_CODEX_BIN` is exported as the absolute path of that installed binary, such as `export AMICUS_CODEX_BIN="$(npm prefix -g)/bin/codex"`, and `"$AMICUS_CODEX_BIN" --version` reports the new version.
+  The mechanical check and `--write` find codex the way the server does: `AMICUS_CODEX_BIN` first, then under WSL2 the native install paths before `PATH`, so without the pin they can inspect a different binary than the one step 2 probes.
 - No `AMICUS_CODEX_SUPPORTED_VERSIONS` override is set, so you test the shipped set rather than your environment.
 - Your `codex login status` output stays out of commits, issues and PRs, because it can carry account-identifying detail.
 
@@ -49,17 +51,17 @@ Step 2 gathers the evidence for the judgment half, and step 3 reads it.
 The judgment checks are only as good as what they compare against, so compare the new binary with the previous minor's.
 `codex` ships on npm, so any earlier version installs side by side without touching the global install.
 Drive both binaries by absolute path, so a difference is attributable to the version and not to whichever binary was first on `PATH`.
-`$NEW` is the installed binary, because it is the one the contract check and the live gate verify; only `$OLD` comes from npm.
+`$NEW` is the binary `AMICUS_CODEX_BIN` names, because it is the one the contract check and the live gate verify; only `$OLD` comes from npm.
 
 ```sh
 SCRATCH=$(mktemp -d)
 npm install --prefix "$SCRATCH/old" @openai/codex@<old-version> >/dev/null
 OLD="$SCRATCH/old/node_modules/.bin/codex"
-NEW=$(command -v codex)
+NEW="$AMICUS_CODEX_BIN"
 "$OLD" --version; "$NEW" --version
 ```
 
-Keep that shell for the rest of this step.
+Keep that shell for the rest of this procedure, and run every probe in step 3 as `"$NEW"` rather than a bare `codex`.
 
 If the new binary was installed some other way than npm, also install the new version from npm and confirm its `--help` matches the installed one's, so a difference cannot be the distribution channel rather than the version.
 
@@ -148,7 +150,9 @@ Encode only phrasings seen in real output, and never a guessed one.
   `VALID_SANDBOXES` must still exist with the same boundaries, and no default path may emit `danger-full-access` or any `--dangerously-bypass-*` (`FORBIDDEN_SURFACE_PHRASES`).
   If the notes touch the sandbox, re-read `WORKSPACE_WRITE_SCOPE_FACT` and `READ_SCOPE_FACT` against them.
   `READ_SCOPE_FACT` is a ceiling claim, so if a release did confine reads the disclosure would be over-broad rather than unsafe, and the response is to re-probe before narrowing anything.
-  Also confirm upstream's `SandboxWorkspaceWrite` struct (`codex-rs` `config/src/types.rs` at the release tag) has no field beyond the two amicus pins, because a new widening key would arrive unpinned.
+  Also diff upstream's complete `SandboxWorkspaceWrite` struct (`codex-rs` `config/src/types.rs`) between the previous checked release tag and the new one.
+  At `rust-v0.163.0` it has four fields: `writable_roots` and `network_access`, which amicus pins, and `exclude_tmpdir_env_var` and `exclude_slash_tmp`, which amicus leaves alone because they only narrow the writable scope.
+  An added field, or a changed type or default on any of the four, is a finding to read for widening behavior, because a new widening key would arrive unpinned.
 - **Implicit context.**
   `SKILLS_DISCOVERY_FACT` and `SKILL_BODY_FACT` describe what codex loads with no flag at all: `AGENTS.md` files and discovered skills.
   `--help` cannot see this surface, so read the notes for any change to instruction-file or skill loading, and re-check the disclosure where one appears.
