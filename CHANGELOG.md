@@ -20,6 +20,23 @@ per-change, as its own lead says.
 
 ## [Unreleased]
 
+### Changed
+
+- codex-cli 0.164 is a supported version, so `amicus_backends` no longer warns on it. 0.164.0 was
+  checked against 0.163.0 at zero spend: `exec --help`, `exec review --help` and `login --help`
+  are identical, and top-level `--help` only adds the experimental `migrate-nfs-db` subcommand.
+  The unknown-feature error, the strict-config, invalid-value and retired-setting rejections,
+  the unknown-flag and invalid-sandbox errors, and the logged-out `login status` line are
+  unchanged. The four config keys amicus pins with `-c` and the three features it disables on
+  every run are still accepted under `--strict-config`, and those three features are still
+  `stable`. Both versions are served the same model catalog, and upstream's
+  `SandboxWorkspaceWrite` config struct is unchanged. `features list` turns on
+  `incremental_tools`, which only changes how a Responses Lite model's tool declarations are
+  carried, not which tools are offered; `mcp_oauth_refresh_coordination`, which only changes how
+  an MCP server's OAuth tokens are refreshed; and `bedrock_setup_wizard`, which only the
+  interactive TUI reads. `realtime_conversation`, `stable_environment_tools`, `transcript_v2` and
+  `worktrees` are now removed, and amicus never set them. The model-facing tool catalog was not re-probed. No paid call was part of the check.
+
 ## [0.11.1] - 2026-10-22
 
 This release leaves the discovery surface at `amicus/0.1/schema-58`, what 0.11.0 shipped, and
