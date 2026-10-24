@@ -121,6 +121,7 @@ uv run python scripts/check_backend_compat.py --write
 ```
 
 Adding a minor to a backend's `SUPPORTED_VERSIONS` is its own PR, made the way #112 and #194 were: a zero-spend comparison against the previous minor, recorded in the PR.
+For codex, `docs/UPGRADING-CODEX.md` is that procedure.
 `tests/test_codex_contract.py`, `tests/test_kimi_contract.py` and `tests/test_claude_contract.py` then hold every committed capture to the flags the contract sends.
 
 The script cannot do the other half, which AGENTS.md rule 18 requires before every release: the carrier re-check.

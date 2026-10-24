@@ -202,9 +202,10 @@ version.
 | How milestones are executed by agents | `docs/superpowers/plans/2026-09-04-amicus-execution-model.md` |
 | Architecture decisions | `docs/adr/` |
 | How a release is cut | `docs/RELEASING.md` |
+| How a new codex minor becomes supported | `docs/UPGRADING-CODEX.md` |
 | Every environment variable, its meaning and default | `docs/CONFIGURATION.md` |
 | The router skill an agent loads to call amicus | `skills/collaborating-with-amicus/` |
-| Host captures and CLI evidence | `docs/host-captures/`, `docs/claude-help/`, `docs/kimi-help/` |
+| Host captures and CLI evidence | `docs/host-captures/`, `docs/claude-help/`, `docs/codex-help/`, `docs/kimi-help/` |
 | How past milestones were built | git history — executed plans are removed once merged |
 
 ## License
