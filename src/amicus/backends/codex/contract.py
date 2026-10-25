@@ -301,17 +301,17 @@ MODEL_SLUG_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 # 2026-09-23 (0.155.1 is served the same list, so gpt-6-sol and gpt-6-luna are a server-side
 # addition, not a 0.156 one). 0.157.0 was served the same list on 2026-09-25. On 2026-10-03
 # 0.159.3 and 0.160.0 were also served gpt-6.1-sol, first in priority; 0.157.1 and 0.158.0 were
-# not, so it is gated on the client version.
+# not, so it is gated on the client version. On 2026-10-24 0.163.0 and 0.164.0 were served the
+# same list without gpt-5.5, and with gpt-reserve (priority 4) ahead of gpt-6-luna (5), #368.
 KNOWN_MODEL_SLUGS: tuple[str, ...] = (
     "gpt-6.1-sol",
     "gpt-6-astra",
     "gpt-6-sol",
-    "gpt-6-luna",
     "gpt-reserve",
+    "gpt-6-luna",
     "gpt-5.6-sol",
     "gpt-5.6-terra",
     "gpt-5.6-luna",
-    "gpt-5.5",
     "codex-auto-review",
 )
 

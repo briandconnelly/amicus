@@ -217,18 +217,17 @@ def test_parse_retry_after_ms(text, expected):
 
 
 def test_static_catalog_and_version_pins():
-    # Pinned exactly (the catalog codex-cli 0.156.1 fetched on 2026-09-23, priority order) so a
-    # removal or reorder fails.
+    # Pinned exactly (the catalog codex-cli 0.164.0 was served on 2026-10-24, priority order) so
+    # a removal or reorder fails.
     assert c.KNOWN_MODEL_SLUGS == (
         "gpt-6.1-sol",
         "gpt-6-astra",
         "gpt-6-sol",
-        "gpt-6-luna",
         "gpt-reserve",
+        "gpt-6-luna",
         "gpt-5.6-sol",
         "gpt-5.6-terra",
         "gpt-5.6-luna",
-        "gpt-5.5",
         "codex-auto-review",
     )
     assert all(c.MODEL_SLUG_PATTERN.match(s) for s in c.KNOWN_MODEL_SLUGS)
