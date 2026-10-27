@@ -516,11 +516,31 @@ class Scratch:
         return _run(argv, env=self.env, cwd=self.work, stdin_text=stdin_text)
 
 
+# What `login status` prints in a CODEX_HOME with no credentials, observed on codex-cli
+# 0.163.0 and 0.164.0: exactly this line on stderr, nothing on stdout, exit 1.
+LOGGED_OUT_STDERR = "Not logged in"
+LOGGED_OUT_EXIT = 1
+
+
 def logged_out(run: Run) -> bool:
-    """`login status` said no login: it failed, and named neither login method."""
-    text = run.stdout + run.stderr
-    methods = (codex_contract.LOGIN_METHOD_CHATGPT, codex_contract.LOGIN_METHOD_API_KEY)
-    return run.exit_code not in (0, None) and not any(m in text for m in methods)
+    """`login status` affirmatively said no login: the observed logged-out diagnostic and
+    exit status, and nothing else. An argument error, a crash, a signal, a credential-store
+    failure or any unfamiliar output proves nothing about the login, so it is inconclusive
+    and no probe runs on it."""
+    return (
+        run.exit_code == LOGGED_OUT_EXIT
+        and not run.timed_out
+        and run.stdout.strip() == ""
+        and run.stderr.strip() == LOGGED_OUT_STDERR
+    )
+
+
+def login_diagnostic(run: Run) -> str:
+    """What an inconclusive `login status` did, for the report."""
+    if run.timed_out:
+        return "it timed out"
+    shown = " | ".join(line for line in (run.stdout + run.stderr).strip().splitlines()[:3])
+    return f"exit {run.exit_code}, output {shown[:300]!r}"
 
 
 def ended(run: Run) -> str:
@@ -709,7 +729,8 @@ def run_probe(probe: Probe, binary: str) -> ProbeResult:
         guard = scratch.run([binary, *codex_contract.LOGIN_STATUS_ARGS])
         if not logged_out(guard):
             return ProbeResult(
-                "was not run: `login status` in its scratch home did not report logged out",
+                "was not run: `login status` in its scratch home did not report logged out "
+                f"({scratch.scrub(login_diagnostic(guard))})",
                 met=False,
                 ran=False,
             )
@@ -863,7 +884,7 @@ def _compare_probes(c: Comparison) -> None:
         if not logged_out(run):
             c.problems.append(
                 f"login status on the {side} binary did not report logged out in a scratch "
-                "home with no credentials"
+                f"home with no credentials ({login_diagnostic(run)})"
             )
     old_text, new_text = login_runs["old"][1], login_runs["new"][1]
     if old_text == new_text:
@@ -931,6 +952,9 @@ def compare_codex(
     if c.stopped:
         return c
     new = collect_surfaces(new_bin)
+    if not surface_ok(new["exec --help"]):
+        c.stopped = ["the new binary's exec --help could not be read, so nothing was compared"]
+        return c
     for name, _args in CODEX_SURFACES:
         unread = [side for side, got in (("old", old), ("new", new)) if not surface_ok(got[name])]
         if unread:
@@ -944,17 +968,16 @@ def compare_codex(
                     name, hygiene(old[name].stdout), hygiene(new[name].stdout), _labels(c)
                 )
             )
-    if surface_ok(new["exec --help"]):
-        c.new_exec_help = new["exec --help"].stdout
-        own = docs_root / "codex-help" / str(c.new_version) / "codex-help.txt"
-        if own.is_file():
-            if hygiene(own.read_text(encoding="utf-8")) == hygiene(c.new_exec_help):
-                c.checked.append(f"the new binary's exec --help matches {own}")
-            else:
-                c.problems.append(
-                    f"the new binary's exec --help does not match {own}, the capture already "
-                    "committed for its version"
-                )
+    c.new_exec_help = new["exec --help"].stdout
+    own = docs_root / "codex-help" / str(c.new_version) / "codex-help.txt"
+    if own.is_file():
+        if hygiene(own.read_text(encoding="utf-8")) == hygiene(c.new_exec_help):
+            c.checked.append(f"the new binary's exec --help matches {own}")
+        else:
+            c.problems.append(
+                f"the new binary's exec --help does not match {own}, the capture already "
+                "committed for its version"
+            )
     _compare_probes(c)
     if debug_models:
         _compare_models(c)

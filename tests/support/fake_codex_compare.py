@@ -10,6 +10,9 @@ beside itself instead (`codex` reads `codex.json`), which a test writes:
     exec_flags       extra option rows for `exec --help`
     features         {name: [stage, default]} for `features list`
     logged_in        `login status` reports a ChatGPT login (default false)
+    login_status     replaces `login status` outright: {"stdout", "stderr", "exit"}, or
+                     {"signal": N} to die by that signal
+    exec_help_exit   `exec --help` prints nothing and exits with this status
     override_wording replaces the strict-config override rejection's wording
     accept_unknown_feature   an unknown `--disable` name is not rejected
     reject_keys      `-c` keys rejected as unknown under `--strict-config`
@@ -173,6 +176,8 @@ def main() -> int:
         sys.stdout.write(_help())
         return 0
     if argv == ["exec", "--help"]:
+        if "exec_help_exit" in _SPEC:
+            return int(_SPEC["exec_help_exit"])
         sys.stdout.write(_exec_help())
         return 0
     if argv == ["exec", "review", "--help"]:
@@ -182,6 +187,13 @@ def main() -> int:
         print("Manage login\n\nCommands:\n  status  Show login status")
         return 0
     if argv == ["login", "status"]:
+        override = _SPEC.get("login_status")
+        if override is not None:
+            if "signal" in override:
+                os.kill(os.getpid(), int(override["signal"]))
+            sys.stdout.write(override.get("stdout", ""))
+            sys.stderr.write(override.get("stderr", ""))
+            return int(override.get("exit", 1))
         if _SPEC.get("logged_in"):
             print("Logged in using ChatGPT")
             return 0

@@ -360,3 +360,55 @@ def test_the_rows_a_report_reads_from_codex_output():
         "goals": ("stable", "true"),
         "incremental_tools": ("under development", "false"),
     }
+
+
+_LOGGED_OUT = {"stderr": "Not logged in\n", "exit": 1}
+
+
+@pytest.mark.parametrize(
+    "status",
+    [
+        pytest.param({"stderr": "error: unrecognized subcommand 'status'\n", "exit": 2}, id="arg"),
+        pytest.param({"stderr": "thread 'main' panicked\n", "exit": 101}, id="crash"),
+        pytest.param({"signal": 9}, id="signal"),
+        pytest.param(
+            {"stderr": "Error: failed to read credentials from keyring: denied\n", "exit": 1},
+            id="credential-store",
+        ),
+        pytest.param({"stdout": "Status unknown\n", "exit": 1}, id="unknown-output"),
+        pytest.param({"stderr": "Not logged in\nwarning: odd\n", "exit": 1}, id="extra-output"),
+        pytest.param({"stderr": "Not logged in\n", "exit": 2}, id="wrong-exit"),
+    ],
+)
+def test_an_inconclusive_login_status_runs_no_probe(tmp_path, capsys, status):
+    """Only codex's observed logged-out answer (0.163.0 and 0.164.0: `Not logged in` on
+    stderr, nothing on stdout, exit 1) lets a probe run. Any other failure says nothing about
+    whether a credential is reachable, so it must not count as logged out."""
+    log = tmp_path / "calls.jsonl"
+    old = _fake(tmp_path, "old", version="0.163.0")
+    new = _fake(tmp_path, "new", version="0.164.0", login_status=status, log=str(log))
+    docs = tmp_path / "docs"
+    _commit_capture(docs, "0.163.0", _exec_help(old))
+    assert compat.main(_compare(old, new, docs)) == 1
+    out = capsys.readouterr().out
+    for probe in compat.codex_probes():
+        assert f"FAIL probe {probe.name} on the new binary (0.164.0): it must" in out
+    assert "did not report logged out (exit " in out or "timed out" in out
+    assert _exec_runs(_log(log)) == [], "no exec run follows an inconclusive guard"
+
+
+def test_the_observed_logged_out_answer_is_the_control(tmp_path, capsys):
+    old = _fake(tmp_path, "old", version="0.163.0")
+    new = _fake(tmp_path, "new", version="0.164.0", login_status=_LOGGED_OUT)
+    docs = tmp_path / "docs"
+    _commit_capture(docs, "0.163.0", _exec_help(old))
+    assert compat.main(_compare(old, new, docs)) == 0, capsys.readouterr().out
+
+
+def test_an_unreadable_new_exec_help_stops_before_any_probe(pair, capsys, tmp_path):
+    old, _new, docs, log = pair
+    new = _fake(tmp_path, "broken", version="0.164.0", exec_help_exit=1, log=str(log))
+    assert compat.main(_compare(old, new, docs)) == 2
+    out = capsys.readouterr().out
+    assert "STOPPED: the new binary's exec --help could not be read" in out
+    assert _exec_runs(_log(log)) == []
