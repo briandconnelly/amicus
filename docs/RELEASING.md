@@ -189,6 +189,7 @@ The tag therefore deliberately points at a commit that is in `main`'s history bu
    - `HEAD` must be PR C's head commit as GitHub reports it (`gh pr view`), and PR C must be open against `main`: the evidence must cover the commit step 4 merges, not a local branch with unpushed commits or one behind a review's push.
    - The tree must be clean, untracked files included whatever `status.showUntrackedFiles` says, because the evidence names a commit, and a tree that differs from it is not what gets tagged.
    - `pyproject.toml` must declare the version being released.
+   - Every release-state check `prepare` ran in step 2 must still hold on this commit, all but the pinned tag's existence, which step 3 creates later: a problem found only after the evidence would mean fixing it on a new commit and spending the quota again.
    - No tag `vX.Y.Z` may exist on `origin`, and a failed lookup is a failure rather than an absent tag; nor may one exist locally, which the evidence script refuses.
    - `uv run python scripts/check_backend_compat.py` must pass, as in the precondition above, because a CLI that is behind, ahead, unauthenticated or outside the contract would make the evidence describe the wrong thing.
 
@@ -254,8 +255,9 @@ The tag therefore deliberately points at a commit that is in `main`'s history bu
    Each of its checks is there for a reason:
    - It fetches `main` from `origin` first, and stops if the fetch fails.
      `gh pr merge --merge` updates GitHub, not the local `origin/main` remote-tracking ref, so any check below run against a stale local ref can pass while meaning nothing — a check run against a stale ref is worse than no check, because it looks like evidence.
-   - `origin/main`'s tip must be an ordinary merge commit whose second parent is the release commit.
-     A tip with one parent means the merge was squashed or rebased despite the prohibition in step 4, and the release must stop.
+   - `origin/main`'s tip must be an ordinary merge commit whose second parent is the release commit, or, on the fast-forward alternative described below this sequence, the release commit itself; the output names which.
+     A tip with one parent that is neither the release commit nor a later commit on top of it means the merge was squashed or rebased despite the prohibition in step 4, and the release must stop.
+     A tip that is a later commit on top of the release commit means `main` was fast-forwarded past it, or work landed after it; the evidence does not cover that tip, and the release must stop, though not for a squash or rebase.
      A tip that merges some other commit is an ordinary merge commit, but either of a branch tip the recorded evidence does not cover — the PR C branch gained a commit after step 3 was run — or of other work merged after the release merge; the release must stop for that reason instead, and the check does not diagnose either case as a squash or rebase.
    - `origin/main`'s tree must equal the release commit's tree, which is what proves the tree the tag will point at and the tree `main` now holds are identical; a difference means something else merged in between, and the release must stop.
    - The release commit must be in `origin/main`'s history.
@@ -290,8 +292,7 @@ The tag therefore deliberately points at a commit that is in `main`'s history bu
 A maintainer who instead wants the tag to be `main`'s own head has a permitted alternative: a direct fast-forward push of the PR C branch to `main` (`git checkout main && git merge --ff-only <pr-branch> && git push origin main`) achieves that, if this repository's branch protection allows a direct push to `main`.
 This runbook cannot say whether it does: `gh api repos/briandconnelly/amicus/branches/main/protection` returned `403 Resource not accessible by integration` to the token available while writing it, so that setting is unverified here, and this document does not assert it either way.
 Treat the ordinary-merge-commit path above as the default; use the fast-forward alternative only if a maintainer confirms it is actually available.
-`scripts/release.py post-merge` checks only the ordinary-merge path: on a fast-forwarded `main` it fails and says `main` was fast-forwarded.
-On that path the check is the maintainer's to run by hand: after `git fetch origin`, `git rev-parse origin/main` must print the release commit itself, and the tag checks of step 5 still apply.
+Step 5's `scripts/release.py post-merge` covers that path too: it accepts a freshly fetched `origin/main` whose tip is the release commit itself, says so (`fast-forward: main's tip is the release commit`), and runs every tag and release-state check exactly as it does after an ordinary merge.
 
 ## What happens next
 

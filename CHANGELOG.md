@@ -32,9 +32,10 @@ per-change, as its own lead says.
   --version X.Y.Z` replace the hand-run checks of `docs/RELEASING.md` steps 3 and 5 (#377).
   `preflight` spends nothing and runs before the live-gate evidence: the checkout must be a
   linked worktree rather than the main checkout, at the PR's head on GitHub, clean, declaring
-  the version, with no `vX.Y.Z` on `origin` or locally, and `check_backend_compat.py` must pass;
-  it prints the evidence command and never runs it. `post-merge` fetches `main` first, then
-  requires an ordinary merge of exactly the release commit with an identical tree, and a local
+  the version, with no `vX.Y.Z` on `origin` or locally, the release-state checks `prepare` ran
+  must still hold, and `check_backend_compat.py` must pass; it prints the evidence command and
+  never runs it. `post-merge` fetches `main` first, then requires an ordinary merge of exactly
+  the release commit, or a fast-forward to it, with an identical tree, and a local
   annotated tag that points at it and carries the evidence record byte for byte, before running
   `check_release_state.py`. Nothing about how amicus runs changes.
 
