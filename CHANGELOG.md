@@ -37,6 +37,15 @@ per-change, as its own lead says.
   interactive TUI reads. `realtime_conversation`, `stable_environment_tools`, `transcript_v2` and
   `worktrees` are now removed, and amicus never set them. The model-facing tool catalog was not
   re-probed. No paid call was part of the check.
+- Preparing a release PR is now one command (#374). `scripts/release.py prepare X.Y.Z` moves
+  every version literal AGENTS.md rule 19 names, README's install example with `.mcp.json`'s
+  pin, rolls `CHANGELOG.md`'s `## [Unreleased]` into a section dated in UTC with its footer
+  links, runs `uv lock`, and then runs every tree check of `scripts/check_release_state.py`
+  except that the pinned tag exists, which it cannot yet. It refuses a version that does not
+  move forward, a dirty tree, `main` and an empty Unreleased section, never touches
+  `.claude-plugin/marketplace.json`, and `--check` previews the edits without writing them.
+  The release predicate the publish workflow runs is unchanged. Nothing about how amicus runs
+  changes.
 
 ### Fixed
 
