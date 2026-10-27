@@ -13,12 +13,25 @@ from __future__ import annotations
 
 import datetime as dt
 import importlib.util
-import json
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
+from tests.support.releasefixture import (
+    NEXT,
+    PIN,
+    PREVIOUS,
+    REPO_URL,
+    TODAY,
+    UNRELEASED_BODY,
+    build_released_repo,
+)
+from tests.support.releasefixture import changelog as _changelog
+from tests.support.releasefixture import git as _git
+from tests.support.releasefixture import manifest as _manifest
+from tests.support.releasefixture import mcp as _mcp
+from tests.support.releasefixture import write as _write
 
 _SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
 
@@ -36,127 +49,12 @@ def _load(name: str):
 release = _load("release")
 release_state = release.release_state
 
-PREVIOUS = "1.2.2"
-NEXT = "1.3.0"
-TODAY = dt.date(2026, 10, 27)
-REPO_URL = "https://github.com/briandconnelly/amicus"
-PIN = "git+https://github.com/briandconnelly/amicus.git@v{}"
-
-UNRELEASED_BODY = """### Added
-
-- A new thing.
-
-### Fixed
-
-- A broken thing.
-"""
-
-# Formatted the way no JSON serializer would write it, so any rewrite of the file shows.
-MARKETPLACE = """{"name": "amicus",   "owner": {"name": "someone"},
-  "plugins": [ {"name": "amicus", "description": "a plugin",
-    "source": {"source": "url", "url": "https://github.com/briandconnelly/amicus.git",
-               "ref": "v%s", "sha": "%s"} } ]}"""
-
-
-def _changelog(unreleased: str) -> str:
-    return f"""# Changelog
-
-Some lead text.
-
-## [Unreleased]
-{unreleased}
-## [{PREVIOUS}] - 2026-09-01
-
-### Added
-
-- An earlier thing.
-
-[Unreleased]: {REPO_URL}/compare/v{PREVIOUS}...HEAD
-[{PREVIOUS}]: {REPO_URL}/releases/tag/v{PREVIOUS}
-"""
-
-
-def _readme(version: str) -> str:
-    return f"""# amicus
-
-```json
-{{"args": ["--from", "{PIN.format(version)}", "amicus-mcp"]}}
-```
-
-## Status and known limits
-
-{PREVIOUS} is the current release.
-"""
-
-
-def _manifest(version: str) -> str:
-    return f'{{\n  "name": "amicus",\n  "version": "{version}",\n  "skills": "./skills/"\n}}\n'
-
-
-def _mcp(version: str) -> str:
-    return json.dumps(
-        {"mcpServers": {"amicus": {"command": "uvx", "args": ["--from", PIN.format(version)]}}},
-        indent=2,
-    )
-
-
-def _git(repo: Path, *args: str) -> str:
-    return subprocess.run(
-        [
-            "git",
-            "-c",
-            "user.name=t",
-            "-c",
-            "user.email=t@example.invalid",
-            "-c",
-            "commit.gpgsign=false",
-            "-c",
-            "tag.gpgsign=false",
-            *args,
-        ],
-        cwd=repo,
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout.strip()
-
-
-def _write(repo: Path, relative: str, text: str) -> None:
-    path = repo / relative
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8")
-
 
 @pytest.fixture
 def repo(tmp_path):
     """`PREVIOUS` released and tagged, the pointer moved to it, unreleased work on a branch."""
     repo = tmp_path / "amicus"
-    repo.mkdir()
-    _git(repo, "init", "-q", "-b", "main")
-    _write(
-        repo,
-        "pyproject.toml",
-        f'[project]\nname = "amicus"\nversion = "{PREVIOUS}"\n\n'
-        '[tool.ruff]\ntarget-version = "py311"\n',
-    )
-    _write(repo, "src/amicus/__init__.py", f'"""amicus."""\n\n__version__ = "{PREVIOUS}"\n')
-    for manifest in release.PLUGIN_MANIFESTS:
-        _write(repo, manifest, _manifest(PREVIOUS))
-    _write(repo, ".mcp.json", _mcp(PREVIOUS))
-    _write(repo, "README.md", _readme(PREVIOUS))
-    _write(repo, "CHANGELOG.md", _changelog("\n"))
-    _write(repo, release.MARKETPLACE_PATH, MARKETPLACE % ("0.0.1", "0" * 40))
-    _write(repo, release_state.DEPRECATIONS_PATH, "DEPRECATED_TOOLS: dict = {}\n")
-    _write(repo, release_state.LEGACY_ENV_SPEC_PATH, 'LEGACY_REMOVAL_VERSION = "9.0.0"\n')
-    _write(repo, release_state.GLOBAL_ENV_PATH, "")
-    _git(repo, "add", "-A")
-    _git(repo, "commit", "-q", "-m", f"release {PREVIOUS}")
-    _git(repo, "tag", "-a", f"v{PREVIOUS}", "-m", "evidence")
-    released = _git(repo, "rev-parse", "HEAD")
-
-    _write(repo, release.MARKETPLACE_PATH, MARKETPLACE % (PREVIOUS, released))
-    _write(repo, "CHANGELOG.md", _changelog("\n" + UNRELEASED_BODY))
-    _git(repo, "commit", "-q", "-am", "work after the release")
+    build_released_repo(repo, release)
     _git(repo, "switch", "-q", "-c", f"chore/release-{NEXT}")
     return repo
 
