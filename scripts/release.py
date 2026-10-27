@@ -493,7 +493,10 @@ def _pull_request(ctx: Context, number: int) -> tuple[dict | None, list[str]]:
         return None, [f"could not read PR #{number} from `gh pr view`: {exc}"]
     problems = []
     if pr.get("state") != "OPEN":
-        problems.append(f"PR #{number} is {pr.get('state')}, not OPEN; the release PR is unmerged")
+        problems.append(
+            f"PR #{number} is {pr.get('state')}, not OPEN; preflight runs before the release "
+            "PR merges"
+        )
     if pr.get("baseRefName") != "main":
         problems.append(f"PR #{number} targets {pr.get('baseRefName')!r}, not main")
     return pr, problems
