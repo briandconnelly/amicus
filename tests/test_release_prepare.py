@@ -404,6 +404,33 @@ def test_a_failed_uv_lock_is_reported(repo, capsys):
     assert "`uv lock` failed: error: resolution failed" in capsys.readouterr().err
 
 
+LOCK = 'version = 1\nrevision = 5\n\n[[package]]\nname = "amicus"\nversion = "{}"\n'
+
+
+def _commit_lock(repo: Path) -> Path:
+    path = repo / "uv.lock"
+    path.write_text(LOCK.format(PREVIOUS), encoding="utf-8")
+    _git(repo, "add", "uv.lock")
+    _git(repo, "commit", "-q", "-m", "lock")
+    return path
+
+
+def test_a_lock_that_moves_only_amicus_version_raises_no_warning(repo, capsys):
+    path = _commit_lock(repo)
+    uv = FakeUv(on_lock=lambda: path.write_text(LOCK.format(NEXT), encoding="utf-8"))
+    assert _prepare(repo, NEXT, uv=uv) == 0
+    assert "warning" not in capsys.readouterr().err
+
+
+def test_lock_churn_beyond_the_version_line_is_warned_about(repo, capsys):
+    """uv 0.13 rewrote a revision-3 lock as revision 5 when 0.11.1 was prepared."""
+    path = _commit_lock(repo)
+    churned = LOCK.format(NEXT).replace("revision = 5", "revision = 6")
+    uv = FakeUv(on_lock=lambda: path.write_text(churned, encoding="utf-8"))
+    assert _prepare(repo, NEXT, uv=uv) == 0
+    assert "beyond amicus's own version line" in capsys.readouterr().err
+
+
 def test_a_subcommand_is_required():
     with pytest.raises(SystemExit) as raised:
         release.main([])

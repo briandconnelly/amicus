@@ -324,11 +324,14 @@ def cmd_prepare(ctx: Context, args: argparse.Namespace) -> int:
         print("then run `uv lock` and the pre-tag release-state checks.")
         return 0
 
+    declared = release_state.declared_version(ctx.repo_root)
     for edit in edits:
         (ctx.repo_root / edit.path).write_text(edit.after, encoding="utf-8")
         print(f"  {edit.path}: {edit.summary}")
 
     problems: list[str] = []
+    lock_path = ctx.repo_root / "uv.lock"
+    lock_before = lock_path.read_text(encoding="utf-8") if lock_path.exists() else None
     try:
         lock = ctx.run(
             ["uv", "lock"], cwd=ctx.repo_root, capture_output=True, text=True, check=False
@@ -341,6 +344,9 @@ def cmd_prepare(ctx: Context, args: argparse.Namespace) -> int:
             problems.append(f"`uv lock` failed: {detail[-1] if detail else lock.returncode}")
         else:
             print("  uv.lock: regenerated with `uv lock`")
+            if lock_before is not None:
+                after = lock_path.read_text(encoding="utf-8")
+                _warn_on_lock_churn(lock_before, after, declared, version)
 
     if not problems:
         problems += release_state.check_tree_pre_tag(
@@ -365,6 +371,26 @@ def cmd_prepare(ctx: Context, args: argparse.Namespace) -> int:
     print("  - write the release section's lead, and docs/MIGRATION.md's upgrade section")
     print("  - the rule-18 carrier re-check and everything from RELEASING step 3 on")
     return 0
+
+
+def _warn_on_lock_churn(before: str, after: str, old: str, new: str) -> None:
+    """Warn when `uv lock` changed more than amicus's own version line.
+
+    On a tree whose lock was current, that line is all a release should move. Anything else
+    is usually a different `uv` rewriting the file: uv 0.13 rewrote the revision-3 lock 0.11.0
+    shipped as revision 5 with new markers, which is why 0.11.1's release PR moved only the
+    version line by hand. A warning, not a refusal: the lock still passes `uv lock --check`,
+    and what the release PR carries is the maintainer's call.
+    """
+    expected = before.replace(
+        f'name = "amicus"\nversion = "{old}"\n', f'name = "amicus"\nversion = "{new}"\n', 1
+    )
+    if after != expected:
+        print(
+            "warning: `uv lock` changed uv.lock beyond amicus's own version line, which a "
+            "different uv release can do; review `git diff uv.lock` before committing.",
+            file=sys.stderr,
+        )
 
 
 def build_parser() -> argparse.ArgumentParser:
