@@ -20,7 +20,7 @@ A patch release within a supported minor needs no change to the set, though the 
 
 - The new `codex` is installed with `npm install -g @openai/codex@<version>` and authenticated with `codex login`.
   Everything below verifies this installed binary; the scratch binaries in step 2 exist only as a comparison baseline.
-- `npm` and `jq` are available, for step 2's comparison against the previous version.
+- `npm` is available, for step 2's comparison against the previous version.
 - You are on a clean branch named `chore/codex-<major>-<minor>`, such as `chore/codex-0-164`, which is what the earlier support PRs used.
 - `AMICUS_CODEX_BIN` is exported as the absolute path of that installed binary, such as `export AMICUS_CODEX_BIN="$(npm prefix -g)/bin/codex"`, and `"$AMICUS_CODEX_BIN" --version` reports the new version.
   The mechanical check and `--write` find codex the way the server does: `AMICUS_CODEX_BIN` first, then under WSL2 the native install paths before `PATH`, so without the pin they can inspect a different binary than the one step 2 probes.
@@ -43,8 +43,8 @@ It runs `--version`, `exec --help` and the free login probe for every backend, a
 An added flag is a candidate for step 3's adoption review.
 The script's docstring and `docs/RELEASING.md` describe every other line it can print.
 
-This is the mechanical half only, and it reads `exec --help` alone.
-Step 2 gathers the evidence for the judgment half, and step 3 reads it.
+This is the mechanical half only: for codex it reads `exec --help` alone, against the newest capture rather than the previous binary.
+Step 2's `compare` subcommand gathers the rest of the evidence from the old and new binaries side by side, and step 3 reads it.
 
 ## 2. Gather old and new evidence
 
@@ -58,41 +58,33 @@ SCRATCH=$(mktemp -d)
 npm install --prefix "$SCRATCH/old" @openai/codex@<old-version> >/dev/null
 OLD="$SCRATCH/old/node_modules/.bin/codex"
 NEW="$AMICUS_CODEX_BIN"
-"$OLD" --version; "$NEW" --version
+uv run python scripts/check_backend_compat.py compare --backend codex --old-bin "$OLD" --new-bin "$NEW"
 ```
 
 Keep that shell for the rest of this procedure, and run every probe in step 3 as `"$NEW"` rather than a bare `codex`.
 
 If the new binary was installed some other way than npm, also install the new version from npm and confirm its `--help` matches the installed one's, so a difference cannot be the distribution channel rather than the version.
 
+`compare` runs every command of either binary in a fresh scratch `HOME` and `CODEX_HOME` with no credentials, under an environment that keeps your `PATH` and nothing else, so no `OPENAI_API_KEY`, `CODEX_API_KEY` or `CODEX_ACCESS_TOKEN` reaches it.
+It prints what it checked, what differed and what it did not run, then a `FAIL` line for each problem.
+It exits 0 when nothing failed, 1 when something did, and 2 when it stopped before comparing; the script's docstring defines each.
+A difference is evidence for step 3 to read, not by itself a failure.
+
 ### Help surfaces
 
-The committed capture holds `codex exec --help` only, so the other surfaces amicus relies on are compared directly:
+`compare` collects `--help`, `exec --help`, `exec review --help`, `login --help` and `features list` from both binaries and compares each one.
+For a difference it lists the flags, subcommands and features added, removed or changed, then the text diff.
+The committed capture holds `codex exec --help` only, which is why the other surfaces are compared binary to binary.
 
-```sh
-capture() {  # $1 = binary, $2 = output dir
-  mkdir -p "$2"
-  "$1" --help              > "$2/codex.txt"         2>&1
-  "$1" exec --help         > "$2/exec.txt"          2>&1
-  "$1" exec review --help  > "$2/exec-review.txt"   2>&1
-  "$1" login --help        > "$2/login.txt"         2>&1
-  "$1" features list       > "$2/features-list.txt" 2>&1
-}
-capture "$OLD" "$SCRATCH/help-old"
-capture "$NEW" "$SCRATCH/help-new"
-
-diff docs/codex-help/<old-version>/codex-help.txt "$SCRATCH/help-old/exec.txt"   # must be clean
-diff -r "$SCRATCH/help-old" "$SCRATCH/help-new"                                  # the comparison
-```
-
-The first diff authenticates the retrieved old binary against the capture committed for it, and a mismatch stops the comparison until it is reconciled.
+Before comparing anything, it authenticates the retrieved old binary: its `exec --help` must match `docs/codex-help/<old-version>/codex-help.txt`, and a mismatch stops the comparison until it is reconciled.
+The match ignores trailing whitespace on each line and blank lines at the end, because the trailing-whitespace and end-of-file hooks strip both from a capture as it is committed; any other difference is a mismatch.
 Matching help is good evidence the retrieved build is the one checked last time, and no evidence about its behavior, so treat any difference below as associated with the version and reconcile it against the release notes before recording it.
-If the previous minor has no capture, compare against the newest one that exists and say so in the PR.
+If the previous minor has no capture, `compare` fails on that, still compares everything else, and names the newest capture that exists; compare against that one by hand and say so in the PR.
 If npm is unreachable, the committed captures are the only baseline, and every other comparison below has no offline substitute.
 
 ### Feature flags
 
-Diff `features-list.txt` from the block above.
+`compare` reads `features list` in its scratch home, so your own config cannot move a default, and lists each feature whose stage or default moved, appeared or went away.
 For each row whose stage or default moved, read the feature at the release tag in `openai/codex` (the `codex-rs` sources at `rust-v<version>`) to decide whether it can reach a `codex exec` run amicus makes, and record that in the PR, as #294 and #353 did.
 A feature read only under `tui/` cannot.
 
@@ -111,7 +103,9 @@ This check exists because codex 0.152.0 dropped `update_plan` from the default t
 ### The served model catalog
 
 `codex debug models` prints the catalog the backend serves to a client version.
-Diff it between the two binaries and compare its slugs with `KNOWN_MODEL_SLUGS`, which is a bundled fallback in priority order.
+It needs an account, so `compare` lists it as not run unless you pass `--debug-models`, which runs it on both binaries under your own environment and login and diffs the two.
+That is the catalog served to your account today, never a replay of the one an earlier support PR recorded.
+Compare its slugs with `KNOWN_MODEL_SLUGS`, which is a bundled fallback in priority order.
 The catalog is served per client version and per account, so it can change with no CLI upgrade at all, which is why `KNOWN_MODEL_SLUGS`'s comment records the client versions and dates each slug was seen on.
 While there, confirm `default_reasoning_level` is still a string and `supported_reasoning_levels` is still a list of `{effort, …}` objects; the parser degrades to `None` on drift, silently for agents, so a shape change belongs in `CHANGELOG.md`.
 
@@ -122,8 +116,9 @@ Work from step 2's evidence and the release notes for every release between the 
 
 ### Zero-spend checks
 
-Run these with an empty scratch `CODEX_HOME` and with `OPENAI_API_KEY` and `CODEX_API_KEY` unset, so a run that gets past config loading stops at the unauthenticated 401 instead of spending.
-That stopping point is the expected result, and an exported key would turn it into a real turn.
+Step 2's `compare` runs each of these on both binaries except the logged-in `login status` forms, and reports each under `CHECKED` or as a `FAIL`; the list below is what each of its probes asserts.
+Every probe gets its own empty scratch `CODEX_HOME`, `login status` there must report logged out before the probe starts, and no API key or access token is passed, so a run that gets past config loading stops at the unauthenticated 401 instead of spending.
+That stopping point is the expected result, and an exported key would turn it into a real turn, which is why a probe run by hand must unset `OPENAI_API_KEY`, `CODEX_API_KEY` and `CODEX_ACCESS_TOKEN` too.
 
 - **Pins and disables.**
   The four `PLUGIN_OWNED_CONFIG_KEYS` pins and every `--disable` in `MODEL_RUN_DISABLED_FEATURES`, sent together under `--strict-config`, must get past config loading on both binaries.
@@ -202,7 +197,7 @@ The usual places are:
 |------|--------------|
 | `src/amicus/backends/codex/contract.py` | `SUPPORTED_VERSIONS`; the docstring's record of what this minor was checked against; the version list in the `MODEL_RUN_DISABLED_FEATURES` comment; the `KNOWN_MODEL_SLUGS` tuple and its provenance comment; any flag, sandbox, grammar or event drift step 3 found |
 | `tests/test_codex_contract.py`, `tests/test_codex_config.py` | the literals that stand for the supported set or the current version |
-| `docs/codex-help/<new-version>/` | the capture, written by `uv run python scripts/check_backend_compat.py --write` from the binary you verified, so the next upgrade can authenticate its baseline against it |
+| `docs/codex-help/<new-version>/` | the capture, written by `uv run python scripts/check_backend_compat.py --write` or by step 2's `compare --write` from the binary you verified, so the next upgrade can authenticate its baseline against it |
 | `CHANGELOG.md` | an entry under `## [Unreleased]` |
 
 Leave the release version literals alone; AGENTS.md rule 19 moves them only in a `chore(release):` PR.
