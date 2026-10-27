@@ -38,6 +38,13 @@ per-change, as its own lead says.
   the release commit, or a fast-forward to it, with an identical tree, and a local
   annotated tag that points at it and carries the evidence record byte for byte, before running
   `check_release_state.py`. Nothing about how amicus runs changes.
+- `scripts/capture_codex_wire_tools.py --old-bin PATH --new-bin PATH` captures the tool catalog
+  two `codex` binaries send the model, at zero spend: each run points codex at a loopback fake
+  Responses server through a `model_providers` override, in a credential-free scratch home,
+  for every model in `KNOWN_MODEL_SLUGS` with and without `MODEL_RUN_DISABLED_FEATURES`, and
+  keeps only tool names and definition hashes. The disables are its positive control, and a
+  control with nothing to apply to leaves the probe unvalidated. `docs/UPGRADING-CODEX.md` no
+  longer says amicus has no instrument for this (#380).
 - `scripts/check_backend_compat.py watch [--json] [--file-issues [--dry-run]]` reports, from
   npm and PyPI metadata alone, a kimi minor outside the shipped set, a claude release newer
   than the newest `docs/claude-help/` capture, and a `fastmcp` or `mcp` release past its
