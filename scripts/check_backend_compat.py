@@ -1233,15 +1233,35 @@ def watch_kimi(npm: Callable[[str], str | None]) -> Finding:
     )
 
 
+def release_order(text: str) -> tuple[tuple[int, int, int], int, tuple[tuple[int, int, str], ...]]:
+    """Semver precedence, which `semver()` alone loses: a final release sorts after its own
+    prereleases (2.1.400-beta.1 < 2.1.400), prerelease identifiers compare numerically where
+    they are numbers (beta.2 < beta.10), and build metadata is ignored. Only for text that
+    `release()` reads; anything else sorts first."""
+    found = release(text)
+    core = semver(found[0]) if found else None
+    if found is None or core is None:
+        return ((0, 0, 0), 0, ())
+    pre = found[1].split("+", 1)[0].removeprefix("-")
+    if not pre:
+        return (core, 1, ())
+    ids = tuple((0, int(i), "") if i.isdigit() else (1, 0, i) for i in pre.split("."))
+    return (core, 0, ids)
+
+
 def watch_claude(npm: Callable[[str], str | None], docs_root: Path) -> Finding:
-    capture = newest_capture(docs_root, "claude")
+    try:
+        capture = newest_capture(docs_root, "claude")
+    except OSError as exc:
+        # An unreadable docs/claude-help is an unread baseline, not a crash (#387).
+        return Finding("claude", "unknown", detail=f"cannot read {docs_root}/claude-help: {exc}")
     if capture is None:
         return Finding("claude", "unknown", detail=f"no capture under {docs_root}/claude-help")
     baseline = f"the newest capture is docs/claude-help/{capture.name}/"
     latest = npm("claude")
     if latest is None or semver(latest) is None:
         return Finding("claude", "unknown", baseline=baseline, detail="npm lookup failed")
-    if (semver(latest) or (0, 0, 0)) <= (semver(capture.name) or (0, 0, 0)):
+    if release_order(latest) <= release_order(capture.name):
         return Finding("claude", "current", latest, baseline)
     if not builtin_supported("claude", latest):
         baseline += ", and its major is outside the shipped set"
@@ -1363,7 +1383,13 @@ def _title_candidates(
     )
     if searched is None or recent is None or len(searched) >= SEARCH_LIMIT:
         return None
-    rows = [r for r in [*searched, *recent] if isinstance(r, dict)]
+    # One row per issue, the direct listing's over the search's: the search index can still
+    # call an issue OPEN after it was closed (#387). Only then filter by state.
+    merged: dict[object, dict] = {}
+    for row in [*searched, *recent]:
+        if isinstance(row, dict):
+            merged[row.get("number")] = row
+    rows = list(merged.values())
     return [r for r in rows if state == "all" or r.get("state") == state.upper()]
 
 
@@ -1408,21 +1434,32 @@ def roll_issue(
     current = str(row.get("title"))[len(prefix) :]
     if number is None or not _RELEASE.fullmatch(current) or semver(current) is None:
         return Filing(f.stream, title, "failed", number, detail=f"cannot read {current!r}")
-    if (semver(current) or (0, 0, 0)) >= (semver(f.latest) or (0, 0, 0)):
+    if release_order(current) >= release_order(str(f.latest)):
         return Filing(f.stream, str(row.get("title")), "exists", number, "OPEN")
     if dry_run:
         return Filing(f.stream, title, "would_edit", number, "OPEN", moved_from=current)
+    # The notice goes first and the title last, so a run that stops part way leaves the old
+    # title, and the rerun finishes the move. The notice is posted only if this exact text is
+    # not already on the issue, so the rerun does not post it twice (#387).
     where = ["--repo", repo] if repo else []
-    edited, _ = gh(["issue", "edit", str(number), *where, "--title", title, "--body", f.body()])
-    if edited != 0:
-        return Filing(f.stream, title, "failed", number, detail="gh issue edit failed")
     note = (
         f"Moved from claude {current} to {f.latest}, the newest release available upstream "
         "(scripts/check_backend_compat.py watch)."
     )
-    commented, _ = gh(["issue", "comment", str(number), *where, "--body", note])
-    if commented != 0:
-        return Filing(f.stream, title, "failed", number, detail="gh issue comment failed")
+    code, out = gh(["issue", "view", str(number), *where, "--json", "comments"])
+    try:
+        posted = [c.get("body") for c in json.loads(out).get("comments", [])] if code == 0 else None
+    except (ValueError, AttributeError):
+        posted = None
+    if posted is None:
+        return Filing(f.stream, title, "failed", number, detail="gh issue view failed")
+    if note not in posted:
+        commented, _ = gh(["issue", "comment", str(number), *where, "--body", note])
+        if commented != 0:
+            return Filing(f.stream, title, "failed", number, detail="gh issue comment failed")
+    edited, _ = gh(["issue", "edit", str(number), *where, "--title", title, "--body", f.body()])
+    if edited != 0:
+        return Filing(f.stream, title, "failed", number, detail="gh issue edit failed")
     return Filing(f.stream, title, "edited", number, "OPEN", moved_from=current)
 
 

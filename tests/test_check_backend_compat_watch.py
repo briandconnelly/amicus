@@ -63,6 +63,8 @@ class FakeGh:
         self.edited: list[list[str]] = []
         self.comments: list[list[str]] = []
         self.fail: str | None = None  # "list", "create", "edit" or "comment" exits 1
+        # number -> the state a lagging search index still reports for that issue
+        self.stale: dict[int, str] = {}
 
     def __call__(self, args: list[str]) -> tuple[int, str]:
         assert args[0] == "issue", args
@@ -71,7 +73,10 @@ class FakeGh:
         if args[1] == "list":
             state = args[args.index("--state") + 1] if "--state" in args else "open"
             limit = int(args[args.index("--limit") + 1]) if "--limit" in args else 30
-            rows = [i for i in self.issues if state == "all" or i["state"] == state.upper()]
+            seen = self.issues
+            if "--search" in args:
+                seen = [i | {"state": self.stale.get(i["number"], i["state"])} for i in seen]
+            rows = [i for i in seen if state == "all" or i["state"] == state.upper()]
             if "--search" in args:
                 rows = rows if self.indexed else []
                 phrase = args[args.index("--search") + 1]
@@ -96,6 +101,11 @@ class FakeGh:
         if args[1] == "comment":
             self.comments.append(args)
             return 0, ""
+        if args[1] == "view":
+            assert args[3:] == ["--json", "comments"] or "--repo" in args, args
+            number = args[2]
+            bodies = [c[c.index("--body") + 1] for c in self.comments if c[2] == number]
+            return 0, json.dumps({"comments": [{"body": b} for b in bodies]})
         raise AssertionError(args)
 
 
@@ -440,3 +450,62 @@ def test_a_failed_claude_edit_fails_the_run(claude_only, roots, capsys, failing)
     gh.fail = failing
     code, filing = _claude_filing(gh, roots, capsys)
     assert code == 1 and filing["action"] == "failed", filing
+
+
+def test_an_unreadable_capture_folder_is_unknown_and_the_rest_still_run(monkeypatch, roots, capsys):
+    """Copilot on #387: a PermissionError from listing docs/claude-help was a traceback."""
+
+    def unreadable(*_a):
+        raise PermissionError("docs/claude-help")
+
+    _no_real_lookups(monkeypatch, _NPM_AHEAD, _PYPI_AHEAD, FakeGh())
+    monkeypatch.setattr(compat, "newest_capture", unreadable)
+    code, out = _run(roots, capsys)
+    assert code == 1, out
+    assert [f["status"] for f in out["findings"]] == ["update", "unknown", "update", "update"]
+
+
+def test_a_stale_search_cannot_make_a_closed_claude_issue_roll(claude_only, roots, capsys):
+    """Copilot on #387: the search said OPEN, the direct listing CLOSED; the listing wins."""
+    gh = claude_only(FakeGh([_claude_issue("2.1.399", 50, "CLOSED")]))
+    gh.stale = {50: "OPEN"}
+    code, filing = _claude_filing(gh, roots, capsys)
+    assert code == 0 and filing["action"] == "filed", filing
+    assert gh.edited == [] and gh.comments == []
+
+
+@pytest.mark.parametrize(
+    ("issue", "latest", "action"),
+    [
+        ("2.1.400-beta.1", "2.1.400", "edited"),
+        ("2.1.400-beta.2", "2.1.400-beta.10", "edited"),
+        ("2.1.400", "2.1.400-beta.1", "exists"),
+        ("2.1.400-beta.1", "2.1.400-beta.1", "exists"),
+    ],
+)
+def test_a_prerelease_rolls_forward_to_its_final(claude_only, roots, capsys, issue, latest, action):
+    """Copilot on #387: `semver()` drops the suffix, so 2.1.400 equalled 2.1.400-beta.1."""
+    gh = claude_only(FakeGh([_claude_issue(issue, 50)]), latest)
+    code, filing = _claude_filing(gh, roots, capsys)
+    assert code == 0 and filing["action"] == action, filing
+    if action == "edited":
+        assert gh.issues[0]["title"] == _CLAUDE + latest
+
+
+@pytest.mark.parametrize("failing", ["comment", "edit"])
+def test_a_half_finished_move_completes_on_the_rerun_with_one_notice(
+    claude_only, roots, capsys, failing
+):
+    """Copilot on #387: an edit that landed before its comment failed left a rerun seeing the
+    latest title, so the move notice was never posted."""
+    gh = claude_only(FakeGh([_claude_issue("2.1.399", 50)]))
+    gh.fail = failing
+    code, filing = _claude_filing(gh, roots, capsys)
+    assert code == 1 and filing["action"] == "failed", filing
+    gh.fail = None
+    code, filing = _claude_filing(gh, roots, capsys)
+    assert code == 0 and filing["action"] == "edited", filing
+    assert gh.issues[0]["title"] == _CLAUDE + "2.1.400"
+    assert len(gh.comments) == 1, "exactly one move notice, whichever step failed"
+    code, filing = _claude_filing(gh, roots, capsys)
+    assert filing["action"] == "exists" and len(gh.comments) == 1
