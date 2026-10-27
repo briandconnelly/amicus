@@ -817,7 +817,7 @@ _INITIALIZE = json.dumps(
         },
     }
 )
-# What uv prints when the ref does not exist on the remote (uv 0.11 to 0.13, verified):
+# What uv prints when the ref does not exist on the remote (observed on uv 0.13.6):
 #   cause: failed to fetch branch or tag `v0.0.0-amicus-negative-control`
 #   fatal: couldn't find remote ref refs/tags/v0.0.0-amicus-negative-control
 _RESOLUTION_ERROR_RES = (
