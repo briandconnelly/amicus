@@ -28,6 +28,13 @@ per-change, as its own lead says.
   against its committed capture, and step 3's zero-spend config and grammar probes, each run
   in a credential-free scratch home. It reports what it checked, what differed and what it did
   not run. The default invocation is unchanged (#376).
+- `scripts/check_backend_compat.py watch [--json] [--file-issues [--dry-run]]` reports, from
+  npm and PyPI metadata alone, a kimi minor outside the shipped set, a claude release newer
+  than the newest `docs/claude-help/` capture, and a `fastmcp` or `mcp` release past its
+  `pyproject.toml` cap. `--file-issues` files one issue per stream and version, never when an
+  open or closed issue already has that exact title; a failed lookup is reported as unknown,
+  files nothing and fails the run. `docs/WATCHING.md` documents it and the routine that runs
+  it (#378).
 
 ### Changed
 

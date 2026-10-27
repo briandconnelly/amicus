@@ -38,6 +38,14 @@ Subcommands (a first argument naming one selects it; anything else is the check 
 
     compare --backend codex --old-bin PATH --new-bin PATH [--docs-root docs] [--write]
             [--debug-models]
+    watch [--json] [--file-issues [--dry-run]] [--repo OWNER/NAME] [--docs-root docs]
+          [--pyproject pyproject.toml]
+
+`watch` (#378) reads only npm and PyPI metadata, so it needs no installed CLI: kimi's
+latest minor against the shipped set, claude's latest against the newest docs/claude-help
+capture, and fastmcp's and mcp's latest against their pyproject.toml caps. `--file-issues`
+files one issue per stream and version unless an open or closed issue has its exact title.
+A lookup that fails is unknown, files nothing and exits 1. docs/WATCHING.md is its contract.
 
 Collects the evidence docs/UPGRADING-CODEX.md step 2 compares, from two binaries driven by
 absolute path, and runs step 3's zero-spend probe matrix on both (#376). Every run of
