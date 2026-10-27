@@ -256,10 +256,10 @@ def plan_prepare(ctx: Context, version: str) -> list[FileEdit]:
     Raises `Refusal` for a precondition the tree itself fails; `_refuse_repository_state`
     covers the ones that need git.
     """
-    if not release_state.VERSION_RE.match(version):
+    if not release_state.VERSION_RE.fullmatch(version):
         raise Refusal(f"version {version!r} is not X.Y.Z")
     declared = release_state.declared_version(ctx.repo_root)
-    if not release_state.VERSION_RE.match(declared):
+    if not release_state.VERSION_RE.fullmatch(declared):
         raise Refusal(f"pyproject.toml declares {declared!r}, which is not X.Y.Z")
     if release_state._parts(version) <= release_state._parts(declared):
         raise Refusal(
@@ -285,7 +285,9 @@ def _refuse_repository_state(ctx: Context) -> None:
     branch = ctx.git_out("symbolic-ref", "--quiet", "--short", "HEAD")
     if branch.returncode == 0 and branch.stdout.strip() == "main":
         raise Refusal("on branch main; prepare the release on its own branch (AGENTS.md rule 8)")
-    status = ctx.git_out("status", "--porcelain")
+    status = ctx.git_out(
+        "status", "--porcelain", "--untracked-files=all", "--ignore-submodules=none"
+    )
     if status.returncode != 0:
         raise Refusal(f"could not read the tree's status: {status.stderr.strip()}")
     if status.stdout.strip():

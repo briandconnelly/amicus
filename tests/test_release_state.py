@@ -311,6 +311,7 @@ def test_pins_compare_numerically_not_as_strings(repo):
         "git+https://github.com/someone-else/amicus.git@v1.2.3",
         "git+https://github.com/briandconnelly/amicus.git@main",
         "git+https://github.com/briandconnelly/amicus.git",
+        "git+https://github.com/briandconnelly/amicus.git@v1.2.3\n",
     ],
 )
 def test_a_source_that_is_not_this_repo_at_a_version_tag_is_rejected(repo, source):
@@ -527,6 +528,8 @@ def test_a_missing_sha_is_rejected(repo):
         ("sha", "c" * 39),
         ("url", "https://github.com/someone-else/amicus.git"),
         ("source", "git-subdir"),
+        ("ref", "v1.2.2\n"),
+        ("sha", "c" * 40 + "\n"),
     ],
 )
 def test_a_malformed_pointer_value_is_rejected(repo, field, value):
@@ -903,7 +906,7 @@ def test_freshness_is_deliberately_not_checked_after_tagging():
 # --- the tag name ----------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("tag", ["1.2.3", "v1.2", "release-1.2.3", "v1.2.3-rc1"])
+@pytest.mark.parametrize("tag", ["1.2.3", "v1.2", "release-1.2.3", "v1.2.3-rc1", "v1.2.3\n"])
 def test_a_tag_that_is_not_vX_Y_Z_is_rejected(tag):
     version, problems = release_state.version_for_tag(tag)
     assert version is None
@@ -951,6 +954,19 @@ def test_a_release_at_the_removal_version_with_the_tool_still_listed_is_rejected
     _set_window(repo, 'removal_at_or_after="1.4.0"', f'removal_at_or_after="{VERSION}"')
     problems = _tree(repo)
     assert len(problems) == 1 and f"at or past its removal_at_or_after {VERSION}" in problems[0]
+
+
+def test_a_window_with_a_trailing_newline_is_rejected(repo):
+    _set_window(repo, 'since="1.2.0"', 'since="1.2.0\\n"')
+    assert any("must be X.Y.Z" in p for p in _tree(repo)), _tree(repo)
+
+
+def test_a_version_with_a_trailing_newline_is_rejected_by_the_cli(repo, capsys):
+    (repo / "pyproject.toml").write_text(
+        '[project]\nname = "amicus"\nversion = "1.2.3\\n"\n', encoding="utf-8"
+    )
+    assert release_state.main([], repo_root=repo) == 1
+    assert "is not X.Y.Z" in capsys.readouterr().err
 
 
 def test_an_empty_table_is_accepted(repo):
@@ -1038,6 +1054,11 @@ def test_a_release_past_the_removal_version_with_no_aliases_left_is_accepted(rep
         ' EnvVar("AMICUS_B", "b", None, ()), EnvVar("AMICUS_C", "c", legacy=[])))\n',
     )
     assert _tree(repo) == []
+
+
+def test_a_legacy_removal_version_with_a_trailing_newline_is_rejected(repo):
+    _set_removal(repo, "2.0.0\\n")
+    assert any("must be X.Y.Z" in p for p in _tree(repo)), _tree(repo)
 
 
 def test_a_legacy_argument_the_parser_cannot_evaluate_counts_as_declared(repo):

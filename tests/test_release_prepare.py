@@ -367,6 +367,14 @@ def test_a_malformed_version_is_refused(repo, capsys, version):
     _assert_refused(repo, capsys, version, reason="is not X.Y.Z")
 
 
+@pytest.mark.parametrize("flag", [(), ("--check",)])
+@pytest.mark.parametrize("version", [f"{NEXT}\n", f"{NEXT}\r\n", f"\n{NEXT}", f" {NEXT}"])
+def test_a_version_with_surrounding_whitespace_is_refused(repo, capsys, version, flag):
+    """A `$`-anchored `match` accepts a trailing newline, which would then be written into
+    TOML, Python and JSON literals; the version must be X.Y.Z and nothing else."""
+    _assert_refused(repo, capsys, version, *flag, reason="is not X.Y.Z")
+
+
 def test_main_is_refused(repo, capsys):
     _git(repo, "switch", "-q", "main")
     _assert_refused(repo, capsys, NEXT, reason="on branch main")
@@ -382,6 +390,14 @@ def test_main_is_refused(repo, capsys):
 )
 def test_a_dirty_tree_is_refused(repo, capsys, dirty):
     dirty(repo)
+    _assert_refused(repo, capsys, NEXT, reason="not clean")
+
+
+def test_an_untracked_file_is_refused_even_when_status_hides_untracked_files(repo, capsys):
+    """`git status --porcelain` honours `status.showUntrackedFiles=no`; the refusal must not."""
+    _git(repo, "config", "status.showUntrackedFiles", "no")
+    (repo / "stray.txt").write_text("x")
+    assert _git(repo, "status", "--porcelain") == "", "known positive: config hides it"
     _assert_refused(repo, capsys, NEXT, reason="not clean")
 
 
