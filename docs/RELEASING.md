@@ -166,6 +166,7 @@ The tag therefore deliberately points at a commit that is in `main`'s history bu
      It moves README's "Any other MCP client" example to the same pin; `tests/test_packaging.py::test_readme_example_mirrors_the_mcp_json_pin` fails if the two differ.
    - It does **not** touch `.claude-plugin/marketplace.json`, and fails if that file is not byte-identical afterwards: its pointer names the previous release until step 7 advances it.
    - It regenerates `uv.lock` with `uv lock`, per AGENTS.md rule 19: `uv.lock` mirrors the version rather than declaring it, and `prek.toml`'s `uv-lock-check` hook runs `uv lock --check` whenever `pyproject.toml` changes, so a release PR that skips this fails its own hook.
+     It warns when `uv lock` changes anything in `uv.lock` beyond amicus's own version line, which a different `uv` release can do: uv 0.13 rewrote the revision-3 lock as revision 5 when 0.11.1 was prepared, and that release PR kept only the version line.
 
    Then do by hand what the script leaves to you, and commit the result as PR C.
    Write the release section's lead paragraph and review its entries.
