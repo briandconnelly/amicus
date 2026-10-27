@@ -22,11 +22,32 @@ file is byte-identical afterwards), create or push a tag, commit, push or merge.
 version, the release notes, README's prose naming the current release, `docs/MIGRATION.md`,
 the rule-18 carrier re-check and the live gates stay with the maintainer.
 
+`preflight --pr N --version X.Y.Z` runs in the release PR's worktree immediately before the
+live-gate evidence (RELEASING step 3), and spends nothing. It checks that this checkout is a
+linked worktree rather than the main checkout, that `HEAD` is PR N's head commit on GitHub, that
+PR N is open against `main`, that the tree is clean (untracked files included, whatever
+`status.showUntrackedFiles` says), that `pyproject.toml` declares X.Y.Z, that no tag `vX.Y.Z`
+exists on `origin` or locally, and that `scripts/check_backend_compat.py` passes. On success it
+prints the evidence command, and never runs it: that spends live quota, which only the
+maintainer authorizes (AGENTS.md rules 5 and 20).
+
+`post-merge --release-sha SHA --version X.Y.Z` runs in the same worktree after the release PR
+merges (RELEASING step 5). It fetches `main` from `origin` first and fails if it cannot, then
+checks that `origin/main`'s tip is an ordinary merge commit whose second parent is SHA, that its
+tree is SHA's tree, that SHA is in `origin/main`'s history, that `HEAD` is SHA on a clean tree,
+and that the local tag `vX.Y.Z` is annotated, peels to SHA and carries
+`.release-evidence/live-gates.json` byte for byte; then it runs
+`check_release_state.py --tag vX.Y.Z --commit SHA`. It never tags, pushes or merges. A pass
+says the tag carries the record the maintainer wrote; it is not proof the live gates ran
+(AGENTS.md rule 23).
+
 Usage:
     uv run python scripts/release.py prepare X.Y.Z [--check]
+    uv run python scripts/release.py preflight --pr N --version X.Y.Z
+    uv run python scripts/release.py post-merge --release-sha SHA --version X.Y.Z
 
 Exits 0 on success, 1 on a refusal or a failed check, printing each problem.
-Pure stdlib, like `check_release_state.py`; it runs `git` and `uv`.
+Pure stdlib, like `check_release_state.py`; it runs `git`, `gh` and `uv`.
 """
 
 from __future__ import annotations
@@ -35,12 +56,14 @@ import argparse
 import datetime as dt
 import difflib
 import importlib.util
+import json
 import re
+import shlex
 import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -395,6 +418,327 @@ def _warn_on_lock_churn(before: str, after: str, old: str, new: str) -> None:
         )
 
 
+# --- preflight: before the live-gate evidence spends anything -------------------------------
+
+EVIDENCE_PATH = ".release-evidence/live-gates.json"
+EVIDENCE_SCRIPT = "scripts/record_live_gate_evidence.py"
+_FULL_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+_SIGNATURE_BYTES_RE = re.compile(rb"^-----BEGIN (?:PGP|SSH) SIGNATURE-----$", re.MULTILINE)
+
+
+def _version_problems(version: str) -> list[str]:
+    if release_state.VERSION_RE.fullmatch(version):
+        return []
+    return [f"version {version!r} is not X.Y.Z"]
+
+
+def _stderr_line(proc: subprocess.CompletedProcess) -> str:
+    text = proc.stderr if isinstance(proc.stderr, str) else (proc.stderr or b"").decode()
+    lines = text.strip().splitlines()
+    return lines[-1] if lines else f"exit status {proc.returncode}"
+
+
+def _rev(ctx: Context, revision: str) -> str | None:
+    """The full SHA `revision` names, or None when it names nothing."""
+    proc = ctx.git_out("rev-parse", "--verify", "--quiet", revision)
+    return proc.stdout.strip() if proc.returncode == 0 else None
+
+
+def _linked_worktree_problems(ctx: Context) -> list[str]:
+    """The checkout must be a linked worktree: its git dir differs from the common one.
+
+    The main checkout's git dir IS the common dir, and the main checkout is where the
+    evidence was recorded by mistake for 0.3.0, 0.6.0 and 0.7.0 (#241).
+    """
+    proc = ctx.git_out("rev-parse", "--path-format=absolute", "--git-dir", "--git-common-dir")
+    dirs = proc.stdout.split("\n")[:2] if proc.returncode == 0 else []
+    if len(dirs) != 2 or not all(dirs):
+        return [f"could not tell which checkout {ctx.repo_root} is: {_stderr_line(proc)}"]
+    git_dir, common_dir = (Path(d).resolve() for d in dirs)
+    if git_dir == common_dir:
+        return [
+            f"{ctx.repo_root} is the main checkout, not a linked worktree; run this in the "
+            "release PR's worktree (`git worktree add`), never in the main checkout (#241)"
+        ]
+    return []
+
+
+def _clean_tree_problems(ctx: Context) -> list[str]:
+    # Explicit flags, because plain `--porcelain` honours `status.showUntrackedFiles` (#385).
+    status = ctx.git_out(
+        "status", "--porcelain", "--untracked-files=all", "--ignore-submodules=none"
+    )
+    if status.returncode != 0:
+        return [f"could not read the tree's status: {_stderr_line(status)}"]
+    if status.stdout.strip():
+        paths = ", ".join(line[3:] for line in status.stdout.splitlines()[:5])
+        return [f"the tree is not clean ({paths}); the evidence must cover a commit, not a tree"]
+    return []
+
+
+def _pull_request(ctx: Context, number: int) -> tuple[dict | None, list[str]]:
+    cmd = ["gh", "pr", "view", str(number), "--json", "headRefOid,headRefName,state,baseRefName"]
+    try:
+        proc = ctx.run(cmd, cwd=ctx.repo_root, capture_output=True, text=True, check=False)
+    except OSError as exc:
+        return None, [f"could not run `gh pr view {number}`: {exc}"]
+    if proc.returncode != 0:
+        return None, [f"`gh pr view {number}` failed: {_stderr_line(proc)}"]
+    try:
+        pr = json.loads(proc.stdout)
+        head = pr["headRefOid"]
+        if not (isinstance(head, str) and _FULL_SHA_RE.fullmatch(head)):
+            raise ValueError(f"headRefOid {head!r} is not a commit SHA")
+    except (ValueError, KeyError, TypeError) as exc:
+        return None, [f"could not read PR #{number} from `gh pr view`: {exc}"]
+    problems = []
+    if pr.get("state") != "OPEN":
+        problems.append(f"PR #{number} is {pr.get('state')}, not OPEN; the release PR is unmerged")
+    if pr.get("baseRefName") != "main":
+        problems.append(f"PR #{number} targets {pr.get('baseRefName')!r}, not main")
+    return pr, problems
+
+
+def _remote_tag_problems(ctx: Context, tag: str) -> list[str]:
+    # `--exit-code` makes absence its own status, 2, so a failed lookup cannot read as absent.
+    proc = ctx.git_out("ls-remote", "--exit-code", "--tags", "origin", f"refs/tags/{tag}")
+    if proc.returncode == 2:
+        return []
+    if proc.returncode == 0:
+        return [f"{tag} already exists on origin; that version is released, choose another"]
+    return [f"could not ask origin whether {tag} exists: {_stderr_line(proc)}"]
+
+
+def _local_tag_problems(ctx: Context, tag: str) -> list[str]:
+    # `rev-parse -q --verify` exits 1 for a missing ref; anything else is not an answer.
+    proc = ctx.git_out("rev-parse", "-q", "--verify", f"refs/tags/{tag}")
+    if proc.returncode == 1:
+        return []
+    if proc.returncode == 0:
+        return [
+            f"a local tag {tag} exists, which the evidence script refuses; if it is from an "
+            f"earlier attempt that was never pushed, `git tag -d {tag}` and rerun"
+        ]
+    return [f"could not tell whether a local tag {tag} exists: {_stderr_line(proc)}"]
+
+
+def _script_problems(ctx: Context, script: str, *args: str) -> list[str]:
+    """Run one of this checkout's scripts, its report on the terminal; a non-zero exit fails."""
+    cmd = [sys.executable, str(ctx.repo_root / script), *args]
+    shown = " ".join(["python", script, *args])
+    try:
+        proc = ctx.run(cmd, cwd=ctx.repo_root, check=False)
+    except OSError as exc:
+        return [f"could not run `{shown}`: {exc}"]
+    if proc.returncode != 0:
+        return [f"`{shown}` failed (exit status {proc.returncode}); its report is above"]
+    return []
+
+
+def evidence_command(repo_root: Path, version: str) -> str:
+    return (
+        f"cd {shlex.quote(str(repo_root))} && "
+        f"AMICUS_REQUIRE_LIVE=1 uv run python {EVIDENCE_SCRIPT} --version {version}"
+    )
+
+
+def cmd_preflight(ctx: Context, args: argparse.Namespace) -> int:
+    version: str = args.version
+    tag = f"v{version}"
+    problems = _version_problems(version)
+    problems += _linked_worktree_problems(ctx)
+    head = _rev(ctx, "HEAD")
+    if head is None:
+        problems.append("could not resolve HEAD")
+    pr, pr_problems = _pull_request(ctx, args.pr)
+    problems += pr_problems
+    if pr is not None and head is not None and head != pr["headRefOid"]:
+        problems.append(
+            f"HEAD is {head}, but PR #{args.pr}'s head on GitHub is {pr['headRefOid']} "
+            f"({pr.get('headRefName')}); the evidence must cover the commit the PR will merge, "
+            "so check out and pull that branch, or push what is here"
+        )
+    problems += _clean_tree_problems(ctx)
+    declared = release_state.declared_version(ctx.repo_root)
+    if declared != version:
+        problems.append(f"pyproject.toml declares {declared!r}, not {version!r}")
+    if not _version_problems(version):
+        problems += _remote_tag_problems(ctx, tag)
+        problems += _local_tag_problems(ctx, tag)
+    print("running scripts/check_backend_compat.py (spends nothing):", flush=True)
+    problems += _script_problems(ctx, "scripts/check_backend_compat.py")
+
+    if problems:
+        print(f"preflight for {version} does NOT hold; do not record evidence:", file=sys.stderr)
+        for problem in problems:
+            print(f"  - {problem}", file=sys.stderr)
+        return 1
+
+    print(f"preflight holds for {version} at {head} (PR #{args.pr}, {pr and pr['headRefName']}).")
+    print(f"Record that SHA: it is the release commit, the one {tag} will point at.")
+    print("Still yours before the evidence run (docs/RELEASING.md step 3): the backend CLIs at")
+    print("npm's latest with Claude Code's autoupdater held, and the rule-18 carrier re-check.")
+    print("The evidence run spends live quota on all three backends and needs the maintainer's")
+    print("authorization in the session that runs it. This script never runs it. The command:")
+    print(f"  {evidence_command(ctx.repo_root, version)}")
+    return 0
+
+
+# --- post-merge: before the tag is pushed -----------------------------------------------
+
+
+def _is_ancestor(ctx: Context, ancestor: str, descendant: str) -> bool | None:
+    """`merge-base --is-ancestor`: 0 is yes, 1 is no, and anything else is no answer."""
+    proc = ctx.git_out("merge-base", "--is-ancestor", ancestor, descendant)
+    return {0: True, 1: False}.get(proc.returncode)
+
+
+def _merge_shape_problems(ctx: Context, tip: str, release: str) -> list[str]:
+    """`origin/main`'s tip must be the ordinary merge commit of exactly the release commit."""
+    proc = ctx.git_out("rev-list", "--parents", "-n", "1", tip)
+    if proc.returncode != 0:
+        return [f"could not read the parents of origin/main's tip {tip}: {_stderr_line(proc)}"]
+    parents = proc.stdout.split()[1:]
+    if len(parents) == 2 and parents[1] == release:
+        return []
+    if tip == release:
+        return [
+            f"origin/main's tip is the release commit {release} itself: main was "
+            "fast-forwarded, not merged with the ordinary merge commit step 4 prescribes, and "
+            "this check covers only that path"
+        ]
+    if len(parents) < 2:
+        return [
+            f"origin/main's tip {tip} is not a merge commit, so the release PR was squashed or "
+            f"rebased: {release} is not what main merged and the evidence covers nothing in "
+            "main; stop the release (RELEASING step 4 forbids both)"
+        ]
+    if len(parents) > 2:
+        return [f"origin/main's tip {tip} is an octopus merge of {len(parents)} parents; stop"]
+    first, second = parents
+    if _is_ancestor(ctx, release, first):
+        return [
+            f"origin/main's tip {tip} merges {second}, not the release commit: other work "
+            "merged after the release merge, so main no longer holds the tree the tag names; "
+            "stop the release (rule 19: the tag push is the only work that follows the merge)"
+        ]
+    return [
+        f"origin/main's tip {tip} is an ordinary merge, but of {second}, not of the release "
+        f"commit {release}: the PR branch gained a commit after the evidence was recorded. "
+        "This is not a squash or rebase. The evidence does not cover what merged; stop the "
+        "release"
+    ]
+
+
+def _tag_message(ctx: Context, tag: str) -> bytes | None:
+    """The annotated tag's message, raw bytes, with any signature block dropped."""
+    proc = ctx.git(
+        ["git", "cat-file", "tag", f"refs/tags/{tag}"],
+        cwd=ctx.repo_root,
+        capture_output=True,
+        check=False,
+    )
+    if proc.returncode != 0:
+        return None
+    # Run without `text=True`, so stdout is bytes whatever `Context.git`'s annotation says.
+    raw = cast("bytes", proc.stdout)
+    _headers, _, message = raw.partition(b"\n\n")
+    signature = _SIGNATURE_BYTES_RE.search(message)
+    return message[: signature.start()] if signature else message
+
+
+def _tag_problems(ctx: Context, tag: str, release: str) -> list[str]:
+    kind = ctx.git_out("cat-file", "-t", f"refs/tags/{tag}")
+    if kind.returncode != 0:
+        return [f"there is no local tag {tag}; step 3 creates it, annotated, before the merge"]
+    if kind.stdout.strip() != "tag":
+        return [
+            f"{tag} is a lightweight tag (git reports {kind.stdout.strip()!r}); rule 20 requires "
+            "an annotated tag whose message is the evidence record"
+        ]
+    problems = []
+    peeled = _rev(ctx, f"refs/tags/{tag}^{{commit}}")
+    if peeled != release:
+        problems.append(f"{tag} points at {peeled}, not the release commit {release}")
+    record_path = ctx.repo_root / EVIDENCE_PATH
+    try:
+        record = record_path.read_bytes()
+    except OSError as exc:
+        return [*problems, f"could not read {EVIDENCE_PATH} in this checkout: {exc}"]
+    message = _tag_message(ctx, tag)
+    if message is None:
+        problems.append(f"could not read {tag}'s message")
+    elif message != record:
+        problems.append(
+            f"{tag}'s message is not {record_path} byte for byte; it was tagged from another "
+            "record (0.3.0 was first tagged with 0.2.0's). Recreate the unpushed tag with "
+            "`--cleanup=verbatim -F` and that file's absolute path"
+        )
+    return problems
+
+
+def cmd_post_merge(ctx: Context, args: argparse.Namespace) -> int:
+    version: str = args.version
+    tag = f"v{version}"
+
+    def fail(problems: list[str]) -> int:
+        print(f"post-merge checks for {version} do NOT hold; do not push {tag}:", file=sys.stderr)
+        for problem in problems:
+            print(f"  - {problem}", file=sys.stderr)
+        return 1
+
+    problems = _version_problems(version)
+    release = _rev(ctx, f"{args.release_sha}^{{commit}}")
+    if release is None:
+        problems.append(f"{args.release_sha!r} names no commit in this checkout")
+    # `gh pr merge` moves GitHub, not this checkout's origin/main; a stale ref passes
+    # every check below while meaning nothing, so a failed fetch stops everything.
+    fetch = ctx.git_out("fetch", "--no-tags", "origin", "+refs/heads/main:refs/remotes/origin/main")
+    if fetch.returncode != 0:
+        problems.append(
+            f"`git fetch origin` failed, so origin/main may be stale: {_stderr_line(fetch)}"
+        )
+    if problems:
+        return fail(problems)
+    assert release is not None
+    tip = _rev(ctx, "refs/remotes/origin/main^{commit}")
+    if tip is None:
+        return fail(["could not resolve origin/main after fetching it"])
+
+    problems += _merge_shape_problems(ctx, tip, release)
+    if _rev(ctx, f"{tip}^{{tree}}") != _rev(ctx, f"{release}^{{tree}}"):
+        problems.append(
+            f"origin/main's tree differs from the release commit's; something else is in main, "
+            f"see `git diff --stat {release} origin/main`"
+        )
+    ancestor = _is_ancestor(ctx, release, tip)
+    if ancestor is None:
+        problems.append(f"could not tell whether {release} is in origin/main's history")
+    elif not ancestor:
+        problems.append(f"the release commit {release} is not in origin/main's history")
+    head = _rev(ctx, "HEAD")
+    if head != release:
+        problems.append(
+            f"HEAD is {head}, not the release commit; run this in the release PR's worktree, "
+            "whose files the release-state check below reads"
+        )
+    problems += _clean_tree_problems(ctx)
+    if not _version_problems(version):
+        problems += _tag_problems(ctx, tag, release)
+        print(f"running scripts/check_release_state.py --tag {tag} --commit {release}:", flush=True)
+        problems += _script_problems(
+            ctx, "scripts/check_release_state.py", "--tag", tag, "--commit", release
+        )
+    if problems:
+        return fail(problems)
+    print(f"post-merge checks hold: origin/main ({tip}) is the ordinary merge of {release},")
+    print(f"with an identical tree, and {tag} is annotated, points at it and carries")
+    print(f"{EVIDENCE_PATH} verbatim. That record is the maintainer's assertion that the")
+    print("live gates passed, checked here for shape and commit; it is not proof they ran.")
+    print(f"Pushing {tag} is yours (docs/RELEASING.md step 6): git push origin {tag}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     commands = parser.add_subparsers(dest="command", required=True, metavar="COMMAND")
@@ -409,6 +753,26 @@ def build_parser() -> argparse.ArgumentParser:
         "--check", action="store_true", help="print the planned edits and write nothing"
     )
     prepare.set_defaults(handler=cmd_prepare)
+
+    preflight = commands.add_parser(
+        "preflight",
+        help="check the release worktree before the live-gate evidence (RELEASING step 3)",
+        description="Check the release PR's worktree; print, never run, the evidence command.",
+    )
+    preflight.add_argument("--pr", type=int, required=True, help="the release PR's number")
+    preflight.add_argument("--version", required=True, help="the version being released, X.Y.Z")
+    preflight.set_defaults(handler=cmd_preflight)
+
+    post_merge = commands.add_parser(
+        "post-merge",
+        help="check the merge and the local tag before pushing it (RELEASING step 5)",
+        description="Fetch origin's main, then check its merge of the release commit and the tag.",
+    )
+    post_merge.add_argument(
+        "--release-sha", required=True, help="the release commit: the PR's tip the evidence names"
+    )
+    post_merge.add_argument("--version", required=True, help="the version being released, X.Y.Z")
+    post_merge.set_defaults(handler=cmd_post_merge)
     return parser
 
 
