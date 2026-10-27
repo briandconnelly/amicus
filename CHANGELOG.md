@@ -28,6 +28,13 @@ per-change, as its own lead says.
   against its committed capture, and step 3's zero-spend config and grammar probes, each run
   in a credential-free scratch home. It reports what it checked, what differed and what it did
   not run. The default invocation is unchanged (#376).
+- `scripts/capture_codex_wire_tools.py --old-bin PATH --new-bin PATH` captures the tool catalog
+  two `codex` binaries send the model, at zero spend: each run points codex at a loopback fake
+  Responses server through a `model_providers` override, in a credential-free scratch home,
+  for every model in `KNOWN_MODEL_SLUGS` with and without `MODEL_RUN_DISABLED_FEATURES`, and
+  keeps only tool names and definition hashes. The disables are its positive control, and a
+  control with nothing to apply to leaves the probe unvalidated. `docs/UPGRADING-CODEX.md` no
+  longer says amicus has no instrument for this (#380).
 
 ### Changed
 

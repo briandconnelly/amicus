@@ -434,7 +434,7 @@ MISSING_CREDENTIALS_401 = (
 # SIGKILL.
 KILL_GRACE_SECONDS = 2
 CODEX_NOT_RUN = (
-    "the model-facing tool catalog: this script has no instrument for it "
+    "the model-facing tool catalog: scripts/capture_codex_wire_tools.py captures it "
     "(docs/UPGRADING-CODEX.md step 2)",
     "logged-in `login status` forms: a scratch home has no login, and yours is never read",
     "step 3's checks that spend: the effort rejection and the network and writable-roots pins",
