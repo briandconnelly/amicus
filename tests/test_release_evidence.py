@@ -471,6 +471,25 @@ def test_tag_exists_sees_annotated_and_lightweight_tags_only_when_present(tmp_pa
     assert evidence._tag_exists("v1.2.0") is False
 
 
+def test_git_dirty_paths_sees_untracked_files_the_user_config_hides(tmp_path, monkeypatch):
+    """`status.showUntrackedFiles=no` must not make an untracked file look clean (#385)."""
+
+    def git(*args):
+        return subprocess.run(
+            ["git", *args], cwd=tmp_path, capture_output=True, text=True, check=True
+        ).stdout
+
+    git("init", "-q")
+    git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "c")
+    git("config", "status.showUntrackedFiles", "no")
+    (tmp_path / "stray.txt").write_text("stray\n")
+    monkeypatch.setattr(evidence, "REPO_ROOT", tmp_path)
+
+    # The control: the config really does hide the file from a plain porcelain status.
+    assert git("status", "--porcelain") == ""
+    assert evidence._git_dirty_paths() == ["?? stray.txt"]
+
+
 def test_tag_exists_raises_outside_a_repository(tmp_path, monkeypatch):
     monkeypatch.setattr(evidence, "REPO_ROOT", tmp_path)
     monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(tmp_path.parent))
@@ -530,9 +549,7 @@ def test_the_recorded_evidence_covers_this_exact_commit():
     head = subprocess.run(
         ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True
     ).stdout.strip()
-    dirty = subprocess.run(
-        ["git", "status", "--porcelain"], capture_output=True, text=True, check=True
-    ).stdout.strip()
+    dirty = evidence._git_dirty_paths()
     problems = evidence.validate(
         json.loads(path.read_text()),
         head=head,

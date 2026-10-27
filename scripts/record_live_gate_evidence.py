@@ -126,7 +126,11 @@ def _git_head() -> str:
 
 
 def _git_dirty_paths() -> list[str]:
-    status = _git("status", "--porcelain").stdout
+    # Both flags override user config: `status.showUntrackedFiles=no` would otherwise hide an
+    # untracked file and `submodule.<name>.ignore` a dirty submodule, so a dirty tree reads clean.
+    status = _git(
+        "status", "--porcelain", "--untracked-files=all", "--ignore-submodules=none"
+    ).stdout
     return [line for line in status.splitlines() if line.strip()]
 
 
