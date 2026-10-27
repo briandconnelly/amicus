@@ -48,9 +48,10 @@ temporary directories; it spends nothing and changes nothing in the checkout. It
 PyPI's `releases` lists files for exactly X.Y.Z (the project's metadata alone says nothing
 about this version), that `origin` has the annotated tag `vX.Y.Z` and its peeled commit, that
 installing the tag exactly as a user would, `uvx --from git+...@vX.Y.Z amicus-mcp` with a fresh
-`UV_CACHE_DIR` and `UV_TOOL_DIR`, answers an MCP `initialize` as `amicus` X.Y.Z, and that the
-same install of a tag that cannot exist fails with uv's resolution error: the negative control
-that proves the positive one was not answered by a cache or by some other binary.
+`UV_CACHE_DIR` and `UV_TOOL_DIR` and a `PATH` that holds no other `amicus-mcp`, answers an MCP
+`initialize` as `amicus` X.Y.Z, and that the same install of a tag that cannot exist fails
+with git's diagnostic that the remote has no such ref: the negative control that proves the
+positive one was not answered by a cache or by some other binary.
 
 `pointer --version X.Y.Z` makes the edit of the marketplace pointer PR (RELEASING step 7,
 AGENTS.md rule 24). It runs `post-publish` first, in the same invocation, and refuses unless
@@ -82,6 +83,7 @@ import json
 import os
 import re
 import shlex
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -817,13 +819,14 @@ _INITIALIZE = json.dumps(
         },
     }
 )
-# What uv prints when the ref does not exist on the remote (observed on uv 0.13.6):
+# Git's own diagnostic for a ref the remote does not have, which uv 0.13.6 relays under
 #   cause: failed to fetch branch or tag `v0.0.0-amicus-negative-control`
 #   fatal: couldn't find remote ref refs/tags/v0.0.0-amicus-negative-control
-_RESOLUTION_ERROR_RES = (
-    re.compile(r"failed to fetch branch or tag `(?P<ref>[^`]+)`"),
-    re.compile(r"couldn't find remote ref (?:refs/(?:tags|heads)/)?(?P<ref>\S+)"),
-)
+# Only the second line counts: uv's wrapper on the first is the same for a DNS, auth or TLS
+# failure (observed with an unresolvable host), so it says nothing about the ref.
+_MISSING_REF_RE = re.compile(r"couldn't find remote ref (?:refs/(?:tags|heads)/)?(?P<ref>\S+)")
+# What the install's PATH may hold besides uv's own directory (see `_isolated_path`).
+_SYSTEM_PATH = ("/usr/bin", "/bin")
 
 
 @dataclass(frozen=True)
@@ -885,6 +888,28 @@ def _remote_tag(ctx: Context, version: str) -> tuple[RemoteTag | None, list[str]
     return RemoteTag(tag, obj, commit), []
 
 
+def _isolated_path(bin_dir: Path) -> str:
+    """A `PATH` on which no `amicus-mcp` but the installed package's can be found.
+
+    When the package `--from` names lacks the console script, uv runs whatever `amicus-mcp`
+    its `PATH` finds instead (observed on uv 0.13.6), and under `uv run` that includes this
+    checkout's `.venv/bin`, whose server reports the checkout's version. So the install sees
+    an allowlist, as `tests/test_packaging.py::_minimal_subprocess_path` does: `bin_dir`,
+    holding links to `uvx`, `uv` and `git` (uv fetches git sources with it), then the core
+    system directories, each checked to hold no `amicus-mcp`.
+    """
+    for program in ("uvx", "uv", "git"):
+        found = shutil.which(program)
+        if found is None:
+            raise OSError(f"`{program}` is not on PATH")
+        (bin_dir / program).symlink_to(Path(found).resolve())
+    entries = [str(bin_dir), *(d for d in _SYSTEM_PATH if Path(d).is_dir())]
+    for entry in entries[1:]:
+        if (Path(entry) / CONSOLE_SCRIPT).exists():
+            raise OSError(f"{entry} holds an `{CONSOLE_SCRIPT}` that could answer for the tag")
+    return os.pathsep.join(entries)
+
+
 def _uvx(ctx: Context, ref: str, timeout: float) -> subprocess.CompletedProcess[str]:
     """Install `ref` as a user would and send it one `initialize`, with nothing cached.
 
@@ -895,15 +920,16 @@ def _uvx(ctx: Context, ref: str, timeout: float) -> subprocess.CompletedProcess[
     """
     with tempfile.TemporaryDirectory(prefix="amicus-post-publish-") as scratch:
         root = Path(scratch)
-        for name in ("cache", "tools", "cwd"):
+        for name in ("cache", "tools", "cwd", "bin"):
             (root / name).mkdir()
         env = {
             **os.environ,
+            "PATH": _isolated_path(root / "bin"),
             "UV_CACHE_DIR": str(root / "cache"),
             "UV_TOOL_DIR": str(root / "tools"),
         }
         return ctx.run(
-            ["uvx", "--from", _install_source(ref), CONSOLE_SCRIPT],
+            [str(root / "bin" / "uvx"), "--from", _install_source(ref), CONSOLE_SCRIPT],
             cwd=root / "cwd",
             env=env,
             input=_INITIALIZE + "\n",
@@ -973,11 +999,11 @@ def _negative_control_problems(ctx: Context, timeout: float) -> list[str]:
             "other than the requested tag is answering, so the install check proves nothing"
         ]
     stderr = proc.stderr or ""
-    named = {m["ref"] for pattern in _RESOLUTION_ERROR_RES for m in pattern.finditer(stderr)}
-    if ref not in named:
+    if ref not in {match["ref"] for match in _MISSING_REF_RE.finditer(stderr)}:
         return [
             f"negative control: installing {ref} failed, but not with uv's resolution error "
-            f"for that ref, so it controls nothing: {_stderr_line(proc)}"
+            f"(git's `couldn't find remote ref` for that ref), so it controls nothing: "
+            f"{_stderr_line(proc)}"
         ]
     return []
 

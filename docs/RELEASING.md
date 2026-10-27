@@ -344,11 +344,13 @@ Each check is there for a reason:
 2. `origin` must have the tag `vX.Y.Z` and its peeled `^{}` entry (`git ls-remote`): a missing tag, or a lightweight one with no peeled entry, fails, and so does a lookup that could not run.
 3. It installs the public tag exactly as a user would, `uvx --from "git+https://github.com/briandconnelly/amicus.git@vX.Y.Z" amicus-mcp`, sends one MCP `initialize` over stdin, and requires `serverInfo.name == "amicus"` and `serverInfo.version == "X.Y.Z"` in the reply.
    Every install runs with its own fresh, empty `UV_CACHE_DIR` and `UV_TOOL_DIR`, in an empty directory: `uvx` reuses a cached tool environment without resolving anything, so a warm cache can pass while proving nothing.
+   Its `PATH` holds only links to `uvx`, `uv` and `git` plus `/usr/bin` and `/bin`, checked to hold no `amicus-mcp`: when a package lacks its console script, uv runs whatever `amicus-mcp` its `PATH` finds instead, and under `uv run` that is the checkout's own `.venv/bin/amicus-mcp`, which reports the checkout's version.
    Step 3's rehearsal already proved transport, build and handshake against the release commit's SHA, so what this adds is narrow but real — that the tag *ref* resolves, which is all that separated the rehearsal from the thing itself.
    This is what step 7's pointer PR is waiting on: do not point the marketplace at a tag whose install you have not just run.
-4. A negative control: the same install, with fresh caches of its own, against a tag that cannot exist (`v0.0.0-amicus-negative-control`, which no release carries and the `v*` ruleset stops anyone creating) must fail with uv's resolution error for that ref.
+4. A negative control: the same install, with fresh caches of its own, against a tag that cannot exist (`v0.0.0-amicus-negative-control`, which no release carries and the `v*` ruleset stops anyone creating) must fail with git's `couldn't find remote ref` for that ref.
    Without it, a warm cache or a silently-substituted binary would make check 3 pass no matter what.
    A success, a timeout or a failure for any other reason is not a control and fails the check: each would look the same whether or not resolution works.
+   uv's own wrapper, `failed to fetch branch or tag`, is not enough: it reads the same for a DNS, authentication or TLS failure, so only git's diagnostic shows the remote was reached and lacks the ref.
 
 `--timeout` sets the seconds each install-and-initialize may take (default 300).
 `uv run pytest -m network --no-cov tests/test_release_post_publish.py` runs the same checks for real, against the release the committed pointer names and against a version that was never published; the `network` marker keeps them out of the gate.

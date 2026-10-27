@@ -42,8 +42,9 @@ per-change, as its own lead says.
   `docs/RELEASING.md`'s hand-run post-tag checks and step 7's hand edit of the marketplace
   pointer (#375). `post-publish` is read-only and spends nothing: PyPI must list files for
   exactly that version, `origin` must carry the annotated tag, a fresh-cache `uvx` install of
-  the tag must answer `initialize` as amicus at that version, and the same install of a tag
-  that cannot exist must fail with uv's resolution error. `pointer` runs those checks first,
+  the tag, on a `PATH` holding no other `amicus-mcp`, must answer `initialize` as amicus at
+  that version, and the same install of a tag that cannot exist must fail with git's
+  diagnostic that the remote has no such ref. `pointer` runs those checks first,
   fetches exactly the tag and requires it to match `origin`, writes `ref` and the peeled `sha`
   without reformatting the file, and runs the pull-request pointer check against a freshly
   fetched `origin/main`; it never commits or opens the PR. A `network` pytest marker, excluded

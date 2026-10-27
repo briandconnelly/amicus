@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 import urllib.error
@@ -131,7 +132,7 @@ class FakeUvx:
         self.calls: list[dict] = []
 
     def __call__(self, cmd, *args, **kwargs):
-        assert cmd[0] == "uvx", f"unexpected command {cmd!r}"
+        assert Path(cmd[0]).name == "uvx", f"unexpected command {cmd!r}"
         assert cmd[1] == "--from" and cmd[3] == "amicus-mcp", cmd
         source = cmd[2]
         assert source.startswith("git+https://github.com/briandconnelly/amicus.git@"), source
@@ -143,6 +144,8 @@ class FakeUvx:
         self.calls.append(
             {
                 "ref": ref,
+                "program": cmd[0],
+                "path": env["PATH"],
                 "cache": env["UV_CACHE_DIR"],
                 "tools": env["UV_TOOL_DIR"],
                 "input": kwargs["input"],
@@ -316,9 +319,75 @@ def test_a_negative_control_failing_for_another_reason_fails(pub, capsys, stderr
     _post_publish_refused(pub, capsys, "not with uv's resolution error", uvx=uvx)
 
 
-def test_either_resolution_message_is_accepted(pub, capsys):
+def test_gits_missing_ref_diagnostic_alone_is_accepted(pub, capsys):
     only_git = f"fatal: couldn't find remote ref refs/tags/{NEGATIVE}\n"
     assert _run(pub, "post-publish", uvx=FakeUvx({NEGATIVE: (1, "", only_git)})) == 0
+
+
+_UV_WRAPPER = (
+    "error: Failed to resolve `--with` requirement\n"
+    "  cause: Git operation failed\n"
+    f"  cause: failed to fetch branch or tag `{NEGATIVE}`\n"
+    "  cause: process didn't exit successfully: `git fetch ...` (exit status: 128)\n"
+    "         --- stderr\n"
+)
+
+
+@pytest.mark.parametrize(
+    "cause",
+    [
+        # Observed on uv 0.13.6 with an unresolvable host: the same wrapper as a missing ref.
+        "fatal: unable to access 'https://github.com/briandconnelly/amicus.git/': "
+        "Could not resolve host: github.com",
+        "fatal: Authentication failed for 'https://github.com/briandconnelly/amicus.git/'",
+        "fatal: unable to access 'https://github.com/briandconnelly/amicus.git/': "
+        "SSL certificate problem: unable to get local issuer certificate",
+    ],
+    ids=["dns", "auth", "tls"],
+)
+def test_a_transport_failure_under_uvs_wrapper_is_no_control(pub, capsys, cause):
+    """uv's `failed to fetch branch or tag` wraps every fetch failure, so it alone says
+    nothing about whether the ref exists; only git's missing-ref diagnostic does."""
+    uvx = FakeUvx({NEGATIVE: (1, "", _UV_WRAPPER + f"         {cause}\n")})
+    _post_publish_refused(pub, capsys, "not with uv's resolution error", uvx=uvx)
+
+
+class FallbackUvx(FakeUvx):
+    """uv 0.13.6's behaviour when the package lacks the console script: it runs whatever
+    `amicus-mcp` the PATH it was given finds (probed with a script-less package and an
+    ambient `amicus-mcp` that answered instead)."""
+
+    def __call__(self, cmd, *args, **kwargs):
+        ref = cmd[2].rsplit("@", 1)[1]
+        if ref == NEGATIVE:
+            return super().__call__(cmd, *args, **kwargs)
+        for entry in kwargs["env"]["PATH"].split(os.pathsep):
+            if (Path(entry) / "amicus-mcp").exists():
+                return subprocess.CompletedProcess(cmd, 0, stdout=_reply(), stderr="")
+        return subprocess.CompletedProcess(
+            cmd, 1, stdout="", stderr="An executable named `amicus-mcp` is not provided\n"
+        )
+
+
+def test_an_ambient_amicus_mcp_cannot_answer_for_the_tag(pub, capsys, tmp_path, monkeypatch):
+    """A tag whose package lacks `amicus-mcp` must fail, even with an ambient one on PATH
+    that reports the right version (`uv run` puts the checkout's `.venv/bin` there)."""
+    ambient = tmp_path / "ambient-bin"
+    ambient.mkdir()
+    script = ambient / "amicus-mcp"
+    script.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    script.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{ambient}{os.pathsep}{os.environ['PATH']}")
+    _post_publish_refused(pub, capsys, "gave no `initialize` reply", uvx=FallbackUvx())
+
+
+def test_the_install_path_holds_uv_and_git_and_no_amicus_mcp(pub, capsys):
+    uvx = FakeUvx()
+    assert _run(pub, "post-publish", uvx=uvx) == 0
+    for call in uvx.calls:
+        entries = call["path"].split(os.pathsep)
+        assert all(not (Path(e) / "amicus-mcp").exists() for e in entries), entries
+        assert Path(call["program"]).name == "uvx"
 
 
 def test_a_malformed_version_is_refused_before_anything_runs(pub, capsys):
