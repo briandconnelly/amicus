@@ -103,7 +103,7 @@ Every run points codex at a fake Responses server on `127.0.0.1` through a `mode
 The fake answers the first request with a completed one-word turn, so codex exits promptly and no model turn leaves the machine.
 The same server is each run's HTTP(S) proxy, so whatever codex tries to reach beyond loopback is refused and its host listed under `OUTBOUND`; 0.163.0 and 0.164.0 try `chatgpt.com`, `ab.chatgpt.com`, `github.com` and `api.github.com`, and an attempt on `api.openai.com` is a `FAIL`.
 A client that ignored the proxy settings would not show up there, so `OUTBOUND` is what codex tried through the proxy, not proof that it tried nothing else.
-The only prompt is a literal of the script, over stdin, and it keeps only each tool's qualified name and a short hash of its definition, never a raw request, a header or instructions text.
+The only prompt is a literal of the script, over stdin, and it keeps only each tool's qualified name and a short hash of its definition (a namespace's own description gets an entry of its own), never a raw request, a header or instructions text.
 
 It captures each model in `KNOWN_MODEL_SLUGS` on both binaries through the argv amicus builds for a read-only run, once with amicus's `MODEL_RUN_DISABLED_FEATURES` disabled and once without, and diffs the two binaries.
 A disable that the binary's `features list` does not list is reported as unsupported on that binary and not sent, because codex rejects an unknown `--disable` at startup, and a run that fails at startup or sends no tools is a `FAIL`, never an empty catalog.
@@ -113,8 +113,9 @@ A scratch home has no login, so by default both binaries get the new binary's bu
 `--catalog own` lets each binary use its own bundled catalog, and `--catalog-bin PATH` takes the shared one from a third binary.
 A model missing from the catalog in use runs on codex's fallback metadata, and the report says which.
 
-The disables are the positive control: they must remove `clock.sleep` from every model whose baseline offers it, and the goal tools likewise, or the probe is blind and the diff proves nothing.
-A control with no baseline to apply it to is reported as unobserved, and then the script does not declare the probe validated.
+The disables are the positive control, checked tool by tool: `clock.sleep`, and each of `create_goal`, `get_goal` and `update_goal`, must appear in some model's baseline on an authoritative carrier (the top-level `tools` or an `additional_tools` item) and be gone from that model's disabled run, or the probe is blind and the diff proves nothing.
+A name read only from a code-mode `exec` description does not count as a baseline, because it may be missing merely because it was deferred, but one still declared after its disable fails the control.
+A control with any tool lacking an authoritative baseline is reported as unobserved, and then the script does not declare the probe validated.
 `--omit-disables` is the negative control for the control itself: the disabled runs then send no `--disable`, and every applicable control must fail.
 It exits 0 when validated, 1 on any `FAIL`, 2 when it stopped before capturing and 3 when nothing failed but a control was unobserved; the script's docstring defines each.
 

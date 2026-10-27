@@ -51,16 +51,27 @@ def _values(argv: list[str], flag: str) -> list[str]:
     return [argv[i + 1] for i, token in enumerate(argv[:-1]) if token == flag]
 
 
+def _undeclare(tool: dict, gone: set[str]) -> dict:
+    """A code-mode `exec` with the declaration lines of `gone` tools cut from its description."""
+    if tool.get("type") != "custom":
+        return tool
+    lines = str(tool.get("description", "")).splitlines()
+    kept = [line for line in lines if not any(f"{{ {n}(" in line for n in gone)]
+    return {**tool, "description": "\n".join(kept)}
+
+
 def _strip(tools: list[dict], gone: set[str]) -> list[dict]:
     kept = []
     for tool in tools:
         if tool.get("name") in gone:
             continue
         if tool.get("type") == "namespace":
-            members = [t for t in tool.get("tools", []) if t.get("name") not in gone]
+            members = [
+                _undeclare(t, gone) for t in tool.get("tools", []) if t.get("name") not in gone
+            ]
             kept.append({**tool, "tools": members})
             continue
-        kept.append(tool)
+        kept.append(_undeclare(tool, gone))
     return kept
 
 

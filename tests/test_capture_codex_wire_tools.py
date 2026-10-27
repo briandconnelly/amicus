@@ -323,7 +323,14 @@ def test_runs_are_isolated_and_keep_nothing_raw(tmp_path, capsys, monkeypatch):
         assert raw not in out
     data = json.loads(text)
     tools = data["sides"]["new"]["captures"][f"{CODE_MODE} baseline"]["tools"]
-    assert set(tools) == {"exec", "exec/exec_command", "wait", "clock.sleep"}
+    assert set(tools) == {
+        "namespace:functions",
+        "exec",
+        "exec/exec_command",
+        "wait",
+        "namespace:clock",
+        "clock.sleep",
+    }
     assert tools["exec/exec_command"] is None
     assert all(len(v) == wire.HASH_CHARS for k, v in tools.items() if v is not None)
     assert data["validated"] is True
@@ -416,6 +423,9 @@ def test_catalog_of_reads_both_carriers_and_code_mode_nesting():
     catalog = wire.catalog_of(body)
     assert catalog is not None
     assert set(catalog) == {
+        "namespace:multi_agent_v1",
+        "namespace:functions",
+        "namespace:clock",
         "exec_command",
         "multi_agent_v1.spawn_agent",
         "web_search",
@@ -438,3 +448,107 @@ def test_catalog_diff_marks_nested_removals_as_possibly_deferred():
         "- exec/x (nested; may only be deferred)",
         "~ b (definition hash 2 -> 3)",
     ]
+
+
+# --- regressions from the review of #388 ----------------------------------------------------
+
+
+def test_one_goal_tool_does_not_validate_the_goals_control(tmp_path, capsys):
+    """Every controlled tool needs its own observed baseline, not just one of them."""
+    log = tmp_path / "calls.jsonl"
+    partial = {CLASSIC: [_fn("exec_command"), _fn("create_goal")]}
+    old = _fake(tmp_path, "old", **_validated_spec("0.163.0", log) | {"tools": partial})
+    new = _fake(tmp_path, "new", **_validated_spec("0.164.0", log) | {"tools": partial})
+    code = wire.main(_run(old, new))
+    out = capsys.readouterr().out
+    assert "goals: unobserved: no authoritative baseline offers get_goal, update_goal" in out
+    assert "NOT VALIDATED" in out
+    assert code == 3
+
+
+def test_a_nested_disappearance_alone_does_not_pass_a_control(tmp_path, capsys):
+    """A tool seen only in exec's description may just be deferred, so its disappearance
+    there cannot pass the control."""
+    log = tmp_path / "calls.jsonl"
+    nested = _code_mode(
+        clock=True, nested=("exec_command", "create_goal", "get_goal", "update_goal")
+    )
+    spec = {
+        "features": ALL_FEATURES,
+        "tools": {CLASSIC: _classic(update_plan=False, goals=False)},
+        "additional": {CODE_MODE: nested},
+        "log": str(log),
+    }
+    old = _fake(tmp_path, "old", version="0.163.0", **spec)
+    new = _fake(tmp_path, "new", version="0.164.0", **spec)
+    code = wire.main(_run(old, new))
+    out = capsys.readouterr().out
+    assert "goals: passed" not in out
+    assert (
+        "goals: unobserved: no authoritative baseline offers create_goal, get_goal, update_goal"
+        in out
+    )
+    assert code == 3
+
+
+def test_a_nested_tool_still_declared_after_its_disable_fails(tmp_path, capsys):
+    log = tmp_path / "calls.jsonl"
+    nested = _code_mode(clock=True, nested=("exec_command", "create_goal"))
+    spec = _validated_spec("0.164.0", log) | {"additional": {CODE_MODE: nested}}
+    old = _fake(tmp_path, "old", **_validated_spec("0.163.0", log))
+    new = _fake(
+        tmp_path,
+        "new",
+        **spec | {"gated": {"sleep_tool": ["sleep"], "goals": ["get_goal", "update_goal"]}},
+    )
+    code = wire.main(_run(old, new))
+    out = capsys.readouterr().out
+    assert (
+        "new 0.164.0: goals: FAILED on gpt-code-mode: the disabled run still offers "
+        "exec/create_goal" in out
+    )
+    assert code == 1
+
+
+def test_a_namespace_change_of_its_own_moves_a_hash():
+    def ns(description: str) -> dict:
+        return {
+            "tools": [
+                {
+                    "type": "namespace",
+                    "name": "clock",
+                    "description": description,
+                    "tools": [_fn("sleep")],
+                }
+            ]
+        }
+
+    before, after = wire.catalog_of(ns("Sleep up to 12h.")), wire.catalog_of(ns("Sleep up to 24h."))
+    assert before is not None and after is not None
+    assert before != after
+    assert wire.catalog_diff(before, after) != []
+
+
+def test_catalog_own_keeps_each_binarys_facts(tmp_path, capsys):
+    log = tmp_path / "calls.jsonl"
+    old = _fake(tmp_path, "old", **_validated_spec("0.163.0", log) | {"bundled": [_bundled()[1]]})
+    new = _fake(tmp_path, "new", **_validated_spec("0.164.0", log))
+    record = tmp_path / "record.json"
+    wire.main(_run(old, new, "--catalog", "own", "--out", str(record)))
+    out = capsys.readouterr().out
+    assert (
+        "on the old binary (0.163.0), not in its own bundled catalog, so captured on codex's "
+        "fallback metadata, not the model's own: gpt-classic" in out
+    )
+    assert "on the new binary (0.164.0), not in its own bundled catalog" not in out
+    facts = json.loads(record.read_text())["sides"]
+    assert facts["old"]["catalog_facts"][CLASSIC] is None
+    assert facts["new"]["catalog_facts"][CLASSIC] is not None
+
+
+def test_the_run_summary_counts_failed_captures_as_failed(tmp_path, capsys):
+    log = tmp_path / "calls.jsonl"
+    old = _fake(tmp_path, "old", **_validated_spec("0.163.0", log))
+    new = _fake(tmp_path, "new", **_validated_spec("0.164.0", log), no_request=True)
+    wire.main(_run(old, new))
+    assert "4 of 8 runs: exactly one request" in capsys.readouterr().out

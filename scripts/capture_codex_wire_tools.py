@@ -21,8 +21,10 @@ every help surface stayed byte-identical (#380). This reads the catalog off the 
       prompt is a literal of this script, sent over stdin (AGENTS.md rule 18).
 
 The server keeps only normalized metadata from each request: every tool's qualified name and
-a short sha256 of its definition. It never stores or prints a raw request, a header or any
-instructions text, and `--out` writes that metadata and nothing else.
+a short sha256 of its definition (a namespace gets an entry of its own, `namespace:<name>`,
+hashing its description and metadata apart from its members). It never stores or prints a
+raw request, a header or any instructions text, and `--out` writes that metadata and nothing
+else.
 
 Each model in KNOWN_MODEL_SLUGS is captured on both binaries twice, with amicus's
 MODEL_RUN_DISABLED_FEATURES disabled and without, through the argv amicus itself builds for a
@@ -41,11 +43,15 @@ A model absent from the catalog in use runs on codex's fallback metadata, and th
 so.
 
 Positive control. A capture that cannot see a tool proves nothing by its absence, so the
-disables are checked against the baseline: for every model whose baseline offers `clock.sleep`
-(sleep_tool) or a goal tool (goals), the disabled run must not. A control with no model to
-apply it to is "unobserved", and then the probe is not declared validated. `--omit-disables` is
-the negative control for the control itself: the "disabled" runs then send no `--disable`, so
-every applicable control must FAIL.
+disables are checked against the baseline, tool by tool: `clock.sleep` (sleep_tool) and each
+of `create_goal`, `get_goal` and `update_goal` (goals) must be offered by some model's baseline
+on an authoritative carrier (the top-level `tools` or an `additional_tools` item) and be gone
+from that model's disabled run. A name read only from exec's description does not count as a
+baseline, because it may be missing merely because it was deferred; a tool still offered after
+its disable, on any carrier, fails the control. A control with any tool lacking an
+authoritative baseline is "unobserved", and then the probe is not declared validated.
+`--omit-disables` is the negative control for the control itself: the "disabled" runs then
+send no `--disable`, so every applicable control must FAIL.
 
 Blind spots, reported as unobserved: the plugin-tool family never appears in a scratch home,
 so the remote_plugin disable has no control; a `code_mode_only` model's nested tools are read
@@ -123,6 +129,8 @@ MODEL_HOST = "api.openai.com"
 # A code-mode `exec` tool declares each nested tool on a line of this form.
 _NESTED = re.compile(r"declare const tools: \{ (\w+)\(")
 NESTED_PREFIX = "exec/"
+# A namespace's own entry, beside its members': `namespace:clock`.
+NAMESPACE_PREFIX = "namespace:"
 HASH_CHARS = 16
 
 # The tools each controlled disable must remove, by leaf name (see `leaf`).
@@ -158,6 +166,9 @@ def _walk(tool: Any, prefix: str, out: dict[str, str | None]) -> None:
     if kind == "namespace" and isinstance(tool.get("tools"), list):
         # `functions` is the Responses API's default namespace; its members read bare.
         inner = "" if name == "functions" else f"{prefix}{name}."
+        # The namespace's own description and metadata, apart from its members.
+        own = {k: v for k, v in tool.items() if k != "tools"}
+        out[f"{NAMESPACE_PREFIX}{prefix}{name}"] = _digest(own)
         for child in tool["tools"]:
             _walk(child, inner, out)
         return
@@ -446,6 +457,8 @@ class Side:
     unsupported: tuple[str, ...] = ()
     captures: dict[tuple[str, str], Capture] = field(default_factory=dict)
     controls: dict[str, str] = field(default_factory=dict)  # feature -> verdict
+    # The model metadata this binary ran on; None when its bundled catalog was unreadable.
+    facts: dict[str, dict[str, Any]] | None = None
     control_lines: list[str] = field(default_factory=list)
 
 
@@ -484,42 +497,56 @@ def model_facts(models: Iterable[dict[str, Any]]) -> dict[str, dict[str, Any]]:
 
 
 def judge_controls(side: Side, models: tuple[str, ...], omitted: bool) -> None:
+    """Each controlled tool needs its own observed removal. A baseline counts only when an
+    authoritative carrier (top-level `tools` or an `additional_tools` item) offers the tool:
+    a name read from exec's description may be missing merely because it was deferred, so
+    its disappearance there proves nothing. A tool still offered after its disable, on any
+    carrier, fails the control."""
     for feature, tools in CONTROLLED.items():
         if feature in side.unsupported:
             side.controls[feature] = "unsupported"
             side.control_lines.append(f"{feature}: unsupported on this binary, no control")
             continue
-        applied, failed = [], []
+        removed: dict[str, list[str]] = {tool: [] for tool in tools}
+        failed: list[tuple[str, list[str]]] = []
         for model in models:
             base, off = side.captures[model, BASELINE], side.captures[model, DISABLED]
             if not base.ok or not off.ok:
                 continue
-            offered = sorted(n for n in base.tools if leaf(n) in tools)
+            offered = [n for n in base.tools if leaf(n) in tools]
             if not offered:
                 continue
             kept = sorted(n for n in off.tools if leaf(n) in tools)
-            (failed if kept else applied).append((model, offered, kept))
+            if kept:
+                failed.append((model, kept))
+                continue
+            for name in offered:
+                if not name.startswith(NESTED_PREFIX):
+                    removed[leaf(name)].append(model)
         if failed:
             side.controls[feature] = "failed"
-            for model, _offered, kept in failed:
-                why = " (--omit-disables: the disable was not sent)" if omitted else ""
-                side.control_lines.append(
-                    f"{feature}: FAILED on {model}: the disabled run still offers "
-                    f"{', '.join(kept)}{why}"
-                )
-        elif applied:
-            side.controls[feature] = "passed"
-            names = sorted({n for _m, offered, _k in applied for n in offered})
-            side.control_lines.append(
-                f"{feature}: passed: {', '.join(names)} offered by "
-                f"{', '.join(m for m, _o, _k in applied)} and removed by the disable"
-            )
-        else:
+            why = " (--omit-disables: the disable was not sent)" if omitted else ""
+            side.control_lines += [
+                f"{feature}: FAILED on {model}: the disabled run still offers "
+                f"{', '.join(kept)}{why}"
+                for model, kept in failed
+            ]
+            continue
+        missing = sorted(tool for tool, seen in removed.items() if not seen)
+        if missing:
             side.controls[feature] = "unobserved"
             side.control_lines.append(
-                f"{feature}: unobserved: no captured baseline offers "
-                f"{' or '.join(sorted(tools))}, so this control proves nothing here"
+                f"{feature}: unobserved: no authoritative baseline offers {', '.join(missing)} "
+                "(top-level tools or additional_tools; a name read from exec's description "
+                "does not count), so this control proves nothing here"
             )
+            continue
+        side.controls[feature] = "passed"
+        side.control_lines.append(
+            f"{feature}: passed: "
+            + "; ".join(f"{tool} offered by {', '.join(removed[tool])}" for tool in sorted(removed))
+            + ", each removed by the disable"
+        )
 
 
 # --- the comparison ----------------------------------------------------------------------------
@@ -587,8 +614,11 @@ def run_all(
             path.write_text(json.dumps({"models": bundled}), encoding="utf-8")
             catalog_path = str(path)
             report.catalog_facts = model_facts(bundled)
+            report.old.facts = report.new.facts = report.catalog_facts
         else:
-            report.catalog_facts = model_facts(read_bundled(new_bin) or [])
+            for side in (report.old, report.new):
+                own = read_bundled(side.binary)
+                side.facts = None if own is None else model_facts(own)
         jobs = [
             (side, model, variant)
             for side in (report.old, report.new)
@@ -631,23 +661,41 @@ def _collect_problems(report: Report) -> None:
             elif verdict == "unobserved":
                 report.unobserved.append(
                     f"positive control {feature} on the {side.label} binary ({side.version}): "
-                    "no baseline to apply it to, so the probe is not validated"
+                    "not every controlled tool had an authoritative baseline, so the probe is "
+                    "not validated"
                 )
     for feature, why in UNCONTROLLED.items():
         report.unobserved.append(f"{feature}: {why}")
     report.unobserved += list(BLIND_SPOTS)
-    facts = report.catalog_facts
+    if report.catalog == "new":
+        _annotate(report, report.catalog_facts, "in the catalog in use")
+    else:
+        for side in (report.old, report.new):
+            where = f"on the {side.label} binary ({side.version}), in its own bundled catalog"
+            if side.facts is None:
+                report.unobserved.append(
+                    f"on the {side.label} binary ({side.version}): `debug models --bundled` "
+                    "could not be read, so which models ran on fallback metadata is unknown"
+                )
+            else:
+                _annotate(report, side.facts, where)
+
+
+def _annotate(report: Report, facts: dict[str, dict[str, Any]], where: str) -> None:
     mode_only = [m for m in report.models if facts.get(m, {}).get("tool_mode") == "code_mode_only"]
     report.unobserved.append(
         "code_mode_only models' nested tools are read from exec's description, which may omit "
-        "deferred tools, so a nested absence is not evidence of removal; in the catalog in "
-        f"use: {', '.join(mode_only) or 'none'}"
+        f"deferred tools, so a nested absence is not evidence of removal; {where}: "
+        f"{', '.join(mode_only) or 'none'}"
     )
     absent = [m for m in report.models if m not in facts]
     if absent:
+        where = where.replace(", in its own", ", not in its own").replace(
+            "in the catalog in use", "not in the catalog in use"
+        )
         report.unobserved.append(
-            "not in the catalog in use, so captured on codex's fallback metadata, not the "
-            f"model's own: {', '.join(absent)}"
+            f"{where}, so captured on codex's fallback metadata, not the model's own: "
+            + ", ".join(absent)
         )
 
 
@@ -705,9 +753,9 @@ def describe(report: Report) -> list[str]:
                 f"  {model} {variant}: {counts}" + (f" ({'; '.join(notes)})" if notes else "")
             )
     caps = [c for side in (old, new) for c in side.captures.values()]
-    odd = [c for c in caps if c.ok and (c.exit_code != 0 or c.requests != 1)]
+    clean = [c for c in caps if c.ok and c.requests == 1 and c.exit_code == 0]
     lines.append(
-        f"  {len(caps) - len(odd)} of {len(caps)} runs: exactly one request, answered with a "
+        f"  {len(clean)} of {len(caps)} runs: exactly one request, answered with a "
         "completed turn by the fake, then exit 0"
     )
     lines.append("CONTROLS")
@@ -746,12 +794,14 @@ def to_json(report: Report) -> dict[str, Any]:
         "catalog_bin_version": compat.read_version(report.catalog_bin)
         if report.catalog_bin
         else None,
-        "catalog_facts": {m: report.catalog_facts.get(m) for m in report.models},
         "omit_disables": report.omitted,
         "validated": report.validated,
         "sides": {
             side.label: {
                 "version": side.version,
+                "catalog_facts": None
+                if side.facts is None
+                else {m: side.facts.get(m) for m in report.models},
                 "disables_sent": list(side.supported),
                 "unsupported": list(side.unsupported),
                 "controls": side.controls,
