@@ -83,6 +83,7 @@ import argparse
 import concurrent.futures
 import contextlib
 import difflib
+import http.client
 import json
 import os
 import re
@@ -216,7 +217,8 @@ def latest_upstream(backend: str) -> str | None:
             timeout=30,
             check=False,
         )
-    except (OSError, subprocess.TimeoutExpired):
+    except (OSError, subprocess.TimeoutExpired, ValueError):
+        # ValueError: npm wrote bytes the locale cannot decode (UnicodeDecodeError).
         return None
     found = release(done.stdout)
     return "".join(found) if done.returncode == 0 and found else None
@@ -1125,6 +1127,10 @@ WATCH_LABELS: dict[str, tuple[str, ...]] = {
 # lags issue creation, so an issue filed a moment ago can be missing from the search; the
 # plain listing reads the repository directly, newest first, and covers that window.
 RECENT_ISSUES = 100
+# The `--limit` on a title search. gh returns 30 rows without one, so an old exact match
+# behind newer near matches was missed (#387). A search that returns this many rows may have
+# been cut short, and is treated as a failed read rather than as a complete answer.
+SEARCH_LIMIT = 1000
 WATCH_STAYS_MANUAL = (
     "Installing and validating the new release, widening a cap and changing a supported set "
     "stay manual, in their own PRs."
@@ -1166,7 +1172,9 @@ def latest_pypi(package: str) -> str | None:
     try:
         with urllib.request.urlopen(PYPI_JSON_URL.format(package=package), timeout=30) as resp:
             data = json.loads(resp.read().decode("utf-8"))
-    except (OSError, ValueError):
+    except (OSError, ValueError, http.client.HTTPException):
+        # OSError covers URLError and a dropped connection, ValueError bad JSON or UTF-8,
+        # and HTTPException a body cut short (`IncompleteRead`) or a malformed response.
         return None
     version = data.get("info", {}).get("version") if isinstance(data, dict) else None
     if not isinstance(version, str) or not _PYPI_FINAL.fullmatch(version):
@@ -1285,7 +1293,7 @@ def run_gh(args: list[str]) -> tuple[int, str]:
         done = subprocess.run(
             ["gh", *args], capture_output=True, text=True, timeout=60, check=False
         )
-    except (OSError, subprocess.TimeoutExpired) as exc:
+    except (OSError, subprocess.TimeoutExpired, ValueError) as exc:
         return 127, str(exc)
     return done.returncode, done.stdout
 
@@ -1306,21 +1314,45 @@ def existing_issue(
 ) -> dict | bool | None:
     """The open or closed issue titled exactly `title`, None when there is none, or False
     when `gh` could not say (which must never be read as "none")."""
+    rows = _title_candidates(title, "all", gh, repo)
+    if rows is None:
+        return False
+    for row in rows:
+        if row.get("title") == title:
+            return row
+    return None
+
+
+def _title_candidates(
+    phrase: str, state: str, gh: Callable[[list[str]], tuple[int, str]], repo: str | None
+) -> list[dict] | None:
+    """Every issue in `state` whose title the search matches for `phrase`, plus the newest
+    RECENT_ISSUES of any state (the search index lags creation), or None when either read
+    failed or the search may have been truncated. The caller compares titles exactly."""
     where = ["--repo", repo] if repo else []
     fields = ["--json", "title,number,state"]
     searched = _gh_issues(
-        ["issue", "list", *where, "--state", "all", "--search", f'in:title "{title}"', *fields],
+        [
+            "issue",
+            "list",
+            *where,
+            "--state",
+            state,
+            "--search",
+            f'in:title "{phrase}"',
+            "--limit",
+            str(SEARCH_LIMIT),
+            *fields,
+        ],
         gh,
     )
     recent = _gh_issues(
         ["issue", "list", *where, "--state", "all", "--limit", str(RECENT_ISSUES), *fields], gh
     )
-    if searched is None or recent is None:
-        return False
-    for row in [*searched, *recent]:
-        if isinstance(row, dict) and row.get("title") == title:
-            return row
-    return None
+    if searched is None or recent is None or len(searched) >= SEARCH_LIMIT:
+        return None
+    rows = [r for r in [*searched, *recent] if isinstance(r, dict)]
+    return [r for r in rows if state == "all" or r.get("state") == state.upper()]
 
 
 @dataclass

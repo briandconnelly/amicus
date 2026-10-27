@@ -6,6 +6,7 @@ falling through to the real one."""
 
 from __future__ import annotations
 
+import http.client
 import importlib.util
 import io
 import json
@@ -51,37 +52,50 @@ _TITLES = [
 
 
 class FakeGh:
-    """A repository's issues, behind the subset of `gh issue` the watch uses. `indexed`
-    False models GitHub's search index lagging a just-created issue."""
+    """A repository's issues, newest first, behind the subset of `gh issue` the watch uses.
+    It honours `--state` and `--limit` (gh's default limit is 30). `indexed` False models
+    GitHub's search index lagging a just-created issue."""
 
     def __init__(self, issues: list[dict] | None = None, *, indexed: bool = True) -> None:
         self.issues = list(issues or [])
         self.indexed = indexed
         self.created: list[list[str]] = []
-        self.fail: str | None = None  # "list" or "create" makes that command exit 1
+        self.edited: list[list[str]] = []
+        self.comments: list[list[str]] = []
+        self.fail: str | None = None  # "list", "create", "edit" or "comment" exits 1
 
     def __call__(self, args: list[str]) -> tuple[int, str]:
         assert args[0] == "issue", args
+        if self.fail == args[1]:
+            return 1, ""
         if args[1] == "list":
-            if self.fail == "list":
-                return 1, ""
-            assert "--state" in args and args[args.index("--state") + 1] == "all", args
-            rows = [i for i in self.issues if self.indexed or "--search" not in args]
+            state = args[args.index("--state") + 1] if "--state" in args else "open"
+            limit = int(args[args.index("--limit") + 1]) if "--limit" in args else 30
+            rows = [i for i in self.issues if state == "all" or i["state"] == state.upper()]
             if "--search" in args:
+                rows = rows if self.indexed else []
                 phrase = args[args.index("--search") + 1]
                 assert phrase.startswith('in:title "') and phrase.endswith('"'), phrase
                 words = phrase[len('in:title "') : -1].lower().split()
                 # GitHub matches words, not the exact string: a near title comes back too.
                 rows = [i for i in rows if all(w in i["title"].lower() for w in words)]
-            return 0, json.dumps(rows)
+            return 0, json.dumps(rows[:limit])
         if args[1] == "create":
-            if self.fail == "create":
-                return 1, ""
             self.created.append(args)
             number = 1000 + len(self.issues)
             title = args[args.index("--title") + 1]
-            self.issues.insert(0, {"title": title, "number": number, "state": "OPEN"})
+            body = args[args.index("--body") + 1]
+            self.issues.insert(0, {"title": title, "number": number, "state": "OPEN", "body": body})
             return 0, f"https://github.com/o/r/issues/{number}\n"
+        if args[1] == "edit":
+            self.edited.append(args)
+            (issue,) = [i for i in self.issues if i["number"] == int(args[2])]
+            issue["title"] = args[args.index("--title") + 1]
+            issue["body"] = args[args.index("--body") + 1]
+            return 0, ""
+        if args[1] == "comment":
+            self.comments.append(args)
+            return 0, ""
         raise AssertionError(args)
 
 
@@ -265,3 +279,68 @@ def test_the_pypi_lookup_reads_the_final_release_or_says_unknown(monkeypatch):
     assert answer({"info": {}}) is None
     assert answer([]) is None
     assert answer(OSError("offline")) is None
+
+
+def test_an_exact_title_past_gh_default_page_is_still_found(monkeypatch, roots, capsys):
+    """Codex on #387: `--search` without `--limit` returns 30 rows, so an old exact-title
+    issue behind 30 newer near titles, and outside the newest 100, was missed."""
+    old = {"title": _TITLES[2], "number": 1, "state": "CLOSED"}
+    near = [
+        {"title": f"{_TITLES[2]} follow-up {n}", "number": 2 + n, "state": "CLOSED"}
+        for n in range(40)
+    ]
+    filler = [{"title": f"unrelated {n}", "number": 100 + n, "state": "OPEN"} for n in range(120)]
+    gh = FakeGh([*filler, *reversed(near), old])
+    _no_real_lookups(monkeypatch, _NPM_AHEAD, _PYPI_AHEAD, gh)
+    _code, out = _run([*roots, "--file-issues"], capsys)
+    actions = {f["stream"]: (f["action"], f["number"]) for f in out["filings"]}
+    assert actions["fastmcp"] == ("exists", 1), actions
+
+
+def test_a_search_that_may_be_truncated_fails_closed(monkeypatch, roots, capsys):
+    near = [
+        {"title": f"{_TITLES[2]} follow-up {n}", "number": 2 + n, "state": "CLOSED"}
+        for n in range(5)
+    ]
+    gh = FakeGh(near)
+    _no_real_lookups(monkeypatch, _NPM_AHEAD, _PYPI_AHEAD, gh)
+    monkeypatch.setattr(compat, "SEARCH_LIMIT", 5)
+    code, out = _run([*roots, "--file-issues"], capsys)
+    assert code == 1, out
+    actions = {f["stream"]: f["action"] for f in out["filings"]}
+    assert actions["fastmcp"] == "failed", actions
+    assert all(a[a.index("--title") + 1] != _TITLES[2] for a in gh.created)
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        http.client.IncompleteRead(b"{"),
+        http.client.RemoteDisconnected("gone"),
+        UnicodeDecodeError("utf-8", b"\xff", 0, 1, "bad"),
+    ],
+)
+def test_a_pypi_read_error_is_unknown_and_the_other_streams_still_run(
+    monkeypatch, roots, capsys, error
+):
+    """Codex on #387: `IncompleteRead` is an `HTTPException`, not an `OSError`, and escaped."""
+
+    class Response(io.BytesIO):
+        def read(self, *_a):
+            raise error
+
+    monkeypatch.setattr(compat.urllib.request, "urlopen", lambda url, timeout: Response())
+    monkeypatch.setattr(compat, "latest_upstream", _NPM_AHEAD.get)
+    monkeypatch.setattr(compat, "run_gh", FakeGh())
+    code, out = _run(roots, capsys)
+    assert code == 1, out
+    assert [f["status"] for f in out["findings"]] == ["update", "update", "unknown", "unknown"]
+
+
+def test_an_npm_output_that_cannot_be_decoded_is_unknown(monkeypatch):
+    def run(*_a, **_k):
+        raise UnicodeDecodeError("utf-8", b"\xff", 0, 1, "bad")
+
+    monkeypatch.setattr(compat.subprocess, "run", run)
+    assert compat.latest_upstream("kimi") is None
+    assert compat.run_gh(["issue", "list"])[0] != 0
