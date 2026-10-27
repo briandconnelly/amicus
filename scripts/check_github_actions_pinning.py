@@ -32,8 +32,11 @@ The trigger check reads only the event names at the first level of the root ``on
 (its scalar, its sequence items or its mapping keys), so an event's own
 configuration (``paths:``, an input's description) never matches. It fails closed
 the same way: a workflow with no root ``on:`` key, or an event name it cannot read
-(an alias, a complex key, a nested collection, an escape JSON does not share), is a
-violation rather than a pass.
+(a complex key, a nested collection, an escape JSON does not share), is a
+violation rather than a pass. So is any YAML node property — a tag (``!!str``), an
+anchor (``&a``) or an alias (``*a``) — at a token start anywhere in the ``on:`` value:
+a property can carry a comma, hide a quote or move the name to another line, so it is
+refused rather than read through.
 
 Usage:
     uv run python scripts/check_github_actions_pinning.py [ROOT]
@@ -79,8 +82,6 @@ _ON_KEY_RE = re.compile(r"""^(?:on|"on"|'on')\s*:(?:\s+(.*)|$)""")
 _KEY_RE = re.compile(
     r"""^("(?:[^"\\]|\\.)*"|'(?:[^']|'')*'|[^\s"'?\-\[\]{}#&*!|>][^:]*?)\s*:(?:\s|$)"""
 )
-# A leading YAML tag (``!!str``) or anchor (``&a``), which does not change the name.
-_DECORATION_RE = re.compile(r"^(?:[!&]\S*\s+)+")
 # Reasons ``trigger_problems`` reports; the tests compare against these.
 PRT_FORBIDDEN = "pull_request_target trigger is forbidden (AGENTS.md rule 15)"
 NO_ON = "no root `on:` key found; write the triggers as a block `on:` so they can be checked"
@@ -197,8 +198,8 @@ def version_comment_problem(value: str, comment: str | None) -> str | None:
 
 def _scalar(token: str) -> str | None:
     """The name a scalar token spells, or ``None`` if this check cannot read it."""
-    token = _DECORATION_RE.sub("", token.strip())
-    if not token or token[0] in "*?|>[{":
+    token = token.strip()
+    if not token or token[0] in "!&*?|>[{":
         return None
     if token[0] == '"':
         try:
@@ -211,6 +212,29 @@ def _scalar(token: str) -> str | None:
             return None
         return token[1:-1].replace("''", "'")
     return token
+
+
+def _has_node_property(value: str) -> bool:
+    """Whether ``value`` holds a tag, anchor or alias at a token start, outside quotes."""
+    quote: str | None = None
+    escaped = False
+    for i, char in enumerate(value):
+        if escaped:
+            escaped = False
+        elif quote:
+            # A backslash escape in double quotes, or a doubled apostrophe in single.
+            if (quote == '"' and char == "\\") or (
+                char == quote == "'" and value[i + 1 : i + 2] == "'"
+            ):
+                escaped = True
+            elif char == quote:
+                quote = None
+        elif i == 0 or value[i - 1] in " \t\n[{,:":
+            if char in "!&*":
+                return True
+            if char in "\"'":
+                quote = char
+    return False
 
 
 def _flow_items(flow: str) -> list[str] | None:
@@ -294,9 +318,11 @@ def trigger_problems(text: str) -> list[tuple[int, str]]:
             ):
                 break
             value_lines.append((n, nxt))
+        inline = (on_key.group(1) or "").strip()
+        if _has_node_property("\n".join([inline, *(v.strip() for _, v in value_lines)])):
+            problems.append((lineno, f"{UNREADABLE}: a YAML tag, anchor or alias"))
+            continue
         events: list[tuple[int, str | None]] = []
-        # A header of properties alone (``on: &events``) leaves the value on the lines below.
-        inline = _DECORATION_RE.sub("", (on_key.group(1) or "") + " ").strip()
         if inline.startswith(("[", "{")):
             flow = " ".join([inline, *(v.strip() for _, v in value_lines)])
             names = _flow_events(flow)

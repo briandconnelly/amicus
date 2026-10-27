@@ -237,7 +237,6 @@ _PRT_FORMS = {
     "scalar": "on: pull_request_target\n",
     "quoted scalar": "on: 'pull_request_target'\n",
     "double-quoted escape": 'on: "pull_request_\\u0074arget"\n',
-    "tagged scalar": "on: !!str pull_request_target\n",
     "flow sequence": "on: [push, pull_request_target]\n",
     "flow mapping": "on: { pull_request_target: { types: [opened] } }\n",
     "flow mapping after a quoted hash": (
@@ -303,13 +302,37 @@ def test_flow_quotes_close_after_an_escaped_backslash_and_open_only_at_a_token()
     assert check.trigger_problems(text) == [(1, check.PRT_FORBIDDEN)]
 
 
-def test_pull_request_target_is_found_under_an_anchored_or_tagged_on():
+def test_yaml_node_properties_in_on_fail_closed():
+    """Tags, anchors and aliases can hide a name or a quote from this parser, so any of
+    them at a token start in the ``on:`` value is unreadable, not read through."""
     for head in (
+        "on: !!str pull_request_target\n",
         "on: &events\n  pull_request_target:\n",
         "on: &events\n  - pull_request_target\n",
         "on: !!map\n  pull_request_target:\n",
+        "on:\n  - &event\n    pull_request_target\n",
+        "on:\n  - !!str\n    pull_request_target\n",
+        "on: [!<tag:yaml.org,2002:str> pull_request_target]\n",
+        'on: {workflow_dispatch: {inputs: {x: {description: !!str "{", type: string}}}, '
+        'pull_request_target: {}, workflow_call: {inputs: {x: {description: !!str "}", '
+        "type: string}}}}\n",
+        "on:\n  push: &p\n    branches: [main]\n  pull_request: *p\n",
+        "on:\n  &e pull_request_target:\n",
     ):
-        assert _forbidden(head + "jobs: {}\n") == [2], head
+        problems = check.trigger_problems(head + "jobs: {}\n")
+        assert problems and all(r.startswith(check.UNREADABLE) for _, r in problems), head
+
+
+def test_property_characters_inside_quotes_or_mid_token_are_not_properties():
+    text = (
+        "on:\n"
+        "  workflow_dispatch:\n"
+        "    inputs:\n"
+        '      x: { description: "a & b !c *d" }\n'
+        "      y: { description: Deploy now! R&D }\n"
+        "jobs: {}\n"
+    )
+    assert check.trigger_problems(text) == []
 
 
 def test_a_doubled_apostrophe_stays_inside_a_flow_quote():
