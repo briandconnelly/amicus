@@ -281,7 +281,24 @@ The tag therefore deliberately points at a commit that is in `main`'s history bu
    Nothing but step 5's checks happens between step 4 and step 6.
 7. Once the publish has completed and the post-tag checks below have passed, open a small `chore(release):` PR that advances `.claude-plugin/marketplace.json`'s pointer to the new tag.
    A release is not complete until this PR merges: tagging and publishing expose it to no plugin user, because hosts install the tag the pointer names.
-   Set `ref` to `vX.Y.Z` and `sha` to `git rev-parse vX.Y.Z^{commit}` — the peeled commit, not the tag object — then run `uv run python scripts/check_release_state.py --base origin/main` and confirm it prints `marketplace pointer check holds.`
+   On a fresh branch off `main`, with a clean tree, make the edit with:
+
+   ```sh
+   uv run python scripts/release.py pointer --version X.Y.Z
+   ```
+
+   It never commits, tags, pushes, merges or opens the PR; committing the edit as `chore(release): point the marketplace at vX.Y.Z` and opening the PR stay yours.
+   Each of its steps is there for a reason:
+   - It runs every post-tag check below first, in the same invocation, and refuses unless they all pass: rule 24 lets the pointer name only a published release, and this step points at a tag whose install has just been run, not one that passed at some earlier moment.
+   - It fetches exactly `refs/tags/vX.Y.Z` from `origin`, without `+`, so a local tag of that name that differs from `origin`'s makes it refuse rather than be overwritten; inspect such a tag before deleting it.
+     The fetched tag must be annotated, and both its tag object and the commit it peels to must be what `origin` reported.
+   - It sets `ref` to `vX.Y.Z` and `sha` to the peeled commit, `git rev-parse vX.Y.Z^{commit}`, not the tag object: a host serves `sha` over a disagreeing `ref` without complaint, so `sha` is what decides what users install.
+     Every other byte of the file is left as it was.
+   - It fetches `main` from `origin`, then runs the check CI runs on the PR, `scripts/check_release_state.py --base` against that fresh `origin/main`, and prints `marketplace pointer check holds against origin/main` when it passes.
+     That check requires the tag to exist, be annotated and peel to `sha`, requires the tag's own `plugin.json` files and `.mcp.json` pin to name its version, refuses a pointer newer than the version the tree declares, and refuses a pointer that moves backwards from `main`'s.
+     If it fails, the script puts `marketplace.json` back as it was and reports why.
+
+   Replayed on the base of the 0.11.1 pointer PR (#364), it produced that PR's diff byte for byte.
    It is not a release under rule 19 and needs no live-gate evidence: it moves a pointer to a tag that is already published.
    Unlike ADR 0015's pin-move it replaces, it reaches installed plugins, because the version at the new tag differs from the one they hold.
 
@@ -313,27 +330,28 @@ A previous success does not make this approval a formality, because the check th
 
 Run these once the tag is pushed and the publish workflow has completed.
 They confirm the release actually landed; they are not a pre-tag gate.
+One command runs all of them, reading PyPI and GitHub and installing into temporary directories; it spends nothing and changes nothing in the checkout:
 
-1. Confirm the release is live on PyPI:
+```sh
+uv run python scripts/release.py post-publish --version X.Y.Z
+```
 
-   ```sh
-   curl -s https://pypi.org/pypi/amicus/json | head -c 200
-   ```
+Step 7's `pointer` runs the same checks itself, so a maintainer moving the pointer straight away may skip this and run that.
+Each check is there for a reason:
 
-   This must return the release metadata, not a 404.
-2. Install from the public tag exactly as a user would, using the committed manifest's own source:
-
-   ```sh
-   printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"post-tag","version":"0"}}}' \
-     | UV_CACHE_DIR="$(mktemp -d)" uvx --from "git+https://github.com/briandconnelly/amicus.git@vX.Y.Z" amicus-mcp
-   ```
-
-   Assert `serverInfo.name == "amicus"` and the expected version in the reply.
-   The fresh `UV_CACHE_DIR` is part of the command, not a note beside it: a warm cache answers without resolving anything, so a copy-pasted command without it can pass while proving nothing.
+1. PyPI's `releases` table must list files for exactly `X.Y.Z`, read from `https://pypi.org/pypi/amicus/json`.
+   The project's metadata alone, which is what a 200 from that URL shows, says only that some version of amicus was ever published, not that this one was.
+2. `origin` must have the tag `vX.Y.Z` and its peeled `^{}` entry (`git ls-remote`): a missing tag, or a lightweight one with no peeled entry, fails, and so does a lookup that could not run.
+3. It installs the public tag exactly as a user would, `uvx --from "git+https://github.com/briandconnelly/amicus.git@vX.Y.Z" amicus-mcp`, sends one MCP `initialize` over stdin, and requires `serverInfo.name == "amicus"` and `serverInfo.version == "X.Y.Z"` in the reply.
+   Every install runs with its own fresh, empty `UV_CACHE_DIR` and `UV_TOOL_DIR`, in an empty directory: `uvx` reuses a cached tool environment without resolving anything, so a warm cache can pass while proving nothing.
    Step 3's rehearsal already proved transport, build and handshake against the release commit's SHA, so what this adds is narrow but real — that the tag *ref* resolves, which is all that separated the rehearsal from the thing itself.
    This is what step 7's pointer PR is waiting on: do not point the marketplace at a tag whose install you have not just run.
-3. Run a negative control: the same command against a version that does not exist must fail.
-   Without it, a warm cache or a silently-substituted binary would make check 2 pass no matter what.
+4. A negative control: the same install, with fresh caches of its own, against a tag that cannot exist (`v0.0.0-amicus-negative-control`, which no release carries and the `v*` ruleset stops anyone creating) must fail with uv's resolution error for that ref.
+   Without it, a warm cache or a silently-substituted binary would make check 3 pass no matter what.
+   A success, a timeout or a failure for any other reason is not a control and fails the check: each would look the same whether or not resolution works.
+
+`--timeout` sets the seconds each install-and-initialize may take (default 300).
+`uv run pytest -m network --no-cov tests/test_release_post_publish.py` runs the same checks for real, against the release the committed pointer names and against a version that was never published; the `network` marker keeps them out of the gate.
 
 ## Rollback
 

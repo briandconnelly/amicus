@@ -38,6 +38,16 @@ per-change, as its own lead says.
   the release commit, or a fast-forward to it, with an identical tree, and a local
   annotated tag that points at it and carries the evidence record byte for byte, before running
   `check_release_state.py`. Nothing about how amicus runs changes.
+- `scripts/release.py post-publish --version X.Y.Z` and `pointer --version X.Y.Z` replace
+  `docs/RELEASING.md`'s hand-run post-tag checks and step 7's hand edit of the marketplace
+  pointer (#375). `post-publish` is read-only and spends nothing: PyPI must list files for
+  exactly that version, `origin` must carry the annotated tag, a fresh-cache `uvx` install of
+  the tag must answer `initialize` as amicus at that version, and the same install of a tag
+  that cannot exist must fail with uv's resolution error. `pointer` runs those checks first,
+  fetches exactly the tag and requires it to match `origin`, writes `ref` and the peeled `sha`
+  without reformatting the file, and runs the pull-request pointer check against a freshly
+  fetched `origin/main`; it never commits or opens the PR. A `network` pytest marker, excluded
+  by default like `integration`, marks the tests that reach PyPI and GitHub.
 - `scripts/capture_codex_wire_tools.py --old-bin PATH --new-bin PATH` captures the tool catalog
   two `codex` binaries send the model, at zero spend: each run points codex at a loopback fake
   Responses server through a `model_providers` override, in a credential-free scratch home,
