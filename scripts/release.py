@@ -27,18 +27,19 @@ live-gate evidence (RELEASING step 3), and spends nothing. It checks that this c
 linked worktree rather than the main checkout, that `HEAD` is PR N's head commit on GitHub, that
 PR N is open against `main`, that the tree is clean (untracked files included, whatever
 `status.showUntrackedFiles` says), that `pyproject.toml` declares X.Y.Z, that no tag `vX.Y.Z`
-exists on `origin` or locally, and that `scripts/check_backend_compat.py` passes. On success it
-prints the evidence command, and never runs it: that spends live quota, which only the
-maintainer authorizes (AGENTS.md rules 5 and 20).
+exists on `origin` or locally, that `check_release_state.check_tree_pre_tag` holds, and that
+`scripts/check_backend_compat.py` passes. On success it prints the evidence command, and never
+runs it: that spends live quota, which only the maintainer authorizes (AGENTS.md rules 5
+and 20).
 
 `post-merge --release-sha SHA --version X.Y.Z` runs in the same worktree after the release PR
 merges (RELEASING step 5). It fetches `main` from `origin` first and fails if it cannot, then
-checks that `origin/main`'s tip is an ordinary merge commit whose second parent is SHA, that its
-tree is SHA's tree, that SHA is in `origin/main`'s history, that `HEAD` is SHA on a clean tree,
-and that the local tag `vX.Y.Z` is annotated, peels to SHA and carries
-`.release-evidence/live-gates.json` byte for byte; then it runs
-`check_release_state.py --tag vX.Y.Z --commit SHA`. It never tags, pushes or merges. A pass
-says the tag carries the record the maintainer wrote; it is not proof the live gates ran
+checks that `origin/main`'s tip is either an ordinary merge commit whose second parent is SHA
+or SHA itself (the fast-forward RELEASING allows), that its tree is SHA's tree, that SHA is in
+`origin/main`'s history, that `HEAD` is SHA on a clean tree, and that the local tag `vX.Y.Z` is
+annotated, peels to SHA and carries `.release-evidence/live-gates.json` byte for byte; then it
+runs `check_release_state.py --tag vX.Y.Z --commit SHA`. It never tags, pushes or merges. A
+pass says the tag carries the record the maintainer wrote; it is not proof the live gates ran
 (AGENTS.md rule 23).
 
 Usage:
@@ -568,6 +569,11 @@ def cmd_preflight(ctx: Context, args: argparse.Namespace) -> int:
     if not _version_problems(version):
         problems += _remote_tag_problems(ctx, tag)
         problems += _local_tag_problems(ctx, tag)
+        # The release-state checks `prepare` ran, re-run on what will be tagged: a problem
+        # found after the evidence would mean fixing it and spending the quota again.
+        problems += release_state.check_tree_pre_tag(
+            version, repo_root=ctx.repo_root, run=ctx.run, git=ctx.git
+        )
     print("running scripts/check_backend_compat.py (spends nothing):", flush=True)
     problems += _script_problems(ctx, "scripts/check_backend_compat.py")
 
@@ -596,19 +602,35 @@ def _is_ancestor(ctx: Context, ancestor: str, descendant: str) -> bool | None:
     return {0: True, 1: False}.get(proc.returncode)
 
 
-def _merge_shape_problems(ctx: Context, tip: str, release: str) -> list[str]:
-    """`origin/main`'s tip must be the ordinary merge commit of exactly the release commit."""
+FAST_FORWARD = "fast-forward: main's tip is the release commit"
+ORDINARY_MERGE = "ordinary merge: main's tip merges the release commit as its second parent"
+
+
+def _merge_shape(ctx: Context, tip: str, release: str) -> tuple[str | None, list[str]]:
+    """How `origin/main`'s tip holds the release commit, or the problems that say it does not.
+
+    Two shapes hold: the ordinary merge commit step 4 prescribes, whose second parent is
+    exactly the release commit, and the documented fast-forward alternative, where the tip IS
+    the release commit. Anything else means main does not hold what the evidence names.
+    """
+    if tip == release:
+        return FAST_FORWARD, []
     proc = ctx.git_out("rev-list", "--parents", "-n", "1", tip)
     if proc.returncode != 0:
-        return [f"could not read the parents of origin/main's tip {tip}: {_stderr_line(proc)}"]
+        problem = f"could not read the parents of origin/main's tip {tip}: {_stderr_line(proc)}"
+        return None, [problem]
     parents = proc.stdout.split()[1:]
     if len(parents) == 2 and parents[1] == release:
-        return []
-    if tip == release:
+        return ORDINARY_MERGE, []
+    return None, _merge_shape_problems(ctx, tip, release, parents)
+
+
+def _merge_shape_problems(ctx: Context, tip: str, release: str, parents: list[str]) -> list[str]:
+    if len(parents) < 2 and _is_ancestor(ctx, release, tip):
         return [
-            f"origin/main's tip is the release commit {release} itself: main was "
-            "fast-forwarded, not merged with the ordinary merge commit step 4 prescribes, and "
-            "this check covers only that path"
+            f"origin/main's tip {tip} is a later commit than the release commit {release}, "
+            "not a merge of it: main was fast-forwarded past it, or work landed on top. This is "
+            "not a squash or rebase. The evidence does not cover main's tip; stop the release"
         ]
     if len(parents) < 2:
         return [
@@ -708,7 +730,8 @@ def cmd_post_merge(ctx: Context, args: argparse.Namespace) -> int:
     if tip is None:
         return fail(["could not resolve origin/main after fetching it"])
 
-    problems += _merge_shape_problems(ctx, tip, release)
+    shape, shape_problems = _merge_shape(ctx, tip, release)
+    problems += shape_problems
     if _rev(ctx, f"{tip}^{{tree}}") != _rev(ctx, f"{release}^{{tree}}"):
         problems.append(
             f"origin/main's tree differs from the release commit's; something else is in main, "
@@ -734,8 +757,9 @@ def cmd_post_merge(ctx: Context, args: argparse.Namespace) -> int:
         )
     if problems:
         return fail(problems)
-    print(f"post-merge checks hold: origin/main ({tip}) is the ordinary merge of {release},")
-    print(f"with an identical tree, and {tag} is annotated, points at it and carries")
+    print(f"post-merge checks hold: origin/main is {tip}, a {shape}.")
+    print(f"Its tree is the release commit {release}'s, and {tag} is annotated, points at it")
+    print("and carries")
     print(f"{EVIDENCE_PATH} verbatim. That record is the maintainer's assertion that the")
     print("live gates passed, checked here for shape and commit; it is not proof they ran.")
     print(f"Pushing {tag} is yours (docs/RELEASING.md step 6): git push origin {tag}")

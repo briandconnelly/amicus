@@ -21,6 +21,8 @@ import sys
 from pathlib import Path
 
 import pytest
+from tests.support.releasefixture import NEXT, TODAY, build_released_repo
+from tests.support.releasefixture import git as _git
 
 _SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
 
@@ -36,34 +38,9 @@ def _load(name: str):
 
 release = _load("release")
 
-PREVIOUS = "1.2.2"
-NEXT = "1.3.0"
+BRANCH = f"chore/release-{NEXT}"
+
 PR = 42
-
-
-def _git(repo: Path, *args: str) -> str:
-    return subprocess.run(
-        [
-            "git",
-            "-c",
-            "user.name=t",
-            "-c",
-            "user.email=t@example.invalid",
-            "-c",
-            "commit.gpgsign=false",
-            "-c",
-            "tag.gpgsign=false",
-            *args,
-        ],
-        cwd=repo,
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout.strip()
-
-
-def _pyproject(version: str) -> str:
-    return f'[project]\nname = "amicus"\nversion = "{version}"\n'
 
 
 class Layout:
@@ -74,33 +51,41 @@ class Layout:
         self.head = ""
 
 
+def _uv_lock(cmd, *args, **kwargs):
+    """`prepare`'s `uv lock` and `uv lock --check`, which would otherwise resolve an index."""
+    assert list(cmd) in (["uv", "lock"], ["uv", "lock", "--check"]), cmd
+    return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+
 @pytest.fixture
 def layout(tmp_path) -> Layout:
+    """PR C as `prepare` leaves it, committed and pushed, checked out in a linked worktree."""
     lay = Layout(tmp_path)
     _git(tmp_path, "init", "-q", "--bare", "-b", "main", str(lay.origin))
-    lay.main.mkdir()
-    _git(lay.main, "init", "-q", "-b", "main")
-    (lay.main / "pyproject.toml").write_text(_pyproject(PREVIOUS), encoding="utf-8")
+    build_released_repo(lay.main, release)
     (lay.main / ".gitignore").write_text(".release-evidence/\n", encoding="utf-8")
-    _git(lay.main, "add", "-A")
-    _git(lay.main, "commit", "-q", "-m", "previous release")
+    _git(lay.main, "add", ".gitignore")
+    _git(lay.main, "commit", "-q", "-m", "ignore the evidence record")
     _git(lay.main, "remote", "add", "origin", str(lay.origin))
     _git(lay.main, "push", "-q", "origin", "main")
-    _git(lay.main, "switch", "-q", "-c", f"chore/release-{NEXT}")
-    (lay.main / "pyproject.toml").write_text(_pyproject(NEXT), encoding="utf-8")
+    _git(lay.main, "switch", "-q", "-c", BRANCH)
+    ctx = release.Context(repo_root=lay.main, run=_uv_lock, today=lambda: TODAY)
+    assert release.main(["prepare", NEXT], context=ctx) == 0
     _git(lay.main, "commit", "-q", "-am", f"chore(release): {NEXT}")
-    _git(lay.main, "push", "-q", "origin", f"chore/release-{NEXT}")
+    _git(lay.main, "push", "-q", "origin", BRANCH)
     lay.head = _git(lay.main, "rev-parse", "HEAD")
     # The main checkout sits at the same commit, so only "which checkout" tells them apart.
     _git(lay.main, "switch", "-q", "--detach", lay.head)
-    _git(lay.main, "worktree", "add", "-q", str(lay.worktree), f"chore/release-{NEXT}")
+    _git(lay.main, "worktree", "add", "-q", str(lay.worktree), BRANCH)
     return lay
 
 
 class FakeRun:
-    """`gh pr view` and `check_backend_compat.py`; anything else fails the test loudly."""
+    """`gh pr view`, `uv lock --check` and `check_backend_compat.py`; anything else fails loudly."""
 
-    def __init__(self, head: str, *, state="OPEN", base="main", gh_returncode=0, compat=0):
+    def __init__(
+        self, head: str, *, state="OPEN", base="main", gh_returncode=0, compat=0, lock_check=0
+    ):
         self.calls: list[list[str]] = []
         self.pr = {
             "headRefOid": head,
@@ -110,6 +95,7 @@ class FakeRun:
         }
         self.gh_returncode = gh_returncode
         self.compat = compat
+        self.lock_check = lock_check
 
     def __call__(self, cmd, *args, **kwargs):
         cmd = [str(part) for part in cmd]
@@ -121,6 +107,10 @@ class FakeRun:
             return subprocess.CompletedProcess(
                 cmd, self.gh_returncode, stdout=stdout, stderr="gh: not found\n"
             )
+        if cmd == ["uv", "lock", "--check"]:
+            return subprocess.CompletedProcess(
+                cmd, self.lock_check, stdout="", stderr="error: the lockfile needs updating\n"
+            )
         if cmd[1].endswith("scripts/check_backend_compat.py"):
             assert cmd[0] == sys.executable
             assert kwargs["cwd"] == Path(cmd[1]).parent.parent  # its --docs-root is relative
@@ -128,6 +118,9 @@ class FakeRun:
                 raise self.compat
             return subprocess.CompletedProcess(cmd, self.compat)
         raise AssertionError(f"unexpected command {cmd!r}")
+
+    def ran(self, *cmd: str) -> bool:
+        return list(cmd) in self.calls
 
     def ran_compat(self) -> bool:
         return any(c[1].endswith("scripts/check_backend_compat.py") for c in self.calls)
@@ -161,6 +154,7 @@ def test_preflight_holds_in_the_release_worktree_and_prints_the_command(layout, 
     assert command.startswith(f"cd {layout.worktree} && ")
     assert command.endswith(f"scripts/record_live_gate_evidence.py --version {NEXT}")
     assert run.ran_compat()
+    assert run.ran("uv", "lock", "--check")
     assert [c[:3] for c in run.calls if c[0] == "gh"] == [["gh", "pr", "view"]]
 
 
@@ -263,6 +257,22 @@ def test_an_unreachable_origin_is_a_failure_not_an_absent_tag(layout, capsys):
 def test_a_local_tag_is_refused(layout, capsys):
     _git(layout.worktree, "tag", "-a", f"v{NEXT}", "-m", "earlier attempt")
     _assert_refused(layout, capsys, FakeRun(layout.head), f"git tag -d v{NEXT}")
+
+
+# --- the release-state checks `prepare` ran ------------------------------------------------
+
+
+def test_a_pre_tag_release_state_problem_fails_preflight(layout, capsys):
+    init = layout.worktree / "src/amicus/__init__.py"
+    init.write_text(init.read_text().replace(NEXT, "9.9.9"), encoding="utf-8")
+    _git(layout.worktree, "commit", "-q", "-am", "a literal that disagrees")
+    head = _git(layout.worktree, "rev-parse", "HEAD")
+    _assert_refused(layout, capsys, FakeRun(head), "src/amicus/__init__.py")
+
+
+def test_a_stale_lock_fails_preflight(layout, capsys):
+    run = FakeRun(layout.head, lock_check=1)
+    _assert_refused(layout, capsys, run, "`uv lock --check` failed")
 
 
 # --- the backend-CLI check -----------------------------------------------------------------

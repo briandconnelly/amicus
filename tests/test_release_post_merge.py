@@ -157,6 +157,7 @@ def test_an_ordinary_merge_of_the_release_commit_holds(rel, capsys):
     out = capsys.readouterr()
     assert out.err == ""
     assert "post-merge checks hold" in out.out
+    assert release.ORDINARY_MERGE in out.out
     assert "not proof they ran" in out.out  # rule 23
     assert [c[1:] for c in run.calls] == [
         [str(rel.checkout / "scripts/check_release_state.py"), "--tag", TAG, "--commit", rel.sha]
@@ -206,12 +207,36 @@ def test_a_rebase_merge_is_refused(rel, capsys):
     _assert_refused(rel, capsys, "squashed or rebased", "is not in origin/main's history")
 
 
-def test_a_fast_forward_is_named_as_such(rel, capsys):
+def test_a_fast_forward_to_the_release_commit_holds(rel, capsys):
+    """RELEASING's permitted alternative: main's tip is the release commit itself."""
     rel.on_github("fetch", "-q", "origin")
     rel.on_github("merge", "-q", "--ff-only", f"origin/{BRANCH}")
     rel.push_main()
-    err = _assert_refused(rel, capsys, "was fast-forwarded")
+    assert rel.on_github("rev-parse", "HEAD") == rel.sha
+    run = FakeRun()
+    assert _post_merge(rel, run) == 0
+    out = capsys.readouterr()
+    assert out.err == ""
+    assert release.FAST_FORWARD in out.out
+    assert len(run.calls) == 1  # the release-state check still runs
+
+
+def test_a_fast_forward_to_a_later_commit_is_refused(rel, capsys):
+    rel.on_github("fetch", "-q", "origin")
+    rel.on_github("merge", "-q", "--ff-only", f"origin/{BRANCH}")
+    _commit_file(rel.github, "late.txt", "x\n", "pushed after the evidence")
+    rel.push_main()
+    err = _assert_refused(rel, capsys, "a later commit than the release commit", "tree differs")
     assert "squashed" not in err
+
+
+def test_a_fast_forward_still_checks_the_tag(rel, capsys):
+    rel.on_github("fetch", "-q", "origin")
+    rel.on_github("merge", "-q", "--ff-only", f"origin/{BRANCH}")
+    rel.push_main()
+    _git(rel.checkout, "tag", "-d", TAG)
+    _git(rel.checkout, "tag", TAG, rel.sha)
+    _assert_refused(rel, capsys, "is a lightweight tag")
 
 
 def test_a_changed_pr_tip_is_not_called_a_squash(rel, capsys):
