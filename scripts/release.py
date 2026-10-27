@@ -42,13 +42,34 @@ runs `check_release_state.py --tag vX.Y.Z --commit SHA`. It never tags, pushes o
 pass says the tag carries the record the maintainer wrote; it is not proof the live gates ran
 (AGENTS.md rule 23).
 
+`post-publish --version X.Y.Z` runs once the tag is pushed and the publish workflow has
+completed (RELEASING "Post-tag completion checks"). It reads PyPI and GitHub and installs into
+temporary directories; it spends nothing and changes nothing in the checkout. It checks that
+PyPI's `releases` lists files for exactly X.Y.Z (the project's metadata alone says nothing
+about this version), that `origin` has the annotated tag `vX.Y.Z` and its peeled commit, that
+installing the tag exactly as a user would, `uvx --from git+...@vX.Y.Z amicus-mcp` with a fresh
+`UV_CACHE_DIR` and `UV_TOOL_DIR`, answers an MCP `initialize` as `amicus` X.Y.Z, and that the
+same install of a tag that cannot exist fails with uv's resolution error: the negative control
+that proves the positive one was not answered by a cache or by some other binary.
+
+`pointer --version X.Y.Z` makes the edit of the marketplace pointer PR (RELEASING step 7,
+AGENTS.md rule 24). It runs `post-publish` first, in the same invocation, and refuses unless
+it passed; then it fetches `main` and exactly the tag `vX.Y.Z` from `origin`, requires the
+tag to be annotated and to be, object and peeled commit, what `origin` reported, writes `ref`
+and the peeled `sha` into `.claude-plugin/marketplace.json` without reformatting it, and runs
+`check_release_state.check_pull_request` against `origin/main`, the check CI runs on the PR.
+If that check fails it puts the file back. It refuses a dirty tree and the `main` branch. It
+never commits, tags, pushes, merges or opens the PR.
+
 Usage:
     uv run python scripts/release.py prepare X.Y.Z [--check]
     uv run python scripts/release.py preflight --pr N --version X.Y.Z
     uv run python scripts/release.py post-merge --release-sha SHA --version X.Y.Z
+    uv run python scripts/release.py post-publish --version X.Y.Z [--timeout SECONDS]
+    uv run python scripts/release.py pointer --version X.Y.Z [--timeout SECONDS]
 
 Exits 0 on success, 1 on a refusal or a failed check, printing each problem.
-Pure stdlib, like `check_release_state.py`; it runs `git`, `gh` and `uv`.
+Pure stdlib, like `check_release_state.py`; it runs `git`, `gh`, `uv` and `uvx`.
 """
 
 from __future__ import annotations
@@ -58,10 +79,13 @@ import datetime as dt
 import difflib
 import importlib.util
 import json
+import os
 import re
 import shlex
 import subprocess
 import sys
+import tempfile
+import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
@@ -117,6 +141,11 @@ def utc_date(moment: dt.datetime) -> dt.date:
     return moment.astimezone(dt.UTC).date()
 
 
+def _http_get(url: str) -> bytes:
+    with urllib.request.urlopen(url, timeout=30) as response:
+        return response.read()
+
+
 @dataclass
 class Context:
     """What every subcommand runs against. Tests replace the runners and the clock."""
@@ -125,6 +154,7 @@ class Context:
     git: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run
     run: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run
     today: Callable[[], dt.date] = field(default=lambda: utc_date(dt.datetime.now(dt.UTC)))
+    http_get: Callable[[str], bytes] = _http_get
 
     def git_out(self, *args: str) -> subprocess.CompletedProcess[str]:
         return self.git(
@@ -436,7 +466,7 @@ def _version_problems(version: str) -> list[str]:
 def _stderr_line(proc: subprocess.CompletedProcess) -> str:
     text = proc.stderr if isinstance(proc.stderr, str) else (proc.stderr or b"").decode()
     lines = text.strip().splitlines()
-    return lines[-1] if lines else f"exit status {proc.returncode}"
+    return lines[-1].strip() if lines else f"exit status {proc.returncode}"
 
 
 def _rev(ctx: Context, revision: str) -> str | None:
@@ -766,6 +796,341 @@ def cmd_post_merge(ctx: Context, args: argparse.Namespace) -> int:
     return 0
 
 
+# --- post-publish: after the publish workflow, before the pointer moves -----------------
+
+PYPI_JSON_URL = "https://pypi.org/pypi/amicus/json"
+SERVER_NAME = "amicus"
+CONSOLE_SCRIPT = "amicus-mcp"
+# A tag no release can carry: not X.Y.Z, so no release tooling makes it, and the `v*` ruleset
+# (AGENTS.md rule 21) stops anyone without bypass from creating it.
+NEGATIVE_CONTROL_REF = "v0.0.0-amicus-negative-control"
+DEFAULT_INSTALL_TIMEOUT = 300.0
+_INITIALIZE = json.dumps(
+    {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2025-06-18",
+            "capabilities": {},
+            "clientInfo": {"name": "amicus-post-publish", "version": "0"},
+        },
+    }
+)
+# What uv prints when the ref does not exist on the remote (uv 0.11 to 0.13, verified):
+#   cause: failed to fetch branch or tag `v0.0.0-amicus-negative-control`
+#   fatal: couldn't find remote ref refs/tags/v0.0.0-amicus-negative-control
+_RESOLUTION_ERROR_RES = (
+    re.compile(r"failed to fetch branch or tag `(?P<ref>[^`]+)`"),
+    re.compile(r"couldn't find remote ref (?:refs/(?:tags|heads)/)?(?P<ref>\S+)"),
+)
+
+
+@dataclass(frozen=True)
+class RemoteTag:
+    """What `origin` says `vX.Y.Z` is: the tag object and the commit it peels to."""
+
+    tag: str
+    obj: str
+    commit: str
+
+
+def _install_source(ref: str) -> str:
+    return f"git+https://github.com/briandconnelly/amicus.git@{ref}"
+
+
+def _pypi_problems(ctx: Context, version: str) -> list[str]:
+    """PyPI's `releases[version]` must exist and list files: the project page alone proves
+    only that some version of amicus was ever published, which is all the hand-run
+    `curl .../json | head` this replaces could show.
+    """
+    try:
+        data = json.loads(ctx.http_get(PYPI_JSON_URL))
+    except (OSError, ValueError) as exc:
+        return [f"could not read {PYPI_JSON_URL}: {exc}"]
+    releases = data.get("releases") if isinstance(data, dict) else None
+    if not isinstance(releases, dict):
+        return [f"{PYPI_JSON_URL} carries no `releases` table"]
+    if version not in releases:
+        return [f"PyPI has no release {version}; has the publish workflow's `pypi` job run?"]
+    files = releases[version]
+    if not isinstance(files, list) or not files:
+        return [f"PyPI lists {version} with no files; the upload did not land"]
+    return []
+
+
+def _remote_tag(ctx: Context, version: str) -> tuple[RemoteTag | None, list[str]]:
+    """`origin`'s `vX.Y.Z` and its peeled commit; a lightweight tag has no peeled line."""
+    tag = f"v{version}"
+    ref = f"refs/tags/{tag}"
+    proc = ctx.git_out("ls-remote", "--exit-code", "origin", ref, f"{ref}^{{}}")
+    if proc.returncode == 2:
+        return None, [f"origin has no tag {tag}; push it (RELEASING step 6) before this"]
+    if proc.returncode != 0:
+        return None, [f"could not ask origin for {tag}: {_stderr_line(proc)}"]
+    refs: dict[str, str] = {}
+    for line in proc.stdout.splitlines():
+        sha, _, name = line.partition("\t")
+        refs[name.strip()] = sha.strip()
+    obj, commit = refs.get(ref), refs.get(f"{ref}^{{}}")
+    if obj is None:
+        return None, [f"origin's answer for {tag} does not name {ref}: {proc.stdout.strip()!r}"]
+    if commit is None:
+        return None, [
+            f"origin's {tag} is a lightweight tag (no peeled `^{{}}` entry); a release tag is "
+            "annotated and carries the evidence record (AGENTS.md rule 20)"
+        ]
+    if not (_FULL_SHA_RE.fullmatch(obj) and _FULL_SHA_RE.fullmatch(commit)):
+        return None, [f"origin's answer for {tag} is not two SHAs: {proc.stdout.strip()!r}"]
+    return RemoteTag(tag, obj, commit), []
+
+
+def _uvx(ctx: Context, ref: str, timeout: float) -> subprocess.CompletedProcess[str]:
+    """Install `ref` as a user would and send it one `initialize`, with nothing cached.
+
+    A fresh `UV_CACHE_DIR` and `UV_TOOL_DIR` are the point: `uvx` reuses a cached tool
+    environment without resolving anything, so a warm cache can answer from a build already
+    on this machine. It runs in an empty directory so that no project file there steers uv.
+    Raises `subprocess.TimeoutExpired` and `OSError` for the caller to report.
+    """
+    with tempfile.TemporaryDirectory(prefix="amicus-post-publish-") as scratch:
+        root = Path(scratch)
+        for name in ("cache", "tools", "cwd"):
+            (root / name).mkdir()
+        env = {
+            **os.environ,
+            "UV_CACHE_DIR": str(root / "cache"),
+            "UV_TOOL_DIR": str(root / "tools"),
+        }
+        return ctx.run(
+            ["uvx", "--from", _install_source(ref), CONSOLE_SCRIPT],
+            cwd=root / "cwd",
+            env=env,
+            input=_INITIALIZE + "\n",
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+        )
+
+
+def _server_info(stdout: str) -> dict | None:
+    """The `serverInfo` of the reply to request 1, or None when there is no such reply."""
+    for line in stdout.splitlines():
+        try:
+            message = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(message, dict) and message.get("id") == 1:
+            result = message.get("result")
+            info = result.get("serverInfo") if isinstance(result, dict) else None
+            return info if isinstance(info, dict) else None
+    return None
+
+
+def _install_problems(ctx: Context, version: str, timeout: float) -> list[str]:
+    tag = f"v{version}"
+    try:
+        proc = _uvx(ctx, tag, timeout)
+    except subprocess.TimeoutExpired:
+        return [f"installing {tag} and initializing it did not finish within {timeout:g}s"]
+    except OSError as exc:
+        return [f"could not run `uvx`: {exc}"]
+    info = _server_info(proc.stdout or "")
+    if info is None:
+        return [
+            f"installing {tag} gave no `initialize` reply (exit status {proc.returncode}): "
+            f"{_stderr_line(proc)}"
+        ]
+    problems = []
+    if info.get("name") != SERVER_NAME:
+        problems.append(f"{tag}'s server calls itself {info.get('name')!r}, not {SERVER_NAME!r}")
+    if info.get("version") != version:
+        problems.append(f"{tag}'s server reports version {info.get('version')!r}, not {version!r}")
+    return problems
+
+
+def _negative_control_problems(ctx: Context, timeout: float) -> list[str]:
+    """The same install of a tag that cannot exist must fail, and fail to resolve.
+
+    A success means something other than the requested tag answered, so the positive check
+    proves nothing. A timeout or any other failure is no control either: it would fail the
+    same way whether or not resolution works.
+    """
+    ref = NEGATIVE_CONTROL_REF
+    try:
+        proc = _uvx(ctx, ref, timeout)
+    except subprocess.TimeoutExpired:
+        return [
+            f"negative control: installing {ref} timed out after {timeout:g}s instead of "
+            "failing to resolve, so it controls nothing"
+        ]
+    except OSError as exc:
+        return [f"negative control: could not run `uvx`: {exc}"]
+    if proc.returncode == 0:
+        return [
+            f"negative control: installing {ref}, which cannot exist, succeeded; something "
+            "other than the requested tag is answering, so the install check proves nothing"
+        ]
+    stderr = proc.stderr or ""
+    named = {m["ref"] for pattern in _RESOLUTION_ERROR_RES for m in pattern.finditer(stderr)}
+    if ref not in named:
+        return [
+            f"negative control: installing {ref} failed, but not with uv's resolution error "
+            f"for that ref, so it controls nothing: {_stderr_line(proc)}"
+        ]
+    return []
+
+
+def post_publish(ctx: Context, version: str, timeout: float) -> tuple[RemoteTag | None, list[str]]:
+    """Every post-publish check; the remote tag when it resolves, and every problem."""
+    problems = _version_problems(version)
+    if problems:
+        return None, problems
+    print(f"checking PyPI for amicus {version}", flush=True)
+    problems += _pypi_problems(ctx, version)
+    print(f"resolving v{version} on origin", flush=True)
+    remote, tag_problems = _remote_tag(ctx, version)
+    problems += tag_problems
+    print(f"installing v{version} with empty uv caches and initializing it", flush=True)
+    problems += _install_problems(ctx, version, timeout)
+    print(
+        f"negative control: installing {NEGATIVE_CONTROL_REF}, which must not resolve", flush=True
+    )
+    problems += _negative_control_problems(ctx, timeout)
+    return remote, problems
+
+
+def cmd_post_publish(ctx: Context, args: argparse.Namespace) -> int:
+    version: str = args.version
+    remote, problems = post_publish(ctx, version, args.timeout)
+    if problems:
+        print(f"post-publish checks for {version} do NOT hold:", file=sys.stderr)
+        for problem in problems:
+            print(f"  - {problem}", file=sys.stderr)
+        return 1
+    assert remote is not None
+    print(f"post-publish checks hold for {version}: PyPI lists its files, origin's {remote.tag}")
+    print(f"peels to {remote.commit}, a fresh install of it answers `initialize` as")
+    print(f"{SERVER_NAME} {version}, and a tag that cannot exist fails to resolve.")
+    print("Next (docs/RELEASING.md step 7), on a fresh branch off main:")
+    print(f"  uv run python scripts/release.py pointer --version {version}")
+    return 0
+
+
+# --- pointer: the marketplace pointer PR's edit ----------------------------------------------
+
+_POINTER_FIELD_RE = '("{key}"\\s*:\\s*")[^"]*(")'
+
+
+def _set_pointer_field(text: str, key: str, value: str) -> str:
+    pattern = re.compile(_POINTER_FIELD_RE.format(key=key))
+    matches = list(pattern.finditer(text))
+    if len(matches) != 1:
+        raise Refusal(f'{MARKETPLACE_PATH} has {len(matches)} "{key}" fields, expected 1')
+    match = matches[0]
+    return text[: match.start()] + match[1] + value + match[2] + text[match.end() :]
+
+
+def pointer_text(text: str, tag: str, sha: str) -> str:
+    """`text` with the pointer's `ref` and `sha` replaced and every other byte kept."""
+    edited = _set_pointer_field(_set_pointer_field(text, "ref", tag), "sha", sha)
+    source = json.loads(edited)["plugins"][0]["source"]
+    if not isinstance(source, dict) or (source.get("ref"), source.get("sha")) != (tag, sha):
+        raise Refusal(f"{MARKETPLACE_PATH}'s pointer did not take ref {tag} and sha {sha}")
+    return edited
+
+
+def _fetched_tag_problems(ctx: Context, remote: RemoteTag) -> list[str]:
+    """Fetch exactly `remote.tag`, then require the local tag to be what origin reported.
+
+    No `+` on the refspec: a local tag of that name that differs from origin's makes the
+    fetch fail rather than be overwritten, and that conflict is reported, not resolved.
+    """
+    tag, ref = remote.tag, f"refs/tags/{remote.tag}"
+    fetch = ctx.git_out("fetch", "--no-tags", "origin", f"{ref}:{ref}")
+    if fetch.returncode != 0:
+        return [
+            f"could not fetch {tag} from origin: {_stderr_line(fetch)}. A local {tag} that "
+            f"differs from origin's is not yours to keep; inspect it (`git show {tag}`) "
+            "before deleting it"
+        ]
+    kind = ctx.git_out("cat-file", "-t", ref)
+    if kind.stdout.strip() != "tag":
+        return [f"the local {tag} is not an annotated tag (git reports {kind.stdout.strip()!r})"]
+    problems = []
+    obj = _rev(ctx, ref)
+    if obj != remote.obj:
+        problems.append(f"the local {tag} is tag object {obj}, but origin's is {remote.obj}")
+    peeled = _rev(ctx, f"{ref}^{{commit}}")
+    if peeled != remote.commit:
+        problems.append(f"the local {tag} peels to {peeled}, but origin's peels to {remote.commit}")
+    return problems
+
+
+def cmd_pointer(ctx: Context, args: argparse.Namespace) -> int:
+    version: str = args.version
+    tag = f"v{version}"
+
+    def fail(problems: list[str], *, written: bool = False) -> int:
+        state = "put back as it was" if written else "not written"
+        print(f"pointer for {version} refused; {MARKETPLACE_PATH} is {state}:", file=sys.stderr)
+        for problem in problems:
+            print(f"  - {problem}", file=sys.stderr)
+        return 1
+
+    problems = _version_problems(version)
+    branch = ctx.git_out("symbolic-ref", "--quiet", "--short", "HEAD")
+    if branch.returncode == 0 and branch.stdout.strip() == "main":
+        problems.append("on branch main; make the pointer PR on its own branch (AGENTS.md rule 8)")
+    problems += _clean_tree_problems(ctx)
+    if problems:
+        return fail(problems)
+
+    # Rule 24 and RELEASING step 7: the pointer names only a release whose install was just
+    # checked, so the checks run here rather than being trusted from an earlier invocation.
+    remote, problems = post_publish(ctx, version, args.timeout)
+    if problems:
+        return fail(["post-publish checks failed, so the pointer stays:", *problems])
+    assert remote is not None
+
+    refresh = ctx.git_out(
+        "fetch", "--no-tags", "origin", "+refs/heads/main:refs/remotes/origin/main"
+    )
+    if refresh.returncode != 0:
+        stale = (
+            f"`git fetch origin main` failed, so origin/main may be stale: {_stderr_line(refresh)}"
+        )
+        return fail([stale])
+    problems = _fetched_tag_problems(ctx, remote)
+    if problems:
+        return fail(problems)
+
+    path = ctx.repo_root / MARKETPLACE_PATH
+    before = path.read_text(encoding="utf-8")
+    try:
+        after = pointer_text(before, tag, remote.commit)
+    except (Refusal, ValueError, KeyError, IndexError, TypeError) as exc:
+        return fail([f"could not edit {MARKETPLACE_PATH}: {exc}"])
+    path.write_text(after, encoding="utf-8")
+    problems = release_state.check_pull_request(
+        "refs/remotes/origin/main", repo_root=ctx.repo_root, git=ctx.git
+    )
+    if problems:
+        path.write_text(before, encoding="utf-8")
+        return fail(problems, written=True)
+
+    if after == before:
+        print(f"{MARKETPLACE_PATH} already points at {tag} ({remote.commit}); nothing changed.")
+    else:
+        print(f"{MARKETPLACE_PATH}: ref -> {tag}, sha -> {remote.commit} (the peeled commit)")
+    print("marketplace pointer check holds against origin/main, as CI will run it.")
+    print("Yours to do (docs/RELEASING.md step 7): commit it as")
+    print(f"  chore(release): point the marketplace at {tag}")
+    print("and open the PR. A release is not complete until that PR merges.")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     commands = parser.add_subparsers(dest="command", required=True, metavar="COMMAND")
@@ -800,6 +1165,29 @@ def build_parser() -> argparse.ArgumentParser:
     )
     post_merge.add_argument("--version", required=True, help="the version being released, X.Y.Z")
     post_merge.set_defaults(handler=cmd_post_merge)
+
+    timeout_help = "seconds to allow each install-and-initialize (default %(default)g)"
+    post_publish_parser = commands.add_parser(
+        "post-publish",
+        help="check PyPI, the remote tag and a fresh install after publishing (post-tag checks)",
+        description="Check the published release; read-only, spends nothing.",
+    )
+    post_publish_parser.add_argument("--version", required=True, help="the released version")
+    post_publish_parser.add_argument(
+        "--timeout", type=float, default=DEFAULT_INSTALL_TIMEOUT, help=timeout_help
+    )
+    post_publish_parser.set_defaults(handler=cmd_post_publish)
+
+    pointer = commands.add_parser(
+        "pointer",
+        help="advance the marketplace pointer to a published tag (RELEASING step 7)",
+        description="Run post-publish, then write the tag's ref and peeled sha into the pointer.",
+    )
+    pointer.add_argument("--version", required=True, help="the published version, X.Y.Z")
+    pointer.add_argument(
+        "--timeout", type=float, default=DEFAULT_INSTALL_TIMEOUT, help=timeout_help
+    )
+    pointer.set_defaults(handler=cmd_pointer)
     return parser
 
 

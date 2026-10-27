@@ -110,9 +110,10 @@ unresolved-import = "warn"
 asyncio_mode = "auto"
 testpaths = ["tests"]
 pythonpath = ["."]
-addopts = "--cov=amicus --cov-report=term-missing --strict-markers --strict-config -m 'not integration'"
+addopts = "--cov=amicus --cov-report=term-missing --strict-markers --strict-config -m 'not integration and not network'"
 markers = [
     "integration: live tests requiring a backend CLI; opt in with `pytest -m integration --no-cov`",
+    "network: reads PyPI and GitHub and installs from them; opt in with `pytest -m network --no-cov`",
     "slow: builds and installs a wheel into a throwaway venv; minutes, not seconds",
 ]
 
