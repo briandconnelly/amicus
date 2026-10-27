@@ -38,6 +38,14 @@ per-change, as its own lead says.
   the release commit, or a fast-forward to it, with an identical tree, and a local
   annotated tag that points at it and carries the evidence record byte for byte, before running
   `check_release_state.py`. Nothing about how amicus runs changes.
+- `scripts/check_backend_compat.py watch [--json] [--file-issues [--dry-run]]` reports, from
+  npm and PyPI metadata alone, a kimi minor outside the shipped set, a claude release newer
+  than the newest `docs/claude-help/` capture, and a `fastmcp` or `mcp` release past its
+  `pyproject.toml` cap. `--file-issues` files one issue per kimi, fastmcp or mcp minor, never
+  when an open or closed issue already has that exact title, and keeps one rolling claude issue
+  that it edits forward; a failed lookup is reported as unknown, files nothing and fails the
+  run. `docs/WATCHING.md` documents it and the routine that runs
+  it (#378).
 
 ### Changed
 
