@@ -29,7 +29,7 @@ check = _load_script()
 def test_iter_uses_extracts_value_and_strips_inline_comment():
     text = "    steps:\n      - uses: actions/checkout@" + "a" * 40 + " # v6.0.3\n"
     found = check.iter_uses(text)
-    assert found == [(2, "actions/checkout@" + "a" * 40)]
+    assert found == [(2, "actions/checkout@" + "a" * 40, "v6.0.3")]
 
 
 def test_iter_uses_skips_full_line_comments():
@@ -50,7 +50,7 @@ def test_iter_uses_ignores_uses_inside_multiline_literal_run_block():
         "          echo done\n"
         "      - uses: actions/checkout@" + "a" * 40 + "\n"
     )
-    assert check.iter_uses(text) == [(5, "actions/checkout@" + "a" * 40)]
+    assert check.iter_uses(text) == [(5, "actions/checkout@" + "a" * 40, None)]
 
 
 def test_iter_uses_ignores_uses_inside_folded_run_block_with_chomp():
@@ -66,19 +66,19 @@ def test_iter_uses_ignores_block_with_indent_then_chomp_indicator():
         "          uses: nope\n"
         "      - uses: actions/checkout@" + "a" * 40 + "\n"
     )
-    assert check.iter_uses(text) == [(4, "actions/checkout@" + "a" * 40)]
+    assert check.iter_uses(text) == [(4, "actions/checkout@" + "a" * 40, None)]
 
 
 def test_iter_uses_resumes_after_block_dedents():
     text = (
         "      - run: |\n          uses: ignored\n      - uses: actions/setup-uv@" + "b" * 40 + "\n"
     )
-    assert check.iter_uses(text) == [(3, "actions/setup-uv@" + "b" * 40)]
+    assert check.iter_uses(text) == [(3, "actions/setup-uv@" + "b" * 40, None)]
 
 
 def test_iter_uses_strips_surrounding_quotes():
     text = '      - uses: "actions/checkout@' + "a" * 40 + '"\n'
-    assert check.iter_uses(text) == [(1, "actions/checkout@" + "a" * 40)]
+    assert check.iter_uses(text) == [(1, "actions/checkout@" + "a" * 40, None)]
 
 
 # --- classify: None means OK, str means violation reason ---------------------
@@ -131,10 +131,12 @@ def test_classify_docker_no_tag_is_violation():
 # --- main: exit codes --------------------------------------------------------
 
 
-def _write_workflow(root: Path, body: str) -> None:
+def _write_workflow(root: Path, body: str, *, on: str | None = "on: push\n") -> None:
+    """Write ``ci.yml``, led by an ``on:`` line unless ``on`` is None: the check fails a
+    workflow with no top-level ``on:``, so a fixture about something else needs one."""
     wf = root / ".github" / "workflows"
     wf.mkdir(parents=True, exist_ok=True)
-    (wf / "ci.yml").write_text(body)
+    (wf / "ci.yml").write_text((on or "") + body)
 
 
 def test_main_returns_0_when_all_pinned(tmp_path, capsys):
@@ -162,10 +164,228 @@ def test_main_scans_yaml_extension_too(tmp_path):
     assert check.main([str(tmp_path)]) == 1
 
 
-# --- the real repository must stay fully pinned ------------------------------
+# --- rule 14's trailing version comment ----------------------------------------
 
 
-def test_this_repository_is_fully_pinned():
+_SHA = "a" * 40
+
+
+def test_iter_uses_returns_the_flow_mapping_lines_trailing_comment():
+    text = "      - { uses: actions/checkout@" + _SHA + " } # v6.0.3\n"
+    assert check.iter_uses(text) == [(1, "actions/checkout@" + _SHA, "v6.0.3")]
+
+
+def test_iter_uses_does_not_read_a_hash_inside_quotes_as_a_comment():
+    text = "      - { uses: actions/checkout@" + _SHA + ', name: "x # v6" }\n'
+    assert check.iter_uses(text) == [(1, "actions/checkout@" + _SHA, None)]
+
+
+def test_iter_uses_reads_the_real_comment_after_a_quoted_hash():
+    text = "      - { uses: actions/checkout@" + _SHA + ", name: 'a # b' } # v6.0.3\n"
+    assert check.iter_uses(text) == [(1, "actions/checkout@" + _SHA, "v6.0.3")]
+
+
+def test_iter_uses_does_not_read_a_hash_without_leading_space_as_a_comment():
+    text = "      - uses: actions/checkout@" + _SHA + "#v6\n"
+    assert check.iter_uses(text) == [(1, "actions/checkout@" + _SHA + "#v6", None)]
+
+
+def test_version_comment_accepts_the_forms_this_repository_uses():
+    for comment in ("v7.0.1", "v4", "1.14.3", "codeql-bundle-v2.25.6", "v4 (latest)"):
+        assert check.version_comment_problem("actions/checkout@" + _SHA, comment) is None, comment
+
+
+def test_version_comment_is_required_on_an_external_sha_pin():
+    assert check.version_comment_problem("actions/checkout@" + _SHA, None) is not None
+
+
+def test_version_comment_must_name_a_version():
+    for comment in ("", "pinned", "TODO bump", "see #12"):
+        assert check.version_comment_problem("actions/checkout@" + _SHA, comment) is not None, (
+            comment
+        )
+
+
+def test_version_comment_is_required_on_a_reusable_workflow_pin():
+    ref = "owner/repo/.github/workflows/ci.yml@" + _SHA
+    assert check.version_comment_problem(ref, None) is not None
+
+
+def test_version_comment_is_not_required_on_a_local_action_or_docker_digest():
+    assert check.version_comment_problem("./.github/workflows/test.yml", None) is None
+    assert check.version_comment_problem("docker://alpine@sha256:" + "c" * 64, None) is None
+
+
+def test_main_returns_1_on_a_sha_pin_without_a_version_comment(tmp_path, capsys):
+    _write_workflow(
+        tmp_path, "jobs:\n  a:\n    steps:\n      - uses: actions/checkout@" + _SHA + "\n"
+    )
+    assert check.main([str(tmp_path)]) == 1
+    assert "ci.yml:5" in capsys.readouterr().out
+
+
+def test_main_reports_a_mutable_ref_once_not_also_as_a_missing_comment(tmp_path, capsys):
+    _write_workflow(tmp_path, "jobs:\n  a:\n    steps:\n      - uses: actions/checkout@v4\n")
+    assert check.main([str(tmp_path)]) == 1
+    assert capsys.readouterr().out.count("FAIL") == 1
+
+
+# --- rule 15: no pull_request_target trigger ------------------------------------
+
+
+_PRT_FORMS = {
+    "scalar": "on: pull_request_target\n",
+    "quoted scalar": "on: 'pull_request_target'\n",
+    "double-quoted escape": 'on: "pull_request_\\u0074arget"\n',
+    "flow sequence": "on: [push, pull_request_target]\n",
+    "flow mapping": "on: { pull_request_target: { types: [opened] } }\n",
+    "flow mapping after a quoted hash": (
+        'on: { workflow_dispatch: { inputs: { x: { description: "x # x" } } }, '
+        "pull_request_target: {} }\n"
+    ),
+    "block sequence": "on:\n  - push\n  - pull_request_target\n",
+    "block sequence at the key's indent": "on:\n- push\n- pull_request_target\n",
+    "block mapping": "on:\n  push:\n  pull_request_target:\n    types: [opened]\n",
+    "quoted key": '"on":\n  "pull_request_target":\n',
+    "multi-line flow": "on: [\n  push,\n  pull_request_target,\n]\n",
+}
+
+
+def _forbidden(text: str) -> list[int]:
+    return [n for n, reason in check.trigger_problems(text) if reason == check.PRT_FORBIDDEN]
+
+
+def test_pull_request_target_is_found_in_every_form_of_on():
+    for form, head in _PRT_FORMS.items():
+        text = "name: x\n" + head + "jobs:\n  a:\n    runs-on: ubuntu-latest\n"
+        assert _forbidden(text), form
+
+
+def test_pull_request_target_is_found_under_an_indented_root():
+    text = "  name: x\n  on: pull_request_target\n  jobs: {}\n"
+    assert _forbidden(text) == [2]
+
+
+def test_pull_request_target_reports_the_line_it_is_on():
+    text = "name: x\non:\n  push:\n  pull_request_target:\njobs: {}\n"
+    assert check.trigger_problems(text) == [(4, check.PRT_FORBIDDEN)]
+
+
+def test_pull_request_target_outside_on_is_not_a_trigger():
+    text = (
+        "on: [push]\n"
+        "# pull_request_target is forbidden here\n"
+        "jobs:\n"
+        "  a:\n"
+        "    if: github.event_name != 'pull_request_target'\n"
+        "    runs-on: ubuntu-latest\n"
+    )
+    assert check.trigger_problems(text) == []
+
+
+def test_pull_request_target_inside_an_events_configuration_is_not_a_trigger():
+    text = (
+        "on:\n"
+        "  push:\n"
+        '    paths: ["docs/pull_request_target.md"]\n'
+        "  workflow_dispatch:\n"
+        "    inputs:\n"
+        "      x: { description: pull_request_target }\n"
+        "  pull_request: { branches: [pull_request_target] }\n"
+        "jobs: {}\n"
+    )
+    assert check.trigger_problems(text) == []
+
+
+def test_flow_quotes_close_after_an_escaped_backslash_and_open_only_at_a_token():
+    text = 'on: { "a\\\\": {}, pull_request_target: {}, x: { d: don\'t } }\njobs: {}\n'
+    assert check.trigger_problems(text) == [(1, check.PRT_FORBIDDEN)]
+
+
+def test_yaml_node_properties_in_on_fail_closed():
+    """Tags, anchors and aliases can hide a name or a quote from this parser, so any of
+    them at a token start in the ``on:`` value is unreadable, not read through."""
+    for head in (
+        "on: !!str pull_request_target\n",
+        "on: &events\n  pull_request_target:\n",
+        "on: &events\n  - pull_request_target\n",
+        "on: !!map\n  pull_request_target:\n",
+        "on:\n  - &event\n    pull_request_target\n",
+        "on:\n  - !!str\n    pull_request_target\n",
+        "on: [!<tag:yaml.org,2002:str> pull_request_target]\n",
+        'on: {workflow_dispatch: {inputs: {x: {description: !!str "{", type: string}}}, '
+        'pull_request_target: {}, workflow_call: {inputs: {x: {description: !!str "}", '
+        "type: string}}}}\n",
+        "on:\n  push: &p\n    branches: [main]\n  pull_request: *p\n",
+        "on:\n  &e pull_request_target:\n",
+    ):
+        problems = check.trigger_problems(head + "jobs: {}\n")
+        assert problems and all(r.startswith(check.UNREADABLE) for _, r in problems), head
+
+
+def test_property_characters_inside_quotes_or_mid_token_are_not_properties():
+    text = (
+        "on:\n"
+        "  workflow_dispatch:\n"
+        "    inputs:\n"
+        '      x: { description: "a & b !c *d" }\n'
+        "      y: { description: Deploy now! R&D }\n"
+        "jobs: {}\n"
+    )
+    assert check.trigger_problems(text) == []
+
+
+def test_a_doubled_apostrophe_stays_inside_a_flow_quote():
+    text = (
+        "on: { workflow_dispatch: { inputs: { x: { description: 'It''s a brace: }' } } } }\n"
+        "jobs: {}\n"
+    )
+    assert check.trigger_problems(text) == []
+
+
+def test_a_comment_inside_on_is_not_a_trigger():
+    text = "on:\n  # never add pull_request_target\n  push: # not pull_request_target\njobs: {}\n"
+    assert check.trigger_problems(text) == []
+
+
+def test_a_longer_event_name_is_not_pull_request_target():
+    text = "on:\n  pull_request_target_x:\n  my_pull_request_target:\njobs: {}\n"
+    assert check.trigger_problems(text) == []
+
+
+def test_a_workflow_with_no_top_level_on_fails_closed():
+    for text in ("jobs: {}\n", "{on: pull_request_target, jobs: {}}\n", "x:\n  on: push\n"):
+        problems = check.trigger_problems(text)
+        assert [reason for _, reason in problems] == [check.NO_ON], text
+
+
+def test_an_event_name_the_check_cannot_read_fails_closed():
+    for head in (
+        'on: "pull_request_\\x74arget"\n',  # a YAML escape that JSON does not have
+        "on: *events\n",
+        "on:\n  ? pull_request_target\n",
+        "on: [push, [pull_request_target]]\n",
+    ):
+        problems = check.trigger_problems(head + "jobs: {}\n")
+        assert problems and all(r.startswith(check.UNREADABLE) for _, r in problems), head
+
+
+def test_main_returns_1_on_a_pull_request_target_workflow(tmp_path, capsys):
+    _write_workflow(
+        tmp_path,
+        "on:\n  pull_request_target:\njobs:\n  a:\n    steps:\n"
+        "      - uses: actions/checkout@" + _SHA + " # v6\n",
+        on=None,
+    )
+    assert check.main([str(tmp_path)]) == 1
+    out = capsys.readouterr().out
+    assert "ci.yml:2" in out and "pull_request_target" in out
+
+
+# --- the real repository must pass the whole check ------------------------------
+
+
+def test_this_repository_passes_the_check():
     """Enforcement that rides the already-required pytest gate, not just a CI step."""
     assert check.main([str(_REPO_ROOT)]) == 0
 
@@ -175,17 +395,17 @@ def test_this_repository_is_fully_pinned():
 
 def test_iter_uses_extracts_flow_mapping_entry():
     text = "    steps:\n      - { uses: actions/checkout@v4, with: { fetch-depth: 1 } }\n"
-    assert check.iter_uses(text) == [(2, "actions/checkout@v4")]
+    assert check.iter_uses(text) == [(2, "actions/checkout@v4", None)]
 
 
 def test_iter_uses_extracts_flow_mapping_inside_flow_sequence():
     text = "    steps: [{ uses: actions/checkout@" + "b" * 40 + " }]\n"
-    assert check.iter_uses(text) == [(1, "actions/checkout@" + "b" * 40)]
+    assert check.iter_uses(text) == [(1, "actions/checkout@" + "b" * 40, None)]
 
 
 def test_iter_uses_reports_block_scalar_uses_with_sentinel():
     text = "    steps:\n      - uses: >-\n          actions/checkout@v4\n      - run: echo hi\n"
-    assert check.iter_uses(text) == [(2, check.BLOCK_SCALAR)]
+    assert check.iter_uses(text) == [(2, check.BLOCK_SCALAR, None)]
 
 
 def test_classify_block_scalar_sentinel_is_violation():
