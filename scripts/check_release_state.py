@@ -29,6 +29,10 @@ question, and the difference matters more than the code:
    which names an EARLIER, internally consistent release: that pointer, not `.mcp.json`, is
    what decides which snapshot a host installs, and it advances only after publishing.
 
+   `check_tree_pre_tag` runs every one of these checks except the pinned tag's existence,
+   for `scripts/release.py prepare` to report on the release PR before step 3 may create
+   the tag. It is not part of the predicate: nothing in this script's CLI calls it.
+
 2. **The live-gate assertion** (`check_tag`). AGENTS.md rule 20's evidence record, carried in
    the annotated tag's own message. A green result here proves only that a well-formed record
    naming *this* commit exists and asserts three passing suites. It does NOT prove the runs
@@ -758,11 +762,44 @@ def check_tree(
     `run` drives `uv lock --check` and `git` drives the tag lookup; they are separate
     parameters so a test can stub one without silently satisfying the other.
     """
-    return [
+    return _tree_problems(version, repo_root=repo_root, run=run, git=git, pin_tag_exists=True)
+
+
+def check_tree_pre_tag(
+    version: str,
+    *,
+    repo_root: Path = REPO_ROOT,
+    run: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+    git: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+) -> list[str]:
+    """`check_tree` without one check: that the tag `.mcp.json` pins exists in this checkout.
+
+    For preparing the release PR (`scripts/release.py prepare`), before any evidence is
+    recorded and so before `docs/RELEASING.md` step 3 may create the tag. Every other check
+    runs exactly as `check_tree` runs it, the pin's shape and version included. This is not
+    the release predicate: `main()` and the `verify` job never call it, and a pass here says
+    nothing about the tag, which `check_tree` still requires with no pre-tag exception.
+    """
+    return _tree_problems(version, repo_root=repo_root, run=run, git=git, pin_tag_exists=False)
+
+
+def _tree_problems(
+    version: str,
+    *,
+    repo_root: Path,
+    run: Callable[..., subprocess.CompletedProcess[str]],
+    git: Callable[..., subprocess.CompletedProcess[str]],
+    pin_tag_exists: bool,
+) -> list[str]:
+    problems = [
         *check_version_literals(version, repo_root=repo_root),
         *check_changelog(version, repo_root=repo_root),
         *check_lock(repo_root=repo_root, run=run),
-        *check_mcp_pin_tag_exists(repo_root=repo_root, git=git),
+    ]
+    if pin_tag_exists:
+        problems += check_mcp_pin_tag_exists(repo_root=repo_root, git=git)
+    return [
+        *problems,
         *check_marketplace(version, repo_root=repo_root, git=git),
         *check_deprecations(version, repo_root=repo_root),
         *check_legacy_env(version, repo_root=repo_root),

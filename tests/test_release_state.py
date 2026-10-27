@@ -400,6 +400,73 @@ def test_a_later_release_pinned_to_its_own_unpushed_tag_is_rejected(repo):
     assert any(f"v{VERSION}" in problem for problem in problems), problems
 
 
+# --- the pre-tag tree check `scripts/release.py prepare` reports (#374) --------------------
+
+
+def _consistent_git_without_the_release_tag(cmd, *args, **kwargs):
+    """`_consistent_git`, except that the release's own tag is not there yet."""
+    if cmd[1:4] == ["rev-parse", "--verify", "--quiet"]:
+        return _tag_missing(cmd, *args, **kwargs)
+    return _consistent_git(cmd, *args, **kwargs)
+
+
+def test_the_pre_tag_check_skips_only_the_pinned_tag_lookup(repo):
+    """Before the tag exists the full predicate fails on exactly one problem, the tag, and
+    the pre-tag check reports nothing; when the tag exists, the two agree."""
+    git = _consistent_git_without_the_release_tag
+    full = release_state.check_tree(VERSION, repo_root=repo, run=_lock_ok, git=git)
+    assert full == release_state.check_mcp_pin_tag_exists(repo_root=repo, git=git) != []
+    assert release_state.check_tree_pre_tag(VERSION, repo_root=repo, run=_lock_ok, git=git) == []
+    assert release_state.check_tree_pre_tag(
+        VERSION, repo_root=repo, run=_lock_ok, git=_consistent_git
+    ) == release_state.check_tree(VERSION, repo_root=repo, run=_lock_ok, git=_consistent_git)
+
+
+def test_the_pre_tag_check_issues_no_tag_lookup(repo):
+    def git(cmd, *args, **kwargs):
+        assert cmd[1:4] != ["rev-parse", "--verify", "--quiet"], "looked the tag up"
+        return _consistent_git(cmd, *args, **kwargs)
+
+    assert release_state.check_tree_pre_tag(VERSION, repo_root=repo, run=_lock_ok, git=git) == []
+
+
+@pytest.mark.parametrize(
+    ("relative", "old", "new", "expected"),
+    [
+        (".mcp.json", f"@v{VERSION}", f"@v{PREVIOUS}", f"expected v{VERSION}"),
+        ("pyproject.toml", VERSION, "9.9.9", "pyproject.toml declares"),
+        ("CHANGELOG.md", f"## [{VERSION}] - ", "## [9.9.9] - ", "no dated"),
+    ],
+)
+def test_the_pre_tag_check_still_runs_every_other_check(repo, relative, old, new, expected):
+    """Skipping the lookup is not skipping the pin: its version is still checked, as is
+    everything else `check_tree` reads."""
+    path = repo / relative
+    path.write_text(path.read_text(encoding="utf-8").replace(old, new), encoding="utf-8")
+    problems = release_state.check_tree_pre_tag(
+        VERSION, repo_root=repo, run=_lock_ok, git=_consistent_git_without_the_release_tag
+    )
+    assert any(expected in problem for problem in problems), problems
+
+
+def test_the_pre_tag_check_still_runs_the_lock_check(repo):
+    problems = release_state.check_tree_pre_tag(
+        VERSION, repo_root=repo, run=_lock_stale, git=_consistent_git_without_the_release_tag
+    )
+    assert any("uv lock --check" in problem for problem in problems), problems
+
+
+def test_the_cli_never_runs_the_pre_tag_check(repo, monkeypatch):
+    """`main()` is the predicate the `verify` job runs: it must keep requiring the tag."""
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("main() called check_tree_pre_tag")
+
+    monkeypatch.setattr(release_state, "check_tree_pre_tag", forbidden)
+    monkeypatch.setattr(release_state, "check_tree", lambda *a, **k: ["sentinel"])
+    assert release_state.main([], repo_root=repo) == 1
+
+
 # --- marketplace pointer (the release-activation spec, #117) --------------------------------
 
 
