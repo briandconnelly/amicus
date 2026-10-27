@@ -6,14 +6,17 @@ import json
 from pathlib import Path
 
 from jsonschema import Draft202012Validator
+from tests.support.fingerprint_pins import REGEN_STEPS
 
 from amicus import wire_shape_snapshot as wss
 from amicus.schemas.envelope import META_ALWAYS_PRESENT, RESULT_META_SCHEMA, Meta
 
 _FIXTURE = Path(__file__).parent / "fixtures" / "wire_shape_snapshot.json"
 _REGEN = (
-    "the DELIVERED envelope shape changed — review the snapshot diff, then in a DEDICATED commit "
-    "bump FINGERPRINT if the agent-visible surface moved and regenerate "
+    "the DELIVERED envelope shape changed — review the snapshot diff. If the agent-visible "
+    f"surface moved: {REGEN_STEPS}, which regenerates this snapshot with the others. If it did "
+    "not (no FINGERPRINT_COVERS category moved, so the tool refuses), regenerate this one alone "
+    "in a dedicated commit "
     "(`uv run python -m amicus.wire_shape_snapshot > tests/fixtures/wire_shape_snapshot.json`)."
 )
 

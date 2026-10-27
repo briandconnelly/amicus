@@ -214,6 +214,9 @@ Adding a minor, refreshing a warning, adding a signature for an existing error c
 
 A codex change moves it only when you carry the change into amicus's surface, touching a category in `FINGERPRINT_COVERS` (`src/amicus/schemas/fingerprint.py`).
 Then AGENTS.md rule 10 applies: bump `FINGERPRINT` and regenerate the pins under `tests/fixtures/` in their own commit.
+After the bump, `uv run python scripts/regenerate_fingerprint_pins.py` writes every pin it moves (each profile's manifest snapshot, `tests/fixtures/fingerprint_pins.json` and, when its output changed, the wire-shape snapshot) and prints the diff to review before you commit.
+It refuses unless `FINGERPRINT` has advanced past its value at the merge-base with `origin/main`, and `--check` only reports stale pins without writing.
+It does not move `RESULT_FORMAT`, the result-format snapshot or the discovery-cost budget: it reports their drift, and each stays a deliberate decision of its own.
 Whether that change is also breaking is a separate question, and `CHANGELOG.md`'s lead defines the **Breaking** and **Surface** labels.
 
 ## 6. Verify and open the PR

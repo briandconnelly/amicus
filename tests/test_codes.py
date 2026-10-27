@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import get_args
 
+from tests.support.fingerprint_pins import load_pins
+
 from amicus.schemas import codes, fingerprint
 from amicus.sdk.backend.contract import BackendContract  # noqa: F401 - import smoke
 from amicus.sdk.conventions import envelope as pe
@@ -87,7 +89,10 @@ def test_generalize_rewrites_only_the_four_minted_codes():
 
 
 def test_fingerprint_constants():
-    assert fingerprint.FINGERPRINT == "amicus/0.1/schema-58"
+    # The fingerprint pin lives in tests/fixtures/fingerprint_pins.json, which
+    # scripts/regenerate_fingerprint_pins.py moves with every other pin of a bump (#373).
+    # RESULT_FORMAT stays a literal here: moving it is rule 11's own decision, never the tool's.
+    assert load_pins()["fingerprint"] == fingerprint.FINGERPRINT
     assert fingerprint.RESULT_FORMAT == 9
     assert fingerprint.JSON_SCHEMA_DIALECT == "https://json-schema.org/draft/2020-12/schema"
     assert fingerprint.LIFECYCLE_META_KEY == "dev.bconnelly.amicus/lifecycle"
