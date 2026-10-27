@@ -44,7 +44,8 @@ Subcommands (a first argument naming one selects it; anything else is the check 
 `watch` (#378) reads only npm and PyPI metadata, so it needs no installed CLI: kimi's
 latest minor against the shipped set, claude's latest against the newest docs/claude-help
 capture, and fastmcp's and mcp's latest against their pyproject.toml caps. `--file-issues`
-files one issue per stream and version unless an open or closed issue has its exact title.
+files one issue per kimi, fastmcp or mcp minor unless an open or closed issue has its exact
+title, and moves claude's one open tracking issue forward instead of filing another.
 A lookup that fails is unknown, files nothing and exits 1. docs/WATCHING.md is its contract.
 
 Collects the evidence docs/UPGRADING-CODEX.md step 2 compares, from two binaries driven by

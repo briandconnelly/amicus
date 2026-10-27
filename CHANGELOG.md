@@ -31,9 +31,10 @@ per-change, as its own lead says.
 - `scripts/check_backend_compat.py watch [--json] [--file-issues [--dry-run]]` reports, from
   npm and PyPI metadata alone, a kimi minor outside the shipped set, a claude release newer
   than the newest `docs/claude-help/` capture, and a `fastmcp` or `mcp` release past its
-  `pyproject.toml` cap. `--file-issues` files one issue per stream and version, never when an
-  open or closed issue already has that exact title; a failed lookup is reported as unknown,
-  files nothing and fails the run. `docs/WATCHING.md` documents it and the routine that runs
+  `pyproject.toml` cap. `--file-issues` files one issue per kimi, fastmcp or mcp minor, never
+  when an open or closed issue already has that exact title, and keeps one rolling claude issue
+  that it edits forward; a failed lookup is reported as unknown, files nothing and fails the
+  run. `docs/WATCHING.md` documents it and the routine that runs
   it (#378).
 
 ### Changed

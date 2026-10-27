@@ -35,11 +35,13 @@ Each stream comes back as one of three statuses:
 `unknown` is never read as `current`: it files nothing for that stream and makes the exit status 1.
 A PyPI `latest` that is not a plain final release, such as a release candidate when no final exists, is `unknown` too.
 
-Exit status 0 means every stream was read and every issue `--file-issues` needed was found or filed; `update` findings alone do not fail it.
-Exit status 1 means at least one stream was `unknown` or one `gh` call failed; argparse's usage errors exit 2.
+A response cut short, a malformed HTTP response or output that cannot be decoded is a failed lookup like any other, and the other streams are still read.
 
-`--json` prints `findings` (one object per stream: `stream`, `status`, `latest`, `baseline`, `key`, `title`, `labels`, `detail`) and, under `--file-issues`, `filings` (one per `update` finding: `stream`, `title`, `action`, `number`, `state`, `detail`).
-`action` is `filed`, `exists`, `would_file` under `--dry-run`, or `failed`.
+Exit status 0 means every stream was read and every issue `--file-issues` needed was found, filed or moved forward; `update` findings alone do not fail it.
+Exit status 1 means at least one stream was `unknown`, one `gh` call failed, a title search may have been cut short, or the claude stream found more than one open tracking issue; argparse's usage errors exit 2.
+
+`--json` prints `findings` (one object per stream: `stream`, `status`, `latest`, `baseline`, `key`, `title`, `labels`, `detail`) and, under `--file-issues`, `filings` (one per `update` finding: `stream`, `title`, `action`, `number`, `state`, `detail`, `moved_from`).
+`action` is `filed`, `edited` (claude only), `exists`, `would_file` or `would_edit` under `--dry-run`, or `failed`; `moved_from` names the release an edited claude issue named before.
 
 ## The issue contract
 
@@ -54,17 +56,35 @@ Each `update` finding has a stable key, its stream and a version, and a title bu
 The kimi title follows the codex routine's `chore(backends): track codex <major>.<minor>`.
 Claude is keyed by full version because its baseline is a capture of one version, not a minor.
 
+### kimi, fastmcp and mcp: one issue per minor
+
 An issue is created only when no issue, open or closed, has exactly that title.
 The check is two reads, and the title must match one of their rows character for character:
 
-- `gh issue list --state all --search 'in:title "<title>"' --json title,number,state`, which finds an issue of any age.
+- `gh issue list --state all --search 'in:title "<title>"' --limit 1000 --json title,number,state`, which finds an issue of any age.
 - `gh issue list --state all --limit 100 --json title,number,state`, the newest issues read directly, because GitHub's search index can lag an issue created moments ago.
 
+Without `--limit`, `gh` returns 30 rows, so the search asks for 1000, and a search that returns 1000 rows may have been cut short: it fails closed, as a failed `gh` call, and nothing is filed for that stream.
 So a re-run files nothing, and closing an issue retires its title for good: a declined minor does not come back.
-A new minor, or a new claude release, has a new title and is filed once.
+A new minor has a new title and is filed once.
+
+### claude: one rolling issue
+
+Claude releases often, so its stream keeps one open issue that moves forward rather than one per release.
+The open issues whose title starts with `chore(backends): track claude ` are read the same two ways, with `--state open` on the search.
+
+- One is open and names an older release: its title and body are edited to the latest release with `gh issue edit`, and `gh issue comment` notes the move.
+- One is open and names the latest release, or a newer one: nothing changes.
+- None is open: a new issue is filed, unless a closed issue has exactly this release's title.
+- More than one is open, or the open one's title does not end in a release: the stream fails closed, and no claude issue is filed, edited or commented on.
+
+Close the issue once a capture at or past its release is committed under `docs/claude-help/`.
+Closing re-arms the watch: the next claude release past the newest capture opens a new issue.
+An open issue is moved forward even when a closed issue already has the latest release's title.
 
 Each issue is labelled `dependencies` and `chore`, both existing labels.
 Its body says the release is available upstream, never that it is supported, because nothing was installed or run.
+A claude issue's body also says that it rolls forward and that closing it re-arms the watch.
 
 ## Running it from the scheduled routine
 
@@ -77,11 +97,12 @@ In a fresh checkout of briandconnelly/amicus at main, run:
     uv run python scripts/check_backend_compat.py watch --file-issues --json
 
 Do not file, edit, close or comment on any issue yourself: the command files at most one
-issue per stream and version, and only when no open or closed issue has that exact title.
+issue per kimi, fastmcp or mcp minor, keeps one rolling claude issue, and never files a
+title an open or closed issue already has.
 Report its JSON output. If it exits non-zero, report every finding whose status is
 "unknown" and every filing whose action is "failed", and say that those streams were not
 checked this run; never describe an unknown stream as up to date.
 ```
 
-Before the routine is trusted, exercise it twice: the first run files one issue per `update` finding, and an immediate re-run files none.
-`--dry-run` shows what a run would file without creating anything; it still runs the two `gh issue list` reads.
+Before the routine is trusted, exercise it twice: the first run files one issue per `update` finding, and an immediate re-run files and edits none.
+`--dry-run` shows what a run would file or edit without changing anything; it still runs the `gh issue list` reads.
