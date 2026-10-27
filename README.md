@@ -203,6 +203,7 @@ version.
 | Architecture decisions | `docs/adr/` |
 | How a release is cut | `docs/RELEASING.md` |
 | How a new codex minor becomes supported | `docs/UPGRADING-CODEX.md` |
+| How new kimi, claude, fastmcp and mcp releases become issues | `docs/WATCHING.md` |
 | How a `FINGERPRINT` bump regenerates its test pins | `scripts/regenerate_fingerprint_pins.py` (its docstring) |
 | Every environment variable, its meaning and default | `docs/CONFIGURATION.md` |
 | The router skill an agent loads to call amicus | `skills/collaborating-with-amicus/` |

@@ -38,6 +38,15 @@ Subcommands (a first argument naming one selects it; anything else is the check 
 
     compare --backend codex --old-bin PATH --new-bin PATH [--docs-root docs] [--write]
             [--debug-models]
+    watch [--json] [--file-issues [--dry-run]] [--repo OWNER/NAME] [--docs-root docs]
+          [--pyproject pyproject.toml]
+
+`watch` (#378) reads only npm and PyPI metadata, so it needs no installed CLI: kimi's
+latest minor against the shipped set, claude's latest against the newest docs/claude-help
+capture, and fastmcp's and mcp's latest against their pyproject.toml caps. `--file-issues`
+files one issue per kimi, fastmcp or mcp minor unless an open or closed issue has its exact
+title, and moves claude's one open tracking issue forward instead of filing another.
+A lookup that fails is unknown, files nothing and exits 1. docs/WATCHING.md is its contract.
 
 Collects the evidence docs/UPGRADING-CODEX.md step 2 compares, from two binaries driven by
 absolute path, and runs step 3's zero-spend probe matrix on both (#376). Every run of
@@ -75,6 +84,8 @@ import argparse
 import concurrent.futures
 import contextlib
 import difflib
+import http.client
+import json
 import os
 import re
 import shutil
@@ -82,7 +93,9 @@ import signal
 import subprocess
 import sys
 import tempfile
-from dataclasses import dataclass, field
+import tomllib
+import urllib.request
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -205,7 +218,8 @@ def latest_upstream(backend: str) -> str | None:
             timeout=30,
             check=False,
         )
-    except (OSError, subprocess.TimeoutExpired):
+    except (OSError, subprocess.TimeoutExpired, ValueError):
+        # ValueError: npm wrote bytes the locale cannot decode (UnicodeDecodeError).
         return None
     found = release(done.stdout)
     return "".join(found) if done.returncode == 0 and found else None
@@ -1094,7 +1108,469 @@ def compare_main(argv: list[str]) -> int:
     return 1 if c.problems else 0
 
 
-SUBCOMMANDS: dict[str, Callable[[list[str]], int]] = {"compare": compare_main}
+# --- watch: metadata-only upstream release watch (#378) ------------------------------------
+
+WATCH_STREAMS: tuple[str, ...] = ("kimi", "claude", "fastmcp", "mcp")
+# Codex is not a stream here: the scheduled routine docs/UPGRADING-CODEX.md describes keeps
+# its `codex-upgrade` issues, each holding a release-notes evaluation this command cannot write.
+PYPI_JSON_URL = "https://pypi.org/pypi/{package}/json"
+# A plain final release. A PyPI `info.version` that is anything else (a prerelease when no
+# final exists) is reported as unknown rather than ordered as if it were final.
+_PYPI_FINAL = re.compile(r"(\d+)\.(\d+)(?:\.\d+)*")
+_CAP = re.compile(r"<\s*(\d+)\.(\d+)")
+WATCH_LABELS: dict[str, tuple[str, ...]] = {
+    "kimi": ("dependencies", "chore"),
+    "claude": ("dependencies", "chore"),
+    "fastmcp": ("dependencies", "chore"),
+    "mcp": ("dependencies", "chore"),
+}
+# How many of the newest issues are listed beside the title search. GitHub's search index
+# lags issue creation, so an issue filed a moment ago can be missing from the search; the
+# plain listing reads the repository directly, newest first, and covers that window.
+RECENT_ISSUES = 100
+# The `--limit` on a title search. gh returns 30 rows without one, so an old exact match
+# behind newer near matches was missed (#387). A search that returns this many rows may have
+# been cut short, and is treated as a failed read rather than as a complete answer.
+SEARCH_LIMIT = 1000
+WATCH_STAYS_MANUAL = (
+    "Installing and validating the new release, widening a cap and changing a supported set "
+    "stay manual, in their own PRs."
+)
+
+
+@dataclass
+class Finding:
+    """One stream's reading. `status` is `update` (a release past the baseline is available
+    upstream), `current` (none is) or `unknown` (a lookup failed: never read as `current`)."""
+
+    stream: str
+    status: str
+    latest: str | None = None
+    baseline: str = ""
+    key: str | None = None
+    title: str | None = None
+    labels: tuple[str, ...] = ()
+    detail: str = ""
+
+    def body(self) -> str:
+        if self.stream == "claude":
+            dedup = (
+                "This issue rolls forward: while it is open, a newer claude release edits its "
+                "title and body instead of opening another. Close it once a capture at or past "
+                "this version is committed under docs/claude-help/; closing re-arms the watch."
+            )
+        else:
+            dedup = (
+                "A re-run files nothing while an issue with this exact title exists, open or "
+                "closed."
+            )
+        return "\n".join(
+            [
+                f"`{self.stream}` {self.latest} is available upstream; {self.baseline}.",
+                "",
+                "Available upstream is not supported: nothing here was installed or run.",
+                WATCH_STAYS_MANUAL,
+                "",
+                f"Watch key: `{self.stream} {self.key}`. Filed by "
+                "`uv run python scripts/check_backend_compat.py watch --file-issues` "
+                f"(docs/WATCHING.md). {dedup}",
+            ]
+        )
+
+
+def latest_pypi(package: str) -> str | None:
+    """PyPI's latest final release of `package`, or None when it cannot be read."""
+    try:
+        with urllib.request.urlopen(PYPI_JSON_URL.format(package=package), timeout=30) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except (OSError, ValueError, http.client.HTTPException):
+        # OSError covers URLError and a dropped connection, ValueError bad JSON or UTF-8,
+        # and HTTPException a body cut short (`IncompleteRead`) or a malformed response.
+        return None
+    version = data.get("info", {}).get("version") if isinstance(data, dict) else None
+    if not isinstance(version, str) or not _PYPI_FINAL.fullmatch(version):
+        return None
+    return version
+
+
+def pyproject_cap(pyproject: Path, package: str) -> tuple[int, int] | None:
+    """The exclusive `<X.Y` upper bound `[project].dependencies` puts on `package`."""
+    try:
+        data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    for requirement in data.get("project", {}).get("dependencies", []):
+        name = re.match(r"[A-Za-z0-9._-]+", requirement)
+        if name and name[0].lower() == package:
+            cap = _CAP.search(requirement)
+            return (int(cap[1]), int(cap[2])) if cap else None
+    return None
+
+
+def _minor(version: str) -> tuple[int, int] | None:
+    parts = re.match(r"(\d+)\.(\d+)", version)
+    return (int(parts[1]), int(parts[2])) if parts else None
+
+
+def watch_kimi(npm: Callable[[str], str | None]) -> Finding:
+    shipped = ", ".join(f"{a}.{b}" for a, b in sorted(kimi_contract.SUPPORTED_VERSIONS))
+    baseline = f"the shipped kimi set is {{{shipped}}}"
+    latest = npm("kimi")
+    minor = _minor(latest) if latest else None
+    if latest is None or minor is None:
+        return Finding("kimi", "unknown", baseline=baseline, detail="npm lookup failed")
+    if builtin_supported("kimi", latest):
+        return Finding("kimi", "current", latest, baseline)
+    key = f"{minor[0]}.{minor[1]}"
+    return Finding(
+        "kimi",
+        "update",
+        latest,
+        f"{baseline}, which does not name {key}",
+        key,
+        f"chore(backends): track kimi {key}",
+        WATCH_LABELS["kimi"],
+    )
+
+
+def release_order(text: str) -> tuple[tuple[int, int, int], int, tuple[tuple[int, int, str], ...]]:
+    """Semver precedence, which `semver()` alone loses: a final release sorts after its own
+    prereleases (2.1.400-beta.1 < 2.1.400), prerelease identifiers compare numerically where
+    they are numbers (beta.2 < beta.10), and build metadata is ignored. Only for text that
+    `release()` reads; anything else sorts first."""
+    found = release(text)
+    core = semver(found[0]) if found else None
+    if found is None or core is None:
+        return ((0, 0, 0), 0, ())
+    pre = found[1].split("+", 1)[0].removeprefix("-")
+    if not pre:
+        return (core, 1, ())
+    ids = tuple((0, int(i), "") if i.isdigit() else (1, 0, i) for i in pre.split("."))
+    return (core, 0, ids)
+
+
+def watch_claude(npm: Callable[[str], str | None], docs_root: Path) -> Finding:
+    try:
+        capture = newest_capture(docs_root, "claude")
+    except OSError as exc:
+        # An unreadable docs/claude-help is an unread baseline, not a crash (#387).
+        return Finding("claude", "unknown", detail=f"cannot read {docs_root}/claude-help: {exc}")
+    if capture is None:
+        return Finding("claude", "unknown", detail=f"no capture under {docs_root}/claude-help")
+    baseline = f"the newest capture is docs/claude-help/{capture.name}/"
+    latest = npm("claude")
+    if latest is None or semver(latest) is None:
+        return Finding("claude", "unknown", baseline=baseline, detail="npm lookup failed")
+    if release_order(latest) <= release_order(capture.name):
+        return Finding("claude", "current", latest, baseline)
+    if not builtin_supported("claude", latest):
+        baseline += ", and its major is outside the shipped set"
+    return Finding(
+        "claude",
+        "update",
+        latest,
+        baseline,
+        latest,
+        f"chore(backends): track claude {latest}",
+        WATCH_LABELS["claude"],
+    )
+
+
+def watch_pypi(package: str, pypi: Callable[[str], str | None], pyproject: Path) -> Finding:
+    cap = pyproject_cap(pyproject, package)
+    if cap is None:
+        return Finding(package, "unknown", detail=f"no `<X.Y` cap on {package} in {pyproject}")
+    baseline = f"pyproject.toml caps {package} below {cap[0]}.{cap[1]}"
+    latest = pypi(package)
+    minor = _minor(latest) if latest else None
+    if latest is None or minor is None:
+        return Finding(package, "unknown", baseline=baseline, detail="PyPI lookup failed")
+    if minor < cap:
+        return Finding(package, "current", latest, baseline)
+    key = f"{minor[0]}.{minor[1]}"
+    return Finding(
+        package,
+        "update",
+        latest,
+        baseline,
+        key,
+        f"chore(deps): track {package} {key} past the cap",
+        WATCH_LABELS[package],
+    )
+
+
+def watch_all(
+    docs_root: Path,
+    pyproject: Path,
+    *,
+    npm: Callable[[str], str | None] | None = None,
+    pypi: Callable[[str], str | None] | None = None,
+) -> list[Finding]:
+    """Every stream in WATCH_STREAMS order. The lookups default to the module's own,
+    resolved at call time so a test can replace them."""
+    npm = npm or latest_upstream
+    pypi = pypi or latest_pypi
+    readers: dict[str, Callable[[], Finding]] = {
+        "kimi": lambda: watch_kimi(npm),
+        "claude": lambda: watch_claude(npm, docs_root),
+        "fastmcp": lambda: watch_pypi("fastmcp", pypi, pyproject),
+        "mcp": lambda: watch_pypi("mcp", pypi, pyproject),
+    }
+    return [readers[stream]() for stream in WATCH_STREAMS]
+
+
+def run_gh(args: list[str]) -> tuple[int, str]:
+    """`gh` with these arguments: (exit code, stdout). A missing `gh` is exit 127."""
+    try:
+        done = subprocess.run(
+            ["gh", *args], capture_output=True, text=True, timeout=60, check=False
+        )
+    except (OSError, subprocess.TimeoutExpired, ValueError) as exc:
+        return 127, str(exc)
+    return done.returncode, done.stdout
+
+
+def _gh_issues(args: list[str], gh: Callable[[list[str]], tuple[int, str]]) -> list[dict] | None:
+    code, out = gh(args)
+    if code != 0:
+        return None
+    try:
+        rows = json.loads(out)
+    except ValueError:
+        return None
+    return rows if isinstance(rows, list) else None
+
+
+def existing_issue(
+    title: str, gh: Callable[[list[str]], tuple[int, str]], repo: str | None = None
+) -> dict | bool | None:
+    """The open or closed issue titled exactly `title`, None when there is none, or False
+    when `gh` could not say (which must never be read as "none")."""
+    rows = _title_candidates(title, "all", gh, repo)
+    if rows is None:
+        return False
+    for row in rows:
+        if row.get("title") == title:
+            return row
+    return None
+
+
+def _title_candidates(
+    phrase: str, state: str, gh: Callable[[list[str]], tuple[int, str]], repo: str | None
+) -> list[dict] | None:
+    """Every issue in `state` whose title the search matches for `phrase`, plus the newest
+    RECENT_ISSUES of any state (the search index lags creation), or None when either read
+    failed or the search may have been truncated. The caller compares titles exactly."""
+    where = ["--repo", repo] if repo else []
+    fields = ["--json", "title,number,state"]
+    searched = _gh_issues(
+        [
+            "issue",
+            "list",
+            *where,
+            "--state",
+            state,
+            "--search",
+            f'in:title "{phrase}"',
+            "--limit",
+            str(SEARCH_LIMIT),
+            *fields,
+        ],
+        gh,
+    )
+    recent = _gh_issues(
+        ["issue", "list", *where, "--state", "all", "--limit", str(RECENT_ISSUES), *fields], gh
+    )
+    if searched is None or recent is None or len(searched) >= SEARCH_LIMIT:
+        return None
+    # One row per issue, the direct listing's over the search's: the search index can still
+    # call an issue OPEN after it was closed (#387). Only then filter by state.
+    merged: dict[object, dict] = {}
+    for row in [*searched, *recent]:
+        if isinstance(row, dict):
+            merged[row.get("number")] = row
+    rows = list(merged.values())
+    return [r for r in rows if state == "all" or r.get("state") == state.upper()]
+
+
+@dataclass
+class Filing:
+    stream: str
+    title: str
+    action: str  # filed | would_file | edited | would_edit | exists | failed
+    number: int | None = None
+    state: str | None = None
+    detail: str = ""
+    moved_from: str | None = None  # the version a rolling (claude) issue was edited from
+
+
+ROLLING_STREAMS: dict[str, str] = {"claude": "chore(backends): track claude "}
+
+
+def roll_issue(
+    f: Finding,
+    gh: Callable[[list[str]], tuple[int, str]],
+    repo: str | None,
+    *,
+    dry_run: bool,
+) -> Filing | None:
+    """The rolling stream's one open issue, moved forward to `f` when it names an older
+    release, or None when no issue is open (the caller then files unless a closed issue has
+    this exact title). More than one open issue, or one whose title names no release, is a
+    failure: which one to move is not this command's call."""
+    prefix = ROLLING_STREAMS[f.stream]
+    title = str(f.title)
+    rows = _title_candidates(prefix.strip(), "open", gh, repo)
+    if rows is None:
+        return Filing(f.stream, title, "failed", detail="gh issue list failed")
+    by_number = {r.get("number"): r for r in rows if str(r.get("title", "")).startswith(prefix)}
+    if not by_number:
+        return None
+    if len(by_number) > 1:
+        numbers = ", ".join(f"#{n}" for n in sorted(by_number, key=str))
+        return Filing(f.stream, title, "failed", detail=f"more than one open issue: {numbers}")
+    ((number, row),) = by_number.items()
+    number = number if isinstance(number, int) else None
+    current = str(row.get("title"))[len(prefix) :]
+    if number is None or not _RELEASE.fullmatch(current) or semver(current) is None:
+        return Filing(f.stream, title, "failed", number, detail=f"cannot read {current!r}")
+    if release_order(current) >= release_order(str(f.latest)):
+        return Filing(f.stream, str(row.get("title")), "exists", number, "OPEN")
+    if dry_run:
+        return Filing(f.stream, title, "would_edit", number, "OPEN", moved_from=current)
+    # The notice goes first and the title last, so a run that stops part way leaves the old
+    # title, and the rerun finishes the move. The notice is posted only if this exact text is
+    # not already on the issue, so the rerun does not post it twice (#387).
+    where = ["--repo", repo] if repo else []
+    note = (
+        f"Moved from claude {current} to {f.latest}, the newest release available upstream "
+        "(scripts/check_backend_compat.py watch)."
+    )
+    code, out = gh(["issue", "view", str(number), *where, "--json", "comments"])
+    try:
+        posted = [c.get("body") for c in json.loads(out).get("comments", [])] if code == 0 else None
+    except (ValueError, AttributeError):
+        posted = None
+    if posted is None:
+        return Filing(f.stream, title, "failed", number, detail="gh issue view failed")
+    if note not in posted:
+        commented, _ = gh(["issue", "comment", str(number), *where, "--body", note])
+        if commented != 0:
+            return Filing(f.stream, title, "failed", number, detail="gh issue comment failed")
+    edited, _ = gh(["issue", "edit", str(number), *where, "--title", title, "--body", f.body()])
+    if edited != 0:
+        return Filing(f.stream, title, "failed", number, detail="gh issue edit failed")
+    return Filing(f.stream, title, "edited", number, "OPEN", moved_from=current)
+
+
+def file_issues(
+    findings: list[Finding],
+    *,
+    gh: Callable[[list[str]], tuple[int, str]] | None = None,
+    repo: str | None = None,
+    dry_run: bool = False,
+) -> list[Filing]:
+    """For each `update` finding, create its issue unless one with its exact title exists,
+    open or closed. Idempotent: a re-run finds what the first run filed. `unknown` and
+    `current` findings file nothing. A rolling stream (claude) first moves its one open
+    issue forward, if it has one (`roll_issue`)."""
+    gh = gh or run_gh
+    done: list[Filing] = []
+    for f in findings:
+        if f.status != "update" or f.title is None:
+            continue
+        if f.stream in ROLLING_STREAMS:
+            rolled = roll_issue(f, gh, repo, dry_run=dry_run)
+            if rolled is not None:
+                done.append(rolled)
+                continue
+        found = existing_issue(f.title, gh, repo)
+        if found is False:
+            done.append(Filing(f.stream, f.title, "failed", detail="gh issue list failed"))
+            continue
+        if isinstance(found, dict):
+            number = found.get("number")
+            done.append(
+                Filing(
+                    f.stream,
+                    f.title,
+                    "exists",
+                    number if isinstance(number, int) else None,
+                    str(found.get("state")),
+                )
+            )
+            continue
+        if dry_run:
+            done.append(Filing(f.stream, f.title, "would_file"))
+            continue
+        args = ["issue", "create", "--title", f.title, "--body", f.body()]
+        args += ["--repo", repo] if repo else []
+        for label in f.labels:
+            args += ["--label", label]
+        code, out = gh(args)
+        if code != 0:
+            done.append(Filing(f.stream, f.title, "failed", detail="gh issue create failed"))
+            continue
+        url = out.strip().splitlines()[-1] if out.strip() else ""
+        number = re.search(r"/issues/(\d+)$", url)
+        done.append(Filing(f.stream, f.title, "filed", int(number[1]) if number else None))
+    return done
+
+
+def describe_watch(findings: list[Finding], filings: list[Filing] | None) -> list[str]:
+    lines = []
+    for f in findings:
+        if f.status == "update":
+            lines.append(f"UPDATE  {f.stream} {f.latest} available upstream; {f.baseline}")
+            lines.append(f"        title: {f.title}")
+        elif f.status == "current":
+            lines.append(f"CURRENT {f.stream} {f.latest}; {f.baseline}")
+        else:
+            lines.append(f"UNKNOWN {f.stream}: {f.detail}; nothing is filed for it")
+    for filing in filings or []:
+        where = f" #{filing.number}" if filing.number else ""
+        state = f" ({filing.state})" if filing.state else ""
+        moved = f" (from {filing.moved_from})" if filing.moved_from else ""
+        detail = f": {filing.detail}" if filing.detail else ""
+        lines.append(f"{filing.action.upper()} {filing.title}{where}{state}{moved}{detail}")
+    return lines
+
+
+def watch_main(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(
+        prog="check_backend_compat.py watch",
+        description="Report releases available upstream past amicus's baselines "
+        "(docs/WATCHING.md).",
+    )
+    parser.add_argument("--docs-root", type=Path, default=Path("docs"))
+    parser.add_argument("--pyproject", type=Path, default=Path("pyproject.toml"))
+    parser.add_argument("--json", action="store_true")
+    parser.add_argument("--file-issues", action="store_true")
+    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--repo")
+    args = parser.parse_args(argv)
+    if args.dry_run and not args.file_issues:
+        parser.error("--dry-run applies to --file-issues")
+    findings = watch_all(args.docs_root, args.pyproject)
+    filings = (
+        file_issues(findings, repo=args.repo, dry_run=args.dry_run) if args.file_issues else None
+    )
+    if args.json:
+        payload: dict[str, object] = {
+            "findings": [asdict(f) for f in findings],
+        }
+        if filings is not None:
+            payload["filings"] = [asdict(f) for f in filings]
+        print(json.dumps(payload, indent=2))
+    else:
+        print("\n".join(describe_watch(findings, filings)))
+    failed = any(f.status == "unknown" for f in findings) or any(
+        f.action == "failed" for f in filings or []
+    )
+    return 1 if failed else 0
+
+
+SUBCOMMANDS: dict[str, Callable[[list[str]], int]] = {"compare": compare_main, "watch": watch_main}
 
 
 def main(argv: list[str] | None = None) -> int:

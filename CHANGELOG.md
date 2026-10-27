@@ -35,6 +35,14 @@ per-change, as its own lead says.
   keeps only tool names and definition hashes. The disables are its positive control, and a
   control with nothing to apply to leaves the probe unvalidated. `docs/UPGRADING-CODEX.md` no
   longer says amicus has no instrument for this (#380).
+- `scripts/check_backend_compat.py watch [--json] [--file-issues [--dry-run]]` reports, from
+  npm and PyPI metadata alone, a kimi minor outside the shipped set, a claude release newer
+  than the newest `docs/claude-help/` capture, and a `fastmcp` or `mcp` release past its
+  `pyproject.toml` cap. `--file-issues` files one issue per kimi, fastmcp or mcp minor, never
+  when an open or closed issue already has that exact title, and keeps one rolling claude issue
+  that it edits forward; a failed lookup is reported as unknown, files nothing and fails the
+  run. `docs/WATCHING.md` documents it and the routine that runs
+  it (#378).
 
 ### Changed
 
@@ -53,6 +61,15 @@ per-change, as its own lead says.
   interactive TUI reads. `realtime_conversation`, `stable_environment_tools`, `transcript_v2` and
   `worktrees` are now removed, and amicus never set them. The model-facing tool catalog was not
   re-probed. No paid call was part of the check.
+- Preparing a release PR is now one command (#374). `scripts/release.py prepare X.Y.Z` moves
+  every version literal AGENTS.md rule 19 names, README's install example with `.mcp.json`'s
+  pin, rolls `CHANGELOG.md`'s `## [Unreleased]` into a section dated in UTC with its footer
+  links, runs `uv lock`, and then runs every tree check of `scripts/check_release_state.py`
+  except that the pinned tag exists, which it cannot yet. It refuses a version that does not
+  move forward, a dirty tree, `main` and an empty Unreleased section, never touches
+  `.claude-plugin/marketplace.json`, and `--check` previews the edits without writing them.
+  The release predicate the publish workflow runs is unchanged. Nothing about how amicus runs
+  changes.
 
 ### Fixed
 

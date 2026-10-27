@@ -1,0 +1,511 @@
+"""`check_backend_compat.py watch` (#378), with `gh`, npm and PyPI all stubbed.
+
+Nothing here reaches the network or a real `gh`: the lookups and the `gh` runner are
+replaced on the module, and a stub that is not replaced fails the test rather than
+falling through to the real one."""
+
+from __future__ import annotations
+
+import http.client
+import importlib.util
+import io
+import json
+import sys
+from pathlib import Path
+
+import pytest
+
+from amicus.backends.kimi import contract as kimi_contract
+
+_SCRIPT = Path(__file__).parent.parent / "scripts" / "check_backend_compat.py"
+_spec = importlib.util.spec_from_file_location("check_backend_compat", _SCRIPT)
+assert _spec is not None and _spec.loader is not None
+compat = importlib.util.module_from_spec(_spec)
+sys.modules["check_backend_compat"] = compat
+_spec.loader.exec_module(compat)
+
+_PYPROJECT = """\
+[project]
+name = "x"
+dependencies = [
+    "anyio>=4",
+    "fastmcp>=4.0,<4.1",
+    "mcp>=2.1,<2.3",
+]
+
+[dependency-groups]
+dev = ["fastmcp[tasks]>=4.0,<9.9"]
+"""
+_NEWEST_KIMI = max(kimi_contract.SUPPORTED_VERSIONS)
+_UNSUPPORTED_KIMI = f"{_NEWEST_KIMI[0]}.{_NEWEST_KIMI[1] + 1}.0"
+_SUPPORTED_KIMI = f"{_NEWEST_KIMI[0]}.{_NEWEST_KIMI[1]}.9"
+
+# Upstream as each test sees it unless it says otherwise: every stream has an update.
+_NPM_AHEAD = {"kimi": _UNSUPPORTED_KIMI, "claude": "2.1.400"}
+_PYPI_AHEAD = {"fastmcp": "4.1.4", "mcp": "2.3.0"}
+_TITLES = [
+    f"chore(backends): track kimi {_NEWEST_KIMI[0]}.{_NEWEST_KIMI[1] + 1}",
+    "chore(backends): track claude 2.1.400",
+    "chore(deps): track fastmcp 4.1 past the cap",
+    "chore(deps): track mcp 2.3 past the cap",
+]
+
+
+class FakeGh:
+    """A repository's issues, newest first, behind the subset of `gh issue` the watch uses.
+    It honours `--state` and `--limit` (gh's default limit is 30). `indexed` False models
+    GitHub's search index lagging a just-created issue."""
+
+    def __init__(self, issues: list[dict] | None = None, *, indexed: bool = True) -> None:
+        self.issues = list(issues or [])
+        self.indexed = indexed
+        self.created: list[list[str]] = []
+        self.edited: list[list[str]] = []
+        self.comments: list[list[str]] = []
+        self.fail: str | None = None  # "list", "create", "edit" or "comment" exits 1
+        # number -> the state a lagging search index still reports for that issue
+        self.stale: dict[int, str] = {}
+
+    def __call__(self, args: list[str]) -> tuple[int, str]:
+        assert args[0] == "issue", args
+        if self.fail == args[1]:
+            return 1, ""
+        if args[1] == "list":
+            state = args[args.index("--state") + 1] if "--state" in args else "open"
+            limit = int(args[args.index("--limit") + 1]) if "--limit" in args else 30
+            seen = self.issues
+            if "--search" in args:
+                seen = [i | {"state": self.stale.get(i["number"], i["state"])} for i in seen]
+            rows = [i for i in seen if state == "all" or i["state"] == state.upper()]
+            if "--search" in args:
+                rows = rows if self.indexed else []
+                phrase = args[args.index("--search") + 1]
+                assert phrase.startswith('in:title "') and phrase.endswith('"'), phrase
+                words = phrase[len('in:title "') : -1].lower().split()
+                # GitHub matches words, not the exact string: a near title comes back too.
+                rows = [i for i in rows if all(w in i["title"].lower() for w in words)]
+            return 0, json.dumps(rows[:limit])
+        if args[1] == "create":
+            self.created.append(args)
+            number = 1000 + len(self.issues)
+            title = args[args.index("--title") + 1]
+            body = args[args.index("--body") + 1]
+            self.issues.insert(0, {"title": title, "number": number, "state": "OPEN", "body": body})
+            return 0, f"https://github.com/o/r/issues/{number}\n"
+        if args[1] == "edit":
+            self.edited.append(args)
+            (issue,) = [i for i in self.issues if i["number"] == int(args[2])]
+            issue["title"] = args[args.index("--title") + 1]
+            issue["body"] = args[args.index("--body") + 1]
+            return 0, ""
+        if args[1] == "comment":
+            self.comments.append(args)
+            return 0, ""
+        if args[1] == "view":
+            assert args[3:] == ["--json", "comments"] or "--repo" in args, args
+            number = args[2]
+            bodies = [c[c.index("--body") + 1] for c in self.comments if c[2] == number]
+            return 0, json.dumps({"comments": [{"body": b} for b in bodies]})
+        raise AssertionError(args)
+
+
+def _no_real_lookups(monkeypatch, npm: dict, pypi: dict, gh: FakeGh) -> None:
+    monkeypatch.setattr(compat, "latest_upstream", npm.get)
+    monkeypatch.setattr(compat, "latest_pypi", pypi.get)
+    monkeypatch.setattr(compat, "run_gh", gh)
+
+
+@pytest.fixture
+def roots(tmp_path):
+    docs = tmp_path / "docs"
+    folder = docs / "claude-help" / "2.1.308"
+    folder.mkdir(parents=True)
+    (folder / "claude-help.txt").write_text("help\n")
+    # A higher name that is not a capture (no help file) is not the baseline.
+    (docs / "claude-help" / "2.1.999").mkdir()
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text(_PYPROJECT)
+    return ["--docs-root", str(docs), "--pyproject", str(pyproject)]
+
+
+def _run(argv: list[str], capsys) -> tuple[int, dict]:
+    code = compat.main(["watch", *argv, "--json"])
+    return code, json.loads(capsys.readouterr().out)
+
+
+def test_watch_is_a_subcommand():
+    assert compat.SUBCOMMANDS["watch"] is compat.watch_main
+
+
+def test_first_run_files_one_issue_per_stream_and_a_rerun_files_none(monkeypatch, roots, capsys):
+    gh = FakeGh()
+    _no_real_lookups(monkeypatch, _NPM_AHEAD, _PYPI_AHEAD, gh)
+    code, out = _run([*roots, "--file-issues"], capsys)
+    assert code == 0, out
+    assert [f["stream"] for f in out["findings"]] == ["kimi", "claude", "fastmcp", "mcp"]
+    assert [f["status"] for f in out["findings"]] == ["update"] * 4
+    assert [f["action"] for f in out["filings"]] == ["filed"] * 4
+    assert [a[a.index("--title") + 1] for a in gh.created] == _TITLES
+    for args in gh.created:
+        body = args[args.index("--body") + 1]
+        assert "available upstream" in body and "is not supported" in body, body
+        labels = [args[i + 1] for i, a in enumerate(args) if a == "--label"]
+        assert labels == ["dependencies", "chore"], labels
+
+    code, out = _run([*roots, "--file-issues"], capsys)
+    assert code == 0, out
+    assert len(gh.created) == 4, "a re-run must file nothing"
+    assert [f["action"] for f in out["filings"]] == ["exists"] * 4
+    assert [f["number"] for f in out["filings"]] == [1000, 1001, 1002, 1003]
+
+
+def test_a_rerun_files_none_even_before_search_indexes_the_first_run(monkeypatch, roots, capsys):
+    gh = FakeGh(indexed=False)
+    _no_real_lookups(monkeypatch, _NPM_AHEAD, _PYPI_AHEAD, gh)
+    _run([*roots, "--file-issues"], capsys)
+    assert len(gh.created) == 4
+    code, out = _run([*roots, "--file-issues"], capsys)
+    assert code == 0 and len(gh.created) == 4, out
+
+
+def test_a_closed_issue_with_the_exact_title_suppresses_filing(monkeypatch, roots, capsys):
+    closed = {"title": _TITLES[2], "number": 7, "state": "CLOSED"}
+    # A title that only CONTAINS the words is not a match: search returns it, the compare drops it.
+    near = {"title": _TITLES[3] + " (superseded)", "number": 8, "state": "CLOSED"}
+    gh = FakeGh([closed, near])
+    _no_real_lookups(monkeypatch, _NPM_AHEAD, _PYPI_AHEAD, gh)
+    code, out = _run([*roots, "--file-issues"], capsys)
+    assert code == 0, out
+    actions = {f["stream"]: (f["action"], f["number"]) for f in out["filings"]}
+    assert actions["fastmcp"] == ("exists", 7)
+    assert actions["mcp"][0] == "filed", "a near title must not suppress filing"
+    assert len(gh.created) == 3
+
+
+def test_a_lookup_failure_is_unknown_files_nothing_and_fails(monkeypatch, roots, capsys):
+    gh = FakeGh()
+    _no_real_lookups(monkeypatch, {}, {}, gh)
+    code, out = _run([*roots, "--file-issues"], capsys)
+    assert code == 1, out
+    assert [f["status"] for f in out["findings"]] == ["unknown"] * 4
+    assert out["filings"] == [] and gh.created == []
+
+    # One stream unknown: it files nothing and fails the run; the others still file.
+    gh = FakeGh()
+    _no_real_lookups(monkeypatch, {"claude": "2.1.400"}, _PYPI_AHEAD, gh)
+    code, out = _run([*roots, "--file-issues"], capsys)
+    assert code == 1, out
+    assert out["findings"][0]["status"] == "unknown"
+    assert [a[a.index("--title") + 1] for a in gh.created] == _TITLES[1:]
+
+
+def test_nothing_past_the_baselines_files_nothing(monkeypatch, roots, capsys):
+    gh = FakeGh()
+    npm = {"kimi": _SUPPORTED_KIMI, "claude": "2.1.308"}
+    _no_real_lookups(monkeypatch, npm, {"fastmcp": "4.0.9", "mcp": "2.2.1"}, gh)
+    code, out = _run([*roots, "--file-issues"], capsys)
+    assert code == 0, out
+    assert [f["status"] for f in out["findings"]] == ["current"] * 4
+    assert out["filings"] == [] and gh.created == []
+
+
+def test_claude_compares_versions_as_numbers_against_the_newest_capture(roots):
+    docs = Path(roots[1])
+    for latest, status in [("2.1.308", "current"), ("2.1.99", "current"), ("2.1.309", "update")]:
+        finding = compat.watch_claude({"claude": latest}.get, docs)
+        assert finding.status == status, (latest, finding)
+    assert compat.watch_claude({"claude": "2.1.309"}.get, docs).key == "2.1.309"
+    missing = compat.watch_claude({"claude": "2.1.309"}.get, docs / "nowhere")
+    assert missing.status == "unknown", "no capture is unknown, never current"
+    major = compat.watch_claude({"claude": "3.0.0"}.get, docs)
+    assert major.status == "update" and "outside the shipped set" in major.baseline
+
+
+def test_a_gh_failure_files_nothing_and_fails(monkeypatch, roots, capsys):
+    for failing in ("list", "create"):
+        gh = FakeGh()
+        gh.fail = failing
+        _no_real_lookups(monkeypatch, _NPM_AHEAD, _PYPI_AHEAD, gh)
+        code, out = _run([*roots, "--file-issues"], capsys)
+        assert code == 1, (failing, out)
+        assert [f["action"] for f in out["filings"]] == ["failed"] * 4
+        assert gh.created == []
+
+
+def test_dry_run_reads_but_never_creates(monkeypatch, roots, capsys):
+    gh = FakeGh([{"title": _TITLES[0], "number": 5, "state": "OPEN"}])
+    _no_real_lookups(monkeypatch, _NPM_AHEAD, _PYPI_AHEAD, gh)
+    code, out = _run([*roots, "--file-issues", "--dry-run"], capsys)
+    assert code == 0, out
+    assert [f["action"] for f in out["filings"]] == ["exists", *["would_file"] * 3]
+    assert gh.created == []
+    with pytest.raises(SystemExit):
+        compat.main(["watch", *roots, "--dry-run"])
+
+
+def test_without_file_issues_gh_is_never_called(monkeypatch, roots, capsys):
+    def gh(_args):
+        raise AssertionError("gh must not run without --file-issues")
+
+    _no_real_lookups(monkeypatch, _NPM_AHEAD, _PYPI_AHEAD, FakeGh())
+    monkeypatch.setattr(compat, "run_gh", gh)
+    assert compat.main(["watch", *roots]) == 0
+    text = capsys.readouterr().out
+    assert "available upstream" in text and "supported;" not in text
+    assert "title: chore(deps): track mcp 2.3 past the cap" in text
+
+
+def test_the_cap_is_read_from_runtime_dependencies_only(tmp_path):
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text(_PYPROJECT)
+    assert compat.pyproject_cap(pyproject, "fastmcp") == (4, 1)
+    assert compat.pyproject_cap(pyproject, "mcp") == (2, 3)
+    assert compat.pyproject_cap(pyproject, "anyio") is None
+    assert compat.pyproject_cap(tmp_path / "missing.toml", "mcp") is None
+    uncapped = compat.watch_pypi("anyio", {"anyio": "9.0.0"}.get, pyproject)
+    assert uncapped.status == "unknown", "a missing cap is unknown, never current"
+    real = Path(__file__).parent.parent / "pyproject.toml"
+    assert compat.pyproject_cap(real, "fastmcp") and compat.pyproject_cap(real, "mcp"), (
+        "the watch reads these caps; keep them as `<X.Y` in [project].dependencies"
+    )
+
+
+def test_the_pypi_lookup_reads_the_final_release_or_says_unknown(monkeypatch):
+    seen: list[str] = []
+
+    def answer(payload: object):
+        def urlopen(url, timeout):
+            seen.append(url)
+            if isinstance(payload, Exception):
+                raise payload
+            return io.BytesIO(json.dumps(payload).encode())
+
+        monkeypatch.setattr(compat.urllib.request, "urlopen", urlopen)
+        return compat.latest_pypi("fastmcp")
+
+    assert answer({"info": {"version": "4.1.4"}}) == "4.1.4", "control"
+    assert seen == ["https://pypi.org/pypi/fastmcp/json"]
+    assert answer({"info": {"version": "4.2.0rc1"}}) is None
+    assert answer({"info": {}}) is None
+    assert answer([]) is None
+    assert answer(OSError("offline")) is None
+
+
+def test_an_exact_title_past_gh_default_page_is_still_found(monkeypatch, roots, capsys):
+    """Codex on #387: `--search` without `--limit` returns 30 rows, so an old exact-title
+    issue behind 30 newer near titles, and outside the newest 100, was missed."""
+    old = {"title": _TITLES[2], "number": 1, "state": "CLOSED"}
+    near = [
+        {"title": f"{_TITLES[2]} follow-up {n}", "number": 2 + n, "state": "CLOSED"}
+        for n in range(40)
+    ]
+    filler = [{"title": f"unrelated {n}", "number": 100 + n, "state": "OPEN"} for n in range(120)]
+    gh = FakeGh([*filler, *reversed(near), old])
+    _no_real_lookups(monkeypatch, _NPM_AHEAD, _PYPI_AHEAD, gh)
+    _code, out = _run([*roots, "--file-issues"], capsys)
+    actions = {f["stream"]: (f["action"], f["number"]) for f in out["filings"]}
+    assert actions["fastmcp"] == ("exists", 1), actions
+
+
+def test_a_search_that_may_be_truncated_fails_closed(monkeypatch, roots, capsys):
+    near = [
+        {"title": f"{_TITLES[2]} follow-up {n}", "number": 2 + n, "state": "CLOSED"}
+        for n in range(5)
+    ]
+    gh = FakeGh(near)
+    _no_real_lookups(monkeypatch, _NPM_AHEAD, _PYPI_AHEAD, gh)
+    monkeypatch.setattr(compat, "SEARCH_LIMIT", 5)
+    code, out = _run([*roots, "--file-issues"], capsys)
+    assert code == 1, out
+    actions = {f["stream"]: f["action"] for f in out["filings"]}
+    assert actions["fastmcp"] == "failed", actions
+    assert all(a[a.index("--title") + 1] != _TITLES[2] for a in gh.created)
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        http.client.IncompleteRead(b"{"),
+        http.client.RemoteDisconnected("gone"),
+        UnicodeDecodeError("utf-8", b"\xff", 0, 1, "bad"),
+    ],
+)
+def test_a_pypi_read_error_is_unknown_and_the_other_streams_still_run(
+    monkeypatch, roots, capsys, error
+):
+    """Codex on #387: `IncompleteRead` is an `HTTPException`, not an `OSError`, and escaped."""
+
+    class Response(io.BytesIO):
+        def read(self, *_a):
+            raise error
+
+    monkeypatch.setattr(compat.urllib.request, "urlopen", lambda url, timeout: Response())
+    monkeypatch.setattr(compat, "latest_upstream", _NPM_AHEAD.get)
+    monkeypatch.setattr(compat, "run_gh", FakeGh())
+    code, out = _run(roots, capsys)
+    assert code == 1, out
+    assert [f["status"] for f in out["findings"]] == ["update", "update", "unknown", "unknown"]
+
+
+def test_an_npm_output_that_cannot_be_decoded_is_unknown(monkeypatch):
+    def run(*_a, **_k):
+        raise UnicodeDecodeError("utf-8", b"\xff", 0, 1, "bad")
+
+    monkeypatch.setattr(compat.subprocess, "run", run)
+    assert compat.latest_upstream("kimi") is None
+    assert compat.run_gh(["issue", "list"])[0] != 0
+
+
+_CLAUDE = "chore(backends): track claude "
+
+
+def _claude_issue(version: str, number: int, state: str = "OPEN") -> dict:
+    return {"title": _CLAUDE + version, "number": number, "state": state, "body": "old"}
+
+
+def _claude_filing(gh: FakeGh, roots, capsys, *extra: str) -> tuple[int, dict]:
+    code, out = _run([*roots, "--file-issues", *extra], capsys)
+    (filing,) = [f for f in out["filings"] if f["stream"] == "claude"]
+    return code, filing
+
+
+@pytest.fixture
+def claude_only(monkeypatch):
+    def setup(gh: FakeGh, latest: str = "2.1.400") -> FakeGh:
+        _no_real_lookups(monkeypatch, {"kimi": _SUPPORTED_KIMI, "claude": latest}, {}, gh)
+        monkeypatch.setattr(compat, "WATCH_STREAMS", ("kimi", "claude"))
+        return gh
+
+    return setup
+
+
+def test_claude_keeps_one_rolling_issue_a_newer_release_edits_it(claude_only, roots, capsys):
+    gh = claude_only(FakeGh([_claude_issue("2.1.399", 50)]))
+    code, filing = _claude_filing(gh, roots, capsys)
+    assert filing["action"] == "edited" and filing["number"] == 50, filing
+    assert filing["moved_from"] == "2.1.399"
+    assert gh.created == [], "a newer release moves the open issue; it never files another"
+    (edit,) = gh.edited
+    assert edit[:3] == ["issue", "edit", "50"]
+    assert edit[edit.index("--title") + 1] == _CLAUDE + "2.1.400"
+    assert "2.1.400 is available upstream" in edit[edit.index("--body") + 1]
+    (comment,) = gh.comments
+    assert comment[:3] == ["issue", "comment", "50"]
+    assert "2.1.399" in comment[-1] and "2.1.400" in comment[-1], comment
+
+    # The same release again is a no-op.
+    code, filing = _claude_filing(gh, roots, capsys)
+    assert filing["action"] == "exists" and filing["number"] == 50, filing
+    assert len(gh.edited) == 1 and len(gh.comments) == 1 and gh.created == []
+
+
+def test_claude_files_when_none_is_open_and_closing_rearms_it(claude_only, roots, capsys):
+    gh = claude_only(FakeGh([_claude_issue("2.1.300", 9, "CLOSED")]))
+    code, filing = _claude_filing(gh, roots, capsys)
+    assert code == 0 and filing["action"] == "filed", filing
+    assert [a[a.index("--title") + 1] for a in gh.created] == [_CLAUDE + "2.1.400"]
+    body = gh.created[0][gh.created[0].index("--body") + 1]
+    assert "rolls forward" in body and "re-arms" in body, body
+
+
+def test_a_closed_claude_issue_for_this_release_suppresses_filing(claude_only, roots, capsys):
+    gh = claude_only(FakeGh([_claude_issue("2.1.400", 9, "CLOSED")]))
+    code, filing = _claude_filing(gh, roots, capsys)
+    assert code == 0 and filing["action"] == "exists" and filing["state"] == "CLOSED", filing
+    assert gh.created == gh.edited == []
+
+
+def test_an_open_claude_issue_ahead_of_latest_is_left_alone(claude_only, roots, capsys):
+    gh = claude_only(FakeGh([_claude_issue("2.1.401", 50)]))
+    code, filing = _claude_filing(gh, roots, capsys)
+    assert code == 0 and filing["action"] == "exists" and filing["number"] == 50, filing
+    assert gh.created == gh.edited == gh.comments == []
+
+
+@pytest.mark.parametrize(
+    "issues",
+    [
+        [_claude_issue("2.1.399", 50), _claude_issue("2.1.398", 51)],
+        [_claude_issue("2.1.400", 50), _claude_issue("2.1.400", 51)],
+        [{"title": _CLAUDE + "next", "number": 50, "state": "OPEN"}],
+    ],
+)
+def test_ambiguous_open_claude_issues_fail_closed(claude_only, roots, capsys, issues):
+    gh = claude_only(FakeGh(issues))
+    code, filing = _claude_filing(gh, roots, capsys)
+    assert code == 1 and filing["action"] == "failed", filing
+    assert gh.created == gh.edited == gh.comments == []
+
+
+def test_dry_run_reports_the_claude_edit_without_making_it(claude_only, roots, capsys):
+    gh = claude_only(FakeGh([_claude_issue("2.1.399", 50)]))
+    code, filing = _claude_filing(gh, roots, capsys, "--dry-run")
+    assert code == 0 and filing["action"] == "would_edit" and filing["number"] == 50, filing
+    assert gh.created == gh.edited == gh.comments == []
+
+
+@pytest.mark.parametrize("failing", ["edit", "comment"])
+def test_a_failed_claude_edit_fails_the_run(claude_only, roots, capsys, failing):
+    gh = claude_only(FakeGh([_claude_issue("2.1.399", 50)]))
+    gh.fail = failing
+    code, filing = _claude_filing(gh, roots, capsys)
+    assert code == 1 and filing["action"] == "failed", filing
+
+
+def test_an_unreadable_capture_folder_is_unknown_and_the_rest_still_run(monkeypatch, roots, capsys):
+    """Copilot on #387: a PermissionError from listing docs/claude-help was a traceback."""
+
+    def unreadable(*_a):
+        raise PermissionError("docs/claude-help")
+
+    _no_real_lookups(monkeypatch, _NPM_AHEAD, _PYPI_AHEAD, FakeGh())
+    monkeypatch.setattr(compat, "newest_capture", unreadable)
+    code, out = _run(roots, capsys)
+    assert code == 1, out
+    assert [f["status"] for f in out["findings"]] == ["update", "unknown", "update", "update"]
+
+
+def test_a_stale_search_cannot_make_a_closed_claude_issue_roll(claude_only, roots, capsys):
+    """Copilot on #387: the search said OPEN, the direct listing CLOSED; the listing wins."""
+    gh = claude_only(FakeGh([_claude_issue("2.1.399", 50, "CLOSED")]))
+    gh.stale = {50: "OPEN"}
+    code, filing = _claude_filing(gh, roots, capsys)
+    assert code == 0 and filing["action"] == "filed", filing
+    assert gh.edited == [] and gh.comments == []
+
+
+@pytest.mark.parametrize(
+    ("issue", "latest", "action"),
+    [
+        ("2.1.400-beta.1", "2.1.400", "edited"),
+        ("2.1.400-beta.2", "2.1.400-beta.10", "edited"),
+        ("2.1.400", "2.1.400-beta.1", "exists"),
+        ("2.1.400-beta.1", "2.1.400-beta.1", "exists"),
+    ],
+)
+def test_a_prerelease_rolls_forward_to_its_final(claude_only, roots, capsys, issue, latest, action):
+    """Copilot on #387: `semver()` drops the suffix, so 2.1.400 equalled 2.1.400-beta.1."""
+    gh = claude_only(FakeGh([_claude_issue(issue, 50)]), latest)
+    code, filing = _claude_filing(gh, roots, capsys)
+    assert code == 0 and filing["action"] == action, filing
+    if action == "edited":
+        assert gh.issues[0]["title"] == _CLAUDE + latest
+
+
+@pytest.mark.parametrize("failing", ["comment", "edit"])
+def test_a_half_finished_move_completes_on_the_rerun_with_one_notice(
+    claude_only, roots, capsys, failing
+):
+    """Copilot on #387: an edit that landed before its comment failed left a rerun seeing the
+    latest title, so the move notice was never posted."""
+    gh = claude_only(FakeGh([_claude_issue("2.1.399", 50)]))
+    gh.fail = failing
+    code, filing = _claude_filing(gh, roots, capsys)
+    assert code == 1 and filing["action"] == "failed", filing
+    gh.fail = None
+    code, filing = _claude_filing(gh, roots, capsys)
+    assert code == 0 and filing["action"] == "edited", filing
+    assert gh.issues[0]["title"] == _CLAUDE + "2.1.400"
+    assert len(gh.comments) == 1, "exactly one move notice, whichever step failed"
+    code, filing = _claude_filing(gh, roots, capsys)
+    assert filing["action"] == "exists" and len(gh.comments) == 1

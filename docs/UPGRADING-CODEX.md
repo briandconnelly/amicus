@@ -13,6 +13,7 @@ Cutting a release is `docs/RELEASING.md`, whose precondition "The backend CLIs a
 You usually do not have to notice a new minor yourself.
 A scheduled Claude Code routine checks npm's `latest` dist-tag for `@openai/codex` and keeps a `codex-upgrade` issue titled `chore(backends): track codex <major>.<minor>` for each new minor, holding an evaluation of the release notes.
 Issues opened before that title existed are titled `chore(cli-contract): track codex <major>.<minor>`.
+The other backend CLIs and the capped `fastmcp` and `mcp` packages are watched by `check_backend_compat.py watch` instead, described in `docs/WATCHING.md`.
 That evaluation is read from the notes alone; nothing in it was run against a binary, so everything below still runs locally, where an authenticated `codex` is installed.
 A patch release within a supported minor needs no change to the set, though the steps below can still be run to refresh a capture.
 

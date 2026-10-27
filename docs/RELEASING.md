@@ -144,18 +144,35 @@ The tag therefore deliberately points at a commit that is in `main`'s history bu
 
 1. Merge PR B (the milestone work, version literals untouched).
 2. Open PR C, the `chore(release):` PR described by AGENTS.md rule 19, and do not merge it yet.
-   Roll `## [Unreleased]` in `CHANGELOG.md` into a dated `## [X.Y.Z] - YYYY-MM-DD` section, and leave a fresh empty `## [Unreleased]` above it.
-   Move the footer's link definitions with it: `[Unreleased]` compares `vX.Y.Z...HEAD`, and a new `[X.Y.Z]` definition compares the previous release's tag with `vX.Y.Z`.
-   `scripts/check_release_state.py` rejects a footer that did not follow the roll, which 0.5.0's release PR first shipped with (#211).
-   That date is **UTC** (`date -u +%F`), not the local date of whoever prepares the PR.
-   The two disagree for part of every day in this maintainer's timezone, and the tag, the publish run and the PyPI record are all stamped in UTC, so a local date makes the changelog disagree with every other artifact of the same release.
-   0.1.0 predates this convention and is dated `2026-09-08`, its local date; it was tagged on 2026-09-09 UTC, and that section is left as it shipped rather than rewritten.
+   On a fresh branch off `main`, with a clean tree, run:
+
+   ```sh
+   uv run python scripts/release.py prepare X.Y.Z --check
+   uv run python scripts/release.py prepare X.Y.Z
+   ```
+
+   The first prints the planned edits and writes nothing; the second makes them, runs `uv lock`, and then runs every release-state check `scripts/check_release_state.py` runs on the tree except one: that the tag `.mcp.json` pins exists, which it cannot until step 3 creates the tag.
+   It refuses a version that is not strictly greater than the one `pyproject.toml` declares, a dirty tree, the `main` branch, and an empty `## [Unreleased]` section.
+   It never commits, tags, pushes or merges.
+   What it does, and why each part is there:
+   - It rolls `## [Unreleased]` in `CHANGELOG.md` into a dated `## [X.Y.Z] - YYYY-MM-DD` section, and leaves a fresh empty `## [Unreleased]` above it.
+   - It moves the footer's link definitions with it: `[Unreleased]` compares `vX.Y.Z...HEAD`, and a new `[X.Y.Z]` definition compares the previous release's tag with `vX.Y.Z`.
+     `scripts/check_release_state.py` rejects a footer that did not follow the roll, which 0.5.0's release PR first shipped with (#211).
+   - That date is **UTC**, what `date -u +%F` prints, not the local date of whoever prepares the PR.
+     The two disagree for part of every day in this maintainer's timezone, and the tag, the publish run and the PyPI record are all stamped in UTC, so a local date makes the changelog disagree with every other artifact of the same release.
+     0.1.0 predates this convention and is dated `2026-09-08`, its local date; it was tagged on 2026-09-09 UTC, and that section is left as it shipped rather than rewritten.
+   - It moves the version literals: `pyproject.toml`, `src/amicus/__init__.py` and both `plugin.json` files.
+     It moves `.mcp.json`'s pin to `vX.Y.Z` with them: per ADR 0031 it names the release being made, so a host installing this tag runs this release's server.
+     It moves README's "Any other MCP client" example to the same pin; `tests/test_packaging.py::test_readme_example_mirrors_the_mcp_json_pin` fails if the two differ.
+   - It does **not** touch `.claude-plugin/marketplace.json`, and fails if that file is not byte-identical afterwards: its pointer names the previous release until step 7 advances it.
+   - It regenerates `uv.lock` with `uv lock`, per AGENTS.md rule 19: `uv.lock` mirrors the version rather than declaring it, and `prek.toml`'s `uv-lock-check` hook runs `uv lock --check` whenever `pyproject.toml` changes, so a release PR that skips this fails its own hook.
+     It warns when `uv lock` changes anything in `uv.lock` beyond amicus's own version line, which a different `uv` release can do: uv 0.13 rewrote the revision-3 lock as revision 5 when 0.11.1 was prepared, and that release PR kept only the version line.
+
+   Then do by hand what the script leaves to you, and commit the result as PR C.
+   Write the release section's lead paragraph and review its entries.
+   Update README's "Status and known limits" prose naming the current release, and add the release's upgrade section to `docs/MIGRATION.md`; the script reminds you of both and edits neither.
    Change no version literal unless the version itself is changing.
-   The literals are `pyproject.toml`, `src/amicus/__init__.py` and both `plugin.json` files.
-   Move `.mcp.json`'s pin to `vX.Y.Z` with the other literals: per ADR 0031 it names the release being made, so a host installing this tag runs this release's server.
-   Move README's "Any other MCP client" example to the same pin in this PR; `tests/test_packaging.py::test_readme_example_mirrors_the_mcp_json_pin` fails if the two differ.
-   Do **not** touch `.claude-plugin/marketplace.json`: its pointer names the previous release until step 7 advances it.
-   Regenerate `uv.lock` with `uv lock` in this same PR, per AGENTS.md rule 19 — `uv.lock` mirrors the version rather than declaring it, and `prek.toml`'s `uv-lock-check` hook runs `uv lock --check` whenever `pyproject.toml` changes, so a release PR that skips this fails its own hook.
+
 3. Run every command from here through step 6 in the PR C worktree, never in the main checkout.
    Every command below is relative to the directory it runs in, and nothing but the evidence script's own refusal checks which checkout that is.
    The evidence was recorded in the main checkout for 0.3.0, 0.6.0 and 0.7.0; each time a later check caught it, but only after the quota on all three backends was spent (#241).
