@@ -14,6 +14,7 @@ from typing import Any
 import pytest
 from fastmcp import Client
 from tests.conftest import ENV_PREFIXES, spawned_server_env
+from tests.support.fingerprint_pins import REGEN_COMMAND, REGEN_STEPS, load_pins
 
 import amicus.backends.claude as claude_pkg
 import amicus.backends.codex as codex_pkg
@@ -27,12 +28,9 @@ from amicus.schemas.params import WORKSPACE_PREREQUISITE, WORKSPACELESS_TOOLS
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
-# sha256 of each profile's canonical manifest JSON; regenerate per the failure message.
-EXPECTED_MANIFEST_HASH: dict[str, str] = {
-    "all": "45548db38b9eee2cf2326128de6ecaa582a723d84b43264281f8c4dd3e869e79",
-    "codex-kimi": "68b223c8dcea88e905b08c78ebc054aa1a44b7f3039ff0d77edf8c4c11ccd5ec",
-    "claude": "69d5c78bd82c47e3db498631e5af638006058714fde2f33eb6e78a368898b9aa",
-}
+# sha256 of each profile's canonical manifest JSON, committed in tests/fixtures/
+# fingerprint_pins.json; regenerate per the failure message.
+EXPECTED_MANIFEST_HASH: dict[str, str] = load_pins()["manifest_hash"]
 
 _CACHING_SPEC_LIST_METHODS = (
     "tools/list",
@@ -191,15 +189,16 @@ async def test_manifest_matches_golden(profile):
     current = manifest.manifest_json(await manifest.build_manifest(app))
     fixture = FIXTURES / f"manifest_snapshot.{profile}.json"
     assert fixture.exists(), (
-        f"no snapshot for profile {profile!r}: `uv run python -m amicus.manifest --profile "
-        f"{profile} > tests/fixtures/manifest_snapshot.{profile}.json` in its own commit"
+        f"no snapshot for profile {profile!r}: `{REGEN_COMMAND}` writes every profile's "
+        "snapshot; commit them in their own commit"
     )
     assert current == fixture.read_text(encoding="utf-8"), (
-        "agent-visible surface changed — review the snapshot diff, then in a DEDICATED "
-        "commit: bump FINGERPRINT (schema-N) in schemas/fingerprint.py, regenerate every "
-        "profile's fixture, and re-pin EXPECTED_MANIFEST_HASH and the surface digests."
+        f"agent-visible surface changed for {profile!r}: {REGEN_STEPS}."
     )
-    assert await manifest.manifest_hash(app) == EXPECTED_MANIFEST_HASH[profile]
+    assert await manifest.manifest_hash(app) == EXPECTED_MANIFEST_HASH[profile], (
+        f"manifest hash for {profile!r} disagrees with tests/fixtures/fingerprint_pins.json: "
+        f"{REGEN_STEPS}."
+    )
 
 
 async def test_profiles_differ_where_annotations_differ():

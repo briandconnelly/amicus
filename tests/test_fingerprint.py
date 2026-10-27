@@ -3,23 +3,21 @@
 from __future__ import annotations
 
 import pytest
+from tests.support.fingerprint_pins import REGEN_STEPS, load_pins
 
 from amicus import manifest, surface
 from amicus.schemas.fingerprint import FINGERPRINT, parse_fingerprint
 
-EXPECTED_SURFACE_DIGEST: dict[str, str] = {
-    "all": "18f957727a54eff706b3f36ef9a3118e90bbe91c365c50b3b63f1e0948a08cdf",
-    "codex-kimi": "ac81fb9acd35d5a39f6a518f5b4eb1333640a66f57603c6c8772e85a9a11bbee",
-    "claude": "18f957727a54eff706b3f36ef9a3118e90bbe91c365c50b3b63f1e0948a08cdf",
-}
+# Committed in tests/fixtures/fingerprint_pins.json beside the manifest hashes (#373).
+EXPECTED_SURFACE_DIGEST: dict[str, str] = load_pins()["surface_digest"]
 
 
 @pytest.mark.parametrize("profile", sorted(manifest.PROFILES))
 async def test_surface_digest_is_pinned(profile):
     actual = await surface.surface_digest(manifest.app_for_profile(profile))
     assert actual == EXPECTED_SURFACE_DIGEST[profile], (
-        f"surface_digest moved for {profile!r}: {actual}. If intentional, bump FINGERPRINT "
-        f"(currently {FINGERPRINT}) and re-pin in a dedicated commit."
+        f"surface_digest moved for {profile!r}: {actual} (FINGERPRINT is {FINGERPRINT}); "
+        f"{REGEN_STEPS}."
     )
 
 
