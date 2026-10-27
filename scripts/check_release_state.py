@@ -29,6 +29,10 @@ question, and the difference matters more than the code:
    which names an EARLIER, internally consistent release: that pointer, not `.mcp.json`, is
    what decides which snapshot a host installs, and it advances only after publishing.
 
+   `check_tree_pre_tag` runs every one of these checks except the pinned tag's existence,
+   for `scripts/release.py prepare` to report on the release PR before step 3 may create
+   the tag. It is not part of the predicate: nothing in this script's CLI calls it.
+
 2. **The live-gate assertion** (`check_tag`). AGENTS.md rule 20's evidence record, carried in
    the annotated tag's own message. A green result here proves only that a well-formed record
    naming *this* commit exists and asserts three passing suites. It does NOT prove the runs
@@ -86,6 +90,8 @@ if TYPE_CHECKING:
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
+# Use `fullmatch` with these, never `match`: `$` also matches before a trailing newline, so
+# `match` accepts "1.2.3\n" (a Copilot finding on PR #384).
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
 TAG_RE = re.compile(r"^v(?P<version>\d+\.\d+\.\d+)$")
 _INIT_VERSION_RE = re.compile(r'^__version__ = "(?P<version>[^"]+)"$', re.MULTILINE)
@@ -167,7 +173,7 @@ def _pin_from_text(text: str) -> tuple[str | None, list[str]]:
     source = args[index]
     if not isinstance(source, str):
         return None, [f".mcp.json's `--from` source is {source!r}, which is not a string"]
-    match = _MCP_SOURCE_RE.match(source)
+    match = _MCP_SOURCE_RE.fullmatch(source)
     if match is None:
         return None, [
             f".mcp.json installs {source!r}, which is not this repository at a vX.Y.Z tag"
@@ -307,9 +313,9 @@ def marketplace_source(
         problems.append(f'{MARKETPLACE_PATH}\'s pointer `source` must be "url"')
     if source.get("url") != MARKETPLACE_URL:
         problems.append(f"{MARKETPLACE_PATH}'s pointer `url` must be {MARKETPLACE_URL}")
-    if not isinstance(source.get("ref"), str) or not TAG_RE.match(source["ref"]):
+    if not isinstance(source.get("ref"), str) or not TAG_RE.fullmatch(source["ref"]):
         problems.append(f"{MARKETPLACE_PATH}'s pointer `ref` must be vX.Y.Z")
-    if not isinstance(source.get("sha"), str) or not _SHA_RE.match(source["sha"]):
+    if not isinstance(source.get("sha"), str) or not _SHA_RE.fullmatch(source["sha"]):
         problems.append(f"{MARKETPLACE_PATH}'s pointer `sha` must be 40 lowercase hex digits")
     return (None if problems else source), problems
 
@@ -317,7 +323,7 @@ def marketplace_source(
 def _pointer_version(source: str | dict) -> str | None:
     """The version a well-formed pointer names, or None for the pre-activation `"./"`."""
     if isinstance(source, dict) and isinstance(source.get("ref"), str):
-        match = TAG_RE.match(source["ref"])
+        match = TAG_RE.fullmatch(source["ref"])
         return match.group("version") if match else None
     return None
 
@@ -590,7 +596,7 @@ def check_deprecations(version: str, *, repo_root: Path = REPO_ROOT) -> list[str
     (AGENTS.md rule 19)."""
     windows, problems = deprecation_windows(repo_root)
     for name, (since, removal) in windows.items():
-        if not (VERSION_RE.match(since) and VERSION_RE.match(removal)):
+        if not (VERSION_RE.fullmatch(since) and VERSION_RE.fullmatch(removal)):
             problems.append(
                 f"{name}: since {since!r} and removal_at_or_after {removal!r} must be X.Y.Z"
             )
@@ -732,7 +738,7 @@ def check_legacy_env(version: str, *, repo_root: Path = REPO_ROOT) -> list[str]:
     removal, declared, problems = legacy_env_state(repo_root)
     if removal is None:
         return problems
-    if not VERSION_RE.match(removal):
+    if not VERSION_RE.fullmatch(removal):
         return [*problems, f"{_LEGACY_REMOVAL_NAME} {removal!r} must be X.Y.Z"]
     if _parts(version) < _parts(removal):
         return problems
@@ -758,11 +764,44 @@ def check_tree(
     `run` drives `uv lock --check` and `git` drives the tag lookup; they are separate
     parameters so a test can stub one without silently satisfying the other.
     """
-    return [
+    return _tree_problems(version, repo_root=repo_root, run=run, git=git, pin_tag_exists=True)
+
+
+def check_tree_pre_tag(
+    version: str,
+    *,
+    repo_root: Path = REPO_ROOT,
+    run: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+    git: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+) -> list[str]:
+    """`check_tree` without one check: that the tag `.mcp.json` pins exists in this checkout.
+
+    For preparing the release PR (`scripts/release.py prepare`), before any evidence is
+    recorded and so before `docs/RELEASING.md` step 3 may create the tag. Every other check
+    runs exactly as `check_tree` runs it, the pin's shape and version included. This is not
+    the release predicate: `main()` and the `verify` job never call it, and a pass here says
+    nothing about the tag, which `check_tree` still requires with no pre-tag exception.
+    """
+    return _tree_problems(version, repo_root=repo_root, run=run, git=git, pin_tag_exists=False)
+
+
+def _tree_problems(
+    version: str,
+    *,
+    repo_root: Path,
+    run: Callable[..., subprocess.CompletedProcess[str]],
+    git: Callable[..., subprocess.CompletedProcess[str]],
+    pin_tag_exists: bool,
+) -> list[str]:
+    problems = [
         *check_version_literals(version, repo_root=repo_root),
         *check_changelog(version, repo_root=repo_root),
         *check_lock(repo_root=repo_root, run=run),
-        *check_mcp_pin_tag_exists(repo_root=repo_root, git=git),
+    ]
+    if pin_tag_exists:
+        problems += check_mcp_pin_tag_exists(repo_root=repo_root, git=git)
+    return [
+        *problems,
         *check_marketplace(version, repo_root=repo_root, git=git),
         *check_deprecations(version, repo_root=repo_root),
         *check_legacy_env(version, repo_root=repo_root),
@@ -770,7 +809,7 @@ def check_tree(
 
 
 def version_for_tag(tag: str) -> tuple[str | None, list[str]]:
-    match = TAG_RE.match(tag)
+    match = TAG_RE.fullmatch(tag)
     if match is None:
         return None, [f"tag {tag!r} is not of the form vX.Y.Z"]
     return match.group("version"), []
@@ -906,7 +945,7 @@ def main(argv: list[str] | None = None, *, repo_root: Path = REPO_ROOT) -> int:
     else:
         version = declared_version(repo_root)
 
-    if not VERSION_RE.match(version):
+    if not VERSION_RE.fullmatch(version):
         problems.append(f"version {version!r} is not X.Y.Z")
 
     problems += check_tree(version, repo_root=repo_root)

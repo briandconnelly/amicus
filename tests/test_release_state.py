@@ -311,6 +311,7 @@ def test_pins_compare_numerically_not_as_strings(repo):
         "git+https://github.com/someone-else/amicus.git@v1.2.3",
         "git+https://github.com/briandconnelly/amicus.git@main",
         "git+https://github.com/briandconnelly/amicus.git",
+        "git+https://github.com/briandconnelly/amicus.git@v1.2.3\n",
     ],
 )
 def test_a_source_that_is_not_this_repo_at_a_version_tag_is_rejected(repo, source):
@@ -400,6 +401,73 @@ def test_a_later_release_pinned_to_its_own_unpushed_tag_is_rejected(repo):
     assert any(f"v{VERSION}" in problem for problem in problems), problems
 
 
+# --- the pre-tag tree check `scripts/release.py prepare` reports (#374) --------------------
+
+
+def _consistent_git_without_the_release_tag(cmd, *args, **kwargs):
+    """`_consistent_git`, except that the release's own tag is not there yet."""
+    if cmd[1:4] == ["rev-parse", "--verify", "--quiet"]:
+        return _tag_missing(cmd, *args, **kwargs)
+    return _consistent_git(cmd, *args, **kwargs)
+
+
+def test_the_pre_tag_check_skips_only_the_pinned_tag_lookup(repo):
+    """Before the tag exists the full predicate fails on exactly one problem, the tag, and
+    the pre-tag check reports nothing; when the tag exists, the two agree."""
+    git = _consistent_git_without_the_release_tag
+    full = release_state.check_tree(VERSION, repo_root=repo, run=_lock_ok, git=git)
+    assert full == release_state.check_mcp_pin_tag_exists(repo_root=repo, git=git) != []
+    assert release_state.check_tree_pre_tag(VERSION, repo_root=repo, run=_lock_ok, git=git) == []
+    assert release_state.check_tree_pre_tag(
+        VERSION, repo_root=repo, run=_lock_ok, git=_consistent_git
+    ) == release_state.check_tree(VERSION, repo_root=repo, run=_lock_ok, git=_consistent_git)
+
+
+def test_the_pre_tag_check_issues_no_tag_lookup(repo):
+    def git(cmd, *args, **kwargs):
+        assert cmd[1:4] != ["rev-parse", "--verify", "--quiet"], "looked the tag up"
+        return _consistent_git(cmd, *args, **kwargs)
+
+    assert release_state.check_tree_pre_tag(VERSION, repo_root=repo, run=_lock_ok, git=git) == []
+
+
+@pytest.mark.parametrize(
+    ("relative", "old", "new", "expected"),
+    [
+        (".mcp.json", f"@v{VERSION}", f"@v{PREVIOUS}", f"expected v{VERSION}"),
+        ("pyproject.toml", VERSION, "9.9.9", "pyproject.toml declares"),
+        ("CHANGELOG.md", f"## [{VERSION}] - ", "## [9.9.9] - ", "no dated"),
+    ],
+)
+def test_the_pre_tag_check_still_runs_every_other_check(repo, relative, old, new, expected):
+    """Skipping the lookup is not skipping the pin: its version is still checked, as is
+    everything else `check_tree` reads."""
+    path = repo / relative
+    path.write_text(path.read_text(encoding="utf-8").replace(old, new), encoding="utf-8")
+    problems = release_state.check_tree_pre_tag(
+        VERSION, repo_root=repo, run=_lock_ok, git=_consistent_git_without_the_release_tag
+    )
+    assert any(expected in problem for problem in problems), problems
+
+
+def test_the_pre_tag_check_still_runs_the_lock_check(repo):
+    problems = release_state.check_tree_pre_tag(
+        VERSION, repo_root=repo, run=_lock_stale, git=_consistent_git_without_the_release_tag
+    )
+    assert any("uv lock --check" in problem for problem in problems), problems
+
+
+def test_the_cli_never_runs_the_pre_tag_check(repo, monkeypatch):
+    """`main()` is the predicate the `verify` job runs: it must keep requiring the tag."""
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("main() called check_tree_pre_tag")
+
+    monkeypatch.setattr(release_state, "check_tree_pre_tag", forbidden)
+    monkeypatch.setattr(release_state, "check_tree", lambda *a, **k: ["sentinel"])
+    assert release_state.main([], repo_root=repo) == 1
+
+
 # --- marketplace pointer (the release-activation spec, #117) --------------------------------
 
 
@@ -460,6 +528,8 @@ def test_a_missing_sha_is_rejected(repo):
         ("sha", "c" * 39),
         ("url", "https://github.com/someone-else/amicus.git"),
         ("source", "git-subdir"),
+        ("ref", "v1.2.2\n"),
+        ("sha", "c" * 40 + "\n"),
     ],
 )
 def test_a_malformed_pointer_value_is_rejected(repo, field, value):
@@ -836,7 +906,7 @@ def test_freshness_is_deliberately_not_checked_after_tagging():
 # --- the tag name ----------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("tag", ["1.2.3", "v1.2", "release-1.2.3", "v1.2.3-rc1"])
+@pytest.mark.parametrize("tag", ["1.2.3", "v1.2", "release-1.2.3", "v1.2.3-rc1", "v1.2.3\n"])
 def test_a_tag_that_is_not_vX_Y_Z_is_rejected(tag):
     version, problems = release_state.version_for_tag(tag)
     assert version is None
@@ -884,6 +954,19 @@ def test_a_release_at_the_removal_version_with_the_tool_still_listed_is_rejected
     _set_window(repo, 'removal_at_or_after="1.4.0"', f'removal_at_or_after="{VERSION}"')
     problems = _tree(repo)
     assert len(problems) == 1 and f"at or past its removal_at_or_after {VERSION}" in problems[0]
+
+
+def test_a_window_with_a_trailing_newline_is_rejected(repo):
+    _set_window(repo, 'since="1.2.0"', 'since="1.2.0\\n"')
+    assert any("must be X.Y.Z" in p for p in _tree(repo)), _tree(repo)
+
+
+def test_a_version_with_a_trailing_newline_is_rejected_by_the_cli(repo, capsys):
+    (repo / "pyproject.toml").write_text(
+        '[project]\nname = "amicus"\nversion = "1.2.3\\n"\n', encoding="utf-8"
+    )
+    assert release_state.main([], repo_root=repo) == 1
+    assert "is not X.Y.Z" in capsys.readouterr().err
 
 
 def test_an_empty_table_is_accepted(repo):
@@ -971,6 +1054,11 @@ def test_a_release_past_the_removal_version_with_no_aliases_left_is_accepted(rep
         ' EnvVar("AMICUS_B", "b", None, ()), EnvVar("AMICUS_C", "c", legacy=[])))\n',
     )
     assert _tree(repo) == []
+
+
+def test_a_legacy_removal_version_with_a_trailing_newline_is_rejected(repo):
+    _set_removal(repo, "2.0.0\\n")
+    assert any("must be X.Y.Z" in p for p in _tree(repo)), _tree(repo)
 
 
 def test_a_legacy_argument_the_parser_cannot_evaluate_counts_as_declared(repo):
