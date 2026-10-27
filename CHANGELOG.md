@@ -20,6 +20,15 @@ per-change, as its own lead says.
 
 ## [Unreleased]
 
+### Added
+
+- `scripts/check_backend_compat.py compare --backend codex --old-bin PATH --new-bin PATH`
+  collects the old and new evidence `docs/UPGRADING-CODEX.md` step 2 used to gather by hand:
+  every help surface and `features list` from both binaries, the old binary authenticated
+  against its committed capture, and step 3's zero-spend config and grammar probes, each run
+  in a credential-free scratch home. It reports what it checked, what differed and what it did
+  not run. The default invocation is unchanged (#376).
+
 ### Changed
 
 - codex-cli 0.164 is a supported version, so `amicus_backends` no longer warns on it. 0.164.0 was
