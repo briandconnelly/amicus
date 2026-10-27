@@ -226,6 +226,8 @@ def _flow_items(flow: str) -> list[str] | None:
         elif quote:
             if quote == '"' and char == "\\":
                 escaped = True
+            elif quote == "'" and char == "'" and flow[i + 1 : i + 2] == "'":
+                escaped = True  # a doubled apostrophe is one quote character
             elif char == quote:
                 quote = None
         elif char in "\"'" and flow[:i].rstrip()[-1:] in ("", "[", "{", ",", ":"):
@@ -293,7 +295,8 @@ def trigger_problems(text: str) -> list[tuple[int, str]]:
                 break
             value_lines.append((n, nxt))
         events: list[tuple[int, str | None]] = []
-        inline = (on_key.group(1) or "").strip()
+        # A header of properties alone (``on: &events``) leaves the value on the lines below.
+        inline = _DECORATION_RE.sub("", (on_key.group(1) or "") + " ").strip()
         if inline.startswith(("[", "{")):
             flow = " ".join([inline, *(v.strip() for _, v in value_lines)])
             names = _flow_events(flow)

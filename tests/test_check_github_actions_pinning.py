@@ -303,6 +303,23 @@ def test_flow_quotes_close_after_an_escaped_backslash_and_open_only_at_a_token()
     assert check.trigger_problems(text) == [(1, check.PRT_FORBIDDEN)]
 
 
+def test_pull_request_target_is_found_under_an_anchored_or_tagged_on():
+    for head in (
+        "on: &events\n  pull_request_target:\n",
+        "on: &events\n  - pull_request_target\n",
+        "on: !!map\n  pull_request_target:\n",
+    ):
+        assert _forbidden(head + "jobs: {}\n") == [2], head
+
+
+def test_a_doubled_apostrophe_stays_inside_a_flow_quote():
+    text = (
+        "on: { workflow_dispatch: { inputs: { x: { description: 'It''s a brace: }' } } } }\n"
+        "jobs: {}\n"
+    )
+    assert check.trigger_problems(text) == []
+
+
 def test_a_comment_inside_on_is_not_a_trigger():
     text = "on:\n  # never add pull_request_target\n  push: # not pull_request_target\njobs: {}\n"
     assert check.trigger_problems(text) == []
