@@ -131,10 +131,12 @@ def test_classify_docker_no_tag_is_violation():
 # --- main: exit codes --------------------------------------------------------
 
 
-def _write_workflow(root: Path, body: str) -> None:
+def _write_workflow(root: Path, body: str, *, on: str | None = "on: push\n") -> None:
+    """Write ``ci.yml``, led by an ``on:`` line unless ``on`` is None: the check fails a
+    workflow with no top-level ``on:``, so a fixture about something else needs one."""
     wf = root / ".github" / "workflows"
     wf.mkdir(parents=True, exist_ok=True)
-    (wf / "ci.yml").write_text(body)
+    (wf / "ci.yml").write_text((on or "") + body)
 
 
 def test_main_returns_0_when_all_pinned(tmp_path, capsys):
@@ -170,6 +172,16 @@ _SHA = "a" * 40
 
 def test_iter_uses_returns_the_flow_mapping_lines_trailing_comment():
     text = "      - { uses: actions/checkout@" + _SHA + " } # v6.0.3\n"
+    assert check.iter_uses(text) == [(1, "actions/checkout@" + _SHA, "v6.0.3")]
+
+
+def test_iter_uses_does_not_read_a_hash_inside_quotes_as_a_comment():
+    text = "      - { uses: actions/checkout@" + _SHA + ', name: "x # v6" }\n'
+    assert check.iter_uses(text) == [(1, "actions/checkout@" + _SHA, None)]
+
+
+def test_iter_uses_reads_the_real_comment_after_a_quoted_hash():
+    text = "      - { uses: actions/checkout@" + _SHA + ", name: 'a # b' } # v6.0.3\n"
     assert check.iter_uses(text) == [(1, "actions/checkout@" + _SHA, "v6.0.3")]
 
 
@@ -209,7 +221,7 @@ def test_main_returns_1_on_a_sha_pin_without_a_version_comment(tmp_path, capsys)
         tmp_path, "jobs:\n  a:\n    steps:\n      - uses: actions/checkout@" + _SHA + "\n"
     )
     assert check.main([str(tmp_path)]) == 1
-    assert "ci.yml:4" in capsys.readouterr().out
+    assert "ci.yml:5" in capsys.readouterr().out
 
 
 def test_main_reports_a_mutable_ref_once_not_also_as_a_missing_comment(tmp_path, capsys):
@@ -224,24 +236,40 @@ def test_main_reports_a_mutable_ref_once_not_also_as_a_missing_comment(tmp_path,
 _PRT_FORMS = {
     "scalar": "on: pull_request_target\n",
     "quoted scalar": "on: 'pull_request_target'\n",
+    "double-quoted escape": 'on: "pull_request_\\u0074arget"\n',
+    "tagged scalar": "on: !!str pull_request_target\n",
     "flow sequence": "on: [push, pull_request_target]\n",
     "flow mapping": "on: { pull_request_target: { types: [opened] } }\n",
+    "flow mapping after a quoted hash": (
+        'on: { workflow_dispatch: { inputs: { x: { description: "x # x" } } }, '
+        "pull_request_target: {} }\n"
+    ),
     "block sequence": "on:\n  - push\n  - pull_request_target\n",
+    "block sequence at the key's indent": "on:\n- push\n- pull_request_target\n",
     "block mapping": "on:\n  push:\n  pull_request_target:\n    types: [opened]\n",
     "quoted key": '"on":\n  "pull_request_target":\n',
     "multi-line flow": "on: [\n  push,\n  pull_request_target,\n]\n",
 }
 
 
+def _forbidden(text: str) -> list[int]:
+    return [n for n, reason in check.trigger_problems(text) if reason == check.PRT_FORBIDDEN]
+
+
 def test_pull_request_target_is_found_in_every_form_of_on():
     for form, head in _PRT_FORMS.items():
         text = "name: x\n" + head + "jobs:\n  a:\n    runs-on: ubuntu-latest\n"
-        assert check.find_pull_request_target(text), form
+        assert _forbidden(text), form
+
+
+def test_pull_request_target_is_found_under_an_indented_root():
+    text = "  name: x\n  on: pull_request_target\n  jobs: {}\n"
+    assert _forbidden(text) == [2]
 
 
 def test_pull_request_target_reports_the_line_it_is_on():
     text = "name: x\non:\n  push:\n  pull_request_target:\njobs: {}\n"
-    assert check.find_pull_request_target(text) == [4]
+    assert check.trigger_problems(text) == [(4, check.PRT_FORBIDDEN)]
 
 
 def test_pull_request_target_outside_on_is_not_a_trigger():
@@ -253,17 +281,53 @@ def test_pull_request_target_outside_on_is_not_a_trigger():
         "    if: github.event_name != 'pull_request_target'\n"
         "    runs-on: ubuntu-latest\n"
     )
-    assert check.find_pull_request_target(text) == []
+    assert check.trigger_problems(text) == []
+
+
+def test_pull_request_target_inside_an_events_configuration_is_not_a_trigger():
+    text = (
+        "on:\n"
+        "  push:\n"
+        '    paths: ["docs/pull_request_target.md"]\n'
+        "  workflow_dispatch:\n"
+        "    inputs:\n"
+        "      x: { description: pull_request_target }\n"
+        "  pull_request: { branches: [pull_request_target] }\n"
+        "jobs: {}\n"
+    )
+    assert check.trigger_problems(text) == []
+
+
+def test_flow_quotes_close_after_an_escaped_backslash_and_open_only_at_a_token():
+    text = 'on: { "a\\\\": {}, pull_request_target: {}, x: { d: don\'t } }\njobs: {}\n'
+    assert check.trigger_problems(text) == [(1, check.PRT_FORBIDDEN)]
 
 
 def test_a_comment_inside_on_is_not_a_trigger():
     text = "on:\n  # never add pull_request_target\n  push: # not pull_request_target\njobs: {}\n"
-    assert check.find_pull_request_target(text) == []
+    assert check.trigger_problems(text) == []
 
 
 def test_a_longer_event_name_is_not_pull_request_target():
     text = "on:\n  pull_request_target_x:\n  my_pull_request_target:\njobs: {}\n"
-    assert check.find_pull_request_target(text) == []
+    assert check.trigger_problems(text) == []
+
+
+def test_a_workflow_with_no_top_level_on_fails_closed():
+    for text in ("jobs: {}\n", "{on: pull_request_target, jobs: {}}\n", "x:\n  on: push\n"):
+        problems = check.trigger_problems(text)
+        assert [reason for _, reason in problems] == [check.NO_ON], text
+
+
+def test_an_event_name_the_check_cannot_read_fails_closed():
+    for head in (
+        'on: "pull_request_\\x74arget"\n',  # a YAML escape that JSON does not have
+        "on: *events\n",
+        "on:\n  ? pull_request_target\n",
+        "on: [push, [pull_request_target]]\n",
+    ):
+        problems = check.trigger_problems(head + "jobs: {}\n")
+        assert problems and all(r.startswith(check.UNREADABLE) for _, r in problems), head
 
 
 def test_main_returns_1_on_a_pull_request_target_workflow(tmp_path, capsys):
@@ -271,16 +335,17 @@ def test_main_returns_1_on_a_pull_request_target_workflow(tmp_path, capsys):
         tmp_path,
         "on:\n  pull_request_target:\njobs:\n  a:\n    steps:\n"
         "      - uses: actions/checkout@" + _SHA + " # v6\n",
+        on=None,
     )
     assert check.main([str(tmp_path)]) == 1
     out = capsys.readouterr().out
     assert "ci.yml:2" in out and "pull_request_target" in out
 
 
-# --- the real repository must stay fully pinned ------------------------------
+# --- the real repository must pass the whole check ------------------------------
 
 
-def test_this_repository_is_fully_pinned():
+def test_this_repository_passes_the_check():
     """Enforcement that rides the already-required pytest gate, not just a CI step."""
     assert check.main([str(_REPO_ROOT)]) == 0
 
