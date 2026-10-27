@@ -1152,6 +1152,17 @@ class Finding:
     detail: str = ""
 
     def body(self) -> str:
+        if self.stream == "claude":
+            dedup = (
+                "This issue rolls forward: while it is open, a newer claude release edits its "
+                "title and body instead of opening another. Close it once a capture at or past "
+                "this version is committed under docs/claude-help/; closing re-arms the watch."
+            )
+        else:
+            dedup = (
+                "A re-run files nothing while an issue with this exact title exists, open or "
+                "closed."
+            )
         return "\n".join(
             [
                 f"`{self.stream}` {self.latest} is available upstream; {self.baseline}.",
@@ -1161,8 +1172,7 @@ class Finding:
                 "",
                 f"Watch key: `{self.stream} {self.key}`. Filed by "
                 "`uv run python scripts/check_backend_compat.py watch --file-issues` "
-                "(docs/WATCHING.md); a re-run files nothing while an issue with this exact "
-                "title exists, open or closed.",
+                f"(docs/WATCHING.md). {dedup}",
             ]
         )
 
@@ -1279,12 +1289,13 @@ def watch_all(
     resolved at call time so a test can replace them."""
     npm = npm or latest_upstream
     pypi = pypi or latest_pypi
-    return [
-        watch_kimi(npm),
-        watch_claude(npm, docs_root),
-        watch_pypi("fastmcp", pypi, pyproject),
-        watch_pypi("mcp", pypi, pyproject),
-    ]
+    readers: dict[str, Callable[[], Finding]] = {
+        "kimi": lambda: watch_kimi(npm),
+        "claude": lambda: watch_claude(npm, docs_root),
+        "fastmcp": lambda: watch_pypi("fastmcp", pypi, pyproject),
+        "mcp": lambda: watch_pypi("mcp", pypi, pyproject),
+    }
+    return [readers[stream]() for stream in WATCH_STREAMS]
 
 
 def run_gh(args: list[str]) -> tuple[int, str]:
@@ -1359,10 +1370,59 @@ def _title_candidates(
 class Filing:
     stream: str
     title: str
-    action: str  # filed | would_file | exists | failed
+    action: str  # filed | would_file | edited | would_edit | exists | failed
     number: int | None = None
     state: str | None = None
     detail: str = ""
+    moved_from: str | None = None  # the version a rolling (claude) issue was edited from
+
+
+ROLLING_STREAMS: dict[str, str] = {"claude": "chore(backends): track claude "}
+
+
+def roll_issue(
+    f: Finding,
+    gh: Callable[[list[str]], tuple[int, str]],
+    repo: str | None,
+    *,
+    dry_run: bool,
+) -> Filing | None:
+    """The rolling stream's one open issue, moved forward to `f` when it names an older
+    release, or None when no issue is open (the caller then files unless a closed issue has
+    this exact title). More than one open issue, or one whose title names no release, is a
+    failure: which one to move is not this command's call."""
+    prefix = ROLLING_STREAMS[f.stream]
+    title = str(f.title)
+    rows = _title_candidates(prefix.strip(), "open", gh, repo)
+    if rows is None:
+        return Filing(f.stream, title, "failed", detail="gh issue list failed")
+    by_number = {r.get("number"): r for r in rows if str(r.get("title", "")).startswith(prefix)}
+    if not by_number:
+        return None
+    if len(by_number) > 1:
+        numbers = ", ".join(f"#{n}" for n in sorted(by_number, key=str))
+        return Filing(f.stream, title, "failed", detail=f"more than one open issue: {numbers}")
+    ((number, row),) = by_number.items()
+    number = number if isinstance(number, int) else None
+    current = str(row.get("title"))[len(prefix) :]
+    if number is None or not _RELEASE.fullmatch(current) or semver(current) is None:
+        return Filing(f.stream, title, "failed", number, detail=f"cannot read {current!r}")
+    if (semver(current) or (0, 0, 0)) >= (semver(f.latest) or (0, 0, 0)):
+        return Filing(f.stream, str(row.get("title")), "exists", number, "OPEN")
+    if dry_run:
+        return Filing(f.stream, title, "would_edit", number, "OPEN", moved_from=current)
+    where = ["--repo", repo] if repo else []
+    edited, _ = gh(["issue", "edit", str(number), *where, "--title", title, "--body", f.body()])
+    if edited != 0:
+        return Filing(f.stream, title, "failed", number, detail="gh issue edit failed")
+    note = (
+        f"Moved from claude {current} to {f.latest}, the newest release available upstream "
+        "(scripts/check_backend_compat.py watch)."
+    )
+    commented, _ = gh(["issue", "comment", str(number), *where, "--body", note])
+    if commented != 0:
+        return Filing(f.stream, title, "failed", number, detail="gh issue comment failed")
+    return Filing(f.stream, title, "edited", number, "OPEN", moved_from=current)
 
 
 def file_issues(
@@ -1374,12 +1434,18 @@ def file_issues(
 ) -> list[Filing]:
     """For each `update` finding, create its issue unless one with its exact title exists,
     open or closed. Idempotent: a re-run finds what the first run filed. `unknown` and
-    `current` findings file nothing."""
+    `current` findings file nothing. A rolling stream (claude) first moves its one open
+    issue forward, if it has one (`roll_issue`)."""
     gh = gh or run_gh
     done: list[Filing] = []
     for f in findings:
         if f.status != "update" or f.title is None:
             continue
+        if f.stream in ROLLING_STREAMS:
+            rolled = roll_issue(f, gh, repo, dry_run=dry_run)
+            if rolled is not None:
+                done.append(rolled)
+                continue
         found = existing_issue(f.title, gh, repo)
         if found is False:
             done.append(Filing(f.stream, f.title, "failed", detail="gh issue list failed"))
@@ -1426,7 +1492,9 @@ def describe_watch(findings: list[Finding], filings: list[Filing] | None) -> lis
     for filing in filings or []:
         where = f" #{filing.number}" if filing.number else ""
         state = f" ({filing.state})" if filing.state else ""
-        lines.append(f"{filing.action.upper()} {filing.title}{where}{state}")
+        moved = f" (from {filing.moved_from})" if filing.moved_from else ""
+        detail = f": {filing.detail}" if filing.detail else ""
+        lines.append(f"{filing.action.upper()} {filing.title}{where}{state}{moved}{detail}")
     return lines
 
 

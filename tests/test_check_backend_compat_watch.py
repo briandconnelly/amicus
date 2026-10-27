@@ -344,3 +344,99 @@ def test_an_npm_output_that_cannot_be_decoded_is_unknown(monkeypatch):
     monkeypatch.setattr(compat.subprocess, "run", run)
     assert compat.latest_upstream("kimi") is None
     assert compat.run_gh(["issue", "list"])[0] != 0
+
+
+_CLAUDE = "chore(backends): track claude "
+
+
+def _claude_issue(version: str, number: int, state: str = "OPEN") -> dict:
+    return {"title": _CLAUDE + version, "number": number, "state": state, "body": "old"}
+
+
+def _claude_filing(gh: FakeGh, roots, capsys, *extra: str) -> tuple[int, dict]:
+    code, out = _run([*roots, "--file-issues", *extra], capsys)
+    (filing,) = [f for f in out["filings"] if f["stream"] == "claude"]
+    return code, filing
+
+
+@pytest.fixture
+def claude_only(monkeypatch):
+    def setup(gh: FakeGh, latest: str = "2.1.400") -> FakeGh:
+        _no_real_lookups(monkeypatch, {"kimi": _SUPPORTED_KIMI, "claude": latest}, {}, gh)
+        monkeypatch.setattr(compat, "WATCH_STREAMS", ("kimi", "claude"))
+        return gh
+
+    return setup
+
+
+def test_claude_keeps_one_rolling_issue_a_newer_release_edits_it(claude_only, roots, capsys):
+    gh = claude_only(FakeGh([_claude_issue("2.1.399", 50)]))
+    code, filing = _claude_filing(gh, roots, capsys)
+    assert filing["action"] == "edited" and filing["number"] == 50, filing
+    assert filing["moved_from"] == "2.1.399"
+    assert gh.created == [], "a newer release moves the open issue; it never files another"
+    (edit,) = gh.edited
+    assert edit[:3] == ["issue", "edit", "50"]
+    assert edit[edit.index("--title") + 1] == _CLAUDE + "2.1.400"
+    assert "2.1.400 is available upstream" in edit[edit.index("--body") + 1]
+    (comment,) = gh.comments
+    assert comment[:3] == ["issue", "comment", "50"]
+    assert "2.1.399" in comment[-1] and "2.1.400" in comment[-1], comment
+
+    # The same release again is a no-op.
+    code, filing = _claude_filing(gh, roots, capsys)
+    assert filing["action"] == "exists" and filing["number"] == 50, filing
+    assert len(gh.edited) == 1 and len(gh.comments) == 1 and gh.created == []
+
+
+def test_claude_files_when_none_is_open_and_closing_rearms_it(claude_only, roots, capsys):
+    gh = claude_only(FakeGh([_claude_issue("2.1.300", 9, "CLOSED")]))
+    code, filing = _claude_filing(gh, roots, capsys)
+    assert code == 0 and filing["action"] == "filed", filing
+    assert [a[a.index("--title") + 1] for a in gh.created] == [_CLAUDE + "2.1.400"]
+    body = gh.created[0][gh.created[0].index("--body") + 1]
+    assert "rolls forward" in body and "re-arms" in body, body
+
+
+def test_a_closed_claude_issue_for_this_release_suppresses_filing(claude_only, roots, capsys):
+    gh = claude_only(FakeGh([_claude_issue("2.1.400", 9, "CLOSED")]))
+    code, filing = _claude_filing(gh, roots, capsys)
+    assert code == 0 and filing["action"] == "exists" and filing["state"] == "CLOSED", filing
+    assert gh.created == gh.edited == []
+
+
+def test_an_open_claude_issue_ahead_of_latest_is_left_alone(claude_only, roots, capsys):
+    gh = claude_only(FakeGh([_claude_issue("2.1.401", 50)]))
+    code, filing = _claude_filing(gh, roots, capsys)
+    assert code == 0 and filing["action"] == "exists" and filing["number"] == 50, filing
+    assert gh.created == gh.edited == gh.comments == []
+
+
+@pytest.mark.parametrize(
+    "issues",
+    [
+        [_claude_issue("2.1.399", 50), _claude_issue("2.1.398", 51)],
+        [_claude_issue("2.1.400", 50), _claude_issue("2.1.400", 51)],
+        [{"title": _CLAUDE + "next", "number": 50, "state": "OPEN"}],
+    ],
+)
+def test_ambiguous_open_claude_issues_fail_closed(claude_only, roots, capsys, issues):
+    gh = claude_only(FakeGh(issues))
+    code, filing = _claude_filing(gh, roots, capsys)
+    assert code == 1 and filing["action"] == "failed", filing
+    assert gh.created == gh.edited == gh.comments == []
+
+
+def test_dry_run_reports_the_claude_edit_without_making_it(claude_only, roots, capsys):
+    gh = claude_only(FakeGh([_claude_issue("2.1.399", 50)]))
+    code, filing = _claude_filing(gh, roots, capsys, "--dry-run")
+    assert code == 0 and filing["action"] == "would_edit" and filing["number"] == 50, filing
+    assert gh.created == gh.edited == gh.comments == []
+
+
+@pytest.mark.parametrize("failing", ["edit", "comment"])
+def test_a_failed_claude_edit_fails_the_run(claude_only, roots, capsys, failing):
+    gh = claude_only(FakeGh([_claude_issue("2.1.399", 50)]))
+    gh.fail = failing
+    code, filing = _claude_filing(gh, roots, capsys)
+    assert code == 1 and filing["action"] == "failed", filing
