@@ -174,29 +174,36 @@ The tag therefore deliberately points at a commit that is in `main`'s history bu
    Change no version literal unless the version itself is changing.
 
 3. Run every command from here through step 6 in the PR C worktree, never in the main checkout.
-   Every command below is relative to the directory it runs in, and nothing but the evidence script's own refusal checks which checkout that is.
+   Every command below is relative to the directory it runs in.
    The evidence was recorded in the main checkout for 0.3.0, 0.6.0 and 0.7.0; each time a later check caught it, but only after the quota on all three backends was spent (#241).
-   Start by moving there and confirming where you are:
+   First do what no script can: bring the backend CLIs to npm's `latest` with Claude Code's autoupdater held, as the backend-CLI precondition above describes, and do the rule-18 carrier re-check, because the evidence vouches for exactly the CLI versions installed at this moment.
+   Then move to the worktree and run the preflight, with PR C's number:
 
    ```sh
    cd ~/projects/amicus-wt-release-X-Y-Z
-   git rev-parse HEAD
-   git status --porcelain
-   grep -m1 '^version' pyproject.toml
+   uv run python scripts/release.py preflight --pr <N> --version X.Y.Z
    ```
 
-   `git rev-parse HEAD` must print the PR C branch tip, `git status --porcelain` must print nothing, and `pyproject.toml` must declare the version being released.
-   Record the branch tip's SHA; call it the release commit, and note it well — it is the commit that gets tagged, and it will not be `main`'s head after the next step.
+   It spends nothing, and each of its checks is there for a reason:
+   - The checkout must be a linked worktree, not the main checkout: their git directories differ, and the main checkout is where the evidence went wrong three times.
+   - `HEAD` must be PR C's head commit as GitHub reports it (`gh pr view`), and PR C must be open against `main`: the evidence must cover the commit step 4 merges, not a local branch with unpushed commits or one behind a review's push.
+   - The tree must be clean, untracked files included whatever `status.showUntrackedFiles` says, because the evidence names a commit, and a tree that differs from it is not what gets tagged.
+   - `pyproject.toml` must declare the version being released.
+   - Every release-state check `prepare` ran in step 2 must still hold on this commit, all but the pinned tag's existence, which step 3 creates later: a problem found only after the evidence would mean fixing it on a new commit and spending the quota again.
+   - No tag `vX.Y.Z` may exist on `origin`, and a failed lookup is a failure rather than an absent tag; nor may one exist locally, which the evidence script refuses.
+   - `uv run python scripts/check_backend_compat.py` must pass, as in the precondition above, because a CLI that is behind, ahead, unauthenticated or outside the contract would make the evidence describe the wrong thing.
+
+   On success it prints the release commit and the exact evidence command, and it never runs that command.
+   Record the release commit's SHA, and note it well: it is the commit that gets tagged, and it will not be `main`'s head after the next step.
    If the PR C branch gains any commit after this point — an "Update branch" click, or a review pushing a change — this step must be redone from the new tip: the evidence would otherwise cover a commit that is no longer what step 4 actually merges.
    Redoing it after the local tag below exists starts with `git tag -d vX.Y.Z`, because the evidence script refuses to run while that tag exists; delete it only if it was never pushed.
    The evidence run below spends real quota on all three backends; a maintainer who has to redo this step must not reuse the earlier record, even though re-spending that quota is tempting.
-   Immediately before it, run the backend-CLI precondition above, `uv run python scripts/check_backend_compat.py` and the rule-18 carrier re-check, because the evidence vouches for exactly the CLI versions installed at this moment.
-   Run `uv run python scripts/record_live_gate_evidence.py --version X.Y.Z`.
+   Run the command the preflight printed, which is `uv run python scripts/record_live_gate_evidence.py --version X.Y.Z` in the worktree.
    The script itself forces `AMICUS_REQUIRE_LIVE=1` into each backend's subprocess environment, so prefixing the command with it is optional; its own usage string documents `AMICUS_REQUIRE_LIVE=1 uv run python scripts/record_live_gate_evidence.py --version X.Y.Z`, and either form runs the same live gates.
-   This spends real quota on all three backends and requires the maintainer's authorization in the session where it runs.
+   This spends real quota on all three backends and requires the maintainer's authorization in the session where it runs; a passing preflight is not that authorization.
    Before any gate runs, it refuses when the checkout declares a version other than `--version`, which is what the main checkout does between releases, and when a local tag `vX.Y.Z` already exists.
-   That tag check reads local tags only: it stops a collision with an earlier attempt, and it is no evidence that `vX.Y.Z` was never published.
-   Neither check establishes that `HEAD` is the PR C branch tip, which is what the `cd` block above is for.
+   That tag check reads local tags only: it stops a collision with an earlier attempt, and it is no evidence that `vX.Y.Z` was never published, which the preflight's `origin` lookup is for.
+   Neither check establishes that `HEAD` is the PR C branch tip, which is what the preflight is for.
    Confirm the new record names the release commit before going on:
 
    ```sh
@@ -238,29 +245,40 @@ The tag therefore deliberately points at a commit that is in `main`'s history bu
    Do not re-run `AMICUS_RELEASE_CHECK=1 uv run pytest tests/test_release_evidence.py` after this merge "just to be sure": it compares the record with the `HEAD` of whichever checkout runs it, so it tells you nothing new.
    In the PR C worktree it still passes, because that worktree's `HEAD` is still the release commit.
    In a main checkout updated past the merge it fails by design, because the release commit is no longer `main`'s head; that failure is not a stop signal, and a cautious re-check will read as one anyway if you are not expecting it.
-5. Run `git fetch origin` first.
-   `gh pr merge --merge` updates GitHub, not the local `origin/main` remote-tracking ref, so any check below run against a stale local ref can pass while meaning nothing — a check run against a stale ref is worse than no check, because it looks like evidence.
-   Run `git merge-base --is-ancestor <release-sha> origin/main && echo ok`.
-   `git merge-base --is-ancestor` prints nothing itself and exits non-zero on failure, so the `&& echo ok` is what makes success visible: `ok` printed means the release commit is in `main`'s history, and any non-zero exit (no `ok`) means it is not, and the release must stop.
-   Run `git rev-parse origin/main^2`.
-   It must print the release commit's SHA.
-   If the command fails outright, `main`'s head is not a merge commit at all, meaning the merge was squashed or rebased despite the prohibition in step 4, and the release must stop.
-   If it instead succeeds but prints a different SHA, the merge was an ordinary merge commit but of a branch tip the recorded evidence does not cover — the PR C branch gained a commit after step 3 was run — and the release must stop for that reason instead; do not diagnose this case as a squash or rebase.
-   Run `git diff --stat <release-sha> origin/main`.
-   It must print nothing, which is what proves the tree the tag will point at and the tree `main` now holds are identical; any output means something else merged in between, and the release must stop.
-6. Push the annotated tag step 3 created, which points at the release commit rather than `main`'s head and whose message is the evidence record verbatim.
-   Do not create it again: `git tag -a` on a name that already exists fails with `fatal: tag 'vX.Y.Z' already exists`.
-   Rerun the checker against it immediately before pushing:
+5. In the PR C worktree, run the post-merge check with the release commit recorded in step 3:
 
    ```sh
-   uv run python scripts/check_release_state.py --tag vX.Y.Z --commit <release-sha>
+   uv run python scripts/release.py post-merge --release-sha <release-sha> --version X.Y.Z
+   ```
+
+   It changes nothing but this checkout's `origin/main` remote-tracking ref, and it never tags, pushes or merges.
+   Each of its checks is there for a reason:
+   - It fetches `main` from `origin` first, and stops if the fetch fails.
+     `gh pr merge --merge` updates GitHub, not the local `origin/main` remote-tracking ref, so any check below run against a stale local ref can pass while meaning nothing — a check run against a stale ref is worse than no check, because it looks like evidence.
+   - `origin/main`'s tip must be an ordinary merge commit whose second parent is the release commit, or, on the fast-forward alternative described below this sequence, the release commit itself; the output names which.
+     A tip with one parent that is neither the release commit nor a later commit on top of it means the merge was squashed or rebased despite the prohibition in step 4, and the release must stop.
+     A tip that is a later commit on top of the release commit means `main` was fast-forwarded past it, or work landed after it; the evidence does not cover that tip, and the release must stop, though not for a squash or rebase.
+     A tip that merges some other commit is an ordinary merge commit, but either of a branch tip the recorded evidence does not cover — the PR C branch gained a commit after step 3 was run — or of other work merged after the release merge; the release must stop for that reason instead, and the check does not diagnose either case as a squash or rebase.
+   - `origin/main`'s tree must equal the release commit's tree, which is what proves the tree the tag will point at and the tree `main` now holds are identical; a difference means something else merged in between, and the release must stop.
+   - The release commit must be in `origin/main`'s history.
+   - `HEAD` must be the release commit on a clean tree, because the release-state check below reads this checkout's files.
+   - The local tag `vX.Y.Z` must be annotated (`git cat-file -t` reports `tag`, not `commit`, which would mean a lightweight tag), must point at the release commit, and its message must be this worktree's `.release-evidence/live-gates.json` byte for byte, which is what `--cleanup=verbatim` and the record's absolute path in step 3 produce.
+     A record that differs is the 0.3.0 failure, a tag carrying another release's record.
+   - Then it runs `uv run python scripts/check_release_state.py --tag vX.Y.Z --commit <release-sha>`, the same predicate the `verify` job runs after the push.
+
+   A pass says the tag carries the record the maintainer wrote, well formed and naming the release commit; it is not proof that the live gates ran (AGENTS.md rule 23).
+6. Push the annotated tag step 3 created, which points at the release commit rather than `main`'s head and whose message is the evidence record verbatim.
+   Do not create it again: `git tag -a` on a name that already exists fails with `fatal: tag 'vX.Y.Z' already exists`.
+   If anything has happened since step 5, rerun it immediately before pushing:
+
+   ```sh
+   uv run python scripts/release.py post-merge --release-sha <release-sha> --version X.Y.Z
    git push origin vX.Y.Z
    ```
 
    AGENTS.md rule 20 requires this form, and the `verify` job refuses a lightweight tag: `.release-evidence/` is gitignored, so the tag message is the only carrier that reaches CI.
-   `--cleanup=verbatim` keeps the JSON byte-for-byte; the default cleanup would also parse, but exactness is free here.
-   Confirm before pushing that `git cat-file -t vX.Y.Z` prints `tag` (not `commit`, which would mean a lightweight tag) and that `git tag -l --format='%(contents)' vX.Y.Z | python -c 'import json,sys; json.load(sys.stdin)'` exits 0.
-   Nothing but step 5's read-only checks happens between step 4 and step 6.
+   `--cleanup=verbatim` keeps the JSON byte-for-byte; the default cleanup would also parse in CI, but step 5 compares the message with the record exactly, so the tag must be made that way.
+   Nothing but step 5's checks happens between step 4 and step 6.
 7. Once the publish has completed and the post-tag checks below have passed, open a small `chore(release):` PR that advances `.claude-plugin/marketplace.json`'s pointer to the new tag.
    A release is not complete until this PR merges: tagging and publishing expose it to no plugin user, because hosts install the tag the pointer names.
    Set `ref` to `vX.Y.Z` and `sha` to `git rev-parse vX.Y.Z^{commit}` — the peeled commit, not the tag object — then run `uv run python scripts/check_release_state.py --base origin/main` and confirm it prints `marketplace pointer check holds.`
@@ -274,6 +292,7 @@ The tag therefore deliberately points at a commit that is in `main`'s history bu
 A maintainer who instead wants the tag to be `main`'s own head has a permitted alternative: a direct fast-forward push of the PR C branch to `main` (`git checkout main && git merge --ff-only <pr-branch> && git push origin main`) achieves that, if this repository's branch protection allows a direct push to `main`.
 This runbook cannot say whether it does: `gh api repos/briandconnelly/amicus/branches/main/protection` returned `403 Resource not accessible by integration` to the token available while writing it, so that setting is unverified here, and this document does not assert it either way.
 Treat the ordinary-merge-commit path above as the default; use the fast-forward alternative only if a maintainer confirms it is actually available.
+Step 5's `scripts/release.py post-merge` covers that path too: it accepts a freshly fetched `origin/main` whose tip is the release commit itself, says so (`fast-forward: main's tip is the release commit`), and runs every tag and release-state check exactly as it does after an ordinary merge.
 
 ## What happens next
 
