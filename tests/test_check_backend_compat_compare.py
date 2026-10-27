@@ -82,6 +82,8 @@ def pair(tmp_path):
     )
     docs = tmp_path / "docs"
     _commit_capture(docs, "0.163.0", _exec_help(old))
+    # That setup run inherited this process's environment; only compare's runs are evidence.
+    log.unlink(missing_ok=True)
     return old, new, docs, log
 
 
@@ -412,3 +414,127 @@ def test_an_unreadable_new_exec_help_stops_before_any_probe(pair, capsys, tmp_pa
     out = capsys.readouterr().out
     assert "STOPPED: the new binary's exec --help could not be read" in out
     assert _exec_runs(_log(log)) == []
+
+
+@pytest.mark.parametrize(
+    ("end", "met"),
+    [
+        # The control: what codex 0.163.0 and 0.164.0 print when the request reaches the
+        # server with no credential, on stderr or (under --json) inside the JSONL on stdout.
+        pytest.param(
+            {"stderr": f"ERROR: {compat.MISSING_CREDENTIALS_401}, url: x\n"}, True, id="401"
+        ),
+        pytest.param(
+            {
+                "stdout": json.dumps(
+                    {
+                        "type": "turn.failed",
+                        "error": {"message": f"{compat.MISSING_CREDENTIALS_401}, url: x"},
+                    }
+                )
+                + "\n"
+            },
+            True,
+            id="401-jsonl",
+        ),
+        # Both match amicus's broad is_auth_failure, and neither reached a server.
+        pytest.param({"stderr": "Not logged in\n"}, False, id="not-logged-in"),
+        pytest.param(
+            {"stderr": "Error: Your access token could not be refreshed. Run `codex login`\n"},
+            False,
+            id="token-refresh",
+        ),
+        pytest.param(
+            {"stderr": f"ERROR: {compat.MISSING_CREDENTIALS_401}\n", "exit": 2},
+            False,
+            id="401-wrong-exit",
+        ),
+    ],
+)
+def test_only_the_observed_missing_credential_401_gets_past_config_loading(
+    tmp_path, capsys, end, met
+):
+    # Control: amicus's broad classifier accepts every one of these, the false ones included.
+    assert codex_contract.is_auth_failure(end.get("stdout"), end.get("stderr"))
+    old = _fake(tmp_path, "old", version="0.163.0")
+    new = _fake(tmp_path, "new", version="0.164.0", exec_end=end)
+    docs = tmp_path / "docs"
+    _commit_capture(docs, "0.163.0", _exec_help(old))
+    code = compat.main(_compare(old, new, docs))
+    fails = [line for line in capsys.readouterr().out.splitlines() if line.startswith("FAIL")]
+    positive = ("pins and disables", "strict-config file, ignored")
+    if met:
+        assert code == 0 and fails == [], fails
+    else:
+        assert code == 1
+        for name in positive:
+            assert any(f"probe {name} on the new binary" in f for f in fails), fails
+
+
+_SLEEPER = """#!/usr/bin/env python3
+import subprocess, sys, time
+child = subprocess.Popen(
+    ["sleep", "60"], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+    stderr=subprocess.DEVNULL,
+)
+open(sys.argv[1], "w").write(str(child.pid))
+time.sleep(60)
+"""
+
+
+def _sleeper(tmp_path: Path) -> tuple[Path, Path]:
+    script = tmp_path / "spawns-a-grandchild"
+    script.write_text(_SLEEPER)
+    script.chmod(0o755)
+    return script, tmp_path / "grandchild.pid"
+
+
+def _gone(pid: int) -> bool:
+    import os
+    import time
+
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return True
+        time.sleep(0.05)
+    os.kill(pid, 9)  # do not leave it behind when the assertion fails
+    return False
+
+
+def _wait_for(path: Path) -> int:
+    import time
+
+    deadline = time.monotonic() + 10
+    while not (path.is_file() and path.read_text()):
+        assert time.monotonic() < deadline, "the grandchild never started"
+        time.sleep(0.02)
+    return int(path.read_text())
+
+
+def test_a_timeout_kills_the_whole_process_group(tmp_path):
+    """npm's codex is a Node entry point that spawns the native binary: killing only the
+    entry point would leave the binary running in a scratch home being deleted."""
+    script, pid_file = _sleeper(tmp_path)
+    run = compat._run([str(script), str(pid_file)], env=None, cwd=tmp_path, timeout=2)
+    assert run.timed_out and run.exit_code is None
+    assert _gone(_wait_for(pid_file)), "the grandchild outlived the timeout"
+
+
+def test_an_interrupt_kills_the_whole_process_group(tmp_path, monkeypatch):
+    script, pid_file = _sleeper(tmp_path)
+    real = compat.subprocess.Popen.communicate
+
+    def interrupted(self, input=None, timeout=None):
+        if timeout != compat.KILL_GRACE_SECONDS and timeout is not None:
+            _wait_for(pid_file)
+            raise KeyboardInterrupt
+        return real(self, input, timeout)
+
+    monkeypatch.setattr(compat.subprocess.Popen, "communicate", interrupted)
+    with pytest.raises(KeyboardInterrupt):
+        compat._run([str(script), str(pid_file)], env=None, cwd=tmp_path, timeout=30)
+    monkeypatch.undo()
+    assert _gone(_wait_for(pid_file)), "the grandchild outlived the interrupt"

@@ -73,10 +73,12 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures
+import contextlib
 import difflib
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -420,6 +422,17 @@ CODEX_SURFACES: tuple[tuple[str, tuple[str, ...]], ...] = (
 CONFIG_REJECTED = "rejected its configuration"
 ARGS_REJECTED = "rejected its arguments"
 UNAUTHENTICATED = "got past config loading to the unauthenticated failure"
+# What codex-cli 0.163.0 and 0.164.0 print, exit 1, when a request reaches the server with no
+# credential at all: on stderr, or inside the JSONL on stdout under `--json`. Only this counts
+# as getting past config loading. amicus's own `is_auth_failure` is broader on purpose (it
+# also matches a local `Not logged in` or a failed token refresh), and neither of those
+# shows that the run got as far as a request.
+MISSING_CREDENTIALS_401 = (
+    "unexpected status 401 Unauthorized: Missing bearer or basic authentication in header"
+)
+# After SIGTERM to a timed-out or interrupted run's process group, how long to wait before
+# SIGKILL.
+KILL_GRACE_SECONDS = 2
 CODEX_NOT_RUN = (
     "the model-facing tool catalog: this script has no instrument for it "
     "(docs/UPGRADING-CODEX.md step 2)",
@@ -461,24 +474,54 @@ def _run(
     stdin_text: str = "",
     timeout: int = COMPARE_TIMEOUT_SECONDS,
 ) -> Run:
-    """One run with stdin closed after `stdin_text`, so nothing can wait on a terminal."""
+    """One run with stdin closed after `stdin_text`, so nothing can wait on a terminal.
+
+    The run gets its own session, so its process group holds everything it starts. npm's
+    `codex` is a Node entry point that spawns the native binary, and killing only the entry
+    point would leave that child running while its scratch directories are deleted. On a
+    timeout or an interrupt the whole group gets SIGTERM, then SIGKILL after a short grace,
+    and is reaped before this returns or re-raises."""
     try:
-        done = subprocess.run(
+        proc = subprocess.Popen(
             argv,
-            input=stdin_text,
-            capture_output=True,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
             errors="replace",
             env=env,
             cwd=cwd,
-            timeout=timeout,
-            check=False,
+            start_new_session=True,
         )
-    except subprocess.TimeoutExpired as exc:
-        return Run(tuple(argv), None, _text(exc.stdout), _text(exc.stderr), timed_out=True)
     except OSError as exc:
         return Run(tuple(argv), None, "", f"could not start: {exc}")
-    return Run(tuple(argv), done.returncode, done.stdout, done.stderr)
+    try:
+        stdout, stderr = proc.communicate(stdin_text, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        stdout, stderr = _kill_group(proc)
+        return Run(tuple(argv), None, stdout, stderr, timed_out=True)
+    except BaseException:
+        _kill_group(proc)
+        raise
+    return Run(tuple(argv), proc.returncode, stdout, stderr)
+
+
+def _signal_group(proc: subprocess.Popen[str], sig: int) -> None:
+    # The group id is the leader's pid, which stays reserved until the leader is reaped.
+    with contextlib.suppress(ProcessLookupError, PermissionError):
+        os.killpg(proc.pid, sig)
+
+
+def _kill_group(proc: subprocess.Popen[str]) -> tuple[str, str]:
+    """SIGTERM the run's process group, SIGKILL it after the grace, and reap the leader."""
+    _signal_group(proc, signal.SIGTERM)
+    try:
+        stdout, stderr = proc.communicate(timeout=KILL_GRACE_SECONDS)
+    except subprocess.TimeoutExpired:
+        _signal_group(proc, signal.SIGKILL)
+        stdout, stderr = proc.communicate()
+    _signal_group(proc, signal.SIGKILL)  # anything that outlived its leader
+    return _text(stdout), _text(stderr)
 
 
 class Scratch:
@@ -557,7 +600,7 @@ def ended(run: Run) -> str:
         return CONFIG_REJECTED
     if codex_contract.is_contract_drift(run.stderr):
         return ARGS_REJECTED
-    if codex_contract.is_auth_failure(run.stdout, run.stderr):
+    if run.exit_code == 1 and MISSING_CREDENTIALS_401 in run.stdout + run.stderr:
         return UNAUTHENTICATED
     return f"exited {run.exit_code} some other way"
 

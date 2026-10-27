@@ -17,6 +17,7 @@ beside itself instead (`codex` reads `codex.json`), which a test writes:
     accept_unknown_feature   an unknown `--disable` name is not rejected
     reject_keys      `-c` keys rejected as unknown under `--strict-config`
     exec_exit        how a run that gets past config loading exits (default 1, the 401)
+    exec_end         replaces that run's ending outright: {"stdout", "stderr", "exit"}
     models           what `debug models` prints
     log              a file that gets one JSON line per invocation: argv, the environment's
                      keys and CODEX_HOME, and what arrived on stdin
@@ -149,6 +150,11 @@ def _exec(args: list[str]) -> int:
             return _fail(
                 f"Error loading config.toml:\n{config}:1:1: unknown configuration field `{key}`\n"
             )
+    end = _SPEC.get("exec_end")
+    if end is not None:
+        sys.stdout.write(end.get("stdout", ""))
+        sys.stderr.write(end.get("stderr", ""))
+        return int(end.get("exit", 1))
     sys.stderr.write(
         "ERROR: unexpected status 401 Unauthorized: Missing bearer or basic authentication "
         "in header, url: https://api.example.invalid/v1/responses\n"
