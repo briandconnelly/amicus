@@ -474,11 +474,11 @@ def test_only_the_observed_missing_credential_401_gets_past_config_loading(
 _SLEEPER = """#!/usr/bin/env python3
 import subprocess, sys, time
 child = subprocess.Popen(
-    ["sleep", "60"], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+    ["sleep", "600"], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
     stderr=subprocess.DEVNULL,
 )
 open(sys.argv[1], "w").write(str(child.pid))
-time.sleep(60)
+time.sleep(15)  # bounded, so a broken kill fails the test rather than hanging it
 """
 
 
