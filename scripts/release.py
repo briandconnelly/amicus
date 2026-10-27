@@ -46,9 +46,11 @@ pass says the tag carries the record the maintainer wrote; it is not proof the l
 completed (RELEASING "Post-tag completion checks"). It reads PyPI and GitHub and installs into
 temporary directories; it spends nothing and changes nothing in the checkout. It checks that
 PyPI's `releases` lists files for exactly X.Y.Z (the project's metadata alone says nothing
-about this version), that `origin` has the annotated tag `vX.Y.Z` and its peeled commit, that
+about this version), that the canonical repository has the annotated tag `vX.Y.Z` and its
+peeled commit and `origin` reports exactly the same, that
 installing the tag exactly as a user would, `uvx --from git+...@vX.Y.Z amicus-mcp` with a fresh
-`UV_CACHE_DIR` and `UV_TOOL_DIR` and a `PATH` that holds no other `amicus-mcp`, answers an MCP
+`UV_CACHE_DIR` and `UV_TOOL_DIR`, an allowlisted environment and a `PATH` that holds no other
+`amicus-mcp`, answers an MCP
 `initialize` as `amicus` X.Y.Z, and that the same install of a tag that cannot exist fails
 with git's diagnostic that the remote has no such ref: the negative control that proves the
 positive one was not answered by a cache or by some other binary.
@@ -157,6 +159,8 @@ class Context:
     run: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run
     today: Callable[[], dt.date] = field(default=lambda: utc_date(dt.datetime.now(dt.UTC)))
     http_get: Callable[[str], bytes] = _http_get
+    # The repository users install from: the marketplace pointer's `url` and the install's.
+    canonical_url: str = release_state.MARKETPLACE_URL
 
     def git_out(self, *args: str) -> subprocess.CompletedProcess[str]:
         return self.git(
@@ -827,19 +831,35 @@ _INITIALIZE = json.dumps(
 _MISSING_REF_RE = re.compile(r"couldn't find remote ref (?:refs/(?:tags|heads)/)?(?P<ref>\S+)")
 # What the install's PATH may hold besides uv's own directory (see `_isolated_path`).
 _SYSTEM_PATH = ("/usr/bin", "/bin")
+# The only ambient variables the install inherits (see `_install_env`): locale, TLS trust
+# and proxies, which decide whether the network works, and nothing that steers Python, a
+# virtual environment or uv's project and index resolution.
+INSTALL_ENV_NAMES = frozenset(
+    {
+        "LANG",
+        "USER",
+        "LOGNAME",
+        "SSL_CERT_FILE",
+        "SSL_CERT_DIR",
+        "GIT_SSL_CAINFO",
+        "GIT_SSL_CAPATH",
+        *(f"{name}_PROXY" for name in ("HTTP", "HTTPS", "ALL", "NO")),
+        *(f"{name}_proxy" for name in ("http", "https", "all", "no")),
+    }
+)
 
 
 @dataclass(frozen=True)
 class RemoteTag:
-    """What `origin` says `vX.Y.Z` is: the tag object and the commit it peels to."""
+    """What a remote says `vX.Y.Z` is: the tag object and the commit it peels to."""
 
     tag: str
     obj: str
     commit: str
 
 
-def _install_source(ref: str) -> str:
-    return f"git+https://github.com/briandconnelly/amicus.git@{ref}"
+def _install_source(ctx: Context, ref: str) -> str:
+    return f"git+{ctx.canonical_url}@{ref}"
 
 
 def _pypi_problems(ctx: Context, version: str) -> list[str]:
@@ -862,30 +882,54 @@ def _pypi_problems(ctx: Context, version: str) -> list[str]:
     return []
 
 
-def _remote_tag(ctx: Context, version: str) -> tuple[RemoteTag | None, list[str]]:
-    """`origin`'s `vX.Y.Z` and its peeled commit; a lightweight tag has no peeled line."""
-    tag = f"v{version}"
+def _ls_remote_tag(
+    ctx: Context, remote: str, where: str, tag: str
+) -> tuple[RemoteTag | None, list[str]]:
+    """`remote`'s `tag` and its peeled commit; a lightweight tag has no peeled line."""
     ref = f"refs/tags/{tag}"
-    proc = ctx.git_out("ls-remote", "--exit-code", "origin", ref, f"{ref}^{{}}")
+    proc = ctx.git_out("ls-remote", "--exit-code", remote, ref, f"{ref}^{{}}")
     if proc.returncode == 2:
-        return None, [f"origin has no tag {tag}; push it (RELEASING step 6) before this"]
+        return None, [f"{where} has no tag {tag}; push it (RELEASING step 6) before this"]
     if proc.returncode != 0:
-        return None, [f"could not ask origin for {tag}: {_stderr_line(proc)}"]
+        return None, [f"could not ask {where} for {tag}: {_stderr_line(proc)}"]
     refs: dict[str, str] = {}
     for line in proc.stdout.splitlines():
         sha, _, name = line.partition("\t")
         refs[name.strip()] = sha.strip()
     obj, commit = refs.get(ref), refs.get(f"{ref}^{{}}")
     if obj is None:
-        return None, [f"origin's answer for {tag} does not name {ref}: {proc.stdout.strip()!r}"]
+        return None, [f"{where}'s answer for {tag} does not name {ref}: {proc.stdout.strip()!r}"]
     if commit is None:
         return None, [
-            f"origin's {tag} is a lightweight tag (no peeled `^{{}}` entry); a release tag is "
+            f"{where}'s {tag} is a lightweight tag (no peeled `^{{}}` entry); a release tag is "
             "annotated and carries the evidence record (AGENTS.md rule 20)"
         ]
     if not (_FULL_SHA_RE.fullmatch(obj) and _FULL_SHA_RE.fullmatch(commit)):
-        return None, [f"origin's answer for {tag} is not two SHAs: {proc.stdout.strip()!r}"]
+        return None, [f"{where}'s answer for {tag} is not two SHAs: {proc.stdout.strip()!r}"]
     return RemoteTag(tag, obj, commit), []
+
+
+def _remote_tag(ctx: Context, version: str) -> tuple[RemoteTag | None, list[str]]:
+    """The tag as the canonical repository has it, which `origin` must match exactly.
+
+    The install and the marketplace pointer both name the canonical repository, while the
+    pointer's tag is fetched from `origin`, which may be a fork or a mirror; a tag object or
+    commit there that differs would put a `sha` in the pointer that users do not install.
+    """
+    tag = f"v{version}"
+    canonical, problems = _ls_remote_tag(
+        ctx, ctx.canonical_url, f"the canonical repository {ctx.canonical_url}", tag
+    )
+    mirror, origin_problems = _ls_remote_tag(ctx, "origin", "origin", tag)
+    problems += origin_problems
+    if canonical is None or mirror is None:
+        return None, problems
+    if mirror != canonical:
+        return None, [
+            f"origin's {tag} (tag object {mirror.obj}, commit {mirror.commit}) does not match "
+            f"the canonical repository's (tag object {canonical.obj}, commit {canonical.commit})"
+        ]
+    return canonical, []
 
 
 def _isolated_path(bin_dir: Path) -> str:
@@ -910,6 +954,37 @@ def _isolated_path(bin_dir: Path) -> str:
     return os.pathsep.join(entries)
 
 
+def _install_env(root: Path) -> dict[str, str]:
+    """The install's whole environment, built from an allowlist rather than inherited.
+
+    An inherited `PYTHONPATH` naming a checkout's `src` would let the installed console
+    script import the checkout's `amicus` ahead of the installed one (Python searches it
+    before site-packages), so a broken tag could pass; `PYTHONHOME`, `VIRTUAL_ENV`,
+    `UV_PROJECT*`, `UV_PYTHON` or an index override could steer the install the same way.
+    So nothing Python-, venv- or uv-related is passed on: only `INSTALL_ENV_NAMES` and
+    `LC_*`, with `PATH` from `_isolated_path`, the real `HOME` (uv keeps its managed Pythons
+    under it), and fresh `TMPDIR`, `UV_CACHE_DIR` and `UV_TOOL_DIR`. Git reads no global or
+    system config, whose `url.<base>.insteadOf` could fetch the tag from somewhere else.
+    """
+    env = {
+        name: value
+        for name, value in os.environ.items()
+        if name in INSTALL_ENV_NAMES or name.startswith("LC_")
+    }
+    env.update(
+        {
+            "PATH": _isolated_path(root / "bin"),
+            "HOME": os.environ.get("HOME") or str(Path.home()),
+            "TMPDIR": str(root / "tmp"),
+            "UV_CACHE_DIR": str(root / "cache"),
+            "UV_TOOL_DIR": str(root / "tools"),
+            "GIT_CONFIG_GLOBAL": os.devnull,
+            "GIT_CONFIG_NOSYSTEM": "1",
+        }
+    )
+    return env
+
+
 def _uvx(ctx: Context, ref: str, timeout: float) -> subprocess.CompletedProcess[str]:
     """Install `ref` as a user would and send it one `initialize`, with nothing cached.
 
@@ -920,16 +995,11 @@ def _uvx(ctx: Context, ref: str, timeout: float) -> subprocess.CompletedProcess[
     """
     with tempfile.TemporaryDirectory(prefix="amicus-post-publish-") as scratch:
         root = Path(scratch)
-        for name in ("cache", "tools", "cwd", "bin"):
+        for name in ("cache", "tools", "cwd", "bin", "tmp"):
             (root / name).mkdir()
-        env = {
-            **os.environ,
-            "PATH": _isolated_path(root / "bin"),
-            "UV_CACHE_DIR": str(root / "cache"),
-            "UV_TOOL_DIR": str(root / "tools"),
-        }
+        env = _install_env(root)
         return ctx.run(
-            [str(root / "bin" / "uvx"), "--from", _install_source(ref), CONSOLE_SCRIPT],
+            [str(root / "bin" / "uvx"), "--from", _install_source(ctx, ref), CONSOLE_SCRIPT],
             cwd=root / "cwd",
             env=env,
             input=_INITIALIZE + "\n",
@@ -1015,7 +1085,7 @@ def post_publish(ctx: Context, version: str, timeout: float) -> tuple[RemoteTag 
         return None, problems
     print(f"checking PyPI for amicus {version}", flush=True)
     problems += _pypi_problems(ctx, version)
-    print(f"resolving v{version} on origin", flush=True)
+    print(f"resolving v{version} in the canonical repository and on origin", flush=True)
     remote, tag_problems = _remote_tag(ctx, version)
     problems += tag_problems
     print(f"installing v{version} with empty uv caches and initializing it", flush=True)

@@ -135,16 +135,18 @@ class FakeUvx:
         assert Path(cmd[0]).name == "uvx", f"unexpected command {cmd!r}"
         assert cmd[1] == "--from" and cmd[3] == "amicus-mcp", cmd
         source = cmd[2]
-        assert source.startswith("git+https://github.com/briandconnelly/amicus.git@"), source
+        assert source.startswith("git+"), source
         ref = source.rsplit("@", 1)[1]
         env, cwd = kwargs["env"], Path(kwargs["cwd"])
-        for key in ("UV_CACHE_DIR", "UV_TOOL_DIR"):
+        for key in ("UV_CACHE_DIR", "UV_TOOL_DIR", "TMPDIR"):
             assert list(Path(env[key]).iterdir()) == [], f"{key} is not empty"
         assert list(cwd.iterdir()) == []
         self.calls.append(
             {
                 "ref": ref,
                 "program": cmd[0],
+                "source": source,
+                "env": dict(env),
                 "path": env["PATH"],
                 "cache": env["UV_CACHE_DIR"],
                 "tools": env["UV_TOOL_DIR"],
@@ -160,7 +162,12 @@ class FakeUvx:
 
 
 def _context(pub: Published, *, pypi: FakePyPI | None = None, uvx: FakeUvx | None = None):
-    return release.Context(repo_root=pub.repo, run=uvx or FakeUvx(), http_get=pypi or FakePyPI())
+    return release.Context(
+        repo_root=pub.repo,
+        run=uvx or FakeUvx(),
+        http_get=pypi or FakePyPI(),
+        canonical_url=str(pub.origin),
+    )
 
 
 def _run(pub: Published, command: str, *, version: str = NEXT, **fakes) -> int:
@@ -540,7 +547,11 @@ def test_pointer_refuses_a_failed_main_refresh(pub, capsys):
             return subprocess.run(cmd, *args, check=False, **kwargs)
 
     ctx = release.Context(
-        repo_root=pub.repo, git=FailingFetch(), run=FakeUvx(), http_get=FakePyPI()
+        repo_root=pub.repo,
+        git=FailingFetch(),
+        run=FakeUvx(),
+        http_get=FakePyPI(),
+        canonical_url=str(pub.origin),
     )
     assert release.main(["pointer", "--version", NEXT], context=ctx) == 1
     assert "origin/main may be stale" in capsys.readouterr().err
@@ -589,3 +600,115 @@ def test_network_post_publish_fails_for_an_unpublished_version(capsys):
     err = capsys.readouterr().err
     assert "PyPI has no release 0.0.1" in err
     assert "origin has no tag v0.0.1" in err
+
+
+# --- review fixes: the install's environment and the canonical repository ---------------
+
+
+class PythonPathUvx(FakeUvx):
+    """A tagged package whose entry point is broken unless something on PYTHONPATH supplies
+    an importable `amicus`: Python searches PYTHONPATH before site-packages, so an inherited
+    one pointing at a checkout's `src` rescues it and the server reports that version."""
+
+    def __call__(self, cmd, *args, **kwargs):
+        if cmd[2].endswith(f"@{NEGATIVE}"):
+            return super().__call__(cmd, *args, **kwargs)
+        super().__call__(cmd, *args, **kwargs)
+        for entry in kwargs["env"].get("PYTHONPATH", "").split(os.pathsep):
+            if entry and (Path(entry) / "amicus" / "__init__.py").exists():
+                return subprocess.CompletedProcess(cmd, 0, stdout=_reply(), stderr="")
+        return subprocess.CompletedProcess(
+            cmd, 1, stdout="", stderr="ModuleNotFoundError: No module named 'amicus.server'\n"
+        )
+
+
+def test_an_ambient_pythonpath_cannot_rescue_a_broken_tag(pub, capsys, tmp_path, monkeypatch):
+    ambient = tmp_path / "checkout-src"
+    (ambient / "amicus").mkdir(parents=True)
+    (ambient / "amicus" / "__init__.py").write_text('__version__ = "1.3.0"\n', encoding="utf-8")
+    monkeypatch.setenv("PYTHONPATH", str(ambient))
+    _post_publish_refused(pub, capsys, "gave no `initialize` reply", uvx=PythonPathUvx())
+
+
+_PYTHON_OR_VENV = (
+    "PYTHONPATH",
+    "PYTHONHOME",
+    "PYTHONSTARTUP",
+    "PYTHONUSERBASE",
+    "PYTHONSAFEPATH",
+    "VIRTUAL_ENV",
+    "CONDA_PREFIX",
+    "UV_PROJECT",
+    "UV_PROJECT_ENVIRONMENT",
+    "UV_PYTHON",
+    "UV_OFFLINE",
+    "UV_INDEX_URL",
+    "UV_CONFIG_FILE",
+)
+
+
+def test_the_install_environment_is_an_allowlist(pub, capsys, monkeypatch):
+    for name in _PYTHON_OR_VENV:
+        monkeypatch.setenv(name, "/ambient")
+    monkeypatch.setenv("AMICUS_CODEX_BIN", "/ambient/codex")
+    monkeypatch.setenv("LANG", "en_US.UTF-8")
+    uvx = FakeUvx()
+    assert _run(pub, "post-publish", uvx=uvx) == 0
+    for call in uvx.calls:
+        env = call["env"]
+        leaked = sorted(k for k in env if k in _PYTHON_OR_VENV or k.startswith("AMICUS_"))
+        assert leaked == []
+        ours = {"PATH", "HOME", "TMPDIR", "UV_CACHE_DIR", "UV_TOOL_DIR"}
+        ours |= {"GIT_CONFIG_GLOBAL", "GIT_CONFIG_NOSYSTEM"}
+        extra = {k for k in env if k not in ours and k not in release.INSTALL_ENV_NAMES}
+        assert all(k.startswith("LC_") for k in extra), sorted(extra)
+        assert env["LANG"] == "en_US.UTF-8"
+        assert env["TMPDIR"] != os.environ.get("TMPDIR")  # emptiness is checked in FakeUvx
+
+
+def test_the_install_uses_the_canonical_repository(pub, capsys):
+    uvx = FakeUvx()
+    assert _run(pub, "post-publish", uvx=uvx) == 0
+    assert uvx.calls[0]["source"] == f"git+{pub.origin}@{TAG}"
+
+
+def _mirror(pub: Published, tmp_path: Path) -> Path:
+    """A clone of the canonical repository for `origin` to point at instead."""
+    mirror = tmp_path / "mirror.git"
+    _git(tmp_path, "clone", "-q", "--mirror", str(pub.origin), str(mirror))
+    _git(pub.repo, "remote", "set-url", "origin", str(mirror))
+    return mirror
+
+
+def test_an_identical_mirror_as_origin_holds(pub, capsys, tmp_path):
+    _mirror(pub, tmp_path)
+    assert _run(pub, "post-publish") == 0
+
+
+def test_an_origin_whose_tag_object_differs_from_canonical_fails(pub, capsys, tmp_path):
+    mirror = _mirror(pub, tmp_path)
+    # Same commit, re-tagged with another message: a different tag object.
+    _git(mirror, "tag", "-d", TAG)
+    _git(mirror, "tag", "-a", TAG, "-m", "a mirror's own record", pub.sha)
+    _post_publish_refused(pub, capsys, "does not match the canonical repository")
+
+
+def test_an_origin_whose_tag_peels_elsewhere_fails(pub, capsys, tmp_path):
+    mirror = _mirror(pub, tmp_path)
+    _git(mirror, "tag", "-d", TAG)
+    _git(mirror, "tag", "-a", TAG, "-m", "moved", f"v{PREVIOUS}^{{commit}}")
+    _post_publish_refused(pub, capsys, "does not match the canonical repository")
+
+
+def test_a_tag_missing_from_the_canonical_repository_fails(pub, capsys, tmp_path):
+    _mirror(pub, tmp_path)
+    _git(pub.origin, "tag", "-d", TAG)  # the canonical one loses it; the mirror keeps it
+    _post_publish_refused(pub, capsys, f"the canonical repository {pub.origin} has no tag {TAG}")
+
+
+def test_pointer_refuses_a_mismatching_origin(pub, capsys, tmp_path):
+    mirror = _mirror(pub, tmp_path)
+    _git(mirror, "tag", "-d", TAG)
+    _git(mirror, "tag", "-a", TAG, "-m", "moved", f"v{PREVIOUS}^{{commit}}")
+    _pointer_refused(pub, capsys, "does not match the canonical repository")
+    assert _local_tag(pub) is None

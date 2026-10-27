@@ -291,7 +291,7 @@ The tag therefore deliberately points at a commit that is in `main`'s history bu
    Each of its steps is there for a reason:
    - It runs every post-tag check below first, in the same invocation, and refuses unless they all pass: rule 24 lets the pointer name only a published release, and this step points at a tag whose install has just been run, not one that passed at some earlier moment.
    - It fetches exactly `refs/tags/vX.Y.Z` from `origin`, without `+`, so a local tag of that name that differs from `origin`'s makes it refuse rather than be overwritten; inspect such a tag before deleting it.
-     The fetched tag must be annotated, and both its tag object and the commit it peels to must be what `origin` reported.
+     The fetched tag must be annotated, and both its tag object and the commit it peels to must be what `origin` reported, which the post-tag checks have already required to be the canonical repository's.
    - It sets `ref` to `vX.Y.Z` and `sha` to the peeled commit, `git rev-parse vX.Y.Z^{commit}`, not the tag object: a host serves `sha` over a disagreeing `ref` without complaint, so `sha` is what decides what users install.
      Every other byte of the file is left as it was.
    - It fetches `main` from `origin`, then runs the check CI runs on the PR, `scripts/check_release_state.py --base` against that fresh `origin/main`, and prints `marketplace pointer check holds against origin/main` when it passes.
@@ -341,10 +341,14 @@ Each check is there for a reason:
 
 1. PyPI's `releases` table must list files for exactly `X.Y.Z`, read from `https://pypi.org/pypi/amicus/json`.
    The project's metadata alone, which is what a 200 from that URL shows, says only that some version of amicus was ever published, not that this one was.
-2. `origin` must have the tag `vX.Y.Z` and its peeled `^{}` entry (`git ls-remote`): a missing tag, or a lightweight one with no peeled entry, fails, and so does a lookup that could not run.
+2. The canonical repository, `https://github.com/briandconnelly/amicus.git`, must have the tag `vX.Y.Z` and its peeled `^{}` entry (`git ls-remote`): a missing tag, or a lightweight one with no peeled entry, fails, and so does a lookup that could not run.
+   `origin` must report the same tag object and peeled commit exactly.
+   The install and the marketplace pointer both name the canonical repository, while step 7 fetches the tag from `origin`, which may be a fork or a mirror; a tag there that differs would put a `sha` in the pointer that users do not install.
 3. It installs the public tag exactly as a user would, `uvx --from "git+https://github.com/briandconnelly/amicus.git@vX.Y.Z" amicus-mcp`, sends one MCP `initialize` over stdin, and requires `serverInfo.name == "amicus"` and `serverInfo.version == "X.Y.Z"` in the reply.
    Every install runs with its own fresh, empty `UV_CACHE_DIR` and `UV_TOOL_DIR`, in an empty directory: `uvx` reuses a cached tool environment without resolving anything, so a warm cache can pass while proving nothing.
    Its `PATH` holds only links to `uvx`, `uv` and `git` plus `/usr/bin` and `/bin`, checked to hold no `amicus-mcp`: when a package lacks its console script, uv runs whatever `amicus-mcp` its `PATH` finds instead, and under `uv run` that is the checkout's own `.venv/bin/amicus-mcp`, which reports the checkout's version.
+   Its environment is an allowlist too, not an inherited one: locale, TLS trust and proxy variables, the real `HOME` (uv keeps its managed Pythons under it), a fresh `TMPDIR`, and git told to read no global or system config, whose `url.<base>.insteadOf` could fetch the tag from elsewhere.
+   Nothing Python-, venv- or uv-related passes through: an inherited `PYTHONPATH` naming a checkout's `src` would be searched before the installed package, so a broken tag could import the checkout's `amicus` and pass, and `PYTHONHOME`, `VIRTUAL_ENV`, `UV_PROJECT*` or an index override could steer the install the same way.
    Step 3's rehearsal already proved transport, build and handshake against the release commit's SHA, so what this adds is narrow but real — that the tag *ref* resolves, which is all that separated the rehearsal from the thing itself.
    This is what step 7's pointer PR is waiting on: do not point the marketplace at a tag whose install you have not just run.
 4. A negative control: the same install, with fresh caches of its own, against a tag that cannot exist (`v0.0.0-amicus-negative-control`, which no release carries and the `v*` ruleset stops anyone creating) must fail with git's `couldn't find remote ref` for that ref.
