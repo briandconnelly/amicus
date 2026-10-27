@@ -67,8 +67,9 @@ Usage:
 Exit codes:
     0  every capture succeeded, no control failed, and every control was applied on both
        binaries (validated)
-    1  at least one FAIL: a run that captured nothing or an empty catalog, a control that
-       failed, or an attempt to reach api.openai.com
+    1  at least one FAIL: a run that captured nothing or an empty catalog, a run that did not
+       exit 0 after exactly one request, a control that failed (a controlled tool still
+       offered after its disable, on any carrier), or an attempt to reach api.openai.com
     2  stopped before capturing: a binary's version, `features list` or the catalog in use
        could not be read
     3  no FAIL, but at least one control was unobserved, so the probe is not validated
@@ -343,7 +344,8 @@ class FakeResponses:
 
 @dataclass
 class Capture:
-    status: str  # captured | empty | no-request | unsupported | not-run | timed-out
+    # captured | empty | unclean | no-request | unsupported | not-run | timed-out
+    status: str
     tools: dict[str, str | None] = field(default_factory=dict)
     detail: str = ""
     fallback: bool = False
@@ -421,6 +423,18 @@ def capture(
         first = seen.catalogs[0]
         if first is None:
             return Capture("no-request", detail="the request body was not readable JSON", **common)
+        # A run that did not end cleanly after exactly one request may have shown codex more
+        # than one catalog, or failed after it; none of it is evidence.
+        if len(seen.catalogs) != 1:
+            return Capture("unclean", detail=f"sent {len(seen.catalogs)} requests", **common)
+        if run.timed_out:
+            return Capture("unclean", detail="timed out after its request", **common)
+        if run.exit_code != 0:
+            return Capture(
+                "unclean",
+                detail=f"exited {run.exit_code} after its request: {_tail(scratch, run.stderr)}",
+                **common,
+            )
         if not first:
             return Capture(
                 "empty",
@@ -511,17 +525,17 @@ def judge_controls(side: Side, models: tuple[str, ...], omitted: bool) -> None:
         failed: list[tuple[str, list[str]]] = []
         for model in models:
             base, off = side.captures[model, BASELINE], side.captures[model, DISABLED]
-            if not base.ok or not off.ok:
+            if not off.ok:
                 continue
-            offered = [n for n in base.tools if leaf(n) in tools]
-            if not offered:
-                continue
+            # A survivor fails the control whatever this model's baseline showed.
             kept = sorted(n for n in off.tools if leaf(n) in tools)
             if kept:
                 failed.append((model, kept))
                 continue
-            for name in offered:
-                if not name.startswith(NESTED_PREFIX):
+            if not base.ok:
+                continue
+            for name in base.tools:
+                if leaf(name) in tools and not name.startswith(NESTED_PREFIX):
                     removed[leaf(name)].append(model)
         if failed:
             side.controls[feature] = "failed"
@@ -802,7 +816,8 @@ def to_json(report: Report) -> dict[str, Any]:
                 "catalog_facts": None
                 if side.facts is None
                 else {m: side.facts.get(m) for m in report.models},
-                "disables_sent": list(side.supported),
+                "disables_supported": list(side.supported),
+                "disables_sent": [] if report.omitted else list(side.supported),
                 "unsupported": list(side.unsupported),
                 "controls": side.controls,
                 "captures": {

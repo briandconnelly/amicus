@@ -552,3 +552,53 @@ def test_the_run_summary_counts_failed_captures_as_failed(tmp_path, capsys):
     new = _fake(tmp_path, "new", **_validated_spec("0.164.0", log), no_request=True)
     wire.main(_run(old, new))
     assert "4 of 8 runs: exactly one request" in capsys.readouterr().out
+
+
+# --- regressions from Copilot's review of #388 ------------------------------------------------
+
+
+def test_a_controlled_tool_surviving_where_the_baseline_lacked_it_fails(tmp_path, capsys):
+    """A disabled run that still offers a controlled tool fails the control, even when that
+    model's baseline did not show it and another model's removal would pass the control."""
+    log = tmp_path / "calls.jsonl"
+    leaky = _code_mode(clock=True, nested=("exec_command", "create_goal"))
+    old = _fake(tmp_path, "old", **_validated_spec("0.163.0", log))
+    new = _fake(
+        tmp_path, "new", **_validated_spec("0.164.0", log), when_disabled={CODE_MODE: leaky}
+    )
+    code = wire.main(_run(old, new))
+    out = capsys.readouterr().out
+    assert (
+        "new 0.164.0: goals: FAILED on gpt-code-mode: the disabled run still offers "
+        "exec/create_goal" in out
+    )
+    assert "NOT VALIDATED" in out
+    assert code == 1
+
+
+@pytest.mark.parametrize(
+    ("spec", "status"),
+    [({"exit_after": 1}, "exited 1 after its request"), ({"requests": 2}, "sent 2 requests")],
+)
+def test_a_capture_needs_exactly_one_request_and_exit_0(tmp_path, capsys, spec, status):
+    log = tmp_path / "calls.jsonl"
+    old = _fake(tmp_path, "old", **_validated_spec("0.163.0", log))
+    new = _fake(tmp_path, "new", **_validated_spec("0.164.0", log) | spec)
+    code = wire.main(_run(old, new))
+    out = capsys.readouterr().out
+    assert f"new 0.164.0 gpt-classic baseline: unclean: {status}" in out
+    assert "4 of 8 runs: exactly one request" in out
+    assert "NOT VALIDATED" in out
+    assert code == 1
+
+
+def test_omit_disables_records_no_disable_sent(tmp_path, capsys):
+    log = tmp_path / "calls.jsonl"
+    old = _fake(tmp_path, "old", **_validated_spec("0.163.0", log))
+    new = _fake(tmp_path, "new", **_validated_spec("0.164.0", log))
+    record = tmp_path / "record.json"
+    wire.main(_run(old, new, "--omit-disables", "--out", str(record)))
+    capsys.readouterr()
+    sides = json.loads(record.read_text())["sides"]
+    assert sides["old"]["disables_sent"] == sides["new"]["disables_sent"] == []
+    assert sides["new"]["disables_supported"] == list(codex_contract.MODEL_RUN_DISABLED_FEATURES)

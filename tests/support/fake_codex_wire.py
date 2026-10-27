@@ -19,6 +19,10 @@ beside itself (`codex` reads `codex.json`), which a test writes:
     no_request       exit 1 before sending any request
     connect          hosts to CONNECT to through the proxy before the request
     fallback         print codex's fallback-metadata warning for the run's model
+    when_disabled    {model: [tool, ...]} replaces `additional`, unstripped, on a run that
+                     sends any --disable
+    requests         how many requests a run sends (default 1)
+    exit_after       the status a run exits with after its requests are answered (default 0)
     log              a file that gets one JSON line per invocation: argv, the environment's
                      keys and what arrived on stdin
 
@@ -119,7 +123,11 @@ def _exec(argv: list[str], stdin: str) -> int:
     }
     additional = _SPEC.get("additional", {}).get(model)
     if additional:
-        item = {"type": "additional_tools", "role": "developer", "tools": _strip(additional, gone)}
+        additional = _strip(additional, gone)
+    if disabled and model in _SPEC.get("when_disabled", {}):
+        additional = _SPEC["when_disabled"][model]  # verbatim: what a leaky binary sends
+    if additional:
+        item = {"type": "additional_tools", "role": "developer", "tools": additional}
         body["input"].insert(0, item)
     if _SPEC.get("fallback"):
         print(json.dumps({"type": "error", "message": f"Model metadata for `{model}` not found."}))
@@ -129,13 +137,14 @@ def _exec(argv: list[str], stdin: str) -> int:
         headers={"Content-Type": "application/json", "Authorization": "Bearer must-not-leak"},
     )
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-    with opener.open(request, timeout=10) as answer:
-        text = answer.read().decode()
-    if "response.completed" not in text:
-        print("Error: stream ended early", file=sys.stderr)
-        return 1
+    for _ in range(_SPEC.get("requests", 1)):
+        with opener.open(request, timeout=10) as answer:
+            text = answer.read().decode()
+        if "response.completed" not in text:
+            print("Error: stream ended early", file=sys.stderr)
+            return 1
     print("OK")
-    return 0
+    return _SPEC.get("exit_after", 0)
 
 
 def main() -> int:

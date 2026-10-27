@@ -106,7 +106,7 @@ A client that ignored the proxy settings would not show up there, so `OUTBOUND` 
 The only prompt is a literal of the script, over stdin, and it keeps only each tool's qualified name and a short hash of its definition (a namespace's own description gets an entry of its own), never a raw request, a header or instructions text.
 
 It captures each model in `KNOWN_MODEL_SLUGS` on both binaries through the argv amicus builds for a read-only run, once with amicus's `MODEL_RUN_DISABLED_FEATURES` disabled and once without, and diffs the two binaries.
-A disable that the binary's `features list` does not list is reported as unsupported on that binary and not sent, because codex rejects an unknown `--disable` at startup, and a run that fails at startup or sends no tools is a `FAIL`, never an empty catalog.
+A disable that the binary's `features list` does not list is reported as unsupported on that binary and not sent, because codex rejects an unknown `--disable` at startup, and a run that fails at startup or sends no tools is a `FAIL`, never an empty catalog, as is one that does not exit 0 after exactly one request.
 
 Which tools codex offers depends on the model's metadata, which a logged-in codex reads from the served catalog.
 A scratch home has no login, so by default both binaries get the new binary's bundled catalog (`codex debug models --bundled`) through `-c model_catalog_json`, which holds the metadata constant so that a difference is the binary's.
