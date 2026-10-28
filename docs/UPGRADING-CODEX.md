@@ -94,7 +94,7 @@ A feature read only under `tui/` cannot.
 `--help` and `features list` stop at what the CLI accepts; neither shows the tool list codex sends the model.
 That list was compared for 0.154 through 0.160 by pointing codex at a local fake Responses server through a custom `model_providers` entry, using codex-in-claude's `scripts/capture_wire_tools.py` read-only (#194, #294).
 It spends nothing, because the fake server answers before any model call.
-amicus has no instrument of its own for this yet, so 0.161 through 0.164 went without it, and each of those PRs said so.
+amicus has no instrument of its own for this yet, so 0.161 through 0.165 went without it, and each of those PRs said so.
 
 When it is run, capture each model in `KNOWN_MODEL_SLUGS` on both binaries, with and without amicus's `MODEL_RUN_DISABLED_FEATURES`, and diff.
 The disables are the positive control: they must remove `clock.sleep` from a model that advertises `clock`, and the goal tools from a model that offers them, or the probe is blind and the diff proves nothing.
@@ -147,7 +147,7 @@ Encode only phrasings seen in real output, and never a guessed one.
   If the notes touch the sandbox, re-read `WORKSPACE_WRITE_SCOPE_FACT` and `READ_SCOPE_FACT` against them.
   `READ_SCOPE_FACT` is a ceiling claim, so if a release did confine reads the disclosure would be over-broad rather than unsafe, and the response is to re-probe before narrowing anything.
   Also diff upstream's complete `SandboxWorkspaceWrite` struct (`codex-rs` `config/src/types.rs`) between the previous checked release tag and the new one.
-  At `rust-v0.164.0`, as at `rust-v0.163.0`, it has four fields: `writable_roots` and `network_access`, which amicus pins, and `exclude_tmpdir_env_var` and `exclude_slash_tmp`, which amicus leaves alone because they only narrow the writable scope.
+  At `rust-v0.165.0`, as at `rust-v0.164.0` and `rust-v0.163.0`, it has four fields: `writable_roots` and `network_access`, which amicus pins, and `exclude_tmpdir_env_var` and `exclude_slash_tmp`, which amicus leaves alone because they only narrow the writable scope.
   An added field, or a changed type or default on any of the four, is a finding to read for widening behavior, because a new widening key would arrive unpinned.
 - **Implicit context.**
   `SKILLS_DISCOVERY_FACT` and `SKILL_BODY_FACT` describe what codex loads with no flag at all: `AGENTS.md` files and discovered skills.

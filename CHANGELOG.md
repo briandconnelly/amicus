@@ -39,6 +39,18 @@ per-change, as its own lead says.
 
 ### Changed
 
+- codex-cli 0.165 is a supported version, so `amicus_backends` no longer warns on it. 0.165.0 was
+  checked against 0.164.0 at zero spend: `--help`, `exec --help`, `exec review --help` and
+  `login --help` are identical, and the unknown-feature error, the strict-config, invalid-value
+  and retired-setting rejections, the unknown-flag and invalid-sandbox errors and the logged-out
+  `login status` line are unchanged. Upstream's `SandboxWorkspaceWrite` config struct is
+  unchanged. `features list` turns on `reasoning_effort_override` (now `stable`, default true),
+  which lets an interactive session change reasoning effort mid-conversation, and adds
+  `prediction_preserve_parent_tools`, `guardianv3`, `guardian_recorded_items` and
+  `tui_multi_backend`; the three features amicus disables on every run are still `stable`. The
+  pinned-keys-and-disables probe and the strict-config-ignored probe timed out on both binaries
+  without network access, so those two were not confirmed, and neither the served catalog nor the
+  model-facing tool catalog was checked. No paid call was part of the check.
 - codex-cli 0.164 is a supported version, so `amicus_backends` no longer warns on it. 0.164.0 was
   checked against 0.163.0 at zero spend: `exec --help`, `exec review --help` and `login --help`
   are identical, and top-level `--help` only adds the experimental `migrate-nfs-db` subcommand.
