@@ -51,8 +51,8 @@ per-change, as its own lead says.
   `pyproject.toml` cap. `--file-issues` files one issue per kimi, fastmcp or mcp minor, never
   when an open or closed issue already has that exact title, and keeps one rolling claude issue
   that it edits forward; a failed lookup is reported as unknown, files nothing and fails the
-  run. `docs/WATCHING.md` documents it and the routine that runs
-  it (#378).
+  run. `.github/workflows/upstream-watch.yml` runs it daily, and `docs/WATCHING.md` documents
+  both (#378).
 
 ### Changed
 

@@ -11,7 +11,8 @@ This is not a release.
 Cutting a release is `docs/RELEASING.md`, whose precondition "The backend CLIs are current and checked" runs the same mechanical check again, and a supported-version change is its own PR there, ahead of any release.
 
 You usually do not have to notice a new minor yourself.
-A scheduled Claude Code routine checks npm's `latest` dist-tag for `@openai/codex` and keeps a `codex-upgrade` issue titled `chore(backends): track codex <major>.<minor>` for each new minor, holding an evaluation of the release notes.
+A scheduled Claude Code routine checks npm's `latest` dist-tag for `@openai/codex` and, for each new minor, opens a draft PR titled `chore(backends): support codex-cli <major>.<minor>` that does the zero-spend steps below and holds an evaluation of the release notes.
+It skips a minor that already has such a PR in any state, or a closed `codex-upgrade` issue titled `chore(backends): track codex <major>.<minor>`, and names an open one in the PR body with `Closes`.
 Issues opened before that title existed are titled `chore(cli-contract): track codex <major>.<minor>`.
 The other backend CLIs and the capped `fastmcp` and `mcp` packages are watched by `check_backend_compat.py watch` instead, described in `docs/WATCHING.md`.
 That evaluation is read from the notes alone; nothing in it was run against a binary, so everything below still runs locally, where an authenticated `codex` is installed.
