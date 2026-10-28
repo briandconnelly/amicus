@@ -65,6 +65,13 @@ per-change, as its own lead says.
   that it edits forward; a failed lookup is reported as unknown, files nothing and fails the
   run. `.github/workflows/upstream-watch.yml` runs it daily, and `docs/WATCHING.md` documents
   both (#378).
+- `scripts/release.py policy` reads back the `v*` tag ruleset and the `pypi` environment that
+  `docs/RELEASING.md`'s preconditions checked by hand (#389). It needs an active ruleset that
+  restricts creation, update and deletion of `refs/tags/v*` with no exclusions, no
+  `Integration` bypass actor on any ruleset covering those tags, a required reviewer on `pypi`,
+  and a single deployment policy, typed `tag` and named `v*`. A ruleset response without
+  `bypass_actors`, which is what the agent App token gets, is reported unknown and fails rather
+  than read as an empty list.
 
 ### Changed
 
