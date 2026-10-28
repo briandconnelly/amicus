@@ -91,6 +91,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import difflib
+import fnmatch
 import importlib.util
 import json
 import os
@@ -1243,6 +1244,8 @@ def cmd_pointer(ctx: Context, args: argparse.Namespace) -> int:
 REPOSITORY = "briandconnelly/amicus"
 TAG_REF_PATTERN = "refs/tags/v*"
 TAG_RESTRICTIONS = ("creation", "update", "deletion")
+# A tag name a release could carry, matched against other rulesets' patterns.
+RELEASE_TAG_SAMPLE = "refs/tags/v0.0.0"
 PYPI_ENVIRONMENT = "pypi"
 # The one deployment policy the environment may carry (RELEASING, "The `pypi` environment").
 PYPI_POLICY = {"name": "v*", "type": "tag"}
@@ -1279,7 +1282,25 @@ def _ref_name(ruleset: dict, key: str) -> list:
     return ((ruleset.get("conditions") or {}).get("ref_name") or {}).get(key) or []
 
 
-def _bypass_findings(name: str, ruleset: dict, qualifies: bool, report: PolicyReport) -> None:
+def _may_block_release_tags(ruleset: dict) -> bool:
+    """Whether an active ruleset that restricts creation could match a `v*` tag.
+
+    Exclusions are ignored, so this errs towards reporting a lockout that is not there.
+    """
+    if ruleset.get("enforcement") != "active":
+        return False
+    if "creation" not in {rule.get("type") for rule in ruleset.get("rules") or []}:
+        return False
+    return any(
+        pattern == "~ALL"
+        or pattern.startswith("refs/tags/v")
+        or fnmatch.fnmatchcase(RELEASE_TAG_SAMPLE, pattern)
+        for pattern in _ref_name(ruleset, "include")
+        if isinstance(pattern, str)
+    )
+
+
+def _bypass_findings(name: str, ruleset: dict, report: PolicyReport) -> None:
     if "bypass_actors" not in ruleset:
         report.unknown.append(
             f"{name}: the response has no `bypass_actors` key, so whether an agent identity may "
@@ -1296,11 +1317,11 @@ def _bypass_findings(name: str, ruleset: dict, qualifies: bool, report: PolicyRe
             f"{name} lets an Integration bypass it (actor_id {ids}); rule 21 permits no agent "
             "identity to bypass a ruleset on tags"
         )
-    elif not actors and qualifies:
+    elif not actors and _may_block_release_tags(ruleset):
         report.problems.append(
-            f"{name} has an empty bypass list: rule 21 holds, but nobody, the maintainer "
-            "included, can create a v* tag, so the release is blocked; add the repository admin "
-            "role, never an agent identity"
+            f"{name} restricts creation of tags a release may use and has an empty bypass list: "
+            "nobody, the maintainer included, can create a v* tag, so the release is blocked; "
+            "add the repository admin role, never an agent identity"
         )
     else:
         listed = ", ".join(f"{a.get('actor_type')} {a.get('actor_id')}" for a in actors)
@@ -1313,7 +1334,9 @@ def check_tag_rulesets(rulesets: list[dict], report: PolicyReport) -> None:
     A ruleset qualifies when it targets tags, includes `refs/tags/v*`, excludes nothing, is
     `active`, and restricts creation, update and deletion. Every ruleset targeting tags is held
     to the bypass rule, whatever its patterns, because a broader one (`refs/tags/*`, `~ALL`)
-    covers `v*` too; an absent `bypass_actors` key is unknown, never an empty list.
+    covers `v*` too; an absent `bypass_actors` key is unknown, never an empty list. Any active
+    one that restricts creation of tags a release may use must let someone bypass it, or the
+    maintainer cannot push the tag either.
     """
     tag_rulesets = [r for r in rulesets if r.get("target") == "tag"]
     if not any(TAG_REF_PATTERN in _ref_name(r, "include") for r in tag_rulesets):
@@ -1337,7 +1360,7 @@ def check_tag_rulesets(rulesets: list[dict], report: PolicyReport) -> None:
                 report.notes.append(f"{name} covers {TAG_REF_PATTERN} but {'; '.join(shortfalls)}")
             qualifies = not shortfalls
         qualified = qualified or qualifies
-        _bypass_findings(name, ruleset, qualifies, report)
+        _bypass_findings(name, ruleset, report)
         report.notes.append(
             f"{name}: current_user_can_bypass is {ruleset.get('current_user_can_bypass')!r}, "
             "which describes whoever's token ran this read-back, not the repository"

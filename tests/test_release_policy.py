@@ -169,6 +169,43 @@ def test_broader_tag_ruleset_without_bypass_actors_is_unknown(capsys):
     assert "UNKNOWN: ruleset 'all tags' (8)" in err
 
 
+@pytest.mark.parametrize(
+    ("include", "blocks"),
+    [
+        (["refs/tags/v*"], True),
+        (["refs/tags/*"], True),
+        (["~ALL"], True),
+        (["refs/tags/v1*"], True),
+        (["refs/tags/nightly-*"], False),
+    ],
+)
+def test_a_second_creation_lockout_blocks_the_release(capsys, include, blocks):
+    """Copilot on #397: a partial ruleset that only restricts creation, bypassed by nobody,
+    locks the maintainer out even though it is not the ruleset rule 21 qualifies."""
+    gh = FakeGh()
+    lockout = _ruleset(
+        id=9,
+        name="lockout",
+        conditions={"ref_name": {"include": include, "exclude": []}},
+        rules=[{"type": "creation"}],
+        bypass_actors=[],
+    )
+    gh.responses[f"{BASE}/rulesets?per_page=100"] = [SUMMARIES, [{"id": 9, "target": "tag"}]]
+    gh.responses[f"{BASE}/rulesets/9"] = lockout
+    code, out, err = _run(capsys, gh)
+    assert ("ruleset 'lockout' (9) restricts creation" in err) is blocks
+    assert code == (1 if blocks else 0), err
+
+
+def test_an_inactive_lockout_does_not_block(capsys):
+    gh = FakeGh()
+    lockout = _ruleset(id=9, name="lockout", enforcement="disabled", bypass_actors=[])
+    gh.responses[f"{BASE}/rulesets?per_page=100"] = [SUMMARIES, [{"id": 9, "target": "tag"}]]
+    gh.responses[f"{BASE}/rulesets/9"] = lockout
+    code, _, err = _run(capsys, gh)
+    assert code == 0, err
+
+
 def test_empty_bypass_list_blocks_the_release(capsys):
     code, _, err = _run(capsys, FakeGh(ruleset=_ruleset(bypass_actors=[])))
     assert code == 1
