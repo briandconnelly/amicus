@@ -29,9 +29,9 @@ Copilot reads this file from a pull request's head branch, so the pull request t
 
 ### What the gate already checks
 
-Rule 2 in `AGENTS.md` defines the gate; CI runs it, preceded by the Actions-pinning check (rule 3).
+Rule 2 in `AGENTS.md` defines the gate; CI runs it, preceded by the Actions pinning-and-trigger check (rule 3, enforcing rules 14 and 15).
 Some tests pin Markdown surfaces against the code, for example `docs/MIGRATION.md`'s tool and parameter names and the README install pin; a claim one of those tests pins is gate-covered.
-Nothing in the gate checks prose style, so rule 16, stale claims no test pins and unpinned drift between documentation and code are reviewer work.
+The gate checks only half of rule 16: it rejects two sentences on one line under `docs/`, not one sentence wrapped across several, so wrapped sentences, stale claims no test pins and unpinned drift between documentation and code are reviewer work.
 
 ### Where the risk concentrates
 
