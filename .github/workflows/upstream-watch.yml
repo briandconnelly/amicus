@@ -1,0 +1,52 @@
+name: Upstream watch
+
+on:
+  schedule:
+    # Daily: kimi, claude, fastmcp and mcp releases past amicus's baselines become
+    # issues (docs/WATCHING.md). Codex stays with its own routine.
+    - cron: "30 15 * * *"
+  workflow_dispatch:
+
+# Least-privilege: nothing at the top level; the one job reads the repo and files issues.
+permissions: {}
+
+# Never two runs at once: a second run must see the first's issues, or both file the same
+# title. Queue rather than cancel, so a run that is filing is never cut off mid-move.
+concurrency:
+  group: upstream-watch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    name: watch upstream releases
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+      - name: Install dependencies
+        run: uv sync --frozen
+      # Reads npm (`npm view`, preinstalled on the runner) and PyPI, then files through `gh`.
+      # Exits 1 when a stream is unknown or a filing failed, which fails the job, so an
+      # unchecked stream is never mistaken for an up-to-date one.
+      - name: Watch and file issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          status=0
+          uv run --frozen python scripts/check_backend_compat.py watch --file-issues --json \
+            --repo "$GITHUB_REPOSITORY" >"$RUNNER_TEMP/watch.json" || status=$?
+          cat "$RUNNER_TEMP/watch.json"
+          {
+            echo "## Upstream watch (exit $status)"
+            echo
+            echo '```json'
+            cat "$RUNNER_TEMP/watch.json"
+            echo '```'
+          } >>"$GITHUB_STEP_SUMMARY"
+          exit "$status"
