@@ -65,14 +65,14 @@ If that check fails it puts the file back. It refuses a dirty tree and the `main
 never commits, tags, pushes, merges or opens the PR.
 
 `policy` reads back, read-only, the two repository controls RELEASING's preconditions name:
-every ruleset covering `refs/tags/v*`, and the `pypi` environment. It needs one active ruleset
-that restricts creation, update and deletion of `v*` tags with no exclusions, no `Integration`
-bypass actor on any ruleset covering them, an environment with a required reviewer, and exactly
-one deployment policy, typed `tag` and named `v*`. A response without `bypass_actors` is
-reported UNKNOWN and fails: GitHub omits the key for a requester without permission on the
-ruleset, the agent App token among them, and an absent key is not an empty list (AGENTS.md
-rule 21). It prints `current_user_can_bypass` as what it is, an answer about whoever's token
-ran it. Only the maintainer's own token can make it pass.
+every tag ruleset, and the `pypi` environment. It needs one active ruleset that restricts
+creation, update and deletion of `refs/tags/v*` with no exclusions, no `Integration` bypass
+actor on any tag ruleset (a broader pattern covers `v*` too), an environment with a required
+reviewer, and exactly one deployment policy, typed `tag` and named `v*`. A response without
+`bypass_actors` is reported UNKNOWN and fails: GitHub omits the key for a requester without
+permission on the ruleset, the agent App token among them, and an absent key is not an empty
+list (AGENTS.md rule 21). It prints `current_user_can_bypass` as what it is, an answer about
+whoever's token ran it. Only the maintainer's own token can make it pass.
 
 Usage:
     uv run python scripts/release.py prepare X.Y.Z [--check]
@@ -1294,7 +1294,7 @@ def _bypass_findings(name: str, ruleset: dict, qualifies: bool, report: PolicyRe
         ids = ", ".join(str(a.get("actor_id")) for a in integrations)
         report.problems.append(
             f"{name} lets an Integration bypass it (actor_id {ids}); rule 21 permits no agent "
-            "identity to bypass a ruleset covering v* tags"
+            "identity to bypass a ruleset on tags"
         )
     elif not actors and qualifies:
         report.problems.append(
@@ -1311,37 +1311,38 @@ def check_tag_rulesets(rulesets: list[dict], report: PolicyReport) -> None:
     """Rule 21 on full ruleset records, each from `rulesets/<id>` (the list omits the rules).
 
     A ruleset qualifies when it targets tags, includes `refs/tags/v*`, excludes nothing, is
-    `active`, and restricts creation, update and deletion. Every ruleset covering `v*` is held
-    to the bypass rule, and an absent `bypass_actors` key is unknown, never an empty list.
+    `active`, and restricts creation, update and deletion. Every ruleset targeting tags is held
+    to the bypass rule, whatever its patterns, because a broader one (`refs/tags/*`, `~ALL`)
+    covers `v*` too; an absent `bypass_actors` key is unknown, never an empty list.
     """
-    covering = [
-        r
-        for r in rulesets
-        if r.get("target") == "tag" and TAG_REF_PATTERN in _ref_name(r, "include")
-    ]
-    if not covering:
+    tag_rulesets = [r for r in rulesets if r.get("target") == "tag"]
+    if not any(TAG_REF_PATTERN in _ref_name(r, "include") for r in tag_rulesets):
         report.problems.append(f"no ruleset targets {TAG_REF_PATTERN} (AGENTS.md rule 21)")
-        return
     qualified = False
-    for ruleset in covering:
+    for ruleset in tag_rulesets:
         name = f"ruleset {ruleset.get('name')!r} ({ruleset.get('id')})"
-        shortfalls = []
-        if ruleset.get("enforcement") != "active":
-            shortfalls.append(f"its enforcement is {ruleset.get('enforcement')!r}, not 'active'")
-        if exclude := _ref_name(ruleset, "exclude"):
-            shortfalls.append(f"it excludes {exclude}")
-        types = {rule.get("type") for rule in ruleset.get("rules") or []}
-        if missing := [kind for kind in TAG_RESTRICTIONS if kind not in types]:
-            shortfalls.append(f"it does not restrict {', '.join(missing)}")
-        if shortfalls:
-            report.notes.append(f"{name} covers {TAG_REF_PATTERN} but {'; '.join(shortfalls)}")
-        qualified = qualified or not shortfalls
-        _bypass_findings(name, ruleset, not shortfalls, report)
+        qualifies = False
+        if TAG_REF_PATTERN in _ref_name(ruleset, "include"):
+            shortfalls = []
+            if ruleset.get("enforcement") != "active":
+                shortfalls.append(
+                    f"its enforcement is {ruleset.get('enforcement')!r}, not 'active'"
+                )
+            if exclude := _ref_name(ruleset, "exclude"):
+                shortfalls.append(f"it excludes {exclude}")
+            types = {rule.get("type") for rule in ruleset.get("rules") or []}
+            if missing := [kind for kind in TAG_RESTRICTIONS if kind not in types]:
+                shortfalls.append(f"it does not restrict {', '.join(missing)}")
+            if shortfalls:
+                report.notes.append(f"{name} covers {TAG_REF_PATTERN} but {'; '.join(shortfalls)}")
+            qualifies = not shortfalls
+        qualified = qualified or qualifies
+        _bypass_findings(name, ruleset, qualifies, report)
         report.notes.append(
             f"{name}: current_user_can_bypass is {ruleset.get('current_user_can_bypass')!r}, "
             "which describes whoever's token ran this read-back, not the repository"
         )
-    if not qualified:
+    if tag_rulesets and not qualified:
         report.problems.append(
             f"no active ruleset covering {TAG_REF_PATTERN} restricts "
             f"{', '.join(TAG_RESTRICTIONS)} with no exclusions (AGENTS.md rule 21)"
@@ -1430,7 +1431,7 @@ def cmd_policy(ctx: Context, _args: argparse.Namespace) -> int:
         return 1
     print(
         f"the release policy read-back holds: an active ruleset restricts creation, update and "
-        f"deletion of {TAG_REF_PATTERN}, no Integration may bypass any ruleset covering it, and "
+        f"deletion of {TAG_REF_PATTERN}, no Integration may bypass any tag ruleset, and "
         f"the {PYPI_ENVIRONMENT!r} environment requires a reviewer and deploys only from tag "
         "'v*'. Whether you can push the tag is current_user_can_bypass above, under your token."
     )

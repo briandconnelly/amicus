@@ -141,6 +141,34 @@ def test_integration_bypass_on_a_second_covering_ruleset_fails(capsys):
     assert "ruleset 'extra' (7) lets an Integration bypass it" in err
 
 
+@pytest.mark.parametrize("include", [["refs/tags/*"], ["~ALL"]])
+def test_integration_bypass_on_a_broader_tag_ruleset_fails(capsys, include):
+    """A broader pattern covers v* tags too, so its bypass list is held to rule 21 (#389)."""
+    gh = FakeGh()
+    broad = _ruleset(
+        id=8,
+        name="all tags",
+        conditions={"ref_name": {"include": include, "exclude": []}},
+        bypass_actors=[{"actor_id": 99, "actor_type": "Integration"}],
+    )
+    gh.responses[f"{BASE}/rulesets?per_page=100"] = [SUMMARIES, [{"id": 8, "target": "tag"}]]
+    gh.responses[f"{BASE}/rulesets/8"] = broad
+    code, _, err = _run(capsys, gh)
+    assert code == 1
+    assert "ruleset 'all tags' (8) lets an Integration bypass it" in err
+
+
+def test_broader_tag_ruleset_without_bypass_actors_is_unknown(capsys):
+    gh = FakeGh()
+    broad = _ruleset(id=8, name="all tags", conditions={"ref_name": {"include": ["~ALL"]}})
+    del broad["bypass_actors"]
+    gh.responses[f"{BASE}/rulesets?per_page=100"] = [SUMMARIES, [{"id": 8, "target": "tag"}]]
+    gh.responses[f"{BASE}/rulesets/8"] = broad
+    code, _, err = _run(capsys, gh)
+    assert code == 1
+    assert "UNKNOWN: ruleset 'all tags' (8)" in err
+
+
 def test_empty_bypass_list_blocks_the_release(capsys):
     code, _, err = _run(capsys, FakeGh(ruleset=_ruleset(bypass_actors=[])))
     assert code == 1

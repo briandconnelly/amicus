@@ -20,7 +20,7 @@ The first two have a script; run it under your own account, not an agent's:
 uv run python scripts/release.py policy
 ```
 
-It reads back every ruleset covering `refs/tags/v*` and the `pypi` environment, checks what the two sections below ask for, and exits 0 only when all of it holds.
+It reads back every tag ruleset, including any broader than `refs/tags/v*`, and the `pypi` environment, checks what the two sections below ask for, and exits 0 only when all of it holds.
 Under the agent App token it always exits 1 with the bypass list reported `UNKNOWN`, because that token's response omits `bypass_actors`; for an agent that is the expected answer, not a finding about the ruleset.
 It does not say whether you can push the tag: the `current_user_can_bypass` it prints describes the token that ran it, and check two below says what to look for.
 The two sections are what it checks and how to read the same thing back by hand.
