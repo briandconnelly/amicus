@@ -64,12 +64,23 @@ and the peeled `sha` into `.claude-plugin/marketplace.json` without reformatting
 If that check fails it puts the file back. It refuses a dirty tree and the `main` branch. It
 never commits, tags, pushes, merges or opens the PR.
 
+`policy` reads back, read-only, the two repository controls RELEASING's preconditions name:
+every tag ruleset, and the `pypi` environment. It needs one active ruleset that restricts
+creation, update and deletion of `refs/tags/v*` with no exclusions, no `Integration` bypass
+actor on any tag ruleset (a broader pattern covers `v*` too), an environment with a required
+reviewer, and exactly one deployment policy, typed `tag` and named `v*`. A response without
+`bypass_actors` is reported UNKNOWN and fails: GitHub omits the key for a requester without
+permission on the ruleset, the agent App token among them, and an absent key is not an empty
+list (AGENTS.md rule 21). It prints `current_user_can_bypass` as what it is, an answer about
+whoever's token ran it. Only the maintainer's own token can make it pass.
+
 Usage:
     uv run python scripts/release.py prepare X.Y.Z [--check]
     uv run python scripts/release.py preflight --pr N --version X.Y.Z
     uv run python scripts/release.py post-merge --release-sha SHA --version X.Y.Z
     uv run python scripts/release.py post-publish --version X.Y.Z [--timeout SECONDS]
     uv run python scripts/release.py pointer --version X.Y.Z [--timeout SECONDS]
+    uv run python scripts/release.py policy
 
 Exits 0 on success, 1 on a refusal or a failed check, printing each problem.
 Pure stdlib, like `check_release_state.py`; it runs `git`, `gh`, `uv` and `uvx`.
@@ -80,6 +91,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import difflib
+import fnmatch
 import importlib.util
 import json
 import os
@@ -1227,6 +1239,228 @@ def cmd_pointer(ctx: Context, args: argparse.Namespace) -> int:
     return 0
 
 
+# --- policy: the `v*` ruleset and the `pypi` environment, read back ---------------------------
+
+REPOSITORY = "briandconnelly/amicus"
+TAG_REF_PATTERN = "refs/tags/v*"
+TAG_RESTRICTIONS = ("creation", "update", "deletion")
+# A tag name a release could carry, matched against other rulesets' patterns.
+RELEASE_TAG_SAMPLE = "refs/tags/v0.0.0"
+PYPI_ENVIRONMENT = "pypi"
+# The one deployment policy the environment may carry (RELEASING, "The `pypi` environment").
+PYPI_POLICY = {"name": "v*", "type": "tag"}
+
+
+class ApiError(Exception):
+    """`gh api` gave no usable answer; a check that needed it cannot pass."""
+
+
+def _gh_api(ctx: Context, path: str, *, paginate: bool = False) -> object:
+    cmd = ["gh", "api", *(["--paginate", "--slurp"] if paginate else []), path]
+    try:
+        proc = ctx.run(cmd, cwd=ctx.repo_root, capture_output=True, text=True, check=False)
+    except OSError as exc:
+        raise ApiError(f"could not run `gh api {path}`: {exc}") from exc
+    if proc.returncode != 0:
+        raise ApiError(f"`gh api {path}` failed: {_stderr_line(proc)}")
+    try:
+        return json.loads(proc.stdout)
+    except ValueError as exc:
+        raise ApiError(f"`gh api {path}` did not return JSON: {exc}") from exc
+
+
+@dataclass
+class PolicyReport:
+    """A read-back's three outcomes. Anything in `problems` or `unknown` fails it."""
+
+    problems: list[str] = field(default_factory=list)
+    unknown: list[str] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)
+
+
+def _ref_name(ruleset: dict, key: str) -> list:
+    return ((ruleset.get("conditions") or {}).get("ref_name") or {}).get(key) or []
+
+
+def _may_block_release_tags(ruleset: dict) -> bool:
+    """Whether an active ruleset that restricts creation could match a `v*` tag.
+
+    Exclusions are ignored, so this errs towards reporting a lockout that is not there.
+    """
+    if ruleset.get("enforcement") != "active":
+        return False
+    if "creation" not in {rule.get("type") for rule in ruleset.get("rules") or []}:
+        return False
+    return any(
+        pattern == "~ALL"
+        or pattern.startswith("refs/tags/v")
+        or fnmatch.fnmatchcase(RELEASE_TAG_SAMPLE, pattern)
+        for pattern in _ref_name(ruleset, "include")
+        if isinstance(pattern, str)
+    )
+
+
+def _bypass_findings(name: str, ruleset: dict, report: PolicyReport) -> None:
+    if "bypass_actors" not in ruleset:
+        report.unknown.append(
+            f"{name}: the response has no `bypass_actors` key, so whether an agent identity may "
+            "bypass it is unknown, not 'nobody'; GitHub omits the key for a requester without "
+            "permission on the ruleset, such as the agent App token. Rerun under the "
+            "maintainer's own token"
+        )
+        return
+    actors = ruleset["bypass_actors"] or []
+    integrations = [a for a in actors if a.get("actor_type") == "Integration"]
+    if integrations:
+        ids = ", ".join(str(a.get("actor_id")) for a in integrations)
+        report.problems.append(
+            f"{name} lets an Integration bypass it (actor_id {ids}); rule 21 permits no agent "
+            "identity to bypass a ruleset on tags"
+        )
+    elif not actors and _may_block_release_tags(ruleset):
+        report.problems.append(
+            f"{name} restricts creation of tags a release may use and has an empty bypass list: "
+            "nobody, the maintainer included, can create a v* tag, so the release is blocked; "
+            "add the repository admin role, never an agent identity"
+        )
+    else:
+        listed = ", ".join(f"{a.get('actor_type')} {a.get('actor_id')}" for a in actors)
+        report.notes.append(f"{name} bypass list: {listed or 'empty'}")
+
+
+def check_tag_rulesets(rulesets: list[dict], report: PolicyReport) -> None:
+    """Rule 21 on full ruleset records, each from `rulesets/<id>` (the list omits the rules).
+
+    A ruleset qualifies when it targets tags, includes `refs/tags/v*`, excludes nothing, is
+    `active`, and restricts creation, update and deletion. Every ruleset targeting tags is held
+    to the bypass rule, whatever its patterns, because a broader one (`refs/tags/*`, `~ALL`)
+    covers `v*` too; an absent `bypass_actors` key is unknown, never an empty list. Any active
+    one that restricts creation of tags a release may use must let someone bypass it, or the
+    maintainer cannot push the tag either.
+    """
+    tag_rulesets = [r for r in rulesets if r.get("target") == "tag"]
+    if not any(TAG_REF_PATTERN in _ref_name(r, "include") for r in tag_rulesets):
+        report.problems.append(f"no ruleset targets {TAG_REF_PATTERN} (AGENTS.md rule 21)")
+    qualified = False
+    for ruleset in tag_rulesets:
+        name = f"ruleset {ruleset.get('name')!r} ({ruleset.get('id')})"
+        qualifies = False
+        if TAG_REF_PATTERN in _ref_name(ruleset, "include"):
+            shortfalls = []
+            if ruleset.get("enforcement") != "active":
+                shortfalls.append(
+                    f"its enforcement is {ruleset.get('enforcement')!r}, not 'active'"
+                )
+            if exclude := _ref_name(ruleset, "exclude"):
+                shortfalls.append(f"it excludes {exclude}")
+            types = {rule.get("type") for rule in ruleset.get("rules") or []}
+            if missing := [kind for kind in TAG_RESTRICTIONS if kind not in types]:
+                shortfalls.append(f"it does not restrict {', '.join(missing)}")
+            if shortfalls:
+                report.notes.append(f"{name} covers {TAG_REF_PATTERN} but {'; '.join(shortfalls)}")
+            qualifies = not shortfalls
+        qualified = qualified or qualifies
+        _bypass_findings(name, ruleset, report)
+        report.notes.append(
+            f"{name}: current_user_can_bypass is {ruleset.get('current_user_can_bypass')!r}, "
+            "which describes whoever's token ran this read-back, not the repository"
+        )
+    if tag_rulesets and not qualified:
+        report.problems.append(
+            f"no active ruleset covering {TAG_REF_PATTERN} restricts "
+            f"{', '.join(TAG_RESTRICTIONS)} with no exclusions (AGENTS.md rule 21)"
+        )
+
+
+def check_pypi_environment(environment: dict, policies: dict, report: PolicyReport) -> None:
+    """The environment's reviewer gate, and its one deployment policy: a tag policy `v*`."""
+    reviewers = [
+        reviewer
+        for rule in environment.get("protection_rules") or []
+        if rule.get("type") == "required_reviewers"
+        for reviewer in rule.get("reviewers") or []
+    ]
+    if not reviewers:
+        report.problems.append(
+            f"the {PYPI_ENVIRONMENT!r} environment has no required_reviewers rule with a reviewer"
+        )
+    scope = environment.get("deployment_branch_policy")
+    if not (isinstance(scope, dict) and scope.get("custom_branch_policies") is True):
+        report.problems.append(
+            f"the {PYPI_ENVIRONMENT!r} environment's deployment_branch_policy is {scope!r}; it "
+            "must use custom policies, or its deployment policies do not apply"
+        )
+    entries = policies.get("branch_policies")
+    if not isinstance(entries, list):
+        report.unknown.append("the deployment-branch-policies response has no branch_policies")
+        return
+    if policies.get("total_count") != len(entries):
+        report.unknown.append(
+            f"the deployment-branch-policies response lists {len(entries)} of "
+            f"{policies.get('total_count')} policies"
+        )
+    found = [{"name": e.get("name"), "type": e.get("type")} for e in entries]
+    if PYPI_POLICY not in found:
+        report.problems.append(
+            f"the {PYPI_ENVIRONMENT!r} environment has no deployment policy typed 'tag' named "
+            "'v*'; a 'branch' policy of that name blocks every release, which is made from a tag"
+        )
+    for entry in found:
+        if entry != PYPI_POLICY:
+            report.problems.append(
+                f"the {PYPI_ENVIRONMENT!r} environment also allows {entry['type']} "
+                f"{entry['name']!r}; its only deployment policy must be tag 'v*'"
+            )
+
+
+def policy_report(ctx: Context) -> PolicyReport:
+    """Read back rule 21's rulesets and the `pypi` environment under whatever token `gh` has."""
+    report = PolicyReport()
+    base = f"repos/{REPOSITORY}"
+    try:
+        pages = cast(
+            "list[list[dict]]", _gh_api(ctx, f"{base}/rulesets?per_page=100", paginate=True)
+        )
+        rulesets = [
+            cast("dict", _gh_api(ctx, f"{base}/rulesets/{summary['id']}"))
+            for page in pages
+            for summary in page
+            if summary.get("target") == "tag"
+        ]
+        check_tag_rulesets(rulesets, report)
+    except (ApiError, AttributeError, KeyError, TypeError) as exc:
+        report.unknown.append(f"could not read the rulesets: {exc}")
+    try:
+        environment = _gh_api(ctx, f"{base}/environments/{PYPI_ENVIRONMENT}")
+        policies = _gh_api(
+            ctx, f"{base}/environments/{PYPI_ENVIRONMENT}/deployment-branch-policies?per_page=100"
+        )
+        check_pypi_environment(cast("dict", environment), cast("dict", policies), report)
+    except (ApiError, AttributeError, KeyError, TypeError) as exc:
+        report.unknown.append(f"could not read the {PYPI_ENVIRONMENT!r} environment: {exc}")
+    return report
+
+
+def cmd_policy(ctx: Context, _args: argparse.Namespace) -> int:
+    report = policy_report(ctx)
+    for note in report.notes:
+        print(f"  {note}", flush=True)
+    if report.problems or report.unknown:
+        print("the release policy read-back does NOT hold:", file=sys.stderr)
+        for problem in report.problems:
+            print(f"  - {problem}", file=sys.stderr)
+        for unknown in report.unknown:
+            print(f"  - UNKNOWN: {unknown}", file=sys.stderr)
+        return 1
+    print(
+        f"the release policy read-back holds: an active ruleset restricts creation, update and "
+        f"deletion of {TAG_REF_PATTERN}, no Integration may bypass any tag ruleset, and "
+        f"the {PYPI_ENVIRONMENT!r} environment requires a reviewer and deploys only from tag "
+        "'v*'. Whether you can push the tag is current_user_can_bypass above, under your token."
+    )
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     commands = parser.add_subparsers(dest="command", required=True, metavar="COMMAND")
@@ -1284,6 +1518,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--timeout", type=float, default=DEFAULT_INSTALL_TIMEOUT, help=timeout_help
     )
     pointer.set_defaults(handler=cmd_pointer)
+
+    policy = commands.add_parser(
+        "policy",
+        help="read back the v* tag ruleset and the pypi environment (RELEASING preconditions)",
+        description="Read back rule 21's ruleset and the pypi environment; read-only.",
+    )
+    policy.set_defaults(handler=cmd_policy)
     return parser
 
 
