@@ -8,13 +8,13 @@ It reports and files; it never installs, validates, widens a cap or changes a su
 
 | Stream | Baseline it is compared with | Watched by |
 | --- | --- | --- |
-| `codex` | the shipped `SUPPORTED_VERSIONS` in `src/amicus/backends/codex/contract.py` | the existing codex routine, which keeps `codex-upgrade` issues (`docs/UPGRADING-CODEX.md`) |
+| `codex` | the shipped `SUPPORTED_VERSIONS` in `src/amicus/backends/codex/contract.py` | the codex routine, which opens a draft support PR for each new minor (`docs/UPGRADING-CODEX.md`) |
 | `kimi` | the shipped `SUPPORTED_VERSIONS` in `src/amicus/backends/kimi/contract.py` | `watch` |
 | `claude` | the newest capture under `docs/claude-help/`, because the shipped set is major-only and a patch never leaves it | `watch` |
 | `fastmcp`, `mcp` | the `<X.Y` cap in `pyproject.toml`'s `[project].dependencies`, which `.github/dependabot.yml` tells Dependabot not to cross (#106) | `watch` |
 
 Codex is not a `watch` stream.
-Its routine writes a release-notes evaluation into each issue, which this command cannot, and two writers of the same title would only race.
+Its routine does the zero-spend upgrade steps and writes a release-notes evaluation into a draft support PR, which this command cannot.
 
 ## The command
 
@@ -54,7 +54,7 @@ Each `update` finding has a stable key, its stream and a version, and a title bu
 | `claude` | the latest release's full version | `chore(backends): track claude <version>` |
 | `fastmcp`, `mcp` | the latest release's `<major>.<minor>` | `chore(deps): track <package> <major>.<minor> past the cap` |
 
-The kimi title follows the codex routine's `chore(backends): track codex <major>.<minor>`.
+The kimi title follows the codex tracking issues' `chore(backends): track codex <major>.<minor>`.
 Claude is keyed by full version because its baseline is a capture of one version, not a minor.
 
 ### kimi, fastmcp and mcp: one issue per minor
@@ -92,23 +92,13 @@ Each issue is labelled `dependencies` and `chore`, both existing labels.
 Its body says the release is available upstream, never that it is supported, because nothing was installed or run.
 A claude issue's body also says that it rolls forward and that closing it re-arms the watch.
 
-## Running it from the scheduled routine
+## Running it on a schedule
 
-The scheduled routine is configured outside this repository, so this text is what the maintainer pastes into it.
-Run it from a checkout of `main`, with `uv` installed and `gh` authenticated as an identity that may create issues here:
-
-```text
-In a fresh checkout of briandconnelly/amicus at main, run:
-
-    uv run python scripts/check_backend_compat.py watch --file-issues --json
-
-Do not file, edit, close or comment on any issue yourself: the command files at most one
-issue per kimi, fastmcp or mcp minor, keeps one rolling claude issue, and never files a
-title an open or closed issue already has.
-Report its JSON output. If it exits non-zero, report every finding whose status is
-"unknown" and every filing whose action is "failed", and say that those streams were not
-checked this run; never describe an unknown stream as up to date.
-```
-
-Before the routine is trusted, exercise it twice: the first run files one issue per `update` finding, and an immediate re-run files and edits none.
-`--dry-run` shows what a run would file or edit without changing anything; it still runs the `gh issue list` reads.
+`.github/workflows/upstream-watch.yml` runs `watch --file-issues --json --repo <this repository>` from `main` daily at 15:30 UTC, and on demand with `gh workflow run upstream-watch.yml`.
+It authenticates `gh` with the job's `GITHUB_TOKEN`, which is limited to `contents: read` and `issues: write`.
+A `concurrency` group queues runs rather than overlapping them, so two runs never file at once.
+The JSON is in the run log and the job summary.
+A non-zero exit fails the run, so an `unknown` stream or a `failed` filing shows as a failed run, never as an up-to-date one.
+Its first two dispatches, runs 40608709624 and 40608881778, filed #393, #394 and #395 and then reported each as `exists`, filing and editing nothing.
+A Claude Code cloud routine was tried first and dropped, because the `gh` token a routine runs with cannot use the GitHub API.
+`--dry-run` shows locally what a run would file or edit without changing anything; it still runs the `gh issue list` reads.
