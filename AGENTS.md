@@ -51,7 +51,6 @@ The rules bind; the context after them explains and points elsewhere.
 24. `.claude-plugin/marketplace.json`'s plugin entry names a release that is already published, by `ref` and a `sha` equal to that tag's peeled commit, never the one being released, and it may never name a version newer than the one the tree declares.
     A release PR under rule 19 leaves it untouched; advance it to the new tag in its own `chore(release):` PR after that tag is published and its install has been checked, and a release is not complete until that PR merges.
     That PR is not a release: it needs no rule-20 evidence, because it moves a pointer to a tag that already exists.
-    Until the 0.4.0 pointer PR merges the entry's `source` is `"./"`; for 0.4.0 only, nothing else merges to `main` between the release PR and that pointer PR.
 
 ## Context
 
@@ -74,7 +73,7 @@ Kimi's session store is different in kind: the CLI rather than amicus writes it,
 
 Rule 2 is the gate's single definition; other documents link here rather than restating it.
 CI (`.github/workflows/test.yml`) runs exactly those commands on every supported Python version and is authoritative; the local hooks below are a convenience.
-`pytest` excludes `-m integration` by default (`addopts` in `pyproject.toml`), so the gate never spends quota.
+`pytest` excludes `-m integration` and `-m network` by default (`addopts` in `pyproject.toml`), so the gate never spends quota or runs the release checks that read PyPI and GitHub; opt into the latter with `uv run pytest -m network --no-cov`.
 Rule 16 is in the gate through `pytest`: `tests/test_check_sentence_per_line.py` runs `scripts/check_sentence_per_line.py` over the committed `docs/` tree.
 
 ### How work is organized
@@ -91,7 +90,6 @@ Users add this repository as a plugin marketplace, and a host copies the plugin 
 ADR 0031 is shaped by that fact, established by probe on Claude Code and Codex, and it supersedes ADR 0015, which had assumed a host re-reads `.mcp.json`.
 Under ADR 0015 the pin trailed the release, so an install taken before the pin-move PR, or anywhere mid-cycle, kept running an older server than its own skills (issue #117).
 So `.mcp.json` names its own release, and from 0.4.0 the marketplace entry pins a published tag by `ref` and `sha`, so hosts install that self-consistent tag snapshot rather than `main`.
-Until the 0.4.0 pointer PR merges, the entry is still `"./"` and hosts install `main`, which is why rule 24 bars anything else from merging during that one transition.
 Rule 24's invariant, that the pointer users follow names an already-published release, moved with it from `.mcp.json` to the marketplace entry.
 `sha` is required because a host serves `sha` over a disagreeing `ref` without complaint, and the `v*` ruleset's admin bypass means a tag can be moved.
 `uvx` reuses a cached tool environment without querying any index, so the version in `.mcp.json`'s requirement string is still what makes an existing install pick up a new server.
@@ -101,8 +99,8 @@ Rule 21 covers creation as well as update and deletion because pushing a `v*` ta
 That ruleset now exists — `release tags`, active, covering `refs/tags/v*` and restricting creation, update and deletion — and 0.1.0 was tagged under it.
 Its bypass list is the part an agent here cannot check: the ruleset response seen from this repository's agent token carries no `bypass_actors` key at all.
 GitHub omits that key from responses to requesters without sufficient permission on the ruleset rather than returning an empty list, so its absence is not evidence that nobody may bypass, and must never be reported as though it were.
-`docs/RELEASING.md` reads that back with the maintainer's own token rather than assuming it.
-The executable procedure — preconditions, the evidence run, the environment approval pause and the post-tag checks — is `docs/RELEASING.md`.
+`docs/RELEASING.md` reads that back with the maintainer's own token rather than assuming it, through `scripts/release.py policy`, which reports the bypass list unknown, and fails, under a token that cannot see it.
+The executable procedure — preconditions, the evidence run, the environment approval pause and the post-tag checks — is `docs/RELEASING.md`; `scripts/release.py` scripts its mechanical steps, one subcommand per step, and never tags, pushes or merges.
 
 Rules 20, 22 and 23 are shaped by what a CI job can and cannot establish, which is the subject of ADR 0014 and of issue #25 before it.
 The `verify` job runs `scripts/check_release_state.py` on the tagged commit, and the two halves of that script are worth different amounts.
@@ -121,7 +119,7 @@ Re-running one means cloning that sibling back to the path rule 17 names and run
 ### Local hooks
 
 `prek.toml` mirrors the gate as Git hooks; install once with `uv run prek install --prepare-hooks`.
-Pre-commit runs file hygiene, ruff, ty, import-linter, the Actions-pinning check, the one-sentence-per-line check and `uv lock --check`; pre-push runs pytest; commit-msg runs the Conventional Commits check.
+Pre-commit runs file hygiene, ruff, ty, import-linter, the Actions pinning-and-trigger check (rules 14 and 15), the one-sentence-per-line check and `uv lock --check`; pre-push runs pytest; commit-msg runs the Conventional Commits check.
 
 ### Spend
 
