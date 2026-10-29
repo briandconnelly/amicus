@@ -178,8 +178,8 @@ the new ones.
 
 0.11.2 is the current release. The discovery surface stays `amicus/0.1/schema-58` and
 `RESULT_FORMAT` did not move, so a job result 0.11.1 stored can still be read. No tool call 0.11.1
-accepted is rejected. amicus now requires fastmcp 4.1 and mcp 2.3, and codex-cli 0.164 and 0.165
-and Kimi Code 2.4 are supported versions.
+accepted is rejected. amicus now requires fastmcp 4.1 and mcp 2.3, and codex-cli 0.164, 0.165 and
+0.166 and Kimi Code 2.4 are supported versions.
 [`docs/MIGRATION.md`](docs/MIGRATION.md#upgrading-from-0111) explains how to upgrade, and
 [`CHANGELOG.md`](CHANGELOG.md) lists every user-visible change.
 
