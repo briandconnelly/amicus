@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import threading
 
+from amicus.jobs import taskmap
 from amicus.jobs.taskmap import MAX_ENTRIES, TaskJobMap
 
 
@@ -30,18 +31,27 @@ def test_corrupt_or_missing_file_reads_as_empty(tmp_path):
     assert not list(path.parent.glob("*.tmp"))
 
 
-def test_record_survives_concurrent_writers(tmp_path):
+def test_record_survives_concurrent_writers(tmp_path, monkeypatch):
     """N threads calling record() on one TaskJobMap concurrently must all survive: a
     tasked call's task_id -> job_id mapping is this task's entire recovery guarantee,
     and losing an entry under concurrency means amicus_job_list(task_id=...) comes back
-    empty for a job that is still running and still spending money."""
+    empty for a job that is still running and still spending money.
+
+    This tests mutual exclusion, not the lock deadline: 200 writers released at once can
+    outrun the 2 s deadline on a slow runner (#372), so the deadline is raised here, and
+    a writer that raises fails the test as that error rather than as a missing entry."""
+    monkeypatch.setattr(taskmap, "LOCK_ACQUIRE_TIMEOUT_S", 60.0)
     task_map = TaskJobMap(tmp_path / "tasks.json")
     n = 200
     barrier = threading.Barrier(n)
+    errors: list[BaseException] = []
 
     def _record(i: int) -> None:
         barrier.wait()
-        task_map.record(f"task-{i}", f"job-{i}")
+        try:
+            task_map.record(f"task-{i}", f"job-{i}")
+        except BaseException as exc:
+            errors.append(exc)
 
     threads = [threading.Thread(target=_record, args=(i,)) for i in range(n)]
     for t in threads:
@@ -49,6 +59,7 @@ def test_record_survives_concurrent_writers(tmp_path):
     for t in threads:
         t.join()
 
+    assert errors == []
     entries = task_map.entries()
     assert len(entries) == n
     assert entries == {f"task-{i}": f"job-{i}" for i in range(n)}
