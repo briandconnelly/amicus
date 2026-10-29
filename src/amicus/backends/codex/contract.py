@@ -13,9 +13,8 @@ grammars, the pinned keys and disables under `--strict-config`, and `login statu
 the retired-setting grammar or the model-facing tool catalog; 0.162.1 the same checks against
 0.161.0, plus the retired-setting grammar and the served catalog, but not the model-facing tool
 catalog; 0.163.0 the same checks against 0.162.1; 0.164.0 the same checks against 0.163.0;
-0.165.0 the same zero-spend checks against 0.164.0, except the served catalog, the model-facing
-tool catalog and the pins-and-disables and strict-config-ignored probes, which timed out without
-a network).
+0.165.0 the same checks against 0.164.0, plus the model-facing tool catalog of every model in
+KNOWN_MODEL_SLUGS and the served catalog's gpt-6.1-terra).
 
 Every assumption amicus makes about the `codex` CLI — subcommands, flags, sandbox values,
 config keys it pins, the event/result extraction surface, and the stderr phrasings that
@@ -306,9 +305,12 @@ MODEL_SLUG_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 # 0.159.3 and 0.160.0 were also served gpt-6.1-sol, first in priority; 0.157.1 and 0.158.0 were
 # not, so it is gated on the client version. On 2026-10-24 0.163.0 and 0.164.0 were served the
 # same list without gpt-5.5, and with gpt-reserve (priority 4) ahead of gpt-6-luna (5), #368.
+# On 2026-10-29 0.164.0 and 0.165.0 were both served gpt-6.1-terra after gpt-6-astra, so it is a
+# server-side addition, not a 0.165 one.
 KNOWN_MODEL_SLUGS: tuple[str, ...] = (
     "gpt-6.1-sol",
     "gpt-6-astra",
+    "gpt-6.1-terra",
     "gpt-6-sol",
     "gpt-reserve",
     "gpt-6-luna",

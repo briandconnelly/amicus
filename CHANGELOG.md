@@ -83,10 +83,14 @@ per-change, as its own lead says.
   unchanged. `features list` turns on `reasoning_effort_override` (now `stable`, default true),
   which lets an interactive session change reasoning effort mid-conversation, and adds
   `prediction_preserve_parent_tools`, `guardianv3`, `guardian_recorded_items` and
-  `tui_multi_backend`; the three features amicus disables on every run are still `stable`. The
-  pinned-keys-and-disables probe and the strict-config-ignored probe timed out on both binaries
-  without network access, so those two were not confirmed, and neither the served catalog nor the
-  model-facing tool catalog was checked. No paid call was part of the check.
+  `tui_multi_backend`; the three features amicus disables on every run are still `stable`, and
+  the four pinned keys and those disables still get past config loading under `--strict-config`.
+  The model-facing tool catalog of every model in the bundled list is the same on both binaries,
+  and the disables still remove `clock.sleep` and the goal tools. No paid call was part of the
+  check.
+- The bundled codex model list, which `amicus_models` falls back to (`source: "static"`) when
+  codex's own catalog cache is missing or unreadable, adds `gpt-6.1-terra` after `gpt-6-astra`:
+  codex-cli 0.164.0 and 0.165.0 were both served it on 2026-10-29.
 - codex-cli 0.164 is a supported version, so `amicus_backends` no longer warns on it. 0.164.0 was
   checked against 0.163.0 at zero spend: `exec --help`, `exec review --help` and `login --help`
   are identical, and top-level `--help` only adds the experimental `migrate-nfs-db` subcommand.
