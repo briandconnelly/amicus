@@ -84,6 +84,16 @@ per-change, as its own lead says.
 - `docs/claude-help/2.1.312/` records the `--help` of Claude Code 2.1.312, which every 2.x
   release already satisfied: only the `purge` row is reworded, and the 2.1.309 to 2.1.312 notes
   change no flag amicus sends. No paid call was made.
+- codex-cli 0.166 is a supported version, so `amicus_backends` no longer warns on it. 0.166.0 was
+  checked against 0.165.0 at zero spend: `--help`, `exec --help`, `exec review --help` and
+  `login --help` are identical, and so are every stderr grammar amicus parses, the logged-out
+  `login status` line, the served model catalog and the model-facing tool catalog of every model
+  in `KNOWN_MODEL_SLUGS`, with and without the disabled features. Upstream's
+  `SandboxWorkspaceWrite` config struct is unchanged. `features list` adds
+  `plugin_discovery_prefetch` (`stable`, default true), an opt-out for startup plugin-directory
+  prefetching codex already did, and seven features under development; the three features amicus
+  disables on every run are still `stable`, and the four pinned keys and those disables still
+  get past config loading under `--strict-config`. No paid call was made.
 - codex-cli 0.165 is a supported version, so `amicus_backends` no longer warns on it. 0.165.0 was
   checked against 0.164.0 at zero spend: `--help`, `exec --help`, `exec review --help` and
   `login --help` are identical, and the unknown-feature error, the strict-config, invalid-value

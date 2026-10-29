@@ -175,7 +175,7 @@ Encode only phrasings seen in real output, and never a guessed one.
   If the notes touch the sandbox, re-read `WORKSPACE_WRITE_SCOPE_FACT` and `READ_SCOPE_FACT` against them.
   `READ_SCOPE_FACT` is a ceiling claim, so if a release did confine reads the disclosure would be over-broad rather than unsafe, and the response is to re-probe before narrowing anything.
   Also diff upstream's complete `SandboxWorkspaceWrite` struct (`codex-rs` `config/src/types.rs`) between the previous checked release tag and the new one.
-  At `rust-v0.165.0`, as at `rust-v0.164.0` and `rust-v0.163.0`, it has four fields: `writable_roots` and `network_access`, which amicus pins, and `exclude_tmpdir_env_var` and `exclude_slash_tmp`, which amicus leaves alone because they only narrow the writable scope.
+  At `rust-v0.166.0`, as at `rust-v0.165.0`, `rust-v0.164.0` and `rust-v0.163.0`, it has four fields: `writable_roots` and `network_access`, which amicus pins, and `exclude_tmpdir_env_var` and `exclude_slash_tmp`, which amicus leaves alone because they only narrow the writable scope.
   An added field, or a changed type or default on any of the four, is a finding to read for widening behavior, because a new widening key would arrive unpinned.
 - **Implicit context.**
   `SKILLS_DISCOVERY_FACT` and `SKILL_BODY_FACT` describe what codex loads with no flag at all: `AGENTS.md` files and discovered skills.
