@@ -26,11 +26,10 @@ dependencies = [
     # Minor-line caps: fastmcp documents that breaking changes may land in minor releases.
     # Widening either cap is a hand-written upgrade PR, not a resolver decision:
     # .github/dependabot.yml ignores minor and major updates to both packages.
-    # Raising the fastmcp floor to >=4.0.4 retires every 4.0.3 list-shape path in
-    # `amicus.obs`; the comment above `_SUMMARY_KEYS` there names them. Remove them in
-    # that same PR.
-    "fastmcp>=4.0,<4.1",
-    "mcp>=2.1,<2.3",
+    # The fastmcp floor is 4.1.4 because several FastMCP advisories are fixed only on the
+    # 4.1 line (#394), and fastmcp 4.1.4 requires mcp 2.3.
+    "fastmcp>=4.1.4,<4.2",
+    "mcp>=2.3,<2.4",
     "pydantic>=2",
 ]
 
@@ -52,7 +51,7 @@ packages = ["src/amicus"]
 [dependency-groups]
 dev = [
     # The tasks spike (M0) needs the real extension; production wiring lands in M5.
-    "fastmcp[tasks]>=4.0,<4.1",
+    "fastmcp[tasks]>=4.1.4,<4.2",
     "import-linter>=2",
     "jsonschema>=4.26",
     "prek>=0.4.5",

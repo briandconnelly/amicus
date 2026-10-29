@@ -244,10 +244,11 @@ def _safe_msg(msg: object) -> object:
 
 
 # Issue #79. FastMCP logs a rejected `tools/call` on `fastmcp.server.server` as
-# ("Invalid arguments for tool %r: %s", name, detail), where `detail` is pydantic's error
-# list and each error's `input` is the rejected value itself. For a missing required
+# ("Invalid arguments for tool %r: %s", name, detail). Before 4.0.4 `detail` was pydantic's
+# error list, and each error's `input` is the rejected value itself: for a missing required
 # argument that `input` is the whole argument dict, so a valid prompt field sent beside the
 # omission would be logged verbatim.
+# The pydantic error types whose `loc` is the key the client sent; `middleware` reads them.
 EXTRA_ARGUMENT_TYPES = frozenset({"unexpected_keyword_argument", "extra_forbidden"})
 _MAX_ARGUMENT_ERRORS = 10
 _DETAIL_WITHHELD = "<detail withheld>"
@@ -268,37 +269,14 @@ def _identifier(value: object) -> str:
     return _UNKNOWN
 
 
-def _argument_error(err: object) -> str:
-    """One pydantic error as ``type at field``."""
-    if not isinstance(err, Mapping):
-        return f"{_UNKNOWN} at {_UNKNOWN}"
-    raw_type = err.get("type")
-    error_type = raw_type if type(raw_type) is str and _ERROR_TYPE.fullmatch(raw_type) else None
-    field = _UNKNOWN
-    loc = err.get("loc")
-    if (
-        error_type is not None
-        and error_type not in EXTRA_ARGUMENT_TYPES
-        and type(loc) in (tuple, list)
-        and loc
-    ):
-        field = _identifier(loc[0])
-    return f"{error_type or _UNKNOWN} at {field}"
-
-
 # FastMCP 4.0.4 redacts this record upstream (PrefectHQ/fastmcp#5106): where it logged
 # pydantic's error list it now logs ``{"error_count": N, "error_types": [...]}``, built with
 # ``include_input=False``/``include_context=False`` and every non-builtin type collapsed to
 # ``custom_error``. That summary carries no ``loc``, so no field name survives to render.
-# Both shapes are installable under this package's ``fastmcp>=4.0,<4.1`` floor, so both are
-# read here; if that floor ever rises to ``>=4.0.4``, every list-shape path below becomes
-# unreachable and goes in that same change: the list branch of ``summarize_argument_errors``,
-# ``_argument_error`` and ``EXTRA_ARGUMENT_TYPES`` (used only by it), the list arm of
-# ``_is_argument_record``, and the list-shape cases in ``tests/test_fastmcp_argument_log.py``.
-# ``_ERROR_TYPE``, ``_identifier`` and ``_MAX_ARGUMENT_ERRORS`` stay: both shapes use them.
+# This package's ``fastmcp>=4.1.4`` floor admits no release that logs the list, so the list
+# shape is no longer read: an argument record carrying one is withheld whole.
 # The count and the types are re-checked rather than trusted, because this module echoes only
-# shapes it has checked itself -- the same reason the list branch re-checks a ``type``
-# pydantic also produced.
+# shapes it has checked itself.
 _SUMMARY_KEYS = ("error_count", "error_types")
 
 
@@ -326,29 +304,16 @@ def _summarized_argument_errors(detail: Mapping[object, object]) -> str:
 
 
 def summarize_argument_errors(detail: object) -> str:
-    """pydantic's argument errors as ``N error(s): type at field, ...``, never a value the
+    """FastMCP's argument-validation detail as ``N error(s): type, ...``, never a value the
     caller sent.
 
-    Two things of each error survive: its ``type``, and the top-level component of its
-    ``loc`` when the type says that component names a declared parameter. ``input`` is the
-    rejected value, ``ctx`` can carry it, and ``msg`` can echo it through a validator's own
-    text, so none of the three is read. The ``loc`` is withheld for an extra-key error,
-    where it IS the key the client sent, and every component below the top level is
-    dropped, because inside an open-keyed mapping a component can be a client's key under
-    any error type.
-
-    FastMCP's own summary mapping is rendered without a field, because it carries none.
-    Anything else is withheld whole: FastMCP's remaining branch logs ``str(e)``, which
-    embeds pydantic's own rendering, input values included."""
-    if isinstance(detail, Mapping):
-        if all(key in detail for key in _SUMMARY_KEYS):
-            return _summarized_argument_errors(detail)
-        return _DETAIL_WITHHELD
-    if type(detail) is not list or not detail:
-        return _DETAIL_WITHHELD
-    shown = ", ".join(_argument_error(err) for err in detail[:_MAX_ARGUMENT_ERRORS])
-    more = ", ..." if len(detail) > _MAX_ARGUMENT_ERRORS else ""
-    return f"{len(detail)} error(s): {shown}{more}"
+    Only FastMCP's own summary mapping is rendered, without a field, because it carries
+    none. Anything else is withheld whole: pydantic's error list carries each rejected
+    value as ``input``, and FastMCP's remaining branch logs ``str(e)``, which embeds
+    pydantic's own rendering, input values included."""
+    if isinstance(detail, Mapping) and all(key in detail for key in _SUMMARY_KEYS):
+        return _summarized_argument_errors(detail)
+    return _DETAIL_WITHHELD
 
 
 _INVALID_ARGUMENTS = "Invalid arguments for tool %s: %s"
@@ -365,9 +330,9 @@ _RESOURCE_FAILURE = "Error reading resource "
 def _is_argument_record(record: logging.LogRecord) -> bool:
     """FastMCP's argument-validation record, recognised by its text OR by its shape.
 
-    The shape test is what keeps a reworded template in a later 4.0.x release from passing
-    through: a two-argument record whose second argument is an error list, or FastMCP's own
-    summary mapping, is rewritten whatever its message says."""
+    The shape test is what keeps a reworded template in a later 4.1.x release from passing
+    through: a two-argument record whose second argument is FastMCP's own summary mapping is
+    rewritten whatever its message says."""
     args = record.args
     if type(args) is not tuple or len(args) != 2:
         return False
@@ -375,9 +340,7 @@ def _is_argument_record(record: logging.LogRecord) -> bool:
     if type(msg) is str and msg.startswith("Invalid arguments for tool"):
         return True
     detail = args[1]
-    if isinstance(detail, Mapping):
-        return all(key in detail for key in _SUMMARY_KEYS)
-    return type(detail) is list and bool(detail) and all(isinstance(e, Mapping) for e in detail)
+    return isinstance(detail, Mapping) and all(key in detail for key in _SUMMARY_KEYS)
 
 
 def _rewrite_fastmcp_server_record(record: logging.LogRecord) -> None:

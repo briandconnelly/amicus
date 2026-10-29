@@ -15,10 +15,10 @@ logger configuration `obs.configure` installs.
 
 FastMCP 4.0.4 closed the same leak on its own side (PrefectHQ/fastmcp#5106): it now logs a
 `{"error_count", "error_types"}` summary instead of pydantic's error list, so no `loc` and
-no rejected value reach amicus at all, and the rewritten record names no field. Both shapes
-install under the `fastmcp>=4.0,<4.1` floor, so the positive controls below follow the
-installed one. amicus keeps its own rewrite rather than deferring to upstream's: the floor
-still admits 4.0.3, and the filter covers the rest of the logger's records regardless."""
+no rejected value reach amicus at all, and the rewritten record names no field. The
+`fastmcp>=4.1.4` floor admits no release that logs the list, so amicus no longer renders it:
+a list detail is withheld whole. amicus keeps its own rewrite rather than deferring to
+upstream's, because the filter covers the rest of the logger's records regardless."""
 
 from __future__ import annotations
 
@@ -32,7 +32,6 @@ import tempfile
 from typing import Any
 
 import fastmcp
-import fastmcp.server.server
 import pytest
 from fastmcp.utilities.logging import configure_logging, temporary_log_level
 from tests.conftest import restored_dependency_logging, spawned_server_env
@@ -65,33 +64,14 @@ LEAKING_CALLS: tuple[tuple[str, str, dict[str, Any]], ...] = (
     ),
 )
 
-# Which upstream branch this install takes. Named off the helper that builds the summary
-# rather than off a version string: if a later 4.0.x renames it while keeping the mapping,
-# the controls below assert the list-shaped records and FAIL, which is the safe direction —
-# they never fall back to asserting nothing.
-UPSTREAM_SUMMARIZES = hasattr(fastmcp.server.server, "_validation_error_summary")
-
 # What the rewritten records say for those calls: which tool, and why, and nothing sent.
-# Upstream's summary carries no `loc`, so on that branch there is no field to name.
+# Upstream's summary carries no `loc`, so there is no field to name. Were a later release to
+# log anything other than that summary, these records would read `<detail withheld>` and the
+# positive controls below would FAIL, which is the safe direction.
 EXPECTED_RECORDS = (
-    (
-        "Invalid arguments for tool amicus_backends: 1 error(s): unexpected_keyword_argument",
-        "Invalid arguments for tool amicus_consult: 1 error(s): string_type",
-        "Invalid arguments for tool amicus_consult: 1 error(s): missing_argument",
-    )
-    if UPSTREAM_SUMMARIZES
-    else (
-        "Invalid arguments for tool amicus_backends: "
-        "1 error(s): unexpected_keyword_argument at <unknown>",
-        "Invalid arguments for tool amicus_consult: 1 error(s): string_type at question",
-        "Invalid arguments for tool amicus_consult: 1 error(s): missing_argument at question",
-    )
-)
-# The record filter is fed both shapes directly, so its own tests never depend on the
-# installed branch.
-LIST_SHAPED_RECORDS = (
-    "Invalid arguments for tool amicus_consult: 1 error(s): string_type at question",
-    "Invalid arguments for tool amicus_consult: 1 error(s): missing_argument at question",
+    "Invalid arguments for tool amicus_backends: 1 error(s): unexpected_keyword_argument",
+    "Invalid arguments for tool amicus_consult: 1 error(s): string_type",
+    "Invalid arguments for tool amicus_consult: 1 error(s): missing_argument",
 )
 
 
@@ -181,12 +161,11 @@ def test_no_rejected_argument_reaches_the_real_servers_stderr_or_log_file(tmp_pa
         assert "starting (stdio)" in on_disk
 
 
-# --- the summary that replaces pydantic's error list -----------------------------------
+# --- pydantic's error list, which is no longer read -----------------------------------
 
 
 def _error(type_: str, loc: object, input_: object = MARKER) -> dict[str, Any]:
-    """One pydantic error dict as FastMCP logs it, with the marker in every field the
-    summary must not read."""
+    """One pydantic error dict as FastMCP 4.0.3 logged it, with the marker in every field."""
     return {
         "type": type_,
         "loc": loc,
@@ -196,72 +175,27 @@ def _error(type_: str, loc: object, input_: object = MARKER) -> dict[str, Any]:
     }
 
 
-def test_the_summary_keeps_each_errors_type_and_declared_field():
-    summary = obs.summarize_argument_errors(
-        [
-            _error("missing_argument", ("question",), {"extra_context": MARKER}),
-            _error("string_type", ("question",), [MARKER]),
-        ]
-    )
-    assert summary == "2 error(s): missing_argument at question, string_type at question"
-
-
-@pytest.mark.parametrize("type_", ["unexpected_keyword_argument", "extra_forbidden"])
-def test_the_summary_withholds_a_client_chosen_key(type_):
-    summary = obs.summarize_argument_errors([_error(type_, (MARKER,))])
-    assert summary == f"1 error(s): {type_} at <unknown>"
-
-
-def test_the_summary_renders_only_the_top_level_field():
-    # Below the top level a `loc` component can be a key the client chose even for an error
-    # type that is not an extra-key type (an open-keyed mapping parameter).
-    summary = obs.summarize_argument_errors([_error("int_type", ("backend_options", MARKER, 0))])
-    assert summary == "1 error(s): int_type at backend_options"
-
-
 class _HostileStr(str):
     def __format__(self, spec: str) -> str:
         return MARKER
 
 
 @pytest.mark.parametrize(
-    ("type_", "loc", "expected"),
-    [
-        ("value error\nforged", ("question",), "<unknown> at <unknown>"),
-        ("x" * 65, ("question",), "<unknown> at <unknown>"),
-        ("Value_Error", ("question",), "<unknown> at <unknown>"),
-        ("string_type", ("two words",), "string_type at <unknown>"),
-        ("string_type", (0,), "string_type at <unknown>"),
-        ("string_type", (_HostileStr("question"),), "string_type at <unknown>"),
-        ("string_type", "question", "string_type at <unknown>"),
-    ],
-)
-def test_the_summary_echoes_nothing_outside_its_shapes(type_, loc, expected):
-    assert obs.summarize_argument_errors([_error(type_, loc)]) == f"1 error(s): {expected}"
-
-
-def test_the_summary_is_capped_and_says_how_many_there_were():
-    summary = obs.summarize_argument_errors(
-        [_error("missing_argument", (f"p{i}",)) for i in range(25)]
-    )
-    assert summary.startswith("25 error(s): missing_argument at p0, ")
-    assert summary.endswith("missing_argument at p9, ...")
-    assert summary.count(" at ") == 10
-
-
-@pytest.mark.parametrize(
-    ("detail", "expected"),
+    "detail",
     [
         # FastMCP's other branch logs `str(e)`, which embeds pydantic's own rendering.
-        (f"1 validation error input_value={MARKER!r}", "<detail withheld>"),
-        ({"loc": MARKER}, "<detail withheld>"),
-        (None, "<detail withheld>"),
-        ([], "<detail withheld>"),
-        ([MARKER], "1 error(s): <unknown> at <unknown>"),
+        f"1 validation error input_value={MARKER!r}",
+        {"loc": MARKER},
+        None,
+        [],
+        [MARKER],
+        # pydantic's error list, even one whose every field is well formed.
+        [_error("missing_argument", ("question",), {"extra_context": MARKER})],
+        [_error("unexpected_keyword_argument", (MARKER,))],
     ],
 )
-def test_the_summary_withholds_a_detail_it_cannot_parse(detail, expected):
-    assert obs.summarize_argument_errors(detail) == expected
+def test_the_summary_withholds_a_detail_it_cannot_parse(detail):
+    assert obs.summarize_argument_errors(detail) == "<detail withheld>"
 
 
 # --- FastMCP's own summary mapping (4.0.4+, PrefectHQ/fastmcp#5106) ---------------------
@@ -346,16 +280,16 @@ def _filtered(record: logging.LogRecord) -> str:
     return record.getMessage()
 
 
-def test_the_validation_record_is_rewritten_at_its_source():
+def test_a_list_detail_under_the_validation_template_is_withheld():
     detail = [_error("missing_argument", ("question",), {"extra_context": MARKER})]
     text = _filtered(_record("Invalid arguments for tool %r: %s", ("amicus_consult", detail)))
-    assert text == LIST_SHAPED_RECORDS[1]
+    assert text == "Invalid arguments for tool amicus_consult: <detail withheld>"
 
 
-def test_a_reworded_template_is_still_recognised_by_its_shape():
+def test_a_list_detail_under_a_reworded_template_is_withheld_whole():
     detail = [_error("string_type", ("question",))]
-    text = _filtered(_record("Tool %r rejected its arguments (%s)", ("amicus_consult", detail)))
-    assert text == LIST_SHAPED_RECORDS[0]
+    record = _record("Tool %r rejected its arguments (%s)", ("amicus_consult", detail))
+    assert _filtered(record) == WITHHELD_RECORD
 
 
 def test_the_str_detail_branch_is_withheld():
@@ -400,7 +334,7 @@ def test_the_filter_withholds_rather_than_raises(monkeypatch):
         raise RuntimeError(MARKER)
 
     monkeypatch.setattr(obs, "summarize_argument_errors", boom)
-    detail = [_error("missing_argument", ("question",))]
+    detail = {"error_count": 1, "error_types": ["missing_argument"]}
     text = _filtered(_record("Invalid arguments for tool %r: %s", ("amicus_consult", detail)))
     assert text == WITHHELD_RECORD
 
