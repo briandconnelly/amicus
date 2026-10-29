@@ -165,7 +165,7 @@ def _declared(help_text: str) -> set[str]:
 
 
 def test_the_captures_under_test_include_the_newest_one():
-    assert [p.name for p in HELP_CAPTURES] == ["2.1.263", "2.1.278", "2.1.308"]
+    assert [p.name for p in HELP_CAPTURES] == ["2.1.263", "2.1.278", "2.1.308", "2.1.312"]
 
 
 @pytest.mark.parametrize("capture", HELP_CAPTURES, ids=lambda p: p.name)

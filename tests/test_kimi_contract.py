@@ -77,9 +77,12 @@ def test_the_captures_are_the_ones_the_contract_claims():
         "2.1.0",
         "2.2.0",
         "2.3.0",
+        "2.4.0",
     ]
     assert (
-        frozenset({(0, 35), (0, 39), (0, 41), (0, 42), (0, 43), (2, 0), (2, 1), (2, 2), (2, 3)})
+        frozenset(
+            {(0, 35), (0, 39), (0, 41), (0, 42), (0, 43), (2, 0), (2, 1), (2, 2), (2, 3), (2, 4)}
+        )
         == contract.SUPPORTED_VERSIONS
     )
     # The newest supported minor is the one the live gate pins, so it must carry a capture.
