@@ -75,6 +75,12 @@ per-change, as its own lead says.
 
 ### Changed
 
+- Kimi Code 2.4 is a supported version, so `amicus_backends` no longer warns on it. 2.4.0 was
+  checked against 2.3.0 at zero spend, as `docs/kimi-help/2.4.0/FINDINGS.md` records: `--help`
+  only rewords `--auto` and adds the `import-sessions` subcommand, the provider-list shape is
+  unchanged, and print mode now skips a configured `default_plan_mode`, so a user config can no
+  longer leave a run in Plan mode. The rule-18 session-store re-check found no way to switch the
+  store off. The kimi live gate was not run.
 - codex-cli 0.165 is a supported version, so `amicus_backends` no longer warns on it. 0.165.0 was
   checked against 0.164.0 at zero spend: `--help`, `exec --help`, `exec review --help` and
   `login --help` are identical, and the unknown-feature error, the strict-config, invalid-value

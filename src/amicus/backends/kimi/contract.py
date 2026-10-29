@@ -5,8 +5,9 @@ checked for its CLI surface (help, provider-list shape, the session subcommand, 
 and by one live gate run, whose scope and provider docs/kimi-help/2.0.2/FINDINGS.md records.
 2.1.0 is checked for its CLI surface and its release notes and commits since 2.0.2, as
 docs/kimi-help/2.1.0/FINDINGS.md records, 2.2.0 likewise against 2.1.0, as
-docs/kimi-help/2.2.0/FINDINGS.md records, and 2.3.0 against 2.2.0, as
-docs/kimi-help/2.3.0/FINDINGS.md records.
+docs/kimi-help/2.2.0/FINDINGS.md records, 2.3.0 against 2.2.0, as
+docs/kimi-help/2.3.0/FINDINGS.md records, and 2.4.0 against 2.3.0, as
+docs/kimi-help/2.4.0/FINDINGS.md records.
 
 `kimi -p` is NOT `codex exec`. Three differences drive the whole design:
 
@@ -107,11 +108,11 @@ SANDBOX_WORKSPACE_WRITE = "workspace-write"
 
 # Advisory: a mismatch warns on amicus_backends, never blocks. (0, 41), (0, 42) and (0, 43)
 # are supported on the evidence in docs/kimi-help/0.41.0/, 0.42.0/ and 0.43.1/, and (2, 0) on
-# docs/kimi-help/2.0.2/, (2, 1) on docs/kimi-help/2.1.0/, (2, 2) on docs/kimi-help/2.2.0/ and
-# (2, 3) on docs/kimi-help/2.3.0/.
+# docs/kimi-help/2.0.2/, (2, 1) on docs/kimi-help/2.1.0/, (2, 2) on docs/kimi-help/2.2.0/,
+# (2, 3) on docs/kimi-help/2.3.0/ and (2, 4) on docs/kimi-help/2.4.0/.
 # Kimi Code went from 0.43 to 2.0 with no 1.x that amicus has seen.
 SUPPORTED_VERSIONS = frozenset(
-    {(0, 35), (0, 39), (0, 41), (0, 42), (0, 43), (2, 0), (2, 1), (2, 2), (2, 3)}
+    {(0, 35), (0, 39), (0, 41), (0, 42), (0, 43), (2, 0), (2, 1), (2, 2), (2, 3), (2, 4)}
 )
 
 # --- Models --------------------------------------------------------------------------------
