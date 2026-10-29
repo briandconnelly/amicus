@@ -44,7 +44,7 @@ The plugins launch the server from a published release tag, pinned in
   "mcpServers": {
     "amicus": {
       "command": "uvx",
-      "args": ["--from", "git+https://github.com/briandconnelly/amicus.git@v0.11.1", "amicus-mcp"]
+      "args": ["--from", "git+https://github.com/briandconnelly/amicus.git@v0.11.2", "amicus-mcp"]
     }
   }
 }
@@ -176,10 +176,11 @@ the new ones.
 
 ## Status and known limits
 
-0.11.1 is the current release. The discovery surface stays `amicus/0.1/schema-58` and
-`RESULT_FORMAT` did not move, so a job result 0.11.0 stored can still be read. No tool call 0.11.0
-accepted is rejected. Kimi Code 2.3 is a supported version.
-[`docs/MIGRATION.md`](docs/MIGRATION.md#upgrading-from-0110) explains how to upgrade, and
+0.11.2 is the current release. The discovery surface stays `amicus/0.1/schema-58` and
+`RESULT_FORMAT` did not move, so a job result 0.11.1 stored can still be read. No tool call 0.11.1
+accepted is rejected. amicus now requires fastmcp 4.1 and mcp 2.3, and codex-cli 0.164 and 0.165
+and Kimi Code 2.4 are supported versions.
+[`docs/MIGRATION.md`](docs/MIGRATION.md#upgrading-from-0111) explains how to upgrade, and
 [`CHANGELOG.md`](CHANGELOG.md) lists every user-visible change.
 
 One known limit: a third-party backend distribution can load through the `amicus.backends`

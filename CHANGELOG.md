@@ -20,6 +20,15 @@ per-change, as its own lead says.
 
 ## [Unreleased]
 
+## [0.11.2] - 2026-10-29
+
+This release leaves the discovery surface at `amicus/0.1/schema-58`, what 0.11.1 shipped, and
+`RESULT_FORMAT` stays 9, so a job result 0.11.1 stored can still be delivered; no entry is
+labelled **Breaking** or **Surface**. It moves amicus onto fastmcp 4.1 and mcp 2.3 for the
+FastMCP advisories listed under Security, and makes codex-cli 0.164 and 0.165 and Kimi Code 2.4
+supported versions. It was checked against codex-cli 0.165.0, Kimi Code 2.4.0 and Claude Code
+2.1.312.
+
 ### Added
 
 - `scripts/check_backend_compat.py compare --backend codex --old-bin PATH --new-bin PATH`
@@ -1554,7 +1563,8 @@ per-change rather than net, so they also name intermediate states that no releas
 - The tagged publish path to pypi.org has never run. Only the TestPyPI dispatch path has been exercised.
 - Eval scenario S6 in `skills/collaborating-with-amicus/tests/scenarios.md` passed on one run (status: `pass`, validated by that run alone); an M7 follow-up run against the current skill text did not isolate the still-open F3 finding, so F3 remains open. S7 (real-host approval friction) has failed both of its recorded runs (status: `fail`); an M7 zero-spend recheck reached neither a pass nor a fail and is recorded as inconclusive, so it does not move S7's status. See their `status` fields and ADR 0012.
 
-[Unreleased]: https://github.com/briandconnelly/amicus/compare/v0.11.1...HEAD
+[Unreleased]: https://github.com/briandconnelly/amicus/compare/v0.11.2...HEAD
+[0.11.2]: https://github.com/briandconnelly/amicus/compare/v0.11.1...v0.11.2
 [0.11.1]: https://github.com/briandconnelly/amicus/compare/v0.11.0...v0.11.1
 [0.11.0]: https://github.com/briandconnelly/amicus/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/briandconnelly/amicus/compare/v0.9.0...v0.10.0
