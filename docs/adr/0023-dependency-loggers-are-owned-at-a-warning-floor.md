@@ -6,6 +6,9 @@
 The SDK now logs under `amicus.sdk.*`, which `obs.configure` covers through the `amicus` logger.
 The Decision's log-file sentence and the Consequences' fall-through sentence no longer name it (#148); the Context keeps it, because it describes the tree this ADR was written against.
 
+**Note (fastmcp 4.1.4, #394):** the `fastmcp>=4.1.4` floor admits no release that logs pydantic's error list, so the list shape is no longer read.
+An argument record carrying a list is withheld whole, and the Decision's list-shape sentences describe what was built for the 4.0.3 floor rather than what runs now.
+
 ## Context
 
 Issue #79 found that FastMCP logs a rejected `tools/call` on `fastmcp.server.server` with pydantic's error list, and that each error's `input` is the rejected value itself.
@@ -25,7 +28,7 @@ The rewritten record names the tool and, for each error, its `type` and the top-
 `input`, `ctx` and `msg` are never read, because `msg` echoes the input through a `value_error`.
 FastMCP 4.0.4 closed the same leak upstream (PrefectHQ/fastmcp#5106) by logging a `{"error_count", "error_types"}` summary in place of pydantic's error list.
 That summary carries no `loc`, so against it the rewritten record names no field: `Invalid arguments for tool amicus_consult: 1 error(s): missing_argument`.
-Both shapes are read, because the `fastmcp>=4.0,<4.1` floor still admits 4.0.3, and upstream's count and types are re-checked here rather than trusted, on the same grounds as the list branch.
+Both shapes were read while the `fastmcp>=4.0,<4.1` floor still admitted 4.0.3; since the floor rose to 4.1.4 only the summary is, and upstream's count and types are re-checked here rather than trusted.
 The `loc` is withheld for an extra-key error, and every component below the top level is dropped, because inside an open-keyed mapping a component can be a client's key under any error type.
 An error type must be a lowercase slug and a field or tool name an identifier, because a `PydanticCustomError` may carry any string as its type.
 
@@ -65,4 +68,6 @@ Loggers outside `amicus`, `fastmcp` and `mcp` still fall through to `logging.las
 Every claim above about what a dependency logs was read from a specific release, and a bump of either dependency is a reason to read it again, because the filter's shape test and the WARNING floor are sized to those releases.
 The audit on 2026-09-13 read fastmcp 4.0.3 and mcp 2.1.1.
 mcp moved to 2.2.0 on 2026-09-14 (PR #81), after the audit, and a re-read that day found the two facts unchanged: FastMCP's argument-validation record is still written on `fastmcp.server.server` with pydantic's error list as its second argument, and the `mcp` stdio runner still logs a dropped pre-initialization frame at DEBUG.
+fastmcp moved to 4.1.4 and mcp to 2.3.0 on 2026-10-29 (#394, #395), and a re-read that day found the record and the frame log unchanged: the argument-validation record carries the summary, never the list, and `mcp/server/runner.py` still logs a dropped pre-initialization frame at DEBUG.
+The WARNING-and-above call sites the bump added are all in the skills providers, the OAuth proxy, the regex search transform, streamable HTTP and the direct dispatcher's progress callback, none of which carries a tool argument on amicus's stdio path.
 Record the next bump's re-read here.

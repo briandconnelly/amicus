@@ -108,6 +108,17 @@ per-change, as its own lead says.
   matches what codex-cli 0.163.0 and 0.164.0 were both served on 2026-10-24. A listing read from
   codex's own models cache is unchanged (#368).
 
+### Security
+
+- amicus now requires `fastmcp>=4.1.4,<4.2` and `mcp>=2.3,<2.4`, up from `fastmcp>=4.0,<4.1`
+  and `mcp>=2.1,<2.3` (#394, #395). FastMCP advisories GHSA-7xgj-8392-5q4r, GHSA-vqqp-x5qm-5qp4,
+  GHSA-cg3c-5x66-h9cc, GHSA-p8g9-xjch-9mxg, GHSA-76mv-6cmh-q7fj, GHSA-99xm-8q53-5c8p and
+  GHSA-pwp3-fpg3-p53c are fixed only on the 4.1 line, and fastmcp 4.1.4 itself requires
+  mcp 2.3. With no admitted fastmcp release logging pydantic's error list, `obs` no longer reads
+  that shape: an argument-validation record carrying one is withheld whole rather than
+  rendered, and FastMCP's own summary is rendered as before. The tool surface and the
+  fingerprint are unchanged.
+
 ## [0.11.1] - 2026-10-22
 
 This release leaves the discovery surface at `amicus/0.1/schema-58`, what 0.11.0 shipped, and
