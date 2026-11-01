@@ -31,6 +31,13 @@ comparison, as the blinding rule below states. These are this file's own:
   provenance, no marker of which one you wrote or prefer. This overrides the belief-disclosure
   rule for the call fields only: record any prior preference of your own before the call, outside
   every call field, and report it afterwards.
+- **Blind the workspace as well as the call fields.** A backend that reads the repository, or
+  whose CLI auto-loads workspace context (`implicit_context` on
+  `amicus_backends(detail="full")`), can find a candidate's authorship in files the call never
+  names: a branch, a commit message, a draft on disk, a `CLAUDE.md`. Point the call at a
+  workspace that holds no such provenance, or run `claude` with `access: "toolless"` and
+  `config_mode: "safe"`, decided before the call; where provenance stays reachable, report the
+  comparison as blinded in the supplied fields only.
 - **Disclose in the report which candidate is yours, if any, and every marker you could not
   remove.** The backend was not told; the reader of your report is.
 - **Fix the criteria before the call and carry them in `question`; carry the candidates in
@@ -95,8 +102,8 @@ a score cannot. `amicus_consult` also returns no `verdict` or `confidence` field
 arrive as prose amicus does not parse, and the Results rules give it no standing that the reasons
 lack.
 
-The same biases are why the pattern is blind. Blinding removes the backend's pointer to
-authorship; it does not remove yours, which is why the disclosure rule puts your authorship in the
+The same biases are why the pattern is blind. Blinding removes the pointers to authorship in
+what you send and in what the backend can reach on its own; it does not remove yours, which is why the disclosure rule puts your authorship in the
 report the backend never sees. The belief-disclosure rule that governs an ordinary brief exists so
 a second opinion is not asked to endorse a conclusion; here the same end is served by withholding
 the conclusion from the call altogether, and the prior preference is kept where it can be compared

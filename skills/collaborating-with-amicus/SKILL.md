@@ -1,6 +1,6 @@
 ---
 name: collaborating-with-amicus
-description: Use whenever this agent should call another model through amicus, or should answer a question about which models amicus can reach — a second opinion, a code review, an adversarial review, a delegated implementation, an independent two-model attempt, a declared review–revise pass, a blind comparison of finalized candidates, or a check of which backends are enabled, installed and authenticated. Trigger on "ask another model", "get a second opinion", "have Codex/Kimi/Claude review this", "delegate this", "have both models attempt this", "run review–revise", "compare these two", "which of these is better", "have another model pick", "which models can I use", "is Codex/Kimi/Claude available", "what does amicus support", "check backend status", on any amicus_* tool result or approval prompt you need to interpret, and at decision points — choosing a hard-to-reverse approach, after two failed fixes, before declaring risky work complete.
+description: Use whenever this agent should call another model through amicus, or should answer a question about which models amicus can reach — a second opinion, a code review, an adversarial review, a delegated implementation, an independent two-model attempt, a declared review–revise pass, a blind comparison of finalized candidates, or a check of which backends are enabled, installed and authenticated. Trigger on "ask another model", "get a second opinion", "have Codex/Kimi/Claude review this", "delegate this", "have both models attempt this", "run review–revise", "have another model compare these two", "ask another model which of these is better", "have another model pick", "which models can I use", "is Codex/Kimi/Claude available", "what does amicus support", "check backend status", on any amicus_* tool result or approval prompt you need to interpret, and at decision points where another model's opinion would change the outcome — choosing a hard-to-reverse approach, after two failed fixes, before declaring risky work complete.
 ---
 
 # Collaborating with amicus
@@ -32,8 +32,8 @@ statement — this list is a map, not a second copy.
 | --- | --- | --- |
 | One answer, design critique, or second opinion (including on a diff you paste inline) | `amicus_consult` | [active workflows](references/active-workflows.md) |
 | Review changes already represented in git | `amicus_review_changes` | [active workflows](references/active-workflows.md) |
-| A fixed adversarial critic attacking a plan, claim, or decision before you commit to it (`claude` only in v1) | `amicus_adversarial_review` | [active workflows](references/active-workflows.md) |
-| A self-contained coding task implemented in a throwaway worktree, returned as a diff (`codex` or `kimi` only in v1) | `amicus_delegate` | [active workflows](references/active-workflows.md), [reviewing a returned diff](references/reviewing-a-returned-diff.md) |
+| A fixed adversarial critic attacking a plan, claim, or decision before you commit to it (`claude` only) | `amicus_adversarial_review` | [active workflows](references/active-workflows.md) |
+| A self-contained coding task implemented in a throwaway worktree, returned as a diff (`codex` or `kimi` only) | `amicus_delegate` | [active workflows](references/active-workflows.md), [reviewing a returned diff](references/reviewing-a-returned-diff.md) |
 | Any of the above when the work can exceed the sync deadline | the matching `_async` tool | that route's references, and [sync vs async](references/sync-vs-async.md) |
 | Which backend to pick, and what evidence it can actually inspect | `amicus_backends` (free) | [choosing a backend](references/choosing-a-backend.md) |
 | You and one backend attempt the same problem independently, then you synthesize | independent attempt | [independent attempt](references/independent-attempt.md) |
@@ -205,62 +205,33 @@ obligations live in the reference each route names, under that file's own `Rules
 
 ## Semantics
 
-Facts the rules above depend on. Nothing here is an obligation.
+Facts the rules above depend on, kept short; the references carry the detail. Nothing here is an
+obligation.
 
 ### Backend as a parameter
 
-amicus has no "default" backend the way a single-model server implies one model by its own name.
-`backend` names which model answers a given call. The tools are shared, but not every tool takes
-every backend: `amicus_delegate` and its twins take `codex` or `kimi`, and
-`amicus_adversarial_review` and its twin take only `claude`. Each tool's `backend` enum is the set
-it accepts, so any other pairing, in-tree backend or not, is rejected at the boundary, pre-spend,
-as `invalid_arguments` with `details.allowed_values`. `feature_unsupported` is only a defensive
-check, returned if the named backend's declared features lack the verb, which no backend a tool's
-enum accepts does today.
-`AMICUS_BACKENDS` (an operator/deployment setting) controls which backends are *enabled* in this
-deployment; it says nothing about which to prefer for a task. A backend can be enabled and still
-not be ready, which is why the discovery rules turn on `status` rather than on `enabled`.
+`backend` names which model answers a call and has no default. Each tool's `backend` enum is the
+set it accepts: `amicus_delegate` and its twins take `codex` or `kimi`,
+`amicus_adversarial_review` and its twin take only `claude`, and any other pairing is rejected
+pre-spend as `invalid_arguments`. `AMICUS_BACKENDS` says which backends this deployment enables,
+not which to prefer, and an enabled backend can still be uninstalled or unauthenticated, which is
+why the Discovery rules turn on `status`. What each backend can read differs too: `claude` has
+no tools at all outside a review unless you pass `access`, and a backend ID is not a model
+family — [choosing a backend](references/choosing-a-backend.md).
 
-Feature support differs per backend in v1, and so does what each backend can *read* — `claude`
-defaults to no tools at all except in a review, which defaults to read-only tools unless the
-operator set `AMICUS_CLAUDE_ACCESS`. A backend ID is also not a model family: Kimi routes to whatever
-OpenAI-compatible provider its `config.toml` names. All three are in
-[choosing a backend](references/choosing-a-backend.md).
+### Deadlines, jobs and results
 
-### Deadlines and spend
+An unkeyed sync call past `timeout_seconds` is terminated and its work is lost; a keyed sync
+call or an `_async` call runs against the longer job deadline and keeps the result. Every paid
+call is a job (`meta.job_id`), and a job's `status`, `result_available` and `result_ok` are three
+different facts. [sync vs async](references/sync-vs-async.md) has the deadlines, the polling
+recipe, expiry and the per-workspace cap; [options and errors](references/options-and-errors.md)
+has `idempotency_key`.
 
-An unkeyed synchronous call runs to a bounded deadline (`timeout_seconds`, default 300s). Past it
-the call is terminated: you receive nothing, and the work the backend already did is gone. An `_async` call
-returns a job handle immediately and runs against a longer job deadline
-(`AMICUS_JOB_MAX_SECONDS`, default 1800s). Starting an async job commits the spend immediately,
-whether or not you ever poll. The sync default leaves a review little margin: a review of a few
-hundred lines has been reported to take two to four minutes on `codex` (issue #84), so raise
-`timeout_seconds` or use a form that keeps the result — see
-[sync vs async](references/sync-vs-async.md).
-
-The exception is a sync call made with an `idempotency_key`. Its run gets the job deadline, and
-`timeout_seconds` only bounds the wait: at that bound the call returns `timeout` with a repair
-that polls `amicus_job_status` for the job, which keeps going, and repeating the same keyed call
-reattaches to it without new spend (see [options and errors](references/options-and-errors.md)).
-
-What a terminated sync call costs at the provider is not something amicus reports, so this skill
-does not claim it equals a completed call's cost. The reason to prefer `_async` is that a sync
-timeout destroys the *result*, not a claim about the bill.
-
-### The job lifecycle
-
-Every paid call — sync or async — is recorded as a job (`meta.job_id`). A sync call returns its
-result directly; an async call returns a handle, and the result is fetched later.
-
-`amicus_job_status` reports `status`, `result_available`, and `result_ok` — three different facts.
-`poll_after_ms` is non-null only while `status` is `running`, and grows with elapsed time only to
-a ceiling ([sync vs async](references/sync-vs-async.md) → Polling); on any terminal status it is `null`,
-which is why a loop that waits for `result_available` alone never ends for a cancelled or failed
-job. A job handle follows the same rule: a repeated keyed `_async` call replays the existing
-job's handle, which can already be terminal. Records expire (`AMICUS_JOB_TTL`, default 24h) and
-a per-workspace cap evicts the oldest terminal ones, but never a result amicus has tracked and
-not yet returned: unfetched results fill the cap and it then refuses new paid calls with
-`job_cap_reached`. [sync vs async](references/sync-vs-async.md) has the lifecycle and recovery.
+A result's `ok` says the call worked, not that anything was covered or that the backend is
+right. Which fields each tool carries, what `review_status`, `coverage`, `findings_diagnostics`,
+`lists_diagnostics` and `confidence` mean, and which check each kind of claim needs are in
+[reading results](references/reading-results.md).
 
 ### Annotations follow the worst enabled backend
 
@@ -278,58 +249,13 @@ A host's own approval policy is a separate mechanism. A host may prompt for any 
 not granted, whatever the annotations say, and amicus's results carry no record of why a host
 prompted. That is why attribution needs host evidence rather than inference.
 
-### Result fields
-
-Consult, review, delegate, and adversarial-review results share `summary`, `findings`,
-`findings_diagnostics`, `questions`, `assumptions`, `next_steps`, and `meta`. Only review and
-adversarial results carry `verdict`, `confidence`, `review_status`, and `coverage`; only delegate
-carries `diff` and `diffstat`. `amicus_review_changes_dry_run` carries the same `coverage` the
-paid review would.
-
-`review_status: unstructured` means the backend answered, but not with one object amicus could
-read, so nothing was parsed: `verdict` and `confidence` are `unknown`. The whole answer is
-`raw_response.text`, delivered at either `detail`,
-and it is an unverified claim like any other output.
-
-`findings_diagnostics` is null when nothing deviated, and otherwise names what was normalized or lost — the
-rule for reading it is under [Results](#results), and
-[reading results](references/reading-results.md) has the reason vocabulary. Consult, review and
-adversarial results also carry `lists_diagnostics`, the same disclosure for the three prose
-lists: null when no list deviated, otherwise one `{dropped, reasons}` member per list that
-did. Delegate does not carry it, because its `next_steps` is amicus's own text
-rather than backend output.
-
-`confidence` is two things at once. Usually it is the backend's own `low|medium|high`. amicus
-substitutes `low` only for partial coverage or findings it could not carry, and only where it
-also withholds the verdict as `unknown`. The two move together or not at all, so a `low` beside
-any other verdict is the backend's word. `unknown` confidence is neither: it is the absence of a
-rating, which a `not_run` review always carries because no backend ran. Both rules for reading
-it are under [Results](#results).
-Discovery, dry-run, async-start, and job-lifecycle tools each have their own schema.
-
-A result being `ok: true` says the call worked, not that it covered anything —
-[reading results](references/reading-results.md) is the reference for that, and for which kind of
-verification each kind of claim needs.
-
 ### Data exposure
 
-- Every free-text field you supply — `question`, `task`, `target`, `evidence`, `extra_context`,
-  `instructions_append`, `focus` — is sent to the selected backend's provider raw. Amicus never
-  writes one to its own logs, and for an async job they reach the job worker over that worker's
-  stdin, never on its argv and never into the job directory.
-- That is amicus's own transport only. How a field reaches the backend CLI is the backend's
-  choice, `carriers` on `amicus_backends(detail="full")` is the authoritative per-backend
-  statement, and they
-  differ enough to matter: on `codex`, `instructions_append` rides **argv**, visible to anything
-  that can list processes on this machine for the run's duration. The per-backend table is in
-  [choosing a backend](references/choosing-a-backend.md).
-- `target` and `evidence` are `amicus_adversarial_review`'s primary carriers, not optional extras.
-- What is acceptable to hand a provider is not thereby acceptable to keep locally. The kimi CLI's
-  own session store keeps what it is sent on this machine's disk; it outlives the run, and amicus
-  does not delete it ([choosing a backend](references/choosing-a-backend.md) has the carrier
-  table).
-- A backend can read files outside the workspace during an active call; the workspace selects
-  where a backend works, not what it can read. Redaction is best-effort and applies only to
-  gathered diffs and returned output, never to what you supply.
-- A dry run previews the input amicus would assemble. It does not invoke the backend, so it
-  neither proves a paid call is safe nor bounds what the backend reads once the paid call runs.
+Every free-text field you supply reaches the selected backend's provider raw; amicus carries it
+over stdin and never logs it, but how it then reaches the backend CLI is the backend's choice,
+and `carriers` on `amicus_backends(detail="full")` is authoritative: on `codex`,
+`instructions_append` rides argv, and the kimi CLI's own session store keeps what it is sent on
+this machine's disk. A backend can read files outside the workspace during a call, redaction
+covers only gathered diffs and returned output, and a dry run invokes no backend, so it proves
+nothing about a paid call. [choosing a backend](references/choosing-a-backend.md) has the
+per-backend table.

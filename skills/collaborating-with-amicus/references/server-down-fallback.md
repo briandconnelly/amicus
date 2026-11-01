@@ -7,7 +7,6 @@ failure, not a tool returning `ok: false`. A tool that answers is not a server t
 
 - **Ask the user to restart or reconnect the amicus MCP server first**, and confirm recovery with
   free `amicus_backends`.
-- **Prefer a sibling MCP server over a hand-rolled CLI call.**
 - **Never write prompt text to a file or onto a command line in a fallback you construct.**
 - **Never construct a write-capable or delegate-tier fallback.** Restore the server instead.
 - **Keep every flag in a fallback command.** If the CLI rejects one, stop and report the drift —
@@ -15,7 +14,6 @@ failure, not a tool returning `ok: false`. A tool that answers is not a server t
 - **Never use the direct CLI route when only the supplied prompt may be disclosed.** It reaches
   the filesystem; the prompt is not the limit of what it sends.
 - **Point `WORKSPACE` only at a directory the user has approved for disclosure.**
-- **Never carry amicus's parameter names or guarantees onto another server's surface.**
 - **Never retry either route while the transport condition is unchanged.**
 
 ## Why the plugin path is preferred
@@ -25,14 +23,10 @@ redaction of gathered diffs and returned output, structured results with `error.
 job record. Everything you gather, bound, and sanitize in a fallback, you do by hand — and the
 answer comes back as prose you must treat as an unverified claim with no envelope.
 
-## First: a sibling server
+## No sibling server
 
-`codex-in-claude` and `moonbridge` are separate MCP servers wrapping the same two CLIs. If either
-is connected while amicus is not, it is the better fallback: it keeps redaction, bounded input,
-and structured results, and its own skill states its guarantees.
-
-Use that server's own tools and its own skill. The surfaces differ, and a guarantee that holds on
-one server is not evidence about another — which is what the rule above is protecting.
+`codex-in-claude` and `moonbridge`, the servers amicus was ported from, are deprecated and
+archived; neither is a fallback. Restore amicus, or use the one direct route below.
 
 ## Last resort: the codex CLI directly
 
@@ -79,9 +73,10 @@ The two rules above govern `WORKSPACE` and when this route may be used at all.
 **Verification status of this command.** Each flag was checked against `codex exec --help` on
 codex-cli 0.153.4 and is accepted there; a negative control confirmed the check can detect an
 absent flag. What that establishes is flag *acceptance* on one version, not that the combination
-behaves as described, and `codex_status` reports 0.153.4 as outside amicus's tested set. The
-command has not been executed end to end. Confirm each flag is still accepted rather than
-assuming; a rejection is CLI drift worth reporting, never a flag to drop.
+behaves as described. The command has not been executed end to end, and the installed codex is
+usually a later release: `amicus_backends` reports its version and whether amicus was built
+against it. Confirm each flag is still accepted rather than assuming; a rejection is CLI drift
+worth reporting, never a flag to drop.
 
 ## Why there is no kimi or claude fallback here
 
