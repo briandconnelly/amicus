@@ -215,8 +215,9 @@ set it accepts: `amicus_delegate` and its twins take `codex` or `kimi`,
 `amicus_adversarial_review` and its twin take only `claude`, and any other pairing is rejected
 pre-spend as `invalid_arguments`. `AMICUS_BACKENDS` says which backends this deployment enables,
 not which to prefer, and an enabled backend can still be uninstalled or unauthenticated, which is
-why the Discovery rules turn on `status`. What each backend can read differs too: `claude` has
-no tools at all outside a review unless you pass `access`, and a backend ID is not a model
+why the Discovery rules turn on `status`. What each backend can read differs too: `claude`
+defaults to no tools at all outside a review unless the operator set `AMICUS_CLAUDE_ACCESS`,
+which `amicus_backends` reports as the resolved default, and a backend ID is not a model
 family — [choosing a backend](references/choosing-a-backend.md).
 
 ### Deadlines, jobs and results
