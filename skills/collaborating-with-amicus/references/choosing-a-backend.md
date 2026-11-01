@@ -6,13 +6,11 @@ evidence the task needs**.
 
 ## Rules
 
-Eligibility, freshness and authority are governed by SKILL.md → Binding rules → Discovery, and
-what may be sent to `kimi` by SKILL.md → Binding rules → Data exposure; they are not restated
-here. These are this file's own:
+Eligibility, freshness and authority are governed by SKILL.md → Binding rules → Discovery, the
+`access` and `config_mode` decision by SKILL.md → Binding rules → Scope and inputs, and what
+may be sent to `kimi` by SKILL.md → Binding rules → Data exposure; they are not restated here.
+These are this file's own:
 
-- **Decide `access` from the evidence the task needs, before the call.** Choosing `readonly` up
-  front because the backend must read a named file is correct; raising it *afterwards*, because a
-  result came back short of evidence, is what the root rule forbids.
 - **Never spend a paid call to break a tie** between backends that are equally suitable.
 - **Never claim two backends are different model families** unless you have evidence of the
   underlying models.
@@ -53,11 +51,11 @@ declares, plus capabilities that are not verbs at all:
 `consult` and `review_changes` are baseline on every backend and never appear in `features`. A
 host that looks for them there concludes, wrongly, that no backend supports them (issue #84).
 
-The gates in v1:
+The gates:
 
 - `amicus_consult` / `amicus_review_changes`: `codex`, `kimi`, `claude`; never gated.
-- `amicus_delegate`: `codex`, `kimi` only. Claude stays review-only, so a delegate call routed
-  to claude fails the feature gate.
+- `amicus_delegate`: `codex`, `kimi` only. Claude is outside the tool's `backend` enum, so a
+  delegate routed to it is rejected as `invalid_arguments`, never `feature_unsupported`.
 - `amicus_adversarial_review`: `claude` only.
 
 ## What each backend can inspect

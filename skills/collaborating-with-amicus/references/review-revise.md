@@ -27,7 +27,7 @@ improves the work; it does not certify it.
    `amicus_consult` for a design, document, or other non-diff artifact;
    `amicus_adversarial_review` when the artifact is a plan, claim, or decision and you want a
    fixed adversarial critic rather than a balanced reviewer. The adversarial verb is an *eligible
-   route here, never a mandatory one* — it is `claude`-only in v1, and a critic instructed to
+   route here, never a mandatory one* — it is `claude`-only, and a critic instructed to
    attack is not the right instrument for every artifact.
 4. Scope the call to the decision, and run the free dry run where one exists.
 5. Verify each material finding, revise what you accept, and record why you declined the rest.

@@ -8,7 +8,13 @@ Optional parameters, duplicate-spend protection, and what to do with an error en
 - **Read `error.code` and, when present, `error.repair`; never infer a fix from the message
   prose.**
 - **Never retry a call whose failing condition has not changed**, except the keyed replay the
-  next rules and a keyed timeout's repair direct, which reattaches to the same run.
+  next rules and a keyed timeout's repair direct, which reattaches to the same run. The
+  condition has changed when `error.temporary` is true and `retry_after_ms`, or the delay the
+  repair names, has elapsed; when it is false, a repair that names a new call (a stored keyed
+  error's `use_new_idempotency_key`, after the delay its prose names) or a fix to what
+  `error.details` or `error.code` names counts. A retry that reaches a backend is a new paid
+  run under the declared cap; one that repeats a free call, as a result-read repair directs,
+  is not.
 - **Follow `repair.next_step` when a repair is present**, and use `repair.tool` /
   `repair.arguments` when they are present rather than composing a retry yourself.
 - **With no `error.repair`, fix what `error.details` names before retrying.**

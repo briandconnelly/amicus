@@ -3,7 +3,7 @@
 `amicus_delegate` and `amicus_delegate_async` implement a task in a throwaway git worktree seeded
 from the current branch's tracked state (`HEAD` plus replayable uncommitted tracked changes;
 untracked files are never copied) and return the resulting `diff`. Delegation is available for
-`codex` and `kimi` in v1; Claude stays review-only.
+`codex` and `kimi`; Claude stays review-only.
 
 ## Rules
 
@@ -60,8 +60,13 @@ bold after its number; the response contract below is written in those keys.
 3. `checks-run` — **Does it compile / pass checks?** The delegate result is an unverified claim
    like any other: `summary` and `findings` describe what the backend says it did, not proof that
    it works. Apply the diff in a **throwaway worktree** — `git worktree add` on a scratch path,
-   not a branch in the user's checkout, which shares that working tree — and run the checks the
-   change actually touches.
+   not a branch in the user's checkout, which shares that working tree — seeded to the baseline
+   the delegate ran on: `HEAD` plus the uncommitted tracked changes amicus replayed, which the
+   diff is relative to. A worktree at bare `HEAD` can refuse a correct patch or test it against
+   different code. When amicus could not replay those changes it says so on
+   `meta.security_warnings` and the baseline is `HEAD` alone. When you cannot reproduce the
+   baseline, report this check as `not run` and the verdict as `cannot-assess`. Then run the
+   checks the change actually touches.
 4. `consistency` — **Is the diff internally consistent?** Read the hunk headers against the hunk
    bodies. `diffstat` is barred as the integrity check by a rule above, and this is why:
    `diffstat` is computed from the raw diff *before* redaction and truncation are applied to the
@@ -109,8 +114,8 @@ your tree without a decision in between.
 ## Handing a returned diff to a second backend
 
 A diff produced by one backend can be reviewed by another. Pass it inline to `amicus_consult`, or
-apply it in a throwaway worktree and run `amicus_review_changes` there against that worktree's
-`workspace_root`.
+apply it in a throwaway worktree seeded to the same baseline as check 3 above and run
+`amicus_review_changes` there against that worktree's `workspace_root`.
 
 Record which artifact the second backend actually saw — the raw diff text, or a worktree with the
 diff applied. They support different conclusions: a backend given only the diff text cannot check

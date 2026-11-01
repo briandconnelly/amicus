@@ -75,6 +75,14 @@ per-change, as its own lead says.
 
 ### Changed
 
+- The `collaborating-with-amicus` skill no longer names `codex-in-claude` or `moonbridge` as
+  fallback servers (both are archived), tells a host validating a delegate's diff to seed the
+  worktree to the baseline the delegate ran on, adds a workspace-blinding rule to the blind
+  comparison, states the retry rule in terms of `error.temporary`, corrects the Claude-delegate
+  rejection to `invalid_arguments`, drops the stale 0.153.4 claim from the fallback, qualifies
+  the comparison triggers in its description, and collapses SKILL.md's Semantics section to
+  pointers at the references that already carry the detail. Nothing about how amicus runs
+  changes.
 - Kimi Code 2.4 is a supported version, so `amicus_backends` no longer warns on it. 2.4.0 was
   checked against 2.3.0 at zero spend, as `docs/kimi-help/2.4.0/FINDINGS.md` records: `--help`
   only rewords `--auto` and adds the `import-sessions` subcommand, the provider-list shape is
