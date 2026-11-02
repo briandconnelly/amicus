@@ -194,6 +194,15 @@ A `null` there means no loaded plugin declares one.
 The `amicus://backends/{backend}` resource is always the full entry.
 `amicus_capabilities(detail="contracts")` is removed: pass `include_tool_details=false` for the same rowless payload, and `detail` now selects only how much each `tool_details` row carries (`summary` is `name`, `cost`, `stability`, `backends`; `full` adds the rest, including `error_codes`).
 
+## Upgrading from 0.11.1
+
+Nothing an operator running amicus 0.11.1 has to handle before running 0.11.2.
+`CHANGELOG.md`'s 0.11.2 section lists every user-visible change since 0.11.1.
+A job result stored by 0.11.1 is still readable: `RESULT_FORMAT` did not move.
+The discovery surface stays `amicus/0.1/schema-58`, so a fingerprint-aware client has nothing to re-read.
+No tool call 0.11.1 accepted is rejected.
+An environment that pins `fastmcp` below 4.1.4 or `mcp` below 2.3 beside amicus has to lift that pin, because amicus now requires both.
+
 ## Upgrading from 0.11.0
 
 Nothing an operator running amicus 0.11.0 has to handle before running 0.11.1.
