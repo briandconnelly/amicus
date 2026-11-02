@@ -20,14 +20,15 @@ per-change, as its own lead says.
 
 ## [Unreleased]
 
-## [0.11.2] - 2026-10-29
+## [0.11.2] - 2026-11-01
 
 This release leaves the discovery surface at `amicus/0.1/schema-58`, what 0.11.1 shipped, and
 `RESULT_FORMAT` stays 9, so a job result 0.11.1 stored can still be delivered; no entry is
 labelled **Breaking** or **Surface**. It moves amicus onto fastmcp 4.1 and mcp 2.3 for the
-FastMCP advisories listed under Security, and makes codex-cli 0.164, 0.165 and 0.166 and Kimi
-Code 2.4 supported versions. It was checked against codex-cli 0.166.0, Kimi Code 2.4.0 and Claude
-Code 2.1.312.
+FastMCP advisories listed under Security, makes codex-cli 0.164, 0.165 and 0.166 and Kimi
+Code 2.4 supported versions, and revises the `collaborating-with-amicus` skill after a review
+on 2026-11-01. It was checked against codex-cli 0.166.0, Kimi Code 2.4.0 and Claude Code
+2.1.312.
 
 ### Added
 
