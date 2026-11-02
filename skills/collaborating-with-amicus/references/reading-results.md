@@ -9,13 +9,11 @@ nothing at all.
 Branching on `ok`, branching on the concrete tool, reading the coverage fields, treating results
 as unverified claims, and matching verification to the claim are governed by SKILL.md → Binding
 rules → Results, which is their authoritative statement. This file explains what each of those
-means; it adds three obligations of its own:
+means; it adds two obligations of its own:
 
 - **Read `questions` and `assumptions` before treating an answer as responsive.** An answer built
   on a wrong assumption is not a wrong answer to your question; it is an answer to a different
   one.
-- **Run this project's full gate before calling implementation work complete**, whatever a
-  returned result claims.
 - **Check that a `meta` key is present before indexing it, unless the `amicus://result-meta`
   schema lists it as `required`.** `meta` is sparse on the wire: a null-valued key is dropped,
   and its absence means what null means.

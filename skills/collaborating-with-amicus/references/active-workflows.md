@@ -94,7 +94,7 @@ are claims; the coverage rules in [reading results](reading-results.md) govern w
 
 ## Adversarial review
 
-`amicus_adversarial_review` (claude only in v1) puts a fixed adversarial critic against a plan,
+`amicus_adversarial_review` (claude only) puts a fixed adversarial critic against a plan,
 claim, or decision. `target` and `evidence` are its **primary carriers** — the critique is only as
 good as what they contain — and both are free-text fields under the secret rule. `scope` is
 optional here: attach a git diff to ground the critique, or omit it to critique the target alone.
