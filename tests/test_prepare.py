@@ -213,6 +213,9 @@ async def test_outside_roots_names_the_worktree_recovery(tmp_path, monkeypatch):
     msg = err["message"]
     assert f"linked git worktree of {main}" in msg and f"workspace_root={main}" in msg
     assert "scope=commit" in msg and "uncommitted changes are not reachable" in msg
+    # #406: the cause is named as the roots, so the hint does not teach "no worktrees".
+    assert "about the client's roots, not about worktrees" in msg
+    assert msg.index("not about worktrees") < msg.index("scope=commit")
     plain = (await _prep(tmp_path, workspace_root=str(tmp_path)))["error"]
     assert plain["code"] == "workspace_outside_roots" and "worktree" not in plain["message"]
 

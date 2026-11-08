@@ -91,13 +91,16 @@ def _placeholder_error(
 def _worktree_hint(workspace_root: str, roots: list[str]) -> str:
     """The recovery a linked worktree of a rooted checkout has (#267), or "". It names
     scope=commit alone: branch and working_tree scopes read the rooted checkout's own HEAD
-    and working tree, not the worktree's."""
+    and working tree, not the worktree's. It first says the refusal is about the roots, so
+    a caller does not learn that worktrees are unsupported (#406)."""
     checkout = ws.linked_worktree_checkout(workspace_root, roots)
     if checkout is None:
         return ""
     return (
         f"; it is in a linked git worktree of {checkout}, which is inside them and shares "
-        f"its commits. To review a worktree commit, pass workspace_root={checkout} with "
+        "its commits. The refusal is about the client's roots, not about worktrees: a "
+        "worktree inside the roots is accepted as workspace_root directly. From this client, "
+        f"to review a worktree commit, pass workspace_root={checkout} with "
         "scope=commit and that commit's sha. From there the backend reads that checkout's "
         "files, and scope=branch and working_tree read its own HEAD and working tree, so the "
         "worktree's uncommitted changes are not reachable"
