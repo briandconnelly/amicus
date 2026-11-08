@@ -101,6 +101,10 @@ per-change, as its own lead says.
   unchanged. 2.5 adds a configurable remote `[environments]` default that print mode honors
   (#413). The rule-18 session-store re-check found no way to switch the store off. The kimi live
   gate was not run.
+- `docs/claude-help/2.1.319/` records the `--help` of Claude Code 2.1.319, which every 2.x
+  release already satisfied: only the `auto-mode` row is reworded, and the 2.1.314 to 2.1.319
+  notes change no flag amicus sends; `-p` JSON results gain a `credential_expires_at` key amicus
+  does not read, and several failures that exited 0 now exit 1. No paid call was made.
 - Kimi Code 2.4 is a supported version, so `amicus_backends` no longer warns on it. 2.4.0 was
   checked against 2.3.0 at zero spend, as `docs/kimi-help/2.4.0/FINDINGS.md` records: `--help`
   only rewords `--auto` and adds the `import-sessions` subcommand, the provider-list shape is
