@@ -161,6 +161,21 @@ def test_validate_request_catalog_first_then_fallback_then_fail_open(pinned_kimi
     assert from_env.validate_request(_req(reasoning_effort="low")) is None
 
 
+def test_validate_request_checks_the_vocabulary_past_a_truncated_catalog(pinned_kimi_bin):
+    """#414: an alias missing from a TRUNCATED catalog may be past the cut, so it is not
+    'unlisted' (kimi will not reject it): the vocabulary decides rather than failing open."""
+    cut = kf.ModelListing(models=kf.K3.models, source="live", truncated=True)
+    _, backend = kf.make_backend(catalog=cut)
+    assert backend.validate_request(_req(model="past-the-cut", reasoning_effort="high")) is None
+    refused = backend.validate_request(_req(model="past-the-cut", reasoning_effort="nope"))
+    assert refused is not None and refused.code == "invalid_reasoning_effort"
+    assert refused.details["allowed_values"] == sorted(
+        contract.REASONING_EFFORT_FALLBACK_VOCABULARY
+    )
+    # A listed alias still decides alone.
+    assert backend.validate_request(_req(model="k3", reasoning_effort="xhigh")) is not None
+
+
 def test_validate_request_refuses_an_unexpected_access_posture(pinned_kimi_bin):
     _, backend = kf.make_backend()
     for bad in ("readonly", "toolless", "garbage"):

@@ -520,6 +520,14 @@ def models_payload(registry: BackendRegistry, backend: str) -> dict[str, Any]:
         ],
         source=listing.source,
         fetched_at=listing.fetched_at,
+        truncated=listing.truncated,
+        truncation_hint=(
+            f"the catalog was cut at amicus's entry bound and these {len(listing.models)} "
+            "models come from its start; a slug past the cut is still valid as `model`, but "
+            "amicus cannot check a reasoning_effort against what that model declares"
+            if listing.truncated
+            else None
+        ),
     ).model_dump(mode="json")
 
 

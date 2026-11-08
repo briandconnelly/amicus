@@ -62,6 +62,9 @@ class ModelListing:
     models: tuple[ModelEntry, ...]
     source: Literal["cache", "static", "live", "none"]
     fetched_at: str | None = None
+    # True when the source held more entries than the reader's bound and `models` stops at
+    # it (#414): a model past the cut exists, so absence from `models` proves nothing.
+    truncated: bool = False
 
 
 @runtime_checkable

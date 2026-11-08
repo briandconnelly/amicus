@@ -93,7 +93,7 @@ class KimiBackend:
 
     def validate_request(self, request: RunRequest) -> ClassifiedFailure | None:
         # ORDER MATTERS: shape, then the catalog (it decides alone when it names the alias
-        # with efforts; an alias it does not name at all fails open), then the fallback
+        # with efforts; an alias a WHOLE catalog does not name fails open, #414), then the fallback
         # vocabulary ONLY when the catalog is silent or the alias declares no efforts.
         # Compare the EXACT value prepare() will send: normalizing here would validate a
         # string the run never uses. See ADR 0009.

@@ -334,6 +334,12 @@ description and the Reference sentence had not been updated to match. "When pres
 a pre-job failure carries no job id and a framework error that bypasses amicus's middleware
 carries neither. Measured on the wire. MEASURED and BUDGET both move by the 142 bytes, so the
 budget keeps no headroom.
+The schema-59 raise (+210 bytes on every profile: all 114736 -> 114946) is #414. All of it is
+amicus_models's outputSchema, which gains `truncated` and `truncation_hint`. A kimi catalog past
+the entry bound was listed cut with nothing saying so, so an absent alias read as an invalid
+one. The `truncated` description is kept rather than stripped because it carries that
+reading: an absent slug may still be valid. A first draft of it cost 51 bytes more. Measured on
+the wire. MEASURED and BUDGET both move by the 210 bytes, so the budget keeps no headroom.
 """
 
 from __future__ import annotations
@@ -343,7 +349,7 @@ from tests.conftest import spawned_server_env
 
 from amicus import manifest
 
-MEASURED: dict[str, int] = {"all": 114736, "codex-kimi": 114744, "claude": 114736}
+MEASURED: dict[str, int] = {"all": 114946, "codex-kimi": 114954, "claude": 114946}
 # The budget is a literal, not MEASURED rounded up to the next kilobyte as it was until
 # 2026-09-14. The rounding left up to 1 KB of growth per bucket that no PR had to own, and
 # this file records three such accumulations (448 and 12 bytes in the paragraphs above, and
@@ -351,7 +357,7 @@ MEASURED: dict[str, int] = {"all": 114736, "codex-kimi": 114744, "claude": 11473
 # #94 that landed after it), each noticed only when the next deliberate raise re-measured.
 # Any growth now fails until a PR raises BUDGET and says why; a shrink passes and shows as
 # drift against MEASURED. Raising one means re-measuring and moving both.
-BUDGET: dict[str, int] = {"all": 114736, "codex-kimi": 114744, "claude": 114736}
+BUDGET: dict[str, int] = {"all": 114946, "codex-kimi": 114954, "claude": 114946}
 
 
 @pytest.mark.parametrize("profile", sorted(manifest.PROFILES))

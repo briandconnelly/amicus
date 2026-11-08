@@ -6,7 +6,7 @@ import json
 
 from amicus.backends.kimi import binary as kb
 from amicus.backends.kimi import config as kc
-from amicus.backends.kimi import models
+from amicus.backends.kimi import contract, models
 from amicus.sdk.core.runtime import BINARY_NOT_FOUND, CommandRun
 
 PAYLOAD = {
@@ -26,8 +26,9 @@ PAYLOAD = {
 
 
 def test_parse_catalog_reads_only_named_model_fields():
-    entries = models.parse_catalog(PAYLOAD)
-    assert entries is not None
+    listing = models.parse_catalog(PAYLOAD)
+    assert listing is not None and listing.source == "live" and listing.truncated is False
+    entries = listing.models
     by_slug = {e.slug: e for e in entries}
     assert set(by_slug) == {"k3", "bare", "empty"}
     assert by_slug["k3"].display_name == "Kimi K3"
@@ -43,11 +44,12 @@ def test_parse_catalog_returns_none_on_drift():
     assert models.parse_catalog({"models": []}) is None
     assert models.parse_catalog({"models": {}}) is None
     parsed = models.parse_catalog({"models": {"k": {"supportEfforts": ["!!"]}}})
-    assert parsed[0].supported_reasoning_efforts is None
+    assert parsed is not None and parsed.models[0].supported_reasoning_efforts is None
 
 
 def test_supported_efforts_for_none_means_cannot_tell():
-    listing = models.ModelListing(models=tuple(models.parse_catalog(PAYLOAD) or ()), source="live")
+    listing = models.parse_catalog(PAYLOAD)
+    assert listing is not None
     assert models.supported_efforts_for("k3", listing) == ("low", "medium", "high", "xhigh")
     assert models.supported_efforts_for("bare", listing) is None
     assert models.supported_efforts_for("unlisted", listing) is None
@@ -56,13 +58,41 @@ def test_supported_efforts_for_none_means_cannot_tell():
 
 
 def test_is_unlisted_alias_only_for_a_live_catalog_that_omits_the_alias():
-    live = models.ModelListing(models=tuple(models.parse_catalog(PAYLOAD) or ()), source="live")
+    live = models.parse_catalog(PAYLOAD)
+    assert live is not None
     silent = models.ModelListing(models=(), source="none")
     assert models.is_unlisted_alias("unlisted", live) is True
     assert models.is_unlisted_alias("k3", live) is False
     assert models.is_unlisted_alias("bare", live) is False
     assert models.is_unlisted_alias(None, live) is False
     assert models.is_unlisted_alias("unlisted", silent) is False
+
+
+def _aliases(n: int) -> dict:
+    return {"models": {f"m{i}": {} for i in range(n)}}
+
+
+def test_parse_catalog_lists_an_openrouter_sized_catalog_whole():
+    """#414: a 362-alias OpenRouter-backed config lost every alias past the 256th."""
+    listing = models.parse_catalog(_aliases(362))
+    assert listing is not None and listing.truncated is False
+    assert len(listing.models) == 362 and listing.models[-1].slug == "m361"
+
+
+def test_parse_catalog_flags_a_catalog_past_the_bound():
+    cap = contract.MODELS_CACHE_MAX_ENTRIES
+    exact = models.parse_catalog(_aliases(cap))
+    assert exact is not None and len(exact.models) == cap and exact.truncated is False
+    over = models.parse_catalog(_aliases(cap + 1))
+    assert over is not None and over.truncated is True
+    assert len(over.models) == cap and over.models[-1].slug == f"m{cap - 1}"
+
+
+def test_is_unlisted_alias_cannot_tell_past_a_truncated_catalog():
+    """An alias missing from a truncated catalog may sit past the cut: not 'unlisted'."""
+    cut = models.ModelListing(models=(models.ModelEntry(slug="k3"),), source="live", truncated=True)
+    assert models.is_unlisted_alias("elsewhere", cut) is False
+    assert models.is_unlisted_alias("k3", cut) is False
 
 
 def _reader(monkeypatch, stdout, exit_code=0, binary_missing=False):
@@ -86,6 +116,14 @@ def test_read_probes_live_and_caches(pinned_kimi_bin, monkeypatch):
     assert calls == [["/KIMI", "provider", "list", "--json"]]
     assert reader.read().source == "live" and len(calls) == 1
     assert reader.read(force=True).source == "live" and len(calls) == 2
+
+
+def test_read_carries_truncation(pinned_kimi_bin, monkeypatch):
+    over = _aliases(contract.MODELS_CACHE_MAX_ENTRIES + 1)
+    listing = _reader(monkeypatch, json.dumps(over))[0].read()
+    assert listing.source == "live" and listing.truncated is True
+    whole = _reader(monkeypatch, json.dumps(PAYLOAD))[0].read()
+    assert whole.truncated is False
 
 
 def test_read_reports_none_when_the_probe_fails(pinned_kimi_bin, monkeypatch):

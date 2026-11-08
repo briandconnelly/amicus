@@ -145,6 +145,18 @@ per-change, as its own lead says.
 
 ### Fixed
 
+- `amicus_models(backend="kimi")` lists a catalog of up to 1024 model aliases, up from 256, and
+  says when it lists fewer than the catalog holds (#414). An OpenRouter-backed kimi config with
+  362 aliases was listed as its first 256, with nothing saying the rest existed. The result
+  gains `truncated`, true when `models` stops at amicus's bound on a larger catalog, and
+  `truncation_hint`; `amicus_models(backend="codex")` and `amicus://models/{backend}` carry
+  them too, though codex's served list is far below its own 256-entry bound. Kimi's
+  `reasoning_effort` check now covers every alias up to the new bound: an effort an alias
+  past the 256th does not declare is refused as `invalid_reasoning_effort` instead of being
+  passed to kimi, which ignores it. An alias missing from a truncated catalog is no longer
+  treated as unknown to kimi; its effort is checked against the general effort vocabulary
+  instead. **Breaking**: schema-59, because kimi now refuses some effort values it used to
+  pass through for those aliases; tools/list grows by 210 bytes per profile.
 - `amicus_models(backend="codex")` no longer lists `gpt-5.5` when it falls back to its bundled
   list (`source: "static"`), because the backend stopped serving it to codex. The fallback now
   also has `gpt-reserve` ahead of `gpt-6-luna`, following the served priority order. The list

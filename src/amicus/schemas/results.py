@@ -596,6 +596,13 @@ class ModelInfo(BaseModel):
     supported_reasoning_efforts: list[str] | None = None
 
 
+_CATALOG_TRUNCATED_DESC = (
+    "True when `models` stops at amicus's bound on a larger catalog: an absent slug may still "
+    "be valid."
+)
+publish.KEPT_DESCRIPTIONS.add(_CATALOG_TRUNCATED_DESC)
+
+
 class ModelCatalogResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
     ok: Literal[True] = True
@@ -604,6 +611,8 @@ class ModelCatalogResult(BaseModel):
     models: list[ModelInfo]
     source: Literal["cache", "static", "live", "none"]
     fetched_at: str | None = None
+    truncated: bool = Field(default=False, description=_CATALOG_TRUNCATED_DESC)
+    truncation_hint: str | None = None
     fingerprint: str = FINGERPRINT
     server_version: str | None = server_version_field()
 

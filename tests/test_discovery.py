@@ -13,7 +13,7 @@ from jsonschema import Draft202012Validator
 from tests.support import fakeplugin
 
 from amicus import config, server, tools
-from amicus.plugin import StatusReport
+from amicus.plugin import ModelEntry, ModelListing, StatusReport
 from amicus.registry import BackendRegistry, UnavailableBackend
 from amicus.schemas import field_policy, results
 from amicus.schemas.codes import ERROR_CODES
@@ -319,6 +319,23 @@ async def test_backends_status_probe_failure_is_a_warning_not_a_crash():
     assert any("RuntimeError" in w for w in entry["status"]["warnings"])
 
 
+async def test_models_reports_a_truncated_catalog():
+    """#414: a catalog cut at the backend's entry bound says so, rather than reading as whole."""
+
+    class _Cut:
+        def read(self):
+            return ModelListing(models=(ModelEntry(slug="m0"),), source="live", truncated=True)
+
+    reg = BackendRegistry({"kimi": fakeplugin.make_plugin("kimi", models=_Cut())}, {})
+    async with Client(_app(registry=reg)) as c:
+        res = await c.call_tool("amicus_models", {"backend": "kimi"})
+        tool = next(t for t in await c.list_tools() if t.name == "amicus_models")
+    Draft202012Validator(tool.output_schema).validate(res.structured_content)
+    assert res.structured_content["truncated"] is True
+    hint = res.structured_content["truncation_hint"]
+    assert "these 1 models" in hint and "`model`" in hint and "reasoning_effort" in hint
+
+
 async def test_models_for_available_and_unavailable_backends():
     async with Client(_app(registry=_mixed_registry())) as c:
         codex = await c.call_tool("amicus_models", {"backend": "codex"})
@@ -334,6 +351,8 @@ async def test_models_for_available_and_unavailable_backends():
         }
     ]
     assert codex.structured_content["source"] == "static"
+    assert codex.structured_content["truncated"] is False
+    assert codex.structured_content["truncation_hint"] is None
     # amicus_models on an unavailable backend now reports the same backend_unavailable
     # envelope every paid tool reports, rather than the resource's informational
     # available:false payload (that stays on amicus://models/{backend}).
