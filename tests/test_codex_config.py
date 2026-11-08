@@ -84,6 +84,7 @@ def test_version_parsing_and_support():
     assert cc.version_supported("codex-cli 0.164.0", cfg) is True
     assert cc.version_supported("codex-cli 0.165.0", cfg) is True
     assert cc.version_supported("codex-cli 0.166.0", cfg) is True
+    assert cc.version_supported("codex-cli 0.167.0", cfg) is True
     assert cc.version_supported("codex-cli 0.100.0", cfg) is False
     assert cc.version_supported("?", cfg) is None
 
