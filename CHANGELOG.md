@@ -83,6 +83,17 @@ per-change, as its own lead says.
   the comparison triggers in its description, and collapses SKILL.md's Semantics section to
   pointers at the references that already carry the detail. Nothing about how amicus runs
   changes.
+- codex-cli 0.167 is a supported version, so `amicus_backends` no longer warns on it. 0.167.0 was
+  checked against 0.166.0 at zero spend: `exec --help`, `exec review --help` and `login --help`
+  are identical and `--help` only rewords `agents`; every stderr grammar amicus parses, the
+  logged-out `login status` line, the served model catalog and the model-facing tool catalog of
+  every model in `KNOWN_MODEL_SLUGS`, with and without the disabled features, are identical.
+  Upstream's `SandboxWorkspaceWrite` config struct is unchanged. `features list` makes
+  `deferred_tool_world_state` `stable` and default-on, which describes deferred tool namespaces
+  in the model's context without changing the tool list, moves `respect_system_proxy` to
+  `experimental` (still off), and adds seven features, none on by default; the three features
+  amicus disables on every run are still `stable`, and the four pinned keys and those disables
+  still get past config loading under `--strict-config`. No paid call was made.
 - Kimi Code 2.4 is a supported version, so `amicus_backends` no longer warns on it. 2.4.0 was
   checked against 2.3.0 at zero spend, as `docs/kimi-help/2.4.0/FINDINGS.md` records: `--help`
   only rewords `--auto` and adds the `import-sessions` subcommand, the provider-list shape is
