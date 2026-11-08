@@ -51,15 +51,17 @@ def _label(value: object, cap: int) -> str | None:
     return redaction.sanitize_echo(value) or None
 
 
-def parse_catalog(payload: object) -> list[ModelEntry] | None:
-    """Model aliases from a `kimi provider list --json` payload, or None if it drifted.
-    Reads ONLY the `models` map; the sibling `providers` map is never touched."""
+def parse_catalog(payload: object) -> ModelListing | None:
+    """The live listing of model aliases from a `kimi provider list --json` payload, or None
+    if it drifted. Reads ONLY the `models` map; the sibling `providers` map is never touched.
+    At most MODELS_CACHE_MAX_ENTRIES aliases are read, and `truncated` says when more exist."""
     if not isinstance(payload, dict):
         return None
     entries = payload.get("models")
     if not isinstance(entries, dict):
         return None
     models: list[ModelEntry] = []
+    truncated = len(entries) > contract.MODELS_CACHE_MAX_ENTRIES
     for alias, entry in list(entries.items())[: contract.MODELS_CACHE_MAX_ENTRIES]:
         if not isinstance(alias, str) or not contract.MODEL_SLUG_PATTERN.match(alias):
             continue
@@ -72,7 +74,9 @@ def parse_catalog(payload: object) -> list[ModelEntry] | None:
                 supported_reasoning_efforts=_supported_efforts(fields.get("supportEfforts")),
             )
         )
-    return models or None
+    if not models:
+        return None
+    return ModelListing(models=tuple(models), source="live", truncated=truncated)
 
 
 def probe_catalog(binary: str, timeout_seconds: int = PROBE_TIMEOUT_SECONDS) -> object | None:
@@ -106,9 +110,8 @@ class KimiModels:
             if now - stamped < contract.HELP_CACHE_TTL_SECONDS:
                 return listing
         binary = self._binary.resolve()
-        parsed = parse_catalog(probe_catalog(binary)) if binary is not None else None
-        if parsed:
-            listing = ModelListing(models=tuple(parsed), source="live")
+        listing = parse_catalog(probe_catalog(binary)) if binary is not None else None
+        if listing is not None:
             self._cache = (now, listing)
             return listing
         # A failed probe is transient (auth hiccup, timeout, ...); do not cache "none" for
@@ -117,10 +120,11 @@ class KimiModels:
 
 
 def is_unlisted_alias(model: str | None, listing: ModelListing) -> bool:
-    """True only when a LIVE catalog names aliases and `model` is not one of them: kimi will
-    reject such an alias outright, so an effort verdict for it would be misleading. False
-    for no model (the configured default runs) and for a silent catalog."""
-    if not model or listing.source != "live":
+    """True only when a WHOLE live catalog names aliases and `model` is not one of them: kimi
+    will reject such an alias outright, so an effort verdict for it would be misleading. False
+    for no model (the configured default runs), for a silent catalog, and for a truncated one,
+    where the alias may sit past the cut (#414)."""
+    if not model or listing.source != "live" or listing.truncated:
         return False
     return all(entry.slug != model for entry in listing.models)
 

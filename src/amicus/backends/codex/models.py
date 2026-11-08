@@ -54,14 +54,16 @@ def _label(value: object, cap: int) -> str | None:
     return redaction.sanitize_echo(value) or None
 
 
-def parse_models(raw: object) -> tuple[list[ModelEntry], str | None] | None:
-    """(entries, fetched_at) from the cache's expected shape, or None when it drifted."""
+def parse_models(raw: object) -> ModelListing | None:
+    """The cache listing from the cache's expected shape, or None when it drifted. At most
+    MODELS_CACHE_MAX_ENTRIES entries are read, and `truncated` says when more exist."""
     if not isinstance(raw, dict):
         return None
     entries = raw.get("models")
     if not isinstance(entries, list):
         return None
     models: list[ModelEntry] = []
+    truncated = len(entries) > contract.MODELS_CACHE_MAX_ENTRIES
     for entry in entries[: contract.MODELS_CACHE_MAX_ENTRIES]:
         if not isinstance(entry, dict):
             continue
@@ -80,7 +82,12 @@ def parse_models(raw: object) -> tuple[list[ModelEntry], str | None] | None:
         )
     if not models:
         return None
-    return models, _label(raw.get("fetched_at"), 64)
+    return ModelListing(
+        models=tuple(models),
+        source="cache",
+        fetched_at=_label(raw.get("fetched_at"), 64),
+        truncated=truncated,
+    )
 
 
 class CodexModels:
@@ -98,8 +105,7 @@ class CodexModels:
         )
         parsed = parse_models(raw) if raw is not None else None
         if parsed is not None:
-            models, fetched_at = parsed
-            return ModelListing(models=tuple(models), source="cache", fetched_at=fetched_at)
+            return parsed
         if contract.KNOWN_MODEL_SLUGS:
             return ModelListing(
                 models=tuple(ModelEntry(slug=s) for s in contract.KNOWN_MODEL_SLUGS),

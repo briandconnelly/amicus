@@ -99,3 +99,18 @@ def test_no_static_fallback_reports_none(monkeypatch, tmp_path):
     monkeypatch.setattr(contract, "KNOWN_MODEL_SLUGS", ())
     listing = models.CodexModels(cc.load_config({})).read()
     assert listing.source == "none" and listing.models == ()
+
+
+def test_cache_past_the_bound_is_listed_truncated(monkeypatch, tmp_path):
+    cap = contract.MODELS_CACHE_MAX_ENTRIES
+    (tmp_path / "models_cache.json").write_text(
+        json.dumps({"models": [{"slug": f"m{i}"} for i in range(cap + 1)]})
+    )
+    listing = _reader(monkeypatch, tmp_path).read()
+    assert listing.source == "cache" and listing.truncated is True
+    assert len(listing.models) == cap and listing.models[-1].slug == f"m{cap - 1}"
+    (tmp_path / "models_cache.json").write_text(
+        json.dumps({"models": [{"slug": f"m{i}"} for i in range(cap)]})
+    )
+    whole = _reader(monkeypatch, tmp_path).read()
+    assert whole.truncated is False and len(whole.models) == cap

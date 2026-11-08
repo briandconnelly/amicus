@@ -1544,7 +1544,7 @@
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-58",
+                "default": "amicus/0.1/schema-59",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -4078,7 +4078,7 @@
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-58",
+            "default": "amicus/0.1/schema-59",
             "title": "Fingerprint",
             "type": "string"
           },
@@ -9329,6 +9329,20 @@
                   "static"
                 ],
                 "type": "string"
+              },
+              "truncated": {
+                "description": "True when `models` stops at amicus's bound on a larger catalog: an absent slug may still be valid.",
+                "type": "boolean"
+              },
+              "truncation_hint": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               }
             },
             "required": [

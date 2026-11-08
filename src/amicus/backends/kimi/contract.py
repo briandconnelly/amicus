@@ -148,7 +148,7 @@ SUPPORTED_VERSIONS = frozenset(
 # --- Models --------------------------------------------------------------------------------
 MODEL_SLUG_PATTERN = re.compile(r"^[A-Za-z0-9._/-]{1,128}$")
 MODELS_CACHE_MAX_BYTES = 1_000_000
-MODELS_CACHE_MAX_ENTRIES = 256
+MODELS_CACHE_MAX_ENTRIES = 1024  # an OpenRouter-backed config lists ~360 aliases (#414)
 SUPPORTED_EFFORTS_MAX_ENTRIES = 16
 
 # --- stream-json event surface --------------------------------------------------------------
