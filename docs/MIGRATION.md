@@ -194,6 +194,17 @@ A `null` there means no loaded plugin declares one.
 The `amicus://backends/{backend}` resource is always the full entry.
 `amicus_capabilities(detail="contracts")` is removed: pass `include_tool_details=false` for the same rowless payload, and `detail` now selects only how much each `tool_details` row carries (`summary` is `name`, `cost`, `stability`, `backends`; `full` adds the rest, including `error_codes`).
 
+## Upgrading from 0.11.1
+
+The changes below are the ones an operator running amicus 0.11.1 may have to handle before running 0.12.0.
+`CHANGELOG.md`'s 0.12.0 section lists every user-visible change since 0.11.1, including the ones that require no migration.
+A job result stored by 0.11.1 is still readable: `RESULT_FORMAT` did not move.
+The discovery surface moves to `amicus/0.1/schema-59`, so a fingerprint-aware client re-reads the catalog once.
+`amicus_models` gains `truncated` and `truncation_hint`; `truncated` is true when `models` stops at amicus's bound on a larger catalog, and an absent slug may then still be valid.
+A kimi call naming a catalogued alias past the 256th, with a `reasoning_effort` that alias does not declare, is now refused as `invalid_reasoning_effort` before any spend, where 0.11.1 passed the effort to kimi, which ignored it.
+A kimi run on Kimi Code 2.5 or later now runs with `--environment local`, so a remote `[environments] default` in kimi's config.toml no longer applies to it; a kimi older than 2.5 is unaffected.
+An environment that pins `fastmcp` below 4.1.4 or `mcp` below 2.3 beside amicus has to lift that pin, because amicus now requires both.
+
 ## Upgrading from 0.11.0
 
 Nothing an operator running amicus 0.11.0 has to handle before running 0.11.1.
