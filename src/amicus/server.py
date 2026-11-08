@@ -284,7 +284,7 @@ def create_app(
     )
     app._amicus_state = state  # ty: ignore[unresolved-attribute]
     lowlevel = app._mcp_server
-    lowlevel.get_capabilities = _filter_capabilities(lowlevel.get_capabilities)  # ty: ignore[invalid-assignment]
+    lowlevel.get_capabilities = _filter_capabilities(lowlevel.get_capabilities)
     _install_cache_hints(app)
     _install_static_read_ttl(app)
     _install_meta_strip(app)
