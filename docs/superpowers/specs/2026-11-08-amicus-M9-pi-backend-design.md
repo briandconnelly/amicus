@@ -37,7 +37,7 @@ with the whole prompt on stdin and `cwd` set to the workspace or the delegate wo
 - Read-only tier (consult, review): `--tools read,grep,find,ls`.
 - Write tier (delegate): `--tools read,bash,edit,write,grep,find,ls`.
 - `PI_SYSTEM_PROMPT` is a fixed amicus literal, so argv carries no prompt input.
-  Its value must never be an existing path, because pi reads a file when the value names one.
+  Pi reads a file when the value names an existing path, so the literal contains no `/` and is longer than 255 bytes: it is then a single path component longer than any filesystem allows, and cannot exist relative to any working directory.
 - `--append-system-prompt ""` is required: without it, a user-level `APPEND_SYSTEM.md` reaches the provider.
 - The child environment adds `PI_TELEMETRY=0` and `PI_SKIP_VERSION_CHECK=1` and drops `PI_CODING_AGENT_SESSION_DIR`; provider credentials and `PI_CODING_AGENT_DIR` are inherited, because they are what authenticate the run.
 - The framing, any `instructions_append` section and the structured-output instruction are composed into the stdin prompt the way the kimi adapter composes its prompt file.
@@ -47,9 +47,13 @@ The zero-spend probe on #423 verified each flag's effect on 1.5.0 against a fake
 ## Model and reasoning effort
 
 - `AMICUS_PI_MODEL` is the default model; a call's `model` overrides it.
-- Both take an exact `provider/id`, matched against a row of `pi --list-models` with no fuzzy matching.
+- Both take an exact `provider/id`.
 - With neither set, the call is refused before spending, as `invalid_arguments` on field `model`, because pi's own default comes from ambient settings and fuzzy matching.
-- A model `pi --list-models <id>` does not list exactly is refused before spending as `invalid_model`, and so is a model the catalog could not be read for: pi sends an unknown id anyway, so this check fails closed, unlike kimi's.
+- Before spending, the model is checked in two free steps, because `pi --list-models` lists only models of providers that have credentials:
+  1. `pi auth check --model <model> --json --no-refresh` resolves the provider, including a provider id that itself contains `/`; an unresolvable model is `invalid_model`, and `not_ready` or `invalid` is `pi_auth_required`.
+  2. With the provider ready, `pi --list-models <id>` must hold a row whose provider column and model column join to exactly `<model>`; no exact row, or a listing that could not be read, is `invalid_model`.
+- Pi sends an unknown id anyway, so this check fails closed, unlike kimi's.
+- When the binary cannot be resolved, validation skips both probes, so the run reports `backend_not_found` rather than a model error.
 - `AMICUS_PI_REASONING_EFFORT` is the default effort; a call's `reasoning_effort` overrides it; with neither, `--thinking` is not sent.
 - An effort must be one of `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, and only `off` is accepted for a model whose catalog row says `thinking: no`.
 - Pi clamps an effort the model does not support, so when the final message's `thinkingLevel` differs from the requested one, the result carries a warning naming both.
@@ -76,11 +80,13 @@ The zero-spend probe on #423 verified each flag's effect on 1.5.0 against a fake
 ## Readiness
 
 - Installed: `pi --version` prints a version.
-- Authenticated: `pi auth check --provider <provider> --json --no-refresh`, where `<provider>` is the prefix of `AMICUS_PI_MODEL`; `ready` is true, `not_ready` and `invalid` are false, anything else is unknown.
+- Authenticated: `pi auth check --model <AMICUS_PI_MODEL> --json --no-refresh`; `ready` is true, `not_ready` and `invalid` are false, anything else is unknown.
   With no `AMICUS_PI_MODEL`, authentication is unknown and `amicus_backends` says that calls must pass `model`.
   `--no-refresh` keeps discovery from refreshing, and so writing, OAuth credentials.
 - Supported versions: `(1, 5)`, advisory, overridable by `AMICUS_PI_SUPPORTED_VERSIONS`.
 - The help probe expects every flag in the invocation above in `pi --help`.
+- Pi builds its runtime and loads resources before it handles `--help` or `--list-models`, so every probe that can load resources (`--help`, `--list-models`) carries the same resource-suppression flags as a run: `--no-context-files --no-skills --no-extensions --no-mcp --no-prompt-templates --no-themes --no-approve --offline`.
+- The login hint names pi's interactive `/login <provider>` or the provider's API-key environment variable; pi 1.5.0 has no `pi auth login`.
 
 ## Disclosures
 
@@ -92,10 +98,12 @@ The zero-spend probe on #423 verified each flag's effect on 1.5.0 against a fake
 ## Release
 
 - Rule 20 grows a fourth suite, `tests/test_pi_live.py`, and rule 18's text names no pi exemption.
-  Both change in a governance PR of their own (rule 9), merged before this milestone's PR.
-- `scripts/record_live_gate_evidence.py`, `scripts/check_release_state.py` and `scripts/check_backend_compat.py` learn `pi` in this milestone.
+  Both change in a governance PR of their own (rule 9).
+- This milestone's PR makes the release tooling require the pi suite: `scripts/record_live_gate_evidence.py`, `scripts/check_release_state.py`, the spend notice in `scripts/release.py`, and `scripts/check_backend_compat.py`, including its `watch` streams.
+  Tooling stricter than rule 20's text is harmless, and the reverse is not, so the milestone PR merges first and the governance PR immediately after it, with no release between the two merges.
 - `FINGERPRINT` moves once, in its own commit with the regenerated pins (rule 10); `RESULT_FORMAT` does not move, because no stored result shape changes.
 
 ## Gate
 
-The rule-2 gate green; `tests/test_pi_contract.py` passes against the 1.5.0 captures after a perturbed capture fails it; the four live suites pass under rule 5 on the branch head, run by the maintainer.
+The rule-2 gate green; `tests/test_pi_contract.py` passes against the 1.5.0 captures after a perturbed capture fails it; `tests/test_pi_live.py` passes under rule 5 on the branch head, run by the maintainer.
+The four-suite requirement binds the next release, under rule 20, not this milestone.
