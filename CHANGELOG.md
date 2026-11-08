@@ -94,6 +94,13 @@ per-change, as its own lead says.
   `experimental` (still off), and adds seven features, none on by default; the three features
   amicus disables on every run are still `stable`, and the four pinned keys and those disables
   still get past config loading under `--strict-config`. No paid call was made.
+- Kimi Code 2.5 is a supported version, so `amicus_backends` no longer warns on it. 2.5.0 was
+  checked against 2.4.0 at zero spend, and 2.5.2's `--help` against 2.5.0's, as
+  `docs/kimi-help/2.5.0/FINDINGS.md` records: `--help` is unchanged, the print path still
+  receives `--skills-dir` and `--agent-file` as before, and the provider-list shape is
+  unchanged. 2.5 adds a configurable remote `[environments]` default that print mode honors
+  (#413). The rule-18 session-store re-check found no way to switch the store off. The kimi live
+  gate was not run.
 - Kimi Code 2.4 is a supported version, so `amicus_backends` no longer warns on it. 2.4.0 was
   checked against 2.3.0 at zero spend, as `docs/kimi-help/2.4.0/FINDINGS.md` records: `--help`
   only rewords `--auto` and adds the `import-sessions` subcommand, the provider-list shape is
