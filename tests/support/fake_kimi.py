@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """A stand-in `kimi` executable for end-to-end tests without spend (stdlib only).
 
-Probes: `--version` prints `0.41.0`; `--help` lists every flag the contract sends or
-refuses; `provider list --json` prints FAKE_KIMI_PROVIDERS (default: one provider and one
-alias `k3` declaring low/medium/high). A `--prompt` run parses the pointer: it copies the
-handshake prompt file to FAKE_KIMI_PROMPT_FILE, writes FAKE_KIMI_ANSWER (default: a
+Probes: `--version` prints FAKE_KIMI_VERSION (default `0.41.0`); `--help` lists every flag
+the contract sends or refuses; `provider list --json` prints FAKE_KIMI_PROVIDERS (default:
+one provider and one alias `k3` declaring low/medium/high). Like the real CLI, a version
+before 2.5 rejects the hidden `--environment` flag at argument parsing (`error: unknown
+option`, exit 1) before doing anything else. A `--prompt` run parses the pointer: it copies
+the handshake prompt file to FAKE_KIMI_PROMPT_FILE, writes FAKE_KIMI_ANSWER (default: a
 structured review/consult JSON, with any `{PROMPT_PATH}` replaced by the handshake prompt's
 path, `{PROMPT_DIR}` by its directory and `{PROMPT_PATH_ESCAPED}` by its `\\/`-escaped JSON
 spelling; FAKE_KIMI_STDERR takes `{PROMPT_PATH}` too) to the answer file the pointer names
@@ -87,10 +89,10 @@ def _scripted_events() -> str | None:
     return os.environ.get("FAKE_KIMI_EVENTS")
 
 
-def main(argv: list[str]) -> int:
-    _record(argv)
+def _probe(argv: list[str], version: str) -> int | None:
+    """Answer a free probe or a parse-time rejection; None for a `--prompt` run."""
     if argv == ["--version"]:
-        print("0.41.0")
+        print(version)
         return 0
     if argv == ["--help"]:
         # FAKE_KIMI_HELP_EXIT makes the probe itself fail while STILL printing its help, so
@@ -100,9 +102,21 @@ def main(argv: list[str]) -> int:
     if argv == ["provider", "list", "--json"]:
         print(os.environ.get("FAKE_KIMI_PROVIDERS", _DEFAULT_PROVIDERS))
         return 0
+    major, minor = (int(part) for part in version.split(".")[:2])
+    if "--environment" in argv and (major, minor) < (2, 5):
+        print("error: unknown option '--environment'", file=sys.stderr)
+        return 1
     if "--prompt" not in argv:
         print("error: unknown command", file=sys.stderr)
         return 2
+    return None
+
+
+def main(argv: list[str]) -> int:
+    _record(argv)
+    probed = _probe(argv, os.environ.get("FAKE_KIMI_VERSION", "0.41.0"))
+    if probed is not None:
+        return probed
     pointer = argv[argv.index("--prompt") + 1]
     prompt_match = _PROMPT_POINTER.search(pointer)
     if prompt_match and os.environ.get("FAKE_KIMI_PROMPT_FILE"):

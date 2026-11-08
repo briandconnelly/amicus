@@ -183,6 +183,21 @@ per-change, as its own lead says.
   that shape: an argument-validation record carrying one is withheld whole rather than
   rendered, and FastMCP's own summary is rendered as before. The tool surface and the
   fingerprint are unchanged.
+- A kimi run on Kimi Code 2.5 or later now starts with `--environment local` (#413). Kimi
+  Code 2.5.0 added remote environments, and a print-mode session binds to the
+  `[environments] default` in the user's kimi config.toml when creation names none, so a user
+  whose default was an SSH, container or launcher target would have had an amicus run execute
+  its tools there, in that entry's `defaultCwd`, rather than in the workspace or the delegate
+  worktree amicus diffs. With `local` named, kimi does not read `[environments]` and runs in
+  the directory amicus starts it in. The flag is hidden from `kimi --help`, so amicus asks
+  `kimi --version` of the binary on every run (never cached) and omits the flag only on a
+  version it reads as older than 2.5, which rejects it at argument parsing; an unreadable
+  version still gets the flag, so an older kimi refuses that run as `cli_contract_changed`
+  before any model call. `amicus_backends(detail="full")` now says this in the kimi entry's
+  `implicit_context`, which also names the `KIMI_CODE_TRUST_WORKSPACE` scrub (#354) and a
+  user-level kimi setting amicus cannot override: `[workspace] require_trust = false`, added in
+  Kimi Code 2.5, trusts every workspace, so the repository's project-level MCP servers start
+  anyway. The tool surface and the fingerprint are unchanged.
 
 ## [0.11.1] - 2026-10-22
 

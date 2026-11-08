@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 from tests.support import kimifixtures as kf
 
+from amicus.backends import kimi as kimi_pkg
 from amicus.backends.kimi import cli, contract
 from amicus.schemas import instructions as ins
 from amicus.sdk.backend.protocol import AgentBackend, OutcomeInspector, RunOutcome, RunRequest
@@ -292,6 +293,69 @@ async def test_no_paid_run_inherits_the_workspace_trust_override(
         assert contract.WORKSPACE_TRUST_ENV not in p.env
         assert p.env["AMICUS_TEST_SURVIVOR"] == "kept"
     assert os.environ[contract.WORKSPACE_TRUST_ENV] == "1"
+
+
+@pytest.mark.parametrize(
+    "kw",
+    [
+        {"kind": "consult"},
+        {"kind": "review"},
+        {"kind": "delegate", "prompt": "do"},
+        {"kind": "delegate", "prompt": "do", "access": "read-only"},
+    ],
+    ids=["consult", "review", "delegate", "delegate-read-only"],
+)
+@pytest.mark.parametrize(
+    ("version", "pinned"),
+    [("2.5.0", True), ("2.5.2", True), (None, True), ("2.4.0", False), ("0.41.0", False)],
+)
+async def test_every_paid_run_on_kimi_2_5_is_pinned_to_the_local_environment(
+    pinned_kimi_bin, tmp_path, kw, version, pinned
+):
+    """#413: Kimi Code 2.5 binds a print-mode session to the user's `[environments] default`
+    unless creation names one, which could run kimi's tools on a remote target in that
+    entry's defaultCwd. Every run kind pins `local`; an unknown version still pins, because
+    a kimi that predates the flag rejects it before any model call."""
+    seen: list[str] = []
+    _, backend = kf.make_backend({"AMICUS_STATE_DIR": str(tmp_path / "state")})
+    backend._version_probe = lambda binary: seen.append(binary) or version  # type: ignore[method-assign]
+    async with backend.prepare(_req(cwd=str(tmp_path), **kw)) as p:
+        argv = list(p.argv)
+        assert p.cwd == str(tmp_path)
+        assert contract.ENVIRONMENT_FLAG not in p.dropped_flags
+    assert seen == ["/KIMI"]  # the resolved binary the run spawns, probed per run
+    if pinned:
+        assert argv[argv.index(contract.ENVIRONMENT_FLAG) + 1] == contract.LOCAL_ENVIRONMENT
+    else:
+        assert contract.ENVIRONMENT_FLAG not in argv
+    assert contract.ENVIRONMENT_CWD_FLAG not in argv
+
+
+async def test_the_version_probe_is_the_cli_probe_and_runs_off_the_event_loop(
+    pinned_kimi_bin, tmp_path, monkeypatch
+):
+    """Unpinned, the backend asks `kimi --version` of the binary it will spawn, on every
+    run: a cached answer could outlive an upgrade from 2.4 to 2.5 and drop the pin."""
+    import threading
+
+    calls: list[tuple[str, bool]] = []
+    main = threading.get_ident()
+
+    def probe(binary, timeout_seconds=10):
+        calls.append((binary, threading.get_ident() != main))
+        return "2.5.0"
+
+    monkeypatch.setattr(cli, "kimi_version", probe)
+    plugin = kimi_pkg.plugin(
+        {"AMICUS_KIMI_BIN": "/KIMI", "AMICUS_STATE_DIR": str(tmp_path / "state")}
+    )
+    plugin.help_probe.flag_support = lambda force=False: kf.ALL_FLAGS  # type: ignore[method-assign]
+    plugin.models.read = lambda force=False: kf.SILENT  # type: ignore[method-assign]
+    backend = plugin.backend
+    for _ in range(2):
+        async with backend.prepare(_req(cwd=str(tmp_path))) as p:
+            assert contract.ENVIRONMENT_FLAG in p.argv
+    assert calls == [("/KIMI", True), ("/KIMI", True)]
 
 
 _NO_FLAGS = FlagSupport(supported=frozenset(), help_parsed=True)

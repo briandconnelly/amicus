@@ -72,3 +72,20 @@ def test_plugin_factory_reads_the_process_env_by_default(pinned_kimi_bin, monkey
 def test_kimi_loads_beside_the_other_in_tree_plugins():
     reg = registry.BackendRegistry.load(("codex", "kimi", "claude"), entry_points=())
     assert set(reg.ids) == {"codex", "kimi", "claude"} and reg.unavailable == {}
+
+
+def test_implicit_context_discloses_the_environment_pin_and_the_trust_setting(pinned_kimi_bin):
+    """#413: amicus_backends says where a kimi run's tools execute on 2.5+, and names the one
+    user-level kimi setting that undoes the KIMI_CODE_TRUST_WORKSPACE scrub (#354), which
+    amicus cannot override per run."""
+    plugin, _ = kf.make_backend({})
+    text = " ".join(plugin.contract.implicit_context_disclosure.split())
+    assert text.startswith(contract.SKILLS_DISCOVERY_FACT_FULL), "the skills fact must survive"
+    assert "--environment local" in text and "[environments] default" in text
+    assert "2.5" in text
+    [trust] = [s for s in text.split(". ") if "require_trust = false" in s]
+    assert "every workspace" in trust
+    assert contract.WORKSPACE_TRUST_ENV in text and "project-level MCP servers" in text
+    assert "does not override" in text
+    for phrase in contract.FORBIDDEN_SURFACE_PHRASES:
+        assert phrase not in text
