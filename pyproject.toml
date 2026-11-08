@@ -103,7 +103,7 @@ ignore = [
 include = ["src"]
 
 [tool.ty.rules]
-unresolved-import = "warn"
+import-not-found = "warn"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
