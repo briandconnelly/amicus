@@ -51,6 +51,34 @@ PROMPT_MODE_INCOMPATIBLE_FLAGS = (
     "--continue",
 )
 
+# --- The local-environment pin (#413) --------------------------------------------------------
+# Kimi Code 2.5.0 added remote environments (MoonshotAI/kimi-code#4062): a session can run its
+# tools on an SSH host, a container or a custom launcher, and `[environments] default` in the
+# user's config.toml names the one a session binds to "when creation does not specify one — a
+# cold start, print mode, or an API create" (docs/en/guides/remote-environment.md:54 at
+# @moonshot-ai/kimi-code@2.5.0). Unpinned, an amicus run would execute there, in that entry's
+# defaultCwd, not in the workspace or the delegate worktree amicus diffs.
+# `--environment local` names the binding at creation. It is hidden from `kimi --help`
+# (apps/kimi-code/src/cli/commands.ts:131-136), so it cannot be help-gated and is gated on the
+# version instead. For `local`, session creation does not read [environments] at all
+# (packages/agent-core-v2/src/app/sessionManager/sessionManagerService.ts:115-119), and with no
+# cwd override the session gets no environment binding, as on a config without [environments]:
+# it runs in the workspace rooted at the process cwd, which the runner sets
+# (workspace/sessionLifecycle/sessionLifecycleService.ts:136-137 and 382;
+# apps/kimi-code/src/cli/v2/run-v2-print.ts:154). The same files are unchanged at 2.5.1 and
+# 2.5.2. Observed on 2.5.0 and 2.5.2 with a scratch config whose default was a command
+# launcher and whose provider was a local fake: unpinned, kimi started the launcher and failed
+# before any model request; pinned, a Bash `pwd` ran locally and printed the run's cwd.
+# 2.4.0 rejects the flag at argument parsing ("error: unknown option '--environment'", exit 1,
+# before any model call), so an unknown version still sends it: that fails closed, where
+# omitting it would not.
+ENVIRONMENT_FLAG = "--environment"
+LOCAL_ENVIRONMENT = "local"  # reserved upstream: no [environments] entry can take this id
+ENVIRONMENT_FLAG_MIN_VERSION = (2, 5)
+# Never sent: it overrides a remote entry's defaultCwd, and a local session's cwd is the
+# process cwd the runner already sets.
+ENVIRONMENT_CWD_FLAG = "--environment-cwd"
+
 # Free probes (no model call).
 VERSION_ARGS = ("--version",)
 HELP_ARGS = ("--help",)
@@ -146,6 +174,24 @@ SKILLS_DISCOVERY_FACT_FULL = (
     + " Skill names and descriptions are exposed to the model up front, so that content can "
     "be sent even if your prompt never mentions it. The isolation option does not suppress "
     "any of it: kimi's built-in skills always load, and AGENTS.md is read regardless."
+)
+WORKSPACE_TRUST_FACT = (
+    f"Amicus drops {WORKSPACE_TRUST_ENV} from every run, so kimi treats the fresh "
+    "directory a run starts in as untrusted and does not start the repository's "
+    "project-level MCP servers (`.mcp.json`, `.kimi-code/mcp.json`), each a command kimi "
+    "would run. A user-level `[workspace] require_trust = false` in kimi's config.toml (Kimi "
+    "Code 2.5 and later) trusts every workspace, so those servers start anyway; amicus does "
+    "not override that setting."
+)
+LOCAL_ENVIRONMENT_FACT = (
+    f"On Kimi Code 2.5 and later, amicus starts every run with `{ENVIRONMENT_FLAG} "
+    f"{LOCAL_ENVIRONMENT}`, so an `[environments] default` in kimi's config.toml cannot move "
+    "the run's tools to a remote SSH, container or launcher target: they run on this machine, "
+    "in the directory amicus starts kimi in. When amicus cannot read kimi's version it sends "
+    "the flag anyway, and a kimi that predates it refuses the run before any model call."
+)
+IMPLICIT_CONTEXT_DISCLOSURE = (
+    f"{SKILLS_DISCOVERY_FACT_FULL} {WORKSPACE_TRUST_FACT} {LOCAL_ENVIRONMENT_FACT}"
 )
 REDACTION_LIMIT_FACT = (
     "Your inputs are sent raw and unredacted. Secret redaction is best-effort and covers "
@@ -256,7 +302,7 @@ CONTRACT = _pc.BackendContract(
     forbidden_surface_phrases=FORBIDDEN_SURFACE_PHRASES,
     supported_features=frozenset({"delegate", "model_validation", "empty_response_detection"}),
     readonly_honesty_statement=READ_ONLY_CONFIDENTIALITY_LIMIT,
-    implicit_context_disclosure=SKILLS_DISCOVERY_FACT_FULL,
+    implicit_context_disclosure=IMPLICIT_CONTEXT_DISCLOSURE,
     structured_output="prompt_append",
     model_catalog=_pc.ModelCatalog(
         strategy="live_probe",

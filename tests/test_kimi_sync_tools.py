@@ -33,6 +33,7 @@ def app(tmp_path, fake_kimi, monkeypatch):
         "FAKE_KIMI_PROVIDERS",
         "FAKE_KIMI_SLEEP",
         "FAKE_KIMI_ANSWER_MODE",
+        "FAKE_KIMI_VERSION",
     ):
         monkeypatch.delenv(key, raising=False)
     monkeypatch.setattr(lifecycle, "SYNC_POLL_INTERVAL_S", 0.02)
@@ -92,6 +93,7 @@ async def test_consult_end_to_end_in_a_repo(app, tmp_path, repo):
     [run] = _runs(tmp_path)
     argv = run["argv"]
     assert argv[0] == "--prompt" and "--agent-file" in argv and "--add-dir" not in argv
+    assert "--environment" not in argv  # the fake reports 0.41.0, which predates the flag
     assert argv[argv.index("--output-format") + 1] == "stream-json"
     assert argv[argv.index("--model") + 1] == "k3"
     assert run["env"] == {
@@ -241,6 +243,32 @@ async def test_review_and_delegate_end_to_end(app, tmp_path, repo, monkeypatch):
     assert "--agent-file" not in argv and "write your final answer to" in argv[1]
 
 
+@pytest.mark.parametrize(("version", "pinned"), [("2.5.0", True), ("2.4.0", False)])
+async def test_a_delegate_on_kimi_2_5_is_pinned_to_the_local_environment(
+    app, tmp_path, repo, monkeypatch, version, pinned
+):
+    """#413, end to end: the worker probes the fake's version and pins `--environment local`
+    on 2.5, so the edit lands in the worktree amicus diffs; on 2.4 it omits the flag, which
+    the fake (like the real 2.4) would reject."""
+    monkeypatch.setenv("FAKE_KIMI_VERSION", version)
+    monkeypatch.setenv("FAKE_KIMI_WRITE", "b.py")
+    monkeypatch.setenv("FAKE_KIMI_ANSWER", "Added b.py.")
+    async with Client(app) as c:
+        res = await c.call_tool(
+            "amicus_delegate", {"backend": "kimi", "task": "add b.py", "workspace_root": str(repo)}
+        )
+    body = res.structured_content
+    assert body["ok"] is True and "+written by fake kimi" in body["diff"]
+    assert not (repo / "b.py").exists()
+    [run] = _runs(tmp_path)
+    argv = run["argv"]
+    if pinned:
+        assert argv[argv.index("--environment") + 1] == "local"
+    else:
+        assert "--environment" not in argv
+    assert "--environment-cwd" not in argv
+
+
 async def test_empty_answer_is_an_empty_response_error(app, tmp_path, repo, monkeypatch):
     monkeypatch.setenv("FAKE_KIMI_ANSWER", "")
     async with Client(app) as c:
@@ -335,6 +363,8 @@ async def test_discovery_tools_read_the_fake(app, tmp_path, repo):
     assert entry["options"][0]["allowed_values"] == ["inherit", "ignore-skills"]
     assert "handshake" in entry["carriers"] and "Kimi provider" in entry["egress"]
     assert "session files" in entry["carriers"] and "session files" in entry["readonly_honesty"]
+    assert "--environment local" in entry["implicit_context"]
+    assert "require_trust = false" in entry["implicit_context"]
     body = models.structured_content
     assert body["source"] == "live" and [m["slug"] for m in body["models"]] == ["k3"]
     assert body["models"][0]["supported_reasoning_efforts"] == ["low", "medium", "high"]

@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from amicus.backends.kimi import contract, normalize
+from amicus.backends.kimi.config import parse_version
 from amicus.sdk.backend.protocol import ClassifiedFailure, RepairHint
 from amicus.sdk.conventions import preflight
 from amicus.sdk.core import redaction, runtime
@@ -81,10 +82,12 @@ def build_exec_command(
     agent_file_path: str | None = None,
     skills_dir: str | None = None,
     flag_support: FlagSupport,
+    pin_local_environment: bool,
 ) -> tuple[list[str], list[str]]:
     """The `kimi -p` invocation. Returns (argv, dropped_help_gated_flags). cwd is not a kimi
     flag; the runner sets it on the subprocess. --add-dir and the prompt-mode-incompatible
-    flags are never sent."""
+    flags are never sent. `pin_local_environment` (see `pins_local_environment`) adds
+    `--environment local`, which is version-gated, never help-gated, so never dropped."""
     if read_only and not agent_file_path:
         raise ValueError(
             "read-only runs require an agent file: the tools allowlist is the only thing "
@@ -97,6 +100,8 @@ def build_exec_command(
         )
     tokens = [kimi_bin, *contract.EXEC_SUBCOMMAND, contract.PROMPT_FLAG, prompt_pointer]
     tokens += [contract.OUTPUT_FORMAT_FLAG, contract.OUTPUT_FORMAT_JSON]
+    if pin_local_environment:
+        tokens += [contract.ENVIRONMENT_FLAG, contract.LOCAL_ENVIRONMENT]
     if agent_file_path:
         tokens += [contract.AGENT_FILE_FLAG, agent_file_path]
     if skills_dir:
@@ -104,6 +109,15 @@ def build_exec_command(
     if model:
         tokens += [contract.MODEL_FLAG, model]
     return _gate_optional(tokens, flag_support)
+
+
+def pins_local_environment(version: str | None) -> bool:
+    """Whether a run on the kimi reporting `version` gets `--environment local` (#413): every
+    version from 2.5 on, and any version amicus cannot read. Only a kimi known to predate the
+    flag goes without it, because one that predates it rejects it at argument parsing, before
+    any model call, while one that has it and goes without may run on a remote target."""
+    parsed = parse_version(version)
+    return parsed is None or parsed >= contract.ENVIRONMENT_FLAG_MIN_VERSION
 
 
 def build_run_env(base: dict[str, str], reasoning_effort: str | None) -> dict[str, str]:

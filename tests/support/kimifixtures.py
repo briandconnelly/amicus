@@ -45,9 +45,12 @@ def make_backend(
     environ: dict | None = None,
     flags: FlagSupport = ALL_FLAGS,
     catalog: ModelListing | None = SILENT,
+    version: str | None = "0.41.0",
 ):
-    """(plugin, backend) with the help probe pinned, the binary pinned to /KIMI and the
-    model catalog pinned (default: silent). `catalog=None` leaves the live reader alone."""
+    """(plugin, backend) with the help probe pinned, the binary pinned to /KIMI, the
+    model catalog pinned (default: silent) and the run-time version probe pinned (default:
+    0.41.0, the sibling capture's version, which predates `--environment`).
+    `catalog=None` leaves the live reader alone."""
     env = {"AMICUS_KIMI_BIN": "/KIMI", **(environ or {})}
     plugin = kimi_pkg.plugin(env)
     probe: HelpProbe = plugin.help_probe
@@ -56,6 +59,7 @@ def make_backend(
         plugin.models.read = lambda force=False: catalog  # type: ignore[method-assign]
     backend = plugin.backend
     assert isinstance(backend, KimiBackend)
+    backend._version_probe = lambda binary: version  # type: ignore[method-assign]
     return plugin, backend
 
 

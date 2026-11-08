@@ -28,6 +28,7 @@ def _cmd(**kw):
         prompt_pointer=cli.build_prompt_pointer(RO, read_only=True),
         agent_file_path=RO["agent"],
         flag_support=ALL,
+        pin_local_environment=False,
     )
     base.update(kw)
     return cli.build_exec_command(**base)
@@ -83,6 +84,54 @@ def test_a_supported_flag_consumes_its_value_so_an_alias_cannot_alter_argv():
     assert cmd[-2:] == ["--model", "--skills-dir"] and dropped == ["--skills-dir"]
     cmd, dropped = _cmd(model="--skills-dir", flag_support=NO_MODEL)
     assert "--model" not in cmd and "--skills-dir" not in cmd and dropped == ["--model"]
+
+
+def test_the_local_environment_pin_rides_argv_and_is_never_help_gated():
+    """#413: `--environment` is hidden from `kimi --help`, so a help probe never lists it;
+    it must ride argv with its value whenever the caller pins, and never be reported
+    dropped, whatever the probe saw."""
+    for fs in (ALL, NO_MODEL, FlagSupport(frozenset(), help_parsed=True)):
+        cmd, dropped = _cmd(pin_local_environment=True, model="k3", flag_support=fs)
+        i = cmd.index(contract.ENVIRONMENT_FLAG)
+        assert cmd[i + 1] == contract.LOCAL_ENVIRONMENT == "local"
+        assert contract.ENVIRONMENT_FLAG not in dropped
+    assert contract.ENVIRONMENT_FLAG not in contract.HELP_GATED_FLAGS
+    assert contract.ENVIRONMENT_FLAG not in contract.ALWAYS_SEND_FLAGS
+    # Never the cwd override: a local session's cwd is the process cwd the runner sets.
+    assert contract.ENVIRONMENT_CWD_FLAG not in cmd
+    off, _ = _cmd(pin_local_environment=False)
+    assert contract.ENVIRONMENT_FLAG not in off and "local" not in off
+
+
+@pytest.mark.parametrize(
+    ("version", "pinned"),
+    [
+        ("2.5.0", True),
+        ("2.5.2", True),
+        ("2.6.0", True),
+        ("3.0.0", True),
+        ("2.5.0-canary.20261104024245-8fc5e22", True),
+        ("kimi 2.5.1\n", True),
+        ("2.4.0", False),
+        ("2.4.1", False),
+        ("2.0.2", False),
+        ("0.43.1", False),
+        ("0.41.0", False),
+        # Unknown: send it. A kimi that predates the flag rejects it at argument parsing,
+        # before any model call, so sending fails closed; omitting would not.
+        (None, True),
+        ("", True),
+        ("garbage", True),
+    ],
+)
+def test_the_local_environment_pin_is_omitted_only_on_a_known_older_kimi(version, pinned):
+    assert cli.pins_local_environment(version) is pinned
+
+
+def test_a_pre_2_5_kimi_rejecting_the_pin_is_contract_drift():
+    # The exact stderr kimi 2.4.0 printed for `--environment local` (exit 1, no model call).
+    f = _classify(_run(stderr="error: unknown option '--environment'", exit_code=1))
+    assert f.code == "cli_contract_changed"
 
 
 def test_an_oversized_pointer_is_refused():

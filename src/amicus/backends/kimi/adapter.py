@@ -5,6 +5,7 @@ gate is the adapter's own; empty answers are an outcome inspection)."""
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import os
 import shutil
@@ -26,7 +27,7 @@ from amicus.sdk.backend.protocol import (
 from amicus.sdk.core import pathalias, runtime
 
 if TYPE_CHECKING:  # pragma: no cover
-    from collections.abc import AsyncGenerator
+    from collections.abc import AsyncGenerator, Callable
 
     from amicus.backends.kimi.binary import KimiBinary
     from amicus.backends.kimi.config import KimiConfig
@@ -41,6 +42,12 @@ EMPTY_RESPONSE_DETAIL = (
 )
 
 
+def _installed_version(binary: str) -> str | None:
+    # Resolved through the module at call time, so a test that patches cli.kimi_version
+    # reaches a backend built before the patch.
+    return cli.kimi_version(binary)
+
+
 class KimiBackend:
     def __init__(
         self, config: KimiConfig, binary: KimiBinary, help_probe: HelpProbe, models: KimiModels
@@ -49,6 +56,9 @@ class KimiBackend:
         self._binary = binary
         self._help_probe = help_probe
         self._models = models
+        # Asked of the resolved binary on every run, never cached: a cached answer could
+        # outlive an upgrade from 2.4 to 2.5 and leave a run unpinned (#413).
+        self._version_probe: Callable[[str], str | None] = _installed_version
 
     # --- resolution the adapter and the classifier must agree on ----------------------------
     def _model(self, request: RunRequest) -> str | None:
@@ -184,6 +194,7 @@ class KimiBackend:
         if request.schema is not None:
             prompt_text += schema_instruction(request.schema)
         isolation = request.isolation or self._config.isolation
+        version = await asyncio.to_thread(self._version_probe, resolved_bin)
         handshake_dir = cli.create_handshake_dir()
         try:
             paths = cli.write_handshake(handshake_dir, prompt_text, read_only=read_only)
@@ -195,6 +206,7 @@ class KimiBackend:
                 agent_file_path=paths.get("agent"),
                 skills_dir=kimi_config.skills_dir_for(isolation, self._config.state_dir),
                 flag_support=self._help_probe.flag_support(),
+                pin_local_environment=cli.pins_local_environment(version),
             )
             yield PreparedRun(
                 argv=tuple(cmd),
