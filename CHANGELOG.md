@@ -20,6 +20,19 @@ per-change, as its own lead says.
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-11-08
+
+This release moves the discovery surface from `amicus/0.1/schema-58`, what 0.11.1 shipped, to
+`amicus/0.1/schema-59`, labelled **Breaking**: `amicus_models` gains `truncated` and
+`truncation_hint`, and kimi now refuses a `reasoning_effort` that an alias past the 256th does
+not declare, where 0.11.1 passed it to kimi, which ignored it (#414). `RESULT_FORMAT` stays 9,
+so a job result 0.11.1 stored can still be delivered. A kimi run on Kimi Code 2.5 or later is
+pinned to kimi's local environment, so a remote `[environments] default` cannot move it off the
+workspace (#413). It also moves amicus onto fastmcp 4.1 and mcp 2.3 for the FastMCP advisories
+listed under Security, makes codex-cli 0.164 through 0.167 and Kimi Code 2.4 and 2.5 supported
+versions, and revises the `collaborating-with-amicus` skill after a review on 2026-11-01. It was
+checked against codex-cli 0.167.0, Kimi Code 2.5.2 and Claude Code 2.1.319.
+
 ### Added
 
 - `scripts/check_backend_compat.py compare --backend codex --old-bin PATH --new-bin PATH`
@@ -1621,7 +1634,8 @@ per-change rather than net, so they also name intermediate states that no releas
 - The tagged publish path to pypi.org has never run. Only the TestPyPI dispatch path has been exercised.
 - Eval scenario S6 in `skills/collaborating-with-amicus/tests/scenarios.md` passed on one run (status: `pass`, validated by that run alone); an M7 follow-up run against the current skill text did not isolate the still-open F3 finding, so F3 remains open. S7 (real-host approval friction) has failed both of its recorded runs (status: `fail`); an M7 zero-spend recheck reached neither a pass nor a fail and is recorded as inconclusive, so it does not move S7's status. See their `status` fields and ADR 0012.
 
-[Unreleased]: https://github.com/briandconnelly/amicus/compare/v0.11.1...HEAD
+[Unreleased]: https://github.com/briandconnelly/amicus/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/briandconnelly/amicus/compare/v0.11.1...v0.12.0
 [0.11.1]: https://github.com/briandconnelly/amicus/compare/v0.11.0...v0.11.1
 [0.11.0]: https://github.com/briandconnelly/amicus/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/briandconnelly/amicus/compare/v0.9.0...v0.10.0
