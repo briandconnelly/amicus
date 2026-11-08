@@ -569,11 +569,14 @@ def test_a_file_that_cannot_be_read_is_unreadable_never_absent(tmp_path, monkeyp
             return real(*args, **kwargs)
         raise OSError(errno.EIO, "injected")
 
-    monkeypatch.setattr(run_mod.os, where, failing)
     prepared = PreparedRun(
         argv=("x",), env={}, cwd=str(tmp_path), artifact_paths={"answer": str(path)}
     )
-    texts, refused = run_mod._read_artifacts(prepared)
+    # Scoped to the one call: `os` is the real module, and pytest's own capture calls
+    # os.fstat when the test body ends (pytest 9.2), before function-scope undo runs.
+    with monkeypatch.context() as patch:
+        patch.setattr(run_mod.os, where, failing)
+        texts, refused = run_mod._read_artifacts(prepared)
     assert texts == {} and refused == {"answer": run_mod.Refusal("unreadable")}
 
 
