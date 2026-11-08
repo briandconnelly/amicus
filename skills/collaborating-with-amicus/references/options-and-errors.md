@@ -27,6 +27,9 @@ Optional parameters, duplicate-spend protection, and what to do with an error en
   the refused path, `git rev-parse --path-format=absolute --git-common-dir` must print a `.git`
   directory whose parent is one of `error.candidate_roots` or lies inside one. A message naming a
   checkout is not that confirmation.
+- **Never record an `outside_roots` refusal of a worktree as "worktrees are unsupported."** The
+  refusal is about the client's roots: a worktree inside them is accepted as `workspace_root`
+  directly, and so is any absolute directory when amicus gets no roots from the client.
 - **Review a confirmed worktree's commits from its rooted checkout with `scope=commit`, never
   `scope=branch` or `working_tree`**, and say in `extra_context` that files the backend reads
   from disk are that checkout's versions.

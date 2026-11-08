@@ -20,6 +20,15 @@ per-change, as its own lead says.
 
 ## [Unreleased]
 
+### Changed
+
+- The `workspace_outside_roots` message for a `workspace_root` in a linked git worktree now says
+  first that the refusal is about the client's roots, not about worktrees, and that a worktree
+  inside the roots is accepted directly, before naming the `scope=commit` recovery (#406). The
+  `collaborating-with-amicus` skill says the same, so an agent does not record "worktrees are
+  unsupported" as a rule. The code, the `outside_roots` token and the absent repair are
+  unchanged.
+
 ## [0.12.0] - 2026-11-08
 
 This release moves the discovery surface from `amicus/0.1/schema-58`, what 0.11.1 shipped, to
