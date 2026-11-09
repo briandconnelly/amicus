@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import contextlib
+import copy
 import hashlib
 import importlib
 import json
@@ -36,6 +37,7 @@ PROFILES: dict[str, dict[str, str]] = {
     "claude": {"AMICUS_BACKENDS": "claude"},
 }
 _FASTMCP_META_KEY = "fastmcp"
+CONTEXTUAL_RULES_KEY = "contextual"
 _SETLIKE_ARRAY_KEYS = frozenset({"enum", "required"})
 RELEASE_VARIABLE_EXCLUDE = frozenset({"version", "server_version"})
 SELF_REFERENTIAL_EXCLUDE = frozenset({"fingerprint", "surface_digest"})
@@ -61,17 +63,21 @@ def app_for_profile(profile: str) -> FastMCP:
 
 
 def repair_rules() -> dict[str, Any]:
-    """The per-code repair contract (ADR 0044): the table with no plugin under "default",
-    and each in-tree backend's own under its id, in every profile, since no table depends
-    on which backends a profile enables. Each factory gets an empty environ, so no operator
-    setting reaches it. What a factory resolves on PATH never reaches a table: the committed
-    snapshot is rendered outside pytest, where the real CLIs may be on PATH, and the golden
-    test compares it under the conftest guard, where none is."""
+    """The repair contract (ADR 0044): the table with no plugin under "default", each
+    in-tree backend's own under its id, and the per-call policy under "contextual", in
+    every profile, since no table depends on which backends a profile enables. Each factory
+    gets an empty environ, so no operator setting reaches it. What a factory resolves on
+    PATH never reaches a table: the committed snapshot is rendered outside pytest, where the
+    real CLIs may be on PATH, and the golden test compares it under the conftest guard,
+    where none is."""
     rules: dict[str, Any] = {"default": errors.repair_contract()}
     for backend_id, target in IN_TREE.items():
         module_name, _, attr = target.partition(":")
         factory = getattr(importlib.import_module(module_name), attr)
         rules[backend_id] = errors.repair_contract(factory({}))
+    # The per-call rule the tables cannot state: a correct_arguments repair names the tool
+    # that failed (#444). Pinned here so changing it moves the fingerprint like a table does.
+    rules[CONTEXTUAL_RULES_KEY] = copy.deepcopy(errors.CONTEXTUAL_REPAIR_POLICY)
     return rules
 
 

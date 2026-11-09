@@ -178,7 +178,7 @@ def classify_failure(
             detail="pi does not know that model id.",
             details={"field": "model"},
             repair=RepairHint(
-                next_step="correct_arguments",
+                next_step="use_allowed_value",
                 tool="amicus_models",
                 alternative="Pass one of the model ids amicus_models lists for pi.",
             ),

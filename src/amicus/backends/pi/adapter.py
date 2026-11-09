@@ -62,7 +62,7 @@ def _invalid_model(detail: str, catalog: str) -> ClassifiedFailure:
         detail=detail,
         details={"field": "model", "catalog": catalog},
         repair=RepairHint(
-            next_step="correct_arguments",
+            next_step="use_allowed_value",
             tool="amicus_models",
             alternative=(
                 "Pass an exact provider/id that amicus_models lists for pi. Refused locally "
@@ -154,7 +154,7 @@ class PiBackend:
             detail=detail,
             details={"field": "reasoning_effort", "allowed_values": list(allowed)},
             repair=RepairHint(
-                next_step="correct_arguments",
+                next_step="use_allowed_value",
                 tool="amicus_models",
                 alternative=(
                     f"Pass one of: {', '.join(allowed)} — or omit reasoning_effort to use the "
@@ -176,7 +176,7 @@ class PiBackend:
             ),
             details={"field": "model"},
             repair=RepairHint(
-                next_step="correct_arguments",
+                next_step="use_allowed_value",
                 tool="amicus_models",
                 alternative=(
                     "Pass `model` as one of the provider/id values amicus_models lists for "
