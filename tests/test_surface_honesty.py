@@ -510,3 +510,40 @@ def test_detail_says_it_shapes_delivery_only(wire):
         if name in ("amicus_backends", "amicus_capabilities"):
             continue  # a discovery detail, not a delivery one
         assert "Delivery only: amicus://params" in description, name
+
+
+# Issue #446: a successful amicus_job_result marks the result delivered
+# (lifecycle.mark_delivered), which under ADR 0038 lets the per-workspace cap evict it for a
+# later paid call. The description said only "The record is retained, so a re-read is
+# free.", and naming the cap elsewhere in the text does not say that this fetch is what
+# exposes the result to it. The description as it stood, kept as the known positive:
+_JOB_RESULT_BEFORE_446 = (
+    "Free — no model call. Fetch a job once amicus_job_status reports a terminal status: "
+    "`done` returns the originating paid tool's stored envelope — check `ok`, then branch "
+    "on `tool`; `cancelled`, `failed` and `timeout` return that terminal error instead. The "
+    "record is retained, so a re-read is free. A still-running job is job_running with "
+    "retry_after_ms. Records expire after AMICUS_JOB_TTL (default 24h); unfetched results "
+    "fill a per-workspace cap that refuses paid calls (job_cap_reached)."
+)
+
+
+def _states_fetch_makes_evictable(description: str) -> bool:
+    """Whether one sentence ties the free re-read to its end: the result this tool has
+    returned becomes evictable by the per-workspace cap for a later paid call."""
+    sentences = re.split(r"(?<=\.)\s+", description)
+    return any(
+        all(p in s for p in ("re-read is free", "returned", "per-workspace cap", "evict"))
+        and "later paid call" in s
+        for s in sentences
+    )
+
+
+def test_job_result_says_a_fetch_makes_the_result_evictable(wire):
+    description = next(t["description"] for t in wire["tools"] if t["name"] == "amicus_job_result")
+    assert _states_fetch_makes_evictable(description), description
+    # The instrument fails on the text #446 replaced, which already named the cap.
+    assert "per-workspace cap" in _JOB_RESULT_BEFORE_446
+    assert not _states_fetch_makes_evictable(_JOB_RESULT_BEFORE_446)
+    # The annotation itself is unchanged (decision D5): a job read stays readOnlyHint true.
+    tool = next(t for t in wire["tools"] if t["name"] == "amicus_job_result")
+    assert tool["annotations"]["readOnlyHint"] is True

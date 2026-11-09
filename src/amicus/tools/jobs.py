@@ -224,8 +224,9 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
             f"{FREE_MARKER} Fetch a job once amicus_job_status reports a terminal status: "
             "`done` returns the originating paid tool's stored envelope — check `ok`, then "
             "branch on `tool`; `cancelled`, `failed` and `timeout` return that terminal error "
-            "instead. The record is retained, so a re-read is free. A still-running job is "
-            f"job_running with retry_after_ms. {_RETENTION}"
+            "instead. A re-read is free until the record expires or, once this tool has "
+            "returned it, the per-workspace cap evicts it for a later paid call. A "
+            f"still-running job is job_running with retry_after_ms. {_RETENTION}"
         ),
     )
     @guard("amicus_job_result", settings)

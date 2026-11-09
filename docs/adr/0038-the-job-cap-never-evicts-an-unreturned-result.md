@@ -51,3 +51,13 @@ An overshoot deletes nothing, which is the property the annotation needs.
 `job_cap_reached` is a new amicus-local error code, so `FINGERPRINT` moves.
 `RESULT_FORMAT` does not: the code is refused before a job record exists, so no stored `result.json` can carry it.
 An agent that starts many jobs and never fetches them now meets a refusal where it used to lose results silently.
+
+## Amendment (2026-11-09): the fetch that exposes a result says so
+
+Issue #446 found that `amicus_job_result` said "The record is retained, so a re-read is free." while the same call stamps the result delivered, which is what lets this cap evict it for a later paid call.
+The cap was named elsewhere in that description, but not the link between this fetch and the eviction.
+Its description now says a re-read is free until the record expires or, once that tool has returned it, the per-workspace cap evicts it for a later paid call.
+`annotations_reading` says the same beside the readOnlyHint reading.
+
+The annotation does not change: `amicus_job_result` stays `readOnlyHint: true` under the observable-scope reading ADR 0001 records, and the maintainer chose the description fix over a flipped hint.
+Neither the delivery stamp nor the cap's rule changes.

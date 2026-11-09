@@ -715,3 +715,13 @@ def test_every_destructive_backend_declares_its_reason():
     assert destructive == {"claude", "pi"}
     assert set(DESTRUCTIVE_REASONS) == destructive
     assert all(r.strip() and not r.endswith(".") for r in DESTRUCTIVE_REASONS.values())
+
+
+async def test_annotations_reading_says_which_job_read_records_a_delivery():
+    """#446: job reads stay readOnlyHint true (decision D5), and the reading says the one
+    thing a read changes: amicus_job_result records the delivery, which is what lets the
+    per-workspace cap evict the result."""
+    reading, _ = await _annotations_reading(config.settings({}))
+    [sentence] = [s for s in reading.split(". ") if "job reads stay readOnlyHint true" in s]
+    assert "amicus_job_result records each result it returns" in sentence
+    assert "evictable by the cap" in sentence
