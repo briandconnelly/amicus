@@ -490,6 +490,17 @@
               "default": null,
               "title": "Cwd"
             },
+            "deprecation": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ToolDeprecation"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
             "elapsed_ms": {
               "default": 0,
               "title": "Elapsed Ms",
@@ -783,6 +794,42 @@
             }
           },
           "title": "RedactionSummary",
+          "type": "object"
+        },
+        "ToolDeprecation": {
+          "additionalProperties": false,
+          "properties": {
+            "migration": {
+              "title": "Migration",
+              "type": "string"
+            },
+            "removal_at_or_after": {
+              "title": "Removal At Or After",
+              "type": "string"
+            },
+            "replaced_by": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Replaced By"
+            },
+            "since": {
+              "title": "Since",
+              "type": "string"
+            }
+          },
+          "required": [
+            "since",
+            "removal_at_or_after",
+            "replaced_by",
+            "migration"
+          ],
+          "title": "ToolDeprecation",
           "type": "object"
         },
         "Usage": {
@@ -1409,6 +1456,17 @@
               "default": null,
               "title": "Cwd"
             },
+            "deprecation": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ToolDeprecation"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
             "elapsed_ms": {
               "default": 0,
               "title": "Elapsed Ms",
@@ -1675,6 +1733,42 @@
             }
           },
           "title": "RawResponse",
+          "type": "object"
+        },
+        "ToolDeprecation": {
+          "additionalProperties": false,
+          "properties": {
+            "migration": {
+              "title": "Migration",
+              "type": "string"
+            },
+            "removal_at_or_after": {
+              "title": "Removal At Or After",
+              "type": "string"
+            },
+            "replaced_by": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Replaced By"
+            },
+            "since": {
+              "title": "Since",
+              "type": "string"
+            }
+          },
+          "required": [
+            "since",
+            "removal_at_or_after",
+            "replaced_by",
+            "migration"
+          ],
+          "title": "ToolDeprecation",
           "type": "object"
         },
         "Usage": {
@@ -2177,6 +2271,17 @@
               "default": null,
               "title": "Cwd"
             },
+            "deprecation": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ToolDeprecation"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
             "elapsed_ms": {
               "default": 0,
               "title": "Elapsed Ms",
@@ -2443,6 +2548,42 @@
             }
           },
           "title": "RawResponse",
+          "type": "object"
+        },
+        "ToolDeprecation": {
+          "additionalProperties": false,
+          "properties": {
+            "migration": {
+              "title": "Migration",
+              "type": "string"
+            },
+            "removal_at_or_after": {
+              "title": "Removal At Or After",
+              "type": "string"
+            },
+            "replaced_by": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Replaced By"
+            },
+            "since": {
+              "title": "Since",
+              "type": "string"
+            }
+          },
+          "required": [
+            "since",
+            "removal_at_or_after",
+            "replaced_by",
+            "migration"
+          ],
+          "title": "ToolDeprecation",
           "type": "object"
         },
         "Usage": {
@@ -3160,6 +3301,17 @@
               "default": null,
               "title": "Cwd"
             },
+            "deprecation": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ToolDeprecation"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
             "elapsed_ms": {
               "default": 0,
               "title": "Elapsed Ms",
@@ -3455,6 +3607,42 @@
             "next_step"
           ],
           "title": "Repair",
+          "type": "object"
+        },
+        "ToolDeprecation": {
+          "additionalProperties": false,
+          "properties": {
+            "migration": {
+              "title": "Migration",
+              "type": "string"
+            },
+            "removal_at_or_after": {
+              "title": "Removal At Or After",
+              "type": "string"
+            },
+            "replaced_by": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Replaced By"
+            },
+            "since": {
+              "title": "Since",
+              "type": "string"
+            }
+          },
+          "required": [
+            "since",
+            "removal_at_or_after",
+            "replaced_by",
+            "migration"
+          ],
+          "title": "ToolDeprecation",
           "type": "object"
         },
         "Usage": {
@@ -4048,6 +4236,17 @@
               "default": null,
               "title": "Cwd"
             },
+            "deprecation": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ToolDeprecation"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
             "elapsed_ms": {
               "default": 0,
               "title": "Elapsed Ms",
@@ -4341,6 +4540,42 @@
             }
           },
           "title": "RedactionSummary",
+          "type": "object"
+        },
+        "ToolDeprecation": {
+          "additionalProperties": false,
+          "properties": {
+            "migration": {
+              "title": "Migration",
+              "type": "string"
+            },
+            "removal_at_or_after": {
+              "title": "Removal At Or After",
+              "type": "string"
+            },
+            "replaced_by": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Replaced By"
+            },
+            "since": {
+              "title": "Since",
+              "type": "string"
+            }
+          },
+          "required": [
+            "since",
+            "removal_at_or_after",
+            "replaced_by",
+            "migration"
+          ],
+          "title": "ToolDeprecation",
           "type": "object"
         },
         "Usage": {

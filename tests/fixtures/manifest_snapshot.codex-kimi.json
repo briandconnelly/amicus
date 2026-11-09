@@ -11,7 +11,7 @@
       "amicus_adversarial_review_async"
     ],
     "annotations_reading": "Annotations describe the worst ENABLED backend, not the backend selected per call: paid tools are destructiveHint false for this profile because every enabled backend confines writes to a throwaway worktree. A paid call never deletes a tracked result amicus has not yet returned to make room for its own job record: the per-workspace cap (AMICUS_JOB_MAX_COUNT) evicts only expired records, terminal errors, results already returned once and records written before delivery was tracked, whatever release wrote them; when only running jobs and tracked, unreturned results remain it refuses the call pre-spend with job_cap_reached. Returned once means amicus handed the result back, not that the client received it. readOnlyHint tracks whether a call changes observable state that outlives the response (a job record, committed spend), so paid tools are readOnlyHint false even when the run writes nothing, and job reads stay readOnlyHint true under the observable-scope reading. amicus_job_consume_result and amicus_job_cancel are destructiveHint true in every profile: consume deletes a retained result and cancel kills the worker and removes its worktree, so neither update is additive. Per-backend effects are published on amicus_backends.",
-    "deprecation_policy": "A deprecated tool, parameter or code stays discoverable for two minor releases with a deprecation marker in its lifecycle _meta naming the replacement.",
+    "deprecation_policy": "A deprecated tool, parameter, code or backend stays discoverable for two minor releases with a deprecation marker naming the replacement: a tool's in its lifecycle _meta, a backend's on its amicus_backends entry and as meta.deprecation on every envelope it produces.",
     "enabled_backends": [
       "codex",
       "kimi"
@@ -132,6 +132,7 @@
       "task_id",
       "idempotency_replayed",
       "backend_details",
+      "deprecation",
       "consume",
       "request_id",
       "fingerprint",
@@ -1554,13 +1555,25 @@
                 "default": null,
                 "title": "Cwd"
               },
+              "deprecation": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/ToolDeprecation"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Set when meta.backend is a deprecated backend: the marker its amicus_backends entry carries (since, removal_at_or_after, replaced_by, migration). Delivery-only: it states the delivering server's view, never stored with the result."
+              },
               "elapsed_ms": {
                 "default": 0,
                 "title": "Elapsed Ms",
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-60",
+                "default": "amicus/0.1/schema-61",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -1851,6 +1864,43 @@
               "next_step"
             ],
             "title": "Repair",
+            "type": "object"
+          },
+          "ToolDeprecation": {
+            "additionalProperties": false,
+            "description": "The deprecation marker ([9.deprecation-marker]): present only on a tool or a backend\ninside its deprecation window, beside a tool's stability tier, which it never replaces.\nThe name predates backend deprecations and is kept because it is a published $defs\ntitle.",
+            "properties": {
+              "migration": {
+                "title": "Migration",
+                "type": "string"
+              },
+              "removal_at_or_after": {
+                "title": "Removal At Or After",
+                "type": "string"
+              },
+              "replaced_by": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Replaced By"
+              },
+              "since": {
+                "title": "Since",
+                "type": "string"
+              }
+            },
+            "required": [
+              "migration",
+              "removal_at_or_after",
+              "replaced_by",
+              "since"
+            ],
+            "title": "ToolDeprecation",
             "type": "object"
           },
           "Usage": {
@@ -4146,7 +4196,7 @@
       "description": "The full ErrorResult schema; tool outputSchemas carry only an opaque error branch.",
       "mimeType": "application/schema+json",
       "name": "amicus-error-envelope",
-      "size": 15059,
+      "size": 16147,
       "title": "amicus error envelope schema",
       "uri": "amicus://error-envelope"
     },
@@ -4172,7 +4222,7 @@
       "description": "The full Meta schema every success envelope's opaque `meta` points at.",
       "mimeType": "application/schema+json",
       "name": "amicus-result-meta",
-      "size": 8226,
+      "size": 9314,
       "title": "amicus result metadata schema",
       "uri": "amicus://result-meta"
     }
@@ -4327,6 +4377,43 @@
               "sha256"
             ],
             "title": "InstructionsFingerprint",
+            "type": "object"
+          },
+          "ToolDeprecation": {
+            "additionalProperties": false,
+            "description": "The deprecation marker ([9.deprecation-marker]): present only on a tool or a backend\ninside its deprecation window, beside a tool's stability tier, which it never replaces.\nThe name predates backend deprecations and is kept because it is a published $defs\ntitle.",
+            "properties": {
+              "migration": {
+                "title": "Migration",
+                "type": "string"
+              },
+              "removal_at_or_after": {
+                "title": "Removal At Or After",
+                "type": "string"
+              },
+              "replaced_by": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Replaced By"
+              },
+              "since": {
+                "title": "Since",
+                "type": "string"
+              }
+            },
+            "required": [
+              "migration",
+              "removal_at_or_after",
+              "replaced_by",
+              "since"
+            ],
+            "title": "ToolDeprecation",
             "type": "object"
           },
           "Usage": {
@@ -4494,13 +4581,25 @@
             "default": null,
             "title": "Cwd"
           },
+          "deprecation": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ToolDeprecation"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Set when meta.backend is a deprecated backend: the marker its amicus_backends entry carries (since, removal_at_or_after, replaced_by, migration). Delivery-only: it states the delivering server's view, never stored with the result."
+          },
           "elapsed_ms": {
             "default": 0,
             "title": "Elapsed Ms",
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-60",
+            "default": "amicus/0.1/schema-61",
             "title": "Fingerprint",
             "type": "string"
           },
@@ -6050,6 +6149,45 @@
                         }
                       ],
                       "description": "Omitted on detail=summary (see omitted_fields); null when no loaded plugin declares one."
+                    },
+                    "deprecation": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "migration": {
+                              "type": "string"
+                            },
+                            "removal_at_or_after": {
+                              "type": "string"
+                            },
+                            "replaced_by": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "since": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "migration",
+                            "removal_at_or_after",
+                            "replaced_by",
+                            "since"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "null: not deprecated. Every envelope whose meta.backend names this backend carries it as meta.deprecation."
                     },
                     "display_name": {
                       "type": "string"
