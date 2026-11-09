@@ -163,3 +163,28 @@ def test_positive_control_a_usable_pi_override_does_resolve(monkeypatch, tmp_pat
     exe.chmod(0o755)
     monkeypatch.setenv("AMICUS_PI_BIN", str(exe))
     assert binary.PiBinary(config.load_config()).resolve() == str(exe)
+
+
+async def test_a_pi_run_without_fake_pi_is_backend_not_found(monkeypatch, tmp_path):
+    from amicus.backends import pi as pi_pkg
+
+    def _must_not_spawn(*args, **kwargs):
+        raise AssertionError("spawned")
+
+    monkeypatch.setattr(run_mod.runtime, "run_async", _must_not_spawn)
+    plugin = pi_pkg.plugin(os.environ)
+    spec = RunSpec(
+        backend="pi",
+        kind="consult",
+        tool="amicus_consult",
+        cwd=str(tmp_path),
+        workspace_source="param",
+        roots_source="client",
+        host_name="Claude Code",
+        timeout_seconds=10,
+        question="why?",
+        model="openrouter/moonshotai/kimi-k3",
+    )
+    out = await run_mod.run_request(spec, plugin)
+    assert out["ok"] is False
+    assert out["error"]["code"] == "backend_not_found"

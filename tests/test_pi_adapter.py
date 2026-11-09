@@ -364,3 +364,106 @@ def test_a_failure_detail_never_echoes_the_stream(stop, exit_code):
     assert failure.code == "nonzero_exit" and "SENTINEL" not in failure.detail
     with_stderr = _outcome(stdout, stderr="provider said no", exit_code=exit_code)
     assert "provider said no" in backend.classify_failure(with_stderr, _req()).detail
+
+
+# --- Ruling 6: the per-call probes are cached for HELP_CACHE_TTL_SECONDS, by model -----------
+
+OTHER = "openrouter/moonshotai/kimi-k3.1-pro"
+_TABLE = (
+    "provider    model                     context  max-out  thinking  images\n"
+    "openrouter  moonshotai/kimi-k3        1.0M     943.7K   yes       yes\n"
+    "openrouter  moonshotai/kimi-k3.1-pro  1.0M     943.7K   yes       yes\n"
+)
+
+
+def _spawning_backend(monkeypatch, *, auth_out: str = '{"status":"ready"}', list_exit: int = 0):
+    """A backend whose probes run the real cli/models code over a counting spawn seam."""
+    from amicus.backends.pi.binary import PiBinary
+    from amicus.backends.pi.config import load_config
+    from amicus.backends.pi.models import PiModels
+    from amicus.sdk.conventions.preflight import HelpProbe
+
+    spawned: list[tuple[str, str]] = []
+
+    def fake(cmd, timeout_seconds, **kwargs):
+        if cmd[1:3] == ["auth", "check"]:
+            spawned.append(("auth", cmd[cmd.index("--model") + 1]))
+            return CommandRun(auth_out, "", 0, 1, False)
+        assert cmd[1] == "--list-models", cmd
+        spawned.append(("lookup", cmd[2]))
+        return CommandRun(_TABLE if list_exit == 0 else "", "", list_exit, 1, False)
+
+    monkeypatch.setattr(runtime, "run_sync_capture", fake)
+    cfg = load_config({"AMICUS_PI_BIN": "/PI"})
+    binary = PiBinary(cfg)
+    binary.resolve = lambda: "/PI"  # type: ignore[method-assign]
+    backend = adapter.PiBackend(
+        cfg, binary, HelpProbe(help_argv=("/PI", *contract.HELP_ARGS)), PiModels(cfg, binary)
+    )
+    return backend, spawned
+
+
+def test_repeated_validation_of_one_model_probes_once(monkeypatch):
+    backend, spawned = _spawning_backend(monkeypatch)
+    assert backend.validate_request(_req()) is None
+    assert backend.validate_request(_req(reasoning_effort="high")) is None
+    assert spawned == [("auth", pf.MODEL), ("lookup", pf.MODEL)]
+    assert backend.validate_request(_req(model=OTHER)) is None
+    assert spawned[2:] == [("auth", OTHER), ("lookup", OTHER)]
+
+
+def test_conformance_at_load_spawns_each_probe_once(monkeypatch):
+    from amicus.backends.pi.config import load_config
+
+    backend, spawned = _spawning_backend(monkeypatch)
+    configured = adapter.PiBackend(
+        load_config({"AMICUS_PI_BIN": "/PI", "AMICUS_PI_MODEL": pf.MODEL}),
+        backend._binary,
+        backend._help_probe,
+        backend._models,
+    )
+    assert conformance.check_backend(contract.CONTRACT, configured) == []
+    assert spawned == [("auth", pf.MODEL), ("lookup", pf.MODEL)]
+
+
+def test_the_cache_expires_after_the_ttl(monkeypatch):
+    from amicus.backends.pi.models import HELP_CACHE_TTL_SECONDS
+
+    backend, spawned = _spawning_backend(monkeypatch)
+    clock = [1000.0]
+    monkeypatch.setattr(adapter.time, "monotonic", lambda: clock[0])
+    assert backend.validate_request(_req()) is None
+    clock[0] += HELP_CACHE_TTL_SECONDS - 1
+    assert backend.validate_request(_req()) is None
+    assert len(spawned) == 2
+    clock[0] += 2
+    assert backend.validate_request(_req()) is None
+    assert len(spawned) == 4
+
+
+def test_an_unknown_auth_state_is_not_cached(monkeypatch):
+    backend, spawned = _spawning_backend(monkeypatch, auth_out="not json")
+    assert backend.validate_request(_req()) is None
+    assert backend.validate_request(_req()) is None
+    # The lookup that followed the unknown auth state was cached; the auth state was not.
+    assert spawned == [("auth", pf.MODEL), ("lookup", pf.MODEL), ("auth", pf.MODEL)]
+
+
+def test_an_unreadable_catalog_is_not_cached(monkeypatch):
+    backend, spawned = _spawning_backend(monkeypatch, list_exit=1)
+    for _ in range(2):
+        failure = backend.validate_request(_req())
+        assert failure is not None and failure.details["catalog"] == "unreadable"
+    assert spawned == [("auth", pf.MODEL), ("lookup", pf.MODEL), ("lookup", pf.MODEL)]
+
+
+def test_the_memo_is_bounded_by_distinct_models(monkeypatch):
+    backend, spawned = _spawning_backend(monkeypatch)
+    monkeypatch.setattr(adapter, "_PROBE_CACHE_MAX_MODELS", 2)
+    for model in (pf.MODEL, OTHER, "openrouter/x/y"):
+        backend.validate_request(_req(model=model))
+    assert set(backend._auth_memo) == {"openrouter/x/y"}
+    assert set(backend._lookup_memo) == {"openrouter/x/y"}
+    spawned.clear()
+    assert backend.validate_request(_req()) is None  # forgotten, so probed again
+    assert spawned == [("auth", pf.MODEL), ("lookup", pf.MODEL)]

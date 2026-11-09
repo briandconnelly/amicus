@@ -53,8 +53,8 @@ host that looks for them there concludes, wrongly, that no backend supports them
 
 The gates:
 
-- `amicus_consult` / `amicus_review_changes`: `codex`, `kimi`, `claude`; never gated.
-- `amicus_delegate`: `codex`, `kimi` only. Claude is outside the tool's `backend` enum, so a
+- `amicus_consult` / `amicus_review_changes`: `codex`, `kimi`, `claude`, `pi`; never gated.
+- `amicus_delegate`: `codex`, `kimi`, `pi` only. Claude is outside the tool's `backend` enum, so a
   delegate routed to it is rejected as `invalid_arguments`, never `feature_unsupported`.
 - `amicus_adversarial_review`: `claude` only.
 

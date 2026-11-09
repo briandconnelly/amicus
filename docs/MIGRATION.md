@@ -51,10 +51,15 @@ Its value is never read, not even to recognise an unexpanded `${...}` placeholde
 | `AMICUS_CLAUDE_REASONING_EFFORT` | `CLAUDE_IN_CODEX_EFFORT` | `xhigh` |
 | `AMICUS_CLAUDE_MAX_BUDGET_USD` | `CLAUDE_IN_CODEX_MAX_BUDGET_USD` | `1.0` |
 | `AMICUS_CLAUDE_SUPPORTED_MAJORS` | `CLAUDE_IN_CODEX_SUPPORTED_MAJORS` | — |
+| `AMICUS_PI_BIN` | — | — |
+| `AMICUS_PI_MODEL` | — | — |
+| `AMICUS_PI_REASONING_EFFORT` | — | — |
+| `AMICUS_PI_SUPPORTED_VERSIONS` | — | — |
 
 `AMICUS_KIMI_BIN` and `AMICUS_CLAUDE_BIN` have no sibling equivalent, because neither `moonbridge` nor `claude-in-codex` offered a CLI-path override to rename.
 `AMICUS_CODEX_BIN` had one — `CODEX_IN_CLAUDE_CODEX_BIN`, as the table above shows — because `codex-in-claude` did.
 `AMICUS_STATE_DIR`, `AMICUS_TASKS`, `AMICUS_TASKS_BACKEND_URL`, `AMICUS_HOST_NAME`, `AMICUS_ALLOW_CWD_WORKSPACE`, `AMICUS_BACKENDS`, `AMICUS_KIMI_BIN`, and `AMICUS_CLAUDE_BIN` are new in amicus and have no sibling equivalent.
+The four `AMICUS_PI_*` names are new too: the pi backend has no sibling, so none of them ever had a former name.
 
 ## Tool-name mapping
 

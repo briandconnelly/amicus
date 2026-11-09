@@ -16,7 +16,7 @@ def _ep(name: str, value: str) -> EntryPoint:
 
 
 def test_in_tree_declarations():
-    assert set(backends.IN_TREE) == {"codex", "kimi", "claude"}
+    assert set(backends.IN_TREE) == {"codex", "kimi", "claude", "pi"}
     assert backends.IN_TREE["codex"] == "amicus.backends.codex:plugin"
     assert backends.KNOWN_EFFECTS["claude"].paid_calls_destructive is True
     assert backends.KNOWN_EFFECTS["codex"].paid_calls_destructive is False
@@ -25,9 +25,9 @@ def test_in_tree_declarations():
 
 
 def test_default_load_records_the_unported_in_tree_backends_as_unavailable(clean_env):
-    # codex (M1), kimi (M3) and claude (M4) all load.
-    reg = registry.BackendRegistry.load(("codex", "kimi", "claude"), entry_points=())
-    assert reg.unavailable == {} and set(reg.ids) == {"codex", "kimi", "claude"}
+    # codex (M1), kimi (M3), claude (M4) and pi (M9) all load.
+    reg = registry.BackendRegistry.load(("codex", "kimi", "claude", "pi"), entry_points=())
+    assert reg.unavailable == {} and set(reg.ids) == {"codex", "kimi", "claude", "pi"}
     assert reg.get("codex") is not None
 
 

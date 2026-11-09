@@ -252,11 +252,12 @@ def test_no_contract_declares_a_baseline_verb_as_a_feature():
     from amicus.backends.claude.contract import CONTRACT as claude
     from amicus.backends.codex.contract import CONTRACT as codex
     from amicus.backends.kimi.contract import CONTRACT as kimi
+    from amicus.backends.pi.contract import CONTRACT as pi
     from amicus.schemas.codes import VERBS
     from amicus.tools._resolve import FEATURE_FOR_VERB
 
     ungated = set(VERBS) - set(FEATURE_FOR_VERB)
-    for backend_id, contract in (("codex", codex), ("kimi", kimi), ("claude", claude)):
+    for backend_id, contract in (("codex", codex), ("kimi", kimi), ("claude", claude), ("pi", pi)):
         assert not (ungated & contract.supported_features), (
             f"{backend_id} declares an ungated verb in supported_features; the skill says none do"
         )
@@ -266,13 +267,19 @@ def test_the_backend_reference_names_every_declared_feature():
     from amicus.backends.claude.contract import CONTRACT as claude
     from amicus.backends.codex.contract import CONTRACT as codex
     from amicus.backends.kimi.contract import CONTRACT as kimi
+    from amicus.backends.pi.contract import CONTRACT as pi
     from amicus.schemas.codes import VERBS
     from amicus.tools._resolve import FEATURE_FOR_VERB
 
     section = _BACKENDS_REF.partition("\n## What `features` contains\n")[2].split("\n## ", 1)[0]
     assert section, "choosing-a-backend.md has no `## What `features` contains` section"
     named = set(re.findall(r"`([a-z_]+)`", section))
-    declared = codex.supported_features | kimi.supported_features | claude.supported_features
+    declared = (
+        codex.supported_features
+        | kimi.supported_features
+        | claude.supported_features
+        | pi.supported_features
+    )
     assert declared <= named, f"undocumented features: {sorted(declared - named)}"
     assert set(VERBS) <= named, "every verb must be placed as gated or baseline"
     assert "(the verbs it supports)" not in _BACKENDS_REF, (
@@ -283,7 +290,8 @@ def test_the_backend_reference_names_every_declared_feature():
     for verb, feature in FEATURE_FOR_VERB.items():
         bullet = next(b for b in _bullets(section) if b.startswith(f"- `amicus_{verb}`"))
         first_sentence = bullet.partition(":")[2].partition(".")[0]
-        for backend_id, contract in (("codex", codex), ("kimi", kimi), ("claude", claude)):
+        backends = (("codex", codex), ("kimi", kimi), ("claude", claude), ("pi", pi))
+        for backend_id, contract in backends:
             listed = f"`{backend_id}`" in first_sentence
             assert listed == (feature in contract.supported_features), (
                 f"{verb} on {backend_id}: reference says {listed}, contract says not"

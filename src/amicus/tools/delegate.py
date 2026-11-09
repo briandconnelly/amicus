@@ -33,7 +33,7 @@ if TYPE_CHECKING:  # pragma: no cover
 _DESC = (
     f"{_resolve.PAID_MARKER} `backend` implements `task` in a throwaway git worktree "
     "seeded from tracked state and returns the diff — never applied to your working "
-    "tree. Codex and Kimi in v1 (feature delegate); Claude stays review-only. Egress: "
+    "tree. Codex, Kimi and Pi in v1 (feature delegate); Claude stays review-only. Egress: "
     "sends task raw to the backend's provider; a backend sandbox may also write the OS "
     "temp roots, which are neither in the diff nor cleaned up. Recorded as a job "
     f"(meta.job_id). {_resolve.RECORD_RETENTION}"

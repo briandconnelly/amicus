@@ -9,10 +9,12 @@ from __future__ import annotations
 
 import contextlib
 import os
-from typing import TYPE_CHECKING
+import time
+from typing import TYPE_CHECKING, Literal
 
 from amicus.backends.pi import cli, contract, normalize
 from amicus.backends.pi.binary import BinaryNotFoundError
+from amicus.backends.pi.models import HELP_CACHE_TTL_SECONDS
 from amicus.schemas import instructions
 from amicus.schemas.params import reasoning_effort_shape_error
 from amicus.schemas.structured import schema_instruction
@@ -32,10 +34,14 @@ if TYPE_CHECKING:  # pragma: no cover
     from amicus.backends.pi.cli import AuthStatus
     from amicus.backends.pi.config import PiConfig
     from amicus.backends.pi.models import PiModels
+    from amicus.plugin import ModelEntry
     from amicus.sdk.backend.protocol import RunOutcome, RunRequest
     from amicus.sdk.conventions.preflight import HelpProbe
 
 _INSTRUCTION_KINDS = frozenset({"consult", "review_changes"})
+# Distinct models a backend remembers probe outcomes for; past it the memo starts over, so a
+# caller cycling through model strings cannot grow it without bound.
+_PROBE_CACHE_MAX_MODELS = 64
 EMPTY_RESPONSE_DETAIL = (
     "pi completed without producing an answer: the event stream holds no assistant text and "
     "no error."
@@ -73,6 +79,42 @@ class PiBackend:
         self._help_probe = help_probe
         self._models = models
         self._auth_status: Callable[[str, str | None], AuthStatus] = _auth_status
+        # validate_request's two probes, remembered per model for HELP_CACHE_TTL_SECONDS, as
+        # the catalog read is: the conformance check at registry load validates several
+        # requests for one model, and each would otherwise spawn both probes again.
+        self._auth_memo: dict[str, tuple[float, AuthStatus]] = {}
+        self._lookup_memo: dict[str, tuple[float, ModelEntry | None]] = {}
+
+    # --- per-call probes, memoized by model ---------------------------------------------------
+    @staticmethod
+    def _make_room(memo: dict, model: str) -> None:
+        if model not in memo and len(memo) >= _PROBE_CACHE_MAX_MODELS:
+            memo.clear()
+
+    def _cached_auth(self, binary: str, model: str) -> AuthStatus:
+        """`pi auth check` for `model`; an "unknown" outcome is transient and not remembered."""
+        now = time.monotonic()
+        hit = self._auth_memo.get(model)
+        if hit is not None and now - hit[0] < HELP_CACHE_TTL_SECONDS:
+            return hit[1]
+        status = self._auth_status(binary, model)
+        if status != "unknown":
+            self._make_room(self._auth_memo, model)
+            self._auth_memo[model] = (now, status)
+        return status
+
+    def _cached_lookup(self, model: str) -> ModelEntry | Literal["unreadable"] | None:
+        """The catalog row for `model`; an unreadable catalog is transient and not remembered,
+        as PiModels.read does not cache a failed probe."""
+        now = time.monotonic()
+        hit = self._lookup_memo.get(model)
+        if hit is not None and now - hit[0] < HELP_CACHE_TTL_SECONDS:
+            return hit[1]
+        result = self._models.lookup(model)
+        if result != "unreadable":
+            self._make_room(self._lookup_memo, model)
+            self._lookup_memo[model] = (now, result)
+        return result
 
     # --- resolution the adapter and the classifier must agree on ----------------------------
     def _model(self, request: RunRequest) -> str | None:
@@ -207,12 +249,12 @@ class PiBackend:
         binary = self._binary.resolve()
         if binary is None:
             return None
-        auth = self._auth_status(binary, model)
+        auth = self._cached_auth(binary, model)
         if auth == "unresolved":
             return _invalid_model("pi cannot resolve that model's provider.", "unresolved")
         if auth == "not_ready":
             return self._auth_required()
-        entry = self._models.lookup(model)
+        entry = self._cached_lookup(model)
         if entry == "unreadable":
             return _invalid_model(
                 "pi's model catalog could not be read, so the model cannot be vouched for.",

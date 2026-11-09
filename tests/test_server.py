@@ -55,7 +55,7 @@ def test_state_of_raises_on_an_app_create_app_did_not_build():
 
 def test_state_is_attached():
     state = server.state_of(_app())
-    assert state.settings.enabled_backends == ("codex", "kimi", "claude")
+    assert state.settings.enabled_backends == ("codex", "kimi", "claude", "pi")
 
 
 def test_summary_is_scope_then_rules_then_reference():

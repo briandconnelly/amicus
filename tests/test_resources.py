@@ -109,6 +109,7 @@ async def test_completion_for_the_backend_template_variable():
             "codex",
             "kimi",
             "claude",
+            "pi",
         ]
         assert (await c.complete(ref, {"name": "other", "value": ""})).values == []
     assert resources.complete_backend(object(), None, None) is None

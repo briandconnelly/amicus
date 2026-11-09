@@ -27,6 +27,7 @@ HOST_DISPLAY_NAMES: dict[str, str] = {
     "kimi": "Kimi",
     "kimi-code": "Kimi",
     "kimi code": "Kimi",
+    "pi": "Pi",
 }
 _HOST_NAME_MAX_CHARS = 64
 

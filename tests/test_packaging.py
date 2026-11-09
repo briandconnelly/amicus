@@ -102,7 +102,7 @@ def test_vendor_auth_includes_the_claude_credentials():
 EXPECTED_ENV_VARS = [
     # Pinned by review, not derived: comparing a generated file to its own generator is not an
     # oracle. This list is the independent expectation; the generator must reproduce it exactly.
-    # 35 declared (16 global + 6 codex + 6 kimi + 7 claude) + 2 vendor = 37.
+    # 39 declared (16 global + 6 codex + 6 kimi + 7 claude + 4 pi) + 2 vendor = 41.
     "AMICUS_ALLOW_CWD_WORKSPACE",
     "AMICUS_BACKENDS",
     "AMICUS_CLAUDE_ACCESS",
@@ -134,6 +134,10 @@ EXPECTED_ENV_VARS = [
     "AMICUS_MAX_DELEGATE_DIFF_BYTES",
     "AMICUS_MAX_INPUT_BYTES",
     "AMICUS_MAX_OUTPUT_BYTES",
+    "AMICUS_PI_BIN",
+    "AMICUS_PI_MODEL",
+    "AMICUS_PI_REASONING_EFFORT",
+    "AMICUS_PI_SUPPORTED_VERSIONS",
     "AMICUS_STATE_DIR",
     "AMICUS_TASKS",
     "AMICUS_TASKS_BACKEND_URL",

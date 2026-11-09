@@ -1,5 +1,5 @@
 """In-tree backend declarations. The packages themselves land per milestone (M1 codex,
-M3 kimi, M4 claude); until then the registry records each as unavailable, which is the
+M3 kimi, M4 claude, M9 pi); until then the registry records each as unavailable, which is the
 honest state, never a startup failure."""
 
 from __future__ import annotations
@@ -11,6 +11,7 @@ IN_TREE: dict[str, str] = {
     "codex": "amicus.backends.codex:plugin",
     "kimi": "amicus.backends.kimi:plugin",
     "claude": "amicus.backends.claude:plugin",
+    "pi": "amicus.backends.pi:plugin",
 }
 
 # Declared effects used to annotate the tool surface BEFORE a plugin is loaded (tool
@@ -21,6 +22,12 @@ KNOWN_EFFECTS: dict[str, AnnotationEffects] = {
     "codex": AnnotationEffects(paid_calls_destructive=False, job_reads_read_only=True),
     "kimi": AnnotationEffects(paid_calls_destructive=False, job_reads_read_only=True),
     "claude": AnnotationEffects(paid_calls_destructive=True, job_reads_read_only=True),
+    "pi": AnnotationEffects(paid_calls_destructive=False, job_reads_read_only=True),
 }
 
-KNOWN_DISPLAY_NAMES: dict[str, str] = {"codex": "Codex", "kimi": "Kimi", "claude": "Claude Code"}
+KNOWN_DISPLAY_NAMES: dict[str, str] = {
+    "codex": "Codex",
+    "kimi": "Kimi",
+    "claude": "Claude Code",
+    "pi": "Pi",
+}

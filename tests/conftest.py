@@ -89,8 +89,8 @@ def _never_spawn_real_claude(monkeypatch):
 @pytest.fixture(autouse=True)
 def _never_spawn_real_pi(monkeypatch):
     """No unit test may run the real pi CLI: an unusable AMICUS_PI_BIN makes every pi run,
-    probe and catalog read short-circuit. A `fake_pi` fixture arrives in a later task for
-    tests that want a run; the live suite (tests/test_pi_live.py) will delete the override."""
+    probe and catalog read short-circuit. Tests that want a run point the override at the
+    `fake_pi` fixture; the live suite (tests/test_pi_live.py) will delete it."""
     monkeypatch.setenv("AMICUS_PI_BIN", NEVER_SPAWN_PI)
 
 
@@ -313,6 +313,19 @@ def fake_kimi(tmp_path_factory) -> Path:
     src = Path(__file__).parent / "support" / "fake_kimi.py"
     exe = tmp_path_factory.mktemp("fake-kimi") / "kimi"
     shutil.copy(src, exe)
+    exe.chmod(exe.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP)
+    return exe
+
+
+@pytest.fixture(scope="session")
+def fake_pi(tmp_path_factory) -> Path:
+    """An executable stand-in `pi` (tests/support/fake_pi.py) for spend-free runs, with the
+    verbatim 1.5.0 `pi --help` capture beside it for its help probe."""
+    root = Path(__file__).parent
+    exe_dir = tmp_path_factory.mktemp("fake-pi")
+    exe = exe_dir / "pi"
+    shutil.copy(root / "support" / "fake_pi.py", exe)
+    shutil.copy(root.parent / "docs" / "pi-help" / "1.5.0" / "pi-help.txt", exe_dir / "pi-help.txt")
     exe.chmod(exe.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP)
     return exe
 
