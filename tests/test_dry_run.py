@@ -473,13 +473,6 @@ def _pi_runs(tmp_path):
     return [a for a in map(json.loads, path.read_text().splitlines()) if "-p" in a]
 
 
-def _reason_field(details):
-    """The field of a backend detail that ErrorDetail could not hold whole: pi's invalid_model
-    adds `catalog`, so render_failure folds the pairs into `reason` ("field=model ...")."""
-    reason = details.get("reason") or ""
-    return next((t.removeprefix("field=") for t in reason.split() if t.startswith("field=")), None)
-
-
 # (case, the env/args it needs, the code and field both the dry run and the paid tool return)
 _PI_REFUSALS = [
     ("missing_model", {"model": None}, {}, "invalid_arguments", "model"),
@@ -530,7 +523,10 @@ async def test_a_pi_dry_run_refuses_exactly_where_the_paid_call_does(
     assert dry_res.is_error is True and paid_res.is_error is True
     assert dry_err["code"] == paid_err["code"] == code, case
     assert dry_err["details"] == paid_err["details"], case
-    assert field in (dry_err["details"].get("field"), _reason_field(dry_err["details"])), case
+    # #450: pi's catalog reason no longer costs the machine field.
+    assert dry_err["details"]["field"] == field, case
+    if code == "invalid_model":
+        assert dry_err["details"]["reason"] == "catalog=no_exact_row", case
     assert dry_err["backend"] == "pi" and json.loads(dry_res.content[0].text) == (
         dry_res.structured_content
     )

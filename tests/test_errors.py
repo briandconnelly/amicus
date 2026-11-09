@@ -277,6 +277,33 @@ def test_render_failure_tolerates_bad_details():
     assert out["error"]["details"] == {"reason": "field=a fields=['b']", "field_withheld": False}
 
 
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        # #450: an unknown key folds into reason; the machine fields stay.
+        (
+            {"field": "model", "catalog": "no_exact_row"},
+            {"field": "model", "reason": "catalog=no_exact_row"},
+        ),
+        # A reason the backend gave leads, and the unknown keys follow it.
+        (
+            {"field": "model", "reason": "r", "catalog": "c", "extra": 1},
+            {"field": "model", "reason": "r catalog=c extra=1"},
+        ),
+        (
+            {"field": "x", "allowed_values": ["a"], "catalog": "c"},
+            {"field": "x", "allowed_values": ["a"], "reason": "catalog=c"},
+        ),
+        # The control: only known keys pass through untouched.
+        ({"field": "model"}, {"field": "model"}),
+    ],
+)
+def test_detail_from_keeps_known_keys_and_folds_only_unknown_ones(raw, expected):
+    detail = errors._detail_from(raw)
+    assert detail is not None
+    assert detail.model_dump(exclude_none=True, exclude={"field_withheld"}) == expected
+
+
 def test_the_timeout_rule_is_never_temporary_for_any_backend():
     """#245 / ADR 0039: one contract for the deadline timeout whatever the backend. The
     identical synchronous call spends again and will likely hit the same deadline."""

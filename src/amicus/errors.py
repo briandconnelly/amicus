@@ -363,10 +363,19 @@ def error_envelope(code: str, message: str, meta: Meta, **kwargs: Any) -> dict[s
 
 
 def _detail_from(raw: dict[str, Any] | None) -> ErrorDetail | None:
+    """A backend's `details` as the wire's ErrorDetail. The keys ErrorDetail declares keep
+    their machine fields (`field` above all); any other key is folded into `reason` as
+    `key=value`, after a reason the backend gave (#450). Only a mapping whose known keys are
+    themselves invalid is folded whole."""
     if not raw:
         return None
+    known = {k: v for k, v in raw.items() if k in ErrorDetail.model_fields}
+    folded = " ".join(f"{k}={v}" for k, v in raw.items() if k not in ErrorDetail.model_fields)
+    if folded:
+        prior = known.get("reason")
+        known["reason"] = (f"{prior} {folded}" if prior else folded)[:300]
     try:
-        return ErrorDetail.model_validate(raw)
+        return ErrorDetail.model_validate(known)
     except ValidationError:
         return ErrorDetail(reason=" ".join(f"{k}={v}" for k, v in raw.items())[:300])
 
