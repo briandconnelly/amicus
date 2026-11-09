@@ -49,6 +49,7 @@ from amicus.tools._meta import (
     annotations_for,
     base_meta,
     deprecation_marker,
+    destructive_causes,
     effects_for,
     lifecycle_meta,
     server_stability,
@@ -648,10 +649,11 @@ async def capabilities_payload(
             f"call: paid tools are destructiveHint {str(effects.paid_calls_destructive).lower()} "
             "for this profile because "
             + (
-                "Claude Code is enabled and its config modes may run workspace hooks. "
+                ", and ".join(destructive_causes(settings))
                 if effects.paid_calls_destructive
-                else "every enabled backend confines writes to a throwaway worktree. "
+                else "every enabled backend confines writes to a throwaway worktree"
             )
+            + ". "
             + "A paid call never deletes a tracked result amicus has not yet returned to make "
             "room for its own job record: the per-workspace cap (AMICUS_JOB_MAX_COUNT) evicts "
             "only expired records, terminal errors, results already returned once and records "

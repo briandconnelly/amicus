@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Literal
 
-from amicus.backends import KNOWN_EFFECTS
+from amicus.backends import DESTRUCTIVE_REASONS, KNOWN_DISPLAY_NAMES, KNOWN_EFFECTS
 from amicus.schemas.envelope import Meta
 from amicus.schemas.fingerprint import LIFECYCLE_META_KEY
 from amicus.sdk.conventions import annotations as ann
@@ -85,6 +85,24 @@ def effects_for(settings: Settings) -> AnnotationEffects:
         for b in settings.enabled_backends
     )
     return AnnotationEffects(paid_calls_destructive=destructive, job_reads_read_only=True)
+
+
+def destructive_causes(settings: Settings) -> list[str]:
+    """One clause per enabled backend that makes the paid tools destructive, each naming
+    that backend and its declared reason (#442). Built from the enabled set, as
+    `effects_for` is, never from what loaded; ordered by declaration, then unknown ids by
+    name, so one profile always reads the same. An id with no declaration is annotated for
+    the worst case, and the clause says so rather than inventing a cause."""
+    enabled = set(settings.enabled_backends)
+    ordered = [b for b in KNOWN_EFFECTS if b in enabled] + sorted(enabled - set(KNOWN_EFFECTS))
+    return [
+        f"{KNOWN_DISPLAY_NAMES[b]} is enabled and {DESTRUCTIVE_REASONS[b]}"
+        if b in KNOWN_EFFECTS
+        else f"{b} is enabled and annotated for the worst case because amicus has no "
+        "declaration for it"
+        for b in ordered
+        if KNOWN_EFFECTS.get(b, _UNKNOWN_EFFECTS).paid_calls_destructive
+    ]
 
 
 def annotations_for(kind: AnnotationKind, settings: Settings) -> dict[str, bool]:
