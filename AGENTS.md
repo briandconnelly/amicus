@@ -39,7 +39,7 @@ The rules bind; the context after them explains and points elsewhere.
     `uv.lock` mirrors the version rather than declaring it: regenerate it in that same PR with `uv lock`, or the `uv lock --check` hook fails.
     Only the maintainer merges that PR, and only the maintainer pushes the tag.
     Push the matching tag before any other work follows that merge: until it exists, `main` declares a version that has no release.
-20. Never push a `v*` tag unless the three live gates — `tests/test_codex_live.py`, `tests/test_kimi_live.py` and `tests/test_claude_live.py`, run under rule 5 — have all PASSED on that exact commit, with those passing outcomes recorded.
+20. Never push a `v*` tag unless the four live gates — `tests/test_codex_live.py`, `tests/test_kimi_live.py`, `tests/test_claude_live.py` and `tests/test_pi_live.py`, run under rule 5 — have all PASSED on that exact commit, with those passing outcomes recorded.
     The record is `.release-evidence/live-gates.json`, written by `scripts/record_live_gate_evidence.py`, naming that commit, each suite and its outcome; a terminal transcript or a recollection is not a record.
     A record showing a failed suite does not satisfy this rule; it is a reason not to tag.
     Push it as an annotated tag whose message is that record verbatim — `git tag -a vX.Y.Z -F .release-evidence/live-gates.json --cleanup=verbatim <release-sha>` — because `.release-evidence/` is gitignored and the tag is the only carrier that reaches the publish workflow.
@@ -66,6 +66,7 @@ A backend's own prompt carriers (for Codex, the developer-instructions argv toke
 Rule 18's exemption is bounded by evidence rather than by proof, because whether a closed-source CLI offers an alternative cannot be proven, only looked for: the condition is that none was found, documented or observed, and the looking is repeated before every amicus release, on the exact CLI versions the rule-20 evidence run uses.
 It is tied to the release rather than to a change in a backend's supported-version set because that set is coarse: a kimi patch release still parses as its minor, and every claude 2.x release is covered by major 2, so a new CLI release can become supported without the set ever changing.
 Kimi's handshake file exists because kimi ignores stdin.
+Pi needs no exemption: it reads the prompt on stdin, amicus's argv token for it is a fixed literal rather than a prompt input, and `--no-session` leaves no session store (ADR 0047, issue #423).
 Codex's argv token exists because `codex exec --help` (0.155.1) offers the prompt, on stdin, and no flag for developer-role instructions, which leaves the `developer_instructions` config value, set with `-c` on argv or from a config file; argv is the one that leaves nothing on disk.
 Kimi's session store is different in kind: the CLI rather than amicus writes it, it outlives the run, and amicus does not delete it; the 0.43.1 probe that found no way to switch it off, and what that probe did not test, are recorded in `docs/kimi-help/0.43.1/FINDINGS.md`.
 
@@ -93,7 +94,7 @@ So `.mcp.json` names its own release, and from 0.4.0 the marketplace entry pins 
 Rule 24's invariant, that the pointer users follow names an already-published release, moved with it from `.mcp.json` to the marketplace entry.
 `sha` is required because a host serves `sha` over a disagreeing `ref` without complaint, and the `v*` ruleset's admin bypass means a tag can be moved.
 `uvx` reuses a cached tool environment without querying any index, so the version in `.mcp.json`'s requirement string is still what makes an existing install pick up a new server.
-Rule 20 is a local pre-tag gate rather than a CI job: hosted runners have no authenticated `codex`, `kimi` or `claude`, so the evidence is recorded on the maintainer's machine against the exact commit to be tagged.
+Rule 20 is a local pre-tag gate rather than a CI job: hosted runners have no authenticated `codex`, `kimi`, `claude` or `pi`, so the evidence is recorded on the maintainer's machine against the exact commit to be tagged.
 That evidence is an honest-mistake guard, not an attestation; it is a local file its author can write by hand.
 Rule 21 covers creation as well as update and deletion because pushing a `v*` tag is by itself what triggers `.github/workflows/publish.yml`: an identity that can create one can publish a release without rules 19 and 20 ever being satisfied, and a moved tag silently changes what users install under a version they already trust.
 That ruleset now exists — `release tags`, active, covering `refs/tags/v*` and restricting creation, update and deletion — and 0.1.0 was tagged under it.
@@ -105,7 +106,7 @@ The executable procedure — preconditions, the evidence run, the environment ap
 Rules 20, 22 and 23 are shaped by what a CI job can and cannot establish, which is the subject of ADR 0014 and of issue #25 before it.
 The `verify` job runs `scripts/check_release_state.py` on the tagged commit, and the two halves of that script are worth different amounts.
 Its release-state coherence half **proves** what it reports: every version literal rule 19 names, the dated `CHANGELOG.md` section, and `uv.lock` are all facts of the tagged tree.
-Its live-gate half checks only that the record carried on the tag is well formed, names this commit and asserts three passing suites — never that those suites ran, which is why rule 23 forbids saying otherwise.
+Its live-gate half checks only that the record carried on the tag is well formed, names this commit and asserts four passing suites — never that those suites ran, which is why rule 23 forbids saying otherwise.
 Everything else rule 19 requires is a convention no CI job can prove: two PRs, an ordinary merge commit rather than a squash, the maintainer merging rather than an agent, and the tag pushed promptly after the merge.
 Those are held by the platform controls around the release — rule 21's ruleset and the `pypi` environment's required reviewer — and by whoever runs the procedure, and this repository states that plainly rather than implying the workflow checks it.
 

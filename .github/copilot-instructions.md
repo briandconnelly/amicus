@@ -39,4 +39,4 @@ The gate checks rule 16 only heuristically: under `docs/` it rejects two sentenc
   Any new log line, error message, argv construction, fixture or committed capture that can carry one of those values is the highest-value place to look.
 - `src/amicus/jobs/delivery.py` is the chokepoint through which every stored result is delivered; a schema gap there reaches every client.
 - `scripts/check_release_state.py`, `scripts/record_live_gate_evidence.py`, `.github/workflows/publish.yml` and `docs/RELEASING.md` implement rules 19 to 24; check that a change to one keeps the others true.
-- `tests/conftest.py` carries the rule-6 guard and `tests/support/fake_codex.py` stands in for the real CLI, so a test that would only pass with a real `codex`, `kimi` or `claude` on `PATH` is a defect.
+- `tests/conftest.py` carries the rule-6 guard and `tests/support/fake_codex.py` stands in for the real CLI, so a test that would only pass with a real `codex`, `kimi`, `claude` or `pi` on `PATH` is a defect.
