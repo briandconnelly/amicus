@@ -85,6 +85,14 @@ def failed_stop(events: str) -> str | None:
     return reason if reason in FAILED_STOP_REASONS else None
 
 
+def stopped_at_length(events: str) -> bool:
+    """Whether the final assistant message's `stopReason` is "length": the provider cut the
+    response off at its output-token limit, so the text, even text that parses as complete
+    JSON, is not the whole answer. It is not a failure code: the run itself succeeded."""
+    message = final_assistant(events)
+    return message is not None and message.get("stopReason") == "length"
+
+
 def final_error(events: str) -> str | None:
     """The final assistant message's `errorMessage` when its `stopReason` is "error"."""
     message = final_assistant(events)

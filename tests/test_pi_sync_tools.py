@@ -196,6 +196,35 @@ async def test_an_error_stop_reason_at_exit_zero_is_an_auth_failure(
     assert len(_runs(tmp_path)) == 1  # the failure came from the stream, not a pre-spawn refusal
 
 
+async def test_a_length_stop_withholds_the_cut_off_answer(app, tmp_path, repo, monkeypatch):
+    """A structured answer cut off by the output-token limit can still parse; it must not be
+    delivered as an ok result."""
+    answer = json.dumps({"summary": "Looks fine", "verdict": "pass", "confidence": "high"})
+    assistant = {
+        "role": "assistant",
+        "content": [{"type": "text", "text": answer}],
+        "stopReason": "length",
+    }
+    events = [
+        {"type": "agent_start"},
+        {"type": "message_end", "message": assistant},
+        {"type": "agent_end", "messages": [assistant]},
+    ]
+    monkeypatch.setenv("FAKE_PI_EVENTS", "".join(json.dumps(e) + "\n" for e in events))
+    async with Client(app) as c:
+        res = await c.call_tool(
+            "amicus_consult",
+            {"backend": "pi", "question": "why?", "workspace_root": str(repo)},
+            raise_on_error=False,
+        )
+    body = res.structured_content
+    assert res.is_error is True and body["ok"] is False
+    assert body["error"]["code"] == "answer_unavailable"
+    assert body["error"]["details"]["reason"] == "stream_truncated"
+    assert "Looks fine" not in json.dumps(body)
+    assert len(_runs(tmp_path)) == 1
+
+
 async def test_an_unauthenticated_pi_refuses_before_any_run_and_is_reported(
     app, tmp_path, repo, monkeypatch
 ):

@@ -36,7 +36,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from amicus.backends.pi.config import PiConfig
     from amicus.backends.pi.models import PiModels
     from amicus.plugin import ModelEntry
-    from amicus.sdk.backend.protocol import RunOutcome, RunRequest
+    from amicus.sdk.backend.protocol import AnswerLoss, RunOutcome, RunRequest
     from amicus.sdk.conventions.preflight import HelpProbe
 
 _INSTRUCTION_KINDS = frozenset({"consult", "review_changes"})
@@ -377,10 +377,20 @@ class PiBackend:
             usage=usage,
             session_id=session_id,
             warnings=warnings,
-            answer_loss=stream_answer_loss(
-                outcome.run, lost_after_answer=normalize.lost_after_final_message(events)
-            ),
+            answer_loss=self._answer_loss(outcome, events),
         )
+
+    @staticmethod
+    def _answer_loss(outcome: RunOutcome, events: str) -> AnswerLoss | None:
+        """A capture loss first; otherwise "truncated" when pi says the model's own output was
+        cut off at its token limit, so the consumer withholds the cut-off answer rather than
+        delivering it as whole (prose or structured alike)."""
+        loss = stream_answer_loss(
+            outcome.run, lost_after_answer=normalize.lost_after_final_message(events)
+        )
+        if loss is None and normalize.stopped_at_length(events):
+            return "truncated"
+        return loss
 
     def _classify(self, outcome: RunOutcome, request: RunRequest) -> ClassifiedFailure:
         aliases = request.sanitize_aliases

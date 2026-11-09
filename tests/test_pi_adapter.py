@@ -318,6 +318,23 @@ def test_finalize_marks_a_truncated_stream():
     assert backend.finalize(RunOutcome(run=run, events=before), _req()).answer_loss is None
 
 
+@pytest.mark.parametrize(
+    ("text", "schema"),
+    [("a prose answer cut off mid-sent", None), ('{"summary": "ok", "findings": []}', {})],
+    ids=["prose", "structured"],
+)
+def test_a_length_stop_marks_the_answer_truncated(text, schema):
+    """pi reports a response cut off by the output-token limit as stopReason "length": the
+    answer, even one that parses as complete JSON, is not the whole answer (Ruling 16)."""
+    req = _req(schema={"type": "object"}) if schema is not None else _req()
+    backend = pf.make_backend()
+    cut = backend.finalize(_outcome(pf.stream(text, stop="length")), req)
+    assert cut.answer_loss == "truncated"
+    whole = backend.finalize(_outcome(pf.stream(text, stop="stop")), req)
+    assert whole.answer_loss is None
+    assert backend.inspect_outcome(_outcome(pf.stream(text, stop="length")), req) is None
+
+
 def test_clamped_thinking_level_warns():
     backend = pf.make_backend()
     outcome = _outcome(pf.stream("ok", thinking="high"))
