@@ -30,6 +30,7 @@ ENV_PREFIXES = config.ENV_PREFIXES
 NEVER_SPAWN_CODEX = "/nonexistent/amicus-test-codex"
 NEVER_SPAWN_KIMI = "/nonexistent/amicus-test-kimi"
 NEVER_SPAWN_CLAUDE = "/nonexistent/amicus-test-claude"
+NEVER_SPAWN_PI = "/nonexistent/amicus-test-pi"
 
 # git exports these into the environment of every hook it runs, and prek's pre-push hook
 # runs this very suite (`entry = "uv run pytest"`, `stages = ["pre-push"]`). Without
@@ -83,6 +84,14 @@ def _never_spawn_real_claude(monkeypatch):
     claude run and probe short-circuit. Tests that want a run point the override at the
     `fake_claude` fixture; the live suite (tests/test_claude_live.py) deletes it."""
     monkeypatch.setenv("AMICUS_CLAUDE_BIN", NEVER_SPAWN_CLAUDE)
+
+
+@pytest.fixture(autouse=True)
+def _never_spawn_real_pi(monkeypatch):
+    """No unit test may run the real pi CLI: an unusable AMICUS_PI_BIN makes every pi run,
+    probe and catalog read short-circuit. A `fake_pi` fixture arrives in a later task for
+    tests that want a run; the live suite (tests/test_pi_live.py) will delete the override."""
+    monkeypatch.setenv("AMICUS_PI_BIN", NEVER_SPAWN_PI)
 
 
 # Every spelling that can open a log file: since #176 only the amicus name, because the
@@ -219,6 +228,7 @@ def clean_env(monkeypatch):
     monkeypatch.setenv("AMICUS_CODEX_BIN", NEVER_SPAWN_CODEX)
     monkeypatch.setenv("AMICUS_KIMI_BIN", NEVER_SPAWN_KIMI)
     monkeypatch.setenv("AMICUS_CLAUDE_BIN", NEVER_SPAWN_CLAUDE)
+    monkeypatch.setenv("AMICUS_PI_BIN", NEVER_SPAWN_PI)
     return monkeypatch
 
 
@@ -240,6 +250,7 @@ def spawned_server_env() -> dict[str, str]:
         "AMICUS_CODEX_BIN": NEVER_SPAWN_CODEX,
         "AMICUS_KIMI_BIN": NEVER_SPAWN_KIMI,
         "AMICUS_CLAUDE_BIN": NEVER_SPAWN_CLAUDE,
+        "AMICUS_PI_BIN": NEVER_SPAWN_PI,
     }
 
 

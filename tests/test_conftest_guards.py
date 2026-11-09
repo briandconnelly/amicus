@@ -137,3 +137,29 @@ def test_positive_control_a_usable_claude_override_does_resolve(monkeypatch, tmp
     exe.chmod(0o755)
     monkeypatch.setenv("AMICUS_CLAUDE_BIN", str(exe))
     assert binary.ClaudeBinary(config.load_config()).resolve() == str(exe)
+
+
+# --- the never-spawn guard for pi: AMICUS_PI_BIN is unusable
+
+
+def test_never_spawn_pi_env_is_set_to_the_unusable_path():
+    from tests.conftest import NEVER_SPAWN_PI
+
+    assert os.environ["AMICUS_PI_BIN"] == NEVER_SPAWN_PI
+    assert not Path(NEVER_SPAWN_PI).exists()
+
+
+def test_the_real_pi_plugin_config_does_not_resolve_a_binary():
+    from amicus.backends.pi import binary, config
+
+    assert binary.PiBinary(config.load_config()).resolve() is None
+
+
+def test_positive_control_a_usable_pi_override_does_resolve(monkeypatch, tmp_path):
+    from amicus.backends.pi import binary, config
+
+    exe = tmp_path / "pi"
+    exe.write_text("#!/bin/sh\nexit 0\n")
+    exe.chmod(0o755)
+    monkeypatch.setenv("AMICUS_PI_BIN", str(exe))
+    assert binary.PiBinary(config.load_config()).resolve() == str(exe)
