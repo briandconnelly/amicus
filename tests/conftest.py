@@ -90,7 +90,7 @@ def _never_spawn_real_claude(monkeypatch):
 def _never_spawn_real_pi(monkeypatch):
     """No unit test may run the real pi CLI: an unusable AMICUS_PI_BIN makes every pi run,
     probe and catalog read short-circuit. Tests that want a run point the override at the
-    `fake_pi` fixture; the live suite (tests/test_pi_live.py) will delete it."""
+    `fake_pi` fixture; the live suite (tests/test_pi_live.py) deletes it."""
     monkeypatch.setenv("AMICUS_PI_BIN", NEVER_SPAWN_PI)
 
 
@@ -383,6 +383,31 @@ def live_kimi(monkeypatch, tmp_path):
     if probe.returncode != 0 or not providers:
         (pytest.fail if require else pytest.skip)("kimi has no configured provider")
     return kimi
+
+
+@pytest.fixture
+def live_pi(monkeypatch, tmp_path):
+    """Opt back into the real pi CLI for `-m integration` tests. Skips when pi is absent,
+    AMICUS_PI_MODEL is unset or its provider is not ready (the free `pi auth check`), unless
+    AMICUS_REQUIRE_LIVE=1 makes any of those a failure. Returns the pi binary."""
+    import shutil
+
+    from amicus.backends.pi import cli as pi_cli
+
+    monkeypatch.delenv("AMICUS_PI_BIN", raising=False)
+    monkeypatch.setenv("AMICUS_STATE_DIR", str(tmp_path / "state"))
+    require = os.environ.get("AMICUS_REQUIRE_LIVE") == "1"
+    pi = shutil.which("pi")
+    if pi is None:
+        (pytest.fail if require else pytest.skip)("pi CLI not installed")
+    model = os.environ.get("AMICUS_PI_MODEL")
+    if not model:
+        (pytest.fail if require else pytest.skip)(
+            "AMICUS_PI_MODEL is not set (pi authenticates per provider; name a provider/id)"
+        )
+    if pi_cli.auth_status(pi, model) != "ready":
+        (pytest.fail if require else pytest.skip)("pi's provider for AMICUS_PI_MODEL is not ready")
+    return pi
 
 
 @pytest.fixture

@@ -126,6 +126,16 @@ def test_a_missing_backend_is_rejected():
     assert any("kimi" in p for p in problems), problems
 
 
+def test_a_three_suite_record_without_pi_is_rejected():
+    record = _record()
+    del record["backends"]["pi"]
+    problems = evidence.validate(record, head=HEAD, tree_clean=True, now=NOW)
+    assert any("pi" in p for p in problems), problems
+    assert evidence.BACKENDS == ("codex", "kimi", "claude", "pi")
+    assert evidence._BINARY_ENV_VARS["pi"] == "AMICUS_PI_BIN"
+    assert evidence._TEST_FILES["pi"] == "tests/test_pi_live.py"
+
+
 def test_a_nonzero_exit_status_is_rejected():
     record = _record()
     record["backends"]["claude"]["exit_status"] = 1
@@ -250,7 +260,7 @@ def _failing_gate(failing_backend):
     return run_gate
 
 
-def test_main_writes_evidence_when_all_three_pass_on_a_clean_tree(tmp_path):
+def test_main_writes_evidence_when_all_four_pass_on_a_clean_tree(tmp_path):
     rc = evidence.main(
         _ARGV,
         repo_root=tmp_path,

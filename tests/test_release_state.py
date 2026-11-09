@@ -45,7 +45,7 @@ PREVIOUS = "1.2.2"
 PREVIOUS_SHA = "c" * 40
 MARKETPLACE_URL = "https://github.com/briandconnelly/amicus.git"
 
-BACKENDS = ("codex", "kimi", "claude")
+BACKENDS = ("codex", "kimi", "claude", "pi")
 
 
 def _record(**overrides):
@@ -876,6 +876,13 @@ def test_a_record_missing_a_backend_is_rejected():
     del record["backends"]["claude"]
     problems = _check_tag(message=json.dumps(record))
     assert any("claude" in problem for problem in problems), problems
+
+
+def test_a_three_suite_record_without_pi_is_rejected():
+    record = _record()
+    del record["backends"]["pi"]
+    problems = _check_tag(message=json.dumps(record))
+    assert any("pi" in problem for problem in problems), problems
 
 
 def test_a_record_taken_on_a_dirty_tree_is_rejected():

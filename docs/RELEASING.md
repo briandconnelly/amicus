@@ -96,7 +96,7 @@ Second, its "Status and known limits" section must not claim anything the releas
 
 ### The backend CLIs are current and checked
 
-A release vouches for the `codex`, `kimi` and `claude` that are installed when its rule-20 evidence is recorded, and those CLIs release far more often than amicus does.
+A release vouches for the `codex`, `kimi`, `claude` and `pi` that are installed when its rule-20 evidence is recorded, and those CLIs release far more often than amicus does.
 Do this last among the preconditions, immediately before the evidence run in the release sequence, because a check done a week earlier describes CLIs that have since moved.
 
 First bring each CLI to its latest release on the machine that will record the evidence.
@@ -122,7 +122,7 @@ A `FAIL` line names what is wrong: a CLI that is not installed or not authentica
 It fails closed: help that cannot be read, or a latest release that cannot be looked up, is a failure rather than a pass, and `--offline` exists to say out loud that the lookup was skipped, which is not good enough for a release.
 A flag counts only where `--help` declares it as an option, never where another option's description happens to name it.
 `FLAGS DIFFER` is not by itself a failure, since upstream adds flags constantly, but every removed flag must be looked up in that backend's `contract.py` before going on.
-`latest unknown` fails the check for every backend, because all three are on npm and it means the lookup failed rather than that the version matched.
+`latest unknown` fails the check for every backend, because all four are on npm and it means the lookup failed rather than that the version matched.
 A version `FAIL` says which way the installed version is off and how to install the version `latest` names: behind means upgrade to it, and ahead means a build from another dist-tag, so pin back to it or wait for `latest` to advance.
 
 When a CLI's version has no capture of its own, commit one with the change that adds support for it, so the next release has something to compare against.
@@ -137,9 +137,9 @@ For codex, `docs/UPGRADING-CODEX.md` is that procedure.
 
 The script cannot do the other half, which AGENTS.md rule 18 requires before every release: the carrier re-check.
 Rule 18 exempts a backend's native prompt carrier only where no documented or observed way to avoid it has been found on the CLI release being validated.
-For each of the three versions the script printed, read that CLI's `--help` and its release notes since the previous amicus release (for kimi, the GitHub releases of `MoonshotAI/kimi-code`) for anything that would avoid a listed carrier: a flag or setting that stops kimi keeping a session, a way to hand kimi its prompt without a file, or a codex channel for developer instructions other than `-c` on argv.
+For each of the four versions the script printed, read that CLI's `--help` and its release notes since the previous amicus release (for kimi, the GitHub releases of `MoonshotAI/kimi-code`) for anything that would avoid a listed carrier: a flag or setting that stops kimi keeping a session, a way to hand kimi its prompt without a file, or a codex channel for developer instructions other than `-c` on argv.
 If one has appeared, the exemption no longer holds for that carrier, and using the new mechanism is a change to make before this release rather than after it.
-If none has, say so in the release PR, naming the three versions, so the next reader can see the looking was done and on what.
+If none has, say so in the release PR, naming the four versions, so the next reader can see the looking was done and on what.
 The probe that stands behind kimi's session store, and what it did not test, is `docs/kimi-help/0.43.1/FINDINGS.md`.
 
 ## The release sequence
@@ -186,7 +186,7 @@ The tag therefore deliberately points at a commit that is in `main`'s history bu
 
 3. Run every command from here through step 6 in the PR C worktree, never in the main checkout.
    Every command below is relative to the directory it runs in.
-   The evidence was recorded in the main checkout for 0.3.0, 0.6.0 and 0.7.0; each time a later check caught it, but only after the quota on all three backends was spent (#241).
+   The evidence was recorded in the main checkout for 0.3.0, 0.6.0 and 0.7.0; each time a later check caught it, but only after the quota on all four backends was spent (#241).
    First do what no script can: bring the backend CLIs to npm's `latest` with Claude Code's autoupdater held, as the backend-CLI precondition above describes, and do the rule-18 carrier re-check, because the evidence vouches for exactly the CLI versions installed at this moment.
    Then move to the worktree and run the preflight, with PR C's number:
 
@@ -208,10 +208,11 @@ The tag therefore deliberately points at a commit that is in `main`'s history bu
    Record the release commit's SHA, and note it well: it is the commit that gets tagged, and it will not be `main`'s head after the next step.
    If the PR C branch gains any commit after this point — an "Update branch" click, or a review pushing a change — this step must be redone from the new tip: the evidence would otherwise cover a commit that is no longer what step 4 actually merges.
    Redoing it after the local tag below exists starts with `git tag -d vX.Y.Z`, because the evidence script refuses to run while that tag exists; delete it only if it was never pushed.
-   The evidence run below spends real quota on all three backends; a maintainer who has to redo this step must not reuse the earlier record, even though re-spending that quota is tempting.
+   The evidence run below spends real quota on all four backends; a maintainer who has to redo this step must not reuse the earlier record, even though re-spending that quota is tempting.
    Run the command the preflight printed, which is `uv run python scripts/record_live_gate_evidence.py --version X.Y.Z` in the worktree.
    The script itself forces `AMICUS_REQUIRE_LIVE=1` into each backend's subprocess environment, so prefixing the command with it is optional; its own usage string documents `AMICUS_REQUIRE_LIVE=1 uv run python scripts/record_live_gate_evidence.py --version X.Y.Z`, and either form runs the same live gates.
-   This spends real quota on all three backends and requires the maintainer's authorization in the session where it runs; a passing preflight is not that authorization.
+   The pi gate also needs `AMICUS_PI_MODEL` exported as an exact `provider/id` whose provider is ready, or it fails rather than skips.
+   This spends real quota on all four backends and requires the maintainer's authorization in the session where it runs; a passing preflight is not that authorization.
    Before any gate runs, it refuses when the checkout declares a version other than `--version`, which is what the main checkout does between releases, and when a local tag `vX.Y.Z` already exists.
    That tag check reads local tags only: it stops a collision with an earlier attempt, and it is no evidence that `vX.Y.Z` was never published, which the preflight's `origin` lookup is for.
    Neither check establishes that `HEAD` is the PR C branch tip, which is what the preflight is for.
@@ -329,7 +330,7 @@ The `build` job runs first, then `verify`, and only then does the `pypi` job wai
 `verify` runs `scripts/check_release_state.py` against the tagged commit and writes its result to the run summary, so read that summary before approving — it is there for exactly this moment, and it is why the check does not live in the `pypi` job, whose every step would run only after your approval.
 Read what the summary claims precisely.
 Release-state coherence is proven: the version literals, the dated changelog section and `uv.lock` really do agree on the tagged tree.
-The live-gate line is not proof the three suites ran; it reports that the record you wrote is well formed and names this commit.
+The live-gate line is not proof the four suites ran; it reports that the record you wrote is well formed and names this commit.
 You are the only evidence that the runs happened, which is what AGENTS.md rule 23 is about.
 Approve that deployment deliberately once you have confirmed the build artifacts look right.
 The upload is irreversible: PyPI does not allow re-uploading a version, even a broken one.

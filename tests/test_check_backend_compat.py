@@ -17,10 +17,12 @@ _spec.loader.exec_module(compat)
 
 
 @pytest.fixture
-def fakes(clean_env, fake_codex, fake_kimi, fake_claude):
+def fakes(clean_env, fake_codex, fake_kimi, fake_claude, fake_pi):
     clean_env.setenv("AMICUS_CODEX_BIN", str(fake_codex))
     clean_env.setenv("AMICUS_KIMI_BIN", str(fake_kimi))
     clean_env.setenv("AMICUS_CLAUDE_BIN", str(fake_claude))
+    clean_env.setenv("AMICUS_PI_BIN", str(fake_pi))
+    clean_env.setenv("AMICUS_PI_MODEL", "openrouter/moonshotai/kimi-k3")
     return clean_env
 
 
@@ -43,7 +45,7 @@ def _capture(root: Path, backend: str, version: str, help_text: str) -> None:
 
 def test_every_in_tree_backend_is_checked_and_a_clean_one_passes(fakes, tmp_path):
     reports = compat.check_all(tmp_path, latest=_no_network, offline=True)
-    assert [r.backend for r in reports] == ["codex", "kimi", "claude"]
+    assert [r.backend for r in reports] == ["codex", "kimi", "claude", "pi"]
     for report in reports:
         assert report.installed and report.help_ok and report.declared, report.backend
         assert report.missing_flags == [], report
@@ -126,7 +128,7 @@ def test_main_exits_nonzero_on_a_problem_and_zero_when_clean(fakes, tmp_path, ca
     monkeypatch.setattr(compat, "latest_upstream", _current(installed))
     assert compat.main(["--docs-root", str(tmp_path)]) == 0
     out = capsys.readouterr().out
-    for backend in ("codex", "kimi", "claude"):
+    for backend in ("codex", "kimi", "claude", "pi"):
         assert backend in out
     assert "carrier" in out.lower(), "the rule-18 re-check is prompted, since no script can do it"
     monkeypatch.setattr(compat, "latest_upstream", lambda _b: "9.9.9")
@@ -183,16 +185,16 @@ def test_help_that_could_not_be_read_is_a_failure_not_a_clean_run(fakes, tmp_pat
 
 @pytest.mark.parametrize("state", [False, None])
 def test_a_backend_that_is_not_authenticated_is_a_failure(fakes, tmp_path, state):
-    """The evidence run needs all three logged in, and RELEASING.md says yes means so."""
+    """The evidence run needs every backend logged in, and RELEASING.md says yes means so."""
     report = compat.check_backend("kimi", tmp_path, latest=_no_network, offline=True)
     assert report.authenticated is True and compat.problems(report) == []
     report.authenticated = state
     assert any("authenticated" in p for p in compat.problems(report))
 
 
-@pytest.mark.parametrize("backend", ["codex", "kimi", "claude"])
+@pytest.mark.parametrize("backend", ["codex", "kimi", "claude", "pi"])
 def test_an_unreadable_latest_is_a_failure_for_every_backend(fakes, tmp_path, backend):
-    """All three CLIs are on npm (kimi as @moonshot-ai/kimi-code, which #202 established; it
+    """All four CLIs are on npm (kimi as @moonshot-ai/kimi-code, which #202 established; it
     was first treated as unreadable). So a missing latest is a lookup that failed, and it
     must not look like a version that matched."""
     assert backend in compat.NPM_PACKAGES

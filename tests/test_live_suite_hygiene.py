@@ -2,7 +2,7 @@
 model's prose. The live suites are `-m integration`, so this pin lives outside them and runs in
 the ordinary gate.
 
-It covers all three backends, discovered rather than listed, because
+It covers every backend, discovered rather than listed, because
 `scripts/record_live_gate_evidence.py` now persists a failed suite's per-test outcome: a suite
 that prints prose on failure would leak it into `.release-evidence/`, not only into a terminal.
 
@@ -30,7 +30,12 @@ LIVE_SUITES = sorted(TESTS_DIR.glob("test_*_live.py"))
 
 # The suites that must exist; a rename that silently drops one from the glob is the failure this
 # pins, because an empty glob would otherwise pass as a clean result.
-REQUIRED_SUITES = ("test_claude_live.py", "test_codex_live.py", "test_kimi_live.py")
+REQUIRED_SUITES = (
+    "test_claude_live.py",
+    "test_codex_live.py",
+    "test_kimi_live.py",
+    "test_pi_live.py",
+)
 
 # Body-rooted messages that carry no model text. Compared as `ast.unparse` output, so formatting
 # and quote style cannot smuggle anything past: an error's `code` is a fixed enum, unlike the

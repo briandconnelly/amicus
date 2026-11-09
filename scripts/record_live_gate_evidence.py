@@ -1,15 +1,15 @@
 #!/usr/bin/env python
-"""Run the three live backend gates and record whether they PASSED on this commit.
+"""Run the four live backend gates and record whether they PASSED on this commit.
 
 This is an honest-mistake guard, not an attestation. The record it writes
 (`.release-evidence/live-gates.json`) is a gitignored local file a maintainer can hand-edit,
 so it proves nothing against a determined author. What it catches is the ordinary slip: tagging
 evidence taken on the wrong commit, on a dirty tree, from a partial run, or too long ago.
 
-AGENTS.md rule 20 requires that the three live gates — tests/test_codex_live.py,
-tests/test_kimi_live.py and tests/test_claude_live.py — have all PASSED (not merely run) on the
-exact commit being tagged, with that outcome recorded here. A record showing a failed suite is
-not evidence; it is a reason not to tag.
+AGENTS.md rule 20 requires that the live gates — tests/test_codex_live.py,
+tests/test_kimi_live.py, tests/test_claude_live.py and tests/test_pi_live.py — have all
+PASSED (not merely run) on the exact commit being tagged, with that outcome recorded here.
+A record showing a failed suite is not evidence; it is a reason not to tag.
 
 This script itself is the deliberate, maintainer-run trigger for `-m integration` that
 AGENTS.md rule 5 requires: it must never be invoked by the test suite, a pre-commit/pre-push
@@ -87,13 +87,14 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 EVIDENCE_PATH = Path(".release-evidence/live-gates.json")
 FAILURE_PATH = Path(".release-evidence/live-gates.failed.json")
 
-BACKENDS = ("codex", "kimi", "claude")
+BACKENDS = ("codex", "kimi", "claude", "pi")
 
 _TEST_FILES = {name: f"tests/test_{name}_live.py" for name in BACKENDS}
 _BINARY_ENV_VARS = {
     "codex": "AMICUS_CODEX_BIN",
     "kimi": "AMICUS_KIMI_BIN",
     "claude": "AMICUS_CLAUDE_BIN",
+    "pi": "AMICUS_PI_BIN",
 }
 
 _REQUIRED_TOP_LEVEL_FIELDS = ("batch_id", "recorded_at", "commit", "tree_clean", "backends")
@@ -345,7 +346,7 @@ def main(
     declared_version: Callable[[], str] = _declared_version,
     tag_exists: Callable[[str], bool] = _tag_exists,
 ) -> int:
-    """Run all three live gates and write EVIDENCE_PATH or FAILURE_PATH under `repo_root`.
+    """Run every live gate and write EVIDENCE_PATH or FAILURE_PATH under `repo_root`.
 
     `git_head`, `git_dirty_paths`, `run_gate`, `declared_version` and `tag_exists` are
     injectable seams: tests substitute fakes here (no real git repo, no subprocess, no live
@@ -544,10 +545,10 @@ def validate(
     manual mutations of a file on disk.
 
     Returns a list of human-readable problems; an empty list means the record is usable release
-    evidence -- i.e. it shows all three live gates (codex, kimi, claude) PASSED, on this exact
+    evidence -- i.e. it shows all four live gates (codex, kimi, claude, pi) PASSED, on this exact
     commit, on a clean tree, recently enough to still be trustworthy, each backend entry
     naming the suite that backend's gate actually runs (`test_file` matches `_TEST_FILES`),
-    and all three entries sharing the record's own `batch_id` -- proof they came from the
+    and every entry sharing the record's own `batch_id` -- proof they came from the
     same run rather than a hand-repaired mix of entries from different runs.
     """
     problems = validate_record(record, head=head, tree_clean=tree_clean)

@@ -635,8 +635,9 @@ def cmd_preflight(ctx: Context, args: argparse.Namespace) -> int:
     print(f"Record that SHA: it is the release commit, the one {tag} will point at.")
     print("Still yours before the evidence run (docs/RELEASING.md step 3): the backend CLIs at")
     print("npm's latest with Claude Code's autoupdater held, and the rule-18 carrier re-check.")
-    print("The evidence run spends live quota on all three backends and needs the maintainer's")
-    print("authorization in the session that runs it. This script never runs it. The command:")
+    print("The evidence run spends live quota on all four backends (codex, kimi, claude and pi)")
+    print("and needs the maintainer's authorization in the session that runs it. This script")
+    print("never runs it. The command:")
     print(f"  {evidence_command(ctx.repo_root, version)}")
     return 0
 
