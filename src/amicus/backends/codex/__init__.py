@@ -42,8 +42,8 @@ LOCAL_CODES: dict[str, RepairRule] = {
 }
 EGRESS = (
     "Sends your question/task, extra_context and instructions_append raw, and the "
-    f"secret-redacted diff for reviews, to OpenAI via the codex CLI. {contract.READ_SCOPE_FACT} "
-    f"{contract.IMPLICIT_CONTEXT_DISCLOSURE} {contract.WORKSPACE_WRITE_SCOPE_FACT}"
+    "secret-redacted diff for reviews, to OpenAI via the codex CLI. "
+    f"{contract.WORKSPACE_WRITE_SCOPE_FACT}"
 )
 CARRIERS = (
     "The prompt (framing, question/task/diff, extra_context) rides the codex process's "

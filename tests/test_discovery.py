@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import time
 from typing import get_args
 
@@ -725,3 +726,57 @@ async def test_annotations_reading_says_which_job_read_records_a_delivery():
     [sentence] = [s for s in reading.split(". ") if "job reads stay readOnlyHint true" in s]
     assert "amicus_job_result records each result it returns" in sentence
     assert "evictable by the cap" in sentence
+
+
+def _sentences(text: str | None) -> list[str]:
+    return [s for s in re.split(r"(?<=[.!?])\s+", " ".join((text or "").split())) if s]
+
+
+async def _loaded_backends():
+    """amicus_backends at both details and each backend's template read, with every in-tree
+    plugin loaded through the real registry path (the autouse guards in conftest make each
+    binary unreachable, so no backend CLI runs). The manifest snapshots are built with an
+    empty registry and never see a plugin's disclosures, so this is the instrument for them."""
+    ids = ("codex", "kimi", "claude", "pi")
+    registry = BackendRegistry.load(ids, entry_points=())
+    assert registry.unavailable == {}
+    app = _app(registry=registry)
+    async with Client(app) as c:
+        summary = (await c.call_tool("amicus_backends", {})).structured_content
+        full = (await c.call_tool("amicus_backends", {"detail": "full"})).structured_content
+        resources = {}
+        for b in ids:
+            [entry] = await c.read_resource(f"amicus://backends/{b}")
+            resources[b] = json.loads(entry.text)
+    return summary, {e["id"]: e for e in full["backends"]}, resources
+
+
+# What leaves and to whom: each backend's egress names its recipient and the inputs it sends.
+_EGRESS_NAMES: dict[str, tuple[str, ...]] = {
+    "codex": ("OpenAI", "question/task", "extra_context", "instructions_append", "diff"),
+    "kimi": ("Kimi provider", "question/task", "extra_context", "instructions_append", "diff"),
+    "claude": ("Anthropic", "question/target/evidence", "extra_context", "diff"),
+    "pi": ("provider",),
+}
+
+
+async def test_backend_egress_says_only_what_leaves_and_never_repeats_its_neighbours():
+    """#445: egress repeated, verbatim, sentences the same entry publishes as
+    readonly_honesty or implicit_context, which made the mandatory first read about 14%
+    longer. Each sentence now has one home in the entry; pi's entry was already the control."""
+    summary, full, resources = await _loaded_backends()
+    assert set(full) == set(_EGRESS_NAMES)
+    for backend, entry in full.items():
+        for name in _EGRESS_NAMES[backend]:
+            assert name in entry["egress"], (backend, name)
+        neighbours = " ".join(
+            " ".join((entry[f] or "").split()) for f in ("readonly_honesty", "implicit_context")
+        )
+        repeated = [s for s in _sentences(entry["egress"]) if s in neighbours]
+        assert repeated == [], (backend, repeated)
+    # The summary still names all four disclosures as omitted.
+    assert summary["omitted_fields"] == list(results.BACKEND_DISCLOSURE_FIELDS)
+    # The template returns one flattened entry; its disclosures equal the full tool entry's.
+    for backend, entry in full.items():
+        for field in results.BACKEND_DISCLOSURE_FIELDS:
+            assert resources[backend][field] == entry[field], (backend, field)

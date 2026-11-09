@@ -39,3 +39,16 @@ def test_plugin_factory_reads_the_process_env_by_default(pinned_codex_bin, monke
     plugin = codex_pkg.plugin()
     assert {o.name: o.default for o in plugin.options}["model"] == "from-env"
     assert plugin.help_probe.help_argv == ("/CODEX", "exec", "--help")
+
+
+def test_egress_leaves_each_disclosure_to_its_own_field(pinned_codex_bin):
+    """#445: egress no longer repeats the read-scope and implicit-context facts, which the
+    entry publishes as readonly_honesty and implicit_context; each still has that home. The
+    workspace-write fact has no other home in the entry, so it stays in egress."""
+    plugin = registry.BackendRegistry.load(("codex",), entry_points=()).get("codex")
+    assert plugin is not None
+    assert contract.READ_SCOPE_FACT in plugin.contract.readonly_honesty_statement
+    assert plugin.contract.implicit_context_disclosure == contract.IMPLICIT_CONTEXT_DISCLOSURE
+    for moved in (contract.READ_SCOPE_FACT, contract.IMPLICIT_CONTEXT_DISCLOSURE):
+        assert moved not in plugin.egress
+    assert contract.WORKSPACE_WRITE_SCOPE_FACT in plugin.egress

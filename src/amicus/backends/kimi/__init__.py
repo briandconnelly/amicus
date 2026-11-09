@@ -34,8 +34,7 @@ EGRESS = (
     "Sends your question/task, extra_context and instructions_append raw, and the "
     "secret-redacted diff for reviews, to your configured Kimi provider (Moonshot or any "
     "OpenAI-compatible endpoint named in kimi's config.toml) via the kimi CLI. "
-    f"{contract.REDACTION_LIMIT_FACT} {contract.SKILLS_DISCOVERY_FACT_FULL} "
-    f"{contract.SKILLS_ISOLATION_NOTE}"
+    f"{contract.REDACTION_LIMIT_FACT} {contract.SKILLS_ISOLATION_NOTE}"
 )
 CARRIERS = (
     "The prompt (framing, question/task/diff, extra_context, and instructions_append as a "

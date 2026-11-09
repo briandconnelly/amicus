@@ -57,8 +57,7 @@ LOCAL_CODES: dict[str, RepairRule] = {
 EGRESS = (
     "Sends your question/target/evidence, extra_context and instructions_append raw, and the "
     "secret-redacted diff for reviews and critiques, to Anthropic via the claude CLI, using "
-    "your Claude login (config_mode inherit/scoped/safe) or ANTHROPIC_API_KEY (bare). "
-    f"{contract.READ_ONLY_HONESTY} {contract.IMPLICIT_CONTEXT_DISCLOSURE}"
+    "your Claude login (config_mode inherit/scoped/safe) or ANTHROPIC_API_KEY (bare)."
 )
 CARRIERS = (
     "The prompt (framing, question/target/evidence/diff, extra_context, and instructions_append "
