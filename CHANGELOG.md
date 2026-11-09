@@ -44,6 +44,25 @@ per-change, as its own lead says.
   says a slug past the cut may still be valid, where it said one is. The `reasoning_effort`
   contract on `amicus://params` and the `collaborating-with-amicus` skill say the same.
 
+- **Surface**: `amicus/0.1/schema-65`. The discovery prose matches the enabled profile and says
+  each thing once (#441, #442, #445, #446). The server instructions end with the line
+  `END OF AMICUS INSTRUCTIONS`, and their head, inside the 2,048 characters a prefix-cutting
+  host shows, says so and tells an agent whose copy ends otherwise to call
+  `amicus_capabilities`; the head was tightened to pay for it and no rule moved (#441).
+  `amicus_capabilities.annotations_reading` names each enabled backend that makes the paid tools
+  `destructiveHint: true` with its own reason (Claude Code's config modes may run workspace
+  hooks; Pi's delegate runs unsandboxed shell commands), and an enabled id amicus has no
+  declaration for as annotated for the worst case, where it used to name Claude Code on every
+  destructive profile, a Pi-only one included; the annotations themselves are unchanged (#442).
+  `amicus_job_result` stays `readOnlyHint: true`, and its description and `annotations_reading`
+  now say that a result it has returned becomes evictable by the per-workspace cap for a later
+  paid call, where the description said only that a re-read is free (#446). On
+  `amicus_backends(detail="full")`, `egress` no longer repeats sentences the same entry
+  publishes as `readonly_honesty` or `implicit_context` (codex, claude and kimi; pi never did),
+  so each sentence has one home and the full payload is about 14% smaller; the facts with no
+  other home, codex's workspace-write scope and kimi's redaction limit and ignore-skills note,
+  stay in `egress` (#445).
+
 ## [0.13.0] - 2026-11-09
 
 This release adds a `pi` backend, for the pi coding-agent CLI, and deprecates `kimi` in its

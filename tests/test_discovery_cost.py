@@ -374,6 +374,15 @@ pi's listing holds (71), and amicus_delegate says amicus does not apply the diff
 and pi have no OS sandbox or network block (7). 250 + 40 + 150 = 440, measured per tool record.
 The server instructions change too, but ride the handshake, not tools/list. Measured on the
 wire. MEASURED and BUDGET both move by the 440 bytes, so the budget keeps no headroom.
+
+The schema-65 raise (+88 bytes on every profile: all 115952 -> 116040) is #446. The
+amicus_job_result description said "The record is retained, so a re-read is free." although a
+successful fetch stamps the result delivered, which lets the per-workspace cap evict it for a
+later paid call (ADR 0038); it now says "A re-read is free until the record expires or, once
+this tool has returned it, the per-workspace cap evicts it for a later paid call." One
+description, +88 bytes. The same change's server-instructions, annotations_reading and
+amicus_backends egress edits ride the handshake and tool results, not tools/list. Measured on
+the wire. MEASURED and BUDGET both move by the 88 bytes, so the budget keeps no headroom.
 """
 
 from __future__ import annotations
@@ -383,7 +392,7 @@ from tests.conftest import spawned_server_env
 
 from amicus import manifest
 
-MEASURED: dict[str, int] = {"all": 115952, "codex-kimi": 115960, "claude": 115952}
+MEASURED: dict[str, int] = {"all": 116040, "codex-kimi": 116048, "claude": 116040}
 # The budget is a literal, not MEASURED rounded up to the next kilobyte as it was until
 # 2026-09-14. The rounding left up to 1 KB of growth per bucket that no PR had to own, and
 # this file records three such accumulations (448 and 12 bytes in the paragraphs above, and
@@ -391,7 +400,7 @@ MEASURED: dict[str, int] = {"all": 115952, "codex-kimi": 115960, "claude": 11595
 # #94 that landed after it), each noticed only when the next deliberate raise re-measured.
 # Any growth now fails until a PR raises BUDGET and says why; a shrink passes and shows as
 # drift against MEASURED. Raising one means re-measuring and moving both.
-BUDGET: dict[str, int] = {"all": 115952, "codex-kimi": 115960, "claude": 115952}
+BUDGET: dict[str, int] = {"all": 116040, "codex-kimi": 116048, "claude": 116040}
 
 
 @pytest.mark.parametrize("profile", sorted(manifest.PROFILES))
