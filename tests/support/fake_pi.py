@@ -17,7 +17,11 @@ A `-p` run reads stdin, copies it to FAKE_PI_STDIN_FILE and appends its argv (bi
 as one JSON line to FAKE_PI_ARGV_FILE when set, writes FAKE_PI_WRITE (a relative path) under
 cwd when set, prints FAKE_PI_EVENTS or a pi 1.5.0 shaped JSONL stream answering
 FAKE_PI_ANSWER (default: a structured consult/review JSON), writes FAKE_PI_STDERR to stderr,
-and exits FAKE_PI_EXIT (default 0)."""
+and exits FAKE_PI_EXIT (default 0).
+
+Every invocation appends `[argv[0], cwd]` as one JSON line to FAKE_PI_CWD_FILE when set. Like
+pi 1.5.0 (`runMigrations(cwd)` in main.js), every invocation except `--version` and `auth`
+renames `<cwd>/.pi/commands` to `<cwd>/.pi/prompts` when only the former exists."""
 
 from __future__ import annotations
 
@@ -146,7 +150,25 @@ def _default_events(prompt: str, answer: str, model: str) -> str:
     return "".join(json.dumps(e) + "\n" for e in events)
 
 
+def _record_cwd(argv: list[str]) -> None:
+    cwd_file = os.environ.get("FAKE_PI_CWD_FILE")
+    if cwd_file:
+        with Path(cwd_file).open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps([argv[0] if argv else "", str(Path.cwd())]) + "\n")
+
+
+def _migrate(argv: list[str]) -> None:
+    """pi's project migration, which runs before it handles `--help` or `--list-models`."""
+    if argv == ["--version"] or argv[:1] == ["auth"]:
+        return
+    project = Path.cwd() / ".pi"
+    if (project / "commands").exists() and not (project / "prompts").exists():
+        (project / "commands").rename(project / "prompts")
+
+
 def main(argv: list[str]) -> int:
+    _record_cwd(argv)
+    _migrate(argv)
     probed = _probe(argv)
     if probed is not None:
         return probed

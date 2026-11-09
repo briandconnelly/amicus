@@ -11,6 +11,7 @@ import time
 from typing import TYPE_CHECKING, Literal
 
 from amicus.backends.pi import contract
+from amicus.backends.pi.config import probe_cwd
 from amicus.plugin import ModelEntry, ModelListing
 from amicus.sdk.core import runtime
 
@@ -46,10 +47,11 @@ def parse_table(stdout: str) -> ModelListing | None:
     return ModelListing(models=tuple(entries), source="live", truncated=truncated)
 
 
-def _probe(binary: str, *terms: str) -> str | None:
+def _probe(binary: str, *terms: str, cwd: str) -> str | None:
     run = runtime.run_sync_capture(
         [binary, *contract.LIST_MODELS_ARGS, *terms, *contract.SUPPRESSION_FLAGS],
         timeout_seconds=PROBE_TIMEOUT_SECONDS,
+        cwd=cwd,
     )
     if run.binary_missing or run.timed_out or run.exit_code != 0:
         return None
@@ -73,7 +75,7 @@ class PiModels:
             if now - stamped < HELP_CACHE_TTL_SECONDS:
                 return listing
         binary = self._binary.resolve()
-        out = _probe(binary) if binary is not None else None
+        out = _probe(binary, cwd=probe_cwd(self._config)) if binary is not None else None
         listing = parse_table(out) if out is not None else None
         if listing is not None:
             self._cache = (now, listing)
@@ -85,7 +87,7 @@ class PiModels:
         """The row whose joined slug equals `model`; None when the listing was read and has
         no such row; "unreadable" when the probe could not run or its output was unusable."""
         binary = self._binary.resolve()
-        out = _probe(binary, model) if binary is not None else None
+        out = _probe(binary, model, cwd=probe_cwd(self._config)) if binary is not None else None
         if out is None:
             return "unreadable"
         listing = parse_table(out)

@@ -31,10 +31,12 @@ def _catalog(monkeypatch, runs, binary=None):
     queue = list(runs)
 
     def fake(cmd, timeout_seconds, **kwargs):
+        assert kwargs.get("cwd") == "/probe-cwd"  # never the server's own cwd
         calls.append(cmd)
         return queue.pop(0) if len(queue) > 1 else queue[0]
 
     monkeypatch.setattr(runtime, "run_sync_capture", fake)
+    monkeypatch.setattr(models, "probe_cwd", lambda config: "/probe-cwd")
     return models.PiModels(object(), binary or _Binary()), calls  # type: ignore[arg-type]
 
 

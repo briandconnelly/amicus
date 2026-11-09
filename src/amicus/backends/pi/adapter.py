@@ -13,6 +13,7 @@ import time
 from typing import TYPE_CHECKING, Literal
 
 from amicus.backends.pi import cli, contract, normalize
+from amicus.backends.pi import config as pi_config
 from amicus.backends.pi.binary import BinaryNotFoundError
 from amicus.backends.pi.models import HELP_CACHE_TTL_SECONDS
 from amicus.schemas import instructions
@@ -49,10 +50,10 @@ EMPTY_RESPONSE_DETAIL = (
 )
 
 
-def _auth_status(binary: str, model: str | None) -> AuthStatus:
+def _auth_status(binary: str, model: str | None, *, cwd: str | None = None) -> AuthStatus:
     # Resolved through the module at call time, so a test that patches cli.auth_status
     # reaches a backend built before the patch.
-    return cli.auth_status(binary, model)
+    return cli.auth_status(binary, model, cwd=cwd)
 
 
 def _invalid_model(detail: str, catalog: str) -> ClassifiedFailure:
@@ -79,7 +80,7 @@ class PiBackend:
         self._binary = binary
         self._help_probe = help_probe
         self._models = models
-        self._auth_status: Callable[[str, str | None], AuthStatus] = _auth_status
+        self._auth_status: Callable[[str, str | None], AuthStatus] = self._probe_auth
         # validate_request's two probes, remembered per model for HELP_CACHE_TTL_SECONDS, as
         # the catalog read is: the conformance check at registry load validates several
         # requests for one model, and each would otherwise spawn both probes again.
@@ -87,6 +88,10 @@ class PiBackend:
         self._lookup_memo: dict[str, tuple[float, ModelEntry | None]] = {}
 
     # --- per-call probes, memoized by model ---------------------------------------------------
+    def _probe_auth(self, binary: str, model: str | None) -> AuthStatus:
+        """The default auth seam: `pi auth check`, spawned from the neutral probe directory."""
+        return _auth_status(binary, model, cwd=pi_config.probe_cwd(self._config))
+
     @staticmethod
     def _make_room(memo: dict, model: str) -> None:
         if model not in memo and len(memo) >= _PROBE_CACHE_MAX_MODELS:

@@ -5,7 +5,9 @@ new, and its resource isolation is fixed by the suppression flags in `contract`.
 from __future__ import annotations
 
 import re
+import tempfile
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from amicus.backends.pi import contract
@@ -14,9 +16,10 @@ from amicus.config.envspec import EnvConflictError, EnvNamespace, EnvVar, is_env
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Mapping
-    from pathlib import Path
 
 PREFIX = "AMICUS_PI_"
+# The directory every free probe spawns pi from; see probe_cwd.
+PROBE_CWD_DIRNAME = "pi-probe-cwd"
 
 ENV = EnvNamespace(
     prefix=PREFIX,
@@ -106,6 +109,20 @@ def load_config(environ: Mapping[str, str] | None = None) -> PiConfig:
         warnings=tuple(warnings),
         errors=tuple(errors),
     )
+
+
+def probe_cwd(config: PiConfig) -> str:
+    """The directory every free probe spawns pi from, created on each call so a removed one
+    is not reported as a missing pi. pi runs its project migrations against its cwd before it
+    handles `--help` or `--list-models` (renaming `.pi/commands/` to `.pi/prompts/`), so a
+    probe must never run in whatever directory the server was started in. When the state
+    directory cannot hold it, the system temporary directory stands in."""
+    path = Path(config.state_dir) / PROBE_CWD_DIRNAME
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return tempfile.gettempdir()
+    return str(path)
 
 
 def parse_version(version: str | None) -> tuple[int, int] | None:

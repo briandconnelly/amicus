@@ -136,6 +136,14 @@ def test_disclosures_say_what_the_spec_says():
     assert "sessionDir" in contract.IMPLICIT_CONTEXT_DISCLOSURE
 
 
+def test_disclosures_name_the_startup_rename_of_project_commands():
+    """pi 1.5.0 renames `<cwd>/.pi/commands/` to `.pi/prompts/` at startup, before any flag
+    amicus sends can stop it, so even a read-only call changes such a workspace."""
+    for text in (contract.IMPLICIT_CONTEXT_DISCLOSURE, contract.READ_ONLY_HONESTY):
+        assert ".pi/commands/" in text and ".pi/prompts/" in text
+    assert "cannot suppress" in contract.IMPLICIT_CONTEXT_DISCLOSURE
+
+
 @pytest.mark.parametrize(
     "text, auth, drift, model, rate",
     [

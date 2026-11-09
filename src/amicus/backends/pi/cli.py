@@ -55,18 +55,22 @@ def build_run_env(base: dict[str, str]) -> dict[str, str]:
 
 
 # --- free probes ------------------------------------------------------------------------------
+# Each takes the directory to spawn pi from: callers pass `config.probe_cwd`, never the
+# server's own cwd, because pi migrates the project files of its cwd at startup.
 
 
-def pi_version(binary: str, timeout_seconds: int = 10) -> str | None:
+def pi_version(binary: str, timeout_seconds: int = 10, *, cwd: str | None = None) -> str | None:
     run = runtime.run_sync_capture(
-        [binary, *contract.VERSION_ARGS], timeout_seconds=timeout_seconds
+        [binary, *contract.VERSION_ARGS], timeout_seconds=timeout_seconds, cwd=cwd
     )
     if run.binary_missing or run.exit_code != 0:
         return None
     return run.stdout.strip() or None
 
 
-def auth_status(binary: str, model: str | None, timeout_seconds: int = 10) -> AuthStatus:
+def auth_status(
+    binary: str, model: str | None, timeout_seconds: int = 10, *, cwd: str | None = None
+) -> AuthStatus:
     """`pi auth check --model <model> --json --no-refresh`: free, never passes `--credentials`.
     No model spawns nothing. pi wraps any exception during the check, including "Unable to
     resolve model", as status `invalid` whose `provider` is the requested model string, so
@@ -76,7 +80,9 @@ def auth_status(binary: str, model: str | None, timeout_seconds: int = 10) -> Au
     if not model:
         return "unknown"
     run = runtime.run_sync_capture(
-        [binary, *contract.AUTH_CHECK_ARGS, "--model", model], timeout_seconds=timeout_seconds
+        [binary, *contract.AUTH_CHECK_ARGS, "--model", model],
+        timeout_seconds=timeout_seconds,
+        cwd=cwd,
     )
     if run.binary_missing:
         return "missing"

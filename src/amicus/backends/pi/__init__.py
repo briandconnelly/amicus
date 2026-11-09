@@ -42,6 +42,7 @@ def plugin(environ: Mapping[str, str] | None = None) -> BackendPlugin:
         help_argv=(token, *contract.HELP_ARGS),
         always_send_flags=contract.CONTRACT.always_send_flags,
         cache_ttl_seconds=HELP_CACHE_TTL_SECONDS,
+        probe_cwd=lambda: pi_config.probe_cwd(cfg),
     )
     catalog = PiModels(cfg, binary)
     return BackendPlugin(

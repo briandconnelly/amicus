@@ -130,3 +130,19 @@ def test_flag_support_fails_open_when_the_cli_cannot_be_executed(tmp_path, monke
     assert _probe().flag_support() == preflight.FlagSupport(
         supported=frozenset(), help_parsed=False
     )
+
+
+def test_probe_cwd_is_resolved_on_every_probe_and_absent_by_default(monkeypatch):
+    seen = []
+
+    def fake(cmd, timeout_seconds, **kwargs):
+        seen.append(kwargs)
+        return runtime.CommandRun(HELP_TEXT, "", 0, 1, False)
+
+    monkeypatch.setattr(runtime, "run_sync_capture", fake)
+    dirs = iter(["/neutral/a", "/neutral/b"])
+    p = _probe(probe_cwd=lambda: next(dirs))
+    p.flag_support()
+    p.flag_support(force=True)
+    _probe().flag_support()
+    assert seen == [{"cwd": "/neutral/a"}, {"cwd": "/neutral/b"}, {}]

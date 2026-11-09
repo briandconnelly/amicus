@@ -50,7 +50,7 @@ def test_a_binary_gone_between_the_probes_is_unknown_not_unauthenticated(env, mo
     """`missing` is a spawn failure, not a statement about credentials."""
     from amicus.backends.pi import cli
 
-    monkeypatch.setattr(cli, "auth_status", lambda binary, model: "missing")
+    monkeypatch.setattr(cli, "auth_status", lambda binary, model, cwd=None: "missing")
     rep = pi_pkg.plugin(env).status.probe()
     assert rep.installed is True and rep.authenticated is None
     assert st.UNRESOLVED_MODEL_WARNING not in rep.warnings

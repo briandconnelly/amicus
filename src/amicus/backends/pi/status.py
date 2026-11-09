@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from amicus.backends.pi import cli
-from amicus.backends.pi.config import version_supported
+from amicus.backends.pi.config import probe_cwd, version_supported
 from amicus.plugin import StatusReport
 from amicus.sdk.conventions import preflight
 
@@ -44,14 +44,15 @@ class PiStatus:
         if override_error is not None:
             return StatusReport(installed=False, warnings=(override_error, *warnings))
         binary = self._binary.resolve() or "pi"
-        version = cli.pi_version(binary)
+        cwd = probe_cwd(self._config)
+        version = cli.pi_version(binary, cwd=cwd)
         if version is None:
             return StatusReport(installed=False, warnings=tuple(warnings))
         authenticated: bool | None = None
         if self._config.model is None:
             warnings.append(NO_MODEL_WARNING)
         else:
-            auth = cli.auth_status(binary, self._config.model)
+            auth = cli.auth_status(binary, self._config.model, cwd=cwd)
             if auth == "ready":
                 authenticated = True
             elif auth in ("not_ready", "unresolved"):

@@ -103,14 +103,19 @@ CARRIERS = (
 READ_ONLY_HONESTY = (
     "Read-only means pi has no shell, edit or write tool. It does not confine reads, so a "
     "prompt-injected repository could make pi read other files on this machine and send them "
-    "to your configured provider, and it is no OS sandbox."
+    "to your configured provider, and it is no OS sandbox. It does not stop pi itself, at "
+    "startup, renaming the workspace's .pi/commands/ to .pi/prompts/ when the latter does "
+    "not exist."
 )
 IMPLICIT_CONTEXT_DISCLOSURE = (
     "Pi adds the working directory to its system prompt. User-level settings, `models.json` "
     "(whose `!command` key values pi runs) and credentials load. Context files, skills, "
     "extensions, MCP, prompt templates, themes and trust-gated project resources do not. A "
     "project `sessionDir` setting is read before trust is resolved, and under --no-session "
-    "nothing was written there on 1.5.0."
+    "nothing was written there on 1.5.0. At startup pi renames the workspace's "
+    ".pi/commands/ to .pi/prompts/ when the latter does not exist, so a consult or review in "
+    "such a repository changes it; amicus cannot suppress this. amicus's own free probes run "
+    "from its state directory, so they never do it."
 )
 
 # --- Failure signatures -------------------------------------------------------------------

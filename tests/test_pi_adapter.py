@@ -401,10 +401,12 @@ def test_auth_probe_without_a_binary_is_unknown():
 def test_auth_status_seam_reaches_the_cli_at_call_time(monkeypatch):
     seen = []
     monkeypatch.setattr(
-        adapter.cli, "auth_status", lambda binary, model: seen.append((binary, model)) or "ready"
+        adapter.cli,
+        "auth_status",
+        lambda binary, model, cwd=None: seen.append((binary, model, cwd)) or "ready",
     )
-    assert adapter._auth_status("/PI", pf.MODEL) == "ready"
-    assert seen == [("/PI", pf.MODEL)]
+    assert adapter._auth_status("/PI", pf.MODEL, cwd="/probe") == "ready"
+    assert seen == [("/PI", pf.MODEL, "/probe")]
 
 
 def test_scrub_env_applies_the_run_environment():
