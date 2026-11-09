@@ -191,7 +191,7 @@ def _profile(raw: str | None, errors: list[str], fatal: list[str]) -> tuple[str,
     # enable exactly what the operator tried to restrict, so nothing is enabled and the
     # server refuses to start, as it does for a relative AMICUS_STATE_DIR.
     problem = (
-        "AMICUS_BACKENDS names no in-tree backend (the names are codex, kimi and claude, "
+        "AMICUS_BACKENDS names no in-tree backend (the names are codex, kimi, claude and pi, "
         "case-sensitive); amicus will not start with every backend enabled in its place"
     )
     errors.append(problem)

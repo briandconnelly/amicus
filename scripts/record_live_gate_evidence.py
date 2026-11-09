@@ -1,15 +1,15 @@
 #!/usr/bin/env python
-"""Run the three live backend gates and record whether they PASSED on this commit.
+"""Run the four live backend gates and record whether they PASSED on this commit.
 
 This is an honest-mistake guard, not an attestation. The record it writes
 (`.release-evidence/live-gates.json`) is a gitignored local file a maintainer can hand-edit,
 so it proves nothing against a determined author. What it catches is the ordinary slip: tagging
 evidence taken on the wrong commit, on a dirty tree, from a partial run, or too long ago.
 
-AGENTS.md rule 20 requires that the three live gates — tests/test_codex_live.py,
-tests/test_kimi_live.py and tests/test_claude_live.py — have all PASSED (not merely run) on the
-exact commit being tagged, with that outcome recorded here. A record showing a failed suite is
-not evidence; it is a reason not to tag.
+AGENTS.md rule 20 requires that the live gates — tests/test_codex_live.py,
+tests/test_kimi_live.py, tests/test_claude_live.py and tests/test_pi_live.py — have all
+PASSED (not merely run) on the exact commit being tagged, with that outcome recorded here.
+A record showing a failed suite is not evidence; it is a reason not to tag.
 
 This script itself is the deliberate, maintainer-run trigger for `-m integration` that
 AGENTS.md rule 5 requires: it must never be invoked by the test suite, a pre-commit/pre-push
@@ -27,8 +27,8 @@ Usage:
 
 Where it runs (issue #241):
     Run it from the release PR's worktree, never from the main checkout. Release evidence was
-    recorded in the main checkout three releases running, and each time the quota for all
-    three backends was spent before a later check noticed. So before any gate runs, the
+    recorded in the main checkout three releases running, and each time the quota for every
+    backend was spent before a later check noticed. So before any gate runs, the
     script refuses when:
     - the checkout's declared version (`project.version` in its pyproject.toml) is not
       `--version`, which is the main checkout between releases, since it still declares the
@@ -55,7 +55,7 @@ Record shape:
     requires every backend entry to CARRY a `batch_id` and to agree with the record's -- this
     is what makes "one shared run produced this whole record" a checkable property instead of
     an assumption. Requiring the field is load-bearing, and was missing until issue #25: while
-    `batch_id` was merely checked-if-present, a record that omitted it from all three entries
+    `batch_id` was merely checked-if-present, a record that omitted it from every entry
     passed. Each backend entry's `test_file` must equal the suite that backend's gate
     actually runs (`_TEST_FILES[backend]`); a record whose entries were hand-copied from a
     different backend's run is rejected on this check.
@@ -87,13 +87,14 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 EVIDENCE_PATH = Path(".release-evidence/live-gates.json")
 FAILURE_PATH = Path(".release-evidence/live-gates.failed.json")
 
-BACKENDS = ("codex", "kimi", "claude")
+BACKENDS = ("codex", "kimi", "claude", "pi")
 
 _TEST_FILES = {name: f"tests/test_{name}_live.py" for name in BACKENDS}
 _BINARY_ENV_VARS = {
     "codex": "AMICUS_CODEX_BIN",
     "kimi": "AMICUS_KIMI_BIN",
     "claude": "AMICUS_CLAUDE_BIN",
+    "pi": "AMICUS_PI_BIN",
 }
 
 _REQUIRED_TOP_LEVEL_FIELDS = ("batch_id", "recorded_at", "commit", "tree_clean", "backends")
@@ -203,8 +204,8 @@ def _summarize_junit(xml_path: Path) -> dict[str, object] | None:
     Never reads an element's text or its `message`/`type` attributes, and never looks at
     `<system-out>`/`<system-err>`: those carry the traceback and the captured output, which is
     where a model's prose or an echoed prompt would be. What comes back is which test did not
-    pass and how it did not pass — enough to rerun that one test instead of respending on all
-    three suites, and not enough to leak anything (AGENTS.md rule 18).
+    pass and how it did not pass — enough to rerun that one test instead of respending on every
+    suite, and not enough to leak anything (AGENTS.md rule 18).
     """
     try:
         root = ElementTree.parse(xml_path).getroot()
@@ -345,7 +346,7 @@ def main(
     declared_version: Callable[[], str] = _declared_version,
     tag_exists: Callable[[str], bool] = _tag_exists,
 ) -> int:
-    """Run all three live gates and write EVIDENCE_PATH or FAILURE_PATH under `repo_root`.
+    """Run every live gate and write EVIDENCE_PATH or FAILURE_PATH under `repo_root`.
 
     `git_head`, `git_dirty_paths`, `run_gate`, `declared_version` and `tag_exists` are
     injectable seams: tests substitute fakes here (no real git repo, no subprocess, no live
@@ -390,7 +391,7 @@ def main(
 
     if all_passed and tree_clean_after:
         _write_json(repo_root, EVIDENCE_PATH, record)
-        print(f"wrote {EVIDENCE_PATH}: all three live gates passed on {commit}.")
+        print(f"wrote {EVIDENCE_PATH}: every live gate passed on {commit}.")
         return 0
 
     _write_json(repo_root, FAILURE_PATH, record)
@@ -544,10 +545,10 @@ def validate(
     manual mutations of a file on disk.
 
     Returns a list of human-readable problems; an empty list means the record is usable release
-    evidence -- i.e. it shows all three live gates (codex, kimi, claude) PASSED, on this exact
+    evidence -- i.e. it shows all four live gates (codex, kimi, claude, pi) PASSED, on this exact
     commit, on a clean tree, recently enough to still be trustworthy, each backend entry
     naming the suite that backend's gate actually runs (`test_file` matches `_TEST_FILES`),
-    and all three entries sharing the record's own `batch_id` -- proof they came from the
+    and every entry sharing the record's own `batch_id` -- proof they came from the
     same run rather than a hand-repaired mix of entries from different runs.
     """
     problems = validate_record(record, head=head, tree_clean=tree_clean)

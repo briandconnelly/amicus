@@ -2,9 +2,9 @@
 
 Give your coding agent a second opinion from a different model.
 
-amicus is one MCP server that fronts **Codex**, **Kimi** and **Claude**. The backend is a
-parameter, not a separate installation — so instead of running three servers and learning three
-tool surfaces, you ask for a consult, a review, or a delegated task and say which model should
+amicus is one MCP server that fronts **Codex**, **Kimi**, **Pi** and **Claude**. The backend is a
+parameter, not a separate installation — so instead of running a server per model and learning a
+tool surface for each, you ask for a consult, a review, or a delegated task and say which model should
 answer.
 
 - **Consult** — a read-only second opinion on an approach, a bug, or a design.
@@ -69,15 +69,27 @@ client that has no notion of a working directory looks like this:
 - macOS or Linux: amicus refuses to start on a non-POSIX platform, because its background-job
   safety layer depends on POSIX process semantics.
 - Python 3.11 or newer, and [`uv`](https://docs.astral.sh/uv/).
-- The CLI for each backend you enable, installed and authenticated: `codex`, `kimi`, `claude`.
+- The CLI for each backend you enable, installed and authenticated: `codex`, `kimi`, `pi`, `claude`.
   amicus drives those CLIs; it does not talk to the providers itself, and it stores no credentials.
 
 ## Using it
 
 Choose which backends are available with `AMICUS_BACKENDS` — a comma-separated list of `codex`,
-`kimi` and `claude` (case-sensitive). Unset, all three are enabled; set, only the backends you
+`kimi`, `pi` and `claude` (case-sensitive). Unset, all four are enabled; set, only the backends you
 name are. An enabled backend whose CLI is missing or not logged in still appears in
 `amicus_backends`, with `status.installed` and `status.authenticated` saying so.
+
+`pi` has no default model. Set `AMICUS_PI_MODEL` to an exact `provider/id`, as `pi --list-models`
+prints it, or pass `model` on each call; a call with neither is refused before it spends. Pi
+authenticates either from credentials saved by its interactive `/login <provider>`, which need
+nothing more, or from the provider's API-key environment variable (for OpenRouter,
+`OPENROUTER_API_KEY`), which has to reach the amicus server's environment: the plugin's
+`.mcp.json` does not forward it, so your host must.
+If you set `PI_CODING_AGENT_DIR`, make it an absolute path (or `~/…`): a relative one is refused
+before any spend and reported on `amicus_backends`, because pi would resolve it against a
+different directory for amicus's free probes than for a paid run.
+A `pi` delegate runs shell commands with no sandbox, and a command it starts (a hung or
+backgrounded process) can outlive the run, because amicus cannot yet find and stop it.
 
 Then just ask, in your own words:
 
@@ -117,14 +129,14 @@ its quota.
 
 Not every backend does everything:
 
-| Verb | Codex | Kimi | Claude |
-| --- | --- | --- | --- |
-| `consult`, `review_changes` | yes | yes | yes |
-| `delegate` | yes | yes | no |
-| `adversarial_review` | no | no | yes |
+| Verb | Codex | Kimi | Pi | Claude |
+| --- | --- | --- | --- | --- |
+| `consult`, `review_changes` | yes | yes | yes | yes |
+| `delegate` | yes | yes | yes | no |
+| `adversarial_review` | no | no | no | yes |
 
 A `no` is amicus's routing policy, not a model limitation. Claude is review-only, and the
-dedicated adversarial-review verb is scoped to Claude. To ask Codex or Kimi for an adversarial
+dedicated adversarial-review verb is scoped to Claude. To ask Codex, Kimi or Pi for an adversarial
 review, use `consult` or `review_changes` and supply the stance yourself; the dedicated verb adds
 a fixed critic stance and the `target` and `evidence` inputs.
 
@@ -154,7 +166,7 @@ does today.
   quote what you sent. Your inputs themselves are never written there ([ADR 0035](docs/adr/0035-a-backend-answer-is-kept-on-the-job-record.md)).
 - **Kimi keeps its own copy.** The kimi CLI writes its own session files (observed under
   `~/.kimi-code/sessions`), which can hold the whole prompt and any answer produced. amicus found
-  no documented way to switch that off and does not delete them, and none of the retention controls above reach it; Codex and Claude
+  no documented way to switch that off and does not delete them, and none of the retention controls above reach it; Codex, Pi and Claude
   run with their session persistence disabled.
 
 ## Configuration
@@ -186,7 +198,7 @@ Code 2.4 and 2.5 are supported versions.
 
 One known limit: a third-party backend distribution can load through the `amicus.backends`
 entry-point group, but cannot yet be enabled or called. `AMICUS_BACKENDS` and the `backend`
-parameter accept only the three in-tree ids.
+parameter accept only the four in-tree ids.
 
 ## Development
 
@@ -205,11 +217,11 @@ version.
 | Architecture decisions | `docs/adr/` |
 | How a release is cut | `docs/RELEASING.md` |
 | How a new codex minor becomes supported | `docs/UPGRADING-CODEX.md` |
-| How new kimi, claude, fastmcp and mcp releases become issues | `docs/WATCHING.md` |
+| How new kimi, pi, claude, fastmcp and mcp releases become issues | `docs/WATCHING.md` |
 | How a `FINGERPRINT` bump regenerates its test pins | `scripts/regenerate_fingerprint_pins.py` (its docstring) |
 | Every environment variable, its meaning and default | `docs/CONFIGURATION.md` |
 | The router skill an agent loads to call amicus | `skills/collaborating-with-amicus/` |
-| Host captures and CLI evidence | `docs/host-captures/`, `docs/claude-help/`, `docs/codex-help/`, `docs/kimi-help/` |
+| Host captures and CLI evidence | `docs/host-captures/`, `docs/claude-help/`, `docs/codex-help/`, `docs/kimi-help/`, `docs/pi-help/` |
 | How past milestones were built | git history — executed plans are removed once merged |
 
 ## License

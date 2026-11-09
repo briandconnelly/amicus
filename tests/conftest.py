@@ -30,6 +30,7 @@ ENV_PREFIXES = config.ENV_PREFIXES
 NEVER_SPAWN_CODEX = "/nonexistent/amicus-test-codex"
 NEVER_SPAWN_KIMI = "/nonexistent/amicus-test-kimi"
 NEVER_SPAWN_CLAUDE = "/nonexistent/amicus-test-claude"
+NEVER_SPAWN_PI = "/nonexistent/amicus-test-pi"
 
 # git exports these into the environment of every hook it runs, and prek's pre-push hook
 # runs this very suite (`entry = "uv run pytest"`, `stages = ["pre-push"]`). Without
@@ -83,6 +84,14 @@ def _never_spawn_real_claude(monkeypatch):
     claude run and probe short-circuit. Tests that want a run point the override at the
     `fake_claude` fixture; the live suite (tests/test_claude_live.py) deletes it."""
     monkeypatch.setenv("AMICUS_CLAUDE_BIN", NEVER_SPAWN_CLAUDE)
+
+
+@pytest.fixture(autouse=True)
+def _never_spawn_real_pi(monkeypatch):
+    """No unit test may run the real pi CLI: an unusable AMICUS_PI_BIN makes every pi run,
+    probe and catalog read short-circuit. Tests that want a run point the override at the
+    `fake_pi` fixture; the live suite (tests/test_pi_live.py) deletes it."""
+    monkeypatch.setenv("AMICUS_PI_BIN", NEVER_SPAWN_PI)
 
 
 # Every spelling that can open a log file: since #176 only the amicus name, because the
@@ -219,6 +228,7 @@ def clean_env(monkeypatch):
     monkeypatch.setenv("AMICUS_CODEX_BIN", NEVER_SPAWN_CODEX)
     monkeypatch.setenv("AMICUS_KIMI_BIN", NEVER_SPAWN_KIMI)
     monkeypatch.setenv("AMICUS_CLAUDE_BIN", NEVER_SPAWN_CLAUDE)
+    monkeypatch.setenv("AMICUS_PI_BIN", NEVER_SPAWN_PI)
     return monkeypatch
 
 
@@ -240,6 +250,7 @@ def spawned_server_env() -> dict[str, str]:
         "AMICUS_CODEX_BIN": NEVER_SPAWN_CODEX,
         "AMICUS_KIMI_BIN": NEVER_SPAWN_KIMI,
         "AMICUS_CLAUDE_BIN": NEVER_SPAWN_CLAUDE,
+        "AMICUS_PI_BIN": NEVER_SPAWN_PI,
     }
 
 
@@ -307,6 +318,19 @@ def fake_kimi(tmp_path_factory) -> Path:
 
 
 @pytest.fixture(scope="session")
+def fake_pi(tmp_path_factory) -> Path:
+    """An executable stand-in `pi` (tests/support/fake_pi.py) for spend-free runs, with the
+    verbatim 1.5.0 `pi --help` capture beside it for its help probe."""
+    root = Path(__file__).parent
+    exe_dir = tmp_path_factory.mktemp("fake-pi")
+    exe = exe_dir / "pi"
+    shutil.copy(root / "support" / "fake_pi.py", exe)
+    shutil.copy(root.parent / "docs" / "pi-help" / "1.5.0" / "pi-help.txt", exe_dir / "pi-help.txt")
+    exe.chmod(exe.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP)
+    return exe
+
+
+@pytest.fixture(scope="session")
 def fake_claude(tmp_path_factory) -> Path:
     """An executable stand-in `claude` (tests/support/fake_claude.py) for spend-free runs."""
     src = Path(__file__).parent / "support" / "fake_claude.py"
@@ -359,6 +383,31 @@ def live_kimi(monkeypatch, tmp_path):
     if probe.returncode != 0 or not providers:
         (pytest.fail if require else pytest.skip)("kimi has no configured provider")
     return kimi
+
+
+@pytest.fixture
+def live_pi(monkeypatch, tmp_path):
+    """Opt back into the real pi CLI for `-m integration` tests. Skips when pi is absent,
+    AMICUS_PI_MODEL is unset or its provider is not ready (the free `pi auth check`), unless
+    AMICUS_REQUIRE_LIVE=1 makes any of those a failure. Returns the pi binary."""
+    import shutil
+
+    from amicus.backends.pi import cli as pi_cli
+
+    monkeypatch.delenv("AMICUS_PI_BIN", raising=False)
+    monkeypatch.setenv("AMICUS_STATE_DIR", str(tmp_path / "state"))
+    require = os.environ.get("AMICUS_REQUIRE_LIVE") == "1"
+    pi = shutil.which("pi")
+    if pi is None:
+        (pytest.fail if require else pytest.skip)("pi CLI not installed")
+    model = os.environ.get("AMICUS_PI_MODEL")
+    if not model:
+        (pytest.fail if require else pytest.skip)(
+            "AMICUS_PI_MODEL is not set (pi authenticates per provider; name a provider/id)"
+        )
+    if pi_cli.auth_status(pi, model) != "ready":
+        (pytest.fail if require else pytest.skip)("pi's provider for AMICUS_PI_MODEL is not ready")
+    return pi
 
 
 @pytest.fixture

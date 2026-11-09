@@ -14,8 +14,8 @@ from typing import Literal, get_args
 
 from amicus.sdk.conventions import envelope as _pe
 
-BACKEND_IDS: tuple[str, ...] = ("codex", "kimi", "claude")
-BackendId = Literal["codex", "kimi", "claude"]
+BACKEND_IDS: tuple[str, ...] = ("codex", "kimi", "claude", "pi")
+BackendId = Literal["codex", "kimi", "claude", "pi"]
 
 VERBS: tuple[str, ...] = ("consult", "review_changes", "adversarial_review", "delegate")
 Verb = Literal["consult", "review_changes", "adversarial_review", "delegate"]
@@ -24,7 +24,7 @@ Verb = Literal["consult", "review_changes", "adversarial_review", "delegate"]
 # is exactly this set, so a schema-driven caller is never offered a backend the verb
 # rejects. `tools.discovery.TOOL_DETAILS[...]["backends"]` reads these; a test keeps them
 # equal to the published enums.
-DelegateBackendId = Literal["codex", "kimi"]
+DelegateBackendId = Literal["codex", "kimi", "pi"]
 AdversarialBackendId = Literal["claude"]
 VERB_BACKENDS: dict[str, tuple[str, ...]] = {
     "consult": BACKEND_IDS,
@@ -37,7 +37,7 @@ VERB_BACKENDS: dict[str, tuple[str, ...]] = {
 _MINTED_SUFFIXES = ("_not_found", "_auth_required", "_auth_indeterminate", "_rate_limited")
 GENERALIZED_BACKEND_CODES = frozenset(f"backend{s}" for s in _MINTED_SUFFIXES)
 
-# Feature codes for the features the v1 backends declare (kimi: model_validation and
+# Feature codes for the features the v1 backends declare (kimi and pi: model_validation and
 # empty_response_detection). Codex's `transfer` is deferred, so its codes are not minted.
 _FEATURE_CODES = _pe.feature_codes(frozenset({"model_validation", "empty_response_detection"}))
 

@@ -32,6 +32,7 @@ _GROUPS: tuple[tuple[str, str], ...] = (
     ("AMICUS_CODEX_", "Codex"),
     ("AMICUS_KIMI_", "Kimi"),
     ("AMICUS_CLAUDE_", "Claude"),
+    ("AMICUS_PI_", "Pi"),
 )
 
 HEADER = "\n".join(
@@ -86,7 +87,7 @@ def render() -> str:
     for var in packaging.declared_vars():
         groups.setdefault(_group(var), []).append(var)
     out = [HEADER]
-    for title in ("Server", "Codex", "Kimi", "Claude"):
+    for title in ("Server", "Codex", "Kimi", "Claude", "Pi"):
         if title not in groups:
             continue
         out.append(f"## {title}")

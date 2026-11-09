@@ -86,7 +86,7 @@ def classify_structured(
 
 def schema_instruction(output_schema: dict) -> str:
     """The prompt-appended structured-output instruction for a backend with no schema flag
-    (kimi, claude). One text, so both backends ask for the object the same way."""
+    (kimi, claude, pi). One text, so every such backend asks for the object the same way."""
     return (
         "\n\n# Required output format\n"
         "Reply with a single JSON object and nothing else — no prose, no code fence. "

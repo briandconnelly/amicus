@@ -9,7 +9,7 @@ self-contained coding task in a throwaway worktree, in the background.
 Request: $ARGUMENTS
 
 `backend` is required — amicus has no default backend. `amicus_delegate_async`
-supports `codex` and `kimi` only in v1 (Claude stays review-only) — do not route a
+supports `codex`, `kimi` and `pi` only in v1 (Claude stays review-only) — do not route a
 delegate request to `claude`. If the request does not name a backend, call
 `amicus_backends` with `detail="full"` first and choose only among backends it reports
 `enabled: true`, `status.authenticated: true`, and delegate listed under supported

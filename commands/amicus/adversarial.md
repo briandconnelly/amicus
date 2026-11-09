@@ -9,8 +9,8 @@ adversarial critic attack a plan, claim, or decision before you commit to it.
 Request: $ARGUMENTS
 
 `backend` is required — amicus has no default backend. `amicus_adversarial_review`
-supports `claude` only in v1 — do not route an adversarial-review request to `codex`
-or `kimi`. If the request does not confirm `claude` is enabled, call
+supports `claude` only in v1 — do not route an adversarial-review request to `codex`,
+`kimi` or `pi`. If the request does not confirm `claude` is enabled, call
 `amicus_backends` with `detail="full"` first and check `enabled: true` and `status.authenticated: true`
 for `claude`.
 

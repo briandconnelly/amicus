@@ -57,7 +57,7 @@ def test_a_complete_fresh_record_is_accepted():
 def test_a_record_whose_entries_omit_batch_id_entirely_is_rejected():
     """The gap issue #25 found: `batch_id` was checked only when present.
 
-    A record that simply left the field out of all three entries validated clean, so the
+    A record that simply left the field out of every entry validated clean, so the
     property the docstring claimed -- one shared run produced this whole record -- was not
     actually checkable. Omission and disagreement must both be rejected; the test below covers
     disagreement.
@@ -124,6 +124,16 @@ def test_a_missing_backend_is_rejected():
     del record["backends"]["kimi"]
     problems = evidence.validate(record, head=HEAD, tree_clean=True, now=NOW)
     assert any("kimi" in p for p in problems), problems
+
+
+def test_a_three_suite_record_without_pi_is_rejected():
+    record = _record()
+    del record["backends"]["pi"]
+    problems = evidence.validate(record, head=HEAD, tree_clean=True, now=NOW)
+    assert any("pi" in p for p in problems), problems
+    assert evidence.BACKENDS == ("codex", "kimi", "claude", "pi")
+    assert evidence._BINARY_ENV_VARS["pi"] == "AMICUS_PI_BIN"
+    assert evidence._TEST_FILES["pi"] == "tests/test_pi_live.py"
 
 
 def test_a_nonzero_exit_status_is_rejected():
@@ -250,7 +260,7 @@ def _failing_gate(failing_backend):
     return run_gate
 
 
-def test_main_writes_evidence_when_all_three_pass_on_a_clean_tree(tmp_path):
+def test_main_writes_evidence_when_all_four_pass_on_a_clean_tree(tmp_path):
     rc = evidence.main(
         _ARGV,
         repo_root=tmp_path,
@@ -361,7 +371,7 @@ def _never_called(label: str, calls: list[str]):
     ],
 )
 def test_main_parses_arguments_before_touching_git_or_any_gate(tmp_path, argv, expected_rc):
-    """Issue #242: `--help` used to start all three live gates, because `main` ignored argv.
+    """Issue #242: `--help` used to start the live gates, because `main` ignored argv.
 
     Neither git nor any gate may run for `--help` or for an argument the script does not
     accept, and neither may write a record.

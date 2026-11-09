@@ -1,12 +1,12 @@
 ---
 name: collaborating-with-amicus
-description: Use whenever this agent should call another model through amicus, or should answer a question about which models amicus can reach — a second opinion, a code review, an adversarial review, a delegated implementation, an independent two-model attempt, a declared review–revise pass, a blind comparison of finalized candidates, or a check of which backends are enabled, installed and authenticated. Trigger on "ask another model", "get a second opinion", "have Codex/Kimi/Claude review this", "delegate this", "have both models attempt this", "run review–revise", "have another model compare these two", "ask another model which of these is better", "have another model pick", "which models can I use", "is Codex/Kimi/Claude available", "what does amicus support", "check backend status", on any amicus_* tool result or approval prompt you need to interpret, and at decision points where another model's opinion would change the outcome — choosing a hard-to-reverse approach, after two failed fixes, before declaring risky work complete.
+description: Use whenever this agent should call another model through amicus, or should answer a question about which models amicus can reach — a second opinion, a code review, an adversarial review, a delegated implementation, an independent two-model attempt, a declared review–revise pass, a blind comparison of finalized candidates, or a check of which backends are enabled, installed and authenticated. Trigger on "ask another model", "get a second opinion", "have Codex/Kimi/Pi/Claude review this", "delegate this", "have both models attempt this", "run review–revise", "have another model compare these two", "ask another model which of these is better", "have another model pick", "which models can I use", "is Codex/Kimi/Pi/Claude available", "what does amicus support", "check backend status", on any amicus_* tool result or approval prompt you need to interpret, and at decision points where another model's opinion would change the outcome — choosing a hard-to-reverse approach, after two failed fixes, before declaring risky work complete.
 ---
 
 # Collaborating with amicus
 
 amicus is one MCP server for every second-opinion model. Every paid tool takes the model as a
-`backend` parameter (`codex`, `kimi`, or `claude`) instead of routing to a separate server per
+`backend` parameter (`codex`, `kimi`, `pi`, or `claude`) instead of routing to a separate server per
 model. This skill is the router: which tool, which backend, sync or async, and what a returned
 result obligates you to do next.
 
@@ -33,7 +33,7 @@ statement — this list is a map, not a second copy.
 | One answer, design critique, or second opinion (including on a diff you paste inline) | `amicus_consult` | [active workflows](references/active-workflows.md) |
 | Review changes already represented in git | `amicus_review_changes` | [active workflows](references/active-workflows.md) |
 | A fixed adversarial critic attacking a plan, claim, or decision before you commit to it (`claude` only) | `amicus_adversarial_review` | [active workflows](references/active-workflows.md) |
-| A self-contained coding task implemented in a throwaway worktree, returned as a diff (`codex` or `kimi` only) | `amicus_delegate` | [active workflows](references/active-workflows.md), [reviewing a returned diff](references/reviewing-a-returned-diff.md) |
+| A self-contained coding task implemented in a throwaway worktree, returned as a diff (`codex`, `kimi` or `pi` only) | `amicus_delegate` | [active workflows](references/active-workflows.md), [reviewing a returned diff](references/reviewing-a-returned-diff.md) |
 | Any of the above when the work can exceed the sync deadline | the matching `_async` tool | that route's references, and [sync vs async](references/sync-vs-async.md) |
 | Which backend to pick, and what evidence it can actually inspect | `amicus_backends` (free) | [choosing a backend](references/choosing-a-backend.md) |
 | You and one backend attempt the same problem independently, then you synthesize | independent attempt | [independent attempt](references/independent-attempt.md) |
@@ -211,7 +211,7 @@ obligation.
 ### Backend as a parameter
 
 `backend` names which model answers a call and has no default. Each tool's `backend` enum is the
-set it accepts: `amicus_delegate` and its twins take `codex` or `kimi`,
+set it accepts: `amicus_delegate` and its twins take `codex`, `kimi` or `pi`,
 `amicus_adversarial_review` and its twin take only `claude`, and any other pairing is rejected
 pre-spend as `invalid_arguments`. `AMICUS_BACKENDS` says which backends this deployment enables,
 not which to prefer, and an enabled backend can still be uninstalled or unauthenticated, which is
@@ -239,8 +239,9 @@ right. Which fields each tool carries, what `review_status`, `coverage`, `findin
 Tool annotations (e.g. `destructiveHint`) are static per tool, but `backend` is a per-call
 parameter, so amicus annotates each paid tool for the worst-behaved backend currently enabled. If
 an enabled backend can write outside a throwaway worktree (Claude, in its non-review config
-modes), every paid tool carries that backend's approval annotations — including a call routed to
-`codex` or `kimi`. This is a deliberate consequence of one shared tool surface, not a bug.
+modes; pi, whose delegate runs unsandboxed shell commands), every paid tool carries that backend's
+approval annotations — including a call routed to `codex` or `kimi`. This is a deliberate
+consequence of one shared tool surface, not a bug.
 
 `effects` on `amicus_backends` is a **static, conservative declaration per backend**. It does not
 vary with `config_mode`, with `access`, or with anything else about a particular call, so it

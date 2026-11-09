@@ -97,9 +97,10 @@ _COMMON_PAID_CODES = [
     "job_cap_reached",
     "internal_error",
 ]
-# Kimi's inspector reports a zero-exit run with no answer as empty_response on every verb it
-# runs, so only a tool that can select kimi lists it; adversarial review is claude-only.
-_KIMI_PAID_CODES = ["empty_response"]
+# Kimi's and pi's inspectors report a zero-exit run with no answer as empty_response on every
+# verb they run, so only a tool that can select kimi or pi lists it; adversarial review is
+# claude-only.
+_EMPTY_RESPONSE_CODES = ["empty_response"]
 # The backend answered and amicus could not read the answer whole: an answer FILE (codex's
 # last message, kimi's delegate answer) its bounded reader refused (#162), or an answer on
 # the output stream (claude's envelope, kimi's final message) its capture cut or lost
@@ -142,7 +143,7 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
         "returns": "summary, findings, questions, next_steps, raw_response (detail=full) and meta.",
         "error_codes": (
             _COMMON_PAID_CODES
-            + _KIMI_PAID_CODES
+            + _EMPTY_RESPONSE_CODES
             + _ANSWER_UNAVAILABLE_CODES
             + _SYNC_LIFECYCLE_CODES
             + _IDEMPOTENCY_CODES
@@ -156,7 +157,7 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
             "job_id, status, poll_after_ms, expires_at, follow_up; result via amicus_job_result."
         ),
         "error_codes": _COMMON_PAID_CODES
-        + _KIMI_PAID_CODES
+        + _EMPTY_RESPONSE_CODES
         + _ANSWER_UNAVAILABLE_CODES
         + _IDEMPOTENCY_CODES,
     },
@@ -171,7 +172,7 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
         ),
         "error_codes": (
             _COMMON_PAID_CODES
-            + _KIMI_PAID_CODES
+            + _EMPTY_RESPONSE_CODES
             + _ANSWER_UNAVAILABLE_CODES
             + _REVIEW_CODES_EMITTED
             + _SYNC_LIFECYCLE_CODES
@@ -184,7 +185,7 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
         "use_when": "A multi-file or whole-branch review that may exceed the sync deadline.",
         "returns": "a job handle; result via amicus_job_result.",
         "error_codes": _COMMON_PAID_CODES
-        + _KIMI_PAID_CODES
+        + _EMPTY_RESPONSE_CODES
         + _ANSWER_UNAVAILABLE_CODES
         + _REVIEW_CODES
         + _IDEMPOTENCY_CODES,
@@ -199,7 +200,7 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
         "returns": "diff, diffstat, summary and meta.",
         "error_codes": [
             *_COMMON_PAID_CODES,
-            *_KIMI_PAID_CODES,
+            *_EMPTY_RESPONSE_CODES,
             *_ANSWER_UNAVAILABLE_CODES,
             "not_a_git_repo",
             "git_unavailable",
@@ -215,7 +216,7 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
         "returns": "a job handle; result via amicus_job_result.",
         "error_codes": [
             *_COMMON_PAID_CODES,
-            *_KIMI_PAID_CODES,
+            *_EMPTY_RESPONSE_CODES,
             *_ANSWER_UNAVAILABLE_CODES,
             "not_a_git_repo",
             "git_unavailable",
@@ -580,7 +581,7 @@ async def capabilities_payload(
         error_codes=list(ERROR_CODES),
         scope=[
             "Second opinions, git-change reviews, adversarial critiques and delegated diffs "
-            "from Codex, Kimi or Claude Code, selected per call.",
+            "from Codex, Kimi, Claude Code or Pi, selected per call.",
             "Durable background jobs for every paid verb, plus the tasks extension when enabled.",
         ],
         negative_scope=[

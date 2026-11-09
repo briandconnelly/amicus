@@ -206,7 +206,7 @@ async def test_backends_catalog_reports_enabled_available_and_unavailable():
     Draft202012Validator(tool.output_schema).validate(payload)
     assert payload["omitted_fields"] == []
     by_id = {b["id"]: b for b in payload["backends"]}
-    assert set(by_id) == {"codex", "kimi", "claude"}
+    assert set(by_id) == {"codex", "kimi", "claude", "pi"}
     assert by_id["codex"]["enabled"] and by_id["codex"]["available"]
     assert by_id["codex"]["status"] == {
         "installed": True,
@@ -424,7 +424,7 @@ async def test_capabilities_summary_full_row_selection_and_include_schemas():
     assert summary["meta_fields"] == list(Meta.model_fields)
     assert len(summary["surface_digest"]) == 64
     assert summary["tasks"]["enabled"] is False and summary["tasks"]["task_tools"] == []
-    assert summary["enabled_backends"] == ["codex", "kimi", "claude"]
+    assert summary["enabled_backends"] == ["codex", "kimi", "claude", "pi"]
     assert {d["name"] for d in summary["tool_details"]} == set(tools.TOOL_ORDER)
     # detail changes field density only: same rows, same order, at both levels.
     assert [d["name"] for d in summary["tool_details"]] == [d["name"] for d in full["tool_details"]]

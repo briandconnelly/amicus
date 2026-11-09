@@ -231,7 +231,7 @@ PARAMETER_CONTRACTS: dict[str, ParamContract] = {
         ),
         full=(
             "Appended BEHIND this server's always-leading framing (codex: "
-            "developer_instructions on argv; claude and kimi: a leading section of the "
+            "developer_instructions on argv; claude, kimi and pi: a leading section of the "
             "stdin/handshake prompt). Normalized once (stripped; blank means omitted); "
             f"refused pre-spend as invalid_arguments when over {MAX_INSTRUCTIONS_APPEND_BYTES} "
             "bytes, when it carries a NUL, another C0 control (tab/LF/CR excepted), DEL, or "
@@ -253,8 +253,8 @@ PARAMETER_CONTRACTS: dict[str, ParamContract] = {
             "Omitted, the backend resolves its own default. The value is validated by the "
             "backend, and amicus_models's per-model set is advisory. A backend-rejected "
             "value fails as invalid_reasoning_effort (repair steers to amicus_models). "
-            "Backends whose CLI does not reject a bad effort (claude, kimi) are "
-            "validated pre-spend: claude against a fixed list, kimi from the model "
+            "Backends whose CLI does not reject a bad effort (claude, kimi, pi) are "
+            "validated pre-spend: claude against a fixed list, kimi and pi from the model "
             "catalog. Control characters, surrogates, and "
             f"values over {REASONING_EFFORT_MAX_LENGTH} chars are rejected at the MCP "
             "boundary as invalid_arguments."
@@ -334,15 +334,17 @@ def params_resource_body() -> dict[str, Any]:
 
 BackendParam = Annotated[
     BackendId,
-    Field(description="Which backend answers: codex | kimi | claude. Required."),
+    Field(description="Which backend answers: codex | kimi | claude | pi. Required."),
 ]
 OptionalBackendParam = Annotated[
     BackendId | None,
-    Field(description="Restrict to one backend: codex | kimi | claude. Omit for all."),
+    Field(description="Restrict to one backend: codex | kimi | claude | pi. Omit for all."),
 ]
 DelegateBackendParam = Annotated[
     DelegateBackendId,
-    Field(description="Which backend answers: codex | kimi (claude stays review-only). Required."),
+    Field(
+        description="Which backend answers: codex | kimi | pi (claude stays review-only). Required."
+    ),
 ]
 
 

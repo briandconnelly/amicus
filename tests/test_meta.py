@@ -149,6 +149,14 @@ def test_effects_for_is_destructive_when_any_enabled_backend_is():
     assert _meta.effects_for(benign).job_reads_read_only is True
 
 
+def test_enabling_pi_makes_paid_tools_destructive():
+    """A pi delegate runs unsandboxed bash, edit and write tools, so its writes are not
+    confined to the throwaway worktree (Ruling 14)."""
+    assert _meta.effects_for(config.settings({"AMICUS_BACKENDS": "pi"})).paid_calls_destructive
+    with_pi = config.settings({"AMICUS_BACKENDS": "codex,kimi,pi"})
+    assert _meta.annotations_for("active", with_pi)["destructiveHint"] is True
+
+
 def test_effects_for_treats_an_unknown_backend_as_worst_case():
     settings = config.settings({"AMICUS_BACKENDS": "codex"})
     object.__setattr__(settings, "enabled_backends", ("codex", "third_party"))

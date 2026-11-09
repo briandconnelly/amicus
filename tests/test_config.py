@@ -9,7 +9,7 @@ from amicus import config
 
 def test_defaults(clean_env):
     s = config.settings({})
-    assert s.enabled_backends == ("codex", "kimi", "claude")
+    assert s.enabled_backends == ("codex", "kimi", "claude", "pi")
     assert s.timeout_seconds == 300
     assert s.max_input_bytes == 200_000
     assert (s.job_ttl_seconds, s.job_max_seconds, s.job_max_count) == (86_400, 1_800, 50)
@@ -27,7 +27,7 @@ def test_profile_parsing_keeps_order_and_drops_unknown_with_an_error(clean_env):
     assert s.enabled_backends == ("codex",)
     assert any("gemini" in e for e in s.config_errors)
     s = config.settings({"AMICUS_BACKENDS": ""})
-    assert s.enabled_backends == ("codex", "kimi", "claude")
+    assert s.enabled_backends == ("codex", "kimi", "claude", "pi")
 
 
 def test_profile_with_no_valid_backend_enables_none_and_is_fatal(clean_env):
@@ -41,7 +41,7 @@ def test_profile_with_no_valid_backend_enables_none_and_is_fatal(clean_env):
         assert "AMICUS_BACKENDS" in problem and "case-sensitive" in problem
     # Blank tokens are not wrong tokens: only separators is still unset.
     s = config.settings({"AMICUS_BACKENDS": " , "})
-    assert s.enabled_backends == ("codex", "kimi", "claude") and s.fatal_errors == ()
+    assert s.enabled_backends == ("codex", "kimi", "claude", "pi") and s.fatal_errors == ()
     # One valid name beside a wrong one stays a non-fatal error, as before.
     s = config.settings({"AMICUS_BACKENDS": "codex,gemini"})
     assert s.enabled_backends == ("codex",) and s.fatal_errors == ()

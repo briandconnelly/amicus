@@ -90,11 +90,11 @@ def tasks_redelivery_seconds(settings: Settings) -> int:
 # findings-as-claims rule also rides the published `findings` description (#97).
 INSTRUCTIONS_HOST_CAP = 2048
 CAPABILITY_SUMMARY = (
-    "Call a different model — Codex, Kimi, or Claude Code, chosen per call by `backend` — "
+    "Call a different model — Codex, Kimi, Claude Code or Pi, chosen per call by `backend` — "
     "for a read-only second opinion (amicus_consult), a structured "
     "review of your git changes (amicus_review_changes), an adversarial critique of a plan "
-    "(amicus_adversarial_review, Claude only in v1), or a delegated coding task "
-    "(amicus_delegate, Codex and Kimi in v1). amicus does not apply anything to your "
+    "(amicus_adversarial_review, Claude only), or a delegated coding task "
+    "(amicus_delegate, Codex, Kimi and Pi). amicus does not apply anything to your "
     "working tree: delegate works in a throwaway worktree and returns a diff you apply "
     "yourself; it does not bypass any backend's sandbox or approvals; and every paid call "
     "sends your inputs to that backend's provider raw. A backend CLI can read files outside "

@@ -35,7 +35,7 @@ question, and the difference matters more than the code:
 
 2. **The live-gate assertion** (`check_tag`). AGENTS.md rule 20's evidence record, carried in
    the annotated tag's own message. A green result here proves only that a well-formed record
-   naming *this* commit exists and asserts three passing suites. It does NOT prove the runs
+   naming *this* commit exists and asserts four passing suites. It does NOT prove the runs
    happened: the maintainer writes that record, and `scripts/record_live_gate_evidence.py`
    says so in its own docstring. This is a machine-checked maintainer assertion, not an
    attestation, and every document that mentions it must say so.
@@ -900,7 +900,7 @@ def _write_summary(path: Path, *, tag: str | None, version: str, problems: list[
             lines.append("")
             lines.append(
                 "**Live-gate record: PRESENT and consistent.** The annotated tag carries a "
-                "well-formed record naming this exact commit and asserting that all three live "
+                "well-formed record naming this exact commit and asserting that all four live "
                 "gates passed."
             )
             lines.append("")
@@ -908,7 +908,7 @@ def _write_summary(path: Path, *, tag: str | None, version: str, problems: list[
                 "> This record is the maintainer's assertion, machine-checked for shape and "
                 "for naming this commit. It is an honest-mistake guard, not an attestation: "
                 "the runs happen on the maintainer's machine and the record is written there, "
-                "so a green check here is not proof the three suites actually ran. Approve the "
+                "so a green check here is not proof the four suites actually ran. Approve the "
                 "deployment on that understanding."
             )
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")

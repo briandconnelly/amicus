@@ -1,7 +1,7 @@
 """`scripts/release.py preflight`: the checks that run before live-gate evidence spends (#377).
 
 The evidence was recorded in the main checkout for 0.3.0, 0.6.0 and 0.7.0, each time spending
-the quota of all three backends before a later check noticed (#241). `preflight` runs first.
+the quota of every backend before a later check noticed (#241). `preflight` runs first.
 
 The fixture is real git: a bare `origin`, a main checkout, and the release PR's branch checked
 out in a linked worktree. The main checkout is detached at the very same commit, so the only

@@ -16,6 +16,7 @@ from amicus.orchestration import prompts as p
         ("codex-cli", None, "Codex"),
         ("codex", None, "Codex"),
         ("kimi-code", None, "Kimi"),
+        ("pi", None, "Pi"),
         ("Some IDE", None, "Some IDE"),
         ("weird\x1bname", None, "weirdname"),
         ("x" * 100, None, "x" * 64),

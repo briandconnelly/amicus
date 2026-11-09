@@ -20,8 +20,28 @@ per-change, as its own lead says.
 
 ## [Unreleased]
 
+### Added
+
+- **Surface**: `amicus/0.1/schema-60`. A `pi` backend, for the pi coding-agent CLI, beside `codex`, `kimi` and `claude` (#423). It
+  serves `consult`, `review_changes` and `delegate` and their `_async` twins and dry runs, and
+  joins the default `AMICUS_BACKENDS` profile; `amicus_adversarial_review` stays `claude` only.
+  Pi has no default model: set `AMICUS_PI_MODEL` to an exact `provider/id`, or pass `model`, or
+  the call is refused before it spends, and the model is checked against `pi auth check` and
+  `pi --list-models` first, failing closed ([ADR 0047](docs/adr/0047-pi-backend-validates-an-exact-model-and-fails-closed.md)).
+  The prompt rides stdin, pi runs with every resource-loading flag off and `--no-session`, and
+  argv carries only a fixed system prompt, so `pi` adds no rule-18 carrier exemption. Pi has no
+  sandbox: read-only means a `read,grep,find,ls` tool allowlist, and a delegate run's writes are
+  not confined to the worktree. A provider API key in the environment reaches pi only if the host
+  forwards it to the amicus server; credentials saved by pi's `/login` need nothing. pi 1.5 is
+  the supported version, captured under `docs/pi-help/1.5.0/`.
+
 ### Changed
 
+- The release tooling now requires a fourth live suite, `tests/test_pi_live.py`:
+  `scripts/record_live_gate_evidence.py` records it and `scripts/check_release_state.py` rejects
+  a record without it, and `scripts/check_backend_compat.py` and its `watch` streams cover the pi
+  CLI. The evidence run needs `AMICUS_PI_MODEL` exported as an exact `provider/id` whose provider
+  is ready. `docs/RELEASING.md` says so.
 - The `workspace_outside_roots` message for a `workspace_root` in a linked git worktree now says
   first that the refusal is about the client's roots, not about worktrees, and that a worktree
   inside the roots is accepted directly, before naming the `scope=commit` recovery (#406). The

@@ -3,7 +3,7 @@
 `amicus_delegate` and `amicus_delegate_async` implement a task in a throwaway git worktree seeded
 from the current branch's tracked state (`HEAD` plus replayable uncommitted tracked changes;
 untracked files are never copied) and return the resulting `diff`. Delegation is available for
-`codex` and `kimi`; Claude stays review-only.
+`codex`, `kimi` and `pi`; Claude stays review-only.
 
 ## Rules
 
@@ -28,21 +28,23 @@ follow that the run changed nothing anywhere. What the run itself could do depen
 backend, and the delegate tool description discloses that writes may land in temporary roots
 outside the returned diff.
 
-| | `codex` | `kimi` |
-| --- | --- | --- |
-| OS sandbox | yes — codex's `workspace-write` | **none** |
-| Network egress during the run | **blocked** — amicus pins `sandbox_workspace_write.network_access=false` | **not blocked** |
-| Writes bounded to the worktree | no — the sandbox also permits the OS temp roots (`/tmp`, `$TMPDIR`) | no — the worktree sets kimi's working directory, not its reach |
-| Approvals | codex's own | none |
+| | `codex` | `kimi` | `pi` |
+| --- | --- | --- | --- |
+| OS sandbox | yes — codex's `workspace-write` | **none** | **none** |
+| Network egress during the run | **blocked** — amicus pins `sandbox_workspace_write.network_access=false` | **not blocked** | **not blocked** |
+| Writes bounded to the worktree | no — the sandbox also permits the OS temp roots (`/tmp`, `$TMPDIR`) | no — the worktree sets kimi's working directory, not its reach | no — the worktree sets pi's working directory, not its reach, and a shell command pi starts can outlive the run (below) |
+| Approvals | codex's own | none | none |
 
 **So an inference from blocked egress holds for `codex` only, and only for operations that
 actually reach a network service** — a push or fetch against a remote host, an install from a
 remote index, a publish to a registry. It does not establish that nothing executed: blocked egress
 bounds what a command may reach, not whether commands ran. A local install from an on-disk
 artifact, a `gh --version`, and a push or fetch against a **filesystem** remote all need no
-network, so none of them is excluded. On `kimi` even the egress half does not hold: a task can reach the network and
+network, so none of them is excluded. On `kimi` and `pi` even the egress half does not hold: a task can reach the network and
 write outside the worktree with the user's own privileges. On either, the returned diff shows what
-changed *in the worktree*, not everything the run did. Confirm the backend before relying on any of this, and read `effects`
+changed *in the worktree*, not everything the run did. On `pi`, a shell command
+the run starts — a hung or backgrounded process — can also outlive the run, because amicus cannot
+yet find and stop it, so it may still be running, and writing, after the diff comes back. Confirm the backend before relying on any of this, and read `effects`
 and `egress` on `amicus_backends(detail="full")` rather than assuming the table above is still current.
 
 ## What to check before applying
@@ -53,8 +55,8 @@ bold after its number; the response contract below is written in those keys.
 1. `fidelity` — **Does it do what the task asked, and nothing more?** Read the diff against the
    original task text. On `codex`, a diff that depends on having reached the network — a fetch,
    a push, a publish, a remote-index install — is suspicious, because egress was blocked; a local
-   command that needed no network is not. On `kimi` neither is anomalous, which is a reason to
-   scope kimi delegate tasks more tightly, not a reason to trust the diff more.
+   command that needed no network is not. On `kimi` and `pi` neither is anomalous, which is a reason to
+   scope their delegate tasks more tightly, not a reason to trust the diff more.
 2. `scope` — **Does it touch files outside the intended scope?** A diff that edits unrelated
    files is a sign the task was under-specified or the model over-reached.
 3. `checks-run` — **Does it compile / pass checks?** The delegate result is an unverified claim

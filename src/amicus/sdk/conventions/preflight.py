@@ -22,8 +22,12 @@ from __future__ import annotations
 import re
 import time
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from amicus.sdk.core import runtime
+
+if TYPE_CHECKING:  # pragma: no cover
+    from collections.abc import Callable
 
 _LONG_FLAG_RE = re.compile(r"--[a-z][a-z0-9-]+")
 
@@ -59,13 +63,25 @@ class HelpProbe:
     always_send_flags: tuple[str, ...] = ()
     cache_ttl_seconds: float = 300.0
     probe_timeout_seconds: int = 10
+    # Where to spawn the probe; None inherits this process's cwd. A callable, so a backend
+    # whose CLI touches its cwd at startup can name (and recreate) a neutral directory on
+    # every probe rather than once at load; None means there is none, so the probe does not run.
+    probe_cwd: Callable[[], str | None] | None = None
     _cache: tuple[float, FlagSupport] | None = field(default=None, repr=False)
 
     def _probe_help(self) -> str:
         """The probe's raw help text, or "" on any failure (callers fail open)."""
-        run = runtime.run_sync_capture(
-            list(self.help_argv), timeout_seconds=self.probe_timeout_seconds
-        )
+        argv = list(self.help_argv)
+        if self.probe_cwd is None:
+            # Exactly the call made before probe_cwd existed.
+            run = runtime.run_sync_capture(argv, timeout_seconds=self.probe_timeout_seconds)
+        else:
+            cwd = self.probe_cwd()
+            if cwd is None:
+                return ""  # no safe directory to spawn from: the probe fails, nothing runs
+            run = runtime.run_sync_capture(
+                argv, timeout_seconds=self.probe_timeout_seconds, cwd=cwd
+            )
         if run.binary_missing:
             return ""
         return f"{run.stdout}\n{run.stderr}"

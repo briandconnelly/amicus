@@ -623,7 +623,7 @@ async def test_delegate_rejects_claude_at_the_boundary_and_never_spawns(app, tmp
         )
     err = res.structured_content["error"]
     assert err["code"] == "invalid_arguments"
-    assert err["details"]["allowed_values"] == ["codex", "kimi"]
+    assert err["details"]["allowed_values"] == ["codex", "kimi", "pi"]
     assert _runs(tmp_path) == []
 
 

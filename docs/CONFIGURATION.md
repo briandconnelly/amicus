@@ -221,3 +221,25 @@ Former names, no longer read: `CLAUDE_IN_CODEX_MAX_BUDGET_USD`.
 Comma-separated claude major versions treated as supported (advisory).
 Unset by default.
 Former names, no longer read: `CLAUDE_IN_CODEX_SUPPORTED_MAJORS`.
+
+## Pi
+
+### `AMICUS_PI_BIN`
+
+Absolute path to the pi executable; used exactly as given.
+Unset by default.
+
+### `AMICUS_PI_MODEL`
+
+Default model (`provider/id`, as `pi --list-models` prints it) when a call omits `model`.
+Unset by default.
+
+### `AMICUS_PI_REASONING_EFFORT`
+
+Default reasoning effort when a call omits `reasoning_effort`.
+Unset by default.
+
+### `AMICUS_PI_SUPPORTED_VERSIONS`
+
+Comma-separated pi major.minor versions treated as supported (advisory).
+Unset by default.

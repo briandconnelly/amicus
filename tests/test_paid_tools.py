@@ -28,7 +28,7 @@ def _app(env: dict | None = None, registry: BackendRegistry | None = None):
     # None -> create_app's own BackendRegistry.load(settings.enabled_backends), which
     # tries to import the not-yet-shipped in-tree backend packages. The codex package exists
     # but its plugin factory lands in Task 6, so the registry records it as load_failed;
-    # kimi loads since M3 and claude since M4. This is the realistic
+    # kimi loads since M3, claude since M4 and pi since M9. This is the realistic
     # intermediate state this milestone is in.
     return server.create_app(config.settings(env or {}), registry)
 
@@ -80,14 +80,14 @@ async def test_backend_enums_are_per_verb_and_match_tool_details():
     equals the `backends` its amicus_capabilities row publishes."""
     by_name = await _tools(_app())
     expected = {
-        "amicus_consult": ["codex", "kimi", "claude"],
-        "amicus_consult_async": ["codex", "kimi", "claude"],
-        "amicus_review_changes": ["codex", "kimi", "claude"],
-        "amicus_review_changes_async": ["codex", "kimi", "claude"],
-        "amicus_review_changes_dry_run": ["codex", "kimi", "claude"],
-        "amicus_delegate": ["codex", "kimi"],
-        "amicus_delegate_async": ["codex", "kimi"],
-        "amicus_delegate_dry_run": ["codex", "kimi"],
+        "amicus_consult": ["codex", "kimi", "claude", "pi"],
+        "amicus_consult_async": ["codex", "kimi", "claude", "pi"],
+        "amicus_review_changes": ["codex", "kimi", "claude", "pi"],
+        "amicus_review_changes_async": ["codex", "kimi", "claude", "pi"],
+        "amicus_review_changes_dry_run": ["codex", "kimi", "claude", "pi"],
+        "amicus_delegate": ["codex", "kimi", "pi"],
+        "amicus_delegate_async": ["codex", "kimi", "pi"],
+        "amicus_delegate_dry_run": ["codex", "kimi", "pi"],
         "amicus_adversarial_review": ["claude"],
         "amicus_adversarial_review_async": ["claude"],
     }
@@ -100,6 +100,7 @@ async def test_backend_enums_are_per_verb_and_match_tool_details():
         "codex",
         "kimi",
         "claude",
+        "pi",
     ]
 
 
@@ -184,9 +185,9 @@ async def test_a_backend_outside_the_verbs_enum_is_rejected_at_the_boundary():
     (tests/test_prepare.py)."""
     app = _app(registry=_fake_registry())
     calls = (
-        ("amicus_delegate", {"backend": "claude", "task": "t"}, ["codex", "kimi"]),
-        ("amicus_delegate_async", {"backend": "claude", "task": "t"}, ["codex", "kimi"]),
-        ("amicus_delegate_dry_run", {"backend": "claude", "task": "t"}, ["codex", "kimi"]),
+        ("amicus_delegate", {"backend": "claude", "task": "t"}, ["codex", "kimi", "pi"]),
+        ("amicus_delegate_async", {"backend": "claude", "task": "t"}, ["codex", "kimi", "pi"]),
+        ("amicus_delegate_dry_run", {"backend": "claude", "task": "t"}, ["codex", "kimi", "pi"]),
         ("amicus_adversarial_review", {"backend": "codex", "target": "t"}, ["claude"]),
         ("amicus_adversarial_review_async", {"backend": "kimi", "target": "t"}, ["claude"]),
     )
@@ -274,7 +275,7 @@ async def test_unknown_backend_is_a_boundary_invalid_arguments():
     err = res.structured_content["error"]
     assert err["code"] == "invalid_arguments"
     assert err["details"]["field"] == "backend"
-    assert err["details"]["allowed_values"] == ["codex", "kimi", "claude"]
+    assert err["details"]["allowed_values"] == ["codex", "kimi", "claude", "pi"]
 
 
 @pytest.mark.parametrize(
