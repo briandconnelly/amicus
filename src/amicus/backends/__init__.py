@@ -26,6 +26,14 @@ KNOWN_EFFECTS: dict[str, AnnotationEffects] = {
     "pi": AnnotationEffects(paid_calls_destructive=True, job_reads_read_only=True),
 }
 
+# Why each backend above with paid_calls_destructive=True makes the paid tools destructive,
+# as amicus_capabilities.annotations_reading states it (#442). One clause per destructive
+# backend, no trailing period; a test fails a destructive backend without one.
+DESTRUCTIVE_REASONS: dict[str, str] = {
+    "claude": "its config modes may run workspace hooks",
+    "pi": "its delegate runs unsandboxed shell commands",
+}
+
 KNOWN_DISPLAY_NAMES: dict[str, str] = {
     "codex": "Codex",
     "kimi": "Kimi",

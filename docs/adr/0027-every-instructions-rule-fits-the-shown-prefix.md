@@ -59,3 +59,18 @@ The comment is corrected, the failure rules are two items, and the test now pins
 Copilot's review of the pull request then marked two things blocking.
 The first was the same missing carrier, which this change now supplies rather than deferring, because `FINGERPRINT` already moves here and a second breaking bump for one description is worse.
 The second was that the job rule named `AMICUS_JOB_TTL` as the only retention bound, while a per-workspace cap (`AMICUS_JOB_MAX_COUNT`, default 50) evicts the oldest finished jobs sooner; the rule now names both, as `amicus_job_*`'s own contract does.
+
+## Amendment (2026-11-09): the text names its own last line
+
+Issue #441 found that an agent holding a cut copy of the text cannot tell it was cut, because nothing in the shown prefix says where the text ends.
+The text now ends with a line of its own, `INSTRUCTIONS_END_MARKER` (`END OF AMICUS INSTRUCTIONS`), as a fourth block after Reference.
+The scope block names that line and tells an agent whose copy ends otherwise to call `amicus_capabilities`.
+The check sits in the scope block rather than in Reference, because a copy that has lost Reference is the one that needs it.
+
+The sentence was paid for by tightening the scope and rules blocks, not by raising `INSTRUCTIONS_HOST_CAP` or moving a rule into Reference.
+Every pinned rule lead, safety claim and error path survives word for word.
+The head is now measured as the offset at which `Reference: ` starts, which counts both blank-line separators and is two characters stricter than the earlier `len(scope) + len(rules) + 2`.
+It is 2,045 of 2,048.
+
+The test pins the marker as the last line, the check sentence inside the head, and that a copy cut at the cap does not end with the marker.
+This amendment makes no claim about which prefix any host delivers today: the 2,048 figure is the 2026-09-14 measurement above, and #441 records the current figure as unmeasured.

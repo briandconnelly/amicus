@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import time
 from typing import get_args
 
@@ -623,3 +624,159 @@ async def test_capabilities_names_where_a_defect_is_reported():
         "correctly, is not one.",
     ):
         assert phrase in desc, phrase
+
+
+async def _annotations_reading(settings, registry=None):
+    """annotations_reading and the paid tools' destructiveHint, read from one app."""
+    app = server.create_app(settings, registry or BackendRegistry({}, {}))
+    async with Client(app) as c:
+        body = (await c.call_tool("amicus_capabilities", {})).structured_content
+        by_name = {t.name: t for t in await c.list_tools()}
+    paid = {by_name[n].annotations.destructive_hint for n in results.PAID_TOOLS}
+    assert len(paid) == 1, paid
+    return body["annotations_reading"], paid.pop()
+
+
+def _destructive_sentence(reading: str) -> str:
+    [sentence] = [s for s in reading.split(". ") if "destructiveHint" in s and "paid tools" in s]
+    return sentence
+
+
+_CLAUDE_REASON = "Claude Code is enabled and its config modes may run workspace hooks"
+_PI_REASON = "Pi is enabled and its delegate runs unsandboxed shell commands"
+_CONFINED = "every enabled backend confines writes to a throwaway worktree"
+
+
+@pytest.mark.parametrize(
+    ("profile", "named", "unnamed"),
+    [
+        ("pi", [_PI_REASON], [_CLAUDE_REASON, "Claude Code"]),
+        ("claude", [_CLAUDE_REASON], [_PI_REASON, "Pi "]),
+        (None, [_CLAUDE_REASON, _PI_REASON], []),
+        ("pi,claude", [_CLAUDE_REASON, _PI_REASON], []),
+    ],
+)
+async def test_annotations_reading_names_each_enabled_destructive_backend(profile, named, unnamed):
+    """#442: a pi-only profile was told paid tools are destructive "because Claude Code is
+    enabled". The sentence now names each enabled backend that makes them so, with its own
+    reason, and agrees with the destructiveHint the paid tools actually carry. The profile
+    is enabled, not loaded: the registry here is empty, so no plugin is loaded at all."""
+    env = {"AMICUS_BACKENDS": profile} if profile else {}
+    reading, destructive = await _annotations_reading(config.settings(env))
+    sentence = _destructive_sentence(reading)
+    assert destructive is True
+    assert "destructiveHint true for this profile because" in sentence
+    for reason in named:
+        assert reason in sentence, (reason, sentence)
+    for absent in unnamed:
+        assert absent not in sentence, (absent, sentence)
+    assert _CONFINED not in sentence
+    if len(named) == 2:
+        # Deterministic: the declaration order, whatever order AMICUS_BACKENDS lists them in.
+        assert sentence.index(_CLAUDE_REASON) < sentence.index(_PI_REASON)
+
+
+@pytest.mark.parametrize("profile", ["codex", "kimi", "codex,kimi"])
+async def test_annotations_reading_keeps_the_confined_sentence_without_a_destructive_backend(
+    profile,
+):
+    reading, destructive = await _annotations_reading(config.settings({"AMICUS_BACKENDS": profile}))
+    sentence = _destructive_sentence(reading)
+    assert destructive is False
+    assert f"destructiveHint false for this profile because {_CONFINED}" in sentence
+    assert "Claude Code" not in sentence and "Pi " not in sentence
+
+
+async def test_annotations_reading_never_invents_a_cause_for_an_undeclared_backend():
+    """An enabled id amicus has no effects declaration for is annotated for the worst case
+    (`_meta._UNKNOWN_EFFECTS`); the sentence says exactly that rather than borrowing a
+    known backend's reason. config rejects an unknown AMICUS_BACKENDS token, so the
+    settings are built with the id set directly."""
+    import dataclasses
+
+    settings = dataclasses.replace(
+        config.settings({"AMICUS_BACKENDS": "codex"}), enabled_backends=("codex", "zeta")
+    )
+    reading, destructive = await _annotations_reading(settings)
+    sentence = _destructive_sentence(reading)
+    assert destructive is True
+    assert (
+        "zeta is enabled and annotated for the worst case because amicus has no declaration for it"
+    ) in sentence
+    for absent in (_CLAUDE_REASON, _PI_REASON, "Codex", _CONFINED):
+        assert absent not in sentence, absent
+
+
+def test_every_destructive_backend_declares_its_reason():
+    """A backend whose KNOWN_EFFECTS says paid calls are destructive must carry the reason
+    annotations_reading gives for it, and a reason may not outlive its declaration."""
+    from amicus.backends import DESTRUCTIVE_REASONS, KNOWN_EFFECTS
+
+    destructive = {b for b, e in KNOWN_EFFECTS.items() if e.paid_calls_destructive}
+    assert destructive == {"claude", "pi"}
+    assert set(DESTRUCTIVE_REASONS) == destructive
+    assert all(r.strip() and not r.endswith(".") for r in DESTRUCTIVE_REASONS.values())
+
+
+async def test_annotations_reading_says_which_job_read_records_a_delivery():
+    """#446: job reads stay readOnlyHint true (decision D5), and the reading says the one
+    thing a read changes: amicus_job_result records the delivery, which is what lets the
+    per-workspace cap evict the result."""
+    reading, _ = await _annotations_reading(config.settings({}))
+    [sentence] = [s for s in reading.split(". ") if "job reads stay readOnlyHint true" in s]
+    assert "amicus_job_result records each result it returns" in sentence
+    assert "evictable by the cap" in sentence
+
+
+def _sentences(text: str | None) -> list[str]:
+    return [s for s in re.split(r"(?<=[.!?])\s+", " ".join((text or "").split())) if s]
+
+
+async def _loaded_backends():
+    """amicus_backends at both details and each backend's template read, with every in-tree
+    plugin loaded through the real registry path (the autouse guards in conftest make each
+    binary unreachable, so no backend CLI runs). The manifest snapshots are built with an
+    empty registry and never see a plugin's disclosures, so this is the instrument for them."""
+    ids = ("codex", "kimi", "claude", "pi")
+    registry = BackendRegistry.load(ids, entry_points=())
+    assert registry.unavailable == {}
+    app = _app(registry=registry)
+    async with Client(app) as c:
+        summary = (await c.call_tool("amicus_backends", {})).structured_content
+        full = (await c.call_tool("amicus_backends", {"detail": "full"})).structured_content
+        resources = {}
+        for b in ids:
+            [entry] = await c.read_resource(f"amicus://backends/{b}")
+            resources[b] = json.loads(entry.text)
+    return summary, {e["id"]: e for e in full["backends"]}, resources
+
+
+# What leaves and to whom: each backend's egress names its recipient and the inputs it sends.
+_EGRESS_NAMES: dict[str, tuple[str, ...]] = {
+    "codex": ("OpenAI", "question/task", "extra_context", "instructions_append", "diff"),
+    "kimi": ("Kimi provider", "question/task", "extra_context", "instructions_append", "diff"),
+    "claude": ("Anthropic", "question/target/evidence", "extra_context", "diff"),
+    "pi": ("provider",),
+}
+
+
+async def test_backend_egress_says_only_what_leaves_and_never_repeats_its_neighbours():
+    """#445: egress repeated, verbatim, sentences the same entry publishes as
+    readonly_honesty or implicit_context, which made the mandatory first read about 14%
+    longer. Each sentence now has one home in the entry; pi's entry was already the control."""
+    summary, full, resources = await _loaded_backends()
+    assert set(full) == set(_EGRESS_NAMES)
+    for backend, entry in full.items():
+        for name in _EGRESS_NAMES[backend]:
+            assert name in entry["egress"], (backend, name)
+        neighbours = " ".join(
+            " ".join((entry[f] or "").split()) for f in ("readonly_honesty", "implicit_context")
+        )
+        repeated = [s for s in _sentences(entry["egress"]) if s in neighbours]
+        assert repeated == [], (backend, repeated)
+    # The summary still names all four disclosures as omitted.
+    assert summary["omitted_fields"] == list(results.BACKEND_DISCLOSURE_FIELDS)
+    # The template returns one flattened entry; its disclosures equal the full tool entry's.
+    for backend, entry in full.items():
+        for field in results.BACKEND_DISCLOSURE_FIELDS:
+            assert resources[backend][field] == entry[field], (backend, field)

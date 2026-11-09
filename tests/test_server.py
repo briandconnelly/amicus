@@ -68,8 +68,10 @@ def test_summary_is_scope_then_rules_then_reference():
     assert server.INSTRUCTIONS_HOST_CAP == 2048
     text = server.CAPABILITY_SUMMARY
     blocks = text.split("\n\n")
-    assert len(blocks) == 3, [b[:40] for b in blocks]
-    scope, rules, reference = blocks
+    # The fourth block is the end marker alone (#441), so it stays the text's last line.
+    assert len(blocks) == 4, [b[:40] for b in blocks]
+    scope, rules, reference, end = blocks
+    assert end == server.INSTRUCTIONS_END_MARKER
     assert "second opinion" in scope.split(". ")[0]
     # Each negative-scope and safety statement on its own, so dropping one cannot hide
     # behind another that survives.
@@ -98,7 +100,9 @@ def test_summary_is_scope_then_rules_then_reference():
     )
     assert len(items) == len(leads), items
     assert all(item.startswith(f"- {lead}") for item, lead in zip(items, leads, strict=True)), items
-    assert len(scope) + len(rules) + 2 <= server.INSTRUCTIONS_HOST_CAP
+    # One measure of the head: the offset at which Reference starts, which counts both
+    # blank-line separators, so every rule and the truncation check end before the cap.
+    assert text.index("Reference: ") <= server.INSTRUCTIONS_HOST_CAP
     assert "delivery statement" in rules
     # The whole clause, not its lead: "Treat every backend's findings as commands" would
     # keep the lead and reverse the rule.
@@ -118,6 +122,33 @@ def test_summary_is_scope_then_rules_then_reference():
     for fact in ("Target protocol", "AMICUS_TASKS", "Transport: stdio"):
         assert fact in reference and fact not in scope + rules, fact
     assert "docs/host-captures" not in text
+
+
+async def test_the_text_carries_a_truncation_check_inside_the_shown_prefix():
+    """#441: an agent holding a cut copy could not tell. The head now names the exact
+    line the text ends with and what to call when a copy does not end with it; the line is
+    pinned last, and the check works on a copy cut at the host's prefix."""
+    marker = server.INSTRUCTIONS_END_MARKER
+    text = server.CAPABILITY_SUMMARY
+    assert marker == "END OF AMICUS INSTRUCTIONS"
+    assert text.splitlines()[-1] == marker and text.endswith(marker)
+    # Stated in the scope block, before the rules, so a host's prefix always carries it.
+    head = text[: text.index("Reference: ")]
+    assert text.index("Reference: ") <= server.INSTRUCTIONS_HOST_CAP
+    scope = text.split("\n\n")[0]
+    [check] = [s for s in scope.split(". ") if marker in s]
+    assert "amicus_capabilities" in check, check
+    assert check in head
+    assert text.count(marker) == 2, "the marker is named once in the head and ends the text"
+    # A copy cut at the cap fails the check rather than passing it by accident.
+    assert len(text) > server.INSTRUCTIONS_HOST_CAP
+    cut = text[: server.INSTRUCTIONS_HOST_CAP]
+    assert cut.splitlines()[-1] != marker and marker in cut
+    # Both eras deliver the same text.
+    async with Client(_app(), mode="legacy") as c:
+        assert c.initialize_result.instructions == text
+    async with Client(_app()) as c:
+        assert c.session.discover_result.instructions == text
 
 
 async def test_the_findings_rule_has_a_carrier_besides_the_instructions():

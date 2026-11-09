@@ -95,3 +95,15 @@ def test_all_three_in_tree_plugins_load_together_with_the_guards_in_place():
             assert not seen.setdefault(option.name, set()) & option.applies_to
             seen[option.name].update(option.applies_to)
             assert fields.setdefault(option.name, option.maps_to) == option.maps_to
+
+
+def test_egress_leaves_each_disclosure_to_its_own_field(pinned_claude_bin):
+    """#445: egress no longer repeats the read-only honesty and implicit-context statements,
+    which the entry publishes as readonly_honesty and implicit_context; each keeps that home."""
+    plugin = registry.BackendRegistry.load(("claude",), entry_points=()).get("claude")
+    assert plugin is not None
+    assert plugin.contract.readonly_honesty_statement == contract.READ_ONLY_HONESTY
+    assert plugin.contract.implicit_context_disclosure == contract.IMPLICIT_CONTEXT_DISCLOSURE
+    for moved in (contract.READ_ONLY_HONESTY, contract.IMPLICIT_CONTEXT_DISCLOSURE):
+        assert moved not in plugin.egress
+    assert "ANTHROPIC_API_KEY" in plugin.egress and "your Claude login" in plugin.egress

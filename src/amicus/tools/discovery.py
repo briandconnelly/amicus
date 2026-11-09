@@ -49,6 +49,7 @@ from amicus.tools._meta import (
     annotations_for,
     base_meta,
     deprecation_marker,
+    destructive_causes,
     effects_for,
     lifecycle_meta,
     server_stability,
@@ -648,10 +649,11 @@ async def capabilities_payload(
             f"call: paid tools are destructiveHint {str(effects.paid_calls_destructive).lower()} "
             "for this profile because "
             + (
-                "Claude Code is enabled and its config modes may run workspace hooks. "
+                ", and ".join(destructive_causes(settings))
                 if effects.paid_calls_destructive
-                else "every enabled backend confines writes to a throwaway worktree. "
+                else "every enabled backend confines writes to a throwaway worktree"
             )
+            + ". "
             + "A paid call never deletes a tracked result amicus has not yet returned to make "
             "room for its own job record: the per-workspace cap (AMICUS_JOB_MAX_COUNT) evicts "
             "only expired records, terminal errors, results already returned once and records "
@@ -662,10 +664,11 @@ async def capabilities_payload(
             + "readOnlyHint tracks whether a call changes observable state that outlives the "
             "response (a job record, committed spend), so paid tools are readOnlyHint false "
             "even when the run writes nothing, and job reads stay readOnlyHint true under the "
-            "observable-scope reading. amicus_job_consume_result and amicus_job_cancel are "
-            "destructiveHint true in every profile: consume deletes a retained result and "
-            "cancel kills the worker and removes its worktree, so neither update is additive. "
-            "Per-backend effects are published on amicus_backends."
+            "observable-scope reading, although amicus_job_result records each result it "
+            "returns, which makes that result evictable by the cap. amicus_job_consume_result "
+            "and amicus_job_cancel are destructiveHint true in every profile: consume deletes "
+            "a retained result and cancel kills the worker and removes its worktree, so "
+            "neither update is additive. Per-backend effects are published on amicus_backends."
         ),
         tasks=TaskSupport(
             enabled=tasks_active,

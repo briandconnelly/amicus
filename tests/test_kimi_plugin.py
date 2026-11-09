@@ -89,3 +89,17 @@ def test_implicit_context_discloses_the_environment_pin_and_the_trust_setting(pi
     assert "does not override" in text
     for phrase in contract.FORBIDDEN_SURFACE_PHRASES:
         assert phrase not in text
+
+
+def test_egress_leaves_each_disclosure_to_its_own_field(pinned_kimi_bin):
+    """#445: egress no longer repeats the skills-discovery fact, which the entry publishes
+    as the head of implicit_context. The redaction limit and the ignore-skills note have no
+    other home in the entry, so they stay in egress."""
+    plugin = registry.BackendRegistry.load(("kimi",), entry_points=()).get("kimi")
+    assert plugin is not None
+    assert contract.SKILLS_DISCOVERY_FACT_FULL in plugin.contract.implicit_context_disclosure
+    assert contract.SKILLS_DISCOVERY_FACT_FULL not in plugin.egress
+    for kept in (contract.REDACTION_LIMIT_FACT, contract.SKILLS_ISOLATION_NOTE):
+        assert kept in plugin.egress
+        assert kept not in plugin.contract.readonly_honesty_statement
+        assert kept not in plugin.contract.implicit_context_disclosure
