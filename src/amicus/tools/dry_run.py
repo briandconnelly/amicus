@@ -9,8 +9,9 @@ from typing import TYPE_CHECKING, Any
 
 from fastmcp import Context
 
-from amicus.errors import error_envelope
-from amicus.orchestration import gitdiff, prompts, review, worktree
+from amicus.errors import error_envelope, render_failure
+from amicus.orchestration import gitdiff, review, worktree
+from amicus.orchestration import run as run_mod
 from amicus.orchestration import workspace as ws
 from amicus.orchestration.isolation import WORKTREE_PREFIX
 from amicus.schemas.envelope import ErrorDetail, Workspace, dump_success
@@ -53,9 +54,9 @@ if TYPE_CHECKING:  # pragma: no cover
     from amicus.tools._prepare import Prepared
 
 _PREVIEW_FACT = (
-    "A dry run reports metadata about the input amicus would assemble; it does not invoke "
-    "the backend, and it neither enumerates nor bounds the files the model itself reads "
-    "during the paid call."
+    "A dry run reports metadata on the input amicus would assemble and runs the backend's free "
+    "pre-spend checks; it neither enumerates nor bounds what files the model reads during the "
+    "paid call."
 )
 _DRY_RUN_DESC = (
     f"{FREE_MARKER} Preview an amicus_review_changes call: the diff scope, its byte size and "
@@ -74,6 +75,29 @@ def _workspace(prep: Prepared) -> Workspace:
         cwd=prep.spec.cwd,
         workspace_source=prep.spec.workspace_source,  # ty: ignore[invalid-argument-type]
         workspace_warning=prep.meta.workspace_warning,
+    )
+
+
+async def _refusal(
+    prep: Prepared, prompt: str, schema: dict[str, Any] | None
+) -> dict[str, Any] | None:
+    """The backend's own pre-spend check (#439), on the request the paid call would build,
+    rendered exactly as the paid tool renders it; None when it passes. It may run the
+    backend's free probes (pi's auth check and model lookup), never the model. The paid
+    call validates again: this is a preview, not a reservation."""
+    spec = prep.spec
+    request = run_mod.build_request(spec, prompt, schema, cwd=spec.cwd)
+    invalid = await asyncio.to_thread(prep.plugin.backend.validate_request, request)
+    if invalid is None:
+        return None
+    return render_failure(
+        prep.plugin,
+        invalid,
+        prep.meta,
+        kind=spec.kind,
+        background=spec.background,
+        job_max_seconds=spec.job_max_seconds,
+        deadline_seconds=spec.timeout_seconds,
     )
 
 
@@ -144,14 +168,13 @@ def _register_review_preview(
             # The not_run envelope already carries the coverage the paid call would report.
             coverage = Coverage.model_validate(gathered["coverage"])
         else:
+            # Only a call that would run the model is validated: the paid review returns
+            # the not_run envelope above before its backend ever sees the request.
+            prompt, schema = run_mod.frame(spec, gathered.text, prep.plugin)
+            refused = await _refusal(prep, prompt, schema)
+            if refused is not None:
+                return refused
             coverage = review.build_coverage(scope, gathered, focused=review.is_focused(spec))
-            prompt = prompts.review_prompt(
-                spec.host_name,
-                gathered.text,
-                prompts.review_label(scope, base, commit),
-                prompts.review_caller_text(spec.focus, extra_context),
-                plugin=prep.plugin,
-            )
             would_call_model, prompt_bytes = True, len(prompt.encode("utf-8"))
             if gathered.truncated and gathered.truncation_hint:
                 warnings.append(gathered.truncation_hint)
@@ -261,10 +284,12 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
                 meta,
                 plugin=prep.plugin,
             )
+        prompt, schema = run_mod.frame(spec, None, prep.plugin)
+        refused = await _refusal(prep, prompt, schema)
+        if refused is not None:
+            return refused
         task_bytes = len(task.encode("utf-8"))
-        prompt_bytes = len(
-            prompts.delegate_prompt(spec.host_name, task, plugin=prep.plugin).encode("utf-8")
-        )
+        prompt_bytes = len(prompt.encode("utf-8"))
         warnings: list[str] = []
         advisory = deadline_advisory(
             True, prompt_bytes, spec.reasoning_effort, spec.timeout_seconds, "amicus_delegate_async"

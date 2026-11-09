@@ -702,7 +702,11 @@
           "invalid_commit",
           "invalid_paths",
           "not_a_git_repo",
-          "git_unavailable"
+          "git_unavailable",
+          "invalid_model",
+          "backend_auth_required",
+          "user_config_rejected",
+          "api_key_missing"
         ],
         "key_optional_params": [
           "scope",
@@ -739,7 +743,10 @@
           "invalid_reasoning_effort",
           "not_a_git_repo",
           "git_unavailable",
-          "worktree_error"
+          "worktree_error",
+          "invalid_model",
+          "backend_auth_required",
+          "user_config_rejected"
         ],
         "key_optional_params": [
           "workspace_root",
@@ -1573,7 +1580,7 @@
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-63",
+                "default": "amicus/0.1/schema-64",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -2102,7 +2109,7 @@
             "summary": "Caller stance text behind the server's own framing. UNTRUSTED, grants no tools, best-effort compliance. No secrets: a backend may carry it on argv. Max 4096 bytes. Contract: amicus://params."
           },
           "reasoning_effort": {
-            "full": "Omitted, the backend resolves its own default. The value is validated by the backend, and amicus_models's per-model set is advisory. A backend-rejected value fails as invalid_reasoning_effort (repair steers to amicus_models). Backends whose CLI does not reject a bad effort (claude, kimi, pi) are validated pre-spend: claude against a fixed list, kimi and pi from the model catalog. Control characters, surrogates, and values over 128 chars are rejected at the MCP boundary as invalid_arguments.",
+            "full": "Omitted, the backend resolves its own default. The value is validated by the backend, and amicus_models's per-model set is advisory. A backend-rejected value fails as invalid_reasoning_effort (repair steers to amicus_models). Backends whose CLI does not reject a bad effort (claude, kimi, pi) are validated pre-spend: claude against a fixed list, kimi from its model listing, and pi from its own lookup of the exact model, which a truncated amicus_models listing does not limit. Control characters, surrogates, and values over 128 chars are rejected at the MCP boundary as invalid_arguments.",
             "summary": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists each model's set); omit for the backend default. Bounds: amicus://params."
           },
           "timeout_seconds": {
@@ -4209,7 +4216,7 @@
       "description": "Full semantics for parameters whose inline description is a compressed summary.",
       "mimeType": "application/json",
       "name": "amicus-params",
-      "size": 7810,
+      "size": 7906,
       "title": "amicus parameter contracts",
       "uri": "amicus://params"
     },
@@ -4599,7 +4606,7 @@
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-63",
+            "default": "amicus/0.1/schema-64",
             "title": "Fingerprint",
             "type": "string"
           },
@@ -8520,7 +8527,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Free — no model call. Preview an amicus_delegate call: the worktree baseline and prefix, task bytes, and the resolved model, effort and backend_options. A dry run reports metadata about the input amicus would assemble; it does not invoke the backend, and it neither enumerates nor bounds the files the model itself reads during the paid call.",
+      "description": "Free — no model call. Preview an amicus_delegate call: the worktree baseline and prefix, task bytes, and the resolved model, effort and backend_options. A dry run reports metadata on the input amicus would assemble and runs the backend's free pre-spend checks; it neither enumerates nor bounds what files the model reads during the paid call.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
@@ -11198,7 +11205,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Free — no model call. Preview an amicus_review_changes call: the diff scope, its byte size and summary, the `coverage` the paid call would report (what it would leave out, and why), the byte cap, the resolved model, effort and backend_options, and whether the paid call would run the model at all. A dry run reports metadata about the input amicus would assemble; it does not invoke the backend, and it neither enumerates nor bounds the files the model itself reads during the paid call.",
+      "description": "Free — no model call. Preview an amicus_review_changes call: the diff scope, its byte size and summary, the `coverage` the paid call would report (what it would leave out, and why), the byte cap, the resolved model, effort and backend_options, and whether the paid call would run the model at all. A dry run reports metadata on the input amicus would assemble and runs the backend's free pre-spend checks; it neither enumerates nor bounds what files the model reads during the paid call.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,

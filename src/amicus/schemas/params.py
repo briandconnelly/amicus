@@ -254,8 +254,9 @@ PARAMETER_CONTRACTS: dict[str, ParamContract] = {
             "backend, and amicus_models's per-model set is advisory. A backend-rejected "
             "value fails as invalid_reasoning_effort (repair steers to amicus_models). "
             "Backends whose CLI does not reject a bad effort (claude, kimi, pi) are "
-            "validated pre-spend: claude against a fixed list, kimi and pi from the model "
-            "catalog. Control characters, surrogates, and "
+            "validated pre-spend: claude against a fixed list, kimi from its model listing, "
+            "and pi from its own lookup of the exact model, which a truncated amicus_models "
+            "listing does not limit. Control characters, surrogates, and "
             f"values over {REASONING_EFFORT_MAX_LENGTH} chars are rejected at the MCP "
             "boundary as invalid_arguments."
         ),

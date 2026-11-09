@@ -85,8 +85,11 @@ So "review this branch before I open the PR" is `scope="branch"`, not the defaul
 
 `amicus_review_changes_dry_run` is free and reports exactly what the paid call would gather:
 `scope`, `base`, `commit`, `paths`, `prompt_bytes`, a `context_summary` of files and lines, the
-resolved `model`, `reasoning_effort` and `backend_options`, and `warnings`. Run it whenever the
-scope could surprise you — an unexpectedly broad `context_summary` is the cheapest signal that the
+resolved `model`, `reasoning_effort` and `backend_options`, and `warnings`. When the paid call
+would run the model, the preview also runs the backend's free pre-spend checks (for `pi`, its
+model, auth and effort checks) and returns the same error the paid call would; a preview of a
+review with nothing to send checks nothing, as the paid call does not. Run it whenever the scope
+could surprise you — an unexpectedly broad `context_summary` is the cheapest signal that the
 selection is wrong.
 
 Review returns `verdict`, `confidence`, and `review_status` on top of the shared fields. All three
@@ -103,7 +106,8 @@ optional here: attach a git diff to ground the critique, or omit it to critique 
 
 `amicus_delegate` for a self-contained implementation task, returned as a diff that amicus never
 applies. `amicus_delegate_dry_run` is free and previews the seeded baseline (`worktree.baseline_ref`),
-`task_bytes`, resolved options, and `warnings`, without creating a worktree or spending.
+`task_bytes`, resolved options, and `warnings`, without creating a worktree or spending; it runs
+the backend's free pre-spend checks and returns the error the paid call would.
 
 A self-contained task makes scope review tractable — an under-specified task is the usual cause of
 a diff that edits unrelated files. Treat that as a reason to specify tightly, not as a guarantee

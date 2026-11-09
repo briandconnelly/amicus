@@ -592,3 +592,36 @@ def test_the_memo_is_bounded_by_distinct_models(monkeypatch):
     spawned.clear()
     assert backend.validate_request(_req()) is None  # forgotten, so probed again
     assert spawned == [("auth", pf.MODEL), ("lookup", pf.MODEL)]
+
+
+def test_a_model_past_a_truncated_listing_is_checked_by_its_own_lookup(monkeypatch):
+    """#443: the listing amicus_models shows stops at MAX_ENTRIES, but validate_request asks
+    pi about the exact model, so a row past the cut is accepted and its efforts enforced."""
+    from amicus.backends.pi import models as pi_models
+    from amicus.plugin import ModelEntry
+
+    header = "provider    model     context  max-out  thinking  images"
+    filler = [f"filler      m{i:04d}     1K       1K       yes       no" for i in range(1100)]
+    late = "late        plain     1K       1K       no        no"
+
+    def probe(_binary, *terms, cwd):
+        rows = [*filler, late]
+        if terms:
+            rows = [r for r in rows if terms[0] in "/".join(r.split()[:2])]
+        return "\n".join([header, *rows]) + "\n"
+
+    monkeypatch.setattr(pi_models, "_probe", probe)
+    monkeypatch.setattr(pi_models, "probe_cwd", lambda _cfg: "/probe-cwd")
+    backend = pf.make_backend()
+    real = pi_models.PiModels(backend._config, backend._binary)
+    backend._models = real
+    listing = real.read()
+    assert listing.truncated is True
+    assert "late/plain" not in {e.slug for e in listing.models}
+    assert real.lookup("late/plain") == ModelEntry(
+        slug="late/plain", supported_reasoning_efforts=("off",)
+    )
+    assert backend.validate_request(_req(model="late/plain")) is None
+    refused = backend.validate_request(_req(model="late/plain", reasoning_effort="high"))
+    assert refused is not None and refused.code == "invalid_reasoning_effort"
+    assert refused.details == {"field": "reasoning_effort", "allowed_values": ["off"]}
