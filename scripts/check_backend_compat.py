@@ -1121,10 +1121,12 @@ PYPI_JSON_URL = "https://pypi.org/pypi/{package}/json"
 # final exists) is reported as unknown rather than ordered as if it were final.
 _PYPI_FINAL = re.compile(r"(\d+)\.(\d+)(?:\.\d+)*")
 _CAP = re.compile(r"<\s*(\d+)\.(\d+)")
+# A backend stream's issue also carries its `backend: <id>` label, so every issue about one
+# backend is found by that label; the package streams have no backend to name.
 WATCH_LABELS: dict[str, tuple[str, ...]] = {
-    "kimi": ("dependencies", "chore"),
-    "claude": ("dependencies", "chore"),
-    "pi": ("dependencies", "chore"),
+    "kimi": ("dependencies", "chore", "backend: kimi"),
+    "claude": ("dependencies", "chore", "backend: claude"),
+    "pi": ("dependencies", "chore", "backend: pi"),
     "fastmcp": ("dependencies", "chore"),
     "mcp": ("dependencies", "chore"),
 }
