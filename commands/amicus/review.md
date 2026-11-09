@@ -11,6 +11,7 @@ Request: $ARGUMENTS
 `backend` is required — amicus has no default backend. If the request does not name
 one (`codex`, `kimi`, `pi`, or `claude`), call `amicus_backends` with `detail="full"` first and choose only
 among backends it reports `enabled: true` and `status.authenticated: true`.
+`kimi` is deprecated in favour of `pi` (removal at or after 0.15.0): prefer `pi`.
 
 Map the rest of the request to the tool's parameters: default `scope=working_tree`;
 for a branch review pass `scope=branch` and `base=<branch>`; for a single commit pass

@@ -4,6 +4,7 @@ honest state, never a startup failure."""
 
 from __future__ import annotations
 
+from amicus.schemas.envelope import ToolDeprecation
 from amicus.sdk.conventions.annotations import AnnotationEffects
 
 # backend id -> "module:attribute" of a BackendPlugin or a zero-argument factory.
@@ -31,3 +32,27 @@ KNOWN_DISPLAY_NAMES: dict[str, str] = {
     "claude": "Claude Code",
     "pi": "Pi",
 }
+
+# Backends inside their deprecation window, keyed by backend id. A deprecated backend stays
+# enabled, in every backend enum and working; its marker rides its amicus_backends entry and
+# the meta of every envelope it produces. Read it through `backend_deprecation()` rather than
+# importing this table (the #43 trap). scripts/check_release_state.py reads this literal
+# statically, so keep every entry's `since` and `removal_at_or_after` literal strings.
+DEPRECATED_BACKENDS: dict[str, ToolDeprecation] = {
+    "kimi": ToolDeprecation(
+        since="0.13.0",
+        removal_at_or_after="0.15.0",
+        replaced_by="pi",
+        migration=(
+            "Enable pi (the default profile includes it; an explicit AMICUS_BACKENDS must "
+            "name it), set AMICUS_PI_MODEL to the exact provider/id the kimi config used (for "
+            'example openrouter/moonshotai/kimi-k3) and pass backend: "pi". pi serves '
+            "consult, review_changes and delegate as kimi does."
+        ),
+    ),
+}
+
+
+def backend_deprecation(backend: str | None) -> ToolDeprecation | None:
+    """The deprecation marker for `backend`, or None when it is not deprecated (or None)."""
+    return None if backend is None else DEPRECATED_BACKENDS.get(backend)

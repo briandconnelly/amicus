@@ -17,6 +17,15 @@ These are this file's own:
 - **Never inspect a user's provider configuration to establish model identity.** Report the
   diversity as unverified instead.
 
+## `kimi` is deprecated
+
+`kimi` is deprecated in favour of `pi`, since 0.13.0, and is removed in 0.15.0 or later. It still
+works, so a call already routed to it need not fail, but prefer `pi` for new work: it serves the
+same verbs (`consult`, `review_changes`, `delegate`) and can run the same model when
+`AMICUS_PI_MODEL` names it as an exact `provider/id`. The `deprecation` marker on kimi's
+`amicus_backends` entry, and `meta.deprecation` on every kimi result, carry the window and the
+migration text; treat that marker, not this file, as authoritative.
+
 ## What `amicus_backends` reports
 
 Per backend: `enabled` (turned on for this deployment), `available` (the plugin loaded),
@@ -24,8 +33,9 @@ Per backend: `enabled` (turned on for this deployment), `available` (the plugin 
 supports plus its extra capabilities — see below), `effects` (`paid_calls_destructive`,
 `job_reads_read_only`), `options` (backend-specific knobs and their allowed values),
 `egress`/`carriers` (how prompt inputs travel), `readonly_honesty` (what this backend's read-only
-tier does and does not bound), and `implicit_context` (what the CLI auto-loads regardless of your
-prompt). The last four are on `detail="full"` only: the default `summary` leaves those keys out of
+tier does and does not bound), `implicit_context` (what the CLI auto-loads regardless of your
+prompt), and `deprecation` (a marker on a deprecated backend, `null` otherwise, at every detail).
+The four before `deprecation` are on `detail="full"` only: the default `summary` leaves those keys out of
 every entry and lists them in the top-level `omitted_fields`, so an absent key means "not
 requested", while a `null` on `full` means no loaded plugin declares one (the backend declares
 none, or its plugin did not load). `summary` is enough for a readiness re-check once the full

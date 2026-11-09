@@ -11,7 +11,7 @@ Request: $ARGUMENTS
 `backend` is required — amicus has no default backend. If the request does not name
 one (`codex`, `kimi`, `pi`, or `claude`), call `amicus_backends` with `detail="full"` first and choose only
 among backends it reports `enabled: true` and `status.authenticated: true`; do not
-guess or fall back to a favorite.
+guess or fall back to a favorite. `kimi` is deprecated in favour of `pi` (removal at or after 0.15.0): prefer `pi`.
 
 Pass the absolute repository path as `workspace_root` so the backend reasons about
 the right project, and include any specific files or context the question needs as

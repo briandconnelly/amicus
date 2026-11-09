@@ -119,6 +119,27 @@ class ConsumeDisposition(BaseModel):
     follow_up: ConsumeFollowUp | None = None
 
 
+class ToolDeprecation(BaseModel):
+    """The deprecation marker ([9.deprecation-marker]): present only on a tool or a backend
+    inside its deprecation window, beside a tool's stability tier, which it never replaces.
+    The name predates backend deprecations and is kept because it is a published $defs
+    title."""
+
+    model_config = ConfigDict(extra="forbid")
+    since: str
+    removal_at_or_after: str
+    replaced_by: str | None
+    migration: str
+
+
+_META_DEPRECATION_DESC = (
+    "Set when meta.backend is a deprecated backend: the marker its amicus_backends entry "
+    "carries (since, removal_at_or_after, replaced_by, migration). Delivery-only: it states "
+    "the delivering server's view, never stored with the result."
+)
+publish.KEPT_DESCRIPTIONS.add(_META_DEPRECATION_DESC)
+
+
 class Meta(BaseModel):
     """Execution metadata on every envelope. Construction: every field has a default, so
     `Meta()` is valid. Wire: `META_ALWAYS_PRESENT` (the fields whose default is never None,
@@ -153,6 +174,13 @@ class Meta(BaseModel):
     task_id: str | None = None
     idempotency_replayed: Literal[True] | None = None
     backend_details: dict[str, Any] | None = None
+    # Delivery-only, like `consume`: excluded from every dump, so a stored result.json keeps
+    # its shape and RESULT_FORMAT does not move. jobs.delivery.attach_backend_deprecation sets
+    # it on the delivered dict from meta.backend, so the marker reflects the server
+    # delivering the result, not the one that stored it (#423).
+    deprecation: ToolDeprecation | None = Field(
+        default=None, exclude=True, description=_META_DEPRECATION_DESC
+    )
     # Delivery-only: excluded from every dump, so a stored result.json keeps its shape and
     # RESULT_FORMAT does not move; jobs.delivery.attach_consume_disposition sets it on the
     # delivered dict instead (#44).

@@ -123,6 +123,7 @@ def build_released_repo(repo: Path, release: ModuleType) -> None:
     write(repo, "CHANGELOG.md", changelog("\n"))
     write(repo, release.MARKETPLACE_PATH, MARKETPLACE % ("0.0.1", "0" * 40))
     write(repo, release_state.DEPRECATIONS_PATH, "DEPRECATED_TOOLS: dict = {}\n")
+    write(repo, release_state.BACKEND_DEPRECATIONS_PATH, "DEPRECATED_BACKENDS: dict = {}\n")
     write(repo, release_state.LEGACY_ENV_SPEC_PATH, 'LEGACY_REMOVAL_VERSION = "9.0.0"\n')
     write(repo, release_state.GLOBAL_ENV_PATH, "")
     git(repo, "add", "-A")

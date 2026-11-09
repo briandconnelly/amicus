@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ValidationError
 
+from amicus.backends import backend_deprecation
 from amicus.errors import error_envelope, serialize_error
 from amicus.jobs.polling import job_status_arguments, poll_hint_ms
 from amicus.orchestration.finalize import sanitize_finding, sanitize_prose_value
@@ -254,7 +255,44 @@ def attach_consume_disposition(
     return envelope
 
 
+def attach_backend_deprecation(envelope: dict[str, Any]) -> dict[str, Any]:
+    """Set `meta.deprecation` on a delivered envelope, success or error, from its
+    `meta.backend` (#423), and drop any value that is not this server's own. Delivery-only,
+    like `consume`: `Meta` excludes the field from every dump, so it is never stored, and
+    the marker states the deprecation as the server DELIVERING the result sees it, not the
+    one that stored it. Every tool result passes through here at the guard
+    (`tools._guard.as_tool_result`), and a stored result again at `finished_job_envelope`;
+    a second pass sets the same value. Mutates."""
+    meta = envelope.get("meta")
+    if not isinstance(meta, dict):
+        return envelope
+    meta.pop("deprecation", None)
+    backend = meta.get("backend")
+    marker = backend_deprecation(backend) if isinstance(backend, str) else None
+    if marker is not None:
+        # All four fields, a null `replaced_by` included, as the amicus_backends entry has.
+        meta["deprecation"] = marker.model_dump(mode="json")
+    return envelope
+
+
 def finished_job_envelope(
+    rec: dict[str, Any],
+    payload: dict[str, Any] | None,
+    job_id: str,
+    kind: str,
+    meta: Meta,
+    detail: str,
+    workspace_root: str | None,
+) -> tuple[dict[str, Any], bool]:
+    """(envelope, delivered), with `meta.deprecation` attached for a deprecated backend; see
+    `_finished_job_envelope`."""
+    envelope, delivered = _finished_job_envelope(
+        rec, payload, job_id, kind, meta, detail, workspace_root
+    )
+    return attach_backend_deprecation(envelope), delivered
+
+
+def _finished_job_envelope(
     rec: dict[str, Any],
     payload: dict[str, Any] | None,
     job_id: str,

@@ -135,6 +135,9 @@ Not every backend does everything:
 | `delegate` | yes | yes | yes | no |
 | `adversarial_review` | no | no | no | yes |
 
+Kimi is deprecated in favour of Pi, since 0.13.0, and is removed in 0.15.0 or later; it works
+until then. The `deprecation` marker on its `amicus_backends` entry says how to move.
+
 A `no` is amicus's routing policy, not a model limitation. Claude is review-only, and the
 dedicated adversarial-review verb is scoped to Claude. To ask Codex, Kimi or Pi for an adversarial
 review, use `consult` or `review_changes` and supply the stance yourself; the dedicated verb adds

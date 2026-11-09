@@ -43,6 +43,8 @@ FINGERPRINT = "amicus/0.1/schema-60"
 # record that carries it, as with 4, 7 and 8.
 # (#244's `job_cap_reached` did not move it: the code refuses a start before any job record
 # exists, so no stored result can carry it.)
+# (#423's meta.deprecation did not move it: like meta.consume it is delivery-only, excluded
+# from every dump, so no stored result carries it.)
 RESULT_FORMAT: int = 9
 
 JSON_SCHEMA_DIALECT = "https://json-schema.org/draft/2020-12/schema"

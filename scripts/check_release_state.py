@@ -10,10 +10,11 @@ question, and the difference matters more than the code:
    `uv.lock` is current, `.mcp.json`'s pin
    names this release's tag and that tag resolves IN THIS CHECKOUT, the marketplace pointer
    is well formed, older than this release and consistent at its tag, every tool
-   deprecation window (`DEPRECATED_TOOLS` in `src/amicus/tools/_meta.py`) contains this
-   release, and no `EnvVar` still declares a legacy name once this release reaches
-   `LEGACY_REMOVAL_VERSION` (`src/amicus/config/envspec.py`). These are facts of
-   the tagged tree (and, for the pin, of this checkout), so a green result here *proves* them.
+   and backend deprecation window (`DEPRECATED_TOOLS` in `src/amicus/tools/_meta.py`,
+   `DEPRECATED_BACKENDS` in `src/amicus/backends/__init__.py`) contains this release, and no
+   `EnvVar` still declares a legacy name once this release reaches `LEGACY_REMOVAL_VERSION`
+   (`src/amicus/config/envspec.py`). These are facts of the tagged tree (and, for the pin, of
+   this checkout), so a green result here *proves* them.
    Nothing self-asserts.
 
    "In this checkout" is the exact claim, and it is deliberately not "on the remote". A
@@ -528,6 +529,13 @@ def check_lock(
 
 DEPRECATIONS_PATH = "src/amicus/tools/_meta.py"
 _DEPRECATIONS_TABLE = "DEPRECATED_TOOLS"
+BACKEND_DEPRECATIONS_PATH = "src/amicus/backends/__init__.py"
+_BACKEND_DEPRECATIONS_TABLE = "DEPRECATED_BACKENDS"
+# Every deprecation table the release predicate holds to its window: (path, table name).
+DEPRECATION_TABLES: tuple[tuple[str, str], ...] = (
+    (DEPRECATIONS_PATH, _DEPRECATIONS_TABLE),
+    (BACKEND_DEPRECATIONS_PATH, _BACKEND_DEPRECATIONS_TABLE),
+)
 
 
 def _assigned_names(node: ast.stmt) -> list[str]:
@@ -540,28 +548,31 @@ def _assigned_names(node: ast.stmt) -> list[str]:
 
 def deprecation_windows(
     repo_root: Path = REPO_ROOT,
+    *,
+    rel_path: str = DEPRECATIONS_PATH,
+    table_name: str = _DEPRECATIONS_TABLE,
 ) -> tuple[dict[str, tuple[str, str]], list[str]]:
-    """`{tool: (since, removal_at_or_after)}`, read statically from `DEPRECATED_TOOLS`.
+    """`{name: (since, removal_at_or_after)}`, read statically from one deprecation table:
+    `DEPRECATED_TOOLS` by default, or any other `DEPRECATION_TABLES` names.
 
     Statically, because the `verify` job runs this script with `--no-project`: amicus itself
-    is not importable there. A test pins this read against the runtime table, so a table
+    is not importable there. A test pins this read against each runtime table, so a table
     this parser cannot read fails there rather than passing here as "no deprecations"."""
-    path = repo_root / DEPRECATIONS_PATH
+    path = repo_root / rel_path
     try:
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     except (OSError, SyntaxError) as exc:
-        return {}, [f"could not read {DEPRECATIONS_PATH}: {exc}"]
+        return {}, [f"could not read {rel_path}: {exc}"]
     table = next(
         (
             node.value
             for node in tree.body
-            if isinstance(node, (ast.Assign, ast.AnnAssign))
-            and _DEPRECATIONS_TABLE in _assigned_names(node)
+            if isinstance(node, (ast.Assign, ast.AnnAssign)) and table_name in _assigned_names(node)
         ),
         None,
     )
     if not isinstance(table, ast.Dict):
-        return {}, [f"{DEPRECATIONS_PATH} has no literal `{_DEPRECATIONS_TABLE}` dict"]
+        return {}, [f"{rel_path} has no literal `{table_name}` dict"]
     windows: dict[str, tuple[str, str]] = {}
     problems: list[str] = []
     for key, value in zip(table.keys, table.values, strict=True):
@@ -576,7 +587,7 @@ def deprecation_windows(
             and {"since", "removal_at_or_after"} <= fields.keys()
         ):
             problems.append(
-                f"{DEPRECATIONS_PATH}: every `{_DEPRECATIONS_TABLE}` entry needs a literal tool "
+                f"{rel_path}: every `{table_name}` entry needs a literal "
                 "name and literal `since` and `removal_at_or_after` strings"
             )
             continue
@@ -590,11 +601,19 @@ def check_deprecations(version: str, *, repo_root: Path = REPO_ROOT) -> list[str
 
     A `since` later than the release would publish, in fingerprint-covered metadata, a
     deprecation that never took effect. A release at or past `removal_at_or_after` with the
-    entry still in the table ships the tool past the end its marker announced; amicus reads
-    that field as the release that removes it. Both are fixed in an ordinary PR (move the
-    window, or remove the tool), never in the release PR, which moves only version literals
-    (AGENTS.md rule 19)."""
-    windows, problems = deprecation_windows(repo_root)
+    entry still in the table ships the tool or backend past the end its marker announced;
+    amicus reads that field as the release that removes it. Both are fixed in an ordinary PR
+    (move the window, or remove the tool or backend), never in the release PR, which moves
+    only version literals (AGENTS.md rule 19)."""
+    windows: dict[str, tuple[str, str]] = {}
+    problems: list[str] = []
+    for rel_path, table_name in DEPRECATION_TABLES:
+        table, table_problems = deprecation_windows(
+            repo_root, rel_path=rel_path, table_name=table_name
+        )
+        problems.extend(table_problems)
+        # A tool and a backend never share a name (tools are amicus_*, backends are not).
+        windows.update(table)
     for name, (since, removal) in windows.items():
         if not (VERSION_RE.fullmatch(since) and VERSION_RE.fullmatch(removal)):
             problems.append(

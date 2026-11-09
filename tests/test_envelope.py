@@ -121,6 +121,7 @@ def test_meta_field_names_are_the_documented_set():
         "task_id",
         "idempotency_replayed",
         "backend_details",
+        "deprecation",
         "consume",
         "request_id",
         "fingerprint",

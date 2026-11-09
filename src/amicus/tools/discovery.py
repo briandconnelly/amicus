@@ -6,7 +6,7 @@ import asyncio
 from typing import TYPE_CHECKING, Any
 
 from amicus import SERVER_NAME, __version__, surface
-from amicus.backends import KNOWN_DISPLAY_NAMES, KNOWN_EFFECTS
+from amicus.backends import KNOWN_DISPLAY_NAMES, KNOWN_EFFECTS, backend_deprecation
 from amicus.errors import error_envelope
 from amicus.schemas.codes import BACKEND_IDS, ERROR_CODES, VERB_BACKENDS
 from amicus.schemas.envelope import ERROR_ENVELOPE_SCHEMA, RESULT_META_SCHEMA, Meta
@@ -478,6 +478,7 @@ def backends_payload(
                 carriers=(plugin.carriers or None) if plugin else None,
                 readonly_honesty=contract.readonly_honesty_statement if contract else None,
                 implicit_context=contract.implicit_context_disclosure if contract else None,
+                deprecation=backend_deprecation(backend_id),
             )
         )
     unavailable = [
@@ -596,8 +597,10 @@ async def capabilities_payload(
             WORKSPACE_PREREQUISITE,
         ],
         deprecation_policy=(
-            "A deprecated tool, parameter or code stays discoverable for two minor releases "
-            "with a deprecation marker in its lifecycle _meta naming the replacement."
+            "A deprecated tool, parameter, code or backend stays discoverable for two minor "
+            "releases with a deprecation marker naming the replacement: a tool's in its "
+            "lifecycle _meta, a backend's on its amicus_backends entry and as meta.deprecation "
+            "on every envelope it produces."
         ),
         tool_error_carrier=(
             "tool result with isError: true; the error envelope is in structuredContent, and "

@@ -8,7 +8,8 @@ description: Use whenever this agent should call another model through amicus, o
 amicus is one MCP server for every second-opinion model. Every paid tool takes the model as a
 `backend` parameter (`codex`, `kimi`, `pi`, or `claude`) instead of routing to a separate server per
 model. This skill is the router: which tool, which backend, sync or async, and what a returned
-result obligates you to do next.
+result obligates you to do next. `kimi` is deprecated in favour of `pi` (removal at or after
+0.15.0): prefer `pi`, and read the `deprecation` marker `amicus_backends` carries for it.
 
 You are the host. A backend is a worker you consult; it does not own the decision, the
 verification, or the working tree.

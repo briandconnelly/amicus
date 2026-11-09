@@ -13,6 +13,7 @@ from amicus.schemas.envelope import (
     BackendRef,
     ContextSummary,
     SuccessBase,
+    ToolDeprecation,
     Workspace,
     server_version_field,
 )
@@ -551,6 +552,11 @@ _OMITTED_FIELDS_DESC = (
     "Pass detail=full to read them."
 )
 publish.KEPT_DESCRIPTIONS.update({_DISCLOSURE_DESC, _OMITTED_FIELDS_DESC})
+_BACKEND_DEPRECATION_DESC = (
+    "null: not deprecated. Every envelope whose meta.backend names this backend carries it "
+    "as meta.deprecation."
+)
+publish.KEPT_DESCRIPTIONS.add(_BACKEND_DEPRECATION_DESC)
 
 
 class BackendEntry(BaseModel):
@@ -567,6 +573,7 @@ class BackendEntry(BaseModel):
     carriers: str | None = Field(default=None, description=_DISCLOSURE_DESC)
     readonly_honesty: str | None = Field(default=None, description=_DISCLOSURE_DESC)
     implicit_context: str | None = Field(default=None, description=_DISCLOSURE_DESC)
+    deprecation: ToolDeprecation | None = Field(default=None, description=_BACKEND_DEPRECATION_DESC)
 
 
 class UnavailableEntry(BaseModel):
@@ -648,17 +655,6 @@ TOOL_DETAIL_FULL_FIELDS: tuple[str, ...] = (
 _TOOL_FULL_ONLY_DESC = "Present on detail=full only; absent on detail=summary."
 _TOOL_FULL_ONLY_LIST_DESC = _TOOL_FULL_ONLY_DESC + " A present empty list means none."
 publish.KEPT_DESCRIPTIONS.update({_TOOL_FULL_ONLY_DESC, _TOOL_FULL_ONLY_LIST_DESC})
-
-
-class ToolDeprecation(BaseModel):
-    """The deprecation marker ([9.deprecation-marker]): present only on a tool inside its
-    deprecation window, beside its stability tier, which it never replaces."""
-
-    model_config = ConfigDict(extra="forbid")
-    since: str
-    removal_at_or_after: str
-    replaced_by: str | None
-    migration: str
 
 
 _TOOL_DEPRECATION_DESC = (

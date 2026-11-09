@@ -20,6 +20,24 @@ per-change, as its own lead says.
 
 ## [Unreleased]
 
+### Deprecated
+
+- **Surface**: `amicus/0.1/schema-61`. The `kimi` backend is deprecated in favour of `pi`, since
+  0.13.0 and for removal in 0.15.0 or later (#423). It stays enabled in the default profile, in
+  every `backend` enum and working until then. A paid A/B on the same model found the two at
+  parity, and `pi` needs none of kimi's rule-18 prompt-carrier exemptions. Each
+  `amicus_backends` entry gains `deprecation`, at either `detail`: the marker (`since`,
+  `removal_at_or_after`, `replaced_by`, `migration`) on `kimi`, `null` on every other backend.
+  Every envelope delivered with `meta.backend` set to `kimi`, success or failure, sync, from a
+  job or from a task, carries the same marker as `meta.deprecation`; it is absent on the others.
+  It is delivery-only, like `meta.consume`: never stored with a job result, so `RESULT_FORMAT`
+  stays 9 and a result stored earlier is delivered with the marker the delivering server holds.
+  `amicus_capabilities.deprecation_policy` now names a backend beside a tool, parameter or code,
+  and `scripts/check_release_state.py` holds `DEPRECATED_BACKENDS` to its window as it does
+  `DEPRECATED_TOOLS`. To move, enable `pi` (an explicit `AMICUS_BACKENDS` must name it), set
+  `AMICUS_PI_MODEL` to the exact `provider/id` the kimi config used (for example
+  `openrouter/moonshotai/kimi-k3`) and pass `backend: "pi"`.
+
 ### Added
 
 - **Surface**: `amicus/0.1/schema-60`. A `pi` backend, for the pi coding-agent CLI, beside `codex`, `kimi` and `claude` (#423). It
