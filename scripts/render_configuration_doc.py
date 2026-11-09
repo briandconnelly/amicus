@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from amicus import packaging
+from amicus.backends import backend_deprecation
 
 if TYPE_CHECKING:
     from amicus.config.envspec import EnvVar
@@ -92,6 +93,17 @@ def render() -> str:
             continue
         out.append(f"## {title}")
         out.append("")
+        deprecation = backend_deprecation(title.lower())
+        if deprecation is not None:
+            replaced = (
+                f" in favour of `{deprecation.replaced_by}`" if deprecation.replaced_by else ""
+            )
+            out.append(
+                f"The `{title.lower()}` backend is deprecated{replaced}, since "
+                f"{deprecation.since}, for removal in {deprecation.removal_at_or_after} or later; "
+                "see `amicus_backends` for the migration."
+            )
+            out.append("")
         for var in groups[title]:
             out.extend(_section(var))
     return "\n".join(out).rstrip() + "\n"

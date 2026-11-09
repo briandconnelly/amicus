@@ -34,9 +34,10 @@ per-change, as its own lead says.
   stays 9 and a result stored earlier is delivered with the marker the delivering server holds.
   `amicus_capabilities.deprecation_policy` now names a backend beside a tool, parameter or code,
   and `scripts/check_release_state.py` holds `DEPRECATED_BACKENDS` to its window as it does
-  `DEPRECATED_TOOLS`. To move, enable `pi` (an explicit `AMICUS_BACKENDS` must name it), set
+  `DEPRECATED_TOOLS`. To move, install the pi CLI and give it the provider's credentials, enable `pi` (an explicit `AMICUS_BACKENDS` must name it), set
   `AMICUS_PI_MODEL` to the exact `provider/id` the kimi config used (for example
-  `openrouter/moonshotai/kimi-k3`) and pass `backend: "pi"`.
+  `openrouter/moonshotai/kimi-k3`), confirm `amicus_backends` reports `pi` ready, and pass
+  `backend: "pi"`.
 
 ### Added
 

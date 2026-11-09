@@ -44,10 +44,12 @@ DEPRECATED_BACKENDS: dict[str, ToolDeprecation] = {
         removal_at_or_after="0.15.0",
         replaced_by="pi",
         migration=(
-            "Enable pi (the default profile includes it; an explicit AMICUS_BACKENDS must "
-            "name it), set AMICUS_PI_MODEL to the exact provider/id the kimi config used (for "
-            'example openrouter/moonshotai/kimi-k3) and pass backend: "pi". pi serves '
-            "consult, review_changes and delegate as kimi does."
+            "Install the pi CLI and give it the provider's credentials (pi's own /login or "
+            "the provider's API-key variable), enable pi (the default profile includes it; an "
+            "explicit AMICUS_BACKENDS must name it), set AMICUS_PI_MODEL to the exact "
+            "provider/id the kimi config used (for example openrouter/moonshotai/kimi-k3), "
+            "confirm amicus_backends reports pi installed and authenticated, then pass backend: "
+            '"pi". pi serves consult, review_changes and delegate as kimi does.'
         ),
     ),
 }
