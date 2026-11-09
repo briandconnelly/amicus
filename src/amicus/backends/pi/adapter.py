@@ -42,6 +42,7 @@ _INSTRUCTION_KINDS = frozenset({"consult", "review_changes"})
 # Distinct models a backend remembers probe outcomes for; past it the memo starts over, so a
 # caller cycling through model strings cannot grow it without bound.
 _PROBE_CACHE_MAX_MODELS = 64
+_ARGV_UNSAFE_PREFIXES = ("-", "@")
 EMPTY_RESPONSE_DETAIL = (
     "pi completed without producing an answer: the event stream holds no assistant text and "
     "no error."
@@ -92,13 +93,14 @@ class PiBackend:
             memo.clear()
 
     def _cached_auth(self, binary: str, model: str) -> AuthStatus:
-        """`pi auth check` for `model`; an "unknown" outcome is transient and not remembered."""
+        """`pi auth check` for `model`; an "unknown" or "missing" outcome is transient and not
+        remembered."""
         now = time.monotonic()
         hit = self._auth_memo.get(model)
         if hit is not None and now - hit[0] < HELP_CACHE_TTL_SECONDS:
             return hit[1]
         status = self._auth_status(binary, model)
-        if status != "unknown":
+        if status not in ("unknown", "missing"):
             self._make_room(self._auth_memo, model)
             self._auth_memo[model] = (now, status)
         return status
@@ -175,6 +177,18 @@ class PiBackend:
             ),
         )
 
+    @staticmethod
+    def _argv_unsafe_model(model: str) -> ClassifiedFailure | None:
+        """The probes splice the model into argv as a bare token, where pi reads a leading
+        "-" as a flag and a leading "@" as a file argument; refuse such a model unprobed."""
+        if not model.startswith(_ARGV_UNSAFE_PREFIXES):
+            return None
+        return _invalid_model(
+            "the model begins with '-' or '@', which pi would read as a flag or a file "
+            "argument; a model is an exact provider/id.",
+            "not_probed",
+        )
+
     def _auth_required(self) -> ClassifiedFailure:
         return ClassifiedFailure(
             code="pi_auth_required",
@@ -236,20 +250,40 @@ class PiBackend:
                 )
         return None
 
+    def _unprobed_refusal(self, request: RunRequest) -> ClassifiedFailure | None:
+        """With no binary to probe, the checks that need none: the effort's shape, its place
+        in pi's vocabulary (no model accepts a level outside it), access and instructions.
+        Everything else is left to the run, which reports pi_not_found."""
+        if (shape := self._shape_refusal(request)) is not None:
+            return shape
+        effort = self._effort(request)
+        if effort is not None and effort not in contract.EFFORTS:
+            return self._effort_refusal(
+                "the requested reasoning_effort is not one pi supports.", contract.EFFORTS
+            )
+        return self._local_refusal(request)
+
     def validate_request(self, request: RunRequest) -> ClassifiedFailure | None:
-        # ORDER MATTERS. The model comes first, since nothing can be checked without one.
-        # An unresolvable binary skips the probes, so the run reports backend_not_found
-        # rather than a model error. `pi auth check` goes before the catalog because
-        # `--list-models` hides every model of a provider with no credentials: asked first,
+        # ORDER MATTERS. The model comes first, since nothing can be checked without one,
+        # and a flag- or file-shaped one is refused before it reaches a probe's argv. An
+        # unresolvable binary skips the probes, so the run reports backend_not_found rather
+        # than a model error, and so does one the auth probe could not spawn (no
+        # AMICUS_PI_BIN and no pi on PATH); the free checks still run. `pi auth check` goes
+        # before the catalog because `--list-models` hides every model of a provider with
+        # no credentials: asked first,
         # the catalog would call an unauthenticated model invalid. Auth "unknown" does not
         # block; the catalog then decides, and fails closed. See the M9 design.
         model = self._model(request)
         if not model:
             return self._missing_model()
+        if (unsafe := self._argv_unsafe_model(model)) is not None:
+            return unsafe
         binary = self._binary.resolve()
         if binary is None:
-            return None
+            return self._unprobed_refusal(request)
         auth = self._cached_auth(binary, model)
+        if auth == "missing":
+            return self._unprobed_refusal(request)
         if auth == "unresolved":
             return _invalid_model("pi cannot resolve that model's provider.", "unresolved")
         if auth == "not_ready":
@@ -285,7 +319,11 @@ class PiBackend:
         model = self._model(request)
         if not model:
             raise ValueError(self._missing_model().detail)
-        invalid = self._shape_refusal(request) or self._local_refusal(request)
+        invalid = (
+            self._argv_unsafe_model(model)
+            or self._shape_refusal(request)
+            or self._local_refusal(request)
+        )
         if invalid is not None:
             raise ValueError(invalid.detail)
         resolved_bin = self._binary.resolve()
@@ -346,6 +384,7 @@ class PiBackend:
             outcome.run,
             error_message=normalize.final_error(self._events(outcome)),
             sanitize=sanitize,
+            stop_reason=normalize.failed_stop(self._events(outcome)),
         )
 
     def inspect_outcome(self, outcome: RunOutcome, request: RunRequest) -> ClassifiedFailure | None:

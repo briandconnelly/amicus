@@ -84,7 +84,7 @@ _INV = '{"status":"invalid","provider":"openrouter","reason":"invalid_state"}'
         (dict(stderr="kaboom", exit_code=1), "unknown"),
         (dict(stdout="garbage", exit_code=0), "unknown"),
         (dict(timed_out=True, exit_code=-1), "unknown"),
-        (dict(missing=True), "unknown"),
+        (dict(missing=True), "missing"),
     ],
 )
 def test_auth_status_maps_every_outcome(monkeypatch, kw, expected):
@@ -125,6 +125,24 @@ def test_classifier_reads_the_exit_zero_error_message():
 def test_binary_missing_and_timeout():
     assert _classify(_run(missing=True)).code == "pi_not_found"
     assert _classify(_run(timed_out=True, exit_code=-1)).code == "timeout"
+
+
+@pytest.mark.parametrize("stop", ["error", "aborted"])
+def test_an_exit_zero_stop_is_worded_as_the_stop_reason(stop):
+    """An exit-0 failure is pi's stop reason, not an exit status: "pi exited 0" next to a
+    failure reads as a contradiction."""
+    bare = _classify(_run(exit_code=0), stop_reason=stop)
+    assert bare.code == "nonzero_exit"
+    assert bare.detail == (
+        f"pi stopped with reason {stop!r} and wrote no error message and nothing to stderr."
+    )
+    said = _classify(_run(exit_code=0), stop_reason=stop, error_message="upstream exploded")
+    assert said.detail == f"pi stopped with reason {stop!r}: upstream exploded"
+
+
+def test_a_nonzero_exit_keeps_the_exit_status_wording():
+    f = _classify(_run(exit_code=2), stop_reason="error", error_message="upstream exploded")
+    assert f.detail == "pi exited 2: upstream exploded"
 
 
 def test_drift_beats_auth():

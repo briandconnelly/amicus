@@ -113,6 +113,81 @@ def test_unresolvable_binary_skips_the_probes():
     assert calls == []
 
 
+def test_a_missing_binary_skips_the_catalog_so_the_run_reports_not_found():
+    """No AMICUS_PI_BIN and no pi on PATH: the binary resolves to the bare literal, the auth
+    probe's spawn is binary-missing, and validation steps aside so the run itself reports
+    pi_not_found rather than a model error with a dead-end repair."""
+    calls: list = []
+    backend = pf.make_backend(auth="missing", calls=calls)
+    assert backend.validate_request(_req()) is None
+    assert calls == [("auth", "/PI", pf.MODEL)]  # the catalog is never asked
+    # A missing binary is transient (it may be installed next), so it is not remembered.
+    assert backend.validate_request(_req()) is None
+    assert calls == [("auth", "/PI", pf.MODEL)] * 2
+
+
+@pytest.mark.parametrize(
+    "environ", [{"AMICUS_PI_BIN": "/definitely/not/here"}, {}], ids=["bad_override", "missing"]
+)
+def test_an_unprobed_binary_still_runs_the_free_checks(environ):
+    """Skipping the probes must not skip the checks that need none: the conformance kit at
+    registry load refuses a backend that accepts a bogus effort, which would report pi as
+    backend_unavailable instead of letting the run report backend_not_found."""
+    calls: list = []
+    backend = pf.make_backend({**environ, "AMICUS_PI_MODEL": pf.MODEL}, auth="missing", calls=calls)
+    assert conformance.check_backend(contract.CONTRACT, backend) == []
+    for effort in ("not-a-level", "high\n"):
+        failure = backend.validate_request(_req(reasoning_effort=effort))
+        assert failure is not None and failure.code == "invalid_reasoning_effort"
+    failure = backend.validate_request(_req(access="danger-full-access"))
+    assert failure is not None and failure.code == "invalid_arguments"
+    assert all(call[0] == "auth" for call in calls)  # the catalog is never asked
+
+
+def test_pi_absent_from_path_validates_clean_through_the_real_probe(monkeypatch, tmp_path):
+    """The same, end to end through the real resolver and auth probe: PATH holds no pi."""
+    spawned: list = []
+
+    def missing(cmd, timeout_seconds, **kwargs):
+        spawned.append(cmd)
+        return CommandRun("", runtime.BINARY_NOT_FOUND, 127, 0, False)
+
+    from amicus.backends.pi.binary import PiBinary
+    from amicus.backends.pi.config import load_config
+    from amicus.backends.pi.models import PiModels
+    from amicus.sdk.conventions.preflight import HelpProbe
+
+    monkeypatch.setattr(runtime, "run_sync_capture", missing)
+    monkeypatch.setenv("PATH", str(tmp_path))
+    cfg = load_config({})
+    binary = PiBinary(cfg)
+    backend = adapter.PiBackend(
+        cfg, binary, HelpProbe(help_argv=("pi", *contract.HELP_ARGS)), PiModels(cfg, binary)
+    )
+    assert binary.resolve() == contract.PI_BIN
+    assert backend.validate_request(_req()) is None
+    assert [cmd[1:3] for cmd in spawned] == [["auth", "check"]]  # no --list-models
+    assert backend.auth_probe() is None
+
+
+@pytest.mark.parametrize("model", ["-h", "--list-models", "@notes.md", "@"])
+def test_a_flag_or_file_shaped_model_is_refused_before_any_probe(model):
+    """The model is spliced into the probes' argv as a bare token, where pi would read a
+    leading "-" as a flag and a leading "@" as a file argument."""
+    calls: list = []
+    backend = pf.make_backend(calls=calls)
+    failure = backend.validate_request(_req(model=model))
+    assert failure is not None and failure.code == "invalid_model"
+    assert failure.details is not None and failure.details["field"] == "model"
+    assert failure.repair is not None and failure.repair.tool == "amicus_models"
+    assert len(model) == 1 or model not in failure.detail  # never echoed
+    assert calls == []
+    configured = pf.make_backend({"AMICUS_PI_MODEL": f"{model}/x"}, calls=calls)
+    refused = configured.validate_request(_req(model=None))
+    assert refused is not None and refused.code == "invalid_model"
+    assert calls == []
+
+
 def test_effort_outside_model_set_is_refused():
     backend = pf.make_backend()
     failure = backend.validate_request(_req(model=pf.NO_THINKING, reasoning_effort="high"))
@@ -206,6 +281,7 @@ async def test_prepare_refuses_invalid_requests_and_an_unresolved_binary(tmp_pat
         {"model": None},
         {"reasoning_effort": "high\n"},
         {"access": "danger-full-access"},
+        {"model": "--help"},
     ):
         with pytest.raises(ValueError):
             async with pf.make_backend().prepare(_req(cwd=str(tmp_path), **bad)):
@@ -263,6 +339,17 @@ def test_exit_zero_error_stop_reason_is_a_failure_not_a_result():
     failure = backend.inspect_outcome(_outcome(other, exit_code=1), _req())
     assert failure is not None and failure.code == "nonzero_exit"
     assert "upstream exploded" in failure.detail
+    failure = backend.inspect_outcome(_outcome(other), _req())
+    assert failure is not None
+    assert failure.detail == "pi stopped with reason 'error': upstream exploded"
+
+
+def test_an_aborted_stop_at_exit_zero_names_the_stop_reason():
+    failure = pf.make_backend().inspect_outcome(_outcome(pf.stream(None, stop="aborted")), _req())
+    assert failure is not None and failure.code == "nonzero_exit"
+    assert failure.detail == (
+        "pi stopped with reason 'aborted' and wrote no error message and nothing to stderr."
+    )
 
 
 def test_empty_zero_exit_run_is_empty_response():

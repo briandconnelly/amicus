@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 from fastmcp import Client
-from tests.conftest import ENV_PREFIXES, spawned_server_env
+from tests.conftest import ENV_PREFIXES, NEVER_SPAWN_PI, spawned_server_env
 from tests.support.fingerprint_pins import REGEN_COMMAND, REGEN_STEPS, load_pins
 
 import amicus.backends.claude as claude_pkg
@@ -216,7 +216,7 @@ def _in_tree_plugins() -> dict[str, Any]:
         "codex": codex_pkg.plugin({}),
         "kimi": kimi_pkg.plugin({}),
         "claude": claude_pkg.plugin({}),
-        "pi": pi_pkg.plugin({}),
+        "pi": pi_pkg.plugin({"AMICUS_PI_BIN": NEVER_SPAWN_PI}),
     }
 
 

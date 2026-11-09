@@ -216,3 +216,33 @@ async def test_an_unauthenticated_pi_refuses_before_any_run_and_is_reported(
     assert _runs(tmp_path) == []
     [entry] = backends.structured_content["backends"]
     assert entry["status"]["authenticated"] is False
+
+
+async def test_pi_absent_from_path_is_backend_not_found(tmp_path, repo, monkeypatch):
+    """No AMICUS_PI_BIN and no pi on PATH: the call reports backend_not_found, not a model
+    error: the spawn of the bare `pi` literal fails as binary-missing."""
+    import shutil
+
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    git = shutil.which("git")
+    assert git is not None
+    (bindir / "git").symlink_to(git)
+    monkeypatch.setenv("PATH", str(bindir))
+    monkeypatch.delenv("AMICUS_PI_BIN")
+    monkeypatch.setenv("AMICUS_PI_MODEL", MODEL)
+    monkeypatch.setenv("AMICUS_STATE_DIR", str(tmp_path / "state"))
+    monkeypatch.setattr(lifecycle, "SYNC_POLL_INTERVAL_S", 0.02)
+    settings = config.settings()
+    app = server.create_app(
+        settings, BackendRegistry.load(settings.enabled_backends, entry_points=())
+    )
+    async with Client(app) as c:
+        res = await c.call_tool(
+            "amicus_consult",
+            {"backend": "pi", "question": "why?", "workspace_root": str(repo)},
+            raise_on_error=False,
+        )
+    body = res.structured_content
+    assert res.is_error is True and body["ok"] is False
+    assert body["error"]["code"] == "backend_not_found" and body["error"]["backend"] == "pi"

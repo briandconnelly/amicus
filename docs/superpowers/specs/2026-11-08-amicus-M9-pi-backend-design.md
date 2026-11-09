@@ -53,7 +53,8 @@ The zero-spend probe on #423 verified each flag's effect on 1.5.0 against a fake
   1. `pi auth check --model <model> --json --no-refresh` resolves the provider, including a provider id that itself contains `/`; an unresolvable model is `invalid_model`, and `not_ready` or `invalid` is `pi_auth_required`.
   2. With the provider ready, `pi --list-models <id>` must hold a row whose provider column and model column join to exactly `<model>`; no exact row, or a listing that could not be read, is `invalid_model`.
 - Pi sends an unknown id anyway, so this check fails closed, unlike kimi's.
-- When the binary cannot be resolved, validation skips both probes, so the run reports `backend_not_found` rather than a model error.
+- A model that begins with `-` or `@` is refused as `invalid_model` before either step, because the probes pass the model to pi as a bare argument, which pi would read as a flag or a file.
+- When the binary cannot be resolved, or the first probe finds it missing, validation skips both probes, so the run reports `backend_not_found` rather than a model error; the checks that need no probe, such as the effort's place in the vocabulary below, still run.
 - `AMICUS_PI_REASONING_EFFORT` is the default effort; a call's `reasoning_effort` overrides it; with neither, `--thinking` is not sent.
 - An effort must be one of `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, and only `off` is accepted for a model whose catalog row says `thinking: no`.
 - Pi clamps an effort the model does not support, so when the final message's `thinkingLevel` differs from the requested one, the result carries a warning naming both.

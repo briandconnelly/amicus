@@ -46,6 +46,16 @@ def test_auth_check_maps_onto_authenticated(env, monkeypatch, auth, expected):
     assert pi_pkg.plugin(env).status.probe().authenticated is expected
 
 
+def test_a_binary_gone_between_the_probes_is_unknown_not_unauthenticated(env, monkeypatch):
+    """`missing` is a spawn failure, not a statement about credentials."""
+    from amicus.backends.pi import cli
+
+    monkeypatch.setattr(cli, "auth_status", lambda binary, model: "missing")
+    rep = pi_pkg.plugin(env).status.probe()
+    assert rep.installed is True and rep.authenticated is None
+    assert st.UNRESOLVED_MODEL_WARNING not in rep.warnings
+
+
 def test_unresolvable_configured_model_is_unauthenticated_and_says_why(env, monkeypatch):
     monkeypatch.setenv(
         "FAKE_PI_AUTH", f'{{"status":"invalid","provider":"{MODEL}","reason":"invalid_state"}}'

@@ -8,6 +8,7 @@ import subprocess
 
 import pytest
 from fastmcp import Client
+from tests.conftest import NEVER_SPAWN_PI
 
 from amicus import backends as in_tree
 from amicus import config, registry, server
@@ -38,7 +39,7 @@ def test_plugin_passes_the_conformance_kit(fake_pi):
 
 
 def test_disclosures_and_vocabulary():
-    plugin = pi_pkg.plugin({})
+    plugin = pi_pkg.plugin({"AMICUS_PI_BIN": NEVER_SPAWN_PI})
     for phrase in contract.CONTRACT.forbidden_surface_phrases:
         assert phrase not in plugin.egress and phrase not in plugin.carriers
     assert plugin.egress == contract.EGRESS and plugin.carriers == contract.CARRIERS
@@ -50,7 +51,13 @@ def test_disclosures_and_vocabulary():
 
 
 def test_options_carry_the_configured_defaults():
-    plugin = pi_pkg.plugin({"AMICUS_PI_MODEL": MODEL, "AMICUS_PI_REASONING_EFFORT": "high"})
+    plugin = pi_pkg.plugin(
+        {
+            "AMICUS_PI_BIN": NEVER_SPAWN_PI,
+            "AMICUS_PI_MODEL": MODEL,
+            "AMICUS_PI_REASONING_EFFORT": "high",
+        }
+    )
     by_name = {o.name: o for o in plugin.options}
     assert set(by_name) == {"model", "reasoning_effort"}
     assert by_name["model"].default == MODEL and by_name["reasoning_effort"].default == "high"
