@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from amicus.backends.pi import cli, contract
@@ -157,3 +159,36 @@ def test_generic_detail_is_sanitized_before_the_cut():
     assert "/wt/abc" not in h.detail and "./src/a.py" in h.detail
     assert _classify(_run(stderr="\x1b[31mred\x1b[0m", exit_code=2)).detail.endswith("red")
     assert _classify(_run(exit_code=2), error_message="oops").detail.endswith("oops")
+
+
+def _echo_stream(user_text: str) -> str:
+    """A `--mode json` stdout whose user message echoes `user_text`, as pi's stream does."""
+    user = {"role": "user", "content": [{"type": "text", "text": user_text}]}
+    return '{"type":"session","id":"s"}\n' + json.dumps({"type": "message_end", "message": user})
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    [
+        "SENTINEL: why does this return 401 Unauthorized?",
+        "SENTINEL: we got 429 Too Many Requests, rate limit hit",
+        'SENTINEL: pi said Model "a/b" not found',
+        "SENTINEL: error: unknown option --x",
+    ],
+)
+def test_the_echoed_stream_is_never_read(prompt):
+    """stdout is the event stream, which echoes the prompt: it must neither drive the
+    classification nor reach the detail (rule 18)."""
+    f = _classify(_run(stdout=_echo_stream(prompt), exit_code=1))
+    assert f.code == "nonzero_exit" and "SENTINEL" not in f.detail
+    assert f.detail.startswith("pi exited 1: ")
+
+
+def test_drift_on_stderr_is_still_contract_drift():
+    run = _run(stdout=_echo_stream("SENTINEL"), stderr="Error: Unknown option: --tools")
+    assert _classify(run).code == "cli_contract_changed"
+
+
+def test_auth_on_stderr_is_still_auth_required():
+    run = _run(stdout=_echo_stream("SENTINEL"), stderr="401 Unauthorized")
+    assert _classify(run).code == "pi_auth_required"

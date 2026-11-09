@@ -300,18 +300,11 @@ class PiBackend:
     def _classify(self, outcome: RunOutcome, request: RunRequest) -> ClassifiedFailure:
         aliases = request.sanitize_aliases
         sanitize = (lambda t: pathalias.sanitize_echo_prose(t, aliases) or "") if aliases else None
-        events = self._events(outcome)
-        error_message = normalize.final_error(events)
-        if error_message is None and not outcome.run.stderr.strip():
-            # Without these the classifier falls back to stdout, and the stream echoes the
-            # user message: a fixed literal keeps every prompt input out of the detail.
-            stop = normalize.failed_stop(events)
-            error_message = (
-                f"pi's final message stopped with stopReason {stop!r} and no error message."
-                if stop is not None
-                else "pi wrote no error message and nothing to stderr."
-            )
-        return cli.classify_failure(outcome.run, error_message=error_message, sanitize=sanitize)
+        return cli.classify_failure(
+            outcome.run,
+            error_message=normalize.final_error(self._events(outcome)),
+            sanitize=sanitize,
+        )
 
     def inspect_outcome(self, outcome: RunOutcome, request: RunRequest) -> ClassifiedFailure | None:
         """A provider failure exits 0 after pi's own retries, so a final assistant message

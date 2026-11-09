@@ -95,6 +95,7 @@ def auth_status(binary: str, model: str | None, timeout_seconds: int = 10) -> Au
     return "unknown"
 
 
+NO_DIAGNOSTIC = "pi wrote no error message and nothing to stderr."
 _ECHO_MAX_CHARS = 200
 _ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*m")
 
@@ -123,8 +124,12 @@ def classify_failure(
     """Map a non-success run into the shared taxonomy, in the SDK's order: binary missing,
     timeout, drift, auth, rate limit, invalid model, nonzero_exit. pi can fail with exit 0 and
     an error in its event stream, so `error_message` (already extracted) is read alongside
-    stderr and stdout; the predicates never see model answer text. `sanitize` runs BEFORE the
-    300-char cut, so a secret or worktree path straddling the cut cannot leak a prefix."""
+    stderr. stdout is never read: under `--mode json` it is the event stream, which echoes
+    the system prompt, the user's prompt and the answer, so a prompt mentioning "401" would
+    be misclassified and any copy of it would put prompt input in the detail (rule 18). pi
+    writes its own CLI errors to stderr. The generic detail is `error_message`, else stderr,
+    else a fixed literal. `sanitize` runs BEFORE the 300-char cut, so a secret or worktree
+    path straddling the cut cannot leak a prefix."""
     if run.binary_missing:
         return ClassifiedFailure(
             code="pi_not_found",
@@ -132,7 +137,7 @@ def classify_failure(
         )
     if run.timed_out:
         return ClassifiedFailure(code="timeout", detail="pi exceeded the timeout.")
-    texts = (run.stderr, run.stdout, error_message)
+    texts = (run.stderr, error_message)
     if contract.is_contract_drift(*texts):
         return ClassifiedFailure(
             code="cli_contract_changed",
@@ -166,7 +171,7 @@ def classify_failure(
                 alternative="Pass one of the model ids amicus_models lists for pi.",
             ),
         )
-    raw = (error_message or run.stderr or run.stdout).strip()
+    raw = (error_message or "").strip() or run.stderr.strip() or NO_DIAGNOSTIC
     stripped_ansi = _strip_ansi(raw)
     sanitized = (
         sanitize(stripped_ansi)
