@@ -201,6 +201,7 @@
           "api_key_missing",
           "job_cap_reached",
           "internal_error",
+          "invalid_model",
           "empty_response",
           "answer_unavailable",
           "job_failed",
@@ -263,6 +264,7 @@
           "api_key_missing",
           "job_cap_reached",
           "internal_error",
+          "invalid_model",
           "empty_response",
           "answer_unavailable",
           "idempotency_conflict",
@@ -319,6 +321,7 @@
           "api_key_missing",
           "job_cap_reached",
           "internal_error",
+          "invalid_model",
           "empty_response",
           "answer_unavailable",
           "invalid_scope",
@@ -393,6 +396,7 @@
           "api_key_missing",
           "job_cap_reached",
           "internal_error",
+          "invalid_model",
           "empty_response",
           "answer_unavailable",
           "invalid_scope",
@@ -461,6 +465,7 @@
           "api_key_missing",
           "job_cap_reached",
           "internal_error",
+          "invalid_model",
           "empty_response",
           "answer_unavailable",
           "not_a_git_repo",
@@ -523,6 +528,7 @@
           "api_key_missing",
           "job_cap_reached",
           "internal_error",
+          "invalid_model",
           "empty_response",
           "answer_unavailable",
           "not_a_git_repo",
@@ -708,7 +714,8 @@
           "invalid_model",
           "backend_auth_required",
           "user_config_rejected",
-          "api_key_missing"
+          "api_key_missing",
+          "internal_error"
         ],
         "key_optional_params": [
           "scope",
@@ -748,7 +755,8 @@
           "worktree_error",
           "invalid_model",
           "backend_auth_required",
-          "user_config_rejected"
+          "user_config_rejected",
+          "internal_error"
         ],
         "key_optional_params": [
           "workspace_root",
@@ -773,7 +781,8 @@
         "cost": "free",
         "deprecation": null,
         "error_codes": [
-          "invalid_arguments"
+          "invalid_arguments",
+          "internal_error"
         ],
         "key_optional_params": [
           "backend",
@@ -796,7 +805,8 @@
         "deprecation": null,
         "error_codes": [
           "invalid_arguments",
-          "backend_unavailable"
+          "backend_unavailable",
+          "internal_error"
         ],
         "key_optional_params": [],
         "name": "amicus_models",
@@ -817,7 +827,8 @@
         "cost": "free",
         "deprecation": null,
         "error_codes": [
-          "invalid_arguments"
+          "invalid_arguments",
+          "internal_error"
         ],
         "key_optional_params": [
           "detail",
@@ -842,7 +853,9 @@
         "error_codes": [
           "job_not_found",
           "invalid_workspace_root",
-          "workspace_outside_roots"
+          "workspace_outside_roots",
+          "invalid_arguments",
+          "internal_error"
         ],
         "key_optional_params": [
           "workspace_root",
@@ -873,7 +886,42 @@
           "job_timeout",
           "job_result_incompatible",
           "invalid_workspace_root",
-          "workspace_outside_roots"
+          "workspace_outside_roots",
+          "invalid_arguments",
+          "internal_error",
+          "backend_unavailable",
+          "feature_unsupported",
+          "unexpanded_env_placeholder",
+          "input_too_large",
+          "invalid_reasoning_effort",
+          "timeout",
+          "nonzero_exit",
+          "backend_not_found",
+          "backend_auth_required",
+          "backend_rate_limited",
+          "cli_contract_changed",
+          "extra_args_rejected",
+          "user_config_rejected",
+          "budget_exceeded",
+          "claude_permission_error",
+          "api_key_invalid",
+          "api_key_missing",
+          "job_cap_reached",
+          "invalid_model",
+          "empty_response",
+          "answer_unavailable",
+          "idempotency_conflict",
+          "idempotency_in_progress",
+          "idempotency_result_unavailable",
+          "invalid_scope",
+          "invalid_base",
+          "invalid_commit",
+          "invalid_paths",
+          "not_a_git_repo",
+          "git_unavailable",
+          "invalid_json",
+          "context_too_large",
+          "worktree_error"
         ],
         "key_optional_params": [
           "workspace_root",
@@ -904,7 +952,42 @@
           "job_timeout",
           "job_result_incompatible",
           "invalid_workspace_root",
-          "workspace_outside_roots"
+          "workspace_outside_roots",
+          "invalid_arguments",
+          "internal_error",
+          "backend_unavailable",
+          "feature_unsupported",
+          "unexpanded_env_placeholder",
+          "input_too_large",
+          "invalid_reasoning_effort",
+          "timeout",
+          "nonzero_exit",
+          "backend_not_found",
+          "backend_auth_required",
+          "backend_rate_limited",
+          "cli_contract_changed",
+          "extra_args_rejected",
+          "user_config_rejected",
+          "budget_exceeded",
+          "claude_permission_error",
+          "api_key_invalid",
+          "api_key_missing",
+          "job_cap_reached",
+          "invalid_model",
+          "empty_response",
+          "answer_unavailable",
+          "idempotency_conflict",
+          "idempotency_in_progress",
+          "idempotency_result_unavailable",
+          "invalid_scope",
+          "invalid_base",
+          "invalid_commit",
+          "invalid_paths",
+          "not_a_git_repo",
+          "git_unavailable",
+          "invalid_json",
+          "context_too_large",
+          "worktree_error"
         ],
         "key_optional_params": [
           "workspace_root",
@@ -930,7 +1013,9 @@
         "error_codes": [
           "job_not_found",
           "invalid_workspace_root",
-          "workspace_outside_roots"
+          "workspace_outside_roots",
+          "invalid_arguments",
+          "internal_error"
         ],
         "key_optional_params": [
           "workspace_root"
@@ -954,7 +1039,9 @@
         "deprecation": null,
         "error_codes": [
           "invalid_workspace_root",
-          "workspace_outside_roots"
+          "workspace_outside_roots",
+          "invalid_arguments",
+          "internal_error"
         ],
         "key_optional_params": [
           "workspace_root",
@@ -1578,11 +1665,12 @@
               },
               "elapsed_ms": {
                 "default": 0,
+                "description": "Milliseconds the backend command runtime measured for this envelope's run, an attempted spawn included; 0 when no run was measured (a discovery or job tool, an early refusal). Not the MCP call's wall time: amicus_job_status reports a job's age in its own top-level elapsed_ms.",
                 "title": "Elapsed Ms",
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-65",
+                "default": "amicus/0.1/schema-66",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -1994,7 +2082,7 @@
         },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
-        "description": "The full error envelope every ok:false tool result carries in structuredContent; resource-read failures carry error (with code/message renamed machine_code/human_message) in JSON-RPC error.data. details.value is omitted for every caller-supplied input: a string parameter can receive a mispasted secret and best-effort redaction cannot catch a plain one, so the caller — who already holds what it sent — repairs from field, reason and allowed_values. Machine identifiers this server minted (job_id) are refused, never echoed, when they carry a control character. repair.arguments, when present, is a complete call. A lookup or poll repair carries the failing call's backend when the lookup tool accepts it, a job_id this server minted, or the workspace_root of a call that already resolved it. An invalid_arguments repair whose every rejected argument is an unknown key carries the call as sent minus those keys, but only when every remaining value is null, a bool, a number, a member of the parameter's published enum, or an object built from those. Any other string could be a secret or a prompt input, so it suppresses the arguments. That call corrects the failures this envelope reports; a later check can still reject it with a repair of its own. A repair that names no tool is a symbolic next step, not a call. invalid_workspace_root and workspace_outside_roots carry no repair at all: only the caller holds the directory they need, details names the field, and details.reason is a fixed token naming the cause, listed in the workspace_root contract at amicus://params.",
+        "description": "The full error envelope every ok:false tool result carries in structuredContent; resource-read failures carry error (with code/message renamed machine_code/human_message) in JSON-RPC error.data. details.value is omitted for every caller-supplied input: a string parameter can receive a mispasted secret and best-effort redaction cannot catch a plain one, so the caller — who already holds what it sent — repairs from field, reason and allowed_values. Machine identifiers this server minted (job_id) are refused, never echoed, when they carry a control character. repair.arguments, when present, is a complete call. A lookup or poll repair carries the failing call's backend when the lookup tool accepts it, a job_id this server minted, or the workspace_root of a call that already resolved it. An invalid_arguments repair whose every rejected argument is an unknown key carries the call as sent minus those keys, but only when every remaining value is null, a bool, a number, a member of the parameter's published enum, or an object built from those. Any other string could be a secret or a prompt input, so it suppresses the arguments. That call corrects the failures this envelope reports; a later check can still reject it with a repair of its own. A repair that names no tool is a symbolic next step, not a call. A correct_arguments repair names the tool that failed: correct that call and repeat it. invalid_workspace_root and workspace_outside_roots carry no repair at all: only the caller holds the directory they need, details names the field, and details.reason is a fixed token naming the cause, listed in the workspace_root contract at amicus://params.",
         "properties": {
           "error": {
             "$ref": "#/$defs/ErrorInfo"
@@ -2939,6 +3027,17 @@
           "tool": null
         },
         "temporary": true
+      }
+    },
+    "contextual": {
+      "self_repair": {
+        "arguments": "only_a_unique_echo_safe_corrected_call",
+        "no_repair_codes": [
+          "invalid_workspace_root",
+          "workspace_outside_roots"
+        ],
+        "tool": "the_failing_tool",
+        "when_next_step": "correct_arguments"
       }
     },
     "default": {
@@ -4205,7 +4304,7 @@
       "description": "The full ErrorResult schema; tool outputSchemas carry only an opaque error branch.",
       "mimeType": "application/schema+json",
       "name": "amicus-error-envelope",
-      "size": 16147,
+      "size": 16530,
       "title": "amicus error envelope schema",
       "uri": "amicus://error-envelope"
     },
@@ -4231,7 +4330,7 @@
       "description": "The full Meta schema every success envelope's opaque `meta` points at.",
       "mimeType": "application/schema+json",
       "name": "amicus-result-meta",
-      "size": 9314,
+      "size": 9609,
       "title": "amicus result metadata schema",
       "uri": "amicus://result-meta"
     }
@@ -4604,11 +4703,12 @@
           },
           "elapsed_ms": {
             "default": 0,
+            "description": "Milliseconds the backend command runtime measured for this envelope's run, an attempted spawn included; 0 when no run was measured (a discovery or job tool, an early refusal). Not the MCP call's wall time: amicus_job_status reports a job's age in its own top-level elapsed_ms.",
             "title": "Elapsed Ms",
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-65",
+            "default": "amicus/0.1/schema-66",
             "title": "Fingerprint",
             "type": "string"
           },
@@ -6570,6 +6670,7 @@
                 "type": "array"
               },
               "error_codes": {
+                "description": "A code on no tool_details row is resource-only (resource_not_found) or reserved: no tool returns it today.",
                 "items": {
                   "type": "string"
                 },
