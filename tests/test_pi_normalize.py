@@ -195,3 +195,16 @@ def test_a_loss_after_the_final_message_is_flagged():
 def test_a_loss_with_no_message_is_a_loss():
     assert normalize.lost_after_final_message(SESSION + LOST)
     assert not normalize.lost_after_final_message(SESSION), "control: nothing lost"
+
+
+def test_failed_stop_keys_on_the_stop_reason_not_the_message():
+    def stream(stop: str, **extra) -> str:
+        return SESSION + _end(_assistant(_text("partial"), stopReason=stop, **extra))
+
+    assert normalize.failed_stop(stream("error")) == "error"
+    assert normalize.failed_stop(stream("error", errorMessage="  ")) == "error"
+    assert normalize.failed_stop(stream("aborted")) == "aborted"
+    assert normalize.failed_stop(stream("stop")) is None
+    assert normalize.failed_stop(STREAM) is None, "control: a successful run did not fail"
+    assert normalize.failed_stop("") is None
+    assert normalize.final_error(stream("error", errorMessage="  ")) is None

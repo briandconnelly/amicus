@@ -73,6 +73,18 @@ def extract_final_message(events: str) -> str | None:
     return joined or None
 
 
+FAILED_STOP_REASONS = frozenset({"error", "aborted"})
+
+
+def failed_stop(events: str) -> str | None:
+    """The final assistant message's `stopReason` when it marks a failure ("error" or
+    "aborted"), whether or not an `errorMessage` came with it; else None. The stop reason,
+    not the message, is pi's failure signal."""
+    message = final_assistant(events)
+    reason = message.get("stopReason") if message else None
+    return reason if reason in FAILED_STOP_REASONS else None
+
+
 def final_error(events: str) -> str | None:
     """The final assistant message's `errorMessage` when its `stopReason` is "error"."""
     message = final_assistant(events)

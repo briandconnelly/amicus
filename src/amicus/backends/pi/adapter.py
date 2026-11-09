@@ -300,18 +300,26 @@ class PiBackend:
     def _classify(self, outcome: RunOutcome, request: RunRequest) -> ClassifiedFailure:
         aliases = request.sanitize_aliases
         sanitize = (lambda t: pathalias.sanitize_echo_prose(t, aliases) or "") if aliases else None
-        return cli.classify_failure(
-            outcome.run,
-            error_message=normalize.final_error(self._events(outcome)),
-            sanitize=sanitize,
-        )
+        events = self._events(outcome)
+        error_message = normalize.final_error(events)
+        if error_message is None and not outcome.run.stderr.strip():
+            # Without these the classifier falls back to stdout, and the stream echoes the
+            # user message: a fixed literal keeps every prompt input out of the detail.
+            stop = normalize.failed_stop(events)
+            error_message = (
+                f"pi's final message stopped with stopReason {stop!r} and no error message."
+                if stop is not None
+                else "pi wrote no error message and nothing to stderr."
+            )
+        return cli.classify_failure(outcome.run, error_message=error_message, sanitize=sanitize)
 
     def inspect_outcome(self, outcome: RunOutcome, request: RunRequest) -> ClassifiedFailure | None:
         """A provider failure exits 0 after pi's own retries, so a final assistant message
-        with `stopReason: "error"` is classified whatever the exit code. A zero-exit run with
-        no answer text is `empty_response`: a success with nothing in it would launder the
-        loss into a result."""
-        if normalize.final_error(self._events(outcome)) is not None:
+        whose `stopReason` is "error" or "aborted" is classified whatever the exit code and
+        whether or not it carries an `errorMessage`: any text before it is a partial answer.
+        A zero-exit run with no answer text is `empty_response`: a success with nothing in it
+        would launder the loss into a result."""
+        if normalize.failed_stop(self._events(outcome)) is not None:
             return self._classify(outcome, request)
         run = outcome.run
         if run.exit_code != 0 or run.timed_out or run.binary_missing:

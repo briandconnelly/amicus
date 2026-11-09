@@ -323,3 +323,44 @@ def test_auth_status_seam_reaches_the_cli_at_call_time(monkeypatch):
 def test_scrub_env_applies_the_run_environment():
     env = pf.make_backend().scrub_env({"PI_CODING_AGENT_SESSION_DIR": "/x", "HOME": "/h"}, None)
     assert env == {"HOME": "/h", "PI_TELEMETRY": "0", "PI_SKIP_VERSION_CHECK": "1"}
+
+
+# --- Ruling 7: the stop reason, not the message, is the failure signal ------------------------
+
+
+@pytest.mark.parametrize("message", [None, "  "])
+def test_error_stop_without_a_message_is_a_failure_even_with_partial_text(message):
+    extra = {} if message is None else {"errorMessage": message}
+    stdout = pf.stream("partial answer", stop="error", **extra)
+    failure = pf.make_backend().inspect_outcome(_outcome(stdout), _req())
+    assert failure is not None and failure.code == "nonzero_exit"
+
+
+def test_aborted_stop_is_a_failure():
+    stdout = pf.stream("partial answer", stop="aborted")
+    failure = pf.make_backend().inspect_outcome(_outcome(stdout), _req())
+    assert failure is not None and failure.code != "empty_response"
+
+
+def test_error_stop_with_no_text_is_not_empty_response():
+    stdout = pf.stream(None, stop="error")
+    failure = pf.make_backend().inspect_outcome(_outcome(stdout), _req())
+    assert failure is not None and failure.code == "nonzero_exit"
+
+
+@pytest.mark.parametrize(("stop", "exit_code"), [("error", 0), ("aborted", 0), ("stop", 1)])
+def test_a_failure_detail_never_echoes_the_stream(stop, exit_code):
+    """The stream echoes the user message, so with no errorMessage and no stderr the detail
+    must not fall back to stdout (rule 18)."""
+    user = pf.line(
+        {
+            "type": "message_end",
+            "message": {"role": "user", "content": [{"type": "text", "text": "SENTINEL-Q"}]},
+        }
+    )
+    stdout = pf.SESSION + user + pf.assistant_end("partial", stop=stop)
+    backend = pf.make_backend()
+    failure = backend.classify_failure(_outcome(stdout, exit_code=exit_code), _req())
+    assert failure.code == "nonzero_exit" and "SENTINEL" not in failure.detail
+    with_stderr = _outcome(stdout, stderr="provider said no", exit_code=exit_code)
+    assert "provider said no" in backend.classify_failure(with_stderr, _req()).detail
