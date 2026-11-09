@@ -408,14 +408,15 @@ class PiBackend:
 
     @staticmethod
     def _answer_loss(outcome: RunOutcome, events: str) -> AnswerLoss | None:
-        """A capture loss first; otherwise "truncated" when pi says the model's own output was
-        cut off at its token limit, so the consumer withholds the cut-off answer rather than
-        delivering it as whole (prose or structured alike)."""
+        """A capture loss first; otherwise "model_output_limit" when pi says the model's own
+        output was cut off at its token limit, so the consumer withholds the cut-off answer
+        rather than delivering it as whole (prose or structured alike), and says the limit
+        was the model's, not amicus's capture cap (#425)."""
         loss = stream_answer_loss(
             outcome.run, lost_after_answer=normalize.lost_after_final_message(events)
         )
         if loss is None and normalize.stopped_at_length(events):
-            return "truncated"
+            return "model_output_limit"
         return loss
 
     def _classify(self, outcome: RunOutcome, request: RunRequest) -> ClassifiedFailure:

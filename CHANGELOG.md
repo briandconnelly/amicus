@@ -256,6 +256,14 @@ checked against codex-cli 0.167.0, Kimi Code 2.5.2 and Claude Code 2.1.319.
 
 ### Fixed
 
+- **Surface**: `amicus/0.1/schema-63`. A `pi` answer the model cut off at its own output-token
+  limit (`stopReason: "length"`) is still `answer_unavailable`, but with its own
+  `error.details.reason`, `model_output_limit`, instead of `stream_truncated` (#425). Its
+  message and repair (`reduce_input`) no longer blame `AMICUS_MAX_OUTPUT_BYTES`, which cannot
+  help: they suggest a narrower request or a model with a larger output limit. A `pi` delegate
+  cut off that way with a captured diff still comes back `ok: true` with the diff, and amicus's
+  own summary now names the model's limit rather than a lost capture. A capture loss still
+  outranks it, and no other backend reports this reason.
 - `amicus_models(backend="kimi")` lists a catalog of up to 1024 model aliases, up from 256, and
   says when it lists fewer than the catalog holds (#414). An OpenRouter-backed kimi config with
   362 aliases was listed as its first 256, with nothing saying the rest existed. The result
