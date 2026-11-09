@@ -75,7 +75,8 @@ The zero-spend probe on #423 verified each flag's effect on 1.5.0 against a fake
   When the last assistant message has `stopReason: "error"`, the outcome inspector classifies it from `errorMessage` and stderr: auth, rate limit and invalid model by pattern, and anything else as `nonzero_exit` with the sanitized message.
   Pi retries a failing request three times on its own before reporting it.
 - A zero-exit run with no assistant text and no error is `empty_response`, as on kimi.
-- A last assistant message with `stopReason: "length"` was cut off at the model's output-token limit, so the adapter marks its answer `answer_loss: "truncated"` and amicus withholds it as `answer_unavailable`, prose or structured, even when the cut-off text parses as complete JSON.
+- A last assistant message with `stopReason: "length"` was cut off at the model's output-token limit, so the adapter marks its answer `answer_loss: "model_output_limit"` and amicus withholds it as `answer_unavailable` with `error.details.reason` `model_output_limit` and repair `reduce_input`, prose or structured, even when the cut-off text parses as complete JSON (#425).
+  A capture loss outranks it, and a delegate with a captured diff still delivers the diff with amicus's own summary naming the model's limit.
 - `Model "<id>" not found` on stderr is classified as `invalid_model`, a backstop behind the pre-spend check.
 - A rejected flag is `cli_contract_changed`.
 

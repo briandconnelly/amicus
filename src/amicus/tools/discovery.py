@@ -103,8 +103,9 @@ _COMMON_PAID_CODES = [
 _EMPTY_RESPONSE_CODES = ["empty_response"]
 # The backend answered and amicus could not read the answer whole: an answer FILE (codex's
 # last message, kimi's delegate answer) its bounded reader refused (#162), or an answer on
-# the output stream (claude's envelope, kimi's final message) its capture cut or lost
-# (#198). Every backend can produce it, so every paid tool lists it.
+# the output stream (claude's envelope, kimi's and pi's final message) its capture cut or
+# lost (#198), or one pi reports the model cut off at its output-token limit (#425). Every
+# backend can produce it, so every paid tool lists it.
 _ANSWER_UNAVAILABLE_CODES = ["answer_unavailable"]
 _REVIEW_CODES = [
     "invalid_scope",
