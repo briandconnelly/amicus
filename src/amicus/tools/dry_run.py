@@ -54,9 +54,9 @@ if TYPE_CHECKING:  # pragma: no cover
     from amicus.tools._prepare import Prepared
 
 _PREVIEW_FACT = (
-    "A dry run reports metadata about the input amicus would assemble; it calls no model but "
-    "runs the backend's free pre-spend checks, and it neither enumerates nor bounds the files "
-    "the model itself reads during the paid call."
+    "A dry run reports metadata on the input amicus would assemble and runs the backend's free "
+    "pre-spend checks; it neither enumerates nor bounds what files the model reads during the "
+    "paid call."
 )
 _DRY_RUN_DESC = (
     f"{FREE_MARKER} Preview an amicus_review_changes call: the diff scope, its byte size and "
