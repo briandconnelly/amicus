@@ -20,6 +20,20 @@ per-change, as its own lead says.
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-11-09
+
+This release adds a `pi` backend, for the pi coding-agent CLI, and deprecates `kimi` in its
+favour, for removal in 0.15.0 or later (#423). `pi` serves `consult`, `review_changes` and
+`delegate`, runs any provider's model named by an exact `provider/id`, and needs no rule-18
+prompt-carrier exemption. It moves the discovery surface from `amicus/0.1/schema-59`, what
+0.12.0 shipped, to `amicus/0.1/schema-63`; nothing a 0.12.0 client called is removed or refused,
+so it is not labelled Breaking. `RESULT_FORMAT` stays 9, so a job result 0.12.0 stored can still
+be delivered. The agent-facing surfaces now call `backend` a harness rather than a model (#430),
+and the release evidence gains a fourth live suite for `pi`. One known `pi` limit ships
+disclosed rather than fixed: a shell command a `pi` delegate leaves running in the background
+can outlive the run (#424). It was checked against codex-cli 0.167.0, Kimi Code 2.5.2, Claude
+Code 2.1.321 and pi 1.5.0.
+
 ### Deprecated
 
 - **Surface**: `amicus/0.1/schema-61`. The `kimi` backend is deprecated in favour of `pi`, since
@@ -1716,7 +1730,8 @@ per-change rather than net, so they also name intermediate states that no releas
 - The tagged publish path to pypi.org has never run. Only the TestPyPI dispatch path has been exercised.
 - Eval scenario S6 in `skills/collaborating-with-amicus/tests/scenarios.md` passed on one run (status: `pass`, validated by that run alone); an M7 follow-up run against the current skill text did not isolate the still-open F3 finding, so F3 remains open. S7 (real-host approval friction) has failed both of its recorded runs (status: `fail`); an M7 zero-spend recheck reached neither a pass nor a fail and is recorded as inconclusive, so it does not move S7's status. See their `status` fields and ADR 0012.
 
-[Unreleased]: https://github.com/briandconnelly/amicus/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/briandconnelly/amicus/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/briandconnelly/amicus/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/briandconnelly/amicus/compare/v0.11.1...v0.12.0
 [0.11.1]: https://github.com/briandconnelly/amicus/compare/v0.11.0...v0.11.1
 [0.11.0]: https://github.com/briandconnelly/amicus/compare/v0.10.0...v0.11.0
