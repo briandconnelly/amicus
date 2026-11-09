@@ -75,7 +75,7 @@ jobs:
         # See scripts/check_release_state.py for what a pass does and does not prove. In
         # short: the tree's release-state coherence is proven; the live-gate record carried in
         # the tag message is a maintainer assertion, machine-checked for shape and for naming
-        # this commit, never proof the three suites ran.
+        # this commit, never proof the four suites ran.
         run: |
           set -euo pipefail
           uv run --no-project --python 3.13 python scripts/check_release_state.py \
