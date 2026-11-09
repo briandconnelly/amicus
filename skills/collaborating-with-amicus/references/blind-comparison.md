@@ -21,12 +21,13 @@ comparison, as the blinding rule below states. These are this file's own:
 - **Compare only finalized candidates, and only when no cheaper discriminator exists.** Name the
   discriminators you considered — a test, this project's gate, a direct inspection — and why each
   cannot settle the question, before the call.
-- **Exclude every backend that produced a candidate, and, when you produced one, the backend that
-  runs the model you are running as, where the host tells you which that is.** A backend that
-  wrote a candidate is its author whatever the label says.
-- **Record whether the comparison backend's model family is verified distinct from each
-  candidate's author, and say `unverified` when it is not.** Backend IDs do not establish
-  families.
+- **Exclude by model identity: every model that produced a candidate, and, when you produced
+  one, the model you are running as, where the host tells you which that is, whichever harness
+  would run it.** Compare resolved `provider/id` where known, never backend ids: `pi` running
+  the model that wrote a candidate is that candidate's author, and so is any harness running it.
+  Where a candidate's model is unknown, exclude the harness that produced it.
+- **Record whether the comparison model's family is verified distinct from each candidate's
+  author, and say `unverified` when it is not.** Backend IDs do not establish families.
 - **Blind the candidates in every field of the call.** Neutral labels, no authorship, no
   provenance, no marker of which one you wrote or prefer. This overrides the belief-disclosure
   rule for the call fields only: record any prior preference of your own before the call, outside

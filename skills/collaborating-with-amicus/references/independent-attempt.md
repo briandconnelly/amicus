@@ -17,6 +17,9 @@ attempt, as the framing rule below states. These are this file's own:
   rule for this pattern.
 - **Declare the pattern and its cap before the first paid call.** One worker attempt is one paid
   call.
+- **Choose a worker whose resolved model differs from the one you are running as, where the host
+  tells you which that is.** Compare `provider/id`, never backend ids: `pi` running your own model
+  is you through another harness, not a second model.
 - **Finalize your own attempt before any call that can return the backend's answer.**
 - **Keep your draft out of the resolved workspace and out of every path named to any call for this
   job**; hold it in context entirely when it is small enough.
@@ -93,8 +96,9 @@ evidence.
 Running two backends against one problem is an **extension of this pattern, not a free variation
 of it**. The one-call allowance here covers one worker. Two workers needs its own declared budget,
 its own job tracking, and separation held for each — and remember that two backend IDs do not
-establish two model families ([choosing a backend](choosing-a-backend.md)), so the diversity the
-pattern trades on may be unverified.
+establish two model families, and two workers on one resolved `provider/id` are one model twice
+([choosing a backend](choosing-a-backend.md)), so the diversity the pattern trades on may be
+unverified.
 
 ## Independent test design
 

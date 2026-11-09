@@ -8,11 +8,14 @@ adversarial critic attack a plan, claim, or decision before you commit to it.
 
 Request: $ARGUMENTS
 
-`backend` is required — amicus has no default backend. `amicus_adversarial_review`
-supports `claude` only in v1 — do not route an adversarial-review request to `codex`,
-`kimi` or `pi`. If the request does not confirm `claude` is enabled, call
-`amicus_backends` with `detail="full"` first and check `enabled: true` and `status.authenticated: true`
-for `claude`.
+`backend` is required — amicus has no default backend. It names the harness, not the model,
+and `amicus_adversarial_review` supports the `claude` harness only — do not route an
+adversarial-review request to `codex`, `kimi` or `pi`, even one running an Anthropic model.
+Resolve the request by the routing procedure in the `collaborating-with-amicus` skill
+(`references/choosing-a-backend.md` → Routing procedure) and never substitute silently: when
+`claude` is not ready, say so rather than switching verb or harness. Whether or not the request
+names `claude`, call `amicus_backends` with `detail="full"` first and check `enabled: true`,
+`status.installed: true` and `status.authenticated: true` for `claude`.
 
 State the plan, claim, or decision under attack in `target`. It is required, and it is
 the only carrier for the subject of the critique: this tool takes no question argument.

@@ -167,3 +167,32 @@ def test_the_readme_counts_the_tools_that_are_registered():
     assert stated, "the README no longer opens its tool section with a count"
     assert stated.group(1) == _COUNT_WORDS[len(TOOL_ORDER)]
     assert ("deprecated" in stated.group(2)) == bool(DEPRECATED_TOOLS)
+
+
+# #430: the paid-verb commands skipped the first full discovery whenever the request named a
+# backend, so a named but unready harness reached a paid call. The read is now unconditional.
+_PAID_COMMANDS = ("consult.md", "review.md", "delegate.md", "delegate-async.md", "adversarial.md")
+
+
+def test_paid_commands_make_the_first_full_discovery_unconditional():
+    for name in _PAID_COMMANDS:
+        text = " ".join((COMMANDS / name).read_text().split())
+        assert "Whether or not the request names" in text, name
+        assert 'call `amicus_backends` with `detail="full"` first' in text, name
+        assert "If the request does not name" not in text, name
+        assert "does not confirm" not in text, name
+
+
+def test_paid_commands_point_at_the_routing_procedure():
+    for name in _PAID_COMMANDS:
+        text = " ".join((COMMANDS / name).read_text().split())
+        assert "`references/choosing-a-backend.md` → Routing procedure" in text, name
+        assert "never substitute" in text, name
+
+
+def test_delegate_commands_promise_only_that_amicus_does_not_apply_the_patch():
+    for name in ("delegate.md", "delegate-async.md"):
+        text = (COMMANDS / name).read_text()
+        assert "never edits your working tree" not in text, name
+        assert "amicus does not apply the patch" in text, name
+        assert "no OS sandbox and no network" in " ".join(text.split()), name

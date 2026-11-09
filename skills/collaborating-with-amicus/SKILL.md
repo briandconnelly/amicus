@@ -5,11 +5,15 @@ description: Use whenever this agent should call another model through amicus, o
 
 # Collaborating with amicus
 
-amicus is one MCP server for every second-opinion model. Every paid tool takes the model as a
-`backend` parameter (`codex`, `kimi`, `pi`, or `claude`) instead of routing to a separate server per
-model. This skill is the router: which tool, which backend, sync or async, and what a returned
-result obligates you to do next. `kimi` is deprecated in favour of `pi` (removal at or after
-0.15.0): prefer `pi`, and read the `deprecation` marker `amicus_backends` carries for it.
+amicus is one MCP server that calls other models through their CLI harnesses. Every paid tool
+takes a `backend` parameter naming the **harness** that runs the call (`codex`, `claude`, `pi`,
+or the deprecated `kimi`), not the model: `codex` runs OpenAI models, `claude` runs Anthropic
+models, and `pi` runs any provider's model it lists, by exact `provider/id`, so two harnesses
+can run the same model. This skill is the router: which harness and model, which tool, sync or
+async, and what a returned result obligates you to do next. `kimi` is deprecated in favour of
+`pi` (removal at or after 0.15.0): it still serves a request that names it or a Kimi model,
+under Binding rules → Routing, with its deprecation disclosed; read the `deprecation` marker
+`amicus_backends` carries for it.
 
 You are the host. A backend is a worker you consult; it does not own the decision, the
 verification, or the working tree.
@@ -20,11 +24,13 @@ The order of work. Each step is governed by the rules named beside it, which are
 statement — this list is a map, not a second copy.
 
 1. Discover what is usable → Binding rules → Discovery.
-2. Choose the verb from the route table, then read every reference its row names.
-3. Preview and budget → Binding rules → Spend, Scope and inputs.
-4. Call.
-5. Read the result → Binding rules → Results.
-6. Verify before acting → Binding rules → Results, and
+2. Resolve the harness and model → Binding rules → Routing, and
+   [choosing a backend](references/choosing-a-backend.md) → Rules.
+3. Choose the verb from the route table, then read every reference its row names.
+4. Preview and budget → Binding rules → Spend, Scope and inputs.
+5. Call.
+6. Read the result → Binding rules → Results.
+7. Verify before acting → Binding rules → Results, and
    [reading results](references/reading-results.md).
 
 ## Route the request
@@ -58,8 +64,11 @@ obligations live in the reference each route names, under that file's own `Rules
 - **Call `amicus_backends(detail="full")` before the first paid call of a session.** Its
   per-backend report, including the disclosures the default `summary` leaves out, is what makes
   the remaining discovery rules checkable.
-- **Pass only a backend reported `enabled: true`, `status.installed: true`, and
-  `status.authenticated: true`.** `enabled` alone is not eligibility.
+- **Pass only a backend reported `enabled: true` and `status.installed: true` that is ready for
+  the model the call will run: `status.authenticated: true`, or, for `pi`, an exact `model` the
+  same call passes that `amicus_models(backend="pi")` lists.** `enabled` alone is not
+  eligibility. pi's `status.authenticated` speaks only for `AMICUS_PI_MODEL` and is `null` while
+  that is unset, so it neither admits nor excludes a per-call `model`.
 - **Confirm the backend's `features` list names `delegate` or `adversarial_review` before calling
   that verb.** Those are the only gated verbs; `consult` and `review_changes` run on every
   backend and never appear in `features`, whose other members are capabilities, not verbs.
@@ -67,6 +76,32 @@ obligations live in the reference each route names, under that file's own `Rules
   disagrees with this skill or any reference in it.
 - **Re-read `amicus_backends` rather than reusing an earlier session's assumption** about what is
   ready.
+
+### Routing
+
+The full procedure, with worked examples, is
+[choosing a backend](references/choosing-a-backend.md) → Rules.
+
+- **Resolve the harness and the model before choosing the verb, and name both before the first
+  paid call.**
+- **Let a named harness win.** `codex`, `claude` or Claude Code, `pi`, and bare `kimi` (the
+  deprecated kimi harness) select that harness, whatever the capitalization. An exact
+  `provider/id` is pi's model syntax, so it selects `pi`.
+- **Send a model-only request to its native harness — `codex` for an OpenAI model, `claude` for
+  an Anthropic model, `kimi` for a Kimi model while that deprecated harness remains, disclosing
+  its deprecation — when that harness is ready and supports the verb; otherwise route it to
+  `pi` with an exact model `amicus_models(backend="pi")` lists, and name that route before the
+  call.**
+- **Never substitute for a named harness silently.** When the harness the user named is not
+  ready or lacks the verb, say so, offer the alternative route (`pi` plus an exact listed model)
+  naming its provider and its containment, and proceed only when the user chooses it.
+- **Route only to a harness that supports the verb.** When none does — an adversarial review
+  with `claude` not ready — report that no eligible route exists; changing the verb is a
+  separate choice for the user.
+- **Learn what `pi` can reach from `amicus_models(backend="pi")`, never from provider
+  configuration.** A missing or truncated listing does not prove a model unreachable.
+- **Ask the user once, before spending, only when the routes that still match after free
+  discovery differ in spend, exposure, containment or verb.**
 
 ### Spend
 
@@ -182,7 +217,7 @@ obligations live in the reference each route names, under that file's own `Rules
 - **Read `carriers` on `amicus_backends(detail="full")` before supplying `instructions_append`.**
 - **Never treat a dry run as evidence that a paid call is safe to make.**
 - **Never point a paid call at a workspace whose contents you would not hand to that backend's
-  provider.**
+  provider** — for `pi`, the provider the model's `provider/id` prefix names.
 - **Never send `kimi` text you would not leave on this machine's disk.**
 
 ### Approval prompts
@@ -198,6 +233,8 @@ obligations live in the reference each route names, under that file's own `Rules
   asked for it or the task declares it**, and the decision is hard to reverse, load-bearing, or
   security-sensitive. Otherwise make one call or none.
 - **Count paid calls across the whole workflow, not per backend.**
+- **Judge model diversity by resolved model (`provider/id` where known), never by backend id.**
+  Two harnesses can run one model, and one harness can run several.
 - **Preserve disagreement in a synthesis.** Never tally votes, average confidence labels, or
   spend a call to manufacture agreement.
 - **Never let a backend's stated preference between candidates stand in for the decision.** It
@@ -209,17 +246,21 @@ obligations live in the reference each route names, under that file's own `Rules
 Facts the rules above depend on, kept short; the references carry the detail. Nothing here is an
 obligation.
 
-### Backend as a parameter
+### Backend names a harness
 
-`backend` names which model answers a call and has no default. Each tool's `backend` enum is the
-set it accepts: `amicus_delegate` and its twins take `codex`, `kimi` or `pi`,
-`amicus_adversarial_review` and its twin take only `claude`, and any other pairing is rejected
-pre-spend as `invalid_arguments`. `AMICUS_BACKENDS` says which backends this deployment enables,
+`backend` names the harness CLI that runs a call, not the model, and has no default; `model`
+picks the model inside that harness. `pi` has no default model: a call needs an exact
+`provider/id`, from `model` or `AMICUS_PI_MODEL`, and pi refuses an unlisted one pre-spend.
+Each tool's `backend` enum is the set it accepts: `amicus_delegate` and its twins take `codex`,
+`kimi` or `pi`, `amicus_adversarial_review` and its twin take only `claude`, and any other
+pairing is rejected pre-spend as `invalid_arguments`. Those restrictions belong to harnesses:
+an Anthropic model run through `pi` can delegate and still has no `adversarial_review`. `AMICUS_BACKENDS` says which backends this deployment enables,
 not which to prefer, and an enabled backend can still be uninstalled or unauthenticated, which is
 why the Discovery rules turn on `status`. What each backend can read differs too: `claude`
 defaults to no tools at all outside a review unless the operator set `AMICUS_CLAUDE_ACCESS`,
-which `amicus_backends` reports as the resolved default, and a backend ID is not a model
-family — [choosing a backend](references/choosing-a-backend.md).
+which `amicus_backends` reports as the resolved default; `pi` loads no `AGENTS.md`, so a pi
+brief must carry the project's constraints itself; and a backend ID is not a model family —
+[choosing a backend](references/choosing-a-backend.md).
 
 ### Deadlines, jobs and results
 
@@ -258,7 +299,9 @@ Every free-text field you supply reaches the selected backend's provider raw; am
 over stdin and never logs it, but how it then reaches the backend CLI is the backend's choice,
 and `carriers` on `amicus_backends(detail="full")` is authoritative: on `codex`,
 `instructions_append` rides argv, and the kimi CLI's own session store keeps what it is sent on
-this machine's disk. A backend can read files outside the workspace during a call, redaction
+this machine's disk. On `pi` the provider is the one the model's `provider/id` prefix names, a
+router included, so the model you pick is also the egress destination. A backend can read files
+outside the workspace during a call, redaction
 covers only gathered diffs and returned output, and a dry run invokes no backend, so it proves
 nothing about a paid call. [choosing a backend](references/choosing-a-backend.md) has the
 per-backend table.
