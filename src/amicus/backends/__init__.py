@@ -22,7 +22,7 @@ KNOWN_EFFECTS: dict[str, AnnotationEffects] = {
     "codex": AnnotationEffects(paid_calls_destructive=False, job_reads_read_only=True),
     "kimi": AnnotationEffects(paid_calls_destructive=False, job_reads_read_only=True),
     "claude": AnnotationEffects(paid_calls_destructive=True, job_reads_read_only=True),
-    "pi": AnnotationEffects(paid_calls_destructive=False, job_reads_read_only=True),
+    "pi": AnnotationEffects(paid_calls_destructive=True, job_reads_read_only=True),
 }
 
 KNOWN_DISPLAY_NAMES: dict[str, str] = {

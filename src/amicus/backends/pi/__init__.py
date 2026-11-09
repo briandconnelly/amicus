@@ -54,7 +54,7 @@ def plugin(environ: Mapping[str, str] | None = None) -> BackendPlugin:
         help_probe=help_probe,
         vocabulary=VOCABULARY,
         env=pi_config.ENV,
-        effects=AnnotationEffects(paid_calls_destructive=False, job_reads_read_only=True),
+        effects=AnnotationEffects(paid_calls_destructive=True, job_reads_read_only=True),
         egress=EGRESS,
         carriers=CARRIERS,
     )
