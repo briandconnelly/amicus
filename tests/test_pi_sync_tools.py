@@ -161,11 +161,16 @@ async def test_a_call_with_no_model_is_refused_before_any_run(app, tmp_path, rep
         )
     body = res.structured_content
     assert res.is_error is True and body["ok"] is False
-    assert body["error"]["backend"] == "pi"
+    err = body["error"]
+    assert err["backend"] == "pi" and err["code"] == "invalid_arguments"
+    assert err["details"]["field"] == "model" and "AMICUS_PI_MODEL" in err["message"]
+    # The success tests positively exercise `_runs`, so an empty list is a real absence.
     assert _runs(tmp_path) == []
 
 
-async def test_an_error_stop_reason_at_exit_zero_is_an_auth_failure(app, repo, monkeypatch):
+async def test_an_error_stop_reason_at_exit_zero_is_an_auth_failure(
+    app, tmp_path, repo, monkeypatch
+):
     assistant = {
         "role": "assistant",
         "content": [],
@@ -188,6 +193,7 @@ async def test_an_error_stop_reason_at_exit_zero_is_an_auth_failure(app, repo, m
     assert res.is_error is True and body["ok"] is False
     assert body["error"]["code"] == "backend_auth_required"
     assert body["error"]["backend"] == "pi"
+    assert len(_runs(tmp_path)) == 1  # the failure came from the stream, not a pre-spawn refusal
 
 
 async def test_an_unauthenticated_pi_refuses_before_any_run_and_is_reported(
@@ -206,6 +212,7 @@ async def test_an_unauthenticated_pi_refuses_before_any_run_and_is_reported(
     body = res.structured_content
     assert res.is_error is True and body["ok"] is False
     assert body["error"]["code"] == "backend_auth_required" and body["error"]["backend"] == "pi"
+    # The success tests positively exercise `_runs`, so an empty list is a real absence.
     assert _runs(tmp_path) == []
     [entry] = backends.structured_content["backends"]
     assert entry["status"]["authenticated"] is False
