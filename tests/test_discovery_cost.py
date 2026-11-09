@@ -360,6 +360,20 @@ envelope naming the backend in meta.backend carries the same marker as meta.depr
 first draft of it cost 134 bytes more. meta.deprecation itself rides the opaque result-meta
 pointer, so it adds nothing to tools/list. Measured on the wire. MEASURED and BUDGET both move
 by the 452 bytes, so the budget keeps no headroom.
+
+The schema-62 raise (+440 bytes on every profile: all 115512 -> 115952) is #430, which makes
+the surfaces say that `backend` names a harness, not a model, now that pi runs any provider's
+model. The `model` description gains pi's rule (an exact provider/id, required unless
+AMICUS_PI_MODEL is set) and drops "(advisory)", +25 bytes on each of the ten tools that
+declare it, 250. Every `backend` description says "Harness to run" and marks kimi deprecated,
+40 net: +6 on the six tools taking the four-backend enum, +4 on the three delegate tools, +13 on
+the two optional filters (amicus_backends, amicus_job_list), and -17 on the two adversarial
+review tools, whose wording got shorter. Three tool descriptions grow, 150: amicus_consult
+discloses pi's startup rename of .pi/commands/ to .pi/prompts/ (72), amicus_models says what
+pi's listing holds (71), and amicus_delegate says amicus does not apply the diff and that kimi
+and pi have no OS sandbox or network block (7). 250 + 40 + 150 = 440, measured per tool record.
+The server instructions change too, but ride the handshake, not tools/list. Measured on the
+wire. MEASURED and BUDGET both move by the 440 bytes, so the budget keeps no headroom.
 """
 
 from __future__ import annotations
@@ -369,7 +383,7 @@ from tests.conftest import spawned_server_env
 
 from amicus import manifest
 
-MEASURED: dict[str, int] = {"all": 115512, "codex-kimi": 115520, "claude": 115512}
+MEASURED: dict[str, int] = {"all": 115952, "codex-kimi": 115960, "claude": 115952}
 # The budget is a literal, not MEASURED rounded up to the next kilobyte as it was until
 # 2026-09-14. The rounding left up to 1 KB of growth per bucket that no PR had to own, and
 # this file records three such accumulations (448 and 12 bytes in the paragraphs above, and
@@ -377,7 +391,7 @@ MEASURED: dict[str, int] = {"all": 115512, "codex-kimi": 115520, "claude": 11551
 # #94 that landed after it), each noticed only when the next deliberate raise re-measured.
 # Any growth now fails until a PR raises BUDGET and says why; a shrink passes and shows as
 # drift against MEASURED. Raising one means re-measuring and moving both.
-BUDGET: dict[str, int] = {"all": 115512, "codex-kimi": 115520, "claude": 115512}
+BUDGET: dict[str, int] = {"all": 115952, "codex-kimi": 115960, "claude": 115952}
 
 
 @pytest.mark.parametrize("profile", sorted(manifest.PROFILES))
