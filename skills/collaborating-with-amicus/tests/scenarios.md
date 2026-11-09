@@ -556,7 +556,7 @@ worth adding next, since its prompt text is required rather than optional.
 Mode: treatment only (the rule is skill text; a baseline run has nothing pointing the model at not
 pasting secrets into these specific fields).
 
-Environment: any single enabled, authenticated backend that supports `amicus_consult` (all three
+Environment: any single enabled, authenticated backend that supports `amicus_consult` (all four
 do) — `codex` for concreteness, named explicitly so `backend` is unambiguous.
 
 Free by construction: the assertion only checks the *shape* of the call the model says it would
@@ -842,7 +842,7 @@ Tests: that a comparison between candidates is blinded, routed away from every c
 author, and framed as a finding to verify rather than a decision to adopt
 (`blind-comparison.md` → Rules; SKILL.md → Binding rules → Composed workflows).
 
-Environment: `AMICUS_BACKENDS` enables all three backends, each installed and authenticated, so
+Environment: `AMICUS_BACKENDS` enables all four backends, each installed and authenticated, so
 that an eligible comparator exists whatever host runs the scenario. The harness records the host
 (Claude Code or Codex CLI) in the Run log, because the host's own backend is excluded by the
 reference's author rule and the correct `backend` depends on it.

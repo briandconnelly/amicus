@@ -75,6 +75,7 @@ The zero-spend probe on #423 verified each flag's effect on 1.5.0 against a fake
   When the last assistant message has `stopReason: "error"`, the outcome inspector classifies it from `errorMessage` and stderr: auth, rate limit and invalid model by pattern, and anything else as `nonzero_exit` with the sanitized message.
   Pi retries a failing request three times on its own before reporting it.
 - A zero-exit run with no assistant text and no error is `empty_response`, as on kimi.
+- A last assistant message with `stopReason: "length"` was cut off at the model's output-token limit, so the adapter marks its answer `answer_loss: "truncated"` and amicus withholds it as `answer_unavailable`, prose or structured, even when the cut-off text parses as complete JSON.
 - `Model "<id>" not found` on stderr is classified as `invalid_model`, a backstop behind the pre-spend check.
 - A rejected flag is `cli_contract_changed`.
 
@@ -93,8 +94,9 @@ The zero-spend probe on #423 verified each flag's effect on 1.5.0 against a fake
 
 - **egress:** the prompt and, for reviews, the secret-redacted diff go to the provider the model's prefix names, through pi; pi can read files outside the workspace, up to everything the OS user can read.
 - **carriers:** the prompt rides stdin; argv carries only amicus's fixed system prompt, the model, the effort and flags; with `--no-session` pi wrote no session file on 1.5.0 after a success, a provider failure or a SIGTERM mid-request.
-- **readonly honesty:** read-only means pi has no shell, edit or write tool; it does not confine reads, and it is no OS sandbox.
+- **readonly honesty:** read-only means pi has no shell, edit or write tool; it does not confine reads, it is no OS sandbox, and it does not stop pi's startup rename of `.pi/commands/` below.
 - **implicit context:** pi adds the working directory to its system prompt; user-level settings, `models.json` (whose `!command` key values pi runs) and credentials load; context files, skills, extensions, MCP, prompt templates, themes and trust-gated project resources do not; a project `sessionDir` setting is read before trust is resolved, and under `--no-session` nothing was written there on 1.5.0.
+  At startup pi renames the workspace's `.pi/commands/` to `.pi/prompts/` when the latter does not exist (`runMigrations(cwd)`, before it handles anything but `--version` and `pi auth`), so a consult or review in such a repository changes it; amicus cannot suppress this, and runs its own free probes (`--help`, `--list-models`, `auth check`, `--version`) from its state directory so that they never do.
 
 ## Release
 

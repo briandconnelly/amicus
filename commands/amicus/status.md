@@ -14,8 +14,8 @@ Request: $ARGUMENTS
 For each backend, report `enabled`, `available` (the plugin loaded),
 `status.installed`, `status.authenticated`, and which features it supports
 (`amicus_delegate` works on `codex`, `kimi` and `pi` only; `amicus_adversarial_review` is
-`claude`-only). `pi` reports `status.authenticated` as unknown until `AMICUS_PI_MODEL` is set,
-and every pi call must then pass `model`. A backend can be enabled but not ready — check `status`, not just
+`claude`-only). While `AMICUS_PI_MODEL` is unset, `pi` reports `status.authenticated` as
+unknown and every pi call must pass an explicit `model`. A backend can be enabled but not ready — check `status`, not just
 `enabled`, before recommending it. `AMICUS_BACKENDS` controls which backends are
 *enabled* in this deployment; it is not a default to fall back to, and this command
 never picks a backend for you.

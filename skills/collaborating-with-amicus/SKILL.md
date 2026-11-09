@@ -239,8 +239,9 @@ right. Which fields each tool carries, what `review_status`, `coverage`, `findin
 Tool annotations (e.g. `destructiveHint`) are static per tool, but `backend` is a per-call
 parameter, so amicus annotates each paid tool for the worst-behaved backend currently enabled. If
 an enabled backend can write outside a throwaway worktree (Claude, in its non-review config
-modes), every paid tool carries that backend's approval annotations — including a call routed to
-`codex`, `kimi` or `pi`. This is a deliberate consequence of one shared tool surface, not a bug.
+modes; pi, whose delegate runs unsandboxed shell commands), every paid tool carries that backend's
+approval annotations — including a call routed to `codex` or `kimi`. This is a deliberate
+consequence of one shared tool surface, not a bug.
 
 `effects` on `amicus_backends` is a **static, conservative declaration per backend**. It does not
 vary with `config_mode`, with `access`, or with anything else about a particular call, so it

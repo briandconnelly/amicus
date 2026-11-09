@@ -189,7 +189,7 @@ The tag therefore deliberately points at a commit that is in `main`'s history bu
 
 3. Run every command from here through step 6 in the PR C worktree, never in the main checkout.
    Every command below is relative to the directory it runs in.
-   The evidence was recorded in the main checkout for 0.3.0, 0.6.0 and 0.7.0; each time a later check caught it, but only after the quota on all four backends was spent (#241).
+   The evidence was recorded in the main checkout for 0.3.0, 0.6.0 and 0.7.0; each time a later check caught it, but only after the quota on all three backends was spent (#241).
    First do what no script can: bring the backend CLIs to npm's `latest` with Claude Code's autoupdater held, as the backend-CLI precondition above describes, and do the rule-18 carrier re-check, because the evidence vouches for exactly the CLI versions installed at this moment.
    Then move to the worktree and run the preflight, with PR C's number:
 

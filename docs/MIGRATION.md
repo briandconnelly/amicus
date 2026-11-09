@@ -165,9 +165,9 @@ These are the differences a user migrating from a single-model server actually h
 
 **Approval friction follows the worst enabled backend (ADR 0001).**
 One tool serves every backend, so its annotations are static and must cover the strictest case.
-Enabling the Claude backend gives *every* tool mutation-grade annotations, including `amicus_consult(backend="codex", ...)`.
+Enabling the Claude or pi backend gives *every* tool mutation-grade annotations, including `amicus_consult(backend="codex", ...)`; a pi delegate runs unsandboxed shell, edit and write tools.
 A call that never prompted under `codex-in-claude` alone can now prompt for approval once Claude is enabled.
-Disable the Claude backend (via `AMICUS_BACKENDS`) to get the old, lighter approval friction back for codex/kimi-only use.
+Disable the Claude and pi backends (via `AMICUS_BACKENDS`) to get the old, lighter approval friction back for codex/kimi-only use.
 `amicus_backends` publishes each backend's own `AnnotationEffects` so an agent can read the per-backend truth directly.
 
 **Remove the sibling servers when you switch; do not run them alongside amicus.**
@@ -178,7 +178,7 @@ Delete each sibling's entry from your host's MCP configuration in the same chang
 
 **One server, one job store.**
 Jobs started against any backend share the same job store under `AMICUS_STATE_DIR`, instead of each sibling keeping its own.
-`AMICUS_JOB_MAX_COUNT` is enforced per workspace, but the underlying task map is one file per state directory, so jobs from `codex`, `kimi`, and `claude` calls are visible to `amicus_job_list` together.
+`AMICUS_JOB_MAX_COUNT` is enforced per workspace, but the underlying task map is one file per state directory, so jobs from `codex`, `kimi`, `claude` and `pi` calls are visible to `amicus_job_list` together.
 Point `AMICUS_STATE_DIR` at separate directories only if you need to keep job history isolated per backend or per project.
 
 **`backend_options` is a closed superset (ADR 0002).**

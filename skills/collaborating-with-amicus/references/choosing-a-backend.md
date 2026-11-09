@@ -67,7 +67,7 @@ task, and one default surprises people:
 | --- | --- | --- |
 | `codex` | Yes — under codex's `--sandbox read-only` OS sandbox | read-only sandbox |
 | `kimi` | Yes — a generated agent profile grants `Read`, `Glob`, `Grep` and no shell or write tool | read-only profile |
-| `pi` | Yes — `--tools read,grep,find,ls`, so no shell, edit or write tool; pi has no OS sandbox | read-only tool allowlist; needs an exact `provider/id` model |
+| `pi` | Yes — `--tools read,grep,find,ls`, so no shell, edit or write tool; pi has no OS sandbox, and at startup it renames a workspace's `.pi/commands/` to `.pi/prompts/` when the latter does not exist, even on a consult or review | read-only tool allowlist; needs an exact `provider/id` model |
 | `claude` | **Reviews only, by default.** `amicus_review_changes` defaults to `access="readonly"` (`Read`, `Grep`, `Glob`); consult and adversarial review default to `access="toolless"`, which grants **no tools at all** | `access="readonly"` for reviews and `"toolless"` otherwise, `config_mode="inherit"` |
 
 **A `claude` consult told to "look at the file and tell me what's wrong" has, by default, no

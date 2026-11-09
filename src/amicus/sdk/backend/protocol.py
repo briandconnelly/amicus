@@ -131,10 +131,12 @@ class Usage:
     ``cached_input_tokens`` (0.9.0) is the prompt-token count served from the
     provider's cache (Codex and Kimi ``cached_input_tokens``; Claude
     ``cacheReadInputTokens`` summed over ``modelUsage``, or the top-level block's
-    ``cache_read_input_tokens`` when ``modelUsage`` has no object entry);
+    ``cache_read_input_tokens`` when ``modelUsage`` has no object entry; Pi
+    ``cacheRead`` summed over its assistant messages);
     ``cache_creation_input_tokens`` (0.9.0) is the count written into the cache
-    (Claude only, ``cacheCreationInputTokens`` or ``cache_creation_input_tokens``
-    by the same rule). Both are defaulted and appended,
+    (Claude, ``cacheCreationInputTokens`` or ``cache_creation_input_tokens`` by the
+    same rule, and Pi, ``cacheWrite`` summed the same way; Codex and Kimi report
+    none). Both are defaulted and appended,
     so every existing positional ``Usage(input, output, total, cost)`` call keeps
     its meaning.
     """
