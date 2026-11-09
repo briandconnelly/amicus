@@ -150,7 +150,7 @@ class Usage:
 
 
 # Why a stream answer cannot be delivered; see ExecResult.answer_loss.
-AnswerLoss = Literal["truncated", "capture_failed"]
+AnswerLoss = Literal["truncated", "capture_failed", "model_output_limit"]
 
 
 def stream_answer_loss(run: CommandRun, *, lost_after_answer: bool) -> AnswerLoss | None:
@@ -180,8 +180,11 @@ class ExecResult:
     capture cannot vouch for it: ``"truncated"`` when output was dropped after the point
     the answer was read from (or, with no answer, anywhere), so a later and truer answer
     may be what was lost, and ``"capture_failed"`` when the stream's reader died. An
-    answer read from a file never sets it, since the stream is then only accounting. The
-    consumer must not deliver an answer that carries it (#198).
+    answer read from a file never sets it, since the stream is then only accounting.
+    ``"model_output_limit"`` is the one loss that is not amicus's capture: the backend
+    reported that the model stopped at its own output-token limit, so the answer is cut off
+    however it was captured (#425); a capture loss outranks it. The consumer must not
+    deliver an answer that carries any of them (#198).
     """
 
     answer: str

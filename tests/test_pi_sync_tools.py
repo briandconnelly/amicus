@@ -220,9 +220,64 @@ async def test_a_length_stop_withholds_the_cut_off_answer(app, tmp_path, repo, m
     body = res.structured_content
     assert res.is_error is True and body["ok"] is False
     assert body["error"]["code"] == "answer_unavailable"
-    assert body["error"]["details"]["reason"] == "stream_truncated"
+    assert body["error"]["details"]["reason"] == "model_output_limit"
+    assert body["error"]["repair"]["next_step"] == "reduce_input"
+    assert body["error"]["temporary"] is False
+    assert "AMICUS_MAX_OUTPUT_BYTES" not in json.dumps(body), "the limit hit was the model's"
     assert "Looks fine" not in json.dumps(body)
     assert len(_runs(tmp_path)) == 1
+
+
+def _length_stop_events(text: str) -> str:
+    assistant = {
+        "role": "assistant",
+        "content": [{"type": "text", "text": text}],
+        "stopReason": "length",
+    }
+    events = [
+        {"type": "agent_start"},
+        {"type": "message_end", "message": assistant},
+        {"type": "agent_end", "messages": [assistant]},
+    ]
+    return "".join(json.dumps(e) + "\n" for e in events)
+
+
+async def test_a_delegate_cut_off_at_the_output_limit_still_delivers_its_diff(
+    app, tmp_path, repo, monkeypatch
+):
+    """The diff comes from the worktree, so a summary cut off by the model's output limit
+    does not cost it; amicus's own summary says the model's limit, not capture, was the
+    cause (#425)."""
+    from amicus.orchestration.run import DELEGATE_SUMMARY_OUTPUT_LIMIT
+
+    monkeypatch.setenv("FAKE_PI_WRITE", "b.py")
+    monkeypatch.setenv("FAKE_PI_EVENTS", _length_stop_events("Added b.py and then"))
+    async with Client(app) as c:
+        res = await c.call_tool(
+            "amicus_delegate", {"backend": "pi", "task": "add b.py", "workspace_root": str(repo)}
+        )
+    body = res.structured_content
+    assert body["ok"] is True and body["summary"] == DELEGATE_SUMMARY_OUTPUT_LIMIT
+    assert "b.py" in body["diff"]
+    assert "Added b.py and then" not in json.dumps(body)
+    assert "AMICUS_MAX_OUTPUT_BYTES" not in json.dumps(body)
+    assert body["meta"]["security_warnings"] == []
+
+
+async def test_a_delegate_cut_off_with_no_diff_is_answer_unavailable(
+    app, tmp_path, repo, monkeypatch
+):
+    monkeypatch.setenv("FAKE_PI_EVENTS", _length_stop_events("I will start by"))
+    async with Client(app) as c:
+        res = await c.call_tool(
+            "amicus_delegate",
+            {"backend": "pi", "task": "add b.py", "workspace_root": str(repo)},
+            raise_on_error=False,
+        )
+    body = res.structured_content
+    assert res.is_error is True and body["error"]["code"] == "answer_unavailable"
+    assert body["error"]["details"]["reason"] == "model_output_limit"
+    assert "I will start by" not in json.dumps(body)
 
 
 async def test_an_unauthenticated_pi_refuses_before_any_run_and_is_reported(

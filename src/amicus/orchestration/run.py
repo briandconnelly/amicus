@@ -113,11 +113,26 @@ _LOSS_WIRE: dict[str, tuple[str, str, str, bool, str]] = {
         "The server log records why the capture failed. The run itself finished, so a retry "
         "is a new paid run.",
     ),
+    "model_output_limit": (
+        "model_output_limit",
+        "the backend answered, but the model stopped at its own output-token limit, so its "
+        "answer is cut off and amicus did not deliver it as though it were whole.",
+        "reduce_input",
+        False,
+        "Narrow the task or ask for a shorter answer, or choose a model with a larger output "
+        "limit. amicus's own capture limit was not the cause, so raising it will not help. "
+        "The run itself finished, so a retry is a new paid run.",
+    ),
 }
 DELEGATE_SUMMARY_LOST = (
     "The backend's summary could not be read whole: amicus's capture of its output lost the "
     "end of it. The diff was captured from the worktree, not from that output, and is still "
     "delivered."
+)
+DELEGATE_SUMMARY_OUTPUT_LIMIT = (
+    "The backend's summary is not delivered: the model stopped at its own output-token limit, "
+    "so the summary was cut off. The diff was captured from the worktree, not from that "
+    "output, and is still delivered."
 )
 # A clean exit an inspector diagnosed as one of these is explained by a lost stream answer:
 # kimi finds no message in a stream whose every message was dropped, and claude finds no
@@ -204,6 +219,15 @@ def _answer_unavailable(refusal: Refusal, meta: Any, plugin: BackendPlugin) -> d
         limit_bytes=MAX_ARTIFACT_BYTES if oversize else None,
         actual_bytes=refusal.size if oversize else None,
     )
+
+
+def _delegate_summary(refusal: Refusal | None, loss: str | None) -> str:
+    """amicus's own summary for a delegate whose diff is delivered without the backend's."""
+    if refusal is not None:
+        return DELEGATE_SUMMARY_UNAVAILABLE
+    if loss == "model_output_limit":
+        return DELEGATE_SUMMARY_OUTPUT_LIMIT
+    return DELEGATE_SUMMARY_LOST
 
 
 def _lost_answer(loss: str, meta: Any, plugin: BackendPlugin) -> dict[str, Any]:
@@ -436,11 +460,7 @@ async def run_request(
                     if refusal is not None:
                         meta.security_warnings.append(ANSWER_REFUSED_WARNING)
                     result = dataclasses.replace(result, answer="")
-                    summary_override = (
-                        DELEGATE_SUMMARY_UNAVAILABLE
-                        if refusal is not None
-                        else DELEGATE_SUMMARY_LOST
-                    )
+                    summary_override = _delegate_summary(refusal, loss)
                 elif refusal is not None:
                     return _answer_unavailable(refusal, meta, plugin)
                 elif loss is not None:

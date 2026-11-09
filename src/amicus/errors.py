@@ -84,9 +84,10 @@ _LOCAL_RULES: dict[str, RepairRule] = {
         "reduce_input",
         None,
         False,
-        "The backend answered, but amicus could not read the answer whole: it refused the "
-        "answer file, or its capture of the output stream cut the answer. Narrow the task or "
-        "ask for a shorter answer; the identical call is likely to end the same way.",
+        "The backend answered, but amicus could not deliver the answer whole: it refused the "
+        "answer file, its capture of the output stream cut the answer, or the model stopped "
+        "at its own output-token limit. Narrow the task or ask for a shorter answer; the "
+        "identical call is likely to end the same way.",
     ),
     "backend_unavailable": RepairRule(
         "inspect_and_retry",

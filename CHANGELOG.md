@@ -52,7 +52,13 @@ per-change, as its own lead says.
   sandbox: read-only means a `read,grep,find,ls` tool allowlist, and a delegate run's writes are
   not confined to the worktree. A provider API key in the environment reaches pi only if the host
   forwards it to the amicus server; credentials saved by pi's `/login` need nothing. pi 1.5 is
-  the supported version, captured under `docs/pi-help/1.5.0/`.
+  the supported version, captured under `docs/pi-help/1.5.0/`. An answer the model cut off at
+  its own output-token limit (`stopReason: "length"`) is never delivered as whole: it is
+  `answer_unavailable` with `error.details.reason` `model_output_limit` and repair
+  `reduce_input`, whose message points at a narrower request or a model with a larger output
+  limit rather than `AMICUS_MAX_OUTPUT_BYTES` (`amicus/0.1/schema-63`, #425). A delegate cut off
+  that way with a captured diff still comes back `ok: true` with the diff and amicus's own
+  summary naming the model's limit.
 
 ### Changed
 

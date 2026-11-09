@@ -35,6 +35,7 @@ Claude's envelope is one JSON document, so a capture that lost any of it leaves 
 
 **The backend decides, because only it knows which record it answered from.**
 `ExecResult.answer_loss` carries the finding (`truncated` or `capture_failed`), set through the SDK's `stream_answer_loss`.
+A third value, `model_output_limit`, was added later for a backend that reports the model stopped at its own output-token limit (#425); it is not a capture loss, so it has its own reason and message, and a capture loss outranks it.
 An answer read from a file never sets it, since the stream is then only accounting: Codex's last-message file and Kimi's delegate answer file are unaffected.
 
 **Stdout has its own flags.**
