@@ -58,9 +58,8 @@ async def test_resolve_job_workspace_explicit_roots_and_errors(tmp_path):
     assert cwd is None and err["ok"] is False
     assert err["error"]["code"] == "invalid_workspace_root"
     assert err["error"]["details"]["field"] == "workspace_root"
-    assert (
-        err["meta"]["roots_source"] == "not_negotiated" and err["meta"]["timeout_seconds"] == 1800
-    )
+    # #447: a job tool's own envelope reports no deadline.
+    assert err["meta"]["roots_source"] == "not_negotiated" and "timeout_seconds" not in err["meta"]
     _cwd, _source, _rs, err = await lookup.resolve_job_workspace(settings, None, "relative/path")
     assert err["error"]["code"] == "invalid_workspace_root"
 
@@ -127,7 +126,7 @@ def test_status_and_summary_models_carry_backend_task_and_detail(tmp_path):
     assert running["backend"] == "codex" and running["status"] == "running"
     assert running["poll_after_ms"] == 1000 and running["task_id"] is None
     assert running["workspace"]["cwd"] == "/repo" and running["cleanup_warnings"] == []
-    assert running["meta"]["job_kind"] == "consult" and running["meta"]["timeout_seconds"] == 1800
+    assert running["meta"]["job_kind"] == "consult" and running["meta"]["timeout_seconds"] is None
     cancelled = lookup.status_model(
         _row(status="cancelled", cleanup_warnings=["/tmp/x"]), ws, "t-1", meta
     )

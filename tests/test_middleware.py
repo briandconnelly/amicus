@@ -83,7 +83,8 @@ async def test_validation_envelope_for_an_enum_failure():
     assert err["details"]["allowed_values"] == ["ok", "fail"]
     assert err["repair"]["tool"] == "probe"
     assert "use one of the field's allowed_values" in err["repair"]["alternative"]
-    assert res.structured_content["meta"]["timeout_seconds"] == 300
+    # #447: a call refused before its handler ran has no deadline to report.
+    assert "timeout_seconds" not in res.structured_content["meta"]
     assert "nope" not in err["message"]
 
 

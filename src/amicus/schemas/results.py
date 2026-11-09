@@ -705,8 +705,8 @@ ISSUES_URL_DESC = (
 
 # #440: the catalog is wider than the union of the rows, and says why.
 _CATALOG_DESC = (
-    "The whole error catalog. A code on no tool_details row (detail=full) is resource-only "
-    "(resource_not_found) or reserved: cataloged, and returned by no tool today."
+    "A code on no tool_details row is resource-only (resource_not_found) or reserved: no "
+    "tool returns it today."
 )
 publish.KEPT_DESCRIPTIONS.add(_CATALOG_DESC)
 
