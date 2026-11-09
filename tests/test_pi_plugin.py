@@ -28,6 +28,7 @@ def test_registry_loads_the_in_tree_pi_plugin(fake_pi, monkeypatch):
     plugin = reg.get("pi")
     assert plugin is not None and plugin.contract is contract.CONTRACT
     assert plugin.effects == in_tree.KNOWN_EFFECTS["pi"]
+    assert plugin.effects.paid_calls_destructive is True
     assert plugin.contract.display_name == in_tree.KNOWN_DISPLAY_NAMES["pi"]
     assert plugin.env.prefix == contract.CONTRACT.env_prefix and plugin.local_codes == {}
 
