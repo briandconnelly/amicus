@@ -64,6 +64,7 @@ The four `AMICUS_PI_*` names are new too: the pi backend has no sibling, so none
 ## Tool-name mapping
 
 Most amicus tools take `backend` as a required parameter (no default); pick `"codex"`, `"kimi"`, or `"claude"` to reproduce a sibling's behavior.
+The `kimi` backend is deprecated in favour of `pi`, since 0.13.0, for removal in 0.15.0 or later: a `moonbridge` user moving now should map its calls to `backend="pi"` on the same model, following the migration text on `amicus_backends`, and the `backend="kimi"` rows below hold only until then.
 `amicus_backends` and `amicus_job_list` take `backend` as an optional filter instead (omit it to see every backend or every job).
 `amicus_capabilities` has no `backend` parameter at all: it reports the whole server (tool inventory, fingerprint, error catalog), not one backend's readiness — use `amicus_backends(backend=...)` for that.
 

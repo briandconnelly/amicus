@@ -100,6 +100,16 @@ DEPRECATIONS = """DEPRECATED_TOOLS: dict[str, ToolDeprecation] = {
 }
 """
 
+BACKEND_DEPRECATIONS = """DEPRECATED_BACKENDS: dict[str, ToolDeprecation] = {
+    "old_backend": ToolDeprecation(
+        since="1.1.0",
+        removal_at_or_after="1.3.0",
+        replaced_by="new_backend",
+        migration=("Pass backend: " '"new_backend".'),
+    ),
+}
+"""
+
 
 LEGACY_REMOVAL = "2.0.0"  # after VERSION, so the unmodified fixture passes
 ENVSPEC = f'LEGACY_REMOVAL_VERSION = "{LEGACY_REMOVAL}"\n'
@@ -182,6 +192,10 @@ def repo(tmp_path):
     (tmp_path / "CHANGELOG.md").write_text(CHANGELOG, encoding="utf-8")
     (tmp_path / "src" / "amicus" / "tools").mkdir()
     (tmp_path / release_state.DEPRECATIONS_PATH).write_text(DEPRECATIONS, encoding="utf-8")
+    (tmp_path / "src" / "amicus" / "backends").mkdir()
+    (tmp_path / release_state.BACKEND_DEPRECATIONS_PATH).write_text(
+        BACKEND_DEPRECATIONS, encoding="utf-8"
+    )
     (tmp_path / "src" / "amicus" / "config").mkdir()
     (tmp_path / release_state.LEGACY_ENV_SPEC_PATH).write_text(ENVSPEC, encoding="utf-8")
     (tmp_path / release_state.GLOBAL_ENV_PATH).write_text(ENV_DECLARATIONS, encoding="utf-8")
@@ -998,6 +1012,66 @@ def test_a_window_that_is_not_a_literal_is_rejected(repo):
     assert any("literal `since` and `removal_at_or_after`" in p for p in _tree(repo))
 
 
+# --- backend deprecation windows (`DEPRECATED_BACKENDS`) --------------------------------
+
+
+def _set_backend_window(repo: Path, old: str, new: str) -> None:
+    path = repo / release_state.BACKEND_DEPRECATIONS_PATH
+    text = path.read_text(encoding="utf-8")
+    assert old in text, f"known positive: the fixture no longer carries {old!r}"
+    path.write_text(text.replace(old, new), encoding="utf-8")
+
+
+def test_the_unmodified_backend_window_is_read_and_accepted(repo):
+    """The known positive the rejections below rely on: the fixture's backend entry is read,
+    and a release inside its window passes."""
+    windows, problems = release_state.deprecation_windows(
+        repo,
+        rel_path=release_state.BACKEND_DEPRECATIONS_PATH,
+        table_name="DEPRECATED_BACKENDS",
+    )
+    assert problems == [] and windows == {"old_backend": ("1.1.0", "1.3.0")}
+    assert _tree(repo) == []
+
+
+def test_a_backend_deprecation_dated_after_the_release_is_rejected(repo):
+    _set_backend_window(repo, 'since="1.1.0"', 'since="1.3.0"')
+    problems = _tree(repo)
+    assert len(problems) == 1 and "old_backend is marked deprecated since 1.3.0" in problems[0]
+
+
+def test_a_release_at_the_removal_version_with_the_backend_still_listed_is_rejected(repo):
+    _set_backend_window(repo, 'removal_at_or_after="1.3.0"', f'removal_at_or_after="{VERSION}"')
+    problems = _tree(repo)
+    assert len(problems) == 1 and (
+        f"old_backend still ships at {VERSION}, at or past its removal_at_or_after" in problems[0]
+    )
+
+
+def test_a_backend_window_that_is_not_a_literal_is_rejected(repo):
+    _set_backend_window(repo, 'since="1.1.0"', "since=SINCE")
+    assert any("DEPRECATED_BACKENDS` entry needs a literal" in p for p in _tree(repo)), _tree(repo)
+
+
+def test_a_missing_backend_table_file_is_rejected_rather_than_read_as_no_deprecations(repo):
+    (repo / release_state.BACKEND_DEPRECATIONS_PATH).unlink()
+    assert any(
+        f"could not read {release_state.BACKEND_DEPRECATIONS_PATH}" in p for p in _tree(repo)
+    )
+
+
+def test_a_backend_table_the_parser_cannot_find_is_rejected(repo):
+    _set_backend_window(repo, "DEPRECATED_BACKENDS:", "RENAMED_TABLE:")
+    assert any("no literal `DEPRECATED_BACKENDS` dict" in p for p in _tree(repo))
+
+
+def test_an_empty_backend_table_is_accepted(repo):
+    (repo / release_state.BACKEND_DEPRECATIONS_PATH).write_text(
+        "DEPRECATED_BACKENDS: dict[str, ToolDeprecation] = {}\n", encoding="utf-8"
+    )
+    assert _tree(repo) == []
+
+
 def test_a_window_that_is_not_a_version_is_rejected(repo):
     _set_window(repo, 'since="1.2.0"', 'since="soon"')
     assert any("must be X.Y.Z" in p for p in _tree(repo))
@@ -1164,6 +1238,25 @@ def test_the_static_read_of_the_deprecation_table_matches_the_runtime_table():
     }
 
 
+def test_the_static_read_of_the_backend_deprecation_table_matches_the_runtime_table():
+    """The same pin for `DEPRECATED_BACKENDS`. It is not `{} == {}`: kimi is in the table
+    (deprecated in favour of pi), so a shape the parser misses fails here."""
+    from amicus import backends
+
+    repo_root = Path(__file__).resolve().parent.parent
+    windows, problems = release_state.deprecation_windows(
+        repo_root,
+        rel_path=release_state.BACKEND_DEPRECATIONS_PATH,
+        table_name="DEPRECATED_BACKENDS",
+    )
+    assert problems == [], "; ".join(problems)
+    assert windows, "known positive: the runtime table is expected to be non-empty"
+    assert windows == {
+        name: (deprecation.since, deprecation.removal_at_or_after)
+        for name, deprecation in backends.DEPRECATED_BACKENDS.items()
+    }
+
+
 def test_the_static_reader_finds_an_entry_written_the_way_the_real_table_writes_them(tmp_path):
     """The shipped table is empty since `amicus_dry_run` was removed (#204), so the
     comparison above is `{} == {}` and proves nothing by itself. This is its known positive:
@@ -1181,6 +1274,9 @@ def test_the_static_reader_finds_an_entry_written_the_way_the_real_table_writes_
         "    ),\n"
         "}\n"
     )
+    backends = tmp_path / release_state.BACKEND_DEPRECATIONS_PATH
+    backends.parent.mkdir(parents=True)
+    backends.write_text("DEPRECATED_BACKENDS: dict[str, ToolDeprecation] = {}\n")
     windows, problems = release_state.deprecation_windows(tmp_path)
     assert problems == [] and windows == {"amicus_old": ("0.5.0", "0.7.0")}
     assert release_state.check_deprecations("0.6.0", repo_root=tmp_path) == []

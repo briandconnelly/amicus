@@ -350,6 +350,16 @@ description names it (` | pi`, 5 bytes), 110 bytes; amicus_delegate's descriptio
 record. The adversarial review tools stay claude-only and do not move. The server
 instructions also name pi, but they ride the handshake, not tools/list. Measured on the wire.
 MEASURED and BUDGET both move by the 114 bytes, so the budget keeps no headroom.
+
+The schema-61 raise (+452 bytes on every profile: all 115060 -> 115512) is the kimi
+deprecation (#423). All of it is one property on amicus_backends's output schema: each
+backend entry's `deprecation`, 452 bytes on the wire (`"deprecation":` and its joining comma,
+15; the inline marker schema with its four fields and its null branch, 314; and its kept
+description with its key, 123). The description says null means not deprecated and that every
+envelope naming the backend in meta.backend carries the same marker as meta.deprecation; a
+first draft of it cost 134 bytes more. meta.deprecation itself rides the opaque result-meta
+pointer, so it adds nothing to tools/list. Measured on the wire. MEASURED and BUDGET both move
+by the 452 bytes, so the budget keeps no headroom.
 """
 
 from __future__ import annotations
@@ -359,7 +369,7 @@ from tests.conftest import spawned_server_env
 
 from amicus import manifest
 
-MEASURED: dict[str, int] = {"all": 115060, "codex-kimi": 115068, "claude": 115060}
+MEASURED: dict[str, int] = {"all": 115512, "codex-kimi": 115520, "claude": 115512}
 # The budget is a literal, not MEASURED rounded up to the next kilobyte as it was until
 # 2026-09-14. The rounding left up to 1 KB of growth per bucket that no PR had to own, and
 # this file records three such accumulations (448 and 12 bytes in the paragraphs above, and
@@ -367,7 +377,7 @@ MEASURED: dict[str, int] = {"all": 115060, "codex-kimi": 115068, "claude": 11506
 # #94 that landed after it), each noticed only when the next deliberate raise re-measured.
 # Any growth now fails until a PR raises BUDGET and says why; a shrink passes and shows as
 # drift against MEASURED. Raising one means re-measuring and moving both.
-BUDGET: dict[str, int] = {"all": 115060, "codex-kimi": 115068, "claude": 115060}
+BUDGET: dict[str, int] = {"all": 115512, "codex-kimi": 115520, "claude": 115512}
 
 
 @pytest.mark.parametrize("profile", sorted(manifest.PROFILES))

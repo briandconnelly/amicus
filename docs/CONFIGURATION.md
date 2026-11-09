@@ -140,6 +140,8 @@ Former names, no longer read: `CODEX_IN_CLAUDE_SUPPORTED_VERSIONS`.
 
 ## Kimi
 
+The `kimi` backend is deprecated in favour of `pi`, since 0.13.0, for removal in 0.15.0 or later; see `amicus_backends` for the migration.
+
 ### `AMICUS_KIMI_BIN`
 
 Absolute path to the kimi executable; used exactly as given.

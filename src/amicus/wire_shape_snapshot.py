@@ -45,8 +45,8 @@ _REQUEST_ID_SENTINEL = "0" * 32
 _JOB_ID_SENTINEL = "0" * 32
 
 
-def _meta(**optional: Any) -> Meta:
-    meta = Meta(backend="codex", cwd="/repo", timeout_seconds=1, elapsed_ms=1, **optional)
+def _meta(*, backend: str = "codex", **optional: Any) -> Meta:
+    meta = Meta(backend=backend, cwd="/repo", timeout_seconds=1, elapsed_ms=1, **optional)
     meta.fingerprint = _FINGERPRINT_SENTINEL
     meta.server_version = _VERSION_SENTINEL
     meta.request_id = _REQUEST_ID_SENTINEL
@@ -156,6 +156,9 @@ def _stored_envelopes() -> dict[str, dict[str, Any]]:
                     redacted_paths=[".env"],
                     security_warnings=["baseline warning"],
                     compat_warnings=["--model"],
+                    # A deprecated backend's run (#423): the chokepoint attaches the
+                    # delivery-only `deprecation`, so it is populated on the wire too.
+                    backend="kimi",
                 ),
             )
         ),

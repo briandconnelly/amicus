@@ -10,6 +10,7 @@ from fastmcp.tools import ToolResult
 
 from amicus import obs
 from amicus.errors import error_envelope
+from amicus.jobs.delivery import attach_backend_deprecation
 from amicus.schemas.envelope import slim_meta
 from amicus.tools._meta import base_meta
 
@@ -24,7 +25,8 @@ GUARD_MARKER = "_amicus_guarded"
 def as_tool_result(envelope: dict[str, Any]) -> dict[str, Any] | ToolResult:
     """An `ok: false` envelope becomes a `ToolResult` with `is_error=True`; an `ok: true`
     envelope has its null meta keys dropped (#47) and is returned for FastMCP's own
-    conversion; anything else is returned unchanged.
+    conversion; anything else is returned unchanged. Either kind first gets the
+    delivery-only `meta.deprecation` of a deprecated backend (#423).
 
     FastMCP derives the text mirror of a `ToolResult` built from `structured_content` on
     the same path (`_convert_to_content`) it uses for a dict returned under an explicit
@@ -33,6 +35,7 @@ def as_tool_result(envelope: dict[str, Any]) -> dict[str, Any] | ToolResult:
     `SemanticErrorMiddleware`: a task-augmented call (ADR 0004) never re-enters the
     middleware chain, and the tasks handler passes a `ToolResult` through with `isError`
     intact."""
+    attach_backend_deprecation(envelope)
     if envelope.get("ok") is False:
         return ToolResult(structured_content=envelope, is_error=True)
     return slim_meta(envelope)

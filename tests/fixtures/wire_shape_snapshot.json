@@ -280,7 +280,7 @@
         "findings_diagnostics": null,
         "lists_diagnostics": null,
         "meta": {
-          "backend": "codex",
+          "backend": "kimi",
           "backend_details": {
             "isolation": "inherit"
           },
@@ -289,6 +289,12 @@
             "--model"
           ],
           "cwd": "/repo",
+          "deprecation": {
+            "migration": "Install the pi CLI and give it the provider's credentials (pi's own /login or the provider's API-key variable), enable pi (the default profile includes it; an explicit AMICUS_BACKENDS must name it), set AMICUS_PI_MODEL to the exact provider/id the kimi config used (for example openrouter/moonshotai/kimi-k3), confirm amicus_backends reports pi installed and authenticated, then pass backend: \"pi\". pi serves consult, review_changes and delegate as kimi does.",
+            "removal_at_or_after": "0.15.0",
+            "replaced_by": "pi",
+            "since": "0.13.0"
+          },
           "elapsed_ms": 1,
           "fingerprint": "<fingerprint>",
           "instructions_append": {
@@ -671,7 +677,7 @@
         "findings_diagnostics": null,
         "lists_diagnostics": null,
         "meta": {
-          "backend": "codex",
+          "backend": "kimi",
           "backend_details": {
             "isolation": "inherit"
           },
@@ -680,6 +686,12 @@
             "--model"
           ],
           "cwd": "/repo",
+          "deprecation": {
+            "migration": "Install the pi CLI and give it the provider's credentials (pi's own /login or the provider's API-key variable), enable pi (the default profile includes it; an explicit AMICUS_BACKENDS must name it), set AMICUS_PI_MODEL to the exact provider/id the kimi config used (for example openrouter/moonshotai/kimi-k3), confirm amicus_backends reports pi installed and authenticated, then pass backend: \"pi\". pi serves consult, review_changes and delegate as kimi does.",
+            "removal_at_or_after": "0.15.0",
+            "replaced_by": "pi",
+            "since": "0.13.0"
+          },
           "elapsed_ms": 1,
           "fingerprint": "<fingerprint>",
           "instructions_append": {

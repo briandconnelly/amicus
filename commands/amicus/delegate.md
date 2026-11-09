@@ -13,6 +13,7 @@ Request: $ARGUMENTS
 request to `claude`. If the request does not name a backend, call `amicus_backends`
 with `detail="full"` first and choose only among backends it reports `enabled: true`,
 `status.authenticated: true`, and delegate listed under supported features.
+`kimi` is deprecated in favour of `pi` (removal at or after 0.15.0): prefer `pi`.
 
 Pass the absolute repository path as `workspace_root` and describe the task
 precisely in `task`; never put a secret in `task` — it travels to the backend's
