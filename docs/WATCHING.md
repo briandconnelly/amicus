@@ -90,7 +90,7 @@ Close the issue once a capture at or past its release is committed under `docs/c
 Closing re-arms the watch: the next claude release past the newest capture opens a new issue.
 An open issue is moved forward even when a closed issue already has the latest release's title.
 
-Each issue is labelled `dependencies` and `chore`, both existing labels.
+Each issue is labelled `dependencies` and `chore`, and a kimi, claude or pi issue also carries its `backend: <id>` label (`backend: kimi`, `backend: claude`, `backend: pi`), all existing labels.
 Its body says the release is available upstream, never that it is supported, because nothing was installed or run.
 A claude issue's body also says that it rolls forward and that closing it re-arms the watch.
 

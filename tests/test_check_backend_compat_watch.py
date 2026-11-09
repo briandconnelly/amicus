@@ -151,11 +151,13 @@ def test_first_run_files_one_issue_per_stream_and_a_rerun_files_none(monkeypatch
     assert [f["status"] for f in out["findings"]] == ["update"] * 5
     assert [f["action"] for f in out["filings"]] == ["filed"] * 5
     assert [a[a.index("--title") + 1] for a in gh.created] == _TITLES
-    for args in gh.created:
+    streams = ["kimi", "claude", "pi", "fastmcp", "mcp"]
+    for stream, args in zip(streams, gh.created, strict=True):
         body = args[args.index("--body") + 1]
         assert "available upstream" in body and "is not supported" in body, body
         labels = [args[i + 1] for i, a in enumerate(args) if a == "--label"]
-        assert labels == ["dependencies", "chore"], labels
+        backend = [f"backend: {stream}"] if stream in ("kimi", "claude", "pi") else []
+        assert labels == ["dependencies", "chore", *backend], labels
 
     code, out = _run([*roots, "--file-issues"], capsys)
     assert code == 0, out
@@ -216,7 +218,7 @@ def test_nothing_past_the_baselines_files_nothing(monkeypatch, roots, capsys):
 
 def test_pi_is_watched_from_npm_against_the_shipped_set():
     assert compat.NPM_PACKAGES["pi"] == "@earendil-works/pi-coding-agent"
-    assert compat.WATCH_LABELS["pi"] == ("dependencies", "chore")
+    assert compat.WATCH_LABELS["pi"] == ("dependencies", "chore", "backend: pi")
     current = compat.watch_pi({"pi": _SUPPORTED_PI}.get)
     assert current.status == "current" and current.stream == "pi", current
     ahead = compat.watch_pi({"pi": _UNSUPPORTED_PI}.get)
