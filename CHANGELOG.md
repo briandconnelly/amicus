@@ -88,6 +88,14 @@ per-change, as its own lead says.
   unsupported" as a rule. The code, the `outside_roots` token and the absent repair are
   unchanged.
 
+### Fixed
+
+- The `collaborating-with-amicus` skill's `description` fits the Agent Skills format's
+  1,024-character limit: it was 1,034 characters in 0.12.0, so a host that enforces the limit
+  could truncate its trigger list or refuse the skill (#431). It now names the harnesses,
+  including pi, and model-family requests such as "get GPT's opinion" and "use Opus", and a test
+  holds it to the limit and to a valid unquoted YAML value.
+
 ## [0.12.0] - 2026-11-08
 
 This release moves the discovery surface from `amicus/0.1/schema-58`, what 0.11.1 shipped, to

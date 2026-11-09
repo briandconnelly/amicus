@@ -629,3 +629,20 @@ def test_the_backend_reference_does_not_say_pi_loads_agents_md():
     flat = _flat(_BACKENDS_REF)
     assert "Each backend also loads context you did not supply — `AGENTS.md`" not in flat
     assert "so it loads no `AGENTS.md`" in flat
+
+
+# The Agent Skills format caps a skill's frontmatter `description` at 1,024 characters, and a
+# host that enforces it may truncate the trigger list or refuse the skill. It was 1,040 when
+# #431 found it, unnoticed because nothing measured it.
+_DESCRIPTION_LIMIT = 1024
+
+
+def test_the_skill_description_fits_the_agent_skills_limit():
+    frontmatter = _SKILL_MD.split("---\n", 2)[1]
+    [line] = [line for line in frontmatter.splitlines() if line.startswith("description: ")]
+    description = line.removeprefix("description: ")
+    assert description, "the skill has no description"
+    assert len(description) <= _DESCRIPTION_LIMIT, len(description)
+    # It is an unquoted YAML plain scalar, where `: ` or ` #` would end the value early or
+    # break the frontmatter; the repository declares no YAML parser to check it with.
+    assert ": " not in description and " #" not in description, description
