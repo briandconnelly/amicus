@@ -41,7 +41,8 @@ _DESC = (
     "design, or a diff you paste inline; use amicus_review_changes when the diff is in "
     f"git. {_EGRESS} Recorded as a job (meta.job_id). {_resolve.RECORD_RETENTION} Prefer "
     "amicus_consult_async for a "
-    "high-effort or broad repo-grounded consult that can exceed the deadline."
+    "high-effort or broad repo-grounded consult that can exceed the deadline. pi may "
+    "rename the workspace's .pi/commands/ to .pi/prompts/ at startup."
 )
 _ASYNC_DESC = (
     f"{_resolve.PAID_MARKER} Async twin of amicus_consult: returns a job handle "

@@ -565,3 +565,59 @@ def test_composed_workflow_overrides_of_the_shared_brief_rules_hold():
 def test_reading_results_does_not_call_every_diagnostic_a_loss():
     # Codex on #339: the reference kept a loss-only lead beside the corrected wording.
     assert "amicus could not relay all of what it said intact" not in _flat(_RESULTS_REF)
+
+
+def test_the_routing_rule_binds_before_the_verb_is_chosen():
+    # #430: `backend` names a harness, not a model, and the decided routing rule binds. Each
+    # of its five obligations is pinned in the Routing rules on its own, so dropping one
+    # cannot hide behind another that survives, and the workflow resolves the route first.
+    routing = _flat(_rules_section("Routing"))
+    for obligation in (
+        "**Resolve the harness and the model before choosing the verb",
+        "**Let a named harness win.**",
+        "bare `kimi` (the deprecated kimi harness)",
+        "`codex` for an OpenAI model, `claude` for an Anthropic model",
+        "**Never substitute a harness or a model silently.**",
+        "proceed only when the user chooses it",
+        "never from provider configuration.** A missing or truncated listing does not prove a",
+        "**Ask the user once, before spending, only when the routes that still match after free",
+    ):
+        assert _flat(obligation) in routing, obligation
+    workflow = _SKILL_MD.partition("\n## Shared workflow\n")[2].split("\n## ", 1)[0]
+    resolve = workflow.index("Resolve the harness and model")
+    assert resolve < workflow.index("Choose the verb")
+    procedure = _flat(_BACKENDS_REF.partition("\n## Rules\n")[2].split("\n## ", 1)[0])
+    assert "### Routing procedure" in procedure
+    examples = ('"collaborate with codex"', '"ask kimi"', '"get GPT\'s opinion"', '"use Opus"')
+    for example in examples:
+        assert example in procedure, example
+
+
+def test_pi_eligibility_is_model_aware():
+    # #430: pi's status.authenticated is null while AMICUS_PI_MODEL is unset, yet a call
+    # with a listed per-call model works; a flat `authenticated: true` rule excluded it.
+    discovery = _flat(_rules_section("Discovery"))
+    assert "`status.authenticated: true`, or, for `pi`, an exact `model`" in discovery
+    assert 'that `amicus_models(backend="pi")` lists' in discovery
+
+
+def test_diversity_is_judged_by_model_not_backend_id():
+    composed = _flat(_rules_section("Composed workflows"))
+    assert "Judge model diversity by resolved model (`provider/id` where known)" in composed
+    blind = _flat((_SKILL / "references" / "blind-comparison.md").read_text(encoding="utf-8"))
+    assert "**Exclude by model identity:" in blind
+    attempt = _flat((_SKILL / "references" / "independent-attempt.md").read_text(encoding="utf-8"))
+    assert "**Choose a worker whose resolved model differs from the one you are running as" in (
+        attempt
+    )
+
+
+def test_the_backend_reference_does_not_say_pi_loads_agents_md():
+    # #430: pi runs with --no-context-files, so "each backend loads AGENTS.md" was false.
+    # The fact under the wording, so the reference cannot outlive a flag change.
+    from amicus.backends.pi.contract import RUN_FLAGS
+
+    assert "--no-context-files" in RUN_FLAGS
+    flat = _flat(_BACKENDS_REF)
+    assert "Each backend also loads context you did not supply — `AGENTS.md`" not in flat
+    assert "so it loads no `AGENTS.md`" in flat

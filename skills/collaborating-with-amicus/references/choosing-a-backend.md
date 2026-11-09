@@ -1,8 +1,11 @@
 # Choosing a backend
 
 `backend` is required on every paid amicus tool and has no default — pick it deliberately for each
-call. Two questions decide it: **is this backend eligible**, and **can it actually see the
-evidence the task needs**.
+call. It names a **harness**, the CLI that runs the call, not a model: `codex` runs OpenAI models,
+`claude` runs Anthropic models, `pi` runs any provider's model it lists by exact `provider/id`,
+and the deprecated `kimi` runs whatever its own configuration names. Three questions decide a
+call: **which harness and model the request means**, **is that route eligible**, and **can it
+actually see the evidence the task needs**.
 
 ## Rules
 
@@ -11,11 +14,54 @@ Eligibility, freshness and authority are governed by SKILL.md → Binding rules 
 may be sent to `kimi` by SKILL.md → Binding rules → Data exposure; they are not restated here.
 These are this file's own:
 
+- **Resolve the harness and the model by the routing procedure below before choosing the verb.**
 - **Never spend a paid call to break a tie** between backends that are equally suitable.
-- **Never claim two backends are different model families** unless you have evidence of the
+- **Compare resolved models, never backend ids, when you claim diversity.** Two calls are
+  different models only when their resolved `provider/id` (or, off `pi`, the model each harness
+  reports running) differ; never claim two different model families without evidence of the
   underlying models.
-- **Never inspect a user's provider configuration to establish model identity.** Report the
-  diversity as unverified instead.
+- **Never inspect a user's provider configuration to establish model identity or what `pi` can
+  reach.** Report the diversity as unverified instead, and read `pi`'s reach from
+  `amicus_models(backend="pi")`.
+- **For `pi`, pass `model` as an exact `provider/id` that `amicus_models(backend="pi")` lists,
+  unless `AMICUS_PI_MODEL` is set and is the model you mean.**
+- **Put the project's constraints in a `pi` brief yourself.** pi runs with
+  `--no-context-files`, so it loads no `AGENTS.md`.
+
+### Routing procedure
+
+Binding: SKILL.md → Binding rules → Routing states it in short; this is the full procedure.
+Run it after the free discovery calls and before choosing the verb.
+
+1. **A named harness wins.** A backend id or CLI name — `codex`, `claude` or Claude Code, `pi`,
+   and bare `kimi`, which still means the deprecated kimi harness — selects that harness.
+   Capitalization changes nothing. A model named alongside it is passed as that harness's
+   `model`.
+2. **A model-only request** — GPT, Opus, Sonnet, Kimi K3, an exact `provider/id` — goes to the
+   native harness for that family when it is ready and supports the verb: `codex` for OpenAI
+   models, `claude` for Anthropic models. A family with neither, or a request whose native
+   harness is not ready or lacks the verb, goes to `pi` with an exact model
+   `amicus_models(backend="pi")` lists, under step 3.
+3. **Never substitute silently.** When the named or native harness is not ready or lacks the
+   verb, say so and offer the alternative route — `pi` plus an exact listed model — naming its
+   provider (the `provider/id` prefix, which may be a router) and its containment (pi has no OS
+   sandbox, and a pi delegate has no network block). Proceed only when the user chooses it.
+4. **Learn what `pi` can reach from `amicus_models(backend="pi")`**, never from provider
+   configuration. A missing or truncated listing does not prove a model unreachable; it means
+   you cannot vouch for it, so say that rather than calling it unavailable.
+5. **Ask once, before spending,** only when the routes that still match after free discovery
+   differ in spend, exposure, containment or verb. Otherwise take the one route left.
+
+Worked examples, each after `amicus_backends(detail="full")`:
+
+| Request | Route |
+| --- | --- |
+| "collaborate with codex" | `codex`; its default model unless one is named |
+| "ask kimi" | the `kimi` harness, disclosing its deprecation and that `pi` is the replacement; not a Kimi model through `pi` |
+| "get GPT's opinion" | `codex` when it is ready; otherwise say so and offer `pi` with a listed OpenAI `provider/id`, proceeding only on the user's choice |
+| "use Opus" | `claude` when it is ready and supports the verb, deciding `access` up front, because a `claude` consult defaults to `toolless` and cannot read the repository; otherwise offer `pi` with a listed Anthropic `provider/id`. A delegate is not on `claude`, so offer `pi` there too |
+| "use `<provider>/<id>`" (an exact `provider/id`) | `pi` with that `model`, once `amicus_models(backend="pi")` lists it; its egress is the provider the prefix names, which may be a router rather than the model's vendor |
+| "use Kimi K3" | a model-only request with no native harness among `codex` and `claude`, so `pi` with a listed `provider/id` for it; the `kimi` harness only when the user names `kimi` |
 
 ## `kimi` is deprecated
 
@@ -68,6 +114,9 @@ The gates:
   delegate routed to it is rejected as `invalid_arguments`, never `feature_unsupported`.
 - `amicus_adversarial_review`: `claude` only.
 
+These gates belong to harnesses, not models: an Anthropic model run through `pi` can delegate and
+still has no `adversarial_review`.
+
 ## What each backend can inspect
 
 A backend answers from what it can read. These differ enough to change which one is right for a
@@ -113,16 +162,22 @@ backend's own choice, and `carriers` on `amicus_backends(detail="full")` is auth
 | `pi` | stdin | stdin | argv carries only a fixed system prompt, the model, the effort and flags. With `--no-session` pi wrote no session file on 1.5.0, so there is no store of its own to disclose |
 | `kimi` | a file in a private temp dir outside the workspace; argv carries only its path | same file | Nothing you type rides argv. amicus removes its temp directory when the run ends, but the kimi CLI also writes its own session store (observed under `~/.kimi-code/sessions`), which can hold the whole prompt and any answer produced; amicus does not delete it, and job expiry, the per-workspace cap and `amicus_job_consume_result` never touch it |
 
-Each backend also loads context you did not supply — `AGENTS.md`, skills, and on `claude` under
-`inherit`/`scoped`, workspace hooks that run outside the tool allowlist. `implicit_context` on
-`amicus_backends(detail="full")` is the authoritative per-backend statement.
+Most backends also load context you did not supply — `AGENTS.md`, skills, and on `claude` under
+`inherit`/`scoped`, workspace hooks that run outside the tool allowlist. `pi` is the exception
+for project context: it runs with `--no-context-files --no-skills --no-extensions --no-mcp`, so
+it loads no `AGENTS.md`, while its user-level settings, its `models.json` (whose `!command`
+values pi runs) and its credentials still load; put the project's constraints in the brief.
+`implicit_context` on `amicus_backends(detail="full")` is the authoritative per-backend
+statement.
 
 ## Judgment call: which backend for a consult or review
 
 Beyond the feature gate and the evidence question, amicus does not rank backends. Weigh:
 
 - **Model diversity, carefully.** Different backend IDs do **not** establish different model
-  families. Kimi routes to whatever OpenAI-compatible provider its `config.toml` names, and its
+  families, and the same backend id can run different models: compare the resolved `provider/id`
+  on `pi`, and the model each harness reports otherwise. `pi` running an Anthropic model beside
+  `claude` is one family through two harnesses. Kimi routes to whatever OpenAI-compatible provider its `config.toml` names, and its
   `model` argument is a configuration alias — `amicus_models` exposes aliases and display labels,
   never verified provider identity. When you have reliable, non-sensitive information about the
   underlying models, weigh family diversity alongside task fit; when you do not, record the
@@ -131,8 +186,9 @@ Beyond the feature gate and the evidence question, amicus does not rank backends
   their own.
 - **Pi's model is yours to name.** `pi` has no default model: it uses `AMICUS_PI_MODEL` or the
   call's `model`, an exact `provider/id`, and refuses the call before it spends when neither is
-  set. Until `AMICUS_PI_MODEL` is set, `status.authenticated` is unknown rather than false. The
-  model's provider prefix decides where the prompt goes, and `amicus_models` lists only models of
+  set. Until `AMICUS_PI_MODEL` is set, `status.authenticated` is unknown (`null`) rather than
+  false, and a call with a listed `model` is still eligible. The model's provider prefix, a
+  router included, decides where the prompt goes, and `amicus_models` lists only models of
   providers pi holds credentials for. An unknown id is `invalid_model`, refused pre-spend because pi
   would send it anyway, where `kimi` rejects an unknown alias itself. A provider API key reaches pi only if
   the host forwards it to the amicus server; credentials saved by pi's `/login` need nothing.

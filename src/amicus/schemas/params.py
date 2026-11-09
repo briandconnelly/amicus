@@ -334,16 +334,22 @@ def params_resource_body() -> dict[str, Any]:
 
 BackendParam = Annotated[
     BackendId,
-    Field(description="Which backend answers: codex | kimi | claude | pi. Required."),
+    Field(description=("Harness to run: codex | kimi (deprecated) | claude | pi. Required.")),
 ]
 OptionalBackendParam = Annotated[
     BackendId | None,
-    Field(description="Restrict to one backend: codex | kimi | claude | pi. Omit for all."),
+    Field(
+        description=(
+            "Restrict to one harness: codex | kimi (deprecated) | claude | pi. Omit for all."
+        )
+    ),
 ]
 DelegateBackendParam = Annotated[
     DelegateBackendId,
     Field(
-        description="Which backend answers: codex | kimi | pi (claude stays review-only). Required."
+        description=(
+            "Harness to run: codex | kimi (deprecated) | pi (claude has no delegate). Required."
+        )
     ),
 ]
 
@@ -360,10 +366,7 @@ def _single_value_as_enum(schema: dict[str, Any]) -> None:
 AdversarialBackendParam = Annotated[
     AdversarialBackendId,
     Field(
-        description=(
-            "Which backend answers: claude, the only backend with adversarial_review in v1. "
-            "Required."
-        ),
+        description=("Harness to run: claude, the only one with adversarial_review. Required."),
         json_schema_extra=_single_value_as_enum,
     ),
 ]
@@ -399,8 +402,8 @@ ModelParam = Annotated[
     str | None,
     Field(
         description=(
-            "Backend model slug; omit for the backend's default. amicus_models lists valid "
-            "slugs (advisory). Control characters rejected."
+            "Model slug (amicus_models); omit for the harness default. pi: exact provider/id, "
+            "required unless AMICUS_PI_MODEL is set. Control characters rejected."
         ),
         pattern=CONTROL_CHAR_FREE_PATTERN,
         max_length=256,

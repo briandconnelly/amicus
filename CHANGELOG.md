@@ -56,6 +56,25 @@ per-change, as its own lead says.
 
 ### Changed
 
+- **Surface**: `amicus/0.1/schema-62`. The agent-facing surfaces now say that `backend` names a
+  harness, the CLI that runs a call, not a model, now that `pi` can run any provider's model by
+  exact `provider/id` (#430). The server instructions open on that and mark `kimi` deprecated;
+  every `backend` parameter description says "Harness to run" and marks `kimi` deprecated; the
+  `model` description says that on `pi` it is an exact `provider/id`, required unless
+  `AMICUS_PI_MODEL` is set; `amicus_models` says what pi's listing holds; `amicus_delegate` says
+  amicus does not apply the diff and that `kimi` and `pi` have no OS sandbox or network block;
+  and `amicus_consult` discloses pi's startup rename of `.pi/commands/` to `.pi/prompts/`. The
+  `collaborating-with-amicus` skill gains binding Routing rules — a named harness wins, bare
+  `kimi` is the deprecated harness, a model-only request goes to its native harness (`codex`
+  for OpenAI, `claude` for Anthropic) or else is offered `pi` with an exact listed model, and
+  nothing is substituted silently — with the full procedure and worked examples in
+  `references/choosing-a-backend.md`. Its eligibility rule is model-aware, so `pi` with a listed
+  per-call `model` is no longer excluded while `status.authenticated` is `null`; diversity is
+  judged by resolved model rather than backend id, in blind comparison and independent attempt
+  too; and the reference no longer says every backend loads `AGENTS.md`, since `pi` runs with
+  `--no-context-files`. The paid-verb commands make the first `amicus_backends(detail="full")`
+  read unconditional, point at the routing procedure, and promise only that amicus does not
+  apply the patch. No call, value or stored result changes.
 - The release tooling now requires a fourth live suite, `tests/test_pi_live.py`:
   `scripts/record_live_gate_evidence.py` records it and `scripts/check_release_state.py` rejects
   a record without it, and `scripts/check_backend_compat.py` and its `watch` streams cover the pi
