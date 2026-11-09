@@ -46,7 +46,9 @@ def test_disclosures_and_vocabulary():
     assert plugin.egress == contract.EGRESS and plugin.carriers == contract.CARRIERS
     assert "stdin" in plugin.carriers and "--no-session" in plugin.carriers
     assert plugin.vocabulary.backend_id == "pi" and plugin.vocabulary.display_name == "Pi"
-    assert "https://pi.dev" in plugin.vocabulary.install_hint
+    assert plugin.vocabulary.install_hint == (
+        "Install the pi coding agent (https://pi.dev), then rerun amicus_backends."
+    )
     assert plugin.vocabulary.login_hint == contract.LOGIN_HINT
     assert plugin.vocabulary.status_tool == "amicus_backends"
 
