@@ -155,3 +155,81 @@ def test_the_temp_root_being_the_server_cwd_is_refused(tmp_path, monkeypatch):
     monkeypatch.setattr(tempfile, "gettempdir", lambda: str(Path.cwd()))
     assert pi_config.probe_cwd(_unwritable_state(tmp_path)) is None
     assert list(tmp_path.glob("amicus-pi-probe-*")) == []
+
+
+# --- a probe directory that is not a private, real directory is never used ------------------
+
+
+def _state_with_symlinked_probe_dir(tmp_path):
+    """`<state>/pi-probe-cwd` planted as a symlink to a workspace holding `.pi/commands/`."""
+    ws = _workspace(tmp_path)
+    state = tmp_path / "state"
+    state.mkdir()
+    (state / pi_config.PROBE_CWD_DIRNAME).symlink_to(ws, target_is_directory=True)
+    return ws, state
+
+
+def test_a_symlinked_probe_dir_is_refused_for_the_private_fallback(tmp_path, monkeypatch):
+    import tempfile
+
+    monkeypatch.setattr(pi_config, "_FALLBACK_PROBE_DIRS", [])
+    monkeypatch.setenv("TMPDIR", str(tmp_path / "tmp"))
+    (tmp_path / "tmp").mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", None)
+    ws, state = _state_with_symlinked_probe_dir(tmp_path)
+    got = pi_config.probe_cwd(pi_config.load_config({"AMICUS_STATE_DIR": str(state)}))
+    assert got is not None and Path(got).name.startswith("amicus-pi-probe-")
+    assert os.path.realpath(got) != os.path.realpath(ws)
+
+
+def test_a_symlinked_probe_dir_never_lets_a_probe_migrate_the_workspace(
+    fake_pi, tmp_path, monkeypatch
+):
+    monkeypatch.setattr(pi_config, "_FALLBACK_PROBE_DIRS", [])
+    ws, state = _state_with_symlinked_probe_dir(tmp_path)
+    log = tmp_path / "cwds.jsonl"
+    monkeypatch.setenv("FAKE_PI_CWD_FILE", str(log))
+    environ = {"AMICUS_PI_BIN": str(fake_pi), "AMICUS_PI_MODEL": MODEL}
+    environ["AMICUS_STATE_DIR"] = str(state)
+    plugin = pi_pkg.plugin(environ)
+
+    plugin.status.probe()
+    plugin.models.read(force=True)
+    plugin.models.lookup(MODEL)
+
+    records = _records(log)
+    assert {kind for kind, _ in records} == {"--version", "auth", "--help", "--list-models"}
+    assert os.path.realpath(ws) not in {os.path.realpath(cwd) for _, cwd in records}
+    assert (ws / ".pi" / "commands").is_dir() and not (ws / ".pi" / "prompts").exists()
+
+
+def test_a_group_or_world_writable_probe_dir_is_refused(tmp_path, monkeypatch):
+    monkeypatch.setattr(pi_config, "_FALLBACK_PROBE_DIRS", [])
+    state = tmp_path / "state"
+    shared = state / pi_config.PROBE_CWD_DIRNAME
+    shared.mkdir(parents=True)
+    shared.chmod(0o777)
+    got = pi_config.probe_cwd(pi_config.load_config({"AMICUS_STATE_DIR": str(state)}))
+    assert got is not None and os.path.realpath(got) != os.path.realpath(shared)
+
+
+def test_a_probe_dir_owned_by_someone_else_is_refused(tmp_path, monkeypatch):
+    monkeypatch.setattr(pi_config, "_FALLBACK_PROBE_DIRS", [])
+    state = tmp_path / "state"
+    (state / pi_config.PROBE_CWD_DIRNAME).mkdir(parents=True)
+    cfg = pi_config.load_config({"AMICUS_STATE_DIR": str(state)})
+    someone_else = os.getuid() + 1
+    with monkeypatch.context() as m:  # scoped to the call: pytest itself uses os
+        m.setattr(pi_config.os, "getuid", lambda: someone_else)
+        got = pi_config.probe_cwd(cfg)
+    assert got is not None and Path(got).name.startswith("amicus-pi-probe-")
+
+
+def test_positive_control_a_private_real_probe_dir_is_used_and_created_0700(tmp_path):
+    state = tmp_path / "state"
+    cfg = pi_config.load_config({"AMICUS_STATE_DIR": str(state)})
+    got = pi_config.probe_cwd(cfg)
+    expected = state / pi_config.PROBE_CWD_DIRNAME
+    assert got == str(expected)
+    assert expected.stat().st_mode & 0o777 == 0o700
+    assert pi_config.probe_cwd(cfg) == got  # an existing private directory is reused

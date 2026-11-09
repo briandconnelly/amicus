@@ -4,7 +4,9 @@ new, and its resource isolation is fixed by the suppression flags in `contract`.
 
 from __future__ import annotations
 
+import os
 import re
+import stat
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,6 +22,15 @@ if TYPE_CHECKING:  # pragma: no cover
 PREFIX = "AMICUS_PI_"
 # The directory every free probe spawns pi from; see probe_cwd.
 PROBE_CWD_DIRNAME = "pi-probe-cwd"
+
+AGENT_DIR_VAR = "PI_CODING_AGENT_DIR"
+AGENT_DIR_NOT_ABSOLUTE = (
+    f"{AGENT_DIR_VAR} is set, but it is not an absolute path as written. pi resolves a "
+    "relative value against its working directory, and amicus runs pi's free probes from its "
+    "own probe directory but a paid run from the workspace (or a delegate's throwaway "
+    "worktree), so the two would read different pi configuration (auth.json, models.json). "
+    "Set it to an absolute path (pi also expands a leading `~/`), or unset it."
+)
 
 ENV = EnvNamespace(
     prefix=PREFIX,
@@ -58,6 +69,19 @@ class PiConfig:
     state_dir: Path
     warnings: tuple[str, ...] = ()
     errors: tuple[str, ...] = ()
+    agent_dir_error: str | None = None
+
+
+def agent_dir_error(environ: Mapping[str, str] | None = None) -> str | None:
+    """Why $PI_CODING_AGENT_DIR is unusable, or None. pi's own variable: pi 1.5.0 expands a
+    leading `~` or `~/` against the home directory and resolves anything else that is not
+    absolute against its cwd, which differs between a probe and a paid run, so such a value is
+    refused rather than resolved (as CODEX_HOME is, #193). An empty value is unset, as it is to
+    pi. The message never echoes the value."""
+    raw = (os.environ if environ is None else environ).get(AGENT_DIR_VAR)
+    if not raw or raw == "~" or raw.startswith("~/") or Path(raw).is_absolute():
+        return None
+    return AGENT_DIR_NOT_ABSOLUTE
 
 
 def _parse_supported_versions(raw: str | None) -> frozenset[tuple[int, int]]:
@@ -86,8 +110,6 @@ def load_config(environ: Mapping[str, str] | None = None) -> PiConfig:
         try:
             return ENV.resolve(name, environ).value
         except EnvConflictError:
-            import os  # noqa: PLC0415
-
             env = os.environ if environ is None else environ
             own = env.get(name)
             if is_env_placeholder(own):
@@ -108,6 +130,7 @@ def load_config(environ: Mapping[str, str] | None = None) -> PiConfig:
         state_dir=global_settings(environ).state_dir,
         warnings=tuple(warnings),
         errors=tuple(errors),
+        agent_dir_error=agent_dir_error(environ),
     )
 
 
@@ -130,17 +153,35 @@ def _private_fallback_dir() -> str | None:
     return made
 
 
+def _is_private_dir(path: Path) -> bool:
+    """`path` exists (created 0o700 if absent) as a real directory, not a symlink to one,
+    owned by this user and writable by no one else. A symlink could point the probes at a
+    workspace, and a directory others can write could have `.pi/commands/` planted in it."""
+    try:
+        path.mkdir(mode=0o700, parents=True, exist_ok=True)
+        st = os.lstat(path)
+    except OSError:
+        return False
+    return (
+        stat.S_ISDIR(st.st_mode)
+        and st.st_uid == os.getuid()
+        and not st.st_mode & (stat.S_IWGRP | stat.S_IWOTH)
+    )
+
+
 def probe_cwd(config: PiConfig) -> str | None:
     """The directory every free probe spawns pi from, created on each call so a removed one
     is not reported as a missing pi. pi runs its project migrations against its cwd before it
     handles `--help` or `--list-models` (renaming `.pi/commands/` to `.pi/prompts/`), so a
     probe must never run in whatever directory the server was started in. When the state
-    directory cannot hold it, a private `amicus-pi-probe-*` directory stands in. When that
-    fails too the result is None and the caller treats the probe as failed: pi is not spawned."""
+    directory cannot hold it as a private real directory (see _is_private_dir), a private
+    `amicus-pi-probe-*` directory stands in. When that fails too, or PI_CODING_AGENT_DIR is
+    refused (a probe would read a different pi configuration than a run), the result is None
+    and the caller treats the probe as failed: pi is not spawned."""
+    if config.agent_dir_error is not None:
+        return None
     path = Path(config.state_dir) / PROBE_CWD_DIRNAME
-    try:
-        path.mkdir(parents=True, exist_ok=True)
-    except OSError:
+    if not _is_private_dir(path):
         return _private_fallback_dir()
     return str(path)
 

@@ -85,6 +85,9 @@ authenticates either from credentials saved by its interactive `/login <provider
 nothing more, or from the provider's API-key environment variable (for OpenRouter,
 `OPENROUTER_API_KEY`), which has to reach the amicus server's environment: the plugin's
 `.mcp.json` does not forward it, so your host must.
+If you set `PI_CODING_AGENT_DIR`, make it an absolute path (or `~/…`): a relative one is refused
+before any spend and reported on `amicus_backends`, because pi would resolve it against a
+different directory for amicus's free probes than for a paid run.
 A `pi` delegate runs shell commands with no sandbox, and a command it starts (a hung or
 backgrounded process) can outlive the run, because amicus cannot yet find and stop it.
 

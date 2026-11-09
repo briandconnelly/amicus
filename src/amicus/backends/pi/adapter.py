@@ -209,6 +209,24 @@ class PiBackend:
             ),
         )
 
+    def _agent_dir_refusal(self) -> ClassifiedFailure | None:
+        """A relative PI_CODING_AGENT_DIR, refused pre-spend: pi would resolve it against
+        request.cwd, a directory no probe looked at (as CODEX_HOME is, #193)."""
+        if self._config.agent_dir_error is None:
+            return None
+        return ClassifiedFailure(
+            code="user_config_rejected",
+            detail=f"{self._config.agent_dir_error} No model call was made.",
+            repair=RepairHint(
+                next_step="correct_config",
+                alternative=(
+                    f"Set {pi_config.AGENT_DIR_VAR} to an absolute path (or unset it) in the "
+                    "environment the amicus server starts with, restart the server, then "
+                    "rerun amicus_backends."
+                ),
+            ),
+        )
+
     def _shape_refusal(self, request: RunRequest) -> ClassifiedFailure | None:
         effort = self._effort(request)
         reason = reasoning_effort_shape_error(effort) if effort is not None else None
@@ -280,7 +298,10 @@ class PiBackend:
         # before the catalog because `--list-models` hides every model of a provider with
         # no credentials: asked first,
         # the catalog would call an unauthenticated model invalid. Auth "unknown" does not
-        # block; the catalog then decides, and fails closed. See the M9 design.
+        # block; the catalog then decides, and fails closed. See the M9 design. A refused
+        # PI_CODING_AGENT_DIR goes before all of it: no probe runs with one.
+        if (agent_dir := self._agent_dir_refusal()) is not None:
+            return agent_dir
         model = self._model(request)
         if not model:
             return self._missing_model()
@@ -324,6 +345,8 @@ class PiBackend:
         the run's stdin, and argv carries no prompt input. The probing checks are
         validate_request's, which the orchestration runs first; prepare repeats only the
         free ones, so a run does not ask pi about its model twice."""
+        if (agent_dir := self._agent_dir_refusal()) is not None:
+            raise ValueError(agent_dir.detail)
         model = self._model(request)
         if not model:
             raise ValueError(self._missing_model().detail)

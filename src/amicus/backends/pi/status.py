@@ -43,6 +43,13 @@ class PiStatus:
         override_error = self._binary.override_error()
         if override_error is not None:
             return StatusReport(installed=False, warnings=(override_error, *warnings))
+        if self._config.agent_dir_error is not None:
+            # Every probe would read a pi configuration resolved against the probe directory,
+            # not the one a paid run would use, so none runs: installed is the binary resolving.
+            return StatusReport(
+                installed=self._binary.resolve() is not None,
+                warnings=(self._config.agent_dir_error, *warnings),
+            )
         binary = self._binary.resolve() or "pi"
         cwd = probe_cwd(self._config)
         version = cli.pi_version(binary, cwd=cwd) if cwd is not None else None
