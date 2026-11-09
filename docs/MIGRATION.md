@@ -200,6 +200,18 @@ A `null` there means no loaded plugin declares one.
 The `amicus://backends/{backend}` resource is always the full entry.
 `amicus_capabilities(detail="contracts")` is removed: pass `include_tool_details=false` for the same rowless payload, and `detail` now selects only how much each `tool_details` row carries (`summary` is `name`, `cost`, `stability`, `backends`; `full` adds the rest, including `error_codes`).
 
+## Upgrading from 0.12.0
+
+The changes below are the ones an operator running amicus 0.12.0 may have to handle before running 0.13.0.
+`CHANGELOG.md`'s 0.13.0 section lists every user-visible change since 0.12.0, including the ones that require no migration.
+A job result stored by 0.12.0 is still readable: `RESULT_FORMAT` did not move.
+The discovery surface moves to `amicus/0.1/schema-63`, so a fingerprint-aware client re-reads the catalog once.
+The default `AMICUS_BACKENDS` profile now includes `pi`; where the pi CLI is not installed, `amicus_backends` reports it with `status.installed: false`, adds no warning, and nothing else changes, and an explicit `AMICUS_BACKENDS` enables `pi` only if it names it.
+A `pi` call needs an exact `provider/id`, from `AMICUS_PI_MODEL` or the call's `model`, listed by `pi --list-models`; without one the call is refused before it spends.
+The `kimi` backend still works, but is deprecated: `amicus_backends` and every envelope from a `kimi` call carry a `deprecation` marker, and it is removed in 0.15.0 or later.
+To move from `kimi` to `pi`, install the pi CLI and give it the provider's credentials, enable `pi`, set `AMICUS_PI_MODEL` to the exact `provider/id` the kimi config used (for example `openrouter/moonshotai/kimi-k3`), confirm `amicus_backends` reports `pi` ready, and pass `backend: "pi"`.
+A `pi` delegate's writes are not confined to the worktree, since pi has no OS sandbox, and a shell command it leaves running in the background can outlive the run (#424).
+
 ## Upgrading from 0.11.1
 
 The changes below are the ones an operator running amicus 0.11.1 may have to handle before running 0.12.0.
