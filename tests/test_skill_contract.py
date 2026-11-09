@@ -576,7 +576,7 @@ def test_the_routing_rule_binds_before_the_verb_is_chosen():
         "**Resolve the harness and the model before choosing the verb",
         "**Let a named harness win.**",
         "bare `kimi` (the deprecated kimi harness)",
-        "`codex` for an OpenAI model, `claude` for an Anthropic model",
+        "`codex` for an OpenAI model, `claude` for an Anthropic model, `kimi` for a Kimi model",
         "**Never substitute for a named harness silently.**",
         "proceed only when the user chooses it",
         "An exact `provider/id` is pi's model syntax, so it selects `pi`.",

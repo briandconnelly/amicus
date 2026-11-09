@@ -66,7 +66,8 @@ per-change, as its own lead says.
   and `amicus_consult` discloses pi's startup rename of `.pi/commands/` to `.pi/prompts/`. The
   `collaborating-with-amicus` skill gains binding Routing rules — a named harness wins, bare
   `kimi` is the deprecated harness, a model-only request goes to its native harness (`codex`
-  for OpenAI, `claude` for Anthropic) or else is offered `pi` with an exact listed model, and
+  for OpenAI, `claude` for Anthropic, `kimi` for Kimi while it remains) or else to `pi` with an
+  exact listed model, and
   nothing is substituted silently — with the full procedure and worked examples in
   `references/choosing-a-backend.md`. Its eligibility rule is model-aware, so `pi` with a listed
   per-call `model` is no longer excluded while `status.authenticated` is `null`; diversity is

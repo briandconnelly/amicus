@@ -39,7 +39,8 @@ Run it after the free discovery calls and before choosing the verb.
    `model`. An exact `provider/id` is pi's own model syntax, so it selects `pi` the same way.
 2. **A model-only request** — GPT, Opus, Sonnet, Kimi K3 — goes to the native harness for that
    family when it is ready and supports the verb: `codex` for OpenAI models, `claude` for
-   Anthropic models. A family with neither, or a request whose native harness is not ready or
+   Anthropic models, and `kimi` for Kimi models while that deprecated harness remains, with its
+   deprecation disclosed. A family with none of these, or a request whose native harness is not ready or
    lacks the verb, goes to `pi` with an exact model `amicus_models(backend="pi")` lists. That is
    routing, not substitution: no confirmation is needed, but name the harness, the model and
    the provider before the paid call.
@@ -67,13 +68,14 @@ Worked examples, each after `amicus_backends(detail="full")`:
 | "use Opus" | `claude` when it is ready and supports the verb, deciding `access` up front, because a `claude` consult defaults to `toolless` and cannot read the repository; otherwise `pi` with a listed Anthropic `provider/id`, named before the call. A delegate is not on `claude`, so it goes to `pi` the same way |
 | "have Claude adversarially review this" while `claude` is not ready | no eligible route: only `claude` has `adversarial_review`, so say so rather than switching harness or verb |
 | "use `<provider>/<id>`" (an exact `provider/id`) | `pi`, as a named harness, with that `model`, once `amicus_models(backend="pi")` lists it; its egress is the provider the prefix names, which may be a router rather than the model's vendor |
-| "use Kimi K3" | a model-only request with no native harness among `codex` and `claude`, so `pi` with a listed `provider/id` for it; the `kimi` harness only when the user names `kimi` |
+| "use Kimi K3" | the `kimi` harness, its native harness, while it remains and is ready, disclosing its deprecation and that `pi` is the replacement; otherwise `pi` with a listed `provider/id` for it, named before the call |
 
 ## `kimi` is deprecated
 
 `kimi` is deprecated in favour of `pi`, since 0.13.0, and is removed in 0.15.0 or later. It still
-works, so a call already routed to it need not fail, but prefer `pi` for new work: it serves the
-same verbs (`consult`, `review_changes`, `delegate`) and can run the same model when
+works, and the routing procedure above still sends it a request that names `kimi` or a Kimi
+model, with its deprecation disclosed; recommend `pi` when a user asks how to move off it: it
+serves the same verbs (`consult`, `review_changes`, `delegate`) and can run the same model when
 `AMICUS_PI_MODEL` names it as an exact `provider/id`. The `deprecation` marker on kimi's
 `amicus_backends` entry, and `meta.deprecation` on every kimi result, carry the window and the
 migration text; treat that marker, not this file, as authoritative.

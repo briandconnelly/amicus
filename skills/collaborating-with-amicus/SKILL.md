@@ -11,7 +11,8 @@ or the deprecated `kimi`), not the model: `codex` runs OpenAI models, `claude` r
 models, and `pi` runs any provider's model it lists, by exact `provider/id`, so two harnesses
 can run the same model. This skill is the router: which harness and model, which tool, sync or
 async, and what a returned result obligates you to do next. `kimi` is deprecated in favour of
-`pi` (removal at or after 0.15.0): prefer `pi`, and read the `deprecation` marker
+`pi` (removal at or after 0.15.0): it still serves a request that names it or a Kimi model,
+under Binding rules → Routing, with its deprecation disclosed; read the `deprecation` marker
 `amicus_backends` carries for it.
 
 You are the host. A backend is a worker you consult; it does not own the decision, the
@@ -87,7 +88,8 @@ The full procedure, with worked examples, is
   deprecated kimi harness) select that harness, whatever the capitalization. An exact
   `provider/id` is pi's model syntax, so it selects `pi`.
 - **Send a model-only request to its native harness — `codex` for an OpenAI model, `claude` for
-  an Anthropic model — when that harness is ready and supports the verb; otherwise route it to
+  an Anthropic model, `kimi` for a Kimi model while that deprecated harness remains, disclosing
+  its deprecation — when that harness is ready and supports the verb; otherwise route it to
   `pi` with an exact model `amicus_models(backend="pi")` lists, and name that route before the
   call.**
 - **Never substitute for a named harness silently.** When the harness the user named is not
