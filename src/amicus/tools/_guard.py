@@ -17,7 +17,6 @@ from amicus.tools._meta import base_meta
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Awaitable, Callable
 
-    from amicus.config import Settings
 
 GUARD_MARKER = "_amicus_guarded"
 
@@ -42,7 +41,7 @@ def as_tool_result(envelope: dict[str, Any]) -> dict[str, Any] | ToolResult:
 
 
 def guard(
-    tool_name: str, settings: Settings
+    tool_name: str,
 ) -> Callable[
     [Callable[..., Awaitable[dict[str, Any]]]],
     Callable[..., Awaitable[dict[str, Any] | ToolResult]],
@@ -75,7 +74,7 @@ def guard(
                     error_envelope(
                         "internal_error",
                         f"{tool_name} failed unexpectedly: {type(exc).__name__}",
-                        base_meta(settings, backend=kwargs.get("backend")),
+                        base_meta(backend=kwargs.get("backend")),
                     )
                 )
 

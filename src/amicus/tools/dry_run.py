@@ -98,6 +98,7 @@ async def _refusal(
         background=spec.background,
         job_max_seconds=spec.job_max_seconds,
         deadline_seconds=spec.timeout_seconds,
+        tool=spec.tool,
     )
 
 
@@ -116,7 +117,7 @@ def _register_review_preview(
         meta=lifecycle_meta(name),
         description=_DRY_RUN_DESC,
     )
-    @guard(name, settings)
+    @guard(name)
     async def review_preview(
         backend: BackendParam,
         ctx: Context | None = None,
@@ -225,7 +226,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
         meta=lifecycle_meta("amicus_delegate_dry_run"),
         description=_DELEGATE_DRY_RUN_DESC,
     )
-    @guard("amicus_delegate_dry_run", settings)
+    @guard("amicus_delegate_dry_run")
     async def amicus_delegate_dry_run(
         backend: DelegateBackendParam,
         task: TaskParam,
@@ -236,7 +237,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
         backend_options: BackendOptionsParam = None,
     ) -> dict[str, Any]:
         """Preview a delegate call without spending."""
-        err = blank_input_error(task, "task", "amicus_delegate_dry_run", settings, backend)
+        err = blank_input_error(task, "task", "amicus_delegate_dry_run", backend)
         if err is not None:
             return err
         prep = await prepare_run(

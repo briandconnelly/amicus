@@ -88,7 +88,7 @@ def register_review_changes(
         description=_REVIEW_DESC,
         task=settings.tasks_enabled,
     )
-    @guard("amicus_review_changes", settings)
+    @guard("amicus_review_changes")
     async def amicus_review_changes(
         backend: BackendParam,
         ctx: Context | None = None,
@@ -154,7 +154,7 @@ def register_review_changes(
         meta=lifecycle_meta("amicus_review_changes_async"),
         description=_REVIEW_ASYNC_DESC,
     )
-    @guard("amicus_review_changes_async", settings)
+    @guard("amicus_review_changes_async")
     async def amicus_review_changes_async(
         backend: BackendParam,
         ctx: Context | None = None,
@@ -222,7 +222,7 @@ def register_adversarial(
         description=_ADV_DESC,
         task=settings.tasks_enabled,
     )
-    @guard("amicus_adversarial_review", settings)
+    @guard("amicus_adversarial_review")
     async def amicus_adversarial_review(
         backend: AdversarialBackendParam,
         target: TargetParam,
@@ -244,9 +244,7 @@ def register_adversarial(
         backend_options: BackendOptionsParam = None,
     ) -> dict[str, Any]:
         """Attack a target with a fixed adversarial critic on the selected backend."""
-        err = _resolve.blank_input_error(
-            target, "target", "amicus_adversarial_review", settings, backend
-        )
+        err = _resolve.blank_input_error(target, "target", "amicus_adversarial_review", backend)
         if err is not None:
             return err
         prep = await prepare_run(
@@ -295,7 +293,7 @@ def register_adversarial(
         meta=lifecycle_meta("amicus_adversarial_review_async"),
         description=_ADV_ASYNC_DESC,
     )
-    @guard("amicus_adversarial_review_async", settings)
+    @guard("amicus_adversarial_review_async")
     async def amicus_adversarial_review_async(
         backend: AdversarialBackendParam,
         target: TargetParam,
@@ -316,7 +314,7 @@ def register_adversarial(
     ) -> dict[str, Any]:
         """Start a background adversarial critique on the selected backend."""
         err = _resolve.blank_input_error(
-            target, "target", "amicus_adversarial_review_async", settings, backend
+            target, "target", "amicus_adversarial_review_async", backend
         )
         if err is not None:
             return err

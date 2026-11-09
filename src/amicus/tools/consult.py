@@ -63,7 +63,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
         description=_DESC,
         task=settings.tasks_enabled,
     )
-    @guard("amicus_consult", settings)
+    @guard("amicus_consult")
     async def amicus_consult(
         backend: BackendParam,
         question: QuestionParam,
@@ -79,7 +79,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
         backend_options: BackendOptionsParam = None,
     ) -> dict[str, Any]:
         """Consult the selected backend for a read-only second opinion."""
-        err = _resolve.blank_input_error(question, "question", "amicus_consult", settings, backend)
+        err = _resolve.blank_input_error(question, "question", "amicus_consult", backend)
         if err is not None:
             return err
         prep = await prepare_run(
@@ -122,7 +122,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
         meta=lifecycle_meta("amicus_consult_async"),
         description=_ASYNC_DESC,
     )
-    @guard("amicus_consult_async", settings)
+    @guard("amicus_consult_async")
     async def amicus_consult_async(
         backend: BackendParam,
         question: QuestionParam,
@@ -136,9 +136,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
         backend_options: BackendOptionsParam = None,
     ) -> dict[str, Any]:
         """Start a background consult on the selected backend."""
-        err = _resolve.blank_input_error(
-            question, "question", "amicus_consult_async", settings, backend
-        )
+        err = _resolve.blank_input_error(question, "question", "amicus_consult_async", backend)
         if err is not None:
             return err
         prep = await prepare_run(

@@ -1189,3 +1189,146 @@ async def test_unreadable_consume_repair_keeps_the_requested_detail(
         again = (await c.call_tool(repair["tool"], repair["arguments"])).structured_content
         assert again["ok"] is True and again["raw_response"]["text"]
         assert again["meta"]["consume"] == {"discard_outcome": "removed"}
+
+
+async def _published_codes(c, tool):
+    body = (await c.call_tool("amicus_capabilities", {"detail": "full"})).structured_content
+    [row] = [r for r in body["tool_details"] if r["name"] == tool]
+    return row["error_codes"]
+
+
+async def test_each_job_tool_failure_is_on_that_tools_published_row(
+    app, store, tmp_path, monkeypatch
+):
+    """#440 witnesses: a code a job tool returns is on the row amicus_capabilities
+    publishes for it. The rows used to omit the boundary's invalid_arguments and the guard's
+    internal_error, and the job reads omitted the paid codes they deliver."""
+    ws = {"workspace_root": str(tmp_path)}
+    async with Client(app) as c:
+        seen = []
+        status = await c.call_tool(
+            "amicus_job_status",
+            {"job_id": "a" * 32, "wait_seconds": 99, **ws},
+            raise_on_error=False,
+        )
+        seen.append(("amicus_job_status", status.structured_content["error"]["code"]))
+        listed = await c.call_tool(
+            "amicus_job_list", {"cursor": "not-a-cursor", **ws}, raise_on_error=False
+        )
+        seen.append(("amicus_job_list", listed.structured_content["error"]["code"]))
+        # A stored result that does not read back.
+        unreadable = await _start(c, tmp_path)
+        await _wait_done(store, tmp_path, unreadable)
+        (store._job_dir(str(tmp_path), unreadable) / "result.json").write_text(
+            json.dumps({"ok": True, "tool": "amicus_consult"})
+        )
+        fetched = await c.call_tool(
+            "amicus_job_result", {"job_id": unreadable, **ws}, raise_on_error=False
+        )
+        seen.append(("amicus_job_result", fetched.structured_content["error"]["code"]))
+        # A paid failure the worker stored, delivered by the job read.
+        monkeypatch.setenv("FAKE_CODEX_EXIT", "3")
+        failed = await _start(c, tmp_path)
+        await _wait_done(store, tmp_path, failed)
+        delivered = await c.call_tool(
+            "amicus_job_result", {"job_id": failed, **ws}, raise_on_error=False
+        )
+        seen.append(("amicus_job_result", delivered.structured_content["error"]["code"]))
+        rows = {tool: await _published_codes(c, tool) for tool, _ in seen}
+    assert [code for _, code in seen] == [
+        "invalid_arguments",
+        "invalid_arguments",
+        "internal_error",
+        "nonzero_exit",
+    ]
+    for tool, code in seen:
+        assert code in rows[tool], (tool, code)
+
+
+async def test_no_deadline_is_reported_where_none_applies(app, store, tmp_path, monkeypatch):
+    """#447: timeout_seconds is a run's deadline, so an envelope of a call that runs nothing
+    omits it: a discovery tool's error, a boundary refusal, every job tool's own envelope,
+    and an early refusal on a paid tool or a dry run. A dry run keeps the deadline the paid
+    call would get, and a paid result keeps its own when a job read delivers it."""
+    ws = {"workspace_root": str(tmp_path)}
+    async with Client(app) as c:
+        job_id = await _start(c, tmp_path)
+        await _wait_done(store, tmp_path, job_id)
+        bodies = {
+            "boundary": await c.call_tool(
+                "amicus_models", {"backend": "gemini"}, raise_on_error=False
+            ),
+            "status": await c.call_tool("amicus_job_status", {"job_id": job_id, **ws}),
+            "list": await c.call_tool("amicus_job_list", ws),
+            "cancel": await c.call_tool("amicus_job_cancel", {"job_id": job_id, **ws}),
+            "not_found": await c.call_tool(
+                "amicus_job_status", {"job_id": "a" * 32, **ws}, raise_on_error=False
+            ),
+            "paid_early": await c.call_tool(
+                "amicus_consult", {"backend": "codex", "question": "  ", **ws}, raise_on_error=False
+            ),
+            "dry_early": await c.call_tool(
+                "amicus_delegate_dry_run",
+                {"backend": "codex", "task": "  ", **ws},
+                raise_on_error=False,
+            ),
+        }
+        fetched = await c.call_tool("amicus_job_result", {"job_id": job_id, **ws})
+        dry = await c.call_tool(
+            "amicus_review_changes_dry_run", {"backend": "codex", **ws}, raise_on_error=False
+        )
+    for name, res in bodies.items():
+        body = res.structured_content
+        meta = body.get("meta") or {}
+        assert "timeout_seconds" not in meta, name
+        assert "timeout_seconds" not in json.loads(res.content[0].text).get("meta", {}), name
+    assert bodies["paid_early"].structured_content["error"]["code"] == "invalid_arguments"
+    assert bodies["dry_early"].structured_content["error"]["code"] == "invalid_arguments"
+    settings = server.state_of(app).settings
+    # The _async run's own deadline is the job deadline, and the fetched result keeps it.
+    assert fetched.structured_content["meta"]["timeout_seconds"] == settings.job_max_seconds
+    # A dry run reports the deadline the paid call would get (its failure here is git's).
+    dry_meta = dry.structured_content["meta"]
+    assert dry_meta["timeout_seconds"] == settings.timeout_seconds
+
+
+async def test_amicus_models_backend_unavailable_has_no_deadline(tmp_path, monkeypatch):
+    monkeypatch.setenv("AMICUS_STATE_DIR", str(tmp_path / "state"))
+    app = server.create_app(config.settings({}), BackendRegistry({}, {}))
+    async with Client(app) as c:
+        res = await c.call_tool("amicus_models", {"backend": "codex"}, raise_on_error=False)
+    body = res.structured_content
+    assert body["error"]["code"] == "backend_unavailable"
+    assert "timeout_seconds" not in body["meta"]
+
+
+async def test_a_job_status_reports_age_on_top_and_no_run_in_meta(app, store, tmp_path):
+    """#447: meta.elapsed_ms is what the command runtime measured for this envelope's run,
+    and a status read runs nothing; the job's age is the top-level elapsed_ms."""
+    ws = {"workspace_root": str(tmp_path)}
+    async with Client(app) as c:
+        job_id = await _start(c, tmp_path)
+        await _wait_done(store, tmp_path, job_id)
+        # The finished run took real milliseconds, so the record's age is non-zero
+        # without a sleep here.
+        status = await c.call_tool("amicus_job_status", {"job_id": job_id, **ws})
+    assert status.structured_content["elapsed_ms"] > 0
+    assert status.structured_content["meta"]["elapsed_ms"] == 0
+
+
+async def test_error_backend_null_and_the_details_projection_stay(app, tmp_path):
+    """#447 declines, pinned: `error.backend` is a required-nullable wire field the server
+    instructions tell agents to read, so it is null when no backend applies, not omitted;
+    and an invalid_arguments envelope's `details` stays the projection of its first
+    invalid_arguments entry."""
+    async with Client(app) as c:
+        res = await c.call_tool(
+            "amicus_job_status",
+            {"job_id": "a" * 32, "workspace_root": str(tmp_path), "wait_seconds": 99},
+            raise_on_error=False,
+        )
+    err = res.structured_content["error"]
+    assert "backend" in err and err["backend"] is None
+    first = err["invalid_arguments"][0]
+    assert err["details"] == {k: first[k] for k in err["details"]}
+    assert err["details"]["field"] == first["field"] == "wait_seconds"

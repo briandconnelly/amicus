@@ -158,7 +158,15 @@ class Meta(BaseModel):
     model: str | None = None
     reasoning_effort: str | None = None
     timeout_seconds: int | None = None
-    elapsed_ms: int = 0
+    elapsed_ms: int = Field(
+        default=0,
+        description=(
+            "Milliseconds the backend command runtime measured for this envelope's run, an "
+            "attempted spawn included; 0 when no run was measured (a discovery or job tool, "
+            "an early refusal). Not the MCP call's wall time: amicus_job_status reports a "
+            "job's age in its own top-level elapsed_ms."
+        ),
+    )
     command_exit_code: int | None = None
     session_id: str | None = None
     truncated: bool = False

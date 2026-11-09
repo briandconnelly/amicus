@@ -703,6 +703,14 @@ ISSUES_URL_DESC = (
 )
 
 
+# #440: the catalog is wider than the union of the rows, and says why.
+_CATALOG_DESC = (
+    "The whole error catalog. A code on no tool_details row (detail=full) is resource-only "
+    "(resource_not_found) or reserved: cataloged, and returned by no tool today."
+)
+publish.KEPT_DESCRIPTIONS.add(_CATALOG_DESC)
+
+
 class CapabilitiesResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
     ok: Literal[True] = True
@@ -724,7 +732,7 @@ class CapabilitiesResult(BaseModel):
     free_tools: list[str]
     job_tools: list[str]
     tool_details: list[ToolCapability] = Field(default_factory=list)
-    error_codes: list[str]
+    error_codes: list[str] = Field(description=_CATALOG_DESC)
     scope: list[str]
     negative_scope: list[str]
     prerequisites: list[str]

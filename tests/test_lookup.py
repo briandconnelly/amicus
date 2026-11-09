@@ -93,14 +93,14 @@ async def test_resolve_job_workspace_falls_back_to_cwd_only_when_allowed(tmp_pat
 
 
 def test_job_meta_and_not_found(tmp_path):
-    settings = _settings(tmp_path)
-    meta = lookup.job_meta(settings, "/repo", "param", "client", backend="codex", kind="delegate")
+    meta = lookup.job_meta("/repo", "param", "client", backend="codex", kind="delegate")
     assert meta.backend == "codex" and meta.job_kind == "delegate" and meta.cwd == "/repo"
-    assert meta.timeout_seconds == 1800 and meta.roots_source == "client"
-    bare = lookup.job_meta(settings, None, None, "not_negotiated")
+    # #447: a job tool has no deadline of its own.
+    assert meta.timeout_seconds is None and meta.roots_source == "client"
+    bare = lookup.job_meta(None, None, "not_negotiated")
     assert bare.backend is None and bare.job_kind is None and bare.cwd is None
     with pytest.raises(ValidationError):
-        lookup.job_meta(settings, None, None, "none")
+        lookup.job_meta(None, None, "none")
     env = lookup.job_not_found("b" * 32, meta, "/repo")
     assert env["error"]["code"] == "job_not_found" and "b" * 32 in env["error"]["message"]
     assert env["error"]["repair"]["tool"] == "amicus_job_list"
@@ -113,17 +113,15 @@ def test_job_meta_and_not_found(tmp_path):
 
 def test_a_long_running_status_keeps_growing_its_poll_hint(tmp_path):
     # pontonier's own row hint saturates at 10000 at four minutes; amicus's does not (#95).
-    settings = _settings(tmp_path)
     ws = lookup.workspace_of("/repo", "param")
-    meta = lookup.job_meta(settings, "/repo", "param", "client", backend="codex", kind="consult")
+    meta = lookup.job_meta("/repo", "param", "client", backend="codex", kind="consult")
     running = lookup.status_model(_row(elapsed_ms=240_000, poll_after_ms=10000), ws, None, meta)
     assert running["poll_after_ms"] == 30000
 
 
 def test_status_and_summary_models_carry_backend_task_and_detail(tmp_path):
-    settings = _settings(tmp_path)
     ws = lookup.workspace_of("/repo", "param")
-    meta = lookup.job_meta(settings, "/repo", "param", "client", backend="codex", kind="consult")
+    meta = lookup.job_meta("/repo", "param", "client", backend="codex", kind="consult")
     running = lookup.status_model(_row(), ws, None, meta)
     JobStatus.model_validate(running)
     assert running["backend"] == "codex" and running["status"] == "running"

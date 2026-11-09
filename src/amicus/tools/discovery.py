@@ -102,6 +102,10 @@ _COMMON_PAID_CODES = [
 # verb they run, so only a tool that can select kimi or pi lists it; adversarial review is
 # claude-only.
 _EMPTY_RESPONSE_CODES = ["empty_response"]
+# A backend that declares model_validation (kimi, pi) refuses a model it cannot vouch for: pi
+# before spending, kimi from the run. Listed by tool role, on each paid tool whose verb
+# accepts one of them, so not on adversarial review, which is claude-only (#440).
+_MODEL_VALIDATION_CODES = ["invalid_model"]
 # The backend answered and amicus could not read the answer whole: an answer FILE (codex's
 # last message, kimi's delegate answer) its bounded reader refused (#162), or an answer on
 # the output stream (claude's envelope, kimi's and pi's final message) its capture cut or
@@ -151,6 +155,7 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
         "returns": "summary, findings, questions, next_steps, raw_response (detail=full) and meta.",
         "error_codes": (
             _COMMON_PAID_CODES
+            + _MODEL_VALIDATION_CODES
             + _EMPTY_RESPONSE_CODES
             + _ANSWER_UNAVAILABLE_CODES
             + _SYNC_LIFECYCLE_CODES
@@ -165,6 +170,7 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
             "job_id, status, poll_after_ms, expires_at, follow_up; result via amicus_job_result."
         ),
         "error_codes": _COMMON_PAID_CODES
+        + _MODEL_VALIDATION_CODES
         + _EMPTY_RESPONSE_CODES
         + _ANSWER_UNAVAILABLE_CODES
         + _IDEMPOTENCY_CODES,
@@ -180,6 +186,7 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
         ),
         "error_codes": (
             _COMMON_PAID_CODES
+            + _MODEL_VALIDATION_CODES
             + _EMPTY_RESPONSE_CODES
             + _ANSWER_UNAVAILABLE_CODES
             + _REVIEW_CODES_EMITTED
@@ -193,6 +200,7 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
         "use_when": "A multi-file or whole-branch review that may exceed the sync deadline.",
         "returns": "a job handle; result via amicus_job_result.",
         "error_codes": _COMMON_PAID_CODES
+        + _MODEL_VALIDATION_CODES
         + _EMPTY_RESPONSE_CODES
         + _ANSWER_UNAVAILABLE_CODES
         + _REVIEW_CODES
@@ -208,6 +216,7 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
         "returns": "diff, diffstat, summary and meta.",
         "error_codes": [
             *_COMMON_PAID_CODES,
+            *_MODEL_VALIDATION_CODES,
             *_EMPTY_RESPONSE_CODES,
             *_ANSWER_UNAVAILABLE_CODES,
             "not_a_git_repo",
@@ -224,6 +233,7 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
         "returns": "a job handle; result via amicus_job_result.",
         "error_codes": [
             *_COMMON_PAID_CODES,
+            *_MODEL_VALIDATION_CODES,
             *_EMPTY_RESPONSE_CODES,
             *_ANSWER_UNAVAILABLE_CODES,
             "not_a_git_repo",
@@ -388,6 +398,67 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
         "error_codes": ["invalid_workspace_root", "workspace_outside_roots"],
     },
 }
+
+
+def _add_codes(row: dict[str, Any], codes: Sequence[str]) -> None:
+    row["error_codes"] = list(dict.fromkeys([*row["error_codes"], *codes]))
+
+
+# Every tool is wrapped by the guard (internal_error on an unexpected exception) and behind
+# the call-boundary validation middleware (invalid_arguments), so every row lists both (#440).
+GUARD_AND_BOUNDARY_CODES = ("invalid_arguments", "internal_error")
+# amicus_job_result and amicus_job_consume_result deliver the originating paid tool's stored
+# envelope, error included, so they can return whatever a paid tool can, beside their own
+# lifecycle codes (#440).
+JOB_READ_TOOLS = ("amicus_job_result", "amicus_job_consume_result")
+PAID_ROWS = tuple(name for name, row in TOOL_DETAILS.items() if row["cost"] == "active")
+for _row in TOOL_DETAILS.values():
+    _add_codes(_row, GUARD_AND_BOUNDARY_CODES)
+for _name in JOB_READ_TOOLS:
+    for _paid in PAID_ROWS:
+        _add_codes(TOOL_DETAILS[_name], TOOL_DETAILS[_paid]["error_codes"])
+
+# The catalog codes on no tool row, each with why (#440, D2). A code is on a row, or here,
+# never both and never neither; tests/test_discovery.py holds the partition.
+RESOURCE_ONLY_CODES: dict[str, str] = {
+    "resource_not_found": (
+        "Only a resource read returns it, as JSON-RPC error.data.machine_code; no tool does."
+    ),
+}
+# Cataloged, so the closed enum stays stable, and emitted by no in-tree tool path today.
+# Removing one would narrow a published enum, a separate compatibility decision.
+RESERVED_CODES: dict[str, str] = {
+    "backend_auth_indeterminate": (
+        "SDK taxonomy for an auth probe that could not answer; no in-tree backend reports "
+        "it (pi lets an unanswered auth probe through and its catalog check decides)."
+    ),
+    "schema_violation": (
+        "A parser classification (schemas/structured.py), never an envelope: a review "
+        "delivers such an answer as review_status unstructured, a consult as prose, and a "
+        "delegate parses none."
+    ),
+    "unsupported_detail": (
+        "SDK taxonomy; `detail` is a closed enum the call boundary refuses as invalid_arguments."
+    ),
+    "unsupported_isolation": (
+        "SDK taxonomy; backend_options.isolation is a closed enum refused as invalid_arguments."
+    ),
+    "unsupported_sandbox": (
+        "SDK taxonomy; amicus has no sandbox parameter, and backend_options.access is a "
+        "closed enum refused as invalid_arguments."
+    ),
+    "unsupported_tier": "SDK taxonomy; amicus has no tier parameter.",
+}
+
+
+def unaccounted_codes(catalog: Sequence[str]) -> list[str]:
+    """The codes of `catalog` on no tool row and in neither classification: each is either
+    undocumented on the tools that return it or an unexplained catalog entry (#440)."""
+    on_rows = {code for row in TOOL_DETAILS.values() for code in row["error_codes"]}
+    classified = set(RESOURCE_ONLY_CODES) | set(RESERVED_CODES)
+    return sorted(set(catalog) - on_rows - classified)
+
+
 _REVIEW_PREVIEW_PARAMS: tuple[list[str], list[str]] = (
     ["backend"],
     ["scope", "base", "commit", "paths", "workspace_root", "backend_options"],
@@ -721,7 +792,7 @@ def register(
             "detail=full before the first paid call; summary is enough for a readiness re-check."
         ),
     )
-    @guard("amicus_backends", settings)
+    @guard("amicus_backends")
     async def amicus_backends(
         backend: OptionalBackendParam = None, detail: BackendsDetailParam = "summary"
     ) -> dict[str, Any]:
@@ -743,7 +814,7 @@ def register(
             "Not fingerprint-stable; same payload as amicus://models/{backend}."
         ),
     )
-    @guard("amicus_models", settings)
+    @guard("amicus_models")
     async def amicus_models(backend: BackendParam) -> dict[str, Any]:
         """List a backend's models. Reports `backend_unavailable`, like every paid tool,
         when the backend has no loaded plugin (see `resolve_paid_call`'s same shape)."""
@@ -754,7 +825,7 @@ def register(
             return error_envelope(
                 "backend_unavailable",
                 f"backend {backend!r} is unavailable ({detail})",
-                base_meta(settings, backend=backend),
+                base_meta(backend=backend),
                 backend=backend,
             )
         return await asyncio.to_thread(models_payload, registry, backend)
@@ -775,7 +846,7 @@ def register(
             "capabilities-result and/or parameter-contracts for resource-blind clients."
         ),
     )
-    @guard("amicus_capabilities", settings)
+    @guard("amicus_capabilities")
     async def amicus_capabilities(
         detail: CapabilitiesDetailParam = "summary",
         include_schemas: IncludeSchemasParam = None,

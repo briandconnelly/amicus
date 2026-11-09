@@ -53,6 +53,14 @@ def _meta(*, backend: str = "codex", **optional: Any) -> Meta:
     return meta
 
 
+def _pinned(meta: Meta) -> Meta:
+    """A real builder's meta with the release variables pinned as `_meta` pins them."""
+    meta.fingerprint = _FINGERPRINT_SENTINEL
+    meta.server_version = _VERSION_SENTINEL
+    meta.request_id = _REQUEST_ID_SENTINEL
+    return meta
+
+
 def _populated(**extra: Any) -> Meta:
     fields: dict[str, Any] = {
         "workspace_source": "param",
@@ -213,8 +221,10 @@ def _lifecycle_envelope(
     kind: str,
     workspace_root: str | None = None,
 ) -> dict[str, Any]:
+    # The meta the job tools themselves build for a lifecycle-generated envelope (#447).
+    meta = _pinned(lookup.job_meta("/repo", "param", "client", backend="codex", kind=kind))
     envelope, _delivered = finished_job_envelope(
-        rec, payload, _JOB_ID_SENTINEL, kind, _meta(), "summary", workspace_root
+        rec, payload, _JOB_ID_SENTINEL, kind, meta, "summary", workspace_root
     )
     if envelope["meta"].get("fingerprint") == FINGERPRINT:
         envelope["meta"]["fingerprint"] = _FINGERPRINT_SENTINEL
@@ -324,9 +334,8 @@ def _handle_meta() -> Meta:
 
 
 def _job_meta() -> Meta:
-    meta = _handle_meta()
-    meta.job_kind = "consult"
-    return meta
+    # amicus_job_status's own builder, so the golden cannot keep a field it dropped (#447).
+    return _pinned(lookup.job_meta("/repo", "param", "client", backend="codex", kind="consult"))
 
 
 def _handles() -> dict[str, Any]:

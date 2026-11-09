@@ -49,7 +49,6 @@ def workspace_of(cwd: str, source: str | None) -> Workspace:
 
 
 def job_meta(
-    settings: Settings,
     cwd: str | None,
     source: str | None,
     roots_source: RootsSource,
@@ -58,14 +57,14 @@ def job_meta(
     kind: str | None = None,
 ) -> Meta:
     """Meta for a lifecycle-GENERATED envelope: the job's backend and kind when a record
-    was resolved, the job deadline as the timeout, and the roots state this lookup saw."""
+    was resolved, and the roots state this lookup saw. No `timeout_seconds`: a job tool has
+    no deadline of its own, and a delivered paid result keeps the one its run had (#447)."""
     return Meta(
         backend=backend,
         cwd=cwd,
         workspace_source=source,  # ty: ignore[invalid-argument-type]
         workspace_warning=ws.workspace_warning_for(source, cwd),
         roots_source=roots_source,
-        timeout_seconds=settings.job_max_seconds,
         job_kind=kind or None,
     )
 
@@ -78,7 +77,7 @@ async def resolve_job_workspace(
     roots, roots_source = await ws.roots_from_ctx(ctx)
     res = ws.resolve(workspace_root, roots, allow_cwd=settings.allow_cwd_workspace)
     if res.error_code is not None:
-        meta = job_meta(settings, None, None, roots_source)
+        meta = job_meta(None, None, roots_source)
         return (
             None,
             None,

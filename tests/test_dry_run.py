@@ -473,6 +473,13 @@ def _pi_runs(tmp_path):
     return [a for a in map(json.loads, path.read_text().splitlines()) if "-p" in a]
 
 
+async def _published_codes(c, tool):
+    """The error_codes row of `tool` as amicus_capabilities(detail="full") publishes it."""
+    body = (await c.call_tool("amicus_capabilities", {"detail": "full"})).structured_content
+    [row] = [r for r in body["tool_details"] if r["name"] == tool]
+    return row["error_codes"]
+
+
 # (case, the env/args it needs, the code and field both the dry run and the paid tool return)
 _PI_REFUSALS = [
     ("missing_model", {"model": None}, {}, "invalid_arguments", "model"),
@@ -518,19 +525,48 @@ async def test_a_pi_dry_run_refuses_exactly_where_the_paid_call_does(
     async with Client(app) as c:
         dry_res = await c.call_tool(dry, call, raise_on_error=False)
         paid_res = await c.call_tool(paid, call, raise_on_error=False)
+        dry_row = await _published_codes(c, dry)
+        paid_row = await _published_codes(c, paid)
     dry_err = dry_res.structured_content["error"]
     paid_err = paid_res.structured_content["error"]
     assert dry_res.is_error is True and paid_res.is_error is True
     assert dry_err["code"] == paid_err["code"] == code, case
+    # #440: each tool's published row names what it just returned.
+    assert code in dry_row and code in paid_row, case
     assert dry_err["details"] == paid_err["details"], case
     # #450: pi's catalog reason no longer costs the machine field.
     assert dry_err["details"]["field"] == field, case
     if code == "invalid_model":
         assert dry_err["details"]["reason"] == "catalog=no_exact_row", case
+    # #444: each of these points at the model lookup, not at a retry of the tool that failed,
+    # and the dry run and the paid call carry the same complete call.
+    assert dry_err["repair"] == paid_err["repair"], case
+    assert dry_err["repair"]["next_step"] == "use_allowed_value", case
+    assert dry_err["repair"]["tool"] == "amicus_models", case
+    assert dry_err["repair"]["arguments"] == {"backend": "pi"}, case
     assert dry_err["backend"] == "pi" and json.loads(dry_res.content[0].text) == (
         dry_res.structured_content
     )
     assert _pi_runs(tmp_path) == []
+
+
+@pytest.mark.parametrize("dry", ["amicus_review_changes_dry_run", "amicus_delegate_dry_run"])
+async def test_a_pi_dry_run_refusing_auth_returns_a_code_on_its_row(
+    tmp_path, repo, fake_pi, monkeypatch, dry
+):
+    """The dry-run refusal matrix's pi auth row (#440)."""
+    app, _ = _pi_registry(tmp_path, fake_pi, monkeypatch)
+    monkeypatch.setenv("FAKE_PI_AUTH", '{"status":"not_ready","provider":"openrouter"}')
+    (repo / "a.py").write_text("x = 2\n")
+    # A model the registry's load-time conformance check did not memoize as authenticated.
+    model = "openrouter/other/model"
+    call = {"backend": "pi", "workspace_root": str(repo), "task": "add b.py", "model": model}
+    if dry == "amicus_review_changes_dry_run":
+        call.pop("task")
+    async with Client(app) as c:
+        err = (await c.call_tool(dry, call, raise_on_error=False)).structured_content["error"]
+        row = await _published_codes(c, dry)
+    assert err["code"] == "backend_auth_required" and err["code"] in row
 
 
 async def test_a_valid_pi_model_previews_and_the_model_runs_are_recorded(
@@ -625,6 +661,10 @@ async def test_a_refused_dry_run_starts_nothing(tmp_path, repo, fake_pi, monkeyp
     assert _pi_runs(tmp_path) == []
 
 
+_REVIEW_DRY = "amicus_review_changes_dry_run"
+_DELEGATE_DRY = "amicus_delegate_dry_run"
+
+
 def dry_run_mod():
     from amicus.tools import dry_run
 
@@ -658,8 +698,10 @@ async def test_a_codex_dry_run_refuses_a_relative_codex_home(tmp_path, repo, mon
             {"backend": "codex", "task": "do it", "workspace_root": str(repo)},
             raise_on_error=False,
         )
+        rows = [await _published_codes(c, t) for t in (_REVIEW_DRY, _DELEGATE_DRY)]
     assert review.structured_content["error"]["code"] == "user_config_rejected"
     assert delegate.structured_content["error"]["code"] == "user_config_rejected"
+    assert all("user_config_rejected" in row for row in rows)
 
 
 async def test_a_claude_dry_run_refuses_bare_mode_without_a_key(tmp_path, repo, monkeypatch):
@@ -675,8 +717,9 @@ async def test_a_claude_dry_run_refuses_bare_mode_without_a_key(tmp_path, repo, 
             },
             raise_on_error=False,
         )
+        row = await _published_codes(c, _REVIEW_DRY)
     err = res.structured_content["error"]
-    assert err["code"] == "api_key_missing"
+    assert err["code"] == "api_key_missing" and "api_key_missing" in row
     assert err["details"]["field"] == "backend_options.config_mode"
 
 
@@ -699,8 +742,10 @@ async def test_a_kimi_dry_run_refuses_an_unknown_effort(tmp_path, repo, monkeypa
             },
             raise_on_error=False,
         )
+        rows = [await _published_codes(c, t) for t in (_REVIEW_DRY, _DELEGATE_DRY)]
     assert review.structured_content["error"]["code"] == "invalid_reasoning_effort"
     assert delegate.structured_content["error"]["code"] == "invalid_reasoning_effort"
+    assert all("invalid_reasoning_effort" in row for row in rows)
 
 
 _PARITY_FIELDS = (
