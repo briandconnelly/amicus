@@ -226,6 +226,7 @@ def invalid_arguments_envelope(
                 "invalid_arguments",
                 message[:300],
                 repair_tool=tool_name,
+                failing_tool=tool_name,
                 repair_arguments=corrected_arguments(errors, arguments, property_schemas),
                 repair_alternative=alternative,
                 invalid_arguments=items,
@@ -366,7 +367,8 @@ class ValidationEnvelopeMiddleware(Middleware):
                 param_names=set(props),
                 property_schemas=props,
                 errors=cause.errors(),
-                meta=Meta(timeout_seconds=self._settings.timeout_seconds),
+                # No deadline applies to a call refused before its handler ran (#447).
+                meta=Meta(),
                 arguments=getattr(context.message, "arguments", None),
             )
             if envelope is None:

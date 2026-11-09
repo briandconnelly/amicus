@@ -57,7 +57,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
         description=_DESC,
         task=settings.tasks_enabled,
     )
-    @guard("amicus_delegate", settings)
+    @guard("amicus_delegate")
     async def amicus_delegate(
         backend: DelegateBackendParam,
         task: TaskParam,
@@ -71,7 +71,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
         backend_options: BackendOptionsParam = None,
     ) -> dict[str, Any]:
         """Delegate a task to the selected backend in a throwaway worktree."""
-        err = _resolve.blank_input_error(task, "task", "amicus_delegate", settings, backend)
+        err = _resolve.blank_input_error(task, "task", "amicus_delegate", backend)
         if err is not None:
             return err
         prep = await prepare_run(
@@ -112,7 +112,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
         meta=lifecycle_meta("amicus_delegate_async"),
         description=_ASYNC_DESC,
     )
-    @guard("amicus_delegate_async", settings)
+    @guard("amicus_delegate_async")
     async def amicus_delegate_async(
         backend: DelegateBackendParam,
         task: TaskParam,
@@ -124,7 +124,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
         backend_options: BackendOptionsParam = None,
     ) -> dict[str, Any]:
         """Start a background delegate on the selected backend."""
-        err = _resolve.blank_input_error(task, "task", "amicus_delegate_async", settings, backend)
+        err = _resolve.blank_input_error(task, "task", "amicus_delegate_async", backend)
         if err is not None:
             return err
         prep = await prepare_run(

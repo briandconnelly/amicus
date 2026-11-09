@@ -13,7 +13,7 @@ from tests.support import fakeplugin
 from amicus import errors
 from amicus.schemas.codes import ERROR_CODES
 from amicus.schemas.envelope import ErrorDetail, ErrorResult, InvalidArgument, Meta
-from amicus.sdk.backend.protocol import ClassifiedFailure, RepairHint
+from amicus.sdk.backend.protocol import ClassifiedFailure, RepairHint, RunOutcome, RunRequest
 from amicus.sdk.backend.protocol import Usage as PUsage
 from amicus.sdk.conventions.envelope import RepairRule
 
@@ -277,6 +277,33 @@ def test_render_failure_tolerates_bad_details():
     assert out["error"]["details"] == {"reason": "field=a fields=['b']", "field_withheld": False}
 
 
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        # #450: an unknown key folds into reason; the machine fields stay.
+        (
+            {"field": "model", "catalog": "no_exact_row"},
+            {"field": "model", "reason": "catalog=no_exact_row"},
+        ),
+        # A reason the backend gave leads, and the unknown keys follow it.
+        (
+            {"field": "model", "reason": "r", "catalog": "c", "extra": 1},
+            {"field": "model", "reason": "r catalog=c extra=1"},
+        ),
+        (
+            {"field": "x", "allowed_values": ["a"], "catalog": "c"},
+            {"field": "x", "allowed_values": ["a"], "reason": "catalog=c"},
+        ),
+        # The control: only known keys pass through untouched.
+        ({"field": "model"}, {"field": "model"}),
+    ],
+)
+def test_detail_from_keeps_known_keys_and_folds_only_unknown_ones(raw, expected):
+    detail = errors._detail_from(raw)
+    assert detail is not None
+    assert detail.model_dump(exclude_none=True, exclude={"field_withheld"}) == expected
+
+
 def test_the_timeout_rule_is_never_temporary_for_any_backend():
     """#245 / ADR 0039: one contract for the deadline timeout whatever the backend. The
     identical synchronous call spends again and will likely hit the same deadline."""
@@ -462,3 +489,118 @@ def test_keyed_stored_error_passes_everything_else_through():
     assert errors.keyed_stored_error(final, "amicus_consult") is final
     junk = {"ok": False, "error": "not an object"}
     assert errors.keyed_stored_error(junk, "amicus_consult") is junk
+
+
+def _migrated_hints():
+    """Every backend hint #444 moved off `correct_arguments`, built by the adapter itself."""
+    from tests.support import kimifixtures as kf
+    from tests.support import pifixtures as pf
+
+    from amicus.backends.kimi import cli as kimi_cli
+    from amicus.backends.pi import adapter as pi_adapter
+    from amicus.backends.pi import cli as pi_cli
+    from amicus.sdk.core.runtime import CommandRun
+
+    pi = pf.make_backend()
+    _, kimi = kf.make_backend(catalog=kf.K3)
+    kimi_effort = kimi.validate_request(
+        RunRequest(
+            kind="consult",
+            prompt="why?",
+            cwd="/repo",
+            timeout_seconds=60,
+            model="k3",
+            reasoning_effort="xhigh",
+        )
+    )
+    return [
+        ("pi", "invalid_model", pi_adapter._invalid_model("d", "no_exact_row")),
+        ("pi", "invalid_arguments", pi._missing_model()),
+        ("pi", "invalid_reasoning_effort", pi._effort_refusal("d", ("off",))),
+        (
+            "pi",
+            "invalid_model",
+            pi_cli.classify_failure(
+                CommandRun("", "", 0, 1, False),
+                error_message='Model "x/y" not found',
+                sanitize=None,
+            ),
+        ),
+        ("kimi", "invalid_reasoning_effort", kimi_effort),
+        (
+            "kimi",
+            "invalid_model",
+            kimi_cli.classify_failure(
+                CommandRun("", 'error: Model "x" is not configured in config.toml.', 1, 1, False),
+                last_message=None,
+                events=None,
+                reasoning_effort=None,
+                sanitize=None,
+            ),
+        ),
+    ]
+
+
+def test_every_migrated_model_hint_routes_to_amicus_models_whatever_tool_failed():
+    """#444: a hint that points at the model lookup says `use_allowed_value`, so the
+    self-repair rule does not turn it into a retry of the failing tool; rendered for a sync
+    tool, a dry run or an _async twin, it is the complete amicus_models call."""
+    hints = _migrated_hints()
+    assert len(hints) == 6
+    for backend_id, code, failure in hints:
+        assert failure is not None and failure.code == code, (backend_id, code)
+        assert failure.repair is not None
+        assert failure.repair.next_step == "use_allowed_value", (backend_id, code)
+        assert failure.repair.tool == "amicus_models", (backend_id, code)
+        for tool in ("amicus_consult", "amicus_delegate_dry_run", "amicus_consult_async"):
+            plugin = fakeplugin.make_plugin(backend_id)
+            repair = errors.render_failure(plugin, failure, Meta(), tool=tool)["error"]["repair"]
+            assert repair["next_step"] == "use_allowed_value"
+            assert (repair["tool"], repair["arguments"]) == (
+                "amicus_models",
+                {"backend": backend_id},
+            ), (backend_id, code, tool)
+
+
+def test_a_claude_permission_hint_is_a_self_repair():
+    """#444: claude's denied-tool hint names no tool of its own and says correct_arguments
+    (pass a different backend_options.access), so it names the tool that failed."""
+    from tests.support import claudefixtures as cf
+
+    from amicus.sdk.core.runtime import CommandRun
+
+    _, backend = cf.make_backend()
+    request = RunRequest(kind="consult", prompt="why?", cwd="/repo", timeout_seconds=60)
+    denied = backend.inspect_outcome(
+        RunOutcome(
+            run=CommandRun(cf.envelope("", permission_denials=[{"tool": "Bash"}]), "", 0, 5, False)
+        ),
+        request,
+    )
+    assert denied is not None and denied.code == "claude_permission_error"
+    assert denied.repair is not None and denied.repair.next_step == "correct_arguments"
+    plugin = fakeplugin.make_plugin("claude")
+    for failure in (denied, ClassifiedFailure(code="claude_permission_error", detail="d")):
+        for tool in ("amicus_review_changes", "amicus_review_changes_async"):
+            repair = errors.render_failure(plugin, failure, Meta(), tool=tool)["error"]["repair"]
+            assert repair["next_step"] == "correct_arguments"
+            assert repair["tool"] == tool and "arguments" not in repair
+
+
+def test_a_self_repair_is_never_completed_or_dropped_as_a_lookup():
+    """#444: amicus_models and amicus_backends are lookup tools, but when one of them is the
+    tool that failed, its correct_arguments repair names it, with no completed backend."""
+    for tool in ("amicus_models", "amicus_backends"):
+        info = errors.make_error(
+            "invalid_arguments",
+            "m",
+            backend="codex",
+            invalid_arguments=[InvalidArgument(field="backend", reason="r")],
+            repair_tool=tool,
+            failing_tool=tool,
+        )
+        assert info.repair is not None
+        assert (info.repair.tool, info.repair.arguments) == (tool, None)
+    # Without a failing tool the table's tool stands, as the manifest's per-code pin says.
+    bare = errors.make_error("invalid_commit", "m", backend="codex")
+    assert bare.repair is not None and bare.repair.tool is None

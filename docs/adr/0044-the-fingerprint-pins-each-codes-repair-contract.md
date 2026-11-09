@@ -40,3 +40,11 @@ A factory resolves its binary on PATH, which reaches no table: the committed sna
 - The `fingerprint_covers` list on `amicus_capabilities` gains `repair_rules`, which is itself a fingerprint move (schema-50).
 - `surface_digest` does not move: it hashes the tool, resource and template records and the instructions text, and none of them changed.
 - A third-party plugin's table is not pinned; only in-tree backends are, as with every other manifest section.
+
+## Amendment (2026-11-09): the contextual self-repair policy is pinned
+
+The per-code tables cannot state a rule that depends on the call, so this ADR left per-call rendering to tests.
+One such rule now has a pin of its own (#444): `repair_rules.contextual.self_repair` in the manifest states the triggering step (`correct_arguments`), that the tool is the failing tool, the arguments rule of ADR 0021, and the codes that carry no repair.
+`errors.CONTEXTUAL_REPAIR_POLICY` is the source, and `errors.SELF_REPAIR_STEP`, which the renderers read, is the same value, so changing the policy moves the fingerprint.
+`tests/test_manifest.py` checks that the policy states what `make_error` and `render_failure` do, and the per-call behaviour on each path is held by `tests/test_self_repair.py`.
+The per-code tables still show the table's tool, `None` for these steps, because they render a code with no call.

@@ -89,7 +89,7 @@ class KimiBackend:
             detail=detail,
             details={"field": "reasoning_effort", "allowed_values": list(allowed)},
             repair=RepairHint(
-                next_step="correct_arguments",
+                next_step="use_allowed_value",
                 tool="amicus_models",
                 alternative=(
                     f"Pass one of: {', '.join(allowed)} — or omit reasoning_effort to use the "

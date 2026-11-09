@@ -118,7 +118,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
             # be read (#280): report that, never a state. A cancel's worker is stopped
             # whether this came from its first read or its post-termination one.
             return unreadable_result_envelope(
-                lookup.job_meta(settings, cwd, source, roots_source),
+                lookup.job_meta(cwd, source, roots_source),
                 tool="amicus_job_status",
                 next_step="poll_job_status",
                 arguments=job_status_arguments(job_id, workspace_root),
@@ -128,10 +128,9 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
             )
         if row is None or lookup.backend_of(row) is None:
             return lookup.job_not_found(
-                job_id, lookup.job_meta(settings, cwd, source, roots_source), workspace_root
+                job_id, lookup.job_meta(cwd, source, roots_source), workspace_root
             )
         meta = lookup.job_meta(
-            settings,
             cwd,
             source,
             roots_source,
@@ -155,7 +154,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
             # the detail asked for: followed at the default, a full-detail consume would
             # deliver the summary and then delete the record. A consume deleted nothing.
             return unreadable_result_envelope(
-                lookup.job_meta(settings, cwd, source, roots_source),
+                lookup.job_meta(cwd, source, roots_source),
                 tool="amicus_job_consume_result" if consume else "amicus_job_result",
                 next_step="fetch_job_result",
                 arguments={**job_status_arguments(job_id, workspace_root), "detail": detail},
@@ -165,10 +164,10 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
         backend = lookup.backend_of(rec) if rec is not None else None
         if rec is None or backend is None:
             return lookup.job_not_found(
-                job_id, lookup.job_meta(settings, cwd, source, roots_source), workspace_root
+                job_id, lookup.job_meta(cwd, source, roots_source), workspace_root
             )
         kind = lookup.kind_of(rec)
-        meta = lookup.job_meta(settings, cwd, source, roots_source, backend=backend, kind=kind)
+        meta = lookup.job_meta(cwd, source, roots_source, backend=backend, kind=kind)
         meta.task_id = task_for(job_id)
         envelope, delivered = finished_job_envelope(
             rec, payload, job_id, kind, meta, detail, workspace_root
@@ -204,7 +203,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
             f"{_RETENTION}"
         ),
     )
-    @guard("amicus_job_status", settings)
+    @guard("amicus_job_status")
     async def amicus_job_status(
         job_id: JobIdParam,
         ctx: Context | None = None,
@@ -229,7 +228,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
             f"still-running job is job_running with retry_after_ms. {_RETENTION}"
         ),
     )
-    @guard("amicus_job_result", settings)
+    @guard("amicus_job_result")
     async def amicus_job_result(
         job_id: JobIdParam,
         ctx: Context | None = None,
@@ -254,7 +253,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
             "A corrupt or incompatible record is kept."
         ),
     )
-    @guard("amicus_job_consume_result", settings)
+    @guard("amicus_job_consume_result")
     async def amicus_job_consume_result(
         job_id: JobIdParam,
         ctx: Context | None = None,
@@ -276,7 +275,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
             "idempotent. cleanup_warnings names any leftover path."
         ),
     )
-    @guard("amicus_job_cancel", settings)
+    @guard("amicus_job_cancel")
     async def amicus_job_cancel(
         job_id: JobIdParam, ctx: Context | None = None, workspace_root: WorkspaceRootParam = None
     ) -> dict[str, Any]:
@@ -298,7 +297,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
             f"state root can each exceed it by one start. {_RETENTION}"
         ),
     )
-    @guard("amicus_job_list", settings)
+    @guard("amicus_job_list")
     async def amicus_job_list(
         ctx: Context | None = None,
         workspace_root: WorkspaceRootParam = None,
@@ -321,8 +320,9 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
                 return error_envelope(
                     "invalid_arguments",
                     f"amicus_job_list: 1 invalid argument(s): cursor — {reason}",
-                    lookup.job_meta(settings, cwd, source, roots_source),
+                    lookup.job_meta(cwd, source, roots_source),
                     repair_tool="amicus_job_list",
+                    failing_tool="amicus_job_list",
                     repair_alternative=(
                         "Pass the previous page's next_cursor as `cursor` unchanged, or omit "
                         "it to start from the newest job."
@@ -344,7 +344,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
                 "task_id": task_id,
             }
             return unreadable_result_envelope(
-                lookup.job_meta(settings, cwd, source, roots_source),
+                lookup.job_meta(cwd, source, roots_source),
                 tool="amicus_job_list",
                 next_step="list_jobs",
                 arguments={
@@ -389,7 +389,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
                 else None
             ),
             next_cursor=_cursor_for(rows[-1]) if truncated else None,
-            meta=lookup.job_meta(settings, cwd, source, roots_source),
+            meta=lookup.job_meta(cwd, source, roots_source),
         ).model_dump(mode="json")
         return result
 

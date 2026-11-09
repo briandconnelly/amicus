@@ -177,9 +177,9 @@ def test_annotations_for_each_kind():
     assert job_cancel["idempotentHint"] is True
 
 
-def test_base_meta_carries_backend_and_timeout():
-    settings = config.settings({"AMICUS_TIMEOUT_SECONDS": "42"})
-    meta = _meta.base_meta(settings, backend="codex", model="gpt")
+def test_base_meta_carries_backend_and_no_deadline():
+    """#447: an envelope built before any run is prepared has no deadline to report."""
+    meta = _meta.base_meta(backend="codex", model="gpt")
     assert meta.backend == "codex"
-    assert meta.timeout_seconds == 42
+    assert meta.timeout_seconds is None
     assert meta.model == "gpt"

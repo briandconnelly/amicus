@@ -46,7 +46,8 @@ On `ok: false` the envelope carries `error.code` (from a closed catalog), a mess
 `error.details`, optional `invalid_arguments[]`, and, on every code but two, `error.repair`. When
 `repair.arguments` is present it is a complete call. It is left out rather than repeat a value that
 could be a secret or a prompt, and a repair with no `repair.tool` is a symbolic next step rather
-than a call. `invalid_workspace_root` and `workspace_outside_roots` carry no `error.repair`,
+than a call. A `correct_arguments` repair names the tool you called: correct that call and make it
+again. `invalid_workspace_root` and `workspace_outside_roots` carry no `error.repair`,
 because only you hold the directory they need: fix what `error.details` names.
 `error.details.reason` says which fix: `no_workspace` (pass `workspace_root`), `not_absolute`,
 `not_a_directory`, `root_not_a_directory` (the client's first file root is stale; fix it or pass

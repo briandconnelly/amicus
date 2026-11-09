@@ -158,7 +158,15 @@ class Meta(BaseModel):
     model: str | None = None
     reasoning_effort: str | None = None
     timeout_seconds: int | None = None
-    elapsed_ms: int = 0
+    elapsed_ms: int = Field(
+        default=0,
+        description=(
+            "Milliseconds the backend command runtime measured for this envelope's run, an "
+            "attempted spawn included; 0 when no run was measured (a discovery or job tool, "
+            "an early refusal). Not the MCP call's wall time: amicus_job_status reports a "
+            "job's age in its own top-level elapsed_ms."
+        ),
+    )
     command_exit_code: int | None = None
     session_id: str | None = None
     truncated: bool = False
@@ -329,6 +337,7 @@ _REPAIR_POLICY = (
     "could be a secret or a prompt input, so it suppresses the arguments. That call "
     "corrects the failures this envelope reports; a later check can still reject it with "
     "a repair of its own. A repair that names no tool is a symbolic next step, not a call. "
+    "A correct_arguments repair names the tool that failed: correct that call and repeat it. "
     "invalid_workspace_root and workspace_outside_roots carry no repair at all: only the "
     "caller holds the directory they need, details names the field, and details.reason is "
     "a fixed token naming the cause, listed in the workspace_root contract at amicus://params."

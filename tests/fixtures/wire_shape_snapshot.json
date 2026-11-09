@@ -970,7 +970,7 @@
         "backend": "codex",
         "compat_warnings": [],
         "cwd": "/repo",
-        "elapsed_ms": 1,
+        "elapsed_ms": 0,
         "fingerprint": "<fingerprint>",
         "job_id": "00000000000000000000000000000000",
         "job_kind": "consult",
@@ -980,7 +980,6 @@
         "security_warnings": [],
         "server_version": "0.0.0",
         "task_id": "task-0",
-        "timeout_seconds": 1,
         "truncated": false,
         "workspace_source": "param"
       },
@@ -1007,7 +1006,7 @@
         "backend": "codex",
         "compat_warnings": [],
         "cwd": "/repo",
-        "elapsed_ms": 1,
+        "elapsed_ms": 0,
         "fingerprint": "<fingerprint>",
         "job_id": "00000000000000000000000000000000",
         "job_kind": "consult",
@@ -1016,7 +1015,6 @@
         "roots_source": "client",
         "security_warnings": [],
         "server_version": "0.0.0",
-        "timeout_seconds": 1,
         "truncated": false,
         "workspace_source": "param"
       },
@@ -1051,15 +1049,17 @@
         "backend": "codex",
         "compat_warnings": [],
         "cwd": "/repo",
-        "elapsed_ms": 1,
+        "elapsed_ms": 0,
         "fingerprint": "<fingerprint>",
         "job_id": "00000000000000000000000000000000",
+        "job_kind": "consult",
         "redacted_paths": [],
         "request_id": "00000000000000000000000000000000",
+        "roots_source": "client",
         "security_warnings": [],
         "server_version": "0.0.0",
-        "timeout_seconds": 1,
-        "truncated": false
+        "truncated": false,
+        "workspace_source": "param"
       },
       "ok": false
     },
@@ -1109,15 +1109,17 @@
         "backend": "codex",
         "compat_warnings": [],
         "cwd": "/repo",
-        "elapsed_ms": 1,
+        "elapsed_ms": 0,
         "fingerprint": "<fingerprint>",
         "job_id": "00000000000000000000000000000000",
+        "job_kind": "review_changes",
         "redacted_paths": [],
         "request_id": "00000000000000000000000000000000",
+        "roots_source": "client",
         "security_warnings": [],
         "server_version": "0.0.0",
-        "timeout_seconds": 1,
-        "truncated": false
+        "truncated": false,
+        "workspace_source": "param"
       },
       "ok": false
     },
@@ -1138,15 +1140,17 @@
         "backend": "codex",
         "compat_warnings": [],
         "cwd": "/repo",
-        "elapsed_ms": 1,
+        "elapsed_ms": 0,
         "fingerprint": "<fingerprint>",
         "job_id": "00000000000000000000000000000000",
+        "job_kind": "consult",
         "redacted_paths": [],
         "request_id": "00000000000000000000000000000000",
+        "roots_source": "client",
         "security_warnings": [],
         "server_version": "0.0.0",
-        "timeout_seconds": 1,
-        "truncated": false
+        "truncated": false,
+        "workspace_source": "param"
       },
       "ok": false
     },
@@ -1172,15 +1176,17 @@
         "backend": "codex",
         "compat_warnings": [],
         "cwd": "/repo",
-        "elapsed_ms": 1,
+        "elapsed_ms": 0,
         "fingerprint": "<fingerprint>",
         "job_id": "00000000000000000000000000000000",
+        "job_kind": "consult",
         "redacted_paths": [],
         "request_id": "00000000000000000000000000000000",
+        "roots_source": "client",
         "security_warnings": [],
         "server_version": "0.0.0",
-        "timeout_seconds": 1,
-        "truncated": false
+        "truncated": false,
+        "workspace_source": "param"
       },
       "ok": false
     },
@@ -1201,15 +1207,17 @@
         "backend": "codex",
         "compat_warnings": [],
         "cwd": "/repo",
-        "elapsed_ms": 1,
+        "elapsed_ms": 0,
         "fingerprint": "<fingerprint>",
         "job_id": "00000000000000000000000000000000",
+        "job_kind": "consult",
         "redacted_paths": [],
         "request_id": "00000000000000000000000000000000",
+        "roots_source": "client",
         "security_warnings": [],
         "server_version": "0.0.0",
-        "timeout_seconds": 1,
-        "truncated": false
+        "truncated": false,
+        "workspace_source": "param"
       },
       "ok": false
     }

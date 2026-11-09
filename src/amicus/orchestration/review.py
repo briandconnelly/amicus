@@ -40,7 +40,11 @@ _GITDIFF_ERRORS: dict[type, tuple[str, str | None]] = {
 GITDIFF_EXCEPTIONS = (*_GITDIFF_ERRORS.keys(), RuntimeError)
 
 
-def gitdiff_error(exc: Exception, meta: Meta, plugin: BackendPlugin) -> dict[str, Any]:
+def gitdiff_error(
+    exc: Exception, meta: Meta, plugin: BackendPlugin, *, tool: str | None = None
+) -> dict[str, Any]:
+    """The envelope for a gather failure. `tool` is the tool that was called, which the
+    invalid_* family's `correct_arguments` repair names (#444)."""
     code, offending = _GITDIFF_ERRORS.get(type(exc), ("git_unavailable", None))
     allowed = list(get_args(ReviewScope)) if code == "invalid_scope" else None
     if code == "invalid_arguments" and offending:
@@ -52,6 +56,7 @@ def gitdiff_error(exc: Exception, meta: Meta, plugin: BackendPlugin) -> dict[str
             reason[:300],
             meta,
             plugin=plugin,
+            failing_tool=tool,
             invalid_arguments=[
                 InvalidArgument(field=offending, reason=reason, allowed_values=values)
             ],
@@ -63,7 +68,12 @@ def gitdiff_error(exc: Exception, meta: Meta, plugin: BackendPlugin) -> dict[str
         else None
     )
     return error_envelope(
-        code, redaction.sanitize_echo_prose(str(exc))[:300], meta, plugin=plugin, details=details
+        code,
+        redaction.sanitize_echo_prose(str(exc))[:300],
+        meta,
+        plugin=plugin,
+        details=details,
+        failing_tool=tool,
     )
 
 
@@ -256,7 +266,7 @@ def gather(spec: RunSpec, meta: Meta, plugin: BackendPlugin) -> DiffResult | dic
             max_bytes=spec.max_input_bytes,
         )
     except GITDIFF_EXCEPTIONS as exc:  # ty: ignore[invalid-exception-caught]
-        return gitdiff_error(exc, meta, plugin)
+        return gitdiff_error(exc, meta, plugin, tool=spec.tool)
     meta.context_summary = ContextSummary(
         files_changed=diff.summary.files_changed,
         lines_added=diff.summary.lines_added,

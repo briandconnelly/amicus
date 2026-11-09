@@ -11,7 +11,6 @@ from amicus.schemas.options import BackendOptions, option_violations, resolved_o
 from amicus.tools._meta import base_meta
 
 if TYPE_CHECKING:  # pragma: no cover
-    from amicus.config import Settings
     from amicus.plugin import BackendPlugin
     from amicus.registry import BackendRegistry
 
@@ -33,7 +32,7 @@ FEATURE_FOR_VERB: dict[str, str] = {
 
 
 def blank_input_error(
-    value: str, field: str, tool_name: str, settings: Settings, backend: str
+    value: str, field: str, tool_name: str, backend: str
 ) -> dict[str, Any] | None:
     if value.strip():
         return None
@@ -41,8 +40,8 @@ def blank_input_error(
     return error_envelope(
         "invalid_arguments",
         f"{tool_name}: 1 invalid argument(s): {field} — {reason}",
-        base_meta(settings, backend=backend),
-        repair_tool=tool_name,
+        base_meta(backend=backend),
+        failing_tool=tool_name,
         repair_alternative=f"Supply a {field} with actual content, then retry.",
         invalid_arguments=[InvalidArgument(field=field, reason=reason)],
     )
@@ -51,14 +50,13 @@ def blank_input_error(
 def resolve_paid_call(
     *,
     registry: BackendRegistry,
-    settings: Settings,
     tool_name: str,
     verb: str,
     backend: str,
     backend_options: BackendOptions | None,
 ) -> tuple[BackendPlugin, dict[str, Any]] | dict[str, Any]:
     """The plugin and resolved options for a paid call, or a ready error envelope."""
-    meta = base_meta(settings, backend=backend)
+    meta = base_meta(backend=backend)
     violations = option_violations(backend, backend_options)
     if violations:
         first = violations[0]
@@ -66,7 +64,7 @@ def resolve_paid_call(
             "invalid_arguments",
             f"{tool_name}: {len(violations)} invalid argument(s): {first.field} — {first.reason}",
             meta,
-            repair_tool=tool_name,
+            failing_tool=tool_name,
             invalid_arguments=violations,
         )
     plugin = registry.get(backend)
@@ -78,6 +76,7 @@ def resolve_paid_call(
             f"backend {backend!r} is unavailable ({detail})",
             meta,
             backend=backend,
+            failing_tool=tool_name,
         )
     feature = FEATURE_FOR_VERB.get(verb)
     if feature is not None and feature not in plugin.contract.supported_features:
@@ -92,5 +91,6 @@ def resolve_paid_call(
             meta,
             plugin=plugin,
             repair_arguments={},
+            failing_tool=tool_name,
         )
     return plugin, resolved_options(backend, backend_options)

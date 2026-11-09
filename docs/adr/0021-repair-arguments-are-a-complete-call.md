@@ -51,3 +51,15 @@ The policy is published beside the offending-value policy on `amicus://error-env
   That shape is the one the M6 first-repair capture exercised, and the skill's scenario S2 asserts on its `repair.tool`, so changing it is left to a decision of its own.
 - Post-boundary `backend_options` applicability violations keep the same shape: their correction is unique, but the raw call is not available where they are detected.
 - Next steps that name no call (`correct_config`, `reduce_input`, `retry_after_delay` and the like) keep their repair, because they are pontonier's closed vocabulary and a central "call or nothing" invariant would strip them from every code.
+
+## Amendment (2026-11-09): a self-repair names the failing tool, and is not a lookup
+
+Issue #444 found the same code naming the failing tool on one tool and no tool on another, and `amicus_models` losing its own tool at the boundary.
+The cause of the last was `complete_lookup`: it read any repair naming `amicus_models` or `amicus_backends` as a lookup, found no backend to complete it with, and dropped the tool.
+The rule is now one: a tool failure whose `repair.next_step` is `correct_arguments` names, in `repair.tool`, the tool that was called (`errors.repair_call`).
+The call is corrected on that tool, so it is a self-repair, and a self-repair is never completed or dropped as a lookup, even when the failing tool is a lookup tool.
+`repair.arguments` on a self-repair follows this ADR unchanged: present only for the unique echo-safe correction the call boundary builds, and only when the builder named the failing tool beside it.
+The failing tool is threaded to every place an envelope is built, before a job stores it, so an `_async` run's stored refusal and a keyed replay name the tool that was called.
+A repair that points at a lookup uses the step that matches it: the `pi` and `kimi` model and effort hints that named `amicus_models` under `correct_arguments` now say `use_allowed_value`, and `complete_lookup` still completes every lookup repair, whatever its step.
+`NO_CORRECTIVE_CALL` codes still carry no repair.
+The Consequences paragraph above that left the tool-only `invalid_arguments` repair "to a decision of its own" is that decision: the tool-only self-repair is kept, and now holds on every path.

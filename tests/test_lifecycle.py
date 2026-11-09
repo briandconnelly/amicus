@@ -550,9 +550,7 @@ async def test_keyed_start_creates_then_replays_the_real_handle(tmp_path, monkey
         store.status(str(tmp_path), first["job_id"]),
         lookup.workspace_of(str(tmp_path), "param"),
         None,
-        lookup.job_meta(
-            _settings(tmp_path), str(tmp_path), "param", "client", backend="fake", kind="consult"
-        ),
+        lookup.job_meta(str(tmp_path), "param", "client", backend="fake", kind="consult"),
     )
     assert status["status"] == "done" and status["poll_after_ms"] is None
     # A finished job is fetched, not polled (#103): same arguments, the other tool.

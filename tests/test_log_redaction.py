@@ -108,9 +108,7 @@ async def test_guarded_tool_exception_text_reaches_neither_handler(logs):
     says which tool failed, with which exception type, at which source location."""
     from amicus.tools._guard import guard
 
-    settings = config.settings({})
-
-    @guard("probe", settings)
+    @guard("probe")
     async def probe(backend: str | None = None) -> dict:
         raise RuntimeError(_message())
 

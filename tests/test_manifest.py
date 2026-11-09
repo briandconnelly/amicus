@@ -14,6 +14,7 @@ from typing import Any
 import pytest
 from fastmcp import Client
 from tests.conftest import ENV_PREFIXES, NEVER_SPAWN_PI, spawned_server_env
+from tests.support import fakeplugin
 from tests.support.fingerprint_pins import REGEN_COMMAND, REGEN_STEPS, load_pins
 
 import amicus.backends.claude as claude_pkg
@@ -23,9 +24,10 @@ import amicus.backends.pi as pi_pkg
 from amicus import errors, manifest, server
 from amicus.backends import IN_TREE
 from amicus.schemas.codes import ERROR_CODES
-from amicus.schemas.envelope import InvalidArgument
+from amicus.schemas.envelope import InvalidArgument, Meta
 from amicus.schemas.fingerprint import FINGERPRINT_COVERS, FINGERPRINT_COVERS_DESC
 from amicus.schemas.params import WORKSPACE_PREREQUISITE, WORKSPACELESS_TOOLS
+from amicus.sdk.backend.protocol import ClassifiedFailure, RepairHint
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -224,8 +226,9 @@ def test_repair_rules_pin_every_code_for_every_in_tree_backend():
     """Issue #252: the section names the plugin-less table and one table per in-tree
     backend, each covering the whole catalog, whichever profile is built."""
     rules = manifest.repair_rules()
-    assert set(rules) == {"default"} | set(IN_TREE)
+    assert set(rules) == {"default", manifest.CONTEXTUAL_RULES_KEY} | set(IN_TREE)
     assert set(_in_tree_plugins()) == set(IN_TREE)
+    rules.pop(manifest.CONTEXTUAL_RULES_KEY)
     for table in rules.values():
         assert set(table) >= set(ERROR_CODES)
         for entry in table.values():
@@ -281,6 +284,8 @@ async def test_flipping_one_codes_temporary_fails_the_golden(monkeypatch, profil
     fixture = (FIXTURES / f"manifest_snapshot.{profile}.json").read_text(encoding="utf-8")
     assert manifest.manifest_json(mutated) != fixture
     for backend_id, table in mutated["repair_rules"].items():
+        if backend_id == manifest.CONTEXTUAL_RULES_KEY:
+            continue
         assert table["answer_unavailable"]["temporary"] is not rule.temporary, backend_id
 
 
@@ -315,6 +320,56 @@ def test_repair_prose_is_deliberately_outside_the_pin(monkeypatch):
         dataclasses.replace(rule, next_step="inspect_and_retry"),
     )
     assert manifest.repair_rules() != before
+
+
+def test_the_contextual_policy_is_pinned_and_states_what_render_does():
+    """#444: the per-call self-repair rule is in the pinned section, and it states what the
+    renderers do. The step it names triggers a repair naming the failing tool, from the
+    table and from a backend's own hint; another step does not; a code it exempts carries no
+    repair at all; and only a call that names the failing tool beside them keeps arguments."""
+    policy = manifest.repair_rules()[manifest.CONTEXTUAL_RULES_KEY]["self_repair"]
+    assert policy == {
+        "when_next_step": "correct_arguments",
+        "tool": "the_failing_tool",
+        "arguments": "only_a_unique_echo_safe_corrected_call",
+        "no_repair_codes": sorted(errors.NO_CORRECTIVE_CALL),
+    }
+    step = policy["when_next_step"]
+    plugin = fakeplugin.make_plugin("codex")
+    for code in sorted(ERROR_CODES):
+        rule = errors.repair_table(plugin)[code]
+        extra = (
+            {"invalid_arguments": [InvalidArgument(field="x", reason="r")]}
+            if code == "invalid_arguments"
+            else {}
+        )
+        info = errors.make_error(code, "m", plugin=plugin, failing_tool="probe_tool", **extra)
+        if code in policy["no_repair_codes"]:
+            assert info.repair is None, code
+        elif rule.next_step == step:
+            assert (info.repair.tool, info.repair.arguments) == ("probe_tool", None), code
+        else:
+            assert info.repair is None or info.repair.tool != "probe_tool", code
+    hinted = errors.render_failure(
+        plugin,
+        ClassifiedFailure(
+            code="invalid_arguments",
+            detail="d",
+            repair=RepairHint(next_step=step, tool="amicus_models", arguments={"backend": "codex"}),
+        ),
+        Meta(),
+        tool="probe_tool",
+    )["error"]["repair"]
+    assert hinted["tool"] == "probe_tool" and "arguments" not in hinted
+    kept = errors.make_error(
+        "invalid_arguments",
+        "m",
+        invalid_arguments=[InvalidArgument(field="x", reason="r")],
+        repair_tool="probe_tool",
+        repair_arguments={"mode": "ok"},
+        failing_tool="probe_tool",
+    )
+    assert kept.repair is not None and kept.repair.arguments == {"mode": "ok"}
 
 
 def test_render_returns_canonical_json():

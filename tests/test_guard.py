@@ -7,7 +7,6 @@ from __future__ import annotations
 from fastmcp import Client, FastMCP
 from fastmcp.tools import ToolResult
 
-from amicus import config
 from amicus.errors import error_envelope
 from amicus.schemas import envelope as e
 from amicus.schemas.envelope import Meta
@@ -69,21 +68,20 @@ async def test_guard_result_matches_fastmcp_dict_conversion_byte_for_byte():
 
 
 async def test_guarded_tool_delivers_is_error_without_any_middleware():
-    settings = config.settings({})
     app = FastMCP(name="scratch")  # deliberately no SemanticErrorMiddleware
 
     @app.tool(name="failing", output_schema={"type": "object", "additionalProperties": True})
-    @guard("failing", settings)
+    @guard("failing")
     async def failing(backend: str | None = None) -> dict:
         return _envelope()
 
     @app.tool(name="raising", output_schema={"type": "object", "additionalProperties": True})
-    @guard("raising", settings)
+    @guard("raising")
     async def raising(backend: str | None = None) -> dict:
         raise RuntimeError("secret detail")
 
     @app.tool(name="fine", output_schema={"type": "object", "additionalProperties": True})
-    @guard("fine", settings)
+    @guard("fine")
     async def fine(backend: str | None = None) -> dict:
         return {"ok": True, "answer": 42}
 

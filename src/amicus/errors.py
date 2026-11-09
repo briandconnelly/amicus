@@ -214,6 +214,40 @@ def complete_lookup(
     return (tool, {"backend": backend}) if backend else (None, None)
 
 
+# The one repair rule that depends on the call rather than the code (#444, ADR 0021's
+# amendment): a failure whose step is SELF_REPAIR_STEP is corrected on the tool that failed,
+# so the repair names that tool. Published as `repair_rules.contextual` in the manifest
+# (ADR 0044's amendment), so the policy is pinned beside the per-code tables it overrides.
+SELF_REPAIR_STEP = "correct_arguments"
+CONTEXTUAL_REPAIR_POLICY: dict[str, Any] = {
+    "self_repair": {
+        "when_next_step": SELF_REPAIR_STEP,
+        "tool": "the_failing_tool",
+        "arguments": "only_a_unique_echo_safe_corrected_call",
+        "no_repair_codes": sorted(NO_CORRECTIVE_CALL),
+    },
+}
+
+
+def repair_call(
+    next_step: str,
+    tool: str | None,
+    arguments: dict[str, Any] | None,
+    backend: str | None,
+    failing_tool: str | None,
+) -> tuple[str | None, dict[str, Any] | None]:
+    """The (tool, arguments) a rendered repair carries. A `correct_arguments` step on a
+    known failing tool is a self-repair: it names that tool, and keeps `arguments` only when
+    the builder itself named the failing tool beside them, which only the call boundary does,
+    and only with a unique echo-safe correction (ADR 0021). A self-repair is never completed
+    or dropped as a lookup, even when the failing tool is amicus_models or amicus_backends.
+    Every other repair, whatever its step, goes through `complete_lookup`."""
+    if next_step == SELF_REPAIR_STEP and failing_tool is not None:
+        kept = dict(arguments) if arguments is not None and tool == failing_tool else None
+        return failing_tool, kept
+    return complete_lookup(tool, arguments, backend)
+
+
 def async_twin_for(kind: str | None) -> str | None:
     """The `_async` tool of a paid verb (`kind` is the RunSpec kind, which names the verb),
     or None. The timeout repair names it as the call to make next (ADR 0039)."""
@@ -286,12 +320,15 @@ def make_error(
     limit_bytes: int | None = None,
     actual_bytes: int | None = None,
     candidate_roots: list[str] | None = None,
+    failing_tool: str | None = None,
 ) -> ErrorInfo:
     """Build the envelope for `code`, deriving the symbolic repair from the table.
     `repair_tool` has three states: omitted keeps the table's tool, a string overrides
-    it, explicit None clears it. A lookup tool's repair is completed by `complete_lookup`,
-    and a NO_CORRECTIVE_CALL code carries no repair. An `invalid_arguments` envelope must
-    carry the list and `details` is always derived from its first entry."""
+    it, explicit None clears it. `failing_tool` is the tool that was called: a
+    `correct_arguments` repair names it (`repair_call`, #444). A lookup tool's repair is
+    completed by `complete_lookup`, and a NO_CORRECTIVE_CALL code carries no repair. An
+    `invalid_arguments` envelope must carry the list and `details` is always derived from
+    its first entry."""
     if code == "invalid_arguments":
         if not invalid_arguments:
             raise ValueError(
@@ -314,7 +351,9 @@ def make_error(
     tool = rule.tool if isinstance(repair_tool, _KeepTableTool) else repair_tool
     is_temp = rule.temporary if temporary is None else temporary
     backend_id = backend if backend is not None else (plugin.backend_id if plugin else None)
-    tool, repair_arguments = complete_lookup(tool, repair_arguments, backend_id)
+    tool, repair_arguments = repair_call(
+        next_step, tool, repair_arguments, backend_id, failing_tool
+    )
     repair = (
         None
         if code in NO_CORRECTIVE_CALL
@@ -363,10 +402,19 @@ def error_envelope(code: str, message: str, meta: Meta, **kwargs: Any) -> dict[s
 
 
 def _detail_from(raw: dict[str, Any] | None) -> ErrorDetail | None:
+    """A backend's `details` as the wire's ErrorDetail. The keys ErrorDetail declares keep
+    their machine fields (`field` above all); any other key is folded into `reason` as
+    `key=value`, after a reason the backend gave (#450). Only a mapping whose known keys are
+    themselves invalid is folded whole."""
     if not raw:
         return None
+    known = {k: v for k, v in raw.items() if k in ErrorDetail.model_fields}
+    folded = " ".join(f"{k}={v}" for k, v in raw.items() if k not in ErrorDetail.model_fields)
+    if folded:
+        prior = known.get("reason")
+        known["reason"] = (f"{prior} {folded}" if prior else folded)[:300]
     try:
-        return ErrorDetail.model_validate(raw)
+        return ErrorDetail.model_validate(known)
     except ValidationError:
         return ErrorDetail(reason=" ".join(f"{k}={v}" for k, v in raw.items())[:300])
 
@@ -380,8 +428,11 @@ def render_failure(
     background: bool = False,
     job_max_seconds: int | None = None,
     deadline_seconds: int | None = None,
+    tool: str | None = None,
 ) -> dict[str, Any]:
-    """The wire envelope for a backend's classified failure. Minted codes are
+    """The wire envelope for a backend's classified failure. `tool` is the tool that was
+    called (RunSpec.tool, an _async twin included), which a `correct_arguments` repair names
+    (#444), from the table or from a backend's own hint. Minted codes are
     generalized; an uncataloged code is reported as internal_error with the original
     code and detail in the message; `retryable` overrides the rule's `temporary`; a
     backend-supplied repair wins over the table; usage from a failed run is kept. A
@@ -402,15 +453,15 @@ def render_failure(
     temporary = rule.temporary if failure.retryable is None else failure.retryable
     if failure.repair is not None:
         next_step = failure.repair.next_step
-        tool, arguments = complete_lookup(
-            failure.repair.tool, failure.repair.arguments, plugin.backend_id
+        repair_tool, arguments = repair_call(
+            next_step, failure.repair.tool, failure.repair.arguments, plugin.backend_id, tool
         )
         alternative = failure.repair.alternative or rule.alternative
     else:
         next_step = rule.next_step
-        tool, arguments = complete_lookup(rule.tool, None, plugin.backend_id)
+        repair_tool, arguments = repair_call(next_step, rule.tool, None, plugin.backend_id, tool)
         alternative = rule.alternative
-    if code == "timeout" and failure.repair is None and tool is None:
+    if code == "timeout" and failure.repair is None and repair_tool is None:
         if background:
             alternative = JOB_DEADLINE_TIMEOUT_ALTERNATIVE
         elif (
@@ -418,10 +469,10 @@ def render_failure(
             or deadline_seconds is None
             or (job_max_seconds > deadline_seconds)
         ):
-            tool = async_twin_for(kind)
+            repair_tool = async_twin_for(kind)
     repair: Repair | None = Repair(
         next_step=next_step,  # ty: ignore[invalid-argument-type]
-        tool=tool,
+        tool=repair_tool,
         arguments=arguments,
         alternative=alternative,
     )

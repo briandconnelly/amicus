@@ -137,7 +137,6 @@ async def prepare_run(
 ) -> Prepared | dict[str, Any]:
     resolved = _resolve.resolve_paid_call(
         registry=registry,
-        settings=settings,
         tool_name=tool_name,
         verb=verb,
         backend=backend,
@@ -184,6 +183,7 @@ async def prepare_run(
             redaction.sanitize_echo_prose(detail) or "invalid workspace",
             meta,
             plugin=plugin,
+            failing_tool=tool_name,
             details=ErrorDetail(field="workspace_root", reason=resolution.reason),
             candidate_roots=list(roots)
             if resolution.error_code == "workspace_outside_roots" and roots
@@ -197,6 +197,7 @@ async def prepare_run(
             f"the requested reasoning_effort {reason}.",
             meta,
             plugin=plugin,
+            failing_tool=tool_name,
             details=ErrorDetail(field="reasoning_effort"),
             repair_next_step="correct_config" if effort_from_config else "correct_arguments",
             repair_tool=None,
@@ -214,7 +215,7 @@ async def prepare_run(
             f"{tool_name}: 1 invalid argument(s): instructions_append — {reason}",
             meta,
             plugin=plugin,
-            repair_tool=tool_name,
+            failing_tool=tool_name,
             repair_alternative=repair,
             invalid_arguments=[InvalidArgument(field="instructions_append", reason=reason)],
         )
@@ -239,7 +240,7 @@ async def prepare_run(
                 f"{tool_name}: 1 invalid argument(s): {offending} — {reason}",
                 meta,
                 plugin=plugin,
-                repair_tool=tool_name,
+                failing_tool=tool_name,
                 invalid_arguments=[InvalidArgument(field=offending, reason=reason)],
             )
     sized = [
@@ -263,6 +264,7 @@ async def prepare_run(
             f"{' + '.join(fields)} exceeds {settings.max_input_bytes} bytes.",
             meta,
             plugin=plugin,
+            failing_tool=tool_name,
             details=ErrorDetail(fields=fields) if len(fields) > 1 else ErrorDetail(field=fields[0]),
             limit_bytes=settings.max_input_bytes,
             actual_bytes=total,
@@ -280,11 +282,16 @@ async def prepare_run(
                 redaction.sanitize_echo_prose(str(exc)),
                 meta,
                 plugin=plugin,
+                failing_tool=tool_name,
                 details=ErrorDetail(field="workspace_root"),
             )
         except (worktree.NoCommitsError, worktree.WorktreeError) as exc:
             return error_envelope(
-                "worktree_error", redaction.sanitize_echo_prose(str(exc))[:300], meta, plugin=plugin
+                "worktree_error",
+                redaction.sanitize_echo_prose(str(exc))[:300],
+                meta,
+                plugin=plugin,
+                failing_tool=tool_name,
             )
         except (FileNotFoundError, NotADirectoryError) as exc:
             if not Path(resolution.path).is_dir():
@@ -294,6 +301,7 @@ async def prepare_run(
                     "the workspace directory no longer exists",
                     meta,
                     plugin=plugin,
+                    failing_tool=tool_name,
                     details=ErrorDetail(
                         field="workspace_root", reason=ws.vanished_reason(resolution.source)
                     ),
@@ -303,10 +311,15 @@ async def prepare_run(
                 redaction.sanitize_echo_prose(str(exc))[:300],
                 meta,
                 plugin=plugin,
+                failing_tool=tool_name,
             )
         except (OSError, subprocess.SubprocessError) as exc:
             return error_envelope(
-                "worktree_error", redaction.sanitize_echo_prose(str(exc))[:300], meta, plugin=plugin
+                "worktree_error",
+                redaction.sanitize_echo_prose(str(exc))[:300],
+                meta,
+                plugin=plugin,
+                failing_tool=tool_name,
             )
     spec = RunSpec(
         backend=backend,

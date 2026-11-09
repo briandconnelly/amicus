@@ -44,3 +44,11 @@ The persisted dump is unchanged, so `RESULT_FORMAT` stays 6.
 - `FINGERPRINT` moves to `schema-24`, for the result-meta schema, the resource metadata and the job-envelope shapes.
 - A reader may index a `required` key without a presence check and must check presence for every other key; the skill's reading guidance says so.
 - A stored result read back with `amicus_job_result` is slimmed twice, once at delivery and once at the guard, and the second pass is a no-op.
+
+## Amendment (2026-11-09): no deadline where none applies, and what elapsed_ms measures
+
+`timeout_seconds` is not in the always-present core, and issue #447 found it on envelopes of calls that run nothing.
+It is now omitted from every envelope built before a run is prepared (`tools._meta.base_meta`: the discovery tools, the guard's `internal_error`, and a paid tool's or dry run's early refusal), from every job tool's own envelope (`jobs.lookup.job_meta`), and from a call-boundary refusal.
+A prepared paid run, a dry run, and a paid result delivered by a job read keep it; nothing strips it at delivery.
+`elapsed_ms` stays in the core, and its field description on `amicus://result-meta` now says what it is: the command runtime's measurement for the envelope's run, an attempted spawn included, 0 when none was measured, and not the call's wall time; `amicus_job_status` reports a job's age in its own top-level `elapsed_ms`.
+Two other #447 points were declined: `error.backend` stays a required-nullable key, emitted as `null` when no backend applies, because the server instructions tell agents to read it; and `error.details` stays the projection of `invalid_arguments[0]`.

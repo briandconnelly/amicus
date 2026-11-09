@@ -568,8 +568,99 @@ def test_empty_response_is_listed_exactly_where_kimi_can_run_the_tool():
     assert paid, "no paid tools found: the instrument is broken"
     for name, row in paid.items():
         assert ("empty_response" in row["error_codes"]) == ("kimi" in row["backends"]), name
-    free = [r for r in TOOL_DETAILS.values() if r["cost"] != "active" and "error_codes" in r]
+    # The job-read tools deliver a paid tool's stored envelope, so they inherit it (#440).
+    free = [
+        r
+        for n, r in TOOL_DETAILS.items()
+        if r["cost"] != "active" and n not in discovery.JOB_READ_TOOLS
+    ]
     assert all("empty_response" not in r["error_codes"] for r in free)
+    for name in discovery.JOB_READ_TOOLS:
+        assert "empty_response" in TOOL_DETAILS[name]["error_codes"], name
+
+
+# --- #440: every code a tool returns is on its row, and every other code says why -------------
+
+
+def test_every_catalog_code_is_on_a_row_or_classified_and_never_both():
+    assert discovery.unaccounted_codes(ERROR_CODES) == []
+    on_rows = {c for row in discovery.TOOL_DETAILS.values() for c in row["error_codes"]}
+    classified = set(discovery.RESOURCE_ONLY_CODES) | set(discovery.RESERVED_CODES)
+    assert on_rows & classified == set()
+    assert set(discovery.RESOURCE_ONLY_CODES) & set(discovery.RESERVED_CODES) == set()
+    assert classified <= set(ERROR_CODES)
+    assert all(reason.strip() for reason in [*discovery.RESERVED_CODES.values()])
+    # The control: the same function reports a catalog code nothing accounts for.
+    assert discovery.unaccounted_codes((*ERROR_CODES, "invented_code")) == ["invented_code"]
+
+
+async def test_every_tool_row_lists_the_boundary_and_guard_codes():
+    """Derived from the registered tools, not from the table: a tool with parameters is
+    behind the call-boundary validation (invalid_arguments), and a guarded one returns
+    internal_error on an unexpected exception."""
+    from amicus.tools._guard import GUARD_MARKER
+
+    app = _app()
+    listed = await _tools(app)
+    assert len(listed) == len(discovery.TOOL_DETAILS)
+    guarded = 0
+    for tool in listed:
+        codes = discovery.TOOL_DETAILS[tool.name]["error_codes"]
+        if tool.input_schema.get("properties"):
+            assert "invalid_arguments" in codes, tool.name
+        registered = await app.get_tool(tool.name)
+        if getattr(registered.fn, GUARD_MARKER, False):
+            guarded += 1
+            assert "internal_error" in codes, tool.name
+    assert guarded == len(listed)
+
+
+def test_invalid_model_is_listed_by_tool_role():
+    """On a paid tool whose verb accepts a backend declaring model_validation, on a dry run
+    that accepts pi (the one backend that refuses a model before spending), and on the job
+    reads that deliver those paid tools' errors; nowhere else."""
+    import importlib
+
+    from amicus.backends import IN_TREE
+    from amicus.schemas.codes import VERB_BACKENDS
+    from amicus.schemas.params import TOOL_VERB
+
+    validating = set()
+    for backend_id in IN_TREE:
+        contract = importlib.import_module(f"amicus.backends.{backend_id}.contract").CONTRACT
+        if "model_validation" in contract.supported_features:
+            validating.add(backend_id)
+    assert validating == {"kimi", "pi"}
+    expected = {
+        name
+        for name, (verb, _is_async) in TOOL_VERB.items()
+        if set(VERB_BACKENDS[verb]) & validating
+    }
+    expected |= {
+        name
+        for name in ("amicus_review_changes_dry_run", "amicus_delegate_dry_run")
+        if "pi" in discovery.TOOL_DETAILS[name]["backends"]
+    }
+    expected |= set(discovery.JOB_READ_TOOLS)
+    actual = {n for n, r in discovery.TOOL_DETAILS.items() if "invalid_model" in r["error_codes"]}
+    assert actual == expected
+    assert "amicus_adversarial_review" not in actual and "amicus_models" not in actual
+
+
+def test_the_job_reads_list_every_code_a_paid_tool_can_store():
+    for name in discovery.JOB_READ_TOOLS:
+        codes = set(discovery.TOOL_DETAILS[name]["error_codes"])
+        for paid in discovery.PAID_ROWS:
+            missing = set(discovery.TOOL_DETAILS[paid]["error_codes"]) - codes
+            assert not missing, (name, paid, missing)
+        assert {"job_not_found", "job_running", "job_result_incompatible"} <= codes, name
+
+
+def test_the_catalog_description_names_the_reserved_class():
+    [success] = [b for b in results.CAPABILITIES_SCHEMA["anyOf"] if "name" in b["properties"]]
+    field = success["properties"]["error_codes"]
+    assert field["description"] == results._CATALOG_DESC
+    assert "reserved" in field["description"] and "resource_not_found" in field["description"]
 
 
 async def test_hand_listed_params_match_each_tools_input_schema():
@@ -780,3 +871,61 @@ async def test_backend_egress_says_only_what_leaves_and_never_repeats_its_neighb
     for backend, entry in full.items():
         for field in results.BACKEND_DISCLOSURE_FIELDS:
             assert resources[backend][field] == entry[field], (backend, field)
+
+
+@pytest.mark.parametrize("answer", ['["not", "an", "object"]', '{"summary": 3}', "plain prose"])
+async def test_no_paid_verb_turns_a_schema_violating_answer_into_schema_violation(
+    tmp_path, fake_codex, monkeypatch, answer
+):
+    """The behaviour behind classifying schema_violation as reserved (#440): an answer the
+    structured parser rejects reaches a consult as prose, a review as review_status
+    unstructured, and a delegate as its diff; none of them is an error envelope."""
+    import subprocess
+
+    from amicus.jobs import lifecycle
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    for args in (("init", "-q"), ("config", "user.email", "t@t.co"), ("config", "user.name", "t")):
+        subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True)
+    (repo / "a.py").write_text("x = 1\n")
+    subprocess.run(["git", "add", "-A"], cwd=repo, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-qm", "i"], cwd=repo, check=True, capture_output=True)
+    (repo / "a.py").write_text("x = 2\n")
+    monkeypatch.setenv("AMICUS_CODEX_BIN", str(fake_codex))
+    monkeypatch.setenv("AMICUS_STATE_DIR", str(tmp_path / "state"))
+    monkeypatch.setenv("FAKE_CODEX_ANSWER", answer)
+    monkeypatch.setattr(lifecycle, "SYNC_POLL_INTERVAL_S", 0.02)
+    settings = config.settings()
+    app = server.create_app(
+        settings, BackendRegistry.load(settings.enabled_backends, entry_points=())
+    )
+    ws = {"backend": "codex", "workspace_root": str(repo)}
+    async with Client(app) as c:
+        consult = await c.call_tool("amicus_consult", {**ws, "question": "why?"})
+        review = await c.call_tool("amicus_review_changes", ws)
+        delegate = await c.call_tool("amicus_delegate", {**ws, "task": "edit a.py"})
+    assert consult.structured_content["ok"] is True
+    assert review.structured_content["ok"] is True
+    if not answer.startswith("{"):
+        assert review.structured_content["review_status"] == "unstructured"
+    assert delegate.structured_content["ok"] is True
+
+
+async def test_an_unsupported_detail_or_isolation_is_invalid_arguments(tmp_path):
+    """The behaviour behind classifying unsupported_detail and unsupported_isolation as
+    reserved (#440): both values are closed enums the call boundary or the option check
+    refuses as invalid_arguments, before any SDK classification could apply."""
+    async with Client(_app()) as c:
+        detail = await c.call_tool("amicus_backends", {"detail": "bogus"}, raise_on_error=False)
+        isolation = await c.call_tool(
+            "amicus_review_changes_dry_run",
+            {
+                "backend": "codex",
+                "workspace_root": str(tmp_path),
+                "backend_options": {"isolation": "bogus"},
+            },
+            raise_on_error=False,
+        )
+    assert detail.structured_content["error"]["code"] == "invalid_arguments"
+    assert isolation.structured_content["error"]["code"] == "invalid_arguments"

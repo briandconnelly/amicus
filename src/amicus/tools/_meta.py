@@ -118,5 +118,9 @@ def annotations_for(kind: AnnotationKind, settings: Settings) -> dict[str, bool]
     return ann.job_mutate(idempotent=True)
 
 
-def base_meta(settings: Settings, *, backend: str | None = None, **fields: Any) -> Meta:
-    return Meta(backend=backend, timeout_seconds=settings.timeout_seconds, **fields)
+def base_meta(*, backend: str | None = None, **fields: Any) -> Meta:
+    """The meta of an envelope built before any run is prepared: a discovery tool's, a
+    paid tool's or a dry run's early failure, the guard's internal_error. It carries no
+    `timeout_seconds`: no deadline applies to a call that runs nothing, and the deadline a
+    paid call resolves is stamped by prepare_run (#447)."""
+    return Meta(backend=backend, **fields)

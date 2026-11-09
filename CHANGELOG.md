@@ -63,6 +63,43 @@ per-change, as its own lead says.
   other home, codex's workspace-write scope and kimi's redaction limit and ignore-skills note,
   stay in `egress` (#445).
 
+- **Surface**: `amicus/0.1/schema-66`. A tool failure whose `repair.next_step` is
+  `correct_arguments` now names the tool that was called in `repair.tool`, on every tool and
+  every path: the call boundary (where `amicus_models` used to lose its own tool), the pre-spend
+  checks, the review gather's `invalid_scope`, `invalid_base`, `invalid_commit` and
+  `invalid_paths` (which named no tool), a backend's refusal, and an `_async` or keyed run's
+  stored error, which names the `_async` or keyed tool (#444). `repair.arguments` is still
+  present only for a unique correction whose every value is safe to echo (ADR 0021).
+  `invalid_workspace_root` and `workspace_outside_roots` still carry no repair. The model and
+  effort refusals of `pi` and `kimi` that point at `amicus_models` now say `use_allowed_value`
+  rather than `correct_arguments`, and still name `amicus_models` with `{backend}`. The rule is
+  pinned as `repair_rules.contextual` in the manifest, and stated on `amicus://error-envelope`.
+
+- **Surface**: `amicus/0.1/schema-66`. Each `tool_details` row's `error_codes` in
+  `amicus_capabilities(detail="full")` lists the codes the tool returns (#440): every row lists
+  `invalid_arguments` and `internal_error`; `invalid_model` is on the paid tools whose verb
+  accepts `kimi` or `pi`, on both dry runs and on the job reads; and `amicus_job_result` and
+  `amicus_job_consume_result` list every code a paid tool can store. The top-level
+  `error_codes` is unchanged and its description now says that a code on no row is
+  resource-only (`resource_not_found`) or reserved: cataloged and returned by no tool today
+  (`backend_auth_indeterminate`, `schema_violation`, `unsupported_detail`,
+  `unsupported_isolation`, `unsupported_sandbox`, `unsupported_tier`).
+
+- **Surface**: `amicus/0.1/schema-66`. A `pi` `invalid_model` refusal keeps `details.field`
+  (`model`), with its catalog reason in `details.reason` as `catalog=<reason>`, where the whole
+  mapping used to be folded into `reason`; any backend detail key the envelope does not declare
+  is now folded into `reason` without costing the declared ones (#450).
+
+- **Surface**: `amicus/0.1/schema-66`. `meta.timeout_seconds` is omitted where no deadline
+  applies: on the discovery tools, on every job tool's own envelope (status, list, cancel,
+  `job_not_found`, `job_running` and the terminal job errors), on a call-boundary refusal, and
+  on any refusal before a run is prepared (#447). A prepared paid run, a dry run and a paid
+  result delivered by `amicus_job_result` or `amicus_job_consume_result` keep it.
+  `meta.elapsed_ms` is now documented on `amicus://result-meta` as the command runtime's
+  measurement for the envelope's run, 0 when none was measured, and not the call's wall time.
+  `error.backend: null` and the `details` projection of `invalid_arguments[0]` are unchanged by
+  decision.
+
 ## [0.13.0] - 2026-11-09
 
 This release adds a `pi` backend, for the pi coding-agent CLI, and deprecates `kimi` in its
