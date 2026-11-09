@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 authors = [{ name = "Brian Connelly" }]
-keywords = ["mcp", "codex", "kimi", "claude-code", "code-review", "delegation", "second-opinion"]
+keywords = ["mcp", "codex", "kimi", "pi", "claude-code", "code-review", "delegation", "second-opinion"]
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",
     "Intended Audience :: Developers",

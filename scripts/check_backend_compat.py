@@ -13,7 +13,7 @@ checked"): for every in-tree backend it reports
       `docs/<backend>-help/<version>/` does not, and the reverse. Flags, not text: claude
       wraps its help to the terminal width and a capture may have been trimmed, so a text
       diff reports a change on every run. `--diff` prints the text diff for a reader;
-    * the latest upstream release, npm's `latest` dist-tag for all three, and whether the
+    * the latest upstream release, npm's `latest` dist-tag for all four, and whether the
       installed CLI is behind it or ahead of it. A lookup that fails is reported as unknown,
       never guessed, and fails the check unless `--offline` was given.
 

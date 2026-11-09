@@ -78,7 +78,7 @@ usually a later release: `amicus_backends` reports its version and whether amicu
 against it. Confirm each flag is still accepted rather than assuming; a rejection is CLI drift
 worth reporting, never a flag to drop.
 
-## Why there is no kimi or claude fallback here
+## Why there is no kimi, claude or pi fallback here
 
 `kimi` ignores stdin and crashes on a long argv, so any hand-rolled kimi call must put the prompt
 in a file or on the command line. Rule 18 exempts *amicus's own* handshake file — a disclosed
@@ -94,6 +94,8 @@ Those flags are not interchangeable. `--tools` is the **primary** allowlist and
 `--disallowed-tools` while `--tools Read,Grep,Glob` still stands leaves a read-only run with one
 layer gone, whereas getting `--tools` wrong leaves a write-capable one. Since an improvised command
 gives you no way to know which you built, do not improvise one.
+
+`pi` also takes its prompt on stdin, so rule 18 is not what stops it either. It has no sandbox: its read-only tier is a `--tools` allowlist, a hand-rolled run needs an exact `provider/id` model and eight resource-suppression flags that keep a hostile workspace's extensions, context files and session path out, and no verified invocation is published here.
 
 ## What still applies
 

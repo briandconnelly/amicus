@@ -27,8 +27,8 @@ Usage:
 
 Where it runs (issue #241):
     Run it from the release PR's worktree, never from the main checkout. Release evidence was
-    recorded in the main checkout three releases running, and each time the quota for all
-    three backends was spent before a later check noticed. So before any gate runs, the
+    recorded in the main checkout three releases running, and each time the quota for every
+    backend was spent before a later check noticed. So before any gate runs, the
     script refuses when:
     - the checkout's declared version (`project.version` in its pyproject.toml) is not
       `--version`, which is the main checkout between releases, since it still declares the
@@ -55,7 +55,7 @@ Record shape:
     requires every backend entry to CARRY a `batch_id` and to agree with the record's -- this
     is what makes "one shared run produced this whole record" a checkable property instead of
     an assumption. Requiring the field is load-bearing, and was missing until issue #25: while
-    `batch_id` was merely checked-if-present, a record that omitted it from all three entries
+    `batch_id` was merely checked-if-present, a record that omitted it from every entry
     passed. Each backend entry's `test_file` must equal the suite that backend's gate
     actually runs (`_TEST_FILES[backend]`); a record whose entries were hand-copied from a
     different backend's run is rejected on this check.
@@ -204,8 +204,8 @@ def _summarize_junit(xml_path: Path) -> dict[str, object] | None:
     Never reads an element's text or its `message`/`type` attributes, and never looks at
     `<system-out>`/`<system-err>`: those carry the traceback and the captured output, which is
     where a model's prose or an echoed prompt would be. What comes back is which test did not
-    pass and how it did not pass — enough to rerun that one test instead of respending on all
-    three suites, and not enough to leak anything (AGENTS.md rule 18).
+    pass and how it did not pass — enough to rerun that one test instead of respending on every
+    suite, and not enough to leak anything (AGENTS.md rule 18).
     """
     try:
         root = ElementTree.parse(xml_path).getroot()
@@ -391,7 +391,7 @@ def main(
 
     if all_passed and tree_clean_after:
         _write_json(repo_root, EVIDENCE_PATH, record)
-        print(f"wrote {EVIDENCE_PATH}: all three live gates passed on {commit}.")
+        print(f"wrote {EVIDENCE_PATH}: every live gate passed on {commit}.")
         return 0
 
     _write_json(repo_root, FAILURE_PATH, record)

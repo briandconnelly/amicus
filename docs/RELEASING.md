@@ -104,6 +104,7 @@ First bring each CLI to its latest release on the machine that will record the e
 `claude` is Claude Code, whose native installer does not follow npm: `npm view @anthropic-ai/claude-code version` still names its latest, and `claude install <version>` installs it, as below.
 `kimi` is Kimi Code, which updates itself: run `kimi upgrade`.
 It is also published to npm, so `npm view @moonshot-ai/kimi-code version` names its latest; PyPI's `kimi-cli` is a different distribution whose version says nothing about it.
+`pi` is an npm package, so `npm view @earendil-works/pi-coding-agent version` names its latest and `npm install -g @earendil-works/pi-coding-agent@<version>` installs it.
 Expect a major version number to mean less than it says: 0.43.1 was followed directly by 2.0.0, whose only major change was a command that opens the desktop app's page.
 "Latest" means npm's `latest` dist-tag, never another tag such as `next`.
 Claude Code's native installer updates itself between runs and can land on a `next` build ahead of `latest` (#323), and an npm upgrade does not move a native install.
@@ -133,7 +134,7 @@ uv run python scripts/check_backend_compat.py --write
 
 Adding a minor to a backend's `SUPPORTED_VERSIONS` is its own PR, made the way #112 and #194 were: a zero-spend comparison against the previous minor, recorded in the PR.
 For codex, `docs/UPGRADING-CODEX.md` is that procedure.
-`tests/test_codex_contract.py`, `tests/test_kimi_contract.py` and `tests/test_claude_contract.py` then hold every committed capture to the flags the contract sends.
+`tests/test_codex_contract.py`, `tests/test_kimi_contract.py`, `tests/test_pi_contract.py` and `tests/test_claude_contract.py` then hold every committed capture to the flags the contract sends.
 
 The script cannot do the other half, which AGENTS.md rule 18 requires before every release: the carrier re-check.
 Rule 18 exempts a backend's native prompt carrier only where no documented or observed way to avoid it has been found on the CLI release being validated.
@@ -141,6 +142,8 @@ For each of the four versions the script printed, read that CLI's `--help` and i
 If one has appeared, the exemption no longer holds for that carrier, and using the new mechanism is a change to make before this release rather than after it.
 If none has, say so in the release PR, naming the four versions, so the next reader can see the looking was done and on what.
 The probe that stands behind kimi's session store, and what it did not test, is `docs/kimi-help/0.43.1/FINDINGS.md`.
+pi holds no exemption, because its prompt rides stdin and `--no-session` wrote no session file on 1.5.0, so the re-check has no pi carrier to look for.
+What the pi capture did and did not test is `docs/pi-help/1.5.0/FINDINGS.md`.
 
 ## The release sequence
 
@@ -212,6 +215,7 @@ The tag therefore deliberately points at a commit that is in `main`'s history bu
    Run the command the preflight printed, which is `uv run python scripts/record_live_gate_evidence.py --version X.Y.Z` in the worktree.
    The script itself forces `AMICUS_REQUIRE_LIVE=1` into each backend's subprocess environment, so prefixing the command with it is optional; its own usage string documents `AMICUS_REQUIRE_LIVE=1 uv run python scripts/record_live_gate_evidence.py --version X.Y.Z`, and either form runs the same live gates.
    The pi gate also needs `AMICUS_PI_MODEL` exported as an exact `provider/id` whose provider is ready, or it fails rather than skips.
+   Credentials saved by pi's `/login` need nothing more; a provider API key must be exported in the shell that runs the script.
    This spends real quota on all four backends and requires the maintainer's authorization in the session where it runs; a passing preflight is not that authorization.
    Before any gate runs, it refuses when the checkout declares a version other than `--version`, which is what the main checkout does between releases, and when a local tag `vX.Y.Z` already exists.
    That tag check reads local tags only: it stops a collision with an earlier attempt, and it is no evidence that `vX.Y.Z` was never published, which the preflight's `origin` lookup is for.

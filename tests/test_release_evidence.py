@@ -57,7 +57,7 @@ def test_a_complete_fresh_record_is_accepted():
 def test_a_record_whose_entries_omit_batch_id_entirely_is_rejected():
     """The gap issue #25 found: `batch_id` was checked only when present.
 
-    A record that simply left the field out of all three entries validated clean, so the
+    A record that simply left the field out of every entry validated clean, so the
     property the docstring claimed -- one shared run produced this whole record -- was not
     actually checkable. Omission and disagreement must both be rejected; the test below covers
     disagreement.
@@ -371,7 +371,7 @@ def _never_called(label: str, calls: list[str]):
     ],
 )
 def test_main_parses_arguments_before_touching_git_or_any_gate(tmp_path, argv, expected_rc):
-    """Issue #242: `--help` used to start all three live gates, because `main` ignored argv.
+    """Issue #242: `--help` used to start the live gates, because `main` ignored argv.
 
     Neither git nor any gate may run for `--help` or for an argument the script does not
     accept, and neither may write a record.

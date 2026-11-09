@@ -67,6 +67,7 @@ task, and one default surprises people:
 | --- | --- | --- |
 | `codex` | Yes — under codex's `--sandbox read-only` OS sandbox | read-only sandbox |
 | `kimi` | Yes — a generated agent profile grants `Read`, `Glob`, `Grep` and no shell or write tool | read-only profile |
+| `pi` | Yes — `--tools read,grep,find,ls`, so no shell, edit or write tool; pi has no OS sandbox | read-only tool allowlist; needs an exact `provider/id` model |
 | `claude` | **Reviews only, by default.** `amicus_review_changes` defaults to `access="readonly"` (`Read`, `Grep`, `Glob`); consult and adversarial review default to `access="toolless"`, which grants **no tools at all** | `access="readonly"` for reviews and `"toolless"` otherwise, `config_mode="inherit"` |
 
 **A `claude` consult told to "look at the file and tell me what's wrong" has, by default, no
@@ -83,15 +84,15 @@ reads the workspace's `CLAUDE.md` and `.claude/settings*.json`, hooks included �
 outside the tool allowlist. What the backend receives is therefore your prompt *plus* whatever
 that mode loads, which `implicit_context` states per backend.
 
-Read-only bounds *modification*, never *reach*, on any of the three. Codex's sandbox bounds
-writes, not reads; kimi's `Read` accepts absolute paths; Claude's `readonly` accepts absolute
+Read-only bounds *modification*, never *reach*, on any of the four. Codex's sandbox bounds
+writes, not reads; kimi's `Read` accepts absolute paths; pi can read files outside the workspace; Claude's `readonly` accepts absolute
 paths too and, having read a file itself, bypasses the diff redaction entirely. The workspace
 selects where a backend works, not what it can read — `readonly_honesty` on `amicus_backends(detail="full")` is
 each backend's own statement of that limit.
 
 ## How your text reaches each backend
 
-Amicus's own transport is the same for all three: free-text fields never touch its logs, and for
+Amicus's own transport is the same for all four: free-text fields never touch its logs, and for
 an async job they reach the worker over stdin. How a field reaches the *backend CLI* is the
 backend's own choice, and `carriers` on `amicus_backends(detail="full")` is authoritative. Today:
 
@@ -99,6 +100,7 @@ backend's own choice, and `carriers` on `amicus_backends(detail="full")` is auth
 | --- | --- | --- | --- |
 | `codex` | stdin | **argv**, as the `-c developer_instructions` override | Visible to any local process listing for the run's duration — never put a secret here |
 | `claude` | stdin | stdin | argv carries only fixed text and flags |
+| `pi` | stdin | stdin | argv carries only a fixed system prompt, the model, the effort and flags. With `--no-session` pi wrote no session file on 1.5.0, so there is no store of its own to disclose |
 | `kimi` | a file in a private temp dir outside the workspace; argv carries only its path | same file | Nothing you type rides argv. amicus removes its temp directory when the run ends, but the kimi CLI also writes its own session store (observed under `~/.kimi-code/sessions`), which can hold the whole prompt and any answer produced; amicus does not delete it, and job expiry, the per-workspace cap and `amicus_job_consume_result` never touch it |
 
 Each backend also loads context you did not supply — `AGENTS.md`, skills, and on `claude` under
@@ -117,6 +119,13 @@ Beyond the feature gate and the evidence question, amicus does not rank backends
   diversity as **unverified** rather than assuming it. Separate attempts and complementary review
   scopes are still useful without it — they just do not establish independence or correctness on
   their own.
+- **Pi's model is yours to name.** `pi` has no default model: it uses `AMICUS_PI_MODEL` or the
+  call's `model`, an exact `provider/id`, and refuses the call before it spends when neither is
+  set. Until `AMICUS_PI_MODEL` is set, `status.authenticated` is unknown rather than false. The
+  model's provider prefix decides where the prompt goes, and `amicus_models` lists only models of
+  providers pi holds credentials for. An unknown id is `invalid_model`, refused pre-spend because pi
+  would send it anyway, where `kimi` rejects an unknown alias itself. A provider API key reaches pi only if
+  the host forwards it to the amicus server; credentials saved by pi's `/login` need nothing.
 - **Task shape.** A broad architectural question benefits from strong general reasoning; a narrow
   mechanical review benefits more from speed and cost. `amicus_models` lists each backend's
   advertised models and reasoning-effort sets.
