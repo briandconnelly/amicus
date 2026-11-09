@@ -111,17 +111,37 @@ def load_config(environ: Mapping[str, str] | None = None) -> PiConfig:
     )
 
 
-def probe_cwd(config: PiConfig) -> str:
+_FALLBACK_PROBE_DIRS: list[str] = []
+
+
+def _private_fallback_dir() -> str | None:
+    """A private directory of our own under the system temporary root, reused for the process.
+    Never the root itself (a shared `<tmp>/.pi/commands` would be migrated) and never inside
+    the server's cwd, which `tempfile.gettempdir()` falls back to when no temp root works."""
+    if _FALLBACK_PROBE_DIRS and Path(_FALLBACK_PROBE_DIRS[0]).is_dir():
+        return _FALLBACK_PROBE_DIRS[0]
+    try:
+        if Path(tempfile.gettempdir()).resolve() == Path.cwd().resolve():
+            return None
+        made = tempfile.mkdtemp(prefix="amicus-pi-probe-")
+    except OSError:
+        return None
+    _FALLBACK_PROBE_DIRS[:] = [made]
+    return made
+
+
+def probe_cwd(config: PiConfig) -> str | None:
     """The directory every free probe spawns pi from, created on each call so a removed one
     is not reported as a missing pi. pi runs its project migrations against its cwd before it
     handles `--help` or `--list-models` (renaming `.pi/commands/` to `.pi/prompts/`), so a
     probe must never run in whatever directory the server was started in. When the state
-    directory cannot hold it, the system temporary directory stands in."""
+    directory cannot hold it, a private `amicus-pi-probe-*` directory stands in. When that
+    fails too the result is None and the caller treats the probe as failed: pi is not spawned."""
     path = Path(config.state_dir) / PROBE_CWD_DIRNAME
     try:
         path.mkdir(parents=True, exist_ok=True)
     except OSError:
-        return tempfile.gettempdir()
+        return _private_fallback_dir()
     return str(path)
 
 

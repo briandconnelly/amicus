@@ -45,7 +45,7 @@ class PiStatus:
             return StatusReport(installed=False, warnings=(override_error, *warnings))
         binary = self._binary.resolve() or "pi"
         cwd = probe_cwd(self._config)
-        version = cli.pi_version(binary, cwd=cwd)
+        version = cli.pi_version(binary, cwd=cwd) if cwd is not None else None
         if version is None:
             return StatusReport(installed=False, warnings=tuple(warnings))
         authenticated: bool | None = None

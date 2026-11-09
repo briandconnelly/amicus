@@ -90,7 +90,10 @@ class PiBackend:
     # --- per-call probes, memoized by model ---------------------------------------------------
     def _probe_auth(self, binary: str, model: str | None) -> AuthStatus:
         """The default auth seam: `pi auth check`, spawned from the neutral probe directory."""
-        return _auth_status(binary, model, cwd=pi_config.probe_cwd(self._config))
+        cwd = pi_config.probe_cwd(self._config)
+        if cwd is None:
+            return "unknown"  # no safe directory to spawn from: nothing runs
+        return _auth_status(binary, model, cwd=cwd)
 
     @staticmethod
     def _make_room(memo: dict, model: str) -> None:

@@ -162,7 +162,10 @@ def test_pi_absent_from_path_validates_clean_through_the_real_probe(monkeypatch,
     cfg = load_config({})
     binary = PiBinary(cfg)
     backend = adapter.PiBackend(
-        cfg, binary, HelpProbe(help_argv=("pi", *contract.HELP_ARGS)), PiModels(cfg, binary)
+        cfg,
+        binary,
+        HelpProbe(help_argv=("pi", *contract.HELP_ARGS), probe_cwd=lambda: "/probe-cwd"),
+        PiModels(cfg, binary),
     )
     assert binary.resolve() == contract.PI_BIN
     assert backend.validate_request(_req()) is None
@@ -504,7 +507,10 @@ def _spawning_backend(monkeypatch, *, auth_out: str = '{"status":"ready"}', list
     binary = PiBinary(cfg)
     binary.resolve = lambda: "/PI"  # type: ignore[method-assign]
     backend = adapter.PiBackend(
-        cfg, binary, HelpProbe(help_argv=("/PI", *contract.HELP_ARGS)), PiModels(cfg, binary)
+        cfg,
+        binary,
+        HelpProbe(help_argv=("/PI", *contract.HELP_ARGS), probe_cwd=lambda: "/probe-cwd"),
+        PiModels(cfg, binary),
     )
     return backend, spawned
 

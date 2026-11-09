@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
 
 from amicus.backends import pi as pi_pkg
 from amicus.backends.pi import config as pi_config
@@ -78,3 +79,79 @@ def test_positive_control_the_fake_records_and_migrates_a_probe_run_in_a_workspa
         ("--help", os.path.realpath(ws))
     ]
     assert (ws / ".pi" / "prompts").is_dir() and not (ws / ".pi" / "commands").exists()
+
+
+def _unwritable_state(tmp_path):
+    blocker = tmp_path / "blocker"
+    blocker.write_text("a file, so nothing can be created beneath it")
+    return pi_config.PiConfig(
+        bin_override=None,
+        model=None,
+        reasoning_effort=None,
+        supported_versions=None,
+        state_dir=str(blocker / "state"),
+        warnings=(),
+        errors=(),
+    )
+
+
+def test_an_unwritable_state_dir_falls_back_to_a_private_mkdtemp_directory(tmp_path, monkeypatch):
+    import tempfile
+
+    monkeypatch.setattr(pi_config, "_FALLBACK_PROBE_DIRS", [])
+    cfg = _unwritable_state(tmp_path)
+    monkeypatch.setenv("TMPDIR", str(tmp_path))
+    monkeypatch.setattr(tempfile, "tempdir", None)
+    got = pi_config.probe_cwd(cfg)
+    assert got is not None and Path(got).is_dir()
+    assert Path(got).name.startswith("amicus-pi-probe-")
+    assert os.path.realpath(got) != os.path.realpath(Path.cwd())
+    assert os.path.realpath(got) != os.path.realpath(tempfile.gettempdir())
+    assert pi_config.probe_cwd(cfg) == got  # reused, not one directory per probe
+
+
+def test_no_private_directory_means_no_probe_and_no_spawn_in_the_server_cwd(tmp_path, monkeypatch):
+    import tempfile
+
+    from amicus.backends.pi.binary import PiBinary
+    from amicus.backends.pi.models import PiModels
+    from amicus.backends.pi.status import PiStatus
+    from amicus.sdk.conventions.preflight import HelpProbe
+    from amicus.sdk.core.runtime import CommandRun
+
+    monkeypatch.setattr(pi_config, "_FALLBACK_PROBE_DIRS", [])
+    cfg = _unwritable_state(tmp_path)
+    monkeypatch.chdir(tmp_path)
+
+    def broken(*args, **kwargs):
+        raise OSError("no temp")
+
+    monkeypatch.setattr(tempfile, "mkdtemp", broken)
+    spawns: list[tuple[list[str], object]] = []
+
+    def record(cmd, timeout_seconds, **kwargs):
+        spawns.append((list(cmd), kwargs.get("cwd")))
+        return CommandRun("", "", 0, 1, False)
+
+    monkeypatch.setattr(runtime, "run_sync_capture", record)
+    assert pi_config.probe_cwd(cfg) is None
+    binary = PiBinary(cfg)
+    help_probe = HelpProbe(
+        help_argv=("/PI", *contract.HELP_ARGS), probe_cwd=lambda: pi_config.probe_cwd(cfg)
+    )
+    assert help_probe.flag_support(force=True).help_parsed is False
+    assert PiModels(cfg, binary).read(force=True).source == "none"
+    assert PiModels(cfg, binary).lookup(MODEL) == "unreadable"
+    assert PiStatus(cfg, binary, help_probe).probe().installed is False
+    assert [s for s in spawns if s[1] is None or s[1] == str(Path.cwd())] == []
+    assert spawns == []
+
+
+def test_the_temp_root_being_the_server_cwd_is_refused(tmp_path, monkeypatch):
+    import tempfile
+
+    monkeypatch.setattr(pi_config, "_FALLBACK_PROBE_DIRS", [])
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(tempfile, "gettempdir", lambda: str(Path.cwd()))
+    assert pi_config.probe_cwd(_unwritable_state(tmp_path)) is None
+    assert list(tmp_path.glob("amicus-pi-probe-*")) == []

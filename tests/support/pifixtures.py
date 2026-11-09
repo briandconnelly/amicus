@@ -53,7 +53,7 @@ def make_backend(
 
     models.read = lambda force=False: listing  # type: ignore[method-assign]
     models.lookup = lookup  # type: ignore[method-assign]
-    help_probe = HelpProbe(help_argv=("/PI", *contract.HELP_ARGS))
+    help_probe = HelpProbe(help_argv=("/PI", *contract.HELP_ARGS), probe_cwd=lambda: "/probe-cwd")
     backend = PiBackend(cfg, binary, help_probe, models)
 
     def auth_status(binary_path: str, model: str | None):

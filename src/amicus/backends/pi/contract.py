@@ -115,7 +115,7 @@ IMPLICIT_CONTEXT_DISCLOSURE = (
     "nothing was written there on 1.5.0. At startup pi renames the workspace's "
     ".pi/commands/ to .pi/prompts/ when the latter does not exist, so a consult or review in "
     "such a repository changes it; amicus cannot suppress this. amicus's own free probes run "
-    "from its state directory, so they never do it."
+    "from a private directory of its own, or do not run, so they never do it."
 )
 
 # --- Failure signatures -------------------------------------------------------------------

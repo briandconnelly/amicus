@@ -75,7 +75,8 @@ class PiModels:
             if now - stamped < HELP_CACHE_TTL_SECONDS:
                 return listing
         binary = self._binary.resolve()
-        out = _probe(binary, cwd=probe_cwd(self._config)) if binary is not None else None
+        cwd = probe_cwd(self._config)
+        out = _probe(binary, cwd=cwd) if binary is not None and cwd is not None else None
         listing = parse_table(out) if out is not None else None
         if listing is not None:
             self._cache = (now, listing)
@@ -87,7 +88,8 @@ class PiModels:
         """The row whose joined slug equals `model`; None when the listing was read and has
         no such row; "unreadable" when the probe could not run or its output was unusable."""
         binary = self._binary.resolve()
-        out = _probe(binary, model, cwd=probe_cwd(self._config)) if binary is not None else None
+        cwd = probe_cwd(self._config)
+        out = _probe(binary, model, cwd=cwd) if binary is not None and cwd is not None else None
         if out is None:
             return "unreadable"
         listing = parse_table(out)

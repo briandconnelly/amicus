@@ -65,8 +65,8 @@ class HelpProbe:
     probe_timeout_seconds: int = 10
     # Where to spawn the probe; None inherits this process's cwd. A callable, so a backend
     # whose CLI touches its cwd at startup can name (and recreate) a neutral directory on
-    # every probe rather than once at load.
-    probe_cwd: Callable[[], str] | None = None
+    # every probe rather than once at load; None means there is none, so the probe does not run.
+    probe_cwd: Callable[[], str | None] | None = None
     _cache: tuple[float, FlagSupport] | None = field(default=None, repr=False)
 
     def _probe_help(self) -> str:
@@ -76,8 +76,11 @@ class HelpProbe:
             # Exactly the call made before probe_cwd existed.
             run = runtime.run_sync_capture(argv, timeout_seconds=self.probe_timeout_seconds)
         else:
+            cwd = self.probe_cwd()
+            if cwd is None:
+                return ""  # no safe directory to spawn from: the probe fails, nothing runs
             run = runtime.run_sync_capture(
-                argv, timeout_seconds=self.probe_timeout_seconds, cwd=self.probe_cwd()
+                argv, timeout_seconds=self.probe_timeout_seconds, cwd=cwd
             )
         if run.binary_missing:
             return ""
