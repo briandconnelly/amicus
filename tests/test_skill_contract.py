@@ -577,8 +577,10 @@ def test_the_routing_rule_binds_before_the_verb_is_chosen():
         "**Let a named harness win.**",
         "bare `kimi` (the deprecated kimi harness)",
         "`codex` for an OpenAI model, `claude` for an Anthropic model",
-        "**Never substitute a harness or a model silently.**",
+        "**Never substitute for a named harness silently.**",
         "proceed only when the user chooses it",
+        "An exact `provider/id` is pi's model syntax, so it selects `pi`.",
+        "**Route only to a harness that supports the verb.**",
         "never from provider configuration.** A missing or truncated listing does not prove a",
         "**Ask the user once, before spending, only when the routes that still match after free",
     ):
@@ -588,7 +590,13 @@ def test_the_routing_rule_binds_before_the_verb_is_chosen():
     assert resolve < workflow.index("Choose the verb")
     procedure = _flat(_BACKENDS_REF.partition("\n## Rules\n")[2].split("\n## ", 1)[0])
     assert "### Routing procedure" in procedure
-    examples = ('"collaborate with codex"', '"ask kimi"', '"get GPT\'s opinion"', '"use Opus"')
+    examples = (
+        '"collaborate with codex"',
+        '"ask kimi"',
+        '"get GPT\'s opinion"',
+        '"use Opus"',
+        '"have Claude adversarially review this"',
+    )
     for example in examples:
         assert example in procedure, example
 

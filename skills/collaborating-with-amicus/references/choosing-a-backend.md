@@ -36,16 +36,20 @@ Run it after the free discovery calls and before choosing the verb.
 1. **A named harness wins.** A backend id or CLI name — `codex`, `claude` or Claude Code, `pi`,
    and bare `kimi`, which still means the deprecated kimi harness — selects that harness.
    Capitalization changes nothing. A model named alongside it is passed as that harness's
-   `model`.
-2. **A model-only request** — GPT, Opus, Sonnet, Kimi K3, an exact `provider/id` — goes to the
-   native harness for that family when it is ready and supports the verb: `codex` for OpenAI
-   models, `claude` for Anthropic models. A family with neither, or a request whose native
-   harness is not ready or lacks the verb, goes to `pi` with an exact model
-   `amicus_models(backend="pi")` lists, under step 3.
-3. **Never substitute silently.** When the named or native harness is not ready or lacks the
-   verb, say so and offer the alternative route — `pi` plus an exact listed model — naming its
-   provider (the `provider/id` prefix, which may be a router) and its containment (pi has no OS
-   sandbox, and a pi delegate has no network block). Proceed only when the user chooses it.
+   `model`. An exact `provider/id` is pi's own model syntax, so it selects `pi` the same way.
+2. **A model-only request** — GPT, Opus, Sonnet, Kimi K3 — goes to the native harness for that
+   family when it is ready and supports the verb: `codex` for OpenAI models, `claude` for
+   Anthropic models. A family with neither, or a request whose native harness is not ready or
+   lacks the verb, goes to `pi` with an exact model `amicus_models(backend="pi")` lists. That is
+   routing, not substitution: no confirmation is needed, but name the harness, the model and
+   the provider before the paid call.
+3. **Never substitute for a named harness silently.** When the harness the user named is not
+   ready or lacks the verb, say so and offer the alternative route — `pi` plus an exact listed
+   model — naming its provider (the `provider/id` prefix, which may be a router) and its
+   containment (pi has no OS sandbox, and a pi delegate has no network block). Proceed only
+   when the user chooses it. Every route offered or taken must support the requested verb: when
+   none does, as for an adversarial review with `claude` not ready, report that no eligible
+   route exists; changing the verb is a separate choice for the user.
 4. **Learn what `pi` can reach from `amicus_models(backend="pi")`**, never from provider
    configuration. A missing or truncated listing does not prove a model unreachable; it means
    you cannot vouch for it, so say that rather than calling it unavailable.
@@ -58,9 +62,11 @@ Worked examples, each after `amicus_backends(detail="full")`:
 | --- | --- |
 | "collaborate with codex" | `codex`; its default model unless one is named |
 | "ask kimi" | the `kimi` harness, disclosing its deprecation and that `pi` is the replacement; not a Kimi model through `pi` |
-| "get GPT's opinion" | `codex` when it is ready; otherwise say so and offer `pi` with a listed OpenAI `provider/id`, proceeding only on the user's choice |
-| "use Opus" | `claude` when it is ready and supports the verb, deciding `access` up front, because a `claude` consult defaults to `toolless` and cannot read the repository; otherwise offer `pi` with a listed Anthropic `provider/id`. A delegate is not on `claude`, so offer `pi` there too |
-| "use `<provider>/<id>`" (an exact `provider/id`) | `pi` with that `model`, once `amicus_models(backend="pi")` lists it; its egress is the provider the prefix names, which may be a router rather than the model's vendor |
+| "get GPT's opinion" | `codex` when it is ready; otherwise `pi` with a listed OpenAI `provider/id`, named before the call |
+| "collaborate with codex" while `codex` is not ready | say so and offer `pi` with a listed OpenAI `provider/id`, proceeding only on the user's choice |
+| "use Opus" | `claude` when it is ready and supports the verb, deciding `access` up front, because a `claude` consult defaults to `toolless` and cannot read the repository; otherwise `pi` with a listed Anthropic `provider/id`, named before the call. A delegate is not on `claude`, so it goes to `pi` the same way |
+| "have Claude adversarially review this" while `claude` is not ready | no eligible route: only `claude` has `adversarial_review`, so say so rather than switching harness or verb |
+| "use `<provider>/<id>`" (an exact `provider/id`) | `pi`, as a named harness, with that `model`, once `amicus_models(backend="pi")` lists it; its egress is the provider the prefix names, which may be a router rather than the model's vendor |
 | "use Kimi K3" | a model-only request with no native harness among `codex` and `claude`, so `pi` with a listed `provider/id` for it; the `kimi` harness only when the user names `kimi` |
 
 ## `kimi` is deprecated

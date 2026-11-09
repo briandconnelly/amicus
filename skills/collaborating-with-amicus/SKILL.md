@@ -84,13 +84,18 @@ The full procedure, with worked examples, is
 - **Resolve the harness and the model before choosing the verb, and name both before the first
   paid call.**
 - **Let a named harness win.** `codex`, `claude` or Claude Code, `pi`, and bare `kimi` (the
-  deprecated kimi harness) select that harness, whatever the capitalization.
+  deprecated kimi harness) select that harness, whatever the capitalization. An exact
+  `provider/id` is pi's model syntax, so it selects `pi`.
 - **Send a model-only request to its native harness — `codex` for an OpenAI model, `claude` for
-  an Anthropic model — when that harness is ready and supports the verb; otherwise offer `pi`
-  with an exact model `amicus_models(backend="pi")` lists.**
-- **Never substitute a harness or a model silently.** When the named or native harness is not
+  an Anthropic model — when that harness is ready and supports the verb; otherwise route it to
+  `pi` with an exact model `amicus_models(backend="pi")` lists, and name that route before the
+  call.**
+- **Never substitute for a named harness silently.** When the harness the user named is not
   ready or lacks the verb, say so, offer the alternative route (`pi` plus an exact listed model)
   naming its provider and its containment, and proceed only when the user chooses it.
+- **Route only to a harness that supports the verb.** When none does — an adversarial review
+  with `claude` not ready — report that no eligible route exists; changing the verb is a
+  separate choice for the user.
 - **Learn what `pi` can reach from `amicus_models(backend="pi")`, never from provider
   configuration.** A missing or truncated listing does not prove a model unreachable.
 - **Ask the user once, before spending, only when the routes that still match after free
