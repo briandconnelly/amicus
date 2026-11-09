@@ -32,7 +32,7 @@ outside the returned diff.
 | --- | --- | --- | --- |
 | OS sandbox | yes — codex's `workspace-write` | **none** | **none** |
 | Network egress during the run | **blocked** — amicus pins `sandbox_workspace_write.network_access=false` | **not blocked** | **not blocked** |
-| Writes bounded to the worktree | no — the sandbox also permits the OS temp roots (`/tmp`, `$TMPDIR`) | no — the worktree sets kimi's working directory, not its reach | no — the worktree sets pi's working directory, not its reach |
+| Writes bounded to the worktree | no — the sandbox also permits the OS temp roots (`/tmp`, `$TMPDIR`) | no — the worktree sets kimi's working directory, not its reach | no — the worktree sets pi's working directory, not its reach, and a shell command pi starts can outlive the run (below) |
 | Approvals | codex's own | none | none |
 
 **So an inference from blocked egress holds for `codex` only, and only for operations that
@@ -42,7 +42,9 @@ bounds what a command may reach, not whether commands ran. A local install from 
 artifact, a `gh --version`, and a push or fetch against a **filesystem** remote all need no
 network, so none of them is excluded. On `kimi` and `pi` even the egress half does not hold: a task can reach the network and
 write outside the worktree with the user's own privileges. On either, the returned diff shows what
-changed *in the worktree*, not everything the run did. Confirm the backend before relying on any of this, and read `effects`
+changed *in the worktree*, not everything the run did. On `pi`, a shell command
+the run starts — a hung or backgrounded process — can also outlive the run, because amicus cannot
+yet find and stop it, so it may still be running, and writing, after the diff comes back. Confirm the backend before relying on any of this, and read `effects`
 and `egress` on `amicus_backends(detail="full")` rather than assuming the table above is still current.
 
 ## What to check before applying

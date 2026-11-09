@@ -49,3 +49,5 @@ The `backend_options` set stays closed, and `isolation` for `pi` is rejected pre
   A provider API key in the environment reaches pi only if the host forwards it to the amicus server, because the plugin's `.mcp.json` lists amicus's own variables and not provider keys.
 - Each call spends two free probes, cached per model for the help-cache TTL, so a credential revoked within that window is reported ready until it expires and the run then fails as `pi_auth_required`.
 - Pi carries the prompt on stdin and writes no session file under `--no-session`, so it adds no rule-18 carrier exemption.
+- A shell command that pi starts during a delegate, such as a hung or backgrounded process, can outlive the run, because amicus cannot yet find and stop it.
+  Pi's bash tool starts its shell detached, with the worktree as a spawn option rather than an argument, so amicus's orphan sweep, which matches the worktree path in a process's argv, does not see it; and amicus ends a timed-out or cancelled run with SIGKILL, so pi's own cleanup of its shells never runs.

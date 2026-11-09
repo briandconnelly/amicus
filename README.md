@@ -85,6 +85,8 @@ authenticates either from credentials saved by its interactive `/login <provider
 nothing more, or from the provider's API-key environment variable (for OpenRouter,
 `OPENROUTER_API_KEY`), which has to reach the amicus server's environment: the plugin's
 `.mcp.json` does not forward it, so your host must.
+A `pi` delegate runs shell commands with no sandbox, and a command it starts (a hung or
+backgrounded process) can outlive the run, because amicus cannot yet find and stop it.
 
 Then just ask, in your own words:
 
