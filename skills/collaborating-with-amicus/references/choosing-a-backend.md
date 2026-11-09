@@ -24,7 +24,9 @@ These are this file's own:
   reach.** Report the diversity as unverified instead, and read `pi`'s reach from
   `amicus_models(backend="pi")`.
 - **For `pi`, pass `model` as an exact `provider/id` that `amicus_models(backend="pi")` lists,
-  unless `AMICUS_PI_MODEL` is set and is the model you mean.**
+  or, when that listing is `truncated`, one past its cut that you know exactly, unless
+  `AMICUS_PI_MODEL` is set and is the model you mean.** pi checks the exact model and its
+  `reasoning_effort` pre-spend either way, and refuses one it cannot resolve.
 - **Put the project's constraints in a `pi` brief yourself.** pi runs with
   `--no-context-files`, so it loads no `AGENTS.md`.
 

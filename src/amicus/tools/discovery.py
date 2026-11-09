@@ -133,6 +133,12 @@ _IDEMPOTENCY_CODES = [
     "idempotency_in_progress",
     "idempotency_result_unavailable",
 ]
+# What a dry run's call to the backend's validate_request can refuse with (#439), beyond the
+# invalid_arguments and invalid_reasoning_effort the rows already list: pi's model and auth
+# checks, and a refused CODEX_HOME or PI_CODING_AGENT_DIR. backend_not_found is not among
+# them: the paid call checks the binary after validating, and binary readiness is what
+# amicus_backends reports.
+_PREVIEW_VALIDATION_CODES = ["invalid_model", "backend_auth_required", "user_config_rejected"]
 TOOL_DETAILS: dict[str, dict[str, Any]] = {
     "amicus_consult": {
         "cost": "active",
@@ -265,6 +271,8 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
             "input_too_large",
             "invalid_reasoning_effort",
             *_REVIEW_CODES[:6],
+            *_PREVIEW_VALIDATION_CODES,
+            "api_key_missing",  # claude's bare mode without a key; claude does not delegate
         ],
     },
     "amicus_delegate_dry_run": {
@@ -284,6 +292,7 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
             "not_a_git_repo",
             "git_unavailable",
             "worktree_error",
+            *_PREVIEW_VALIDATION_CODES,
         ],
     },
     "amicus_backends": {
@@ -524,14 +533,34 @@ def models_payload(registry: BackendRegistry, backend: str) -> dict[str, Any]:
         source=listing.source,
         fetched_at=listing.fetched_at,
         truncated=listing.truncated,
-        truncation_hint=(
-            f"the catalog was cut at amicus's entry bound and these {len(listing.models)} "
-            "models come from its start; a slug past the cut is still valid as `model`, but "
-            "amicus cannot check a reasoning_effort against what that model declares"
-            if listing.truncated
-            else None
-        ),
+        truncation_hint=_truncation_hint(backend, len(listing.models))
+        if listing.truncated
+        else None,
     ).model_dump(mode="json")
+
+
+# What a cut listing changes for the next call depends on what the backend checks (#443).
+# pi looks the exact model up on its own (PiModels.lookup) and checks the effort against that
+# row before spending, so only the listing is short; that lookup has a bound of its own, and
+# pi refuses what it cannot resolve, so the hint never promises acceptance. Every other
+# backend's effort check, where it has one, reads this listing (kimi, ADR 0009).
+_PAST_THE_CUT_CHECKED = frozenset({"pi"})
+
+
+def _truncation_hint(backend: str, count: int) -> str:
+    head = (
+        f"the catalog was cut at amicus's entry bound and these {count} models come from its start"
+    )
+    if backend in _PAST_THE_CUT_CHECKED:
+        return (
+            f"{head}; only this listing was cut: pass an exact provider/id past it as `model` "
+            "and pi still checks it and its reasoning_effort before any spend, refusing a "
+            "model it cannot resolve"
+        )
+    return (
+        f"{head}; a slug past the cut may still be valid as `model`, but amicus cannot check "
+        "a reasoning_effort against what that model declares"
+    )
 
 
 async def capabilities_payload(

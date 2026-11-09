@@ -9,9 +9,13 @@ without spending quota.
 Request: $ARGUMENTS
 
 Both preview tools still take `backend` as a required argument — a dry run reports
-what amicus would assemble *for that backend's resolved options*, not whether the
-backend itself is ready or authenticated; use `amicus_backends` for that, and if the
-request does not name a backend ask which one to preview against.
+what amicus would assemble *for that backend's resolved options* and runs that
+backend's free pre-spend checks (for `pi`, its model, auth and effort checks), so a
+preview fails where the paid call would be refused before spending. It does not
+check that the backend's binary is installed; use `amicus_backends` for readiness,
+and if the request does not name a backend ask which one to preview against.
+When a preview returns an error, report its `error.code` and follow `error.repair`
+as for the paid call.
 
 For a review preview, call `amicus_review_changes_dry_run` (free — no model call). Map the scope
 request to `scope`/`base`/`commit` as for `/amicus:review`, and pass the absolute

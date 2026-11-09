@@ -66,8 +66,9 @@ obligations live in the reference each route names, under that file's own `Rules
   the remaining discovery rules checkable.
 - **Pass only a backend reported `enabled: true` and `status.installed: true` that is ready for
   the model the call will run: `status.authenticated: true`, or, for `pi`, an exact `model` the
-  same call passes that `amicus_models(backend="pi")` lists.** `enabled` alone is not
-  eligibility. pi's `status.authenticated` speaks only for `AMICUS_PI_MODEL` and is `null` while
+  same call passes that `amicus_models(backend="pi")` lists, or, past a `truncated` listing's
+  cut, that you know exactly.** pi checks such a model pre-spend and refuses one it cannot
+  resolve. `enabled` alone is not eligibility. pi's `status.authenticated` speaks only for `AMICUS_PI_MODEL` and is `null` while
   that is unset, so it neither admits nor excludes a per-call `model`.
 - **Confirm the backend's `features` list names `delegate` or `adversarial_review` before calling
   that verb.** Those are the only gated verbs; `consult` and `review_changes` run on every
@@ -250,7 +251,8 @@ obligation.
 
 `backend` names the harness CLI that runs a call, not the model, and has no default; `model`
 picks the model inside that harness. `pi` has no default model: a call needs an exact
-`provider/id`, from `model` or `AMICUS_PI_MODEL`, and pi refuses an unlisted one pre-spend.
+`provider/id`, from `model` or `AMICUS_PI_MODEL`, and pi refuses one its catalog has no exact
+row for, pre-spend.
 Each tool's `backend` enum is the set it accepts: `amicus_delegate` and its twins take `codex`,
 `kimi` or `pi`, `amicus_adversarial_review` and its twin take only `claude`, and any other
 pairing is rejected pre-spend as `invalid_arguments`. Those restrictions belong to harnesses:
@@ -302,6 +304,6 @@ and `carriers` on `amicus_backends(detail="full")` is authoritative: on `codex`,
 this machine's disk. On `pi` the provider is the one the model's `provider/id` prefix names, a
 router included, so the model you pick is also the egress destination. A backend can read files
 outside the workspace during a call, redaction
-covers only gathered diffs and returned output, and a dry run invokes no backend, so it proves
-nothing about a paid call. [choosing a backend](references/choosing-a-backend.md) has the
+covers only gathered diffs and returned output, and a dry run calls no model (it runs only the
+backend's free pre-spend checks), so it proves nothing about what a paid call reads or sends. [choosing a backend](references/choosing-a-backend.md) has the
 per-backend table.

@@ -289,7 +289,6 @@ def _compose(
         if isinstance(gathered, dict):
             return gathered
         diff = gathered
-    gathered_text = diff.text if diff is not None else None
     # A focused pass is never a full review (per the `focus` parameter contract), so the
     # coverage records it and apply_coverage downgrades a model `pass` over it.
     coverage = review.build_coverage(
@@ -297,6 +296,15 @@ def _compose(
         diff,
         focused=spec.kind in ("review_changes", "adversarial_review") and review.is_focused(spec),
     )
+    prompt, schema = frame(spec, diff.text if diff is not None else None, plugin)
+    return prompt, schema, coverage
+
+
+def frame(
+    spec: RunSpec, gathered_text: str | None, plugin: BackendPlugin
+) -> tuple[str, dict[str, Any] | None]:
+    """(prompt, output schema) for the kind, through the plugin's framing hook. The dry runs
+    frame through this too, so what they validate is what the paid call would send."""
     scope_label = prompts.review_label(spec.scope or "working_tree", spec.base, spec.commit)
     schema: dict[str, Any] | None
     if spec.kind == "review_changes":
@@ -327,7 +335,35 @@ def _compose(
     else:
         prompt = prompts.delegate_prompt(spec.host_name, spec.task or "", plugin=plugin)
         schema = None
-    return prompt, schema, coverage
+    return prompt, schema
+
+
+def build_request(
+    spec: RunSpec,
+    prompt: str,
+    schema: dict[str, Any] | None,
+    *,
+    cwd: str,
+    aliases: tuple[str, ...] = (),
+) -> RunRequest:
+    """The RunRequest a backend validates and runs. One builder for the paid run (the
+    selected site's cwd and aliases) and the dry runs (the workspace, no aliases), so the
+    request a preview validates cannot drift from the one the paid call would (#439)."""
+    return RunRequest(
+        kind=spec.kind,
+        prompt=prompt,
+        cwd=cwd,
+        timeout_seconds=spec.timeout_seconds,
+        schema=schema,
+        model=spec.model,
+        reasoning_effort=spec.reasoning_effort,
+        budget_usd=spec.options.get("max_budget_usd"),
+        config_mode=spec.options.get("config_mode"),
+        access=spec.options.get("access"),
+        isolation=spec.options.get("isolation"),
+        sanitize_aliases=aliases,
+        instructions_append=spec.instructions_append,
+    )
 
 
 async def run_request(
@@ -347,21 +383,7 @@ async def run_request(
         with select_site(spec, plugin, on_worktree_parent) as site:
             if site.security_warnings:
                 meta.security_warnings = list(site.security_warnings)
-            request = RunRequest(
-                kind=spec.kind,
-                prompt=prompt,
-                cwd=site.cwd,
-                timeout_seconds=spec.timeout_seconds,
-                schema=schema,
-                model=spec.model,
-                reasoning_effort=spec.reasoning_effort,
-                budget_usd=spec.options.get("max_budget_usd"),
-                config_mode=spec.options.get("config_mode"),
-                access=spec.options.get("access"),
-                isolation=spec.options.get("isolation"),
-                sanitize_aliases=site.aliases,
-                instructions_append=spec.instructions_append,
-            )
+            request = build_request(spec, prompt, schema, cwd=site.cwd, aliases=site.aliases)
             invalid = plugin.backend.validate_request(request)
             if invalid is not None:
                 return render_failure(

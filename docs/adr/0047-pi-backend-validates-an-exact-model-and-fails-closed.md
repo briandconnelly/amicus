@@ -1,6 +1,6 @@
 # ADR 0047: the pi backend validates an exact model and fails closed
 
-**Status:** Accepted (2026-11-08)
+**Status:** Accepted (2026-11-08); amended 2026-11-09 for issues #439 and #443
 
 Departs from the kimi model and effort checks of [ADR 0009](0009-m3-kimi-port-decisions.md) because pi's CLI does not reject an unknown model, and keeps the closed `backend_options` set of [ADR 0002](0002-backend-options-is-a-closed-superset.md) for a backend with nothing to isolate.
 
@@ -51,3 +51,14 @@ The `backend_options` set stays closed, and `isolation` for `pi` is rejected pre
 - Pi carries the prompt on stdin and writes no session file under `--no-session`, so it adds no rule-18 carrier exemption.
 - A shell command that pi starts during a delegate, such as a hung or backgrounded process, can outlive the run, because amicus cannot yet find and stop it.
   Pi's bash tool starts its shell detached, with the worktree as a spawn option rather than an argument, so amicus's orphan sweep, which matches the worktree path in a process's argv, does not see it; and amicus ends a timed-out or cancelled run with SIGKILL, so pi's own cleanup of its shells never runs.
+
+## Amendment (2026-11-09): previews run the same validation, and a cut listing does not limit it
+
+Issue #439 found that `amicus_review_changes_dry_run` and `amicus_delegate_dry_run` stopped before the backend's `validate_request`, so a pi preview with no model reported a call the paid tool refuses.
+Both previews now build the request through the same helper the paid run uses and run that backend's `validate_request` on it, free probes included, returning the envelope the paid tool would.
+For pi that means `pi auth check` and the exact-model lookup above run during a preview; no model call is made, and no worktree, job record or `prepare` is started.
+A review preview with nothing to send validates nothing, because the paid review returns `not_run` before its backend sees the request.
+The paid call validates again, so a passing preview is a forecast, not a reservation: a probe cached in the server process for the help-cache TTL can disagree with the fresh probe the paid call's worker runs.
+A missing binary is still reported only by the paid call and by `amicus_backends`, because the run checks the binary after validation.
+The same previews also run kimi's effort check against its listing, as [ADR 0009](0009-m3-kimi-port-decisions.md) decides it.
+Issue #443 corrected `amicus_models`'s truncation hint for pi: the lookup in the second step asks about the exact model, so a model past the 1,024-row listing that `amicus_models` shows is still checked, effort included, and the hint says so without promising the model is accepted.

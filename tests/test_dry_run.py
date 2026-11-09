@@ -428,3 +428,373 @@ async def test_every_focus_states_its_cap_and_points_long_text_to_extra_context(
     alternative = res.structured_content["error"]["repair"]["alternative"]
     assert "keep focus to a short concern (at most 500 characters)" in alternative
     assert "move the supporting detail to extra_context" in alternative
+
+
+# --- #439: a dry run runs the backend's pre-spend validation -------------------------------
+
+PI_MODEL = "openrouter/moonshotai/kimi-k3"
+_NO_THINKING_MODELS = (
+    "provider    model                     context  max-out  thinking  images\n"
+    "openrouter  moonshotai/kimi-k3        1.0M     943.7K   no        yes\n"
+)
+
+
+def _pi_registry(
+    tmp_path, fake_pi, monkeypatch, *, model: str | None = PI_MODEL, models: str | None = None
+):
+    """(app, registry) on the fake pi, as tests/test_pi_sync_tools.py builds it. The catalog
+    is set before the registry loads: its conformance check validates, and the adapter
+    remembers each model's catalog row for the probe TTL."""
+    from amicus.jobs import lifecycle
+
+    monkeypatch.setenv("AMICUS_PI_BIN", str(fake_pi))
+    if model is None:
+        monkeypatch.delenv("AMICUS_PI_MODEL", raising=False)
+    else:
+        monkeypatch.setenv("AMICUS_PI_MODEL", model)
+    monkeypatch.setenv("AMICUS_STATE_DIR", str(tmp_path / "state"))
+    monkeypatch.setenv("FAKE_PI_ARGV_FILE", str(tmp_path / "argv.jsonl"))
+    monkeypatch.setenv("FAKE_PI_STDIN_FILE", str(tmp_path / "stdin.txt"))
+    for key in ("FAKE_PI_EXIT", "FAKE_PI_EVENTS", "FAKE_PI_AUTH", "FAKE_PI_MODELS"):
+        monkeypatch.delenv(key, raising=False)
+    if models is not None:
+        monkeypatch.setenv("FAKE_PI_MODELS", models)
+    monkeypatch.setattr(lifecycle, "SYNC_POLL_INTERVAL_S", 0.02)
+    settings = config.settings()
+    registry = BackendRegistry.load(settings.enabled_backends, entry_points=())
+    return server.create_app(settings, registry), registry
+
+
+def _pi_runs(tmp_path):
+    """The fake pi's model invocations (`-p` runs); its free probes are not recorded."""
+    path = tmp_path / "argv.jsonl"
+    if not path.exists():
+        return []
+    return [a for a in map(json.loads, path.read_text().splitlines()) if "-p" in a]
+
+
+def _reason_field(details):
+    """The field of a backend detail that ErrorDetail could not hold whole: pi's invalid_model
+    adds `catalog`, so render_failure folds the pairs into `reason` ("field=model ...")."""
+    reason = details.get("reason") or ""
+    return next((t.removeprefix("field=") for t in reason.split() if t.startswith("field=")), None)
+
+
+# (case, the env/args it needs, the code and field both the dry run and the paid tool return)
+_PI_REFUSALS = [
+    ("missing_model", {"model": None}, {}, "invalid_arguments", "model"),
+    (
+        "unlisted_model",
+        {},
+        {"model": "openrouter/nobody/nothing"},
+        "invalid_model",
+        "model",
+    ),
+    (
+        "unsupported_effort",
+        {"models": _NO_THINKING_MODELS},
+        {"reasoning_effort": "high"},
+        "invalid_reasoning_effort",
+        "reasoning_effort",
+    ),
+]
+_PAIRS = [
+    ("amicus_review_changes_dry_run", "amicus_review_changes", {}),
+    ("amicus_delegate_dry_run", "amicus_delegate", {"task": "add b.py"}),
+]
+
+
+@pytest.mark.parametrize(("dry", "paid", "extra"), _PAIRS, ids=["review", "delegate"])
+@pytest.mark.parametrize(
+    ("case", "setup", "args", "code", "field"), _PI_REFUSALS, ids=[c[0] for c in _PI_REFUSALS]
+)
+async def test_a_pi_dry_run_refuses_exactly_where_the_paid_call_does(
+    tmp_path, repo, fake_pi, monkeypatch, dry, paid, extra, case, setup, args, code, field
+):
+    """#439: the refusal travels the real paid path (MCP -> worker -> the fake pi), and the
+    dry run returns the same code and field, with no model run on either side."""
+    app, _ = _pi_registry(
+        tmp_path,
+        fake_pi,
+        monkeypatch,
+        model=setup.get("model", PI_MODEL),
+        models=setup.get("models"),
+    )
+    (repo / "a.py").write_text("x = 2\n")  # a review with nothing to send never validates
+    call = {"backend": "pi", "workspace_root": str(repo), **extra, **args}
+    async with Client(app) as c:
+        dry_res = await c.call_tool(dry, call, raise_on_error=False)
+        paid_res = await c.call_tool(paid, call, raise_on_error=False)
+    dry_err = dry_res.structured_content["error"]
+    paid_err = paid_res.structured_content["error"]
+    assert dry_res.is_error is True and paid_res.is_error is True
+    assert dry_err["code"] == paid_err["code"] == code, case
+    assert dry_err["details"] == paid_err["details"], case
+    assert field in (dry_err["details"].get("field"), _reason_field(dry_err["details"])), case
+    assert dry_err["backend"] == "pi" and json.loads(dry_res.content[0].text) == (
+        dry_res.structured_content
+    )
+    assert _pi_runs(tmp_path) == []
+
+
+async def test_a_valid_pi_model_previews_and_the_model_runs_are_recorded(
+    tmp_path, repo, fake_pi, monkeypatch
+):
+    """The positive control for the refusal tests above: a listed model previews ok, and the
+    `-p` recorder they read empty does see a paid run."""
+    app, _ = _pi_registry(tmp_path, fake_pi, monkeypatch)
+    (repo / "a.py").write_text("x = 2\n")
+    async with Client(app) as c:
+        review = await c.call_tool(
+            "amicus_review_changes_dry_run", {"backend": "pi", "workspace_root": str(repo)}
+        )
+        delegate = await c.call_tool(
+            "amicus_delegate_dry_run",
+            {"backend": "pi", "task": "add b.py", "workspace_root": str(repo)},
+        )
+        assert _pi_runs(tmp_path) == []
+        await c.call_tool(
+            "amicus_consult", {"backend": "pi", "question": "why?", "workspace_root": str(repo)}
+        )
+    assert review.structured_content["ok"] is True
+    assert review.structured_content["would_call_model"] is True
+    assert review.structured_content["model"] == PI_MODEL
+    assert delegate.structured_content["ok"] is True
+    assert len(_pi_runs(tmp_path)) == 1
+
+
+async def test_a_clean_tree_pi_preview_without_a_model_does_not_validate(
+    tmp_path, repo, fake_pi, monkeypatch
+):
+    """A review with nothing to send never reaches the backend on the paid path, so its
+    preview says so and does not turn the missing model into a refusal."""
+    app, registry = _pi_registry(tmp_path, fake_pi, monkeypatch, model=None)
+    backend = registry.get("pi").backend
+    calls = []
+    real = backend.validate_request
+
+    def spy(request):
+        calls.append(request)
+        return real(request)
+
+    monkeypatch.setattr(backend, "validate_request", spy)
+    async with Client(app) as c:
+        clean = await c.call_tool(
+            "amicus_review_changes_dry_run", {"backend": "pi", "workspace_root": str(repo)}
+        )
+        assert calls == []
+        (repo / "a.py").write_text("x = 2\n")
+        dirty = await c.call_tool(
+            "amicus_review_changes_dry_run",
+            {"backend": "pi", "workspace_root": str(repo)},
+            raise_on_error=False,
+        )
+    body = clean.structured_content
+    assert body["ok"] is True and body["would_call_model"] is False and body["model"] is None
+    # The spy is live: the same preview over a dirty tree reaches it and is refused.
+    assert len(calls) == 1
+    assert dirty.structured_content["error"]["code"] == "invalid_arguments"
+
+
+async def test_a_refused_dry_run_starts_nothing(tmp_path, repo, fake_pi, monkeypatch):
+    """The dry call alone: no worktree, no backend.prepare, no job record, no model run."""
+    from amicus.jobs import lifecycle
+    from amicus.orchestration import isolation
+
+    app, registry = _pi_registry(tmp_path, fake_pi, monkeypatch)
+    backend = registry.get("pi").backend
+
+    def forbidden(*_a, **_k):
+        raise AssertionError("a dry run must not reach this")
+
+    monkeypatch.setattr(backend, "prepare", forbidden)
+    monkeypatch.setattr(lifecycle, "start_job", forbidden)
+    monkeypatch.setattr(isolation, "select_site", forbidden)
+    monkeypatch.setattr(dry_run_mod().worktree, "create", forbidden, raising=False)
+    (repo / "a.py").write_text("x = 2\n")
+    call = {"backend": "pi", "workspace_root": str(repo), "model": "openrouter/nobody/nothing"}
+    async with Client(app) as c:
+        review = await c.call_tool("amicus_review_changes_dry_run", call, raise_on_error=False)
+        delegate = await c.call_tool(
+            "amicus_delegate_dry_run", {**call, "task": "add b.py"}, raise_on_error=False
+        )
+    assert review.structured_content["error"]["code"] == "invalid_model"
+    assert delegate.structured_content["error"]["code"] == "invalid_model"
+    worktrees = subprocess.run(
+        ["git", "worktree", "list"], cwd=repo, capture_output=True, text=True, check=True
+    ).stdout.splitlines()
+    assert len(worktrees) == 1
+    state = tmp_path / "state"
+    assert not [p for p in state.rglob("*") if p.name in ("meta.json", "result.json")]
+    assert _pi_runs(tmp_path) == []
+
+
+def dry_run_mod():
+    from amicus.tools import dry_run
+
+    return dry_run
+
+
+def _app(tmp_path, monkeypatch, **env):
+    monkeypatch.setenv("AMICUS_STATE_DIR", str(tmp_path / "state"))
+    for key, value in env.items():
+        if value is None:
+            monkeypatch.delenv(key, raising=False)
+        else:
+            monkeypatch.setenv(key, value)
+    settings = config.settings()
+    return server.create_app(
+        settings, BackendRegistry.load(settings.enabled_backends, entry_points=())
+    )
+
+
+async def test_a_codex_dry_run_refuses_a_relative_codex_home(tmp_path, repo, monkeypatch):
+    app = _app(tmp_path, monkeypatch, CODEX_HOME="relative/codex-home")
+    (repo / "a.py").write_text("x = 2\n")
+    async with Client(app) as c:
+        review = await c.call_tool(
+            "amicus_review_changes_dry_run",
+            {"backend": "codex", "workspace_root": str(repo)},
+            raise_on_error=False,
+        )
+        delegate = await c.call_tool(
+            "amicus_delegate_dry_run",
+            {"backend": "codex", "task": "do it", "workspace_root": str(repo)},
+            raise_on_error=False,
+        )
+    assert review.structured_content["error"]["code"] == "user_config_rejected"
+    assert delegate.structured_content["error"]["code"] == "user_config_rejected"
+
+
+async def test_a_claude_dry_run_refuses_bare_mode_without_a_key(tmp_path, repo, monkeypatch):
+    app = _app(tmp_path, monkeypatch, ANTHROPIC_API_KEY=None)
+    (repo / "a.py").write_text("x = 2\n")
+    async with Client(app) as c:
+        res = await c.call_tool(
+            "amicus_review_changes_dry_run",
+            {
+                "backend": "claude",
+                "workspace_root": str(repo),
+                "backend_options": {"config_mode": "bare"},
+            },
+            raise_on_error=False,
+        )
+    err = res.structured_content["error"]
+    assert err["code"] == "api_key_missing"
+    assert err["details"]["field"] == "backend_options.config_mode"
+
+
+async def test_a_kimi_dry_run_refuses_an_unknown_effort(tmp_path, repo, monkeypatch):
+    app = _app(tmp_path, monkeypatch)
+    (repo / "a.py").write_text("x = 2\n")
+    async with Client(app) as c:
+        review = await c.call_tool(
+            "amicus_review_changes_dry_run",
+            {"backend": "kimi", "workspace_root": str(repo), "reasoning_effort": "turbo"},
+            raise_on_error=False,
+        )
+        delegate = await c.call_tool(
+            "amicus_delegate_dry_run",
+            {
+                "backend": "kimi",
+                "task": "do it",
+                "workspace_root": str(repo),
+                "reasoning_effort": "turbo",
+            },
+            raise_on_error=False,
+        )
+    assert review.structured_content["error"]["code"] == "invalid_reasoning_effort"
+    assert delegate.structured_content["error"]["code"] == "invalid_reasoning_effort"
+
+
+_PARITY_FIELDS = (
+    "kind",
+    "prompt",
+    "schema",
+    "timeout_seconds",
+    "model",
+    "reasoning_effort",
+    "access",
+    "config_mode",
+    "isolation",
+    "budget_usd",
+    "instructions_append",
+)
+_PARITY_CASES = [
+    (
+        "codex",
+        "amicus_review_changes_dry_run",
+        "amicus_review_changes",
+        {
+            "model": "gpt-test",
+            "reasoning_effort": "high",
+            "instructions_append": "Be terse.",
+            "backend_options": {"isolation": "ignore-rules"},
+        },
+    ),
+    (
+        "claude",
+        "amicus_review_changes_dry_run",
+        "amicus_review_changes",
+        {
+            "model": "opus-test",
+            "reasoning_effort": "high",
+            "backend_options": {"config_mode": "safe", "max_budget_usd": 2.5},
+        },
+    ),
+    (
+        "codex",
+        "amicus_delegate_dry_run",
+        "amicus_delegate",
+        {
+            "task": "add b.py",
+            "model": "gpt-test",
+            "reasoning_effort": "low",
+            "backend_options": {"isolation": "ignore-rules"},
+        },
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    ("backend", "dry", "paid", "args"),
+    _PARITY_CASES,
+    ids=["codex-review", "claude-review", "codex-delegate"],
+)
+async def test_a_dry_run_validates_the_request_the_paid_call_would(
+    tmp_path, repo, monkeypatch, backend, dry, paid, args
+):
+    """The paid path runs in a worker process, so it is driven here in process: run_sync is
+    replaced by run_request itself, and both sides hand their RunRequest to a recorder that
+    refuses, so nothing runs."""
+    from amicus.jobs import lifecycle
+    from amicus.orchestration import run as run_mod
+    from amicus.sdk.backend.protocol import ClassifiedFailure
+
+    monkeypatch.setenv("AMICUS_STATE_DIR", str(tmp_path / "state"))
+    settings = config.settings()
+    registry = BackendRegistry.load(settings.enabled_backends, entry_points=())
+    app = server.create_app(settings, registry)
+    seen = []
+
+    def record(request):
+        seen.append(request)
+        return ClassifiedFailure(code="invalid_arguments", detail="recorded")
+
+    monkeypatch.setattr(registry.get(backend).backend, "validate_request", record)
+
+    async def in_process(_store, spec, _meta, plugin, **_kw):
+        return await run_mod.run_request(spec, plugin)
+
+    monkeypatch.setattr(lifecycle, "run_sync", in_process)
+    (repo / "a.py").write_text("x = 2\n")
+    call = {"backend": backend, "workspace_root": str(repo), **args}
+    async with Client(app) as c:
+        dry_res = await c.call_tool(dry, call, raise_on_error=False)
+        paid_res = await c.call_tool(paid, call, raise_on_error=False)
+    assert dry_res.structured_content["error"]["message"] == "recorded"
+    assert paid_res.structured_content["error"]["message"] == "recorded"
+    dry_req, paid_req = seen
+    for field in _PARITY_FIELDS:
+        assert getattr(dry_req, field) == getattr(paid_req, field), field
+    assert dry_req.model == args["model"] and dry_req.reasoning_effort == args["reasoning_effort"]

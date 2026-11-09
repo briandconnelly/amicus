@@ -20,6 +20,30 @@ per-change, as its own lead says.
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking**: `amicus/0.1/schema-64`. `amicus_review_changes_dry_run` and
+  `amicus_delegate_dry_run` now run the selected backend's own pre-spend validation, free probes
+  included (for `pi`, `pi auth check` and the exact-model lookup), on the request the paid call
+  would build, and return the error envelope the paid tool returns (#439). A preview that 0.13.0
+  answered `ok: true`, such as a `pi` preview with no model, is now refused where the paid call
+  would be: as `invalid_arguments`, `invalid_model`, `invalid_reasoning_effort`,
+  `backend_auth_required`, `user_config_rejected` or, for claude's `bare` mode without a key,
+  `api_key_missing`, and both dry-run rows in `amicus_capabilities(detail="full")` list the codes
+  they can now return. A review preview with nothing to send still validates nothing, as the
+  paid review does not. A preview still calls no model and starts no worktree, job or backend
+  run, and it still does not check that the backend's binary is installed, which
+  `amicus_backends` reports. The two descriptions now say a preview runs those free checks.
+
+### Fixed
+
+- **Surface**: `amicus/0.1/schema-64`. `amicus_models`'s `truncation_hint` is now specific to the
+  backend (#443). For `pi` it says only the listing was cut, and that an exact `provider/id`
+  past it and its `reasoning_effort` are still checked before any spend, with a model pi cannot
+  resolve refused; it no longer says amicus cannot check that effort. For every other backend it
+  says a slug past the cut may still be valid, where it said one is. The `reasoning_effort`
+  contract on `amicus://params` and the `collaborating-with-amicus` skill say the same.
+
 ## [0.13.0] - 2026-11-09
 
 This release adds a `pi` backend, for the pi coding-agent CLI, and deprecates `kimi` in its

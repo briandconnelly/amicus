@@ -336,6 +336,42 @@ async def test_models_reports_a_truncated_catalog():
     assert "these 1 models" in hint and "`model`" in hint and "reasoning_effort" in hint
 
 
+class _CutListing:
+    def read(self):
+        return ModelListing(models=(ModelEntry(slug="m0"),), source="live", truncated=True)
+
+
+async def _models_both_ways(backend):
+    """(tool payload, amicus://models/{backend} payload) for a cut listing on `backend`."""
+    reg = BackendRegistry({backend: fakeplugin.make_plugin(backend, models=_CutListing())}, {})
+    async with Client(_app(registry=reg)) as c:
+        tool = (await c.call_tool("amicus_models", {"backend": backend})).structured_content
+        [content] = await c.read_resource(f"amicus://models/{backend}")
+    return tool, json.loads(content.text)
+
+
+async def test_a_truncated_pi_listing_says_the_exact_model_is_still_checked():
+    """#443: pi looks the exact model up on its own, past amicus's listing bound, and checks
+    its effort pre-spend; the hint says so, without promising the model is accepted."""
+    tool, resource = await _models_both_ways("pi")
+    assert tool["truncation_hint"] == resource["truncation_hint"]
+    hint = tool["truncation_hint"]
+    assert "these 1 models" in hint
+    assert "provider/id" in hint and "reasoning_effort" in hint
+    assert "checks" in hint and "before any spend" in hint
+    assert "refus" in hint  # a model pi cannot resolve is refused, not promised
+    assert "cannot check" not in hint and "is still valid" not in hint
+
+
+async def test_a_truncated_kimi_listing_does_not_vouch_for_a_slug_past_the_cut():
+    tool, resource = await _models_both_ways("kimi")
+    assert tool["truncation_hint"] == resource["truncation_hint"]
+    hint = tool["truncation_hint"]
+    assert "these 1 models" in hint and "may still be valid" in hint
+    assert "is still valid" not in hint
+    assert "cannot check a reasoning_effort" in hint
+
+
 async def test_models_for_available_and_unavailable_backends():
     async with Client(_app(registry=_mixed_registry())) as c:
         codex = await c.call_tool("amicus_models", {"backend": "codex"})
