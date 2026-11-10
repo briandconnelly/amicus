@@ -79,10 +79,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           FILED: ${{ needs.watch.outputs.filed }}
+        # The evaluation runs from the ref the watch ran from: `main` on the schedule.
         run: |
           set -euo pipefail
           for issue in $(jq -r '.[]' <<<"$FILED"); do
             [[ "$issue" =~ ^[1-9][0-9]*$ ]] || { echo "::error::not an issue number: $issue"; exit 1; }
-            gh workflow run backend-release-eval.yml --repo "$GITHUB_REPOSITORY" -f issue="$issue"
+            # --ref saves gh a lookup of the default branch, which this token cannot read.
+            gh workflow run backend-release-eval.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME" \
+              -f issue="$issue"
             echo "dispatched an evaluation of #$issue"
           done

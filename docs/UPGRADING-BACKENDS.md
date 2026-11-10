@@ -21,51 +21,67 @@ A kimi or pi PR is a release a maintainer may still decline, and a declined mino
 ## 0. Before starting
 
 - Read the issue, and check that it is still open.
-- If an open PR already says `Closes #<issue>`, the evaluation is already in that PR: comment on the issue to say so, and stop.
+- If an open PR already references the issue (`gh pr list --state open --search "<issue> in:body"`), the evaluation is already in that PR: comment on the issue to say so, and stop.
 - Work on a branch named `chore/<backend>-<version with dots as dashes>`, such as `chore/kimi-2-6` or `chore/claude-2-1-320`, which is what earlier support PRs used.
 - For kimi and pi, evaluate the newest patch release of the issue's minor, which npm's `latest` dist-tag names when the minor is current; for claude, the exact version the title names.
+- Record the baseline now, before anything is written: the newest version under `docs/<backend>-help/` as committed on `main`.
+  Step 2 adds a newer capture, so "the newest capture" means something else after it, and every later step that compares with the previous release uses this recorded baseline.
 
 ## 1. Install into a scratch prefix
 
 Install the release from npm into a directory of its own, never globally and never inside the checkout:
 
 ```sh
+REPO=$(git rev-parse --show-toplevel)
 SCRATCH=$(mktemp -d)
 npm install --prefix "$SCRATCH/new" <package>@<version>
 ```
 
 The packages are `@moonshot-ai/kimi-code`, `@earendil-works/pi-coding-agent` and `@anthropic-ai/claude-code`, which `NPM_PACKAGES` in `scripts/check_backend_compat.py` also names.
 The binary is then under `$SCRATCH/new/node_modules/.bin/`.
-Install the version the newest capture records the same way, into `$SCRATCH/old`, when a side-by-side comparison would answer a question the capture cannot.
+Install the baseline version the same way, into `$SCRATCH/old`, when a side-by-side comparison would answer a question the capture cannot.
 
 ## 2. Capture at zero spend
 
-Run only the commands the newest `FINDINGS.md` for that backend lists, and nothing that sends a prompt.
-Run each one from a scratch working directory, with a scratch `HOME`, and with every credential the environment holds removed:
+Run only the commands the baseline's `FINDINGS.md` lists, and nothing that sends a prompt.
+Run every probe, the mechanical check included, in a subshell, so the shell you work in stays in the checkout, and inside it from a scratch working directory, with a scratch `HOME`, and with every credential the environment holds removed:
 
 ```sh
 mkdir -p "$SCRATCH/home" "$SCRATCH/cwd"
-cd "$SCRATCH/cwd"
-env -u ANTHROPIC_API_KEY -u CLAUDE_CODE_OAUTH_TOKEN -u GH_TOKEN -u GITHUB_TOKEN \
-  HOME="$SCRATCH/home" "$SCRATCH/new/node_modules/.bin/<binary>" --help
+(
+  cd "$SCRATCH/cwd" &&
+  env -u ANTHROPIC_API_KEY -u CLAUDE_CODE_OAUTH_TOKEN -u GH_TOKEN -u GITHUB_TOKEN \
+    HOME="$SCRATCH/home" "$SCRATCH/new/node_modules/.bin/<binary>" --help
+)
 ```
 
 The scratch directory matters for pi, which loads resources from its working directory before it handles `--help`, and the scratch `HOME` keeps the probe away from any real configuration or session store.
 `kimi provider list --json` and `pi --list-models` read a provider configuration that a runner does not have, so record their shape as unavailable rather than guessing it, and say so in `FINDINGS.md`.
 
-Then run the mechanical check against that binary:
+Then run the mechanical check the same way, with the project's own interpreter and every path resolved against the checkout:
 
 ```sh
-AMICUS_<BACKEND>_BIN="$SCRATCH/new/node_modules/.bin/<binary>" uv run python scripts/check_backend_compat.py --write
+(
+  cd "$SCRATCH/cwd" &&
+  env -u ANTHROPIC_API_KEY -u CLAUDE_CODE_OAUTH_TOKEN -u GH_TOKEN -u GITHUB_TOKEN \
+    HOME="$SCRATCH/home" \
+    AMICUS_CODEX_BIN=/nonexistent AMICUS_KIMI_BIN=/nonexistent \
+    AMICUS_CLAUDE_BIN=/nonexistent AMICUS_PI_BIN=/nonexistent \
+    AMICUS_<BACKEND>_BIN="$SCRATCH/new/node_modules/.bin/<binary>" \
+    "$REPO/.venv/bin/python" "$REPO/scripts/check_backend_compat.py" --docs-root "$REPO/docs" --write
+)
 ```
 
-It runs `--version`, `--help` and the free login probe, compares the flags with the newest capture, and with `--write` saves the new `--help` and version as the capture.
-Its report for the other backends, which are not installed on a runner, is expected to fail, and only the backend under evaluation is read.
+The last `AMICUS_<BACKEND>_BIN` names the backend under evaluation and overrides its `/nonexistent`.
+Every other backend is pointed at a path that does not exist, which the check reports as not installed and never captures; that matters because a runner has other CLIs on `PATH`, such as the `claude` the evaluation itself runs on, and `--write` captures every installed backend that has no capture yet.
+For the backend under evaluation it runs `--version`, `--help` and the free login probe, compares the flags with the baseline, and with `--write` saves the new `--help` and version as the capture.
+Its report fails for the backends it was told are not installed, which is expected.
+Afterwards `git status --short docs/` must show a new folder under `docs/<backend>-help/` and nothing else; remove anything else it shows.
 Never paste login status output anywhere: it can carry account-identifying detail.
 
 ## 3. Read the release notes
 
-Read the notes for every release between the newest capture and the version under evaluation:
+Read the notes for every release after the baseline from step 0, up to the version under evaluation:
 
 - kimi: `apps/kimi-code/CHANGELOG.md` in the repository `npm view @moonshot-ai/kimi-code repository.url` names.
 - pi: the changelog or GitHub releases of the repository `npm view @earendil-works/pi-coding-agent repository.url` names.
@@ -112,7 +128,10 @@ A support change does not normally touch a category in `FINGERPRINT_COVERS`, so 
 Run the gate AGENTS.md rule 2 defines.
 Never run the live gates: AGENTS.md rule 5 allows them only when the maintainer asks, and a runner has no authenticated CLI anyway, so the PR says they were not run.
 
-Commit with a Conventional Commit message that ends with `Closes #<issue>`, push the branch, and open a draft PR with the title from the table above.
+Commit with a Conventional Commit message, push the branch, and open a draft PR with the title from the table above.
+A kimi or pi PR ends its body with `Closes #<issue>`, because that issue names one minor.
+A claude PR says `Refs #<issue>` instead and never uses a closing keyword: the watch moves the claude issue forward to each newer release, so by the time the PR merges the issue may name a release the PR did not evaluate, and closing it then would retire that release's title for good (`docs/WATCHING.md`).
+The maintainer closes the claude issue after merging, once the issue's current title names a release at or before the capture.
 Fill in `.github/PULL_REQUEST_TEMPLATE.md`: what was checked and against which version, what was not checked, and the gate's result.
 
 Finish with one comment on the issue: the decision, the findings that bear on it, what could not be checked from a runner, and the PR link if there is one.
