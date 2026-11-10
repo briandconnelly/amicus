@@ -7,7 +7,8 @@ on:
     - cron: "30 15 * * *"
   workflow_dispatch:
 
-# Least-privilege: nothing at the top level; the one job reads the repo and files issues.
+# Least-privilege: nothing at the top level; `watch` reads the repo and files issues, and
+# `evaluate` may only dispatch workflows.
 permissions: {}
 
 # Never two runs at once: a second run must see the first's issues, or both file the same
@@ -24,6 +25,8 @@ jobs:
     permissions:
       contents: read
       issues: write
+    outputs:
+      filed: ${{ steps.filed.outputs.issues }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -50,3 +53,36 @@ jobs:
             echo '```'
           } >>"$GITHUB_STEP_SUMMARY"
           exit "$status"
+      # Even when the watch failed on one stream, the issues it did file still get evaluated.
+      - name: List the backend issues this run filed
+        id: filed
+        if: ${{ !cancelled() }}
+        run: |
+          issues=$(jq -c '[.filings[]? | select(.action == "filed" and .number != null
+            and (.stream == "kimi" or .stream == "pi" or .stream == "claude")) | .number]' \
+            "$RUNNER_TEMP/watch.json" 2>/dev/null) || issues='[]'
+          echo "issues=${issues:-[]}" >>"$GITHUB_OUTPUT"
+
+  evaluate:
+    name: dispatch release evaluations
+    needs: watch
+    # An issue filed with GITHUB_TOKEN starts no `issues` workflow, but a dispatch does, so
+    # each new kimi, pi or claude issue is handed to backend-release-eval.yml this way.
+    # A claude issue moved forward by `edited` is not re-dispatched; dispatch it by hand.
+    if: ${{ !cancelled() && needs.watch.outputs.filed != '' && needs.watch.outputs.filed != '[]' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - name: Dispatch one evaluation per filed issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FILED: ${{ needs.watch.outputs.filed }}
+        run: |
+          set -euo pipefail
+          for issue in $(jq -r '.[]' <<<"$FILED"); do
+            [[ "$issue" =~ ^[1-9][0-9]*$ ]] || { echo "::error::not an issue number: $issue"; exit 1; }
+            gh workflow run backend-release-eval.yml --repo "$GITHUB_REPOSITORY" -f issue="$issue"
+            echo "dispatched an evaluation of #$issue"
+          done
