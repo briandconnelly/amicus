@@ -48,6 +48,10 @@ per-change, as its own lead says.
 
 ### Fixed
 
+- A `pi` run whose final assistant message carries a `stopReason` that is not a string, such
+  as a JSON list or object, is now classified as any other run is, and its answer delivered,
+  where it failed as `internal_error` (#438). No supported pi release has been seen to emit one.
+
 - `amicus_models(backend="pi")` no longer lists OpenRouter `:batch` ids, which OpenRouter serves
   only on its batch endpoint and pi's chat/completions calls always 404 on (#458).
   A `model` naming one is refused before any probe as `invalid_model` with `details.reason` `catalog=batch_only`.

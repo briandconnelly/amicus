@@ -82,7 +82,7 @@ def failed_stop(events: str) -> str | None:
     not the message, is pi's failure signal."""
     message = final_assistant(events)
     reason = message.get("stopReason") if message else None
-    return reason if reason in FAILED_STOP_REASONS else None
+    return reason if isinstance(reason, str) and reason in FAILED_STOP_REASONS else None
 
 
 def stopped_at_length(events: str) -> bool:
