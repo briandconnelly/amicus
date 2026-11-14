@@ -126,7 +126,11 @@ class CodexBackend:
                 "the codex binary could not be resolved; refusing to spawn a PATH-searched "
                 "fallback."
             )
-        with tempfile.TemporaryDirectory(prefix=TEMP_PREFIX) as tmp:
+        with tempfile.TemporaryDirectory(prefix=TEMP_PREFIX) as made:
+            # codex 0.169 opens --output-last-message without following symlinks (it
+            # expands only the root /tmp, /var and /etc links on macOS) and fails the run
+            # at startup otherwise, so a TMPDIR behind any other symlink broke every call.
+            tmp = os.path.realpath(made)
             last_msg_path = str(Path(tmp) / "last-message.txt")
             schema_path: str | None = None
             if request.schema is not None:

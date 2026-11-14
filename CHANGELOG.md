@@ -67,6 +67,12 @@ per-change, as its own lead says.
 
 ### Fixed
 
+- A `codex` call no longer fails at startup when the temp directory (`TMPDIR`) is reached
+  through a symlink. codex-cli 0.169 opens its `--output-last-message` file without following
+  symlinks, expanding only the root `/tmp`, `/var` and `/etc` links on macOS, and exits with
+  "Failed to open last message file" otherwise; amicus now passes it the resolved path.
+  The default macOS and Linux temp directories were not affected.
+
 - A JSON document nested too deeply for the decoder, in a backend's event stream, its result
   envelope, its structured answer or a free probe's output, is now read as unparseable where it
   raised `RecursionError` and failed the run as `internal_error` (#471). This covers every

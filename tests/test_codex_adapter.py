@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import tomllib
 from pathlib import Path
 
@@ -51,6 +52,29 @@ async def test_prepare_stages_artifacts_stdin_and_kind_policy(pinned_codex_bin, 
         _req(kind="review_changes", prompt="r", access="workspace-write")
     ) as p:
         assert p.argv[p.argv.index("--sandbox") + 1] == "workspace-write"  # explicit access wins
+
+
+async def test_prepare_passes_codex_a_symlink_free_artifact_path(
+    pinned_codex_bin, tmp_path, monkeypatch
+):
+    """codex 0.169 opens --output-last-message without following symlinks and fails the
+    run at startup when a directory on the path is one ("Not a directory"), so a temp root
+    behind a symlink would fail every codex call. The staged paths are resolved first."""
+    real = tmp_path / "real"
+    real.mkdir()
+    link = tmp_path / "link"
+    link.symlink_to(real)
+    monkeypatch.setattr("tempfile.tempdir", str(link))
+    _, backend = cf.make_backend()
+    async with backend.prepare(_req(cwd=str(tmp_path), schema={"type": "object"})) as p:
+        last = p.argv[p.argv.index("--output-last-message") + 1]
+        staged = [last, *p.artifacts, *p.artifact_paths.values()]
+        assert os.path.realpath(str(real)) in last, "control: the symlinked temp root was used"
+        for path in staged:
+            assert os.path.realpath(path) == path, path
+        assert Path(p.artifact_paths["schema"]).read_text() == '{"type": "object"}'
+        made = Path(last).parent
+    assert not made.exists(), "the staging directory is still removed"
 
 
 async def test_prepare_applies_isolation_and_env_defaults(pinned_codex_bin):
