@@ -37,7 +37,13 @@ def _strip_code_fence(text: str) -> str:
 
 
 def _loads(text: str) -> Any:
-    return json.loads(text, object_pairs_hook=_reject_repeated_keys)
+    """Parse strictly. A document nested too deeply for the decoder raises RecursionError,
+    which is not a ValueError; it is re-raised as one so every caller treats it as any
+    other unparseable answer (#471)."""
+    try:
+        return json.loads(text, object_pairs_hook=_reject_repeated_keys)
+    except RecursionError:
+        raise ValueError("JSON document is nested too deeply to parse") from None
 
 
 def _enclosed_object(text: str) -> dict | None:

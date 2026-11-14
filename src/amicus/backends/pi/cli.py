@@ -90,7 +90,7 @@ def auth_status(
         return "unknown"
     try:
         data = json.loads(run.stdout)
-    except (json.JSONDecodeError, TypeError):
+    except (json.JSONDecodeError, TypeError, RecursionError):
         return "unknown"
     if not isinstance(data, dict):
         return "unknown"

@@ -90,7 +90,7 @@ def probe_catalog(binary: str, timeout_seconds: int = PROBE_TIMEOUT_SECONDS) -> 
         return None
     try:
         return json.loads(run.stdout)
-    except (json.JSONDecodeError, ValueError):
+    except (json.JSONDecodeError, ValueError, RecursionError):
         return None
 
 

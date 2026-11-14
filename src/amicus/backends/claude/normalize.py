@@ -19,7 +19,7 @@ def parse_envelope(stdout: str) -> dict[str, Any] | None:
     """The envelope as a dict, or None when stdout is not a JSON object."""
     try:
         parsed = json.loads(stdout)
-    except (json.JSONDecodeError, ValueError, TypeError):
+    except (json.JSONDecodeError, ValueError, TypeError, RecursionError):
         return None
     return parsed if isinstance(parsed, dict) else None
 
