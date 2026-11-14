@@ -102,7 +102,8 @@ Do this last among the preconditions, immediately before the evidence run in the
 First bring each CLI to its latest release on the machine that will record the evidence.
 `codex` is an npm package, so `npm view @openai/codex version` names its latest and `npm install -g @openai/codex@<version>` installs it.
 `claude` is Claude Code, whose native installer does not follow npm: `npm view @anthropic-ai/claude-code version` still names its latest, and `claude install <version>` installs it, as below.
-`kimi` is Kimi Code, which updates itself: run `kimi upgrade`.
+`kimi` is Kimi Code, and it is the exception: it is deprecated and frozen at its supported set until it is removed, so do not upgrade it past the newest minor `SUPPORTED_VERSIONS` names (`src/amicus/backends/kimi/contract.py`).
+Kimi Code updates itself, so confirm `kimi --version` is still inside that set before the evidence run.
 It is also published to npm, so `npm view @moonshot-ai/kimi-code version` names its latest; PyPI's `kimi-cli` is a different distribution whose version says nothing about it.
 `pi` is an npm package, so `npm view @earendil-works/pi-coding-agent version` names its latest and `npm install -g @earendil-works/pi-coding-agent@<version>` installs it.
 Expect a major version number to mean less than it says: 0.43.1 was followed directly by 2.0.0, whose only major change was a command that opens the desktop app's page.
@@ -124,6 +125,7 @@ It fails closed: help that cannot be read, or a latest release that cannot be lo
 A flag counts only where `--help` declares it as an option, never where another option's description happens to name it.
 `FLAGS DIFFER` is not by itself a failure, since upstream adds flags constantly, but every removed flag must be looked up in that backend's `contract.py` before going on.
 `latest unknown` fails the check for every backend, because all four are on npm and it means the lookup failed rather than that the version matched.
+A deprecated backend that is behind `latest` on a version the contract supports is not a failure: the script prints a `frozen:` line for it instead, because no newer release of it will be validated; ahead of `latest`, a prerelease, or a version outside the contract still fails for it.
 A version `FAIL` says which way the installed version is off and how to install the version `latest` names: behind means upgrade to it, and ahead means a build from another dist-tag, so pin back to it or wait for `latest` to advance.
 
 When a CLI's version has no capture of its own, commit one with the change that adds support for it, so the next release has something to compare against.

@@ -343,6 +343,32 @@ def test_a_cli_behind_latest_is_told_to_upgrade():
     assert "ahead of" in numeric, numeric
 
 
+def test_a_deprecated_backend_behind_latest_is_frozen_not_a_failure(monkeypatch):
+    """A deprecated backend is frozen at its supported set until it is removed: no newer
+    release is validated, so "behind latest" cannot be fixed by upgrading and must not
+    block a release. Only that one failure is waived."""
+    assert compat.in_tree.backend_deprecation("kimi") is not None, "control: kimi is deprecated"
+    assert _off_latest("kimi", "2.5.2", "2.6.2") == []
+    report = compat.Report("kimi", installed=True, version="2.5.2", authenticated=True)
+    report.builtin_supported = report.help_ok = True
+    report.latest = "2.6.2"
+    assert any("frozen" in line and "2.6.2" in line for line in compat._describe(report))
+    # Ahead of latest, a prerelease, and an unsupported version still fail.
+    (ahead,) = _off_latest("kimi", "2.7.0", "2.6.2")
+    assert "ahead of" in ahead, ahead
+    (pre,) = _off_latest("kimi", "2.5.2-beta.1", "2.6.2")
+    assert "prerelease" in pre, pre
+    report.builtin_supported = False
+    assert any("outside the built-in contract" in p for p in compat.problems(report))
+    # A backend that is not deprecated is still told to upgrade.
+    (behind,) = _off_latest("codex", "0.167.0", "0.169.0")
+    assert "behind" in behind, behind
+    # And kimi itself is, once nothing marks it deprecated.
+    monkeypatch.setattr(compat.in_tree, "DEPRECATED_BACKENDS", {})
+    (unfrozen,) = _off_latest("kimi", "2.5.2", "2.6.2")
+    assert "behind" in unfrozen, unfrozen
+
+
 def test_a_latest_that_differs_only_by_suffix_is_neither_ahead_nor_behind():
     (found,) = _off_latest("codex", "0.155.1", "0.155.1-beta.1")
     assert "does not match" in found and "ahead" not in found and "behind" not in found, found
