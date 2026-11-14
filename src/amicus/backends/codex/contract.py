@@ -15,7 +15,11 @@ the retired-setting grammar or the model-facing tool catalog; 0.162.1 the same c
 catalog; 0.163.0 the same checks against 0.162.1; 0.164.0 the same checks against 0.163.0;
 0.165.0 the same checks against 0.164.0, plus the model-facing tool catalog of every model in
 KNOWN_MODEL_SLUGS and the served catalog's gpt-6.1-terra; 0.166.0 the same checks against
-0.165.0; 0.167.0 the same checks against 0.166.0; 0.169.0 the same checks against 0.167.0).
+0.165.0; 0.167.0 the same checks against 0.166.0; 0.169.0 the same checks against 0.167.0,
+except that the model-facing tool catalog was compared only for gpt-5.6-sol, gpt-5.6-terra,
+gpt-5.6-luna and codex-auto-review: 0.167.0's runs of the other six models timed out and its
+disable controls were unobserved, so 0.169.0's catalog for those six is captured, with both
+controls passing, but not compared).
 
 Every assumption amicus makes about the `codex` CLI — subcommands, flags, sandbox values,
 config keys it pins, the event/result extraction surface, and the stderr phrasings that
