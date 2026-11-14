@@ -15,7 +15,7 @@ Routing procedure) and never substitute one silently: a named harness wins, and 
 means the deprecated kimi harness. Whether or not the request names one, call
 `amicus_backends` with `detail="full"` first and use only a harness it reports
 `enabled: true` and `status.installed: true` and ready for the model
-(`status.authenticated: true`, or for `pi` a `model` it lists); do not guess or fall
+(`status.authenticated: true`, or for `pi` a `model` it lists, or for `claude` a `config_mode` the user chose under the skill's Binding rules → Discovery); do not guess or fall
 back to a favorite. For `pi`, pass `model` as an exact `provider/id` that
 `amicus_models` lists for `pi`, unless `AMICUS_PI_MODEL` is set and names the model you mean;
 pi's `status.authenticated` is unknown while that is unset. `kimi` is deprecated in favour of

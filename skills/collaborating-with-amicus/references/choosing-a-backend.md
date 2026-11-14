@@ -57,7 +57,8 @@ Run it after the free discovery calls and before choosing the verb.
    configuration. A missing or truncated listing does not prove a model unreachable; it means
    you cannot vouch for it, so say that rather than calling it unavailable.
 5. **Ask once, before spending,** only when the routes that still match after free discovery
-   differ in spend, exposure, containment or verb. Otherwise take the one route left.
+   differ in spend, exposure, containment or verb. Otherwise take the one route left; whether
+   an unrequested call may be made at all is SKILL.md → Binding rules → Spend, not this step.
 
 Worked examples, each after `amicus_backends(detail="full")`:
 

@@ -719,11 +719,15 @@ def test_the_validation_recipe_carries_the_hardening_amicus_applies():
     assert "core.fsmonitor=false" in base, "control: the source still disables fsmonitor"
     assert any(flag.startswith("core.hooksPath=") for flag in base)
     recipe = _DIFF_REF.split("```sh", 1)[1].split("```", 1)[0]
-    add = next(line for line in recipe.splitlines() if "worktree add" in line)
-    assert "-c core.hooksPath=/dev/null" in add and "-c core.fsmonitor=false" in add
+    # A `-c` override lasts one command, so each git invocation carries it, the two
+    # `git apply`s included: without it they start a configured fsmonitor program.
+    invocations = re.findall(r"\bgit [^|\n]*", recipe)
+    assert len(invocations) == 4, "control: the parse finds the recipe's four git commands"
+    for invocation in invocations:
+        assert "-c core.hooksPath=/dev/null -c core.fsmonitor=false" in invocation, invocation
     assert "--no-ext-diff --no-textconv" in recipe
     rules = _flat(_DIFF_REF.partition("\n## Rules\n")[2].split("\n## ", 1)[0])
-    assert "**Create that worktree with repository hooks and fsmonitor disabled**" in rules
+    assert "**Run every git command that builds that worktree with repository hooks" in rules
 
 
 def test_shipped_references_cite_no_repository_rule_number():
@@ -733,3 +737,19 @@ def test_shipped_references_cite_no_repository_rule_number():
         text = path.read_text(encoding="utf-8").lower()
         assert "rule 18" not in text and "rule-18" not in text, path.name
     assert "keep prompt text off disk and off the command line" in _flat(_FALLBACK_REF)
+
+
+def test_the_consent_question_is_not_bounded_by_the_routing_question():
+    # Review of #481: "ask only when routes differ" and "ask before an unrequested call" gave
+    # opposite answers with one eligible route. The routing rule now scopes itself.
+    routing = _flat(_rules_section("Routing"))
+    assert "This limits questions about which route to take." in routing
+    assert "is asked even when one route is left" in routing
+
+
+def test_the_slash_commands_carry_the_mode_aware_claude_exception():
+    # Review of #482: the commands restated the flat eligibility test the rule replaced.
+    commands = Path(__file__).resolve().parents[1] / "commands" / "amicus"
+    for name in ("consult", "review", "adversarial"):
+        text = _flat((commands / f"{name}.md").read_text(encoding="utf-8"))
+        assert "`config_mode`" in text and "Binding rules → Discovery" in text, name

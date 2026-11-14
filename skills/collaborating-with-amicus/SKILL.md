@@ -116,7 +116,9 @@ below is stated only here.
   row that lists only `off` is a non-thinking model: pass `off` explicitly, since amicus
   refuses any other value pre-spend, and omitting it inherits `AMICUS_PI_REASONING_EFFORT`.
 - **Ask the user once, before spending, only when the routes that still match after free
-  discovery differ in spend, exposure, containment or verb.**
+  discovery differ in spend, exposure, containment or verb.** This limits questions about
+  which route to take. Consent for a call the user did not ask for is a separate question,
+  under Spend, and is asked even when one route is left.
 
 ### Spend
 

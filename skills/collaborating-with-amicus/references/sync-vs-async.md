@@ -41,7 +41,7 @@ going, and repeating the same keyed call reattaches to it without new spend. Sta
 twin or dropping the key there is a second paid run; the Spend rules in SKILL.md say what to do
 with that repair. A keyed sync call waits for a long run inside a single call, as does
 `amicus_job_status` with a positive `wait_seconds` (see Polling below). Sync and
-`_async` are separate identities (ADR 0020), so a keyed sync call cannot wait on a job you
+`_async` are separate identities (ADR 0020) in amicus's design, so a keyed sync call cannot wait on a job you
 started with the `_async` twin.
 
 ## What `_async` returns

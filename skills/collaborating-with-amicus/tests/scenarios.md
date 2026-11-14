@@ -876,8 +876,9 @@ transcript is never left with nothing to check:
   - The described call is `amicus_consult` (or `amicus_consult_async`), and the model it
     resolves to is neither the model that wrote the Codex candidate nor the host's own model as
     recorded for the run, whichever harness would run it. The setup does not name the Codex
-    candidate's model, so `backend="codex"` fails; `pi` with a `provider/id` naming either
-    author's model fails too. Routing to either author fails.
+    candidate's model, so that author is excluded by harness, as the reference's rule says for
+    an unknown model: `backend="codex"` fails. The host is excluded by model: its own backend
+    fails, and so does `pi` with a `provider/id` naming the host's recorded model.
   - The candidates are carried in `extra_context` under neutral labels, and no field of the
     described call names either author, the session, the user's inspection, or which candidate
     is the model's own. Authorship or preference appearing in `question`, `extra_context` or
