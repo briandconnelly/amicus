@@ -15,7 +15,8 @@ checked"): for every in-tree backend it reports
       diff reports a change on every run. `--diff` prints the text diff for a reader;
     * the latest upstream release, npm's `latest` dist-tag for all four, and whether the
       installed CLI is behind it or ahead of it. A lookup that fails is reported as unknown,
-      never guessed, and fails the check unless `--offline` was given.
+      never guessed, and fails the check unless `--offline` was given. A deprecated backend is
+      frozen at its supported set, so being behind is reported for it and does not fail.
 
 It runs `--version`, `--help` and each backend's free login probe, and nothing else: no
 prompt is sent, so no quota is spent. It cannot do the other half of the precondition, the
@@ -342,7 +343,8 @@ def problems(report: Report) -> list[str]:
             "release evidence"
         )
     elif report.latest and release(report.version) != release(report.latest):
-        found.append(not_latest(report))
+        if not frozen_behind(report):
+            found.append(not_latest(report))
     elif report.latest is None and report.backend in NPM_PACKAGES and not report.offline:
         # Every backend is on npm, so an unreadable latest is a lookup that failed, and a
         # lookup that failed must not look like a version that matched.
@@ -352,6 +354,18 @@ def problems(report: Report) -> list[str]:
             "the check was skipped"
         )
     return found
+
+
+def frozen_behind(report: Report) -> bool:
+    """Whether a deprecated backend is merely behind npm's latest, on a version the shipped
+    contract supports. A deprecated backend is frozen at its supported set until it is
+    removed, so no newer release is validated or added, and "behind latest" has no fix a
+    release could wait for. Only that is waived: ahead of latest, a prerelease, and a
+    version outside the contract still fail."""
+    if in_tree.backend_deprecation(report.backend) is None or not report.builtin_supported:
+        return False
+    installed, latest = semver(report.version), semver(report.latest)
+    return installed is not None and latest is not None and installed < latest
 
 
 def not_latest(report: Report) -> str:
@@ -394,6 +408,11 @@ def _describe(report: Report, *, show_diff: bool = False) -> list[str]:
         f"{report.backend}: installed {report.version}, latest {latest}, "
         f"authenticated={report.authenticated}"
     ]
+    if report.latest and frozen_behind(report):
+        lines.append(
+            f"    frozen: {report.backend} is deprecated, so staying behind latest "
+            f"({report.latest}) is expected and not a failure"
+        )
     name = report.capture.name if report.capture else None
     if report.capture_state == "none":
         lines.append("    no committed help capture to compare against")
