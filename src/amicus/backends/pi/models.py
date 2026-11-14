@@ -26,6 +26,12 @@ MAX_ENTRIES = 1024
 _HEADER = ["provider", "model", "context", "max-out", "thinking", "images"]
 
 
+def is_batch_only(slug: str) -> bool:
+    """True for an OpenRouter ":batch" id: OpenRouter serves those only on its batch
+    endpoint, and pi calls chat/completions, where they fail with a 404."""
+    return slug.startswith("openrouter/") and slug.endswith(":batch")
+
+
 def parse_table(stdout: str) -> ModelListing | None:
     """The listing from a `--list-models` table, or None without the header (including pi's
     `No models matching ...` message). At most MAX_ENTRIES rows are read."""
@@ -42,8 +48,11 @@ def parse_table(stdout: str) -> ModelListing | None:
         if len(entries) >= MAX_ENTRIES:
             truncated = True
             break
+        slug = f"{cols[0]}/{cols[1]}"
+        if is_batch_only(slug):
+            continue
         efforts = contract.EFFORTS if cols[4] == "yes" else ("off",)
-        entries.append(ModelEntry(slug=f"{cols[0]}/{cols[1]}", supported_reasoning_efforts=efforts))
+        entries.append(ModelEntry(slug=slug, supported_reasoning_efforts=efforts))
     return ModelListing(models=tuple(entries), source="live", truncated=truncated)
 
 

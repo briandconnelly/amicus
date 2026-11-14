@@ -59,6 +59,20 @@ def test_no_thinking_model_accepts_only_off():
     assert b.supported_reasoning_efforts == contract.EFFORTS
 
 
+def test_openrouter_batch_rows_are_dropped():
+    # OpenRouter serves ":batch" ids only on its batch endpoint; pi calls chat/completions,
+    # where they 404, so the catalog never offers them. Other providers' ":batch" ids stay.
+    table = (
+        HEADER
+        + "openrouter  z-ai/glm-5.3  1M  1M  yes  no\n"
+        + "openrouter  z-ai/glm-5.3:batch  1M  1M  yes  no\n"
+        + "other  m:batch  1K  1K  no  no\n"
+    )
+    listing = models.parse_table(table)
+    assert listing is not None
+    assert [m.slug for m in listing.models] == ["openrouter/z-ai/glm-5.3", "other/m:batch"]
+
+
 def test_no_matches_message_is_none():
     assert models.parse_table('No models matching "x"\n') is None
     assert models.parse_table("") is None
