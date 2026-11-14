@@ -39,7 +39,7 @@ per-change, as its own lead says.
 
 - `amicus_models(backend="pi")` no longer lists OpenRouter `:batch` ids, which OpenRouter serves
   only on its batch endpoint and pi's chat/completions calls always 404 on (#458).
-  A `model` naming one is refused before any probe as `invalid_model` with `catalog: batch_only`.
+  A `model` naming one is refused before any probe as `invalid_model` with `details.reason` `catalog=batch_only`.
 
 - **Surface**: `amicus/0.1/schema-64`. `amicus_models`'s `truncation_hint` is now specific to the
   backend (#443). For `pi` it says only the listing was cut, and that an exact `provider/id`
