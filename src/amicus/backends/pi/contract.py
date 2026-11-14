@@ -1,5 +1,5 @@
 """Single source of truth for the external `pi` (pi-mono coding agent) CLI contract, verified
-against 1.5.0 by the captures under docs/pi-help/ and the zero-spend probe on issue #423.
+against 1.5.0 and 1.5.2 by the captures under docs/pi-help/ and the zero-spend probe on issue #423.
 
 `pi -p --mode json` differs from the other backends in three ways that drive the design:
 
@@ -83,7 +83,7 @@ SANDBOX_WORKSPACE_WRITE = "workspace-write"
 RUN_ENV_SET: dict[str, str] = {"PI_TELEMETRY": "0", "PI_SKIP_VERSION_CHECK": "1"}
 RUN_ENV_DROP: tuple[str, ...] = ("PI_CODING_AGENT_SESSION_DIR",)
 
-# pi 1.5.0 has no `pi auth login`.
+# pi 1.5.0 has no `pi auth login` (1.5.2 adds it); `/login` and the API-key variable work on both.
 LOGIN_HINT = (
     "Start `pi` interactively and run `/login <provider>`, or set the provider's API-key "
     "environment variable (for OpenRouter, OPENROUTER_API_KEY)."

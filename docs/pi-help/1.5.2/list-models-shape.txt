@@ -1,0 +1,4 @@
+provider    model                     context  max-out  thinking  images
+openrouter  moonshotai/kimi-k3        1.0M     943.7K   yes       yes
+openrouter  moonshotai/kimi-k3:batch  1.0M     16.4K    yes       yes
+openrouter  moonshotai/kimi-k3.1-pro  1.0M     943.7K   yes       yes
