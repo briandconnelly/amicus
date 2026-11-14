@@ -148,6 +148,7 @@ Work from step 2's evidence and the release notes for every release between the 
 Step 2's `compare` runs each of these on both binaries except the logged-in `login status` forms, and reports each under `CHECKED` or as a `FAIL`; the list below is what each of its probes asserts.
 Every probe gets its own empty scratch `CODEX_HOME`, `login status` there must report logged out before the probe starts, and no API key or access token is passed, so a run that gets past config loading stops at the unauthenticated 401 instead of spending.
 That stopping point is the expected result, and an exported key would turn it into a real turn, which is why a probe run by hand must unset `OPENAI_API_KEY`, `CODEX_API_KEY` and `CODEX_ACCESS_TOKEN` too.
+macOS has no `timeout`, so bound a probe run by hand with `perl -e 'alarm 90; exec @ARGV' <command>`, where exit 142 means the alarm fired.
 
 - **Pins and disables.**
   The four `PLUGIN_OWNED_CONFIG_KEYS` pins and every `--disable` in `MODEL_RUN_DISABLED_FEATURES`, sent together under `--strict-config`, must get past config loading on both binaries.
@@ -208,6 +209,7 @@ They guard the case `--strict-config` cannot see: a key that keeps its name whil
   `-c sandbox_workspace_write.network_access=false` (`WORKSPACE_WRITE_NETWORK_ACCESS_CONFIG_KEY`) closes egress against a user config file or profile that opens it.
   In a subshell with a scratch `CODEX_HOME` holding a copy of `auth.json`, removed by an `EXIT` trap, set `network_access = true` in both `config.toml` and a profile, then ask codex to run `curl` against a public URL three times: with no pin, which must reach the network (the positive control), with the pin, and with the pin and the profile, which must both be blocked.
   Judge each run by the `command_execution` item's `exit_code` in the `--json` stream, never the model's prose.
+  Write the profile as its own file, `$CODEX_HOME/<name>.config.toml`, selected with `-p <name>`: codex 0.169.0 refuses `-p <name>` at startup while `config.toml` still holds a legacy `[profiles.<name>]` table, so a probe written that way never reaches the pin.
 - **Workspace-write writable-roots pin.**
   `-c 'sandbox_workspace_write.writable_roots=[]'` (`WORKSPACE_WRITE_WRITABLE_ROOTS_CONFIG_KEY`) gets the same three runs, with the config naming a writable root under `$HOME`, a separate pre-absent target file per run, and the target directory removed in the same `EXIT` trap.
   The target must sit outside the workspace and both temp roots, because `workspace-write` already permits `/tmp` and `$TMPDIR`, and a target there passes every run vacuously.
