@@ -102,8 +102,8 @@ The full procedure, with worked examples, is
 - **Learn what `pi` can reach from `amicus_models(backend="pi")`, never from provider
   configuration.** A missing or truncated listing does not prove a model unreachable.
 - **Take `reasoning_effort` from the chosen row's `supported_reasoning_efforts`.** For `pi`, a
-  row that lists only `off` is a non-thinking model: pass `off` or omit the parameter, since
-  amicus refuses any other value pre-spend.
+  row that lists only `off` is a non-thinking model: pass `off` explicitly, since amicus
+  refuses any other value pre-spend, and omitting it inherits `AMICUS_PI_REASONING_EFFORT`.
 - **Ask the user once, before spending, only when the routes that still match after free
   discovery differ in spend, exposure, containment or verb.**
 
