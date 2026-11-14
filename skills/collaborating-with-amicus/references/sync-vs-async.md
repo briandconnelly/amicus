@@ -20,7 +20,7 @@ and the backend keeps running against a separate, longer job deadline (`AMICUS_J
 default 1800s). Starting the job commits the spend right away, even if you never poll.
 
 The default leaves a review little margin. A review of a few hundred lines at medium effort has
-been reported to take two to four minutes on `codex` (issue #84): inside the 300s default,
+been reported to take two to four minutes on `codex` ([#84](https://github.com/briandconnelly/amicus/issues/84)): inside the 300s default,
 but close enough that a slower draw is lost with it. For an unkeyed sync review of more than a
 small diff, raise `timeout_seconds` toward its ceiling, or use a form that keeps the result.
 

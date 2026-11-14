@@ -15,6 +15,8 @@ untracked files are never copied) and return the resulting `diff`. Delegation is
   what could not have happened inside it.
 - **Applying a diff in a disposable worktree is part of reviewing it, not an exception to the
   rule above.** Validate there; never validate in the user's working tree.
+- **Create that worktree with repository hooks and fsmonitor disabled**, as the recipe under
+  check 3 does. A disposable directory is not process containment.
 - **State the assessment and the action separately.** They are different facts.
 - **Never use `diffstat` as the integrity check on `diff`.** They are computed at different points.
 - **Never report `Action: applied` for a diff whose `Verdict:` is `reject` or `cannot-assess`.**
@@ -69,6 +71,28 @@ bold after its number; the response contract below is written in those keys.
    `meta.security_warnings` and the baseline is `HEAD` alone. When you cannot reproduce the
    baseline, report this check as `not run` and the verdict as `cannot-assess`. Then run the
    checks the change actually touches.
+
+   ```sh
+   git -c core.hooksPath=/dev/null -c core.fsmonitor=false worktree add --detach "$SCRATCH" HEAD
+   git -c core.fsmonitor=false diff --no-ext-diff --no-textconv --binary HEAD \
+     | git -C "$SCRATCH" apply --index
+   git -C "$SCRATCH" apply "$RETURNED_DIFF"
+   ```
+
+   Run it from the user's checkout, with `SCRATCH` a new path outside it and `RETURNED_DIFF` a
+   file holding the result's `diff`. The second command replays the uncommitted tracked changes;
+   skip it when there are none, or when amicus reported it could not replay them. A plain
+   `git worktree add` runs the repository's `post-checkout` hook, so the first command points
+   `core.hooksPath` at nothing and turns fsmonitor off, as amicus does for its own worktree;
+   `--no-ext-diff` and `--no-textconv` stop a configured external diff tool from replacing the
+   patch with its own output. This rebuilds the baseline only while the tracked tree is as it
+   was when the delegate started: when it has moved, or the returned diff does not apply, the
+   check is `not run`. It does not neutralize attribute filter drivers (`clean`, `smudge`),
+   which amicus also disables for its own worktree, and the checks you then run execute the
+   repository's own code, so validate a repository you do not trust inside a container. The
+   recipe was run on git 2.56.1 against a repository with a `post-checkout` hook, an
+   uncommitted tracked change and `diff.external` set: the hook ran under a plain
+   `worktree add` and did not under this one.
 4. `consistency` — **Is the diff internally consistent?** Read the hunk headers against the hunk
    bodies. `diffstat` is barred as the integrity check by a rule above, and this is why:
    `diffstat` is computed from the raw diff *before* redaction and truncation are applied to the

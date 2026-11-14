@@ -20,6 +20,31 @@ per-change, as its own lead says.
 
 ## [Unreleased]
 
+### Changed
+
+- The `collaborating-with-amicus` skill asks the user before a paid call they did not request:
+  a situation its description names is a reason to offer the call, not consent to spend or to
+  send workspace content (#481). A user's request alone now selects a composed workflow; the
+  stakes test applies only where the task declares one (#481).
+
+### Fixed
+
+- The skill's routing rules no longer require naming a model no surface reports, and say the
+  kind of work requested is an input to resolving the harness (#480).
+- The skill reads `claude`'s `status.authenticated` as speaking for the default `config_mode`
+  only, and offers `config_mode: "bare"` where an ignored API key is reported (#482).
+- The returned-diff reference gives a tested recipe for rebuilding the delegate baseline with
+  repository hooks and fsmonitor disabled, where it had named no command and a plain
+  `git worktree add` runs `post-checkout` (#483).
+- The `access` and `config_mode` rule names what to do when a result comes back short of
+  evidence (#484).
+- The skill's references no longer cite this repository's `AGENTS.md` rule 18, and the
+  server-down fallback records an end-to-end run on codex-cli 0.169.0 (#485).
+- The skill's references give `safe` as adversarial review's `config_mode` default and list
+  `user_config_rejected` for `pi` as well as `codex` (#486).
+- Scenarios S1, S4 and S16 match the rules in force, and S18 covers a model-only request
+  routed through `pi` (#479).
+
 ## [0.14.0] - 2026-11-14
 
 This release corrects what the tool surface says about itself, and has two breaking changes.

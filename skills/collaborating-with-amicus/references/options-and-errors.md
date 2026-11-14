@@ -133,9 +133,10 @@ job returns its terminal error, and `meta.consume` reports its discard too.
 
 ## Backend-local codes
 
-Some codes exist only for one backend and are preserved verbatim rather than generalized:
+Some codes belong to particular backends and are preserved verbatim rather than generalized:
 `user_config_rejected` (codex — the user's own CLI config carries something the installed CLI
-refuses at startup; zero spend), and `budget_exceeded`, `claude_permission_error`,
+refuses at startup; pi — `PI_CODING_AGENT_DIR` is a relative path; zero spend on either, and
+the repair says which fix applies), and `budget_exceeded`, `claude_permission_error`,
 `api_key_invalid`, `api_key_missing` (claude). `budget_exceeded` is the one to read carefully: the
 best-effort spend threshold stopped the run, and it **may already have spent**. claude checks the
 threshold only between model calls, so `meta.usage.cost_usd` can exceed `max_budget_usd`; read

@@ -1,6 +1,6 @@
 ---
 name: collaborating-with-amicus
-description: Use when calling another model or coding-agent harness through amicus, or checking reachable backends/models (codex, claude, pi, deprecated kimi). Covers second opinions, code/adversarial reviews, delegated implementation, independent two-model attempts, declared review–revise passes, and blind comparisons of finalized candidates. Trigger on "ask another model", "get a second opinion", "collaborate with Codex", "have Codex/Claude/Pi/Kimi review this", requests for another model's help ("get GPT's opinion", "use Opus"), "delegate this", "have both models attempt this", "run review–revise", "have another model compare these two or pick the better one", "which models can I use", "is Codex/Claude/Pi/Kimi available", "what does amicus support", "check backend status", any amicus_* result or approval prompt needing interpretation, and decisions another opinion would change — hard-to-reverse choices, after two failed fixes, before declaring risky work complete.
+description: Use when calling another model or coding-agent harness through amicus, or checking reachable backends/models (codex, claude, pi, deprecated kimi). Covers second opinions, code/adversarial reviews, delegated implementation, independent two-model attempts, declared review–revise passes, and blind comparisons of finalized candidates. Trigger on "ask another model", "get a second opinion", "collaborate with Codex", "have Codex/Claude/Pi/Kimi review this", requests for another model's help ("get GPT's opinion", "have Opus check this"), "delegate this to Codex", "have both models attempt this", "run review–revise", "have another model compare these two or pick the better one", "which models can amicus use", "is Codex/Claude/Pi/Kimi available", "what does amicus support", "check backend status", any amicus_* result or approval prompt needing interpretation, and decisions another opinion would change — hard-to-reverse choices, after two failed fixes, before declaring risky work complete.
 ---
 
 # Collaborating with amicus
@@ -67,9 +67,15 @@ obligations live in the reference each route names, under that file's own `Rules
 - **Pass only a backend reported `enabled: true` and `status.installed: true` that is ready for
   the model the call will run: `status.authenticated: true`, or, for `pi`, an exact `model` the
   same call passes that `amicus_models(backend="pi")` lists, or, past a `truncated` listing's
-  cut, that you know exactly.** pi checks such a model pre-spend and refuses one it cannot
+  cut, that you know exactly, or, for `claude`, a `config_mode` the user chose under the next
+  rule.** pi checks such a model pre-spend and refuses one it cannot
   resolve. `enabled` alone is not eligibility. pi's `status.authenticated` speaks only for `AMICUS_PI_MODEL` and is `null` while
   that is unset, so it neither admits nor excludes a per-call `model`.
+- **Read `claude`'s `status.authenticated` as speaking for the deployment's default
+  `config_mode` only.** Where it is not `true` and `status.warnings` reports an
+  `ANTHROPIC_API_KEY` that the default mode ignores, a call passing `config_mode: "bare"` can
+  still run: offer that route to the user, naming the mode, instead of reporting `claude` as
+  unusable, and take it only when they choose it.
 - **Confirm the backend's `features` list names `delegate` or `adversarial_review` before calling
   that verb.** Those are the only gated verbs; `consult` and `review_changes` run on every
   backend and never appear in `features`, whose other members are capabilities, not verbs.
@@ -80,11 +86,16 @@ obligations live in the reference each route names, under that file's own `Rules
 
 ### Routing
 
-The full procedure, with worked examples, is
-[choosing a backend](references/choosing-a-backend.md) → Rules.
+The full procedure for resolving the harness and the model, with worked examples, is
+[choosing a backend](references/choosing-a-backend.md) → Rules. The `reasoning_effort` rule
+below is stated only here.
 
 - **Resolve the harness and the model before choosing the verb, and name both before the first
-  paid call.**
+  paid call.** The kind of work the request asks for is an input to that resolution: a harness
+  that lacks its verb is not a route. What waits until the route is resolved is selecting the
+  tool and reading its references. Where the call takes a harness's default model and no
+  surface reports which model that is, name it as that harness's default rather than guessing
+  a slug.
 - **Let a named harness win.** `codex`, `claude` or Claude Code, `pi`, and bare `kimi` (the
   deprecated kimi harness) select that harness, whatever the capitalization. An exact
   `provider/id` is pi's model syntax, so it selects `pi`.
@@ -110,6 +121,11 @@ The full procedure, with worked examples, is
 ### Spend
 
 - **Never call a paid tool to find out whether a backend is available.**
+- **Ask the user before a paid call they did not ask for.** A situation this skill's
+  description names — a hard-to-reverse choice, two failed fixes, risky work about to be called
+  complete — is a reason to offer the call, naming the harness, the provider it sends to and
+  what it would be sent. It is not consent to spend quota or to send workspace content. A
+  standing instruction from the user or the project to consult without asking is that consent.
 - **State the paid-call cap for the decision before the first paid call, then stay within it.**
 - **Use the matching `_async` tool, or the sync tool with an `idempotency_key`, when you are
   unsure the work will finish inside the sync deadline.** A terminated unkeyed sync call returns
@@ -138,7 +154,8 @@ The full procedure, with worked examples, is
 - **Decide `access` and `config_mode` before the call, from the evidence the task needs, and
   state that need.** Raising either in response to a result that came back short of evidence is
   the case this forbids; choosing `readonly` up front because the backend must read a named file
-  is not.
+  is not. When a result does come back short of evidence, say so, then either resend with the
+  evidence inline under the declared cap or put the wider setting to the user, who decides.
 
 ### Results
 
@@ -210,7 +227,8 @@ The full procedure, with worked examples, is
   `$XDG_CACHE_HOME/amicus/jobs` or `~/.cache/amicus/jobs`) or loop on it in a shell: its files
   skip the delivery checks and their layout is not a contract. Observe a job through
   `amicus_job_status`, or reattach to a keyed sync run by repeating the same keyed call.
-- **Fetch a completed result promptly rather than letting it expire.**
+- **Fetch a job's result in the same turn `amicus_job_status` reports it terminal**, rather
+  than leaving it to expire or to fill the per-workspace cap.
 - **Prefer `amicus_job_result` over `amicus_job_consume_result`** whenever another step may still
   need the artifact.
 
@@ -221,21 +239,25 @@ The full procedure, with worked examples, is
 - **Read `carriers` on `amicus_backends(detail="full")` before supplying `instructions_append`.**
 - **Never treat a dry run as evidence that a paid call is safe to make.**
 - **Never point a paid call at a workspace whose contents you would not hand to that backend's
-  provider** — for `pi`, the provider the model's `provider/id` prefix names.
+  provider** — for `pi`, the provider the model's `provider/id` prefix names. Choosing a
+  different workspace does not keep other files from it: a backend can read whatever the OS
+  user running it can, so never present a workspace as a boundary on what is read.
 - **Never send `kimi` text you would not leave on this machine's disk.**
 
 ### Approval prompts
 
-- **Report an approval prompt to the user rather than working around it.** Never retry silently,
-  switch `backend` to dodge it, or ask the user to disable a backend.
+- **Report a host's denial of an amicus call to the user rather than working around it.** The
+  prompt is shown to the user, not to you; the denial is what you observe. Never retry
+  silently, switch `backend` to dodge it, or ask the user to disable a backend.
 - **Report the observed denial and the annotation policy separately, and name a causing backend
   only when the host gave evidence of one.** Otherwise say the cause is unknown.
 
 ### Composed workflows
 
 - **Select an independent attempt, a review–revise pass or a blind comparison only when the user
-  asked for it or the task declares it**, and the decision is hard to reverse, load-bearing, or
-  security-sensitive. Otherwise make one call or none.
+  asked for it, or when the task declares it and the decision is hard to reverse, load-bearing,
+  or security-sensitive.** A user's request is enough on its own. Otherwise make one call or
+  none.
 - **Count paid calls across the whole workflow, not per backend.**
 - **Judge model diversity by resolved model (`provider/id` where known), never by backend id.**
   Two harnesses can run one model, and one harness can run several.

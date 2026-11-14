@@ -115,7 +115,7 @@ declares, plus capabilities that are not verbs at all:
   (`invalid_model`) and report a reply with no content (`empty_response`).
 
 `consult` and `review_changes` are baseline on every backend and never appear in `features`. A
-host that looks for them there concludes, wrongly, that no backend supports them (issue #84).
+host that looks for them there concludes, wrongly, that no backend supports them ([#84](https://github.com/briandconnelly/amicus/issues/84)).
 
 The gates:
 
@@ -137,7 +137,7 @@ task, and one default surprises people:
 | `codex` | Yes — under codex's `--sandbox read-only` OS sandbox | read-only sandbox |
 | `kimi` | Yes — a generated agent profile grants `Read`, `Glob`, `Grep` and no shell or write tool | read-only profile |
 | `pi` | Yes — `--tools read,grep,find,ls`, so no shell, edit or write tool; pi has no OS sandbox, and at startup it renames a workspace's `.pi/commands/` to `.pi/prompts/` when the latter does not exist, even on a consult or review | read-only tool allowlist; needs an exact `provider/id` model |
-| `claude` | **Reviews only, by default.** `amicus_review_changes` defaults to `access="readonly"` (`Read`, `Grep`, `Glob`); consult and adversarial review default to `access="toolless"`, which grants **no tools at all** | `access="readonly"` for reviews and `"toolless"` otherwise, `config_mode="inherit"` |
+| `claude` | **Reviews only, by default.** `amicus_review_changes` defaults to `access="readonly"` (`Read`, `Grep`, `Glob`); consult and adversarial review default to `access="toolless"`, which grants **no tools at all** | `access="readonly"` for reviews and `"toolless"` otherwise; `config_mode="inherit"` for consult and review, and `"safe"` for adversarial review (`"bare"` when the operator's mode is `bare`) |
 
 **A `claude` consult told to "look at the file and tell me what's wrong" has, by default, no
 tool with which to look.** Either supply the evidence inline (`question`, `extra_context`) or pass
