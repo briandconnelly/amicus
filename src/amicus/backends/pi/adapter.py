@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Literal
 from amicus.backends.pi import cli, contract, normalize
 from amicus.backends.pi import config as pi_config
 from amicus.backends.pi.binary import BinaryNotFoundError
-from amicus.backends.pi.models import HELP_CACHE_TTL_SECONDS
+from amicus.backends.pi.models import HELP_CACHE_TTL_SECONDS, is_batch_only
 from amicus.schemas import instructions
 from amicus.schemas.params import reasoning_effort_shape_error
 from amicus.schemas.structured import schema_instruction
@@ -307,6 +307,12 @@ class PiBackend:
             return self._missing_model()
         if (unsafe := self._argv_unsafe_model(model)) is not None:
             return unsafe
+        if is_batch_only(model):
+            return _invalid_model(
+                "OpenRouter serves this ':batch' id only on its batch endpoint, which pi "
+                "cannot call; pass the same id without ':batch'.",
+                "batch_only",
+            )
         binary = self._binary.resolve()
         if binary is None:
             return self._unprobed_refusal(request)

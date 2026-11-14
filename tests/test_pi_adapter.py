@@ -99,6 +99,16 @@ def test_fuzzy_model_is_refused_as_invalid_model():
     assert failure.details is not None and failure.details["catalog"] == "no_exact_row"
 
 
+def test_openrouter_batch_model_is_refused_before_any_probe():
+    calls: list = []
+    backend = pf.make_backend(calls=calls)
+    failure = backend.validate_request(_req(model="openrouter/z-ai/glm-5.3:batch"))
+    assert failure is not None and failure.code == "invalid_model"
+    assert failure.details is not None and failure.details["catalog"] == "batch_only"
+    assert "batch" in failure.detail
+    assert calls == []
+
+
 def test_unreadable_catalog_fails_closed():
     backend = pf.make_backend(catalog="unreadable")
     failure = backend.validate_request(_req())
