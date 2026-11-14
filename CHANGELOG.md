@@ -40,8 +40,11 @@ per-change, as its own lead says.
   `--help` and `login --help` are identical, and `exec --help` and `exec review --help` only add
   `--trust`, which amicus does not send; every stderr grammar amicus parses, the pins and disables
   under `--strict-config` and the logged-out `login status` line are identical. The model-facing
-  tool catalog of every model in `KNOWN_MODEL_SLUGS` changes only the code-mode `exec` tool's
-  definition, and both disable controls pass on 0.169.0. Upstream's `SandboxWorkspaceWrite` config
+  tool catalog was compared only for gpt-5.6-sol, gpt-5.6-terra, gpt-5.6-luna and
+  codex-auto-review, where only the code-mode `exec` tool's definition changes; every 0.169.0 run
+  was clean and both disable controls pass on 0.169.0, but 0.167.0's runs of gpt-6.1-sol,
+  gpt-6-astra, gpt-6.1-terra, gpt-6-sol, gpt-6-luna and gpt-reserve timed out, and its controls
+  were unobserved, so those six models have no comparison and the capture is not validated. Upstream's `SandboxWorkspaceWrite` config
   struct is unchanged. The served model catalog is the same list in the same order with the same
   reasoning levels; only its per-model `web_search_provider` moved from null to `"standalone"`,
   a field amicus does not read.
