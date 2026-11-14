@@ -20,6 +20,19 @@ per-change, as its own lead says.
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-11-14
+
+This release corrects what the tool surface says about itself, and has two breaking changes.
+The dry-run tools now run the selected backend's own pre-spend validation, so a preview is
+refused where the paid call would be (#439), and a profile that enables `kimi` now advertises
+the paid tools as `destructiveHint: true` (#426). The rest of the surface work makes the
+discovery prose match the enabled profile and tightens the error contract (#440 to #447, #450).
+It moves the discovery surface from `amicus/0.1/schema-63`, what 0.13.0 shipped, to
+`amicus/0.1/schema-67`. `RESULT_FORMAT` stays 9, so a job result 0.13.0 stored can still be
+delivered. codex-cli 0.169 is supported, and a `codex` call no longer fails when the temp
+directory is behind a symlink (#472). `kimi` stays deprecated and is frozen at Kimi Code 2.5
+until its removal in 0.15.0 or later: no newer kimi release is validated or added.
+
 ### Changed
 
 - **Breaking**: `amicus/0.1/schema-64`. `amicus_review_changes_dry_run` and
@@ -49,8 +62,8 @@ per-change, as its own lead says.
   codex-auto-review, where only the code-mode `exec` tool's definition changes; every 0.169.0 run
   was clean and both disable controls pass on 0.169.0, but 0.167.0's runs of gpt-6.1-sol,
   gpt-6-astra, gpt-6.1-terra, gpt-6-sol, gpt-6-luna and gpt-reserve timed out, and its controls
-  were unobserved, so those six models have no comparison and the capture is not validated. Upstream's `SandboxWorkspaceWrite` config
-  struct is unchanged. The served model catalog is the same list in the same order with the same
+  were unobserved, so those six models have no comparison and the capture is not validated.
+  Upstream's `SandboxWorkspaceWrite` config struct is unchanged. The served model catalog is the same list in the same order with the same
   reasoning levels; only its per-model `web_search_provider` moved from null to `"standalone"`,
   a field amicus does not read.
 
@@ -1860,7 +1873,8 @@ per-change rather than net, so they also name intermediate states that no releas
 - The tagged publish path to pypi.org has never run. Only the TestPyPI dispatch path has been exercised.
 - Eval scenario S6 in `skills/collaborating-with-amicus/tests/scenarios.md` passed on one run (status: `pass`, validated by that run alone); an M7 follow-up run against the current skill text did not isolate the still-open F3 finding, so F3 remains open. S7 (real-host approval friction) has failed both of its recorded runs (status: `fail`); an M7 zero-spend recheck reached neither a pass nor a fail and is recorded as inconclusive, so it does not move S7's status. See their `status` fields and ADR 0012.
 
-[Unreleased]: https://github.com/briandconnelly/amicus/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/briandconnelly/amicus/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/briandconnelly/amicus/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/briandconnelly/amicus/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/briandconnelly/amicus/compare/v0.11.1...v0.12.0
 [0.11.1]: https://github.com/briandconnelly/amicus/compare/v0.11.0...v0.11.1

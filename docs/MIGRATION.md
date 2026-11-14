@@ -201,6 +201,19 @@ A `null` there means no loaded plugin declares one.
 The `amicus://backends/{backend}` resource is always the full entry.
 `amicus_capabilities(detail="contracts")` is removed: pass `include_tool_details=false` for the same rowless payload, and `detail` now selects only how much each `tool_details` row carries (`summary` is `name`, `cost`, `stability`, `backends`; `full` adds the rest, including `error_codes`).
 
+## Upgrading from 0.13.0
+
+The changes below are the ones an operator running amicus 0.13.0 may have to handle before running 0.14.0.
+`CHANGELOG.md`'s 0.14.0 section lists every user-visible change since 0.13.0, including the ones that require no migration.
+A job result stored by 0.13.0 is still readable: `RESULT_FORMAT` did not move.
+The discovery surface moves to `amicus/0.1/schema-67`, so a fingerprint-aware client re-reads the catalog once.
+`amicus_review_changes_dry_run` and `amicus_delegate_dry_run` now run the selected backend's own pre-spend validation, so a preview that 0.13.0 answered `ok: true` can now be refused with the error the paid call would return, such as a `pi` preview with no model; a caller that treated any dry-run answer as success must branch on `ok`.
+A profile that enables `kimi` now advertises the paid tools as `destructiveHint: true`, so a host that gates destructive tools may ask for approval where it did not, including on calls routed to `codex`; set `AMICUS_BACKENDS=codex` to keep the lighter approval friction.
+A tool failure's `meta.timeout_seconds` is now omitted where no deadline applies, so a client must not require the key on discovery tools, job tools or a refusal made before a run is prepared.
+A `pi` or `kimi` model or effort refusal that points at `amicus_models` now carries `repair.next_step` `use_allowed_value`, where it carried `correct_arguments`.
+A `pi` `invalid_model` refusal keeps `details.field`, with its catalog reason in `details.reason` as `catalog=<reason>`.
+The `kimi` backend is frozen at Kimi Code 2.5 until it is removed in 0.15.0 or later: a newer kimi release is outside the supported set, and `amicus_backends` warns on it.
+
 ## Upgrading from 0.12.0
 
 The changes below are the ones an operator running amicus 0.12.0 may have to handle before running 0.13.0.

@@ -44,7 +44,7 @@ The plugins launch the server from a published release tag, pinned in
   "mcpServers": {
     "amicus": {
       "command": "uvx",
-      "args": ["--from", "git+https://github.com/briandconnelly/amicus.git@v0.13.0", "amicus-mcp"]
+      "args": ["--from", "git+https://github.com/briandconnelly/amicus.git@v0.14.0", "amicus-mcp"]
     }
   }
 }
@@ -191,13 +191,14 @@ the new ones.
 
 ## Status and known limits
 
-0.13.0 is the current release. It adds a `pi` backend, for the pi coding-agent CLI, which runs
-any provider's model named by an exact `provider/id` in `AMICUS_PI_MODEL` or a call's `model`,
-and deprecates `kimi` in its favour, for removal in 0.15.0 or later. The discovery surface moves
-to `amicus/0.1/schema-63`, and `RESULT_FORMAT` did not move, so a job result 0.12.0 stored can
-still be read. [`docs/MIGRATION.md`](docs/MIGRATION.md#upgrading-from-0120) explains how to
-upgrade, and moving from `kimi` to `pi`, and [`CHANGELOG.md`](CHANGELOG.md) lists every
-user-visible change.
+0.14.0 is the current release. Its dry-run tools now run the selected backend's own pre-spend
+validation, so a preview is refused where the paid call would be, and a profile that enables
+`kimi` now advertises the paid tools as `destructiveHint: true`. It supports codex-cli 0.169.
+`kimi` stays deprecated in favour of `pi`, for removal in 0.15.0 or later, and is frozen at Kimi
+Code 2.5. The discovery surface moves to `amicus/0.1/schema-67`, and `RESULT_FORMAT` did not
+move, so a job result 0.13.0 stored can still be read.
+[`docs/MIGRATION.md`](docs/MIGRATION.md#upgrading-from-0130) explains how to upgrade, and
+[`CHANGELOG.md`](CHANGELOG.md) lists every user-visible change.
 
 Two known limits: a third-party backend distribution can load through the `amicus.backends`
 entry-point group, but cannot yet be enabled or called, since `AMICUS_BACKENDS` and the
