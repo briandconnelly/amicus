@@ -45,7 +45,7 @@ def test_contract_is_derived_from_the_constants_and_self_consistent():
 
 
 def test_the_captures_are_the_ones_the_contract_claims():
-    assert [p.name for p in CAPTURES] == ["1.5.0"]
+    assert [p.name for p in CAPTURES] == ["1.5.0", "1.5.2"]
     assert frozenset({(1, 5)}) == contract.SUPPORTED_VERSIONS
 
 
