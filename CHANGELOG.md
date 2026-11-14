@@ -42,7 +42,9 @@ per-change, as its own lead says.
   under `--strict-config` and the logged-out `login status` line are identical. The model-facing
   tool catalog of every model in `KNOWN_MODEL_SLUGS` changes only the code-mode `exec` tool's
   definition, and both disable controls pass on 0.169.0. Upstream's `SandboxWorkspaceWrite` config
-  struct is unchanged. The served model catalog was not checked.
+  struct is unchanged. The served model catalog is the same list in the same order with the same
+  reasoning levels; only its per-model `web_search_provider` moved from null to `"standalone"`,
+  a field amicus does not read.
 
 ### Fixed
 

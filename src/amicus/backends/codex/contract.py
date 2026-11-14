@@ -15,8 +15,7 @@ the retired-setting grammar or the model-facing tool catalog; 0.162.1 the same c
 catalog; 0.163.0 the same checks against 0.162.1; 0.164.0 the same checks against 0.163.0;
 0.165.0 the same checks against 0.164.0, plus the model-facing tool catalog of every model in
 KNOWN_MODEL_SLUGS and the served catalog's gpt-6.1-terra; 0.166.0 the same checks against
-0.165.0; 0.167.0 the same checks against 0.166.0; 0.169.0 the same checks against 0.167.0,
-but not the served catalog).
+0.165.0; 0.167.0 the same checks against 0.166.0; 0.169.0 the same checks against 0.167.0).
 
 Every assumption amicus makes about the `codex` CLI — subcommands, flags, sandbox values,
 config keys it pins, the event/result extraction surface, and the stderr phrasings that
@@ -309,7 +308,7 @@ MODEL_SLUG_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 # same list without gpt-5.5, and with gpt-reserve (priority 4) ahead of gpt-6-luna (5), #368.
 # On 2026-10-29 0.164.0 and 0.165.0 were both served gpt-6.1-terra after gpt-6-astra, so it is a
 # server-side addition, not a 0.165 one. 0.166.0 was served the same list that day, and 0.166.0
-# and 0.167.0 were both served it again on 2026-11-08.
+# and 0.167.0 were both served it again on 2026-11-08, and 0.167.0 and 0.169.0 on 2026-11-14.
 KNOWN_MODEL_SLUGS: tuple[str, ...] = (
     "gpt-6.1-sol",
     "gpt-6-astra",
