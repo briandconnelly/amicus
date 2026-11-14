@@ -213,7 +213,7 @@ def login_status(binary: str, timeout_seconds: int = 10) -> tuple[bool | None, s
 def _provider_count(stdout: str) -> int | None:
     try:
         data = json.loads(stdout)
-    except (json.JSONDecodeError, TypeError):
+    except (json.JSONDecodeError, TypeError, RecursionError):
         return None
     if isinstance(data, list):
         return len(data)

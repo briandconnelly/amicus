@@ -100,7 +100,7 @@ def _activity_observer(job_dir: Path) -> tuple[Callable[[str], None], ActivityRe
             return
         try:
             event = json.loads(text)
-        except ValueError:
+        except (ValueError, RecursionError):
             return
         if isinstance(event, dict):
             recorder.record(time.time())
