@@ -47,6 +47,7 @@ An overshoot deletes nothing, which is the property the annotation needs.
 ## Consequences
 
 `destructiveHint: false` on the paid tools in the codex and kimi profile now holds for the job store: a paid call never deletes a tracked result amicus has not yet returned.
+Note (2026-11-14): since issue #426 a profile that enables kimi advertises `destructiveHint: true`, and only a codex-only profile still advertises `false` (ADR 0001, amendment of 2026-11-14).
 `annotations_reading`, the paid tools' retention sentence, the `amicus_job_*` retention sentence and the server instructions say so.
 `job_cap_reached` is a new amicus-local error code, so `FINGERPRINT` moves.
 `RESULT_FORMAT` does not: the code is refused before a job record exists, so no stored `result.json` can carry it.

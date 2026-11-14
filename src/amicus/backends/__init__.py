@@ -21,7 +21,7 @@ IN_TREE: dict[str, str] = {
 # backend's milestone pins plugin.effects against this table.
 KNOWN_EFFECTS: dict[str, AnnotationEffects] = {
     "codex": AnnotationEffects(paid_calls_destructive=False, job_reads_read_only=True),
-    "kimi": AnnotationEffects(paid_calls_destructive=False, job_reads_read_only=True),
+    "kimi": AnnotationEffects(paid_calls_destructive=True, job_reads_read_only=True),
     "claude": AnnotationEffects(paid_calls_destructive=True, job_reads_read_only=True),
     "pi": AnnotationEffects(paid_calls_destructive=True, job_reads_read_only=True),
 }
@@ -30,6 +30,7 @@ KNOWN_EFFECTS: dict[str, AnnotationEffects] = {
 # as amicus_capabilities.annotations_reading states it (#442). One clause per destructive
 # backend, no trailing period; a test fails a destructive backend without one.
 DESTRUCTIVE_REASONS: dict[str, str] = {
+    "kimi": "its delegate runs shell commands and writes files with no sandbox",
     "claude": "its config modes may run workspace hooks",
     "pi": "its delegate runs unsandboxed shell commands",
 }

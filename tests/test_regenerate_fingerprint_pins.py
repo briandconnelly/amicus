@@ -185,7 +185,7 @@ def test_committed_measured_reads_the_literal(tmp_path):
 def test_committed_measured_reads_this_repositorys_test():
     """The parser finds the real discovery-cost literal, so its drift report can fire."""
     measured = regen.committed_measured(regen.REPO)
-    assert set(measured) == {"all", "claude", "codex-kimi"}
+    assert set(measured) == {"all", "claude", "codex", "codex-kimi"}
     assert all(isinstance(v, int) and v > 0 for v in measured.values())
 
 

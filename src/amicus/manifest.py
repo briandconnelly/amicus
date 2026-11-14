@@ -33,6 +33,7 @@ from amicus.registry import BackendRegistry
 
 PROFILES: dict[str, dict[str, str]] = {
     "all": {},
+    "codex": {"AMICUS_BACKENDS": "codex"},
     "codex-kimi": {"AMICUS_BACKENDS": "codex,kimi"},
     "claude": {"AMICUS_BACKENDS": "claude"},
 }

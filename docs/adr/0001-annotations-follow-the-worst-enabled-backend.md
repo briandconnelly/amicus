@@ -32,3 +32,11 @@ Issue #442 found that `annotations_reading` explained every destructive profile 
 The sentence is now built from the enabled backends, not the loaded ones: each enabled backend that makes paid tools destructive is named with its own reason from `DESTRUCTIVE_REASONS`, in declaration order.
 An enabled id with no declaration is named as annotated for the worst case because amicus has no declaration for it, never given a borrowed cause.
 A test fails a backend that `KNOWN_EFFECTS` marks destructive without a reason.
+
+## Amendment (2026-11-14): Kimi
+
+Kimi is the third backend whose paid calls are destructive (issue #426).
+It has no sandbox and no approvals: its prompt mode runs shell commands and writes files ungated, and a worktree changes its working directory, not its reach.
+The Context above, that Kimi confines writes to a throwaway worktree, described its bridge's annotation rather than its behaviour, and `KNOWN_EFFECTS` declared `false` on that basis until this amendment.
+A profile that enables Kimi now advertises paid tools as `destructiveHint: true`, and `DESTRUCTIVE_REASONS` names Kimi with its reason.
+A codex-only profile is the one in-tree profile whose paid tools still advertise `false`.

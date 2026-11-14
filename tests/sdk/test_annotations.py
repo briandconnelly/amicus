@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from amicus.sdk.conventions import annotations
 
-# codex-in-claude / moonbridge position: writes stay in a throwaway worktree;
+# codex-in-claude position (amicus codex): writes stay in a throwaway worktree;
 # job reads advertised read-only despite lazy maintenance.
 WORKTREE_BRIDGE = annotations.AnnotationEffects(
     paid_calls_destructive=False, job_reads_read_only=True

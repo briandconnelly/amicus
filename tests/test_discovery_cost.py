@@ -392,6 +392,15 @@ them from undocumented ones. A first draft of it cost 55 bytes more. The rows th
 detail=full results, and the self-repair and meta changes of the same PR ride the error
 envelope and amicus://result-meta, not tools/list. Measured on the wire. MEASURED and BUDGET
 both move by the 123 bytes, so the budget keeps no headroom.
+
+The schema-67 move (#426) adds no byte to any tool record and moves no profile's size; it moves
+which profile carries which size. kimi now declares its paid calls destructive, because it has
+no sandbox and a worktree changes its cwd, not its reach, so the codex-kimi profile's eight
+active tools carry `destructiveHint: true` and it drops to the `all` and `claude` size,
+116171 -> 116163, one byte per active tool. The new `codex` profile is the one whose paid tools
+still say `false`, and it measures 116171, the size codex-kimi had. The annotations_reading
+sentence that names Kimi rides amicus_capabilities's result, not tools/list. Measured on the
+wire. MEASURED and BUDGET both move with it, so the budget keeps no headroom.
 """
 
 from __future__ import annotations
@@ -401,7 +410,12 @@ from tests.conftest import spawned_server_env
 
 from amicus import manifest
 
-MEASURED: dict[str, int] = {"all": 116163, "codex-kimi": 116171, "claude": 116163}
+MEASURED: dict[str, int] = {
+    "all": 116163,
+    "codex": 116171,
+    "codex-kimi": 116163,
+    "claude": 116163,
+}
 # The budget is a literal, not MEASURED rounded up to the next kilobyte as it was until
 # 2026-09-14. The rounding left up to 1 KB of growth per bucket that no PR had to own, and
 # this file records three such accumulations (448 and 12 bytes in the paragraphs above, and
@@ -409,7 +423,12 @@ MEASURED: dict[str, int] = {"all": 116163, "codex-kimi": 116171, "claude": 11616
 # #94 that landed after it), each noticed only when the next deliberate raise re-measured.
 # Any growth now fails until a PR raises BUDGET and says why; a shrink passes and shows as
 # drift against MEASURED. Raising one means re-measuring and moving both.
-BUDGET: dict[str, int] = {"all": 116163, "codex-kimi": 116171, "claude": 116163}
+BUDGET: dict[str, int] = {
+    "all": 116163,
+    "codex": 116171,
+    "codex-kimi": 116163,
+    "claude": 116163,
+}
 
 
 @pytest.mark.parametrize("profile", sorted(manifest.PROFILES))

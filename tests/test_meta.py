@@ -3,6 +3,8 @@ and the base Meta builder (exercised end-to-end once real tools land in Task 12)
 
 from __future__ import annotations
 
+import pytest
+
 from amicus import __version__, config
 from amicus.schemas.fingerprint import LIFECYCLE_META_KEY
 from amicus.schemas.results import ToolDeprecation
@@ -143,10 +145,20 @@ def test_the_ratchet_fires_at_the_removal_version_and_not_before():
 
 def test_effects_for_is_destructive_when_any_enabled_backend_is():
     destructive = config.settings({"AMICUS_BACKENDS": "claude"})
-    benign = config.settings({"AMICUS_BACKENDS": "codex,kimi"})
+    benign = config.settings({"AMICUS_BACKENDS": "codex"})
     assert _meta.effects_for(destructive).paid_calls_destructive is True
     assert _meta.effects_for(benign).paid_calls_destructive is False
     assert _meta.effects_for(benign).job_reads_read_only is True
+
+
+@pytest.mark.parametrize("profile", ["kimi", "codex,kimi"])
+def test_enabling_kimi_makes_paid_tools_destructive(profile):
+    """kimi has no sandbox: its delegate runs shell and writes files ungated, and the
+    worktree changes its cwd, not its reach (#426). Effects come from the enabled set, so
+    this holds with no kimi plugin loaded at all."""
+    settings = config.settings({"AMICUS_BACKENDS": profile})
+    assert _meta.effects_for(settings).paid_calls_destructive is True
+    assert _meta.annotations_for("active", settings)["destructiveHint"] is True
 
 
 def test_enabling_pi_makes_paid_tools_destructive():

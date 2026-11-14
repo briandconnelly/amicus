@@ -166,9 +166,10 @@ These are the differences a user migrating from a single-model server actually h
 
 **Approval friction follows the worst enabled backend (ADR 0001).**
 One tool serves every backend, so its annotations are static and must cover the strictest case.
-Enabling the Claude or pi backend gives *every* tool mutation-grade annotations, including `amicus_consult(backend="codex", ...)`; a pi delegate runs unsandboxed shell, edit and write tools.
+Enabling the Claude, pi or kimi backend gives *every* tool mutation-grade annotations, including `amicus_consult(backend="codex", ...)`; a pi or kimi delegate runs shell commands and writes files with no sandbox.
 A call that never prompted under `codex-in-claude` alone can now prompt for approval once Claude is enabled.
-Disable the Claude and pi backends (via `AMICUS_BACKENDS`) to get the old, lighter approval friction back for codex/kimi-only use.
+Unlike `moonbridge`, which advertised `destructiveHint: false`, amicus advertises `true` whenever kimi is enabled, because a worktree changes kimi's working directory, not its reach.
+Enable only the codex backend (`AMICUS_BACKENDS=codex`) to get the old, lighter approval friction back.
 `amicus_backends` publishes each backend's own `AnnotationEffects` so an agent can read the per-backend truth directly.
 
 **Remove the sibling servers when you switch; do not run them alongside amicus.**
