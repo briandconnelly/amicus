@@ -67,6 +67,12 @@ per-change, as its own lead says.
 
 ### Fixed
 
+- A `codex` call no longer fails at startup when the temp directory (`TMPDIR`) is reached
+  through a symlink. codex-cli 0.169 opens its `--output-last-message` file without following
+  symlinks, expanding only the root `/tmp`, `/var` and `/etc` links on macOS, and exits with
+  "Failed to open last message file" otherwise; amicus now passes it the resolved path.
+  The default macOS and Linux temp directories were not affected.
+
 - A `pi` run whose final assistant message carries a `stopReason` that is not a string, such
   as a JSON list or object, is now classified as any other run is, and its answer delivered,
   where it failed as `internal_error` (#438). No supported pi release has been seen to emit one.
