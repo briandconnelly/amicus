@@ -19,7 +19,7 @@ def _event(raw_line: str) -> dict | None:
         return None
     try:
         event = json.loads(line)
-    except (json.JSONDecodeError, ValueError):
+    except (json.JSONDecodeError, ValueError, RecursionError):
         return None
     return event if isinstance(event, dict) else None
 
@@ -96,7 +96,7 @@ def _unwrap_json_message(message: str) -> str:
         return text
     try:
         blob = json.loads(text)
-    except (json.JSONDecodeError, ValueError):
+    except (json.JSONDecodeError, ValueError, RecursionError):
         return text
     if isinstance(blob, dict) and isinstance(blob.get("error"), dict):
         inner = blob["error"].get("message")

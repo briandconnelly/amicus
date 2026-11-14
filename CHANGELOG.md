@@ -73,6 +73,12 @@ per-change, as its own lead says.
   "Failed to open last message file" otherwise; amicus now passes it the resolved path.
   The default macOS and Linux temp directories were not affected.
 
+- A JSON document nested too deeply for the decoder, in a backend's event stream, its result
+  envelope, its structured answer or a free probe's output, is now read as unparseable where it
+  raised `RecursionError` and failed the run as `internal_error` (#471). This covers every
+  backend, and a structured answer that deep is `invalid_json`. No backend has been seen to
+  emit one.
+
 - A `pi` run whose final assistant message carries a `stopReason` that is not a string, such
   as a JSON list or object, is now classified as any other run is, and its answer delivered,
   where it failed as `internal_error` (#438). No supported pi release has been seen to emit one.

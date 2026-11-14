@@ -18,7 +18,7 @@ def _event(raw_line: str) -> dict | None:
         return None
     try:
         event = json.loads(line)
-    except (json.JSONDecodeError, ValueError):
+    except (json.JSONDecodeError, ValueError, RecursionError):
         return None
     return event if isinstance(event, dict) else None
 
