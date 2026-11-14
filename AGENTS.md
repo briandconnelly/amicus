@@ -21,6 +21,7 @@ The rules bind; the context after them explains and points elsewhere.
 9. Never change `.github/**`, `AGENTS.md` or `CLAUDE.md` inside a milestone plan; those change only in a PR of their own.
 10. When a change touches a category in `FINGERPRINT_COVERS` (`src/amicus/schemas/fingerprint.py`), bump `FINGERPRINT` and regenerate the pins under `tests/fixtures/` in their own commit.
 11. When a stored job result's shape changes, bump `RESULT_FORMAT` in the same file.
+    A new field on `Meta` (`src/amicus/schemas/envelope.py`) that a stored result carries is such a change unless it is declared `Field(exclude=True)`, because `Meta` forbids extra keys and an older reader rejects the record.
 12. Write commit messages and PR titles as Conventional Commits, `type(scope)?!?: subject` (scope optional, `!` marks a breaking change), with an imperative lowercase subject and no trailing period, using only the types and scopes in `scripts/check_commit_message.py`.
 13. When a change needs a new commit scope, extend `scripts/check_commit_message.py` in that same change.
 14. Pin every `uses:` in a workflow to a full commit SHA with the version in a trailing comment.
@@ -51,6 +52,8 @@ The rules bind; the context after them explains and points elsewhere.
 24. `.claude-plugin/marketplace.json`'s plugin entry names a release that is already published, by `ref` and a `sha` equal to that tag's peeled commit, never the one being released, and it may never name a version newer than the one the tree declares.
     A release PR under rule 19 leaves it untouched; advance it to the new tag in its own `chore(release):` PR after that tag is published and its install has been checked, and a release is not complete until that PR merges.
     That PR is not a release: it needs no rule-20 evidence, because it moves a pointer to a tag that already exists.
+25. Before starting work on an issue, search for open pull requests that address it, including ones from forks (`gh pr list --state open --search "<issue number>"`); if one exists, review or help finish it, and supersede it only with the maintainer's agreement.
+26. Use a closing keyword (`Closes`, `Fixes`, `Resolves`) only for a change that resolves the whole issue, and nowhere else in a commit message or PR body; reference a partial fix as `Part of #N`, because GitHub closes the issue on the keyword whatever words follow it.
 
 ## Context
 
