@@ -735,6 +735,9 @@ def _destructive_sentence(reading: str) -> str:
 
 _CLAUDE_REASON = "Claude Code is enabled and its config modes may run workspace hooks"
 _PI_REASON = "Pi is enabled and its delegate runs unsandboxed shell commands"
+_KIMI_REASON = (
+    "Kimi is enabled and its delegate runs shell commands and writes files with no sandbox"
+)
 _CONFINED = "every enabled backend confines writes to a throwaway worktree"
 
 
@@ -743,8 +746,10 @@ _CONFINED = "every enabled backend confines writes to a throwaway worktree"
     [
         ("pi", [_PI_REASON], [_CLAUDE_REASON, "Claude Code"]),
         ("claude", [_CLAUDE_REASON], [_PI_REASON, "Pi "]),
-        (None, [_CLAUDE_REASON, _PI_REASON], []),
+        (None, [_KIMI_REASON, _CLAUDE_REASON, _PI_REASON], []),
         ("pi,claude", [_CLAUDE_REASON, _PI_REASON], []),
+        ("kimi", [_KIMI_REASON], [_CLAUDE_REASON, _PI_REASON, "Codex"]),
+        ("codex,kimi", [_KIMI_REASON], [_CLAUDE_REASON, _PI_REASON, "Codex"]),
     ],
 )
 async def test_annotations_reading_names_each_enabled_destructive_backend(profile, named, unnamed):
@@ -762,20 +767,20 @@ async def test_annotations_reading_names_each_enabled_destructive_backend(profil
     for absent in unnamed:
         assert absent not in sentence, (absent, sentence)
     assert _CONFINED not in sentence
-    if len(named) == 2:
+    if _CLAUDE_REASON in named and _PI_REASON in named:
         # Deterministic: the declaration order, whatever order AMICUS_BACKENDS lists them in.
         assert sentence.index(_CLAUDE_REASON) < sentence.index(_PI_REASON)
 
 
-@pytest.mark.parametrize("profile", ["codex", "kimi", "codex,kimi"])
-async def test_annotations_reading_keeps_the_confined_sentence_without_a_destructive_backend(
-    profile,
-):
-    reading, destructive = await _annotations_reading(config.settings({"AMICUS_BACKENDS": profile}))
+async def test_annotations_reading_keeps_the_confined_sentence_without_a_destructive_backend():
+    """codex alone is the one profile left whose paid tools are not destructive: kimi has
+    no sandbox, so enabling it makes them destructive (#426)."""
+    reading, destructive = await _annotations_reading(config.settings({"AMICUS_BACKENDS": "codex"}))
     sentence = _destructive_sentence(reading)
     assert destructive is False
     assert f"destructiveHint false for this profile because {_CONFINED}" in sentence
-    assert "Claude Code" not in sentence and "Pi " not in sentence
+    for absent in ("Claude Code", "Pi ", "Kimi"):
+        assert absent not in sentence, absent
 
 
 async def test_annotations_reading_never_invents_a_cause_for_an_undeclared_backend():
@@ -804,7 +809,7 @@ def test_every_destructive_backend_declares_its_reason():
     from amicus.backends import DESTRUCTIVE_REASONS, KNOWN_EFFECTS
 
     destructive = {b for b, e in KNOWN_EFFECTS.items() if e.paid_calls_destructive}
-    assert destructive == {"claude", "pi"}
+    assert destructive == {"claude", "kimi", "pi"}
     assert set(DESTRUCTIVE_REASONS) == destructive
     assert all(r.strip() and not r.endswith(".") for r in DESTRUCTIVE_REASONS.values())
 

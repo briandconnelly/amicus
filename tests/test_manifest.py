@@ -205,12 +205,19 @@ async def test_manifest_matches_golden(profile):
 
 
 async def test_profiles_differ_where_annotations_differ():
-    a = await manifest.build_manifest(manifest.app_for_profile("codex-kimi"))
+    a = await manifest.build_manifest(manifest.app_for_profile("codex"))
     b = await manifest.build_manifest(manifest.app_for_profile("claude"))
     consult_a = next(t for t in a["tools"] if t["name"] == "amicus_consult")
     consult_b = next(t for t in b["tools"] if t["name"] == "amicus_consult")
     assert consult_a["annotations"]["destructiveHint"] is False
     assert consult_b["annotations"]["destructiveHint"] is True
+
+
+async def test_codex_kimi_profile_is_destructive():
+    """kimi has no sandbox, so a profile that enables it is destructive (#426)."""
+    m = await manifest.build_manifest(manifest.app_for_profile("codex-kimi"))
+    consult = next(t for t in m["tools"] if t["name"] == "amicus_consult")
+    assert consult["annotations"]["destructiveHint"] is True
 
 
 def _in_tree_plugins() -> dict[str, Any]:
@@ -426,14 +433,14 @@ async def test_tools_list_wire_is_the_handshake_era_stdio_body():
 
 async def test_tools_list_bytes_discriminates_one_byte_per_active_tool():
     """Control: the instrument can see a change, and sees exactly its size. The claude
-    and codex-kimi profiles differ only in `destructiveHint` on the active tools (`true`
+    and codex profiles differ only in `destructiveHint` on the active tools (`true`
     against `false`: one byte each), so the two counts differ by the active-tool count."""
     env = spawned_server_env()
     active = (await manifest.build_manifest(manifest.app_for_profile("all")))["capabilities"][
         "active_tools"
     ]
     assert len(active) == 8
-    difference = manifest.tools_list_bytes("codex-kimi", env=env) - manifest.tools_list_bytes(
+    difference = manifest.tools_list_bytes("codex", env=env) - manifest.tools_list_bytes(
         "claude", env=env
     )
     assert difference == len(active)

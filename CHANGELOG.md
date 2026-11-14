@@ -46,6 +46,17 @@ per-change, as its own lead says.
   reasoning levels; only its per-model `web_search_provider` moved from null to `"standalone"`,
   a field amicus does not read.
 
+- **Breaking**: `amicus/0.1/schema-67`. A profile that enables `kimi` now advertises the paid
+  tools as `destructiveHint: true`, where it advertised `false` (#426). kimi has no sandbox: its
+  delegate runs shell commands and writes files ungated, and the throwaway worktree changes its
+  working directory, not its reach, so `false` overstated what a kimi call is confined to.
+  `amicus_backends` reports kimi's `effects.paid_calls_destructive` as `true`, and
+  `amicus_capabilities.annotations_reading` names Kimi with its reason. A host that gates
+  destructive tools may now ask for approval on calls it ran without asking under a profile such
+  as `AMICUS_BACKENDS=codex,kimi`, including calls routed to `codex`; enable only `codex`
+  (`AMICUS_BACKENDS=codex`) to keep the lighter approval friction. The default profile, which
+  enables `claude` and `pi`, was already `true`; its `annotations_reading` now names Kimi as well.
+
 ### Fixed
 
 - `amicus_models(backend="pi")` no longer lists OpenRouter `:batch` ids, which OpenRouter serves

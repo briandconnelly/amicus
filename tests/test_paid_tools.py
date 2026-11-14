@@ -280,7 +280,12 @@ async def test_unknown_backend_is_a_boundary_invalid_arguments():
 
 @pytest.mark.parametrize(
     ("env", "destructive"),
-    [({}, True), ({"AMICUS_BACKENDS": "codex,kimi"}, False), ({"AMICUS_BACKENDS": "claude"}, True)],
+    [
+        ({}, True),
+        ({"AMICUS_BACKENDS": "codex"}, False),
+        ({"AMICUS_BACKENDS": "codex,kimi"}, True),
+        ({"AMICUS_BACKENDS": "claude"}, True),
+    ],
 )
 async def test_paid_annotations_follow_the_worst_enabled_backend(env, destructive):
     by_name = await _tools(_app(env))
