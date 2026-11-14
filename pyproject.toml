@@ -28,7 +28,7 @@ dependencies = [
     # .github/dependabot.yml ignores minor and major updates to both packages.
     # The fastmcp floor is 4.1.4 because several FastMCP advisories are fixed only on the
     # 4.1 line (#394), and fastmcp 4.1.4 requires mcp 2.3.
-    "fastmcp>=4.1.4,<4.2",
+    "fastmcp>=4.1.4,<4.3",
     "mcp>=2.3,<2.4",
     "pydantic>=2",
 ]
@@ -51,7 +51,7 @@ packages = ["src/amicus"]
 [dependency-groups]
 dev = [
     # The tasks spike (M0) needs the real extension; production wiring lands in M5.
-    "fastmcp[tasks]>=4.1.4,<4.2",
+    "fastmcp[tasks]>=4.1.4,<4.3",
     "import-linter>=2",
     "jsonschema>=4.26",
     "prek>=0.4.5",

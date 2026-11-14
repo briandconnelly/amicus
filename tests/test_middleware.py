@@ -12,6 +12,7 @@ from fastmcp import Client, FastMCP
 from fastmcp.client import extension_hooks
 from fastmcp.exceptions import ResourceError
 from mcp import MCPError
+from mcp.types import Implementation
 from pydantic import BaseModel, ConfigDict, Field
 
 from amicus import config, middleware
@@ -223,7 +224,7 @@ async def test_connection_log_names_the_negotiated_facts_and_never_an_argument(c
     monkeypatch.setattr(extension_hooks, "_internal_client_extension_factories", [])
     app = _scratch_app()
     with caplog.at_level(logging.DEBUG, logger="amicus.middleware"):
-        async with Client(app) as c:
+        async with Client(app, client_info=Implementation(name="probe-client", version="1.0")) as c:
             await c.call_tool("probe", {"mode": "ok", "paths": ["SECRET-PATH"]})
         async with Client(
             app, mode="legacy", client_info={"name": "claude-code", "version": "2.1.263"}
@@ -232,9 +233,10 @@ async def test_connection_log_names_the_negotiated_facts_and_never_an_argument(c
     lines = [r.getMessage() for r in caplog.records if r.name == "amicus.middleware"]
     assert len(lines) == 2 and all(line.startswith("tools/call probe: ") for line in lines)
     modern, legacy = lines
-    # Measured: an in-memory client declares mcp/0.1.0 by default, on BOTH eras; the
-    # tasks extension is not negotiated because this scratch app registers none.
-    assert "protocol=2026-07-28" in modern and "client=mcp/0.1.0" in modern
+    # Both clients name themselves explicitly: the in-memory default changed across
+    # fastmcp releases (mcp/0.1.0 on 4.1, fastmcp/<version> on 4.2). The tasks
+    # extension is not negotiated because this scratch app registers none.
+    assert "protocol=2026-07-28" in modern and "client=probe-client/1.0" in modern
     assert "protocol=2025-11-25" in legacy and "client=claude-code/2.1.263" in legacy
     assert "tasks_negotiated=False" in modern and "tasks_negotiated=False" in legacy
     assert all("SECRET-PATH" not in line for line in lines)
