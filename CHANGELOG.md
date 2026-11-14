@@ -35,6 +35,15 @@ per-change, as its own lead says.
   run, and it still does not check that the backend's binary is installed, which
   `amicus_backends` reports. The two descriptions now say a preview runs those free checks.
 
+- codex-cli 0.169 is a supported version, so `amicus_backends` no longer warns on it; 0.168 was
+  never checked and stays outside the set. 0.169.0 was checked against 0.167.0 at zero spend:
+  `--help` and `login --help` are identical, and `exec --help` and `exec review --help` only add
+  `--trust`, which amicus does not send; every stderr grammar amicus parses, the pins and disables
+  under `--strict-config` and the logged-out `login status` line are identical. The model-facing
+  tool catalog of every model in `KNOWN_MODEL_SLUGS` changes only the code-mode `exec` tool's
+  definition, and both disable controls pass on 0.169.0. Upstream's `SandboxWorkspaceWrite` config
+  struct is unchanged. The served model catalog was not checked.
+
 ### Fixed
 
 - `amicus_models(backend="pi")` no longer lists OpenRouter `:batch` ids, which OpenRouter serves
