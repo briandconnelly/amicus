@@ -35,6 +35,11 @@ per-change, as its own lead says.
   run, and it still does not check that the backend's binary is installed, which
   `amicus_backends` reports. The two descriptions now say a preview runs those free checks.
 
+- `docs/claude-help/2.1.325/` records the `--help` of Claude Code 2.1.325, which every 2.x
+  release already satisfied: only the `rm` row is reworded, and the 2.1.321 to 2.1.325 notes
+  change no flag amicus sends; long tool results no longer outlive a `--no-session-persistence`
+  run, and an NFS transcript loss that exited 0 now exits 1. No paid call was made.
+
 - codex-cli 0.169 is a supported version, so `amicus_backends` no longer warns on it; 0.168 was
   never checked and stays outside the set. 0.169.0 was checked against 0.167.0 at zero spend:
   `--help` and `login --help` are identical, and `exec --help` and `exec review --help` only add

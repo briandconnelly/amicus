@@ -171,6 +171,7 @@ def test_the_captures_under_test_include_the_newest_one():
         "2.1.308",
         "2.1.312",
         "2.1.319",
+        "2.1.325",
     ]
 
 
