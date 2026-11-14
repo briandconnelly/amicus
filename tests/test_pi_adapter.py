@@ -395,6 +395,16 @@ def test_an_aborted_stop_at_exit_zero_names_the_stop_reason():
     )
 
 
+@pytest.mark.parametrize("stop", [["x"], {"x": 1}])
+def test_a_non_string_stop_reason_with_an_answer_is_a_normal_result(stop):
+    """#438: an unhashable stopReason crashed inspect_outcome, so the worker reported
+    internal_error and lost a usable answer."""
+    backend = pf.make_backend()
+    outcome = _outcome(pf.stream("hi", stopReason=stop))
+    assert backend.inspect_outcome(outcome, _req()) is None
+    assert backend.finalize(outcome, _req()).answer == "hi"
+
+
 def test_empty_zero_exit_run_is_empty_response():
     backend = pf.make_backend()
     failure = backend.inspect_outcome(_outcome(pf.stream(None)), _req())

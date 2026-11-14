@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from amicus.backends.pi import normalize
 
 
@@ -195,6 +197,16 @@ def test_a_loss_after_the_final_message_is_flagged():
 def test_a_loss_with_no_message_is_a_loss():
     assert normalize.lost_after_final_message(SESSION + LOST)
     assert not normalize.lost_after_final_message(SESSION), "control: nothing lost"
+
+
+@pytest.mark.parametrize("stop", [["error"], {"error": 1}, 1, True, None])
+def test_failed_stop_ignores_a_stop_reason_that_is_not_a_string(stop):
+    """#438: an unhashable stopReason raised TypeError on the set membership test."""
+    events = SESSION + _end(_assistant(_text("partial"), stopReason=stop))
+    assert normalize.failed_stop(events) is None
+    for reason in ("error", "aborted"):
+        control = SESSION + _end(_assistant(_text("partial"), stopReason=reason))
+        assert normalize.failed_stop(control) == reason
 
 
 def test_failed_stop_keys_on_the_stop_reason_not_the_message():
