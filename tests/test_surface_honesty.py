@@ -282,11 +282,6 @@ _SUPERSEDED_CONSUME_SURFACES: dict[str, str] = {
     "discovery returns": (
         "the originating tool's envelope; meta.consume says whether the record was deleted."
     ),
-    "jobs command": (
-        "Fetch a finished result and delete the record: `amicus_job_consume_result` with "
-        "`job_id` — use this once you are done with the result. Its `meta.consume` says "
-        "whether the record was deleted; when it carries a `follow_up`, the record may remain."
-    ),
     "skill reference": (
         "The consumed envelope's `meta.consume.discard_outcome` says whether the deletion "
         "happened; when it did not, the record may remain and `meta.consume.follow_up` names "
@@ -318,12 +313,10 @@ def _block(text: str, marker: str) -> str:
 
 
 def _consume_outcome_surfaces() -> dict[str, str]:
-    jobs_md = (_REPO / "commands" / "amicus" / "jobs.md").read_text(encoding="utf-8")
     skill_ref = _REPO / "skills" / "collaborating-with-amicus" / "references"
     options = (skill_ref / "options-and-errors.md").read_text(encoding="utf-8")
     return {
         "discovery returns": discovery.TOOL_DETAILS["amicus_job_consume_result"]["returns"],
-        "jobs command": _block(jobs_md, "`amicus_job_consume_result` with"),
         "skill reference": _block(options, "meta.consume"),
     }
 
@@ -368,12 +361,6 @@ _SUPERSEDED_BY_126: dict[str, str] = {
         "or delete_failed. A failed, cancelled or timed-out job returns its terminal error "
         "with no meta.consume and is not deleted, nor is a corrupt or incompatible record."
     ),
-    "jobs command": (
-        "after `not_done` or `delete_failed` the record may remain, and "
-        "`meta.consume.follow_up` names the call that shows what is left. A failed, "
-        "cancelled or timed-out job returns its terminal error with no `meta.consume` and "
-        "is not deleted."
-    ),
     "skill reference": (
         "after `not_done` or `delete_failed` the record may remain, and "
         "`meta.consume.follow_up` names the call that shows what is left. A failed, cancelled "
@@ -390,14 +377,6 @@ _SUPERSEDED_TERMINAL_CONSUME: dict[str, str] = {
     "discovery returns": (
         "the originating tool's envelope; meta.consume.discard_outcome is what the store "
         "did, with a follow_up after not_done or delete_failed."
-    ),
-    "jobs command": (
-        "Fetch a finished result and delete the record: `amicus_job_consume_result` with "
-        "`job_id` — use this once you are done with the result. Its "
-        "`meta.consume.discard_outcome` reports what the store did: after `removed` or "
-        "`missing` it no longer serves the record, so a repeat call returns `job_not_found`; "
-        "after `not_done` or `delete_failed` the record may remain, and "
-        "`meta.consume.follow_up` names the call that shows what is left."
     ),
     "skill reference": (
         "The consumed envelope's `meta.consume.discard_outcome` reports what the store did, "

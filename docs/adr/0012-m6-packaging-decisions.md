@@ -1,6 +1,6 @@
 # ADR 0012: What the M6 packaging milestone decided
 
-**Status:** Accepted (2026-09-07, M6)
+**Status:** Accepted (2026-09-07, M6); the per-verb commands were removed by [ADR 0049](0049-the-plugin-ships-no-slash-commands.md)
 
 ## Context
 

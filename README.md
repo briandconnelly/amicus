@@ -97,21 +97,8 @@ Then just ask, in your own words:
 - "Have another model review my current changes."
 - "Delegate this task to another model and show me the proposed diff."
 
-In Claude Code there are also slash commands:
-
-| Command | What it does |
-| --- | --- |
-| `/amicus:consult` | Ask another model for a read-only second opinion |
-| `/amicus:review` | Have another model review your git changes |
-| `/amicus:delegate` | Delegate a coding task; get back a reviewable diff |
-| `/amicus:delegate-async` | Delegate a long coding task in the background; get a job id to poll with `/amicus:jobs` |
-| `/amicus:adversarial` | Run a fixed adversarial critic against a plan, claim, or decision |
-| `/amicus:dry-run` | Preview what a review or delegate call would send — free, no model call |
-| `/amicus:jobs` | Poll, fetch, list, or cancel a background job |
-| `/amicus:status` | Check which backends are enabled, installed, and authenticated |
-
-Start with `/amicus:status` — it tells you which backends are actually usable before you spend
-anything.
+Start by asking which backends are available: the answer is free, and it tells you which
+backends are actually usable before you spend anything.
 
 ## The tools
 

@@ -457,8 +457,6 @@ def test_the_polling_reference_states_the_wait_ceiling():
     assert f"`wait_seconds` (up to {MAX_STATUS_WAIT_SECONDS} s)" in polling, (
         "the polling reference does not state wait_seconds' ceiling from source"
     )
-    jobs_cmd = (_SKILL.parents[1] / "commands" / "amicus" / "jobs.md").read_text(encoding="utf-8")
-    assert f"`wait_seconds` (up to {MAX_STATUS_WAIT_SECONDS})" in " ".join(jobs_cmd.split())
 
 
 def test_the_brief_rules_keep_a_full_reviews_scope_out_of_extra_context():
@@ -761,14 +759,6 @@ def test_the_consent_question_is_not_bounded_by_the_routing_question():
     routing = _flat(_rules_section("Routing"))
     assert "This limits questions about which route to take." in routing
     assert "is asked even when one route is left" in routing
-
-
-def test_the_slash_commands_carry_the_mode_aware_claude_exception():
-    # Review of #482: the commands restated the flat eligibility test the rule replaced.
-    commands = Path(__file__).resolve().parents[1] / "commands" / "amicus"
-    for name in ("consult", "review", "adversarial"):
-        text = _flat((commands / f"{name}.md").read_text(encoding="utf-8"))
-        assert "`config_mode`" in text and "Binding rules → Discovery" in text, name
 
 
 # ADR 0048 (#487): the body loads on every trigger, so it carries what binds every use and
