@@ -35,6 +35,8 @@ per-change, as its own lead says.
   a situation its description names is a reason to offer the call, not consent to spend or to
   send workspace content (#481). A user's request alone now selects a composed workflow; the
   stakes test applies only where the task declares one (#481).
+- The skill's blind-comparison rules now say that a candidate whose model is unknown leaves
+  model-family diversity `unverified`: the harness that produced it does not establish a family.
 
 ### Fixed
 
