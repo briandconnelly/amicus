@@ -200,8 +200,8 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
             "time, result_available, result_ok, and poll_after_ms to honor before the next "
             "poll while status is running (it grows with elapsed time, up to "
             f"{MAX_POLL_AFTER_MS / 1000:g} s; null on any terminal status), or pass a positive "
-            f"wait_seconds (at most {MAX_STATUS_WAIT_SECONDS}), which is itself the wait: call "
-            "again at once if it returns running. "
+            "wait_seconds, which is itself the wait (at most "
+            f"{MAX_STATUS_WAIT_SECONDS} s): call again at once if it returns running. "
             f"{_RETENTION}"
         ),
     )
