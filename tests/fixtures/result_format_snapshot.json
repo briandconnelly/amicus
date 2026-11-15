@@ -1,5 +1,5 @@
 {
-  "result_format": 9,
+  "result_format": 10,
   "schemas": {
     "AdversarialReviewResult": {
       "$defs": {
@@ -3537,6 +3537,43 @@
           "title": "Meta",
           "type": "object"
         },
+        "PartialWork": {
+          "additionalProperties": false,
+          "properties": {
+            "diff": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Diff"
+            },
+            "diffstat": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Diffstat"
+            },
+            "incomplete": {
+              "const": true,
+              "default": true,
+              "title": "Incomplete",
+              "type": "boolean"
+            }
+          },
+          "title": "PartialWork",
+          "type": "object"
+        },
         "Repair": {
           "additionalProperties": false,
           "properties": {
@@ -3738,6 +3775,17 @@
           "default": false,
           "title": "Ok",
           "type": "boolean"
+        },
+        "partial": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PartialWork"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [

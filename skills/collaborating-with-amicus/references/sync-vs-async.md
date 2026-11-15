@@ -40,6 +40,12 @@ Prefer `_async`, or a sync call with an `idempotency_key`, for:
 - a multi-file or whole-branch review
 - any delegate task (implementation work is usually the slowest of the four verbs)
 
+A delegate that runs out of time is not a total loss: its `timeout` error carries the diff it
+left as `partial` (`incomplete: true`), when amicus could capture it. Review it like any returned
+diff before reusing any of it. A background delegate's backend is stopped a short reserve before
+the job deadline so that capture can happen. Keep a delegate's task small, and leave slow
+verification such as a full test suite out of it: run that yourself on the diff you get back.
+
 What a terminated sync call costs at the provider is not reported to amicus, so nothing here
 claims it equals a completed call's cost. The reason to prefer `_async` under uncertainty is that
 an unkeyed sync timeout destroys the result you paid for.

@@ -42,6 +42,7 @@ IDENTITY_EXCLUDE: frozenset[str] = frozenset(
         "background",
         "job_max_seconds",
         "keyed",
+        "deadline_epoch",
     }
 )
 
@@ -80,6 +81,11 @@ class RunSpec:
     # stored outcome, so a failure that says "retry the same call" must say to change the key
     # (ADR 0039). Not a prompt input; a record written before it existed loads as False.
     keyed: bool = False
+    # A background run's wall-clock job deadline as of when the call was prepared, which is
+    # no later than the job store's own: a delegate stops its backend a reserve short of it,
+    # so the worker can still capture the worktree's partial diff (#508). Not a prompt input,
+    # nor part of a keyed identity; a record written before it existed loads as None.
+    deadline_epoch: float | None = None
     # --- inputs: never persisted, never on argv ---
     question: str | None = None
     task: str | None = None

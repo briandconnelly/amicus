@@ -1096,7 +1096,7 @@
       "error": {
         "backend": null,
         "code": "job_result_incompatible",
-        "message": "stored job result was written under a different result format (result_format 10; this release reads 9, producer server_version 0.0.0): stored under another result format",
+        "message": "stored job result was written under a different result format (result_format 11; this release reads 10, producer server_version 0.0.0): stored under another result format",
         "repair": {
           "alternative": "The stored result predates this server version; start a new job.",
           "next_step": "start_new_job"
@@ -1196,7 +1196,7 @@
         "code": "job_timeout",
         "message": "The job exceeded its wall-clock deadline and was stopped.",
         "repair": {
-          "alternative": "Start a new job.",
+          "alternative": "The job was stopped at its deadline (AMICUS_JOB_MAX_SECONDS, default 1800s) and its work was discarded. A new job is a new paid run that will likely stop the same way: start one only with a smaller task, with slow verification such as a full test suite left out of it, or after the operator raises AMICUS_JOB_MAX_SECONDS.",
           "next_step": "start_new_job"
         },
         "request_id": "00000000000000000000000000000000",

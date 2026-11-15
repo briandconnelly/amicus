@@ -201,6 +201,14 @@ A `null` there means no loaded plugin declares one.
 The `amicus://backends/{backend}` resource is always the full entry.
 `amicus_capabilities(detail="contracts")` is removed: pass `include_tool_details=false` for the same rowless payload, and `detail` now selects only how much each `tool_details` row carries (`summary` is `name`, `cost`, `stability`, `backends`; `full` adds the rest, including `error_codes`).
 
+## Upgrading from 0.14.0
+
+The changes below are the ones an operator running amicus 0.14.0 may have to handle before running the next release.
+A job result stored by 0.14.0 is no longer readable: `RESULT_FORMAT` moved from 9 to 10, so fetch or consume any stored result you still need before upgrading.
+The discovery surface moves to `amicus/0.1/schema-70`, so a fingerprint-aware client re-reads the catalog once.
+A delegate's `timeout` error can now carry a `partial` field holding the incomplete diff the backend left, so a client that validates error envelopes against a closed schema must admit it.
+A background delegate's backend now stops a reserve before `AMICUS_JOB_MAX_SECONDS` (a tenth of it, 15 to 120 seconds), and such a job now ends `done` with `result_ok: false` rather than with status `timeout`.
+
 ## Upgrading from 0.13.0
 
 The changes below are the ones an operator running amicus 0.13.0 may have to handle before running 0.14.0.
@@ -462,7 +470,7 @@ Branch on `review_status` before reading the verdict, and read that text before 
 Only an answer amicus could not read at all is still an error: `invalid_json` for an empty one, or `empty_response` on Kimi, which detects it first, and, from 0.5.0, `answer_unavailable` for an answer file amicus refuses to read (see "Upgrading from 0.4.0").
 
 **A job result stored by 0.2.0 is no longer readable (#65, #52, #139).**
-`RESULT_FORMAT` moved from 4 to 9, so `amicus_job_result` and `amicus_job_consume_result` return `job_result_incompatible` for a record 0.2.0 wrote, rather than a result whose new fields would answer for a run that never measured them.
+`RESULT_FORMAT` moved from 4 to 10, so `amicus_job_result` and `amicus_job_consume_result` return `job_result_incompatible` for a record 0.2.0 wrote, rather than a result whose new fields would answer for a run that never measured them.
 Fetch or consume any stored result you still need before upgrading; the record itself stays until `AMICUS_JOB_TTL` or the per-workspace cap evicts it.
 
 **An empty `idempotency_key` is rejected (#66).**
