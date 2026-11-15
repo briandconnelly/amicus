@@ -15,7 +15,10 @@ Resolve the request by the routing procedure in the `collaborating-with-amicus` 
 (`references/choosing-a-backend.md` → Routing procedure) and never substitute silently: when
 `claude` is not ready, say so rather than switching verb or harness. Whether or not the request
 names `claude`, call `amicus_backends` with `detail="full"` first and check `enabled: true`,
-`status.installed: true` and `status.authenticated: true` for `claude`.
+`status.installed: true` and `status.authenticated: true` for `claude`. That last field speaks
+for the default `config_mode` only: where it is not `true` and `status.warnings` reports an
+`ANTHROPIC_API_KEY` the default mode ignores, offer `config_mode: "bare"` and use it only when
+the user chooses it (the skill's Binding rules → Discovery).
 
 State the plan, claim, or decision under attack in `target`. It is required, and it is
 the only carrier for the subject of the critique: this tool takes no question argument.

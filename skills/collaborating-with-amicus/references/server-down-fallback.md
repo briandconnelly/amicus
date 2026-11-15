@@ -31,7 +31,8 @@ archived; neither is a fallback. Restore amicus, or use the one direct route bel
 ## Last resort: the codex CLI directly
 
 `codex` is the only direct CLI fallback documented here. Its prompt travels on **stdin**, so a
-hand-rolled call can stay inside AGENTS.md rule 18. Read-only consult only:
+hand-rolled call can keep prompt text off disk and off the command line, as the rule above
+requires. Read-only consult only:
 
 ```sh
 codex exec \
@@ -51,7 +52,8 @@ codex exec \
 Send the prompt on stdin; the trailing `-` is what selects it.
 
 Every flag here is one amicus supports and never gates on `--help` parsing
-(`src/amicus/backends/codex/contract.py`, `ALWAYS_SEND_FLAGS` and `MODEL_RUN_DISABLED_FEATURES`),
+(`ALWAYS_SEND_FLAGS` and `MODEL_RUN_DISABLED_FEATURES` in `src/amicus/backends/codex/contract.py`
+of the amicus repository, which an installed plugin does not carry),
 selected here for codex's strictest config isolation: no persisted session, no
 `$CODEX_HOME/config.toml`, no execpolicy rules, no remote-plugin connectors, and an explicit
 working root instead of the ambient directory.
@@ -71,21 +73,24 @@ the tools rather than relying on that.
 The two rules above govern `WORKSPACE` and when this route may be used at all.
 
 **Verification status of this command.** Each flag was checked against `codex exec --help` on
-codex-cli 0.153.4 and is accepted there; a negative control confirmed the check can detect an
-absent flag. What that establishes is flag *acceptance* on one version, not that the combination
-behaves as described. The command has not been executed end to end, and the installed codex is
-usually a later release: `amicus_backends` reports its version and whether amicus was built
-against it. Confirm each flag is still accepted rather than assuming; a rejection is CLI drift
-worth reporting, never a flag to drop.
+codex-cli 0.153.4 and again on 0.169.0, and is accepted on both; a negative control confirmed
+the check can detect an absent flag. On 0.169.0 the command was also executed end to end once,
+in an empty directory, with a one-line prompt of the test's own on stdin: it exited 0 and
+returned the answer as an `agent_message` item. What that establishes is that the combination
+runs and answers on that version, not that each flag has the isolation effect described above.
+The installed codex may be a later release: `amicus_backends` reports its version and whether
+amicus was built against it. Confirm each flag is still accepted rather than assuming; a
+rejection is CLI drift worth reporting, never a flag to drop.
 
 ## Why there is no kimi, claude or pi fallback here
 
 `kimi` ignores stdin and crashes on a long argv, so any hand-rolled kimi call must put the prompt
-in a file or on the command line. Rule 18 exempts *amicus's own* handshake file — a disclosed
-carrier surfaced on `amicus_backends` — and that exemption does not extend to a command you
-compose yourself. **There is no rule-18-compliant hand-rolled kimi fallback. Restore the server.**
+in a file or on the command line. *amicus's own* handshake file is a disclosed carrier surfaced
+on `amicus_backends`; a command you compose yourself has no such standing under the rule above.
+**There is no hand-rolled kimi fallback that keeps the prompt off disk and off the command line.
+Restore the server.**
 
-`claude` does take its prompt on stdin, so rule 18 is not what stops it. Its read-only tier is a
+`claude` does take its prompt on stdin, so the prompt-carrier rule is not what stops it. Its read-only tier is a
 tool allowlist assembled from several flags rather than a single sandbox switch, and no verified
 invocation is published here.
 
@@ -95,7 +100,7 @@ Those flags are not interchangeable. `--tools` is the **primary** allowlist and
 layer gone, whereas getting `--tools` wrong leaves a write-capable one. Since an improvised command
 gives you no way to know which you built, do not improvise one.
 
-`pi` also takes its prompt on stdin, so rule 18 is not what stops it either. It has no sandbox: its read-only tier is a `--tools` allowlist, a hand-rolled run needs an exact `provider/id` model and eight resource-suppression flags that keep a hostile workspace's extensions, context files and session path out, and no verified invocation is published here.
+`pi` also takes its prompt on stdin, so the prompt-carrier rule is not what stops it either. It has no sandbox: its read-only tier is a `--tools` allowlist, a hand-rolled run needs an exact `provider/id` model and eight resource-suppression flags that keep a hostile workspace's extensions, context files and session path out, and no verified invocation is published here.
 
 ## What still applies
 

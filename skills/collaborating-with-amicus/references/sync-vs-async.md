@@ -20,7 +20,7 @@ and the backend keeps running against a separate, longer job deadline (`AMICUS_J
 default 1800s). Starting the job commits the spend right away, even if you never poll.
 
 The default leaves a review little margin. A review of a few hundred lines at medium effort has
-been reported to take two to four minutes on `codex` (issue #84): inside the 300s default,
+been reported to take two to four minutes on `codex` ([#84](https://github.com/briandconnelly/amicus/issues/84)): inside the 300s default,
 but close enough that a slower draw is lost with it. For an unkeyed sync review of more than a
 small diff, raise `timeout_seconds` toward its ceiling, or use a form that keeps the result.
 
@@ -41,7 +41,7 @@ going, and repeating the same keyed call reattaches to it without new spend. Sta
 twin or dropping the key there is a second paid run; the Spend rules in SKILL.md say what to do
 with that repair. A keyed sync call waits for a long run inside a single call, as does
 `amicus_job_status` with a positive `wait_seconds` (see Polling below). Sync and
-`_async` are separate identities (ADR 0020), so a keyed sync call cannot wait on a job you
+`_async` are separate identities (ADR 0020) in amicus's design, so a keyed sync call cannot wait on a job you
 started with the `_async` twin.
 
 ## What `_async` returns

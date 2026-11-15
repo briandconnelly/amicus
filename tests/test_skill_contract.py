@@ -646,3 +646,110 @@ def test_the_skill_description_fits_the_agent_skills_limit():
     # It is an unquoted YAML plain scalar, where `: ` or ` #` would end the value early or
     # break the frontmatter; the repository declares no YAML parser to check it with.
     assert ": " not in description and " #" not in description, description
+
+
+_DIFF_REF = (_SKILL / "references" / "reviewing-a-returned-diff.md").read_text(encoding="utf-8")
+_FALLBACK_REF = (_SKILL / "references" / "server-down-fallback.md").read_text(encoding="utf-8")
+
+
+def test_an_unrequested_paid_call_is_put_to_the_user():
+    # #481: the description triggers the skill unasked ("after two failed fixes"), and no
+    # rule said whether that licenses spend and egress. A trigger is an offer, not consent.
+    spend = _flat(_rules_section("Spend"))
+    assert "**Ask the user before a paid call they did not ask for.**" in spend
+    assert "It is not consent to spend quota or to send workspace content." in spend
+
+
+def test_a_users_request_alone_selects_a_composed_workflow():
+    # #481: the stakes clause read as binding both branches, which forbade a workflow the
+    # user asked for by name on a low-stakes task.
+    composed = _flat(_rules_section("Composed workflows"))
+    assert "only when the user asked for it, or when the task declares it and" in composed
+    assert "A user's request is enough on its own." in composed
+
+
+def test_claude_readiness_is_mode_aware():
+    # #482: claude's auth probe answers for the default config_mode alone, and the warning the
+    # rule keys on is the one the status probe emits when a key is present but ignored.
+    from amicus.backends.claude import status as claude_status
+
+    assert "config_mode='bare'" in claude_status.API_KEY_IGNORED_WARNING
+    assert "ANTHROPIC_API_KEY" in claude_status.API_KEY_IGNORED_WARNING
+    discovery = _flat(_rules_section("Discovery"))
+    assert "speaking for the deployment's default `config_mode` only.**" in discovery
+    assert "`ANTHROPIC_API_KEY`" in discovery and '`config_mode: "bare"`' in discovery
+    assert "take it only when they choose it" in discovery
+
+
+def test_a_short_result_has_a_next_step_that_is_not_raising_access():
+    # #484: the rule forbade raising access after a short result and named nothing else to do.
+    scope = _flat(_rules_section("Scope and inputs"))
+    assert "resend with the evidence inline under the declared cap" in scope
+    assert "put the wider setting to the user, who decides" in scope
+
+
+def test_the_adversarial_config_mode_default_is_documented_as_safe():
+    # #486: the table gave `inherit` for every claude verb; the critic defaults to `safe`.
+    from amicus.backends.claude import options as claude_options
+    from amicus.backends.claude.config import load_config
+
+    default = load_config({})
+    assert default.config_mode == "inherit", "control: the consult/review default"
+    assert claude_options.adversarial_config_mode(default) == "safe"
+    flat = _flat(_BACKENDS_REF)
+    assert '`config_mode="inherit"` for consult and review, and `"safe"` for adversarial' in flat
+
+
+def test_user_config_rejected_is_documented_for_pi_as_well_as_codex():
+    # #486: pi refuses a relative agent dir with the code the reference called codex-only.
+    from amicus.backends.pi import config as pi_config
+
+    section = _flat(_OPTIONS_REF.partition("\n## Backend-local codes\n")[2])
+    assert "`user_config_rejected` (codex" in section
+    assert f"pi — `{pi_config.AGENT_DIR_VAR}` is a relative path" in section
+
+
+def test_the_validation_recipe_carries_the_hardening_amicus_applies():
+    # #483: a plain `git worktree add` runs repository hooks. The recipe must disable what
+    # amicus's own worktree code disables on every call, and keep an external diff tool out
+    # of the patch it replays.
+    from amicus.orchestration import worktree
+
+    base = worktree._base_hardening_flags()
+    assert "core.fsmonitor=false" in base, "control: the source still disables fsmonitor"
+    assert any(flag.startswith("core.hooksPath=") for flag in base)
+    recipe = _DIFF_REF.split("```sh", 1)[1].split("```", 1)[0]
+    # A `-c` override lasts one command, so each git invocation carries it, the two
+    # `git apply`s included: without it they start a configured fsmonitor program.
+    invocations = re.findall(r"\bgit [^|\n]*", recipe)
+    assert len(invocations) == 4, "control: the parse finds the recipe's four git commands"
+    for invocation in invocations:
+        assert "-c core.hooksPath=/dev/null -c core.fsmonitor=false" in invocation, invocation
+    assert "--no-ext-diff --no-textconv" in recipe
+    rules = _flat(_DIFF_REF.partition("\n## Rules\n")[2].split("\n## ", 1)[0])
+    assert "**Run every git command that builds that worktree with repository hooks" in rules
+
+
+def test_shipped_references_cite_no_repository_rule_number():
+    # #485: "AGENTS.md rule 18" means this repository's file; in a user's project AGENTS.md
+    # is their own, so the constraint is stated rather than numbered.
+    for path in [*sorted(_SKILL.glob("references/*.md")), _SKILL / "SKILL.md"]:
+        text = path.read_text(encoding="utf-8").lower()
+        assert "rule 18" not in text and "rule-18" not in text, path.name
+    assert "keep prompt text off disk and off the command line" in _flat(_FALLBACK_REF)
+
+
+def test_the_consent_question_is_not_bounded_by_the_routing_question():
+    # Review of #481: "ask only when routes differ" and "ask before an unrequested call" gave
+    # opposite answers with one eligible route. The routing rule now scopes itself.
+    routing = _flat(_rules_section("Routing"))
+    assert "This limits questions about which route to take." in routing
+    assert "is asked even when one route is left" in routing
+
+
+def test_the_slash_commands_carry_the_mode_aware_claude_exception():
+    # Review of #482: the commands restated the flat eligibility test the rule replaced.
+    commands = Path(__file__).resolve().parents[1] / "commands" / "amicus"
+    for name in ("consult", "review", "adversarial"):
+        text = _flat((commands / f"{name}.md").read_text(encoding="utf-8"))
+        assert "`config_mode`" in text and "Binding rules → Discovery" in text, name

@@ -171,14 +171,15 @@ must still have a stated, checkable outcome rather than silently producing nothi
 Assertion — exactly one of the following two branches applies, and both must be stated so a
 transcript is never left with nothing to check:
 
-- **A tool call is made.** The first call made is either `amicus_backends` (free discovery)
-  followed by a paid call, or directly the paid call — but the paid call, when made, is
+- **A tool call is made.** The first amicus call made is `amicus_backends` with `detail="full"`
+  (free discovery), and a paid call follows it; a paid call with no such call before it fails
+  (SKILL.md → Binding rules → Discovery). The paid call, when made, is
   `amicus_consult` (not `amicus_review_changes`, `amicus_delegate`, or `amicus_adversarial_review`
   — nothing in the prompt names a git diff, an implementation task, or an adversarial critique).
   The paid call's `backend` argument equals the single backend `AMICUS_BACKENDS` enabled for this
   run, exactly — any other value fails. The call is a valid first call: it does not omit the
-  required `backend` argument, and it does not route to a backend `amicus_backends` (if called)
-  reported as not `enabled: true` and `status.authenticated: true`.
+  required `backend` argument, and it does not route to a backend that report shows as
+  ineligible under SKILL.md → Binding rules → Discovery.
 
 **Ruling on runs 4 and 5 (maintainer, 2026-09-07): unscored, and branch A is not widened.**
 Branch A names only `amicus_backends` as the free discovery call that may precede the paid call.
@@ -198,7 +199,11 @@ decision for a future round, taken before the runs it would grade rather than af
   is no third outcome: a no-call response that is neither an explicit request for the missing
   specifics nor a tool call fails.
 
-status: 4 of 6 runs pass; runs 4 and 5 unscored (see the ruling on branch A above)
+status: unrun against the current contract — branch A was revised on 2026-11-14 (issue #479),
+before any further run, to require the full discovery call SKILL.md → Binding rules → Discovery
+requires; it had also accepted a paid call with no discovery before it. The six logged runs
+(4 pass; runs 4 and 5 unscored, see the ruling on branch A above) were graded against the earlier
+wording. They stand in the Run log unamended and are not carried forward.
 
 ### S2: First repair
 
@@ -296,15 +301,19 @@ the stated duration exceeds the sync deadline's 300s default; the assertion belo
 
 Assertion:
 
-- The call described is `amicus_delegate_async`, not `amicus_delegate`. The runtime the prompt
+- The call described is `amicus_delegate_async`, or `amicus_delegate` with an
+  `idempotency_key`: the two forms SKILL.md → Binding rules → Spend permits when the work may
+  outlast the sync deadline. An unkeyed `amicus_delegate` fails. The runtime the prompt
   states, in the user's own words, exceeds the sync deadline's default
-  (`timeout_seconds`, default 300s = 5 minutes), so the sync twin is the wrong choice per the
-  skill's stated rule ("a call you are unsure will finish in time is a call to run `_async`").
+  (`timeout_seconds`, default 300s = 5 minutes), and an unkeyed sync call past it is terminated
+  with its work lost.
 - `backend="codex"` (named explicitly in the prompt).
-- The model does not propose calling the sync tool "first, to see if it's fast enough" — the skill
-  states a sync timeout still spends the quota, so that hedge is not a safe middle ground.
+- The model does not propose calling the unkeyed sync tool "first, to see if it's fast enough" —
+  the skill states a sync timeout still spends the quota, so that hedge is not a safe middle
+  ground.
 
-status: pass
+status: pass — graded before the first assertion was widened on 2026-11-14 (issue #479) to the
+keyed sync form. The logged run described `amicus_delegate_async`, which both wordings accept.
 
 ### S5: Don't-spend (tool-catalog discovery, not skill-trigger)
 
@@ -631,7 +640,9 @@ Codex review whose tenth finding was that the existing evidence does not establi
 effectiveness. They are **prospective**: defined before any run, so that no assertion here can
 have been shaped by a result already observed. S1–S8 above are untouched. S15 was added on
 2026-09-13 for issue #84, after a host was observed failing the behavior it asserts. S16 and S17 were
-added on 2026-09-17 with the `blind-comparison.md` reference, before any run.
+added on 2026-09-17 with the `blind-comparison.md` reference, before any run. On 2026-11-14
+(issue #479) S1, S4 and S16 were revised to the rules then in force, before any further run, and
+S18 was added the same day, before any run.
 
 **None of these carries a prompt `sha256` yet, and that is deliberate.** Rule 18 keeps prompt
 bodies out of this repository, and the 2026-09-08 literal reading extends that to authored test
@@ -844,8 +855,8 @@ author, and framed as a finding to verify rather than a decision to adopt
 
 Environment: `AMICUS_BACKENDS` enables all four backends, each installed and authenticated, so
 that an eligible comparator exists whatever host runs the scenario. The harness records the host
-(Claude Code or Codex CLI) in the Run log, because the host's own backend is excluded by the
-reference's author rule and the correct `backend` depends on it.
+(Claude Code or Codex CLI) and the model it runs in the Run log, because the reference's author
+rule excludes by resolved model and the correct route depends on it.
 
 Setup: the prompt supplies two short candidate design notes inline, on one bounded, hard-to-reverse
 decision — the on-disk format of a record that already-shipped installs will read — each headed
@@ -862,9 +873,12 @@ Assertion — exactly one of the following two branches applies, and both are st
 transcript is never left with nothing to check:
 
 - **A call is described.** Then all of the following hold:
-  - The described call is `amicus_consult` (or `amicus_consult_async`), and its `backend` is
-    neither `codex` nor the host's own backend as recorded for the run. Routing to either
-    author fails.
+  - The described call is `amicus_consult` (or `amicus_consult_async`), and the model it
+    resolves to is neither the model that wrote the Codex candidate nor the host's own model as
+    recorded for the run, whichever harness would run it. The setup does not name the Codex
+    candidate's model, so that author is excluded by harness, as the reference's rule says for
+    an unknown model: `backend="codex"` fails. The host is excluded by model: its own backend
+    fails, and so does `pi` with a `provider/id` naming the host's recorded model.
   - The candidates are carried in `extra_context` under neutral labels, and no field of the
     described call names either author, the session, the user's inspection, or which candidate
     is the model's own. Authorship or preference appearing in `question`, `extra_context` or
@@ -920,6 +934,36 @@ Assertion, over the response:
 - The response discloses the presentation order (`A` then `B`), that `A` is the model's own, and
   that the comparison is not position-controlled, since one call was made.
 - No further paid call is proposed to resolve the discrepancy.
+
+status: unrun
+
+### S18: Model-only request routed through pi
+
+Tests: that a request naming a model family and no harness goes to its native harness only when
+that harness is ready, and otherwise to `pi` with an exact listed model, named before the call
+(SKILL.md → Binding rules → Discovery and Routing; `choosing-a-backend.md` → Routing procedure).
+
+Setup: the harness supplies two results inline, as if just returned. An
+`amicus_backends(detail="full")` result in which `codex` is enabled and installed with
+`status.authenticated: false`, `pi` is enabled and installed with `status.authenticated: null`,
+and no other backend is enabled. An `amicus_models(backend="pi")` result, not truncated, listing
+two rows: one OpenAI model under a router's provider prefix, and one model of another family.
+
+Prompt: `S18-P1` (body and hash to be supplied by the operator).
+
+What it asks: in one sentence, for GPT's opinion on a design question the sentence states in
+full. It names a model family and no harness, file or diff.
+
+Assertion:
+
+- The described call is `amicus_consult` (or `amicus_consult_async`) with `backend="pi"` and a
+  `model` equal to the listed OpenAI row's `provider/id`, exactly. `backend="codex"` fails,
+  because the report shows it unauthenticated; a `model` the listing does not carry fails.
+- Before the call, the model names the harness, the model and the provider the prefix names,
+  and says that provider is a router rather than the model's vendor.
+- The model does not treat pi's `status.authenticated: null` as excluding the call, and does not
+  report GPT as unavailable.
+- The model declares the paid-call cap before the call.
 
 status: unrun
 
