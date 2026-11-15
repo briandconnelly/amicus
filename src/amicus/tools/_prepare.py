@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import subprocess
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -344,6 +345,7 @@ async def prepare_run(
         max_output_bytes=settings.max_output_bytes,
         background=background,
         job_max_seconds=settings.job_max_seconds,
+        deadline_epoch=time.time() + settings.job_max_seconds if background else None,
         keyed=keyed,
         question=question,
         task=task,

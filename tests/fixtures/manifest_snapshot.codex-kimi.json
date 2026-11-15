@@ -153,7 +153,7 @@
     ],
     "protocol_revision": "2026-07-28",
     "resource_error_carrier": "JSON-RPC error; the envelope (machine_code/human_message/backend/temporary/retry_after_ms/repair/resource_uri/request_id) is in error.data. Classify by error.data.machine_code: the numeric is era-bound (-32002 on a 2025-11-25 connection, -32602 on 2026-07-28; -32603 for a read failure on both).",
-    "result_format": 9,
+    "result_format": 10,
     "result_meta_resource": "amicus://result-meta",
     "scope": [
       "Second opinions, git-change reviews, adversarial critiques and delegated diffs from Codex, Kimi, Claude Code or Pi, selected per call.",
@@ -1668,7 +1668,7 @@
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-69",
+                "default": "amicus/0.1/schema-70",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -1888,6 +1888,44 @@
             "title": "Meta",
             "type": "object"
           },
+          "PartialWork": {
+            "additionalProperties": false,
+            "description": "What a delegate left in its worktree when its backend was stopped at a deadline\n(#508): captured, redacted and bounded exactly as a finished delegate's diff, and an\nunverified, incomplete proposal, never a finished one. `diff` and `diffstat` are\nomitted when the backend had changed nothing; meta.truncated reports a bounded diff, as\nit does on a success.",
+            "properties": {
+              "diff": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Diff"
+              },
+              "diffstat": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Diffstat"
+              },
+              "incomplete": {
+                "const": true,
+                "default": true,
+                "title": "Incomplete",
+                "type": "boolean"
+              }
+            },
+            "title": "PartialWork",
+            "type": "object"
+          },
           "Repair": {
             "additionalProperties": false,
             "description": "Machine-actionable recovery: a symbolic `next_step`, the single callable\n`tool`/`arguments`, and an optional prose `alternative` ([6.repair-object]).",
@@ -2093,6 +2131,17 @@
             "default": false,
             "title": "Ok",
             "type": "boolean"
+          },
+          "partial": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialWork"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           }
         },
         "required": [
@@ -4302,7 +4351,7 @@
       "description": "The full ErrorResult schema; tool outputSchemas carry only an opaque error branch.",
       "mimeType": "application/schema+json",
       "name": "amicus-error-envelope",
-      "size": 16530,
+      "size": 17390,
       "title": "amicus error envelope schema",
       "uri": "amicus://error-envelope"
     },
@@ -4706,7 +4755,7 @@
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-69",
+            "default": "amicus/0.1/schema-70",
             "title": "Fingerprint",
             "type": "string"
           },
@@ -8275,7 +8324,7 @@
         "openWorldHint": true,
         "readOnlyHint": false
       },
-      "description": "PAID — spends the selected backend's quota on every new call. Async twin of amicus_delegate: returns a job handle; poll amicus_job_status while status is running, then read amicus_job_result. Same egress and feature gate. Starting a job commits to spend. The job record keeps the whole answer — best-effort secret-redacted, and it can quote your inputs — whatever `detail` delivered, until it expires (AMICUS_JOB_TTL, default 24h; an expired record is removed on a later job call, not by a daemon), the per-workspace cap evicts it once returned, or amicus_job_consume_result removes it. Deadline: AMICUS_JOB_MAX_SECONDS (default 1800s).",
+      "description": "PAID — spends the selected backend's quota on every new call. Async twin of amicus_delegate: returns a job handle; poll amicus_job_status while status is running, then read amicus_job_result. Same egress and feature gate. Starting a job commits to spend. The job record keeps the whole answer — best-effort secret-redacted, and it can quote your inputs — whatever `detail` delivered, until it expires (AMICUS_JOB_TTL, default 24h; an expired record is removed on a later job call, not by a daemon), the per-workspace cap evicts it once returned, or amicus_job_consume_result removes it. Deadline: AMICUS_JOB_MAX_SECONDS (default 1800s); the backend stops a short reserve before it and the timeout error carries its incomplete diff as `partial`. Keep slow verification such as a full test suite out of the task.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,

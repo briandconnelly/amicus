@@ -712,3 +712,129 @@ async def test_a_vanished_workspace_does_not_explain_a_spawn_elsewhere(tmp_path)
         fakeplugin.make_plugin(backend=_SpawnsIn((str(tmp_path / "no-such-cli"),), str(site))),
     )
     assert out["error"]["code"] == "backend_not_found"
+
+
+class _TimesOut(fakeplugin.FakeBackend):
+    def classify_failure(self, outcome, request):
+        return ClassifiedFailure(code="timeout", detail="the backend ran out of time")
+
+
+def _timeout_plugin():
+    return fakeplugin.make_plugin(backend=_TimesOut())
+
+
+async def test_a_timed_out_delegate_returns_its_partial_diff(monkeypatch, repo):
+    # #508: the worktree's work is captured before the site is torn down and rides the
+    # timeout as `partial`, presented like a finished delegate's diff.
+    monkeypatch.setattr(
+        run_mod.runtime,
+        "run_async",
+        cf.scripted_run_async(exit_code=124, timed_out=True, write_in_cwd={"a.py": "x = 3\n"}),
+    )
+    out = await run_mod.run_request(_spec("delegate", str(repo)), _timeout_plugin())
+    assert out["ok"] is False and out["error"]["code"] == "timeout"
+    partial = out["partial"]
+    assert partial["incomplete"] is True and "+x = 3" in partial["diff"]
+    assert partial["diffstat"] == "1 file changed, 1 insertion(+), 1 deletion(-)"
+    assert (repo / "a.py").read_text() == "x = 1\n"
+
+
+async def test_a_timed_out_delegate_that_changed_nothing_says_so(monkeypatch, repo):
+    monkeypatch.setattr(
+        run_mod.runtime, "run_async", cf.scripted_run_async(exit_code=124, timed_out=True)
+    )
+    out = await run_mod.run_request(_spec("delegate", str(repo)), _timeout_plugin())
+    assert out["error"]["code"] == "timeout" and out["partial"] == {"incomplete": True}
+    # It reads back, as delivery and keyed normalization both validate it.
+    from amicus.errors import keyed_stored_error
+    from amicus.schemas.envelope import ErrorResult
+
+    assert ErrorResult.model_validate(out).partial is not None
+    assert keyed_stored_error(out, "amicus_delegate_async")["partial"] == {"incomplete": True}
+
+
+def _capture_site_error():
+    from amicus.orchestration import isolation
+
+    return isolation.SiteError("worktree_error", "capture failed")
+
+
+@pytest.mark.parametrize(
+    "error",
+    [_capture_site_error, lambda: UnicodeDecodeError("utf-8", b"\xff", 0, 1, "bad")],
+)
+async def test_a_partial_diff_that_cannot_be_captured_keeps_the_timeout(monkeypatch, repo, error):
+    from amicus.orchestration import isolation
+
+    def boom(self):
+        raise error()
+
+    monkeypatch.setattr(isolation.WorktreeSite, "capture_diff", boom)
+    monkeypatch.setattr(
+        run_mod.runtime, "run_async", cf.scripted_run_async(exit_code=124, timed_out=True)
+    )
+    out = await run_mod.run_request(_spec("delegate", str(repo)), _timeout_plugin())
+    assert out["error"]["code"] == "timeout" and "partial" not in out
+
+
+async def test_a_timed_out_consult_carries_no_partial(monkeypatch):
+    monkeypatch.setattr(
+        run_mod.runtime, "run_async", cf.scripted_run_async(exit_code=124, timed_out=True)
+    )
+    out = await run_mod.run_request(_spec(), _timeout_plugin())
+    assert out["error"]["code"] == "timeout" and "partial" not in out
+
+
+async def test_a_partial_diff_is_bounded_like_a_finished_one(monkeypatch, repo):
+    monkeypatch.setattr(
+        run_mod.runtime,
+        "run_async",
+        cf.scripted_run_async(exit_code=124, timed_out=True, write_in_cwd={"b.py": "y\n" * 500}),
+    )
+    out = await run_mod.run_request(
+        _spec("delegate", str(repo), max_diff_bytes=100), _timeout_plugin()
+    )
+    assert len(out["partial"]["diff"].encode()) <= 100 and out["meta"]["truncated"] is True
+
+
+@pytest.mark.parametrize(
+    ("job_seconds", "reserve"), [(60, 15), (600, 60), (1800, 120), (7200, 120)]
+)
+def test_the_deadline_reserve_is_a_tenth_within_bounds(job_seconds, reserve):
+    assert run_mod.deadline_reserve_seconds(job_seconds) == reserve
+
+
+def test_a_background_delegate_stops_its_backend_a_reserve_before_the_deadline():
+    spec = _spec("delegate", timeout_seconds=1800, background=True, deadline_epoch=10_000.0)
+    # Prepared at 8200: 1800s left, less the 120s reserve.
+    assert run_mod.backend_timeout(spec, now=8200.0) == 1680
+    # Time spent before the backend started comes out of its budget too.
+    assert run_mod.backend_timeout(spec, now=8500.0) == 1380
+    # A spent deadline still runs (and times out) through the backend's own path.
+    assert run_mod.backend_timeout(spec, now=20_000.0) == 1
+    # Never longer than the spec's own timeout, even with a clock behind the deadline.
+    assert run_mod.backend_timeout(spec, now=0.0) == 1800
+
+
+def test_only_a_background_delegate_takes_the_reserve():
+    assert run_mod.backend_timeout(_spec("delegate", timeout_seconds=30), now=0.0) == 30
+    consult = _spec(timeout_seconds=1800, background=True, deadline_epoch=10_000.0)
+    assert run_mod.backend_timeout(consult, now=8200.0) == 1800
+
+
+async def test_a_background_delegate_runs_its_backend_on_the_reserved_timeout(monkeypatch, repo):
+    import time
+
+    calls: list = []
+    monkeypatch.setattr(
+        run_mod.runtime, "run_async", cf.scripted_run_async(stdout="done", calls=calls)
+    )
+    spec = _spec(
+        "delegate",
+        str(repo),
+        timeout_seconds=1800,
+        background=True,
+        deadline_epoch=time.time() + 1800,
+    )
+    await run_mod.run_request(spec, fakeplugin.make_plugin())
+    assert 1600 <= calls[0]["timeout"] <= 1680

@@ -65,10 +65,13 @@ TIMEOUT_ALTERNATIVE = (
 # A background run (an _async job or a keyed sync call) already ran under the job deadline,
 # so its timeout names no tool: an _async twin would hit the same deadline (ADR 0039).
 JOB_DEADLINE_TIMEOUT_ALTERNATIVE = (
-    "The background run passed the job deadline (AMICUS_JOB_MAX_SECONDS, default 1800s); the "
-    "same call, sync or _async, will likely time out again, and any next attempt is a NEW paid "
-    "run, not a recovery of this one (the backend may already have charged this run). Narrow "
-    "the task, or have the operator raise AMICUS_JOB_MAX_SECONDS."
+    "The background run reached the job deadline (AMICUS_JOB_MAX_SECONDS, default 1800s; a "
+    "delegate's backend is stopped a short reserve before it); the same call, sync or _async, "
+    "will likely time out again, and any next attempt is a NEW paid run, not a recovery of "
+    "this one (the backend may already have charged this run). A delegate's `partial`, when "
+    "present, is the incomplete diff it left: review it before reusing any of it. Split the "
+    "task into smaller ones, keep slow verification such as a full test suite out of a "
+    "delegate's task and run it yourself, or have the operator raise AMICUS_JOB_MAX_SECONDS."
 )
 
 # A keyed run's same call replays its stored outcome (ADR 0020), so no stored error of a
@@ -526,4 +529,5 @@ def keyed_stored_error(envelope: dict[str, Any], tool: str) -> dict[str, Any]:
             )
         repair = repair.model_copy(update={"alternative": prose + (repair.alternative or "")})
     keyed = info.model_copy(update={"temporary": False, "retry_after_ms": None, "repair": repair})
-    return serialize_error(ErrorResult(error=keyed, meta=result.meta))
+    # model_copy, not a rebuild: a timed-out delegate's partial work must survive (#508).
+    return serialize_error(result.model_copy(update={"error": keyed}))

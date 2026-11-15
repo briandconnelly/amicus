@@ -20,6 +20,20 @@ per-change, as its own lead says.
 
 ## [Unreleased]
 
+### Added
+
+- **Breaking**: `amicus/0.1/schema-70`, `RESULT_FORMAT` 10. A delegate whose backend times out
+  returns the work it left in its worktree: the `timeout` error carries a new `partial` field,
+  `{incomplete: true, diff, diffstat}`, redacted and bounded like a finished delegate's diff.
+  A background delegate (`_async`, or keyed sync) now stops its backend a reserve before the
+  job deadline (a tenth of `AMICUS_JOB_MAX_SECONDS`, 15 to 120 seconds), so the worker, not the
+  job store, ends the run and can capture that diff; such a job now finishes `done` with
+  `result_ok: false` rather than `timeout`. The store's own `job_timeout` remains the backstop,
+  and its repair text, the background `timeout` repair and the `amicus_delegate_async`
+  description now say to narrow the task, keep slow verification such as a full test suite out
+  of it, or raise `AMICUS_JOB_MAX_SECONDS`. A job result an earlier release stored is refused
+  as `job_result_incompatible` (#508).
+
 ### Changed
 
 - The `collaborating-with-amicus` skill's body is about a quarter smaller (18.3 KB, from

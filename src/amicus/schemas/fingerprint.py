@@ -21,7 +21,7 @@ import re
 # Bump on any externally observable change to a category below; the committed manifest
 # snapshot (tests/test_manifest.py) fails on drift and its message says to bump this.
 # After the bump, scripts/regenerate_fingerprint_pins.py rewrites every pin it moves.
-FINGERPRINT = "amicus/0.1/schema-69"
+FINGERPRINT = "amicus/0.1/schema-70"
 
 # Persisted result-format version stamped into job records (M2); moves only when a
 # stored result.json shape an older reader's closed schema could reject changes.
@@ -45,7 +45,9 @@ FINGERPRINT = "amicus/0.1/schema-69"
 # exists, so no stored result can carry it.)
 # (#423's meta.deprecation did not move it: like meta.consume it is delivery-only, excluded
 # from every dump, so no stored result carries it.)
-RESULT_FORMAT: int = 9
+# 10 (#508): an error result gained `partial`, a timed-out delegate's incomplete diff. A 9
+# reader's closed ErrorResult REJECTS a 10 record that carries it.
+RESULT_FORMAT: int = 10
 
 JSON_SCHEMA_DIALECT = "https://json-schema.org/draft/2020-12/schema"
 PROTOCOL_REVISION = "2026-07-28"

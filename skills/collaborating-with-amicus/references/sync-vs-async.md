@@ -24,8 +24,10 @@ These are this file's own:
 ## The deadline
 
 An unkeyed synchronous call runs to a bounded deadline (`timeout_seconds`, default 300s, at most
-600s). If the backend has not finished by then the call is terminated and you receive nothing —
-the work it had already done is unrecoverable. An `_async` call returns a job handle immediately
+600s). If the backend has not finished by then the call is terminated: a consult or review
+returns nothing, and a delegate returns only the `partial` diff described below, when the backend
+stopped at that deadline in time to capture it. If the wait's grace window also runs out, or the
+call is cancelled, the work is unrecoverable. An `_async` call returns a job handle immediately
 and the backend keeps running against a separate, longer job deadline (`AMICUS_JOB_MAX_SECONDS`,
 default 1800s). Starting the job commits the spend right away, even if you never poll.
 
@@ -40,9 +42,16 @@ Prefer `_async`, or a sync call with an `idempotency_key`, for:
 - a multi-file or whole-branch review
 - any delegate task (implementation work is usually the slowest of the four verbs)
 
+A delegate that runs out of time is not a total loss: its `timeout` error carries the diff it
+left as `partial` (`incomplete: true`), when amicus could capture it. Review it like any returned
+diff before reusing any of it. A background delegate's backend is stopped a short reserve before
+the job deadline so that capture can happen. Keep a delegate's task small, and leave slow
+verification such as a full test suite out of it: run that yourself on the diff you get back.
+
 What a terminated sync call costs at the provider is not reported to amicus, so nothing here
 claims it equals a completed call's cost. The reason to prefer `_async` under uncertainty is that
-an unkeyed sync timeout destroys the result you paid for.
+an unkeyed sync timeout destroys the result you paid for, apart from a delegate's best-effort
+`partial` diff.
 
 A sync call made with an `idempotency_key` is the exception. Its run gets the job deadline
 (`AMICUS_JOB_MAX_SECONDS`), as an `_async` run does, and `timeout_seconds` only bounds the wait:

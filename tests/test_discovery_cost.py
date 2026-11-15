@@ -413,6 +413,14 @@ past sessions sent wait_seconds over its cap and scope=commit without `commit`, 
 wait_seconds and amicus_job_status descriptions now state the 0-50 bound and the scope and
 commit descriptions state that scope=commit requires `commit`. Measured on the wire. MEASURED
 and BUDGET both move up by the 196 bytes, so the budget keeps no headroom.
+
+The schema-70 growth (+174 bytes on every profile: all 116258 -> 116432) is #508. The
+amicus_delegate_async description now says the backend stops a short reserve before the job
+deadline, that the timeout error carries its incomplete diff as `partial`, and that slow
+verification such as a full test suite belongs outside the task, which is what ran a past
+delegate into the deadline. The `partial` field itself rides only error results, which no
+outputSchema carries. Measured on the wire. MEASURED and BUDGET both move up by the 174 bytes,
+so the budget keeps no headroom.
 """
 
 from __future__ import annotations
@@ -423,10 +431,10 @@ from tests.conftest import spawned_server_env
 from amicus import manifest
 
 MEASURED: dict[str, int] = {
-    "all": 116258,
-    "codex": 116266,
-    "codex-kimi": 116258,
-    "claude": 116258,
+    "all": 116432,
+    "codex": 116440,
+    "codex-kimi": 116432,
+    "claude": 116432,
 }
 # The budget is a literal, not MEASURED rounded up to the next kilobyte as it was until
 # 2026-09-14. The rounding left up to 1 KB of growth per bucket that no PR had to own, and
@@ -436,10 +444,10 @@ MEASURED: dict[str, int] = {
 # Any growth now fails until a PR raises BUDGET and says why; a shrink passes and shows as
 # drift against MEASURED. Raising one means re-measuring and moving both.
 BUDGET: dict[str, int] = {
-    "all": 116258,
-    "codex": 116266,
-    "codex-kimi": 116258,
-    "claude": 116258,
+    "all": 116432,
+    "codex": 116440,
+    "codex-kimi": 116432,
+    "claude": 116432,
 }
 
 

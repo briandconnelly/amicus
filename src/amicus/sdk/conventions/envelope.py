@@ -313,7 +313,16 @@ def repair_rules(
             "poll_job_status", None, True, "Poll job status until result_available."
         ),
         "job_cancelled": RepairRule("start_new_job", None, False, "Start a new job."),
-        "job_timeout": RepairRule("start_new_job", None, False, "Start a new job."),
+        "job_timeout": RepairRule(
+            "start_new_job",
+            None,
+            False,
+            "The job was stopped at its deadline (AMICUS_JOB_MAX_SECONDS, default 1800s) and "
+            "its work was discarded. A new job is a new paid run that will likely stop the "
+            "same way: start one only with a smaller task, with slow verification such as a "
+            "full test suite left out of it, or after the operator raises "
+            "AMICUS_JOB_MAX_SECONDS.",
+        ),
         "job_failed": RepairRule(
             "inspect_and_retry", None, False, "Inspect the stored failure, then start a new job."
         ),
