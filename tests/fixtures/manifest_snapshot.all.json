@@ -1670,7 +1670,7 @@
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-68",
+                "default": "amicus/0.1/schema-69",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -4708,7 +4708,7 @@
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-68",
+            "default": "amicus/0.1/schema-69",
             "title": "Fingerprint",
             "type": "string"
           },
@@ -5066,7 +5066,7 @@
                 "type": "null"
               }
             ],
-            "description": "Commit ref for scope=commit. Control characters rejected."
+            "description": "Commit ref, required for scope=commit. Control characters rejected."
           },
           "detail": {
             "default": "summary",
@@ -5178,7 +5178,7 @@
                 "type": "null"
               }
             ],
-            "description": "Optionally attach a git diff to the critique: working_tree | branch | commit."
+            "description": "Optionally attach a git diff to the critique: working_tree | branch (requires `base`) | commit (requires `commit`)."
           },
           "target": {
             "description": "The plan, claim, or decision the adversarial critic attacks.",
@@ -5862,7 +5862,7 @@
                 "type": "null"
               }
             ],
-            "description": "Commit ref for scope=commit. Control characters rejected."
+            "description": "Commit ref, required for scope=commit. Control characters rejected."
           },
           "evidence": {
             "anyOf": [
@@ -5965,7 +5965,7 @@
                 "type": "null"
               }
             ],
-            "description": "Optionally attach a git diff to the critique: working_tree | branch | commit."
+            "description": "Optionally attach a git diff to the critique: working_tree | branch (requires `base`) | commit (requires `commit`)."
           },
           "target": {
             "description": "The plan, claim, or decision the adversarial critic attacks.",
@@ -9668,7 +9668,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Free — no model call. Poll a job's state without fetching its result: status, elapsed time, result_available, result_ok, and poll_after_ms to honor before the next poll while status is running (it grows with elapsed time, up to 30 s; null on any terminal status), or pass a positive wait_seconds, which is itself the wait: call again at once if it returns running. Records expire after AMICUS_JOB_TTL (default 24h); unfetched results fill a per-workspace cap that refuses paid calls (job_cap_reached).",
+      "description": "Free — no model call. Poll a job's state without fetching its result: status, elapsed time, result_available, result_ok, and poll_after_ms to honor before the next poll while status is running (it grows with elapsed time, up to 30 s; null on any terminal status), or pass a positive wait_seconds (at most 50), which is itself the wait: call again at once if it returns running. Records expire after AMICUS_JOB_TTL (default 24h); unfetched results fill a per-workspace cap that refuses paid calls (job_cap_reached).",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
@@ -9681,7 +9681,7 @@
           },
           "wait_seconds": {
             "default": 0,
-            "description": "Hold the call up to this many seconds while the job runs, returning as soon as it is terminal; 0 returns at once. Wait here, never on amicus's job store.",
+            "description": "Hold the call up to this many seconds (0-50) while the job runs, returning as soon as it is terminal; 0 returns at once. Wait here, never on amicus's job store.",
             "maximum": 50,
             "minimum": 0,
             "type": "integer"
@@ -10193,7 +10193,7 @@
                 "type": "null"
               }
             ],
-            "description": "Commit ref for scope=commit. Control characters rejected."
+            "description": "Commit ref, required for scope=commit. Control characters rejected."
           },
           "detail": {
             "default": "summary",
@@ -10293,7 +10293,7 @@
           },
           "scope": {
             "default": "working_tree",
-            "description": "working_tree (tracked changes vs HEAD), branch (vs `base`, required), or commit (one commit).",
+            "description": "working_tree (tracked changes vs HEAD), branch (vs `base`, required), or commit (the `commit` ref, required).",
             "enum": [
               "branch",
               "commit",
@@ -10981,7 +10981,7 @@
                 "type": "null"
               }
             ],
-            "description": "Commit ref for scope=commit. Control characters rejected."
+            "description": "Commit ref, required for scope=commit. Control characters rejected."
           },
           "extra_context": {
             "anyOf": [
@@ -11072,7 +11072,7 @@
           },
           "scope": {
             "default": "working_tree",
-            "description": "working_tree (tracked changes vs HEAD), branch (vs `base`, required), or commit (one commit).",
+            "description": "working_tree (tracked changes vs HEAD), branch (vs `base`, required), or commit (the `commit` ref, required).",
             "enum": [
               "branch",
               "commit",
@@ -11424,7 +11424,7 @@
                 "type": "null"
               }
             ],
-            "description": "Commit ref for scope=commit. Control characters rejected."
+            "description": "Commit ref, required for scope=commit. Control characters rejected."
           },
           "extra_context": {
             "anyOf": [
@@ -11502,7 +11502,7 @@
           },
           "scope": {
             "default": "working_tree",
-            "description": "working_tree (tracked changes vs HEAD), branch (vs `base`, required), or commit (one commit).",
+            "description": "working_tree (tracked changes vs HEAD), branch (vs `base`, required), or commit (the `commit` ref, required).",
             "enum": [
               "branch",
               "commit",
