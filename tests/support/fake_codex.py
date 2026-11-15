@@ -5,7 +5,8 @@ Probes: `--version` prints `codex-cli 0.153.4`; `login status` prints `Logged in
 ChatGPT`; `exec --help` lists every ALWAYS_SEND flag plus `--model`. An `exec` run reads the
 prompt from stdin when the last token is `-`, writes FAKE_CODEX_ANSWER (default: a
 structured review/consult JSON) to the `--output-last-message` path, optionally writes a
-file under `--cd` (FAKE_CODEX_WRITE=relative/path), prints FAKE_CODEX_EVENTS (default: a
+file under `--cd` (FAKE_CODEX_WRITE=relative/path, holding FAKE_CODEX_WRITE_CONTENT, default
+`changed` and a newline; parent directories are created), prints FAKE_CODEX_EVENTS (default: a
 session + token_count JSONL) to stdout and FAKE_CODEX_STDERR to stderr, sleeps
 FAKE_CODEX_SLEEP seconds, and exits FAKE_CODEX_EXIT (default 0). FAKE_CODEX_ARGV_FILE gets
 one JSON line per invocation; FAKE_CODEX_STDIN_FILE receives the prompt.
@@ -89,8 +90,10 @@ def main() -> int:
     cwd = argv[argv.index("--cd") + 1] if "--cd" in argv else Path.cwd()
     target = os.environ.get("FAKE_CODEX_WRITE")
     if target:
-        with (Path(cwd) / target).open("w", encoding="utf-8") as fh:
-            fh.write("changed\n")
+        path = Path(cwd) / target
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="utf-8") as fh:
+            fh.write(os.environ.get("FAKE_CODEX_WRITE_CONTENT", "changed\n"))
     if "--output-last-message" in argv:
         _write_answer(Path(argv[argv.index("--output-last-message") + 1]))
     sys.stdout.write(os.environ.get("FAKE_CODEX_EVENTS", _DEFAULT_EVENTS))

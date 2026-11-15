@@ -104,6 +104,7 @@ def app(tmp_path, fake_kimi, fake_codex, monkeypatch):
         "FAKE_CODEX_STDERR",
         "FAKE_CODEX_ANSWER",
         "FAKE_CODEX_WRITE",
+        "FAKE_CODEX_WRITE_CONTENT",
         "FAKE_CODEX_EVENTS",
         "FAKE_CODEX_SLEEP",
         "AMICUS_BACKENDS",

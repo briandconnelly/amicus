@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+from pathlib import Path
 
 import pytest
 from fastmcp import Client
@@ -26,6 +27,7 @@ def app(tmp_path, fake_codex, monkeypatch):
         "FAKE_CODEX_STDERR",
         "FAKE_CODEX_ANSWER",
         "FAKE_CODEX_WRITE",
+        "FAKE_CODEX_WRITE_CONTENT",
         "FAKE_CODEX_EVENTS",
         "FAKE_CODEX_ANSWER_MODE",
         "FAKE_CODEX_ANSWER_BYTES",
@@ -248,6 +250,28 @@ async def test_delegate_end_to_end(app, repo, tmp_path, monkeypatch):
         ["git", "worktree", "list"], cwd=repo, capture_output=True, text=True, check=True
     ).stdout
     assert listed.strip().count("\n") == 0
+
+
+async def test_the_fake_codex_returns_scenario_s6s_subtly_wrong_diff(app, repo, monkeypatch):
+    # S6 needs a diff that applies cleanly and breaks one requirement; the stub used to write
+    # only the word `changed`, which no review could miss.
+    fixture = json.loads(
+        (Path(__file__).parent / "fixtures" / "s6_subtle_delegate.json").read_text("utf-8")
+    )
+    monkeypatch.setenv("FAKE_CODEX_WRITE", fixture["write"])
+    monkeypatch.setenv("FAKE_CODEX_WRITE_CONTENT", fixture["content"])
+    monkeypatch.setenv("FAKE_CODEX_ANSWER", fixture["answer"])
+    async with Client(app) as c:
+        res = await c.call_tool(
+            "amicus_delegate",
+            {"backend": "codex", "task": "add a csv export", "workspace_root": str(repo)},
+        )
+    body = res.structured_content
+    assert body["ok"] is True and body["summary"] == fixture["answer"]
+    assert "+++ b/src/csv_export.py" in body["diff"] and "+changed" not in body["diff"]
+    assert '+        lines.append(",".join(' in body["diff"]
+    assert "quotes fields" in body["summary"] and "csv.writer" not in body["diff"]
+    subprocess.run(["git", "apply", "--check"], cwd=repo, input=body["diff"], text=True, check=True)
 
 
 async def test_delegate_preflight_and_other_backends(app, tmp_path):
