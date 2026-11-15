@@ -484,7 +484,8 @@ MCP tool-annotation-driven approval prompt, which cannot be simulated in a free/
 
 Environment: `AMICUS_BACKENDS` enables both `claude` and `codex`. Claude is enabled in a
 configuration where it is not review-only (i.e. one of amicus's write-capable Claude modes), so
-per SKILL.md's "Annotations follow the worst enabled backend" section every paid tool — including
+per the "why annotations follow the worst enabled backend" section of `options-and-errors.md`
+(in SKILL.md until 2026-11-14, issue #487) every paid tool — including
 one this call routes to `codex` — carries Claude's more permissive (mutation-grade) approval
 annotation for the whole session.
 
@@ -500,8 +501,7 @@ Assertion:
   computed per-tool for the worst enabled backend, not per-call for the backend actually
   selected).
 - The model does not treat the approval prompt as evidence of a bug or as evidence that `codex`
-  itself is write-capable. It explains, in its own words or by quoting SKILL.md's "Annotations
-  follow the worst enabled backend" section, that annotation-driven friction tracks the most
+  itself is write-capable. It explains, in its own words or by quoting that section, that annotation-driven friction tracks the most
   permissive *enabled* backend, not the backend this particular call actually uses.
 - **The model reports the observed prompt and the annotation policy as two separate statements,
   and does not assert that a specific backend's annotation caused this prompt unless the host
@@ -513,8 +513,8 @@ Assertion:
   to the user) with the explanation above attached.
 
 **The attribution clause changed on 2026-09-09 and binds future runs only.** SKILL.md's approval
-rule — numbered rule 5 until the 2026-09-09 restructure, now under Binding rules → Approval
-prompts — previously required naming "the backend whose annotation caused" the prompt. A host may prompt for
+rule — numbered rule 5 until the 2026-09-09 restructure, and since 2026-11-14 (issue #487) under
+`options-and-errors.md` → Rules — previously required naming "the backend whose annotation caused" the prompt. A host may prompt for
 any tool the user has not granted, whatever the annotations say, and no amicus result records why a
 host prompted — so the old rule demanded an attribution the agent has no way to establish. The rule
 now separates the observation from the policy. This does not move the status below: both logged
@@ -682,7 +682,7 @@ status: unrun
 ### S10: Terminal-job lifecycle
 
 Tests: that polling is driven by `status`, not by `result_available`
-(SKILL.md → Binding rules → Jobs; `sync-vs-async.md` → Polling).
+(`sync-vs-async.md` → Rules and Polling).
 
 Setup: the harness supplies an `amicus_job_status` result inline, as if just returned, for a job
 the model previously started: `status: "cancelled"`, `result_available: false`, `result_ok: null`,
@@ -710,7 +710,7 @@ status: unrun
 ### S11: Coverage reporting
 
 Tests: that `ok: true` is not read as "it was reviewed"
-(SKILL.md → Binding rules → Results; `reading-results.md` → Coverage).
+(`reading-results.md` → Rules and Coverage).
 
 Setup: the harness supplies a completed `amicus_review_changes` result inline: `ok: true`,
 `review_status: "not_run"`, an empty `findings` list, and a `summary` stating that no reviewable
@@ -851,7 +851,8 @@ status: unrun
 
 Tests: that a comparison between candidates is blinded, routed away from every candidate's
 author, and framed as a finding to verify rather than a decision to adopt
-(`blind-comparison.md` → Rules; SKILL.md → Binding rules → Composed workflows).
+(`blind-comparison.md` → Rules; SKILL.md → Binding rules → Composed workflows, the diversity
+rule).
 
 Environment: `AMICUS_BACKENDS` enables all four backends, each installed and authenticated, so
 that an eligible comparator exists whatever host runs the scenario. The harness records the host
@@ -906,8 +907,8 @@ status: unrun
 ### S17: Blind comparison result handling
 
 Tests: that a returned preference is treated as a finding whose reasons are verified, not as the
-decision (`blind-comparison.md` → Rules, the finding and disclosure rules; SKILL.md → Binding
-rules → Composed workflows, the preference rule).
+decision (`blind-comparison.md` → Rules, the finding and disclosure rules; `reading-results.md`
+→ Rules, the preference rule).
 
 Environment: any single enabled backend; no call is made.
 
@@ -941,7 +942,7 @@ status: unrun
 
 Tests: that a request naming a model family and no harness goes to its native harness only when
 that harness is ready, and otherwise to `pi` with an exact listed model, named before the call
-(SKILL.md → Binding rules → Discovery and Routing; `choosing-a-backend.md` → Routing procedure).
+(SKILL.md → Binding rules → Discovery and Routing; `choosing-a-backend.md` → Worked routes).
 
 Setup: the harness supplies two results inline, as if just returned. An
 `amicus_backends(detail="full")` result in which `codex` is enabled and installed with

@@ -1,6 +1,6 @@
 # ADR 0016: the skill's rule block is the complete contract, and ported guarantees are re-verified
 
-**Status:** Accepted (2026-09-09)
+**Status:** Accepted (2026-09-09); amended by [ADR 0048](0048-the-skill-body-carries-what-binds-every-use.md), which says when a reference's rules block binds
 
 ## Context
 

@@ -43,6 +43,20 @@ def _binding_rules() -> str:
 _BINDING_RULES = _binding_rules()
 
 
+def _reference_rules(name: str) -> str:
+    """One reference's `## Rules` block. ADR 0048: a rule there binds as a body rule does,
+    provided a Required reading rule sends the agent to that block, which
+    `test_every_reference_rules_block_is_required_reading` asserts."""
+    text = (_SKILL / "references" / name).read_text(encoding="utf-8")
+    block = text.partition("\n## Rules\n")[2].split("\n## ", 1)[0]
+    assert block, f"{name} has no `## Rules` section"
+    return block
+
+
+_RESULTS_RULES = _reference_rules("reading-results.md")
+_SYNC_RULES = _reference_rules("sync-vs-async.md")
+
+
 def _section(heading_contains: str) -> str:
     """The one `##` section of reading-results.md that owns a field's vocabulary."""
     sections = _RESULTS_REF.split("\n## ")
@@ -92,27 +106,28 @@ def test_an_unknown_confidence_is_documented_as_an_absence_not_a_low_rating():
     """The one misreading the value exists to prevent. A rule that merely LISTS `unknown`
     satisfies the test above while leaving an agent free to treat it as a low rating.
 
-    Asserted against the BINDING RULES slice, not the whole file: a sentence demoted to
-    `## Semantics` still reads as guidance and would satisfy a whole-file search, which is
+    Asserted against the reference's RULES block, not the whole file: a sentence demoted to
+    explanatory prose still reads as guidance and would satisfy a whole-file search, which is
     precisely the failure ADR 0016 exists to prevent."""
-    assert 'Never read `confidence: "unknown"` as a low rating.' in _BINDING_RULES
+    assert 'Never read `confidence: "unknown"` as a low rating.' in _RESULTS_RULES
     assert "It is the absence of a rating, not a low one." in _RESULTS_REF
 
 
-def test_the_coverage_field_is_named_in_the_binding_rules():
+def test_the_coverage_field_is_named_in_the_result_rules():
     """#65: `coverage` is the machine-readable disclosure. Under ADR 0016 a signal named only
-    in reading-results.md does not bind, so the rules block must name it itself."""
-    assert "`coverage`" in _BINDING_RULES
+    in a reference's prose does not bind, so the rules block that owns result reading (ADR
+    0048) must name it itself."""
+    assert "`coverage`" in _RESULTS_RULES
 
 
-def test_the_lists_diagnostics_field_is_named_in_the_binding_rules():
+def test_the_lists_diagnostics_field_is_named_in_the_result_rules():
     """#52: the prose-list twin of `findings_diagnostics`. The two rules an agent needs are
     that the field exists to be checked and that a null member is a clean list - an
     empty `next_steps` beside a non-null member is a loss, not the backend saying none."""
-    assert "`lists_diagnostics`" in _BINDING_RULES
+    assert "`lists_diagnostics`" in _RESULTS_RULES
     assert (
         "Read `lists_diagnostics` before treating an empty prose list as the backend saying "
-        "none." in _BINDING_RULES
+        "none." in _RESULTS_RULES
     )
 
 
@@ -123,7 +138,7 @@ def test_the_high_confidence_misreading_is_a_rule_of_its_own():
     constraints` names."""
     assert (
         "Never read a high `confidence` as evidence that coverage was complete or findings "
-        "intact." in _BINDING_RULES
+        "intact." in _RESULTS_RULES
     )
 
 
@@ -164,13 +179,13 @@ def test_a_not_run_review_is_documented_as_carrying_no_rating():
     confidence_section = _VOCABULARY["Confidence"][1]
     assert "`review_status: not_run`" in confidence_section
     assert "there are three" not in confidence_section
-    assert "no backend ran (`review_status: not_run`)" in _BINDING_RULES
+    assert "no backend ran (`review_status: not_run`)" in _RESULTS_RULES
     # Codex's review of PR #92: one cause named is not both. Each text has to keep the
     # unreadable-rating cause beside the not_run one, or a later edit could say `unknown`
     # occurs only when no backend ran with this test still green.
     assert "supplied no readable value" in results._CONFIDENCE_DESC
     assert "nothing amicus could read there" in confidence_section
-    assert "supplied none amicus could read" in _BINDING_RULES
+    assert "supplied none amicus could read" in _RESULTS_RULES
 
 
 def test_the_skill_names_every_code_that_carries_no_repair():
@@ -195,7 +210,7 @@ def test_no_rule_reads_a_repair_the_envelope_may_not_carry():
     unconditional = re.compile(
         r"read `error\.code` and `error\.repair`|\*\*Follow `repair\.next_step`\*\*", re.IGNORECASE
     )
-    for rules in (_BINDING_RULES, _OPTIONS_RULES):
+    for rules in (_BINDING_RULES, _OPTIONS_RULES, _RESULTS_RULES, _SYNC_RULES):
         assert not unconditional.search(rules)
     assert "With no `error.repair`, fix what `error.details` names" in _OPTIONS_RULES
 
@@ -397,12 +412,12 @@ def test_the_carrier_table_names_kimis_session_store():
 def test_the_jobs_rules_say_to_wait_through_the_tool_never_the_store():
     # Issue #266: agents with no way to block on a job watched ~/.cache/amicus/jobs from a
     # shell loop, reading result.json past the delivery path. The binding rule names the tool
-    # parameter that replaces that loop and forbids the store.
+    # parameter that replaces that loop and forbids the store. The store ban stays in the
+    # body: an ordinary sync call is a job too and never reads sync-vs-async.md (ADR 0048).
     jobs = _BINDING_RULES.partition("\n### Jobs\n")[2].split("\n### ", 1)[0]
     assert jobs, "SKILL.md's binding rules have no `### Jobs` section"
-    jobs = " ".join(jobs.split())
-    assert "`wait_seconds`" in jobs, "the jobs rules do not name wait_seconds"
-    assert "job store" in jobs, "the jobs rules do not forbid reading the job store"
+    assert "job store" in " ".join(jobs.split()), "the body does not forbid reading the job store"
+    assert "`wait_seconds`" in _SYNC_RULES, "the polling rules do not name wait_seconds"
 
 
 def test_the_jobs_rules_do_not_exclude_keyed_sync_reattach():
@@ -420,8 +435,7 @@ def test_the_jobs_rules_say_a_waited_call_is_repeated_at_once():
     # Issue #272 (Copilot on PR #273): sync-vs-async.md said to call again at once after a
     # positive wait_seconds, but that file declares it adds no obligations, and the binding
     # rule left open whether a waited call still owes poll_after_ms. The rule must settle it.
-    jobs = _BINDING_RULES.partition("\n### Jobs\n")[2].split("\n### ", 1)[0]
-    [pacing] = [b for b in _bullets(jobs) if "`poll_after_ms`" in b]
+    [pacing] = [b for b in _bullets(_SYNC_RULES) if "`poll_after_ms`" in b]
     pacing = " ".join(pacing.split())
     assert "`wait_seconds`" in pacing and "itself the wait" in pacing
     assert "call again at once" in pacing
@@ -462,14 +476,13 @@ def test_the_brief_rules_keep_a_full_reviews_scope_out_of_extra_context():
     assert "every other place" in surface
 
 
-def test_the_results_rules_name_where_a_defect_is_reported():
+def test_the_error_rules_name_where_a_defect_is_reported():
     """A Claude Code host shows the model none of the instructions' Reference block, so the
-    skill is the carrier that reaches it: one binding rule in Results names `issues_url` on
+    skill is the carrier that reaches it: one rule names `issues_url` on
     `amicus_capabilities`, binds the offer-do-not-file obligation and keeps prompt inputs
-    out of a report. It lives in Results because that is where a failure is read."""
-    section = _BINDING_RULES.partition("\n### Results\n")[2].split("\n### ", 1)[0]
-    assert section, "no `### Results` section in the binding rules"
-    [rule] = [b for b in _bullets(section) if "`issues_url`" in b]
+    out of a report. It lives in options-and-errors.md → Rules because Required reading sends
+    every failure there, a free tool's and a resource read's included."""
+    [rule] = [b for b in _bullets(_OPTIONS_RULES) if "`issues_url`" in b]
     bold = re.match(r"- \*\*(.+?)\*\*", rule, re.DOTALL)
     assert bold, "the issues rule must open with a bolded obligation"
     obligation = " ".join(bold.group(1).split())
@@ -503,7 +516,7 @@ def test_the_brief_rules_bind_every_paid_route():
     # Review of 2026-10-11, finding 1: "read only that route's reference" let a delegate skip
     # active-workflows.md's brief and input-placement rules. A binding rule now requires them
     # before every paid call, and the delegate row names that file too.
-    scope = _flat(_BINDING_RULES.partition("\n### Scope and inputs\n")[2].split("\n### ", 1)[0])
+    scope = _flat(_rules_section("Required reading"))
     assert "active-workflows.md) → Rules before every paid call" in scope
     assert "read only that route's reference" not in _SKILL_MD
     [row] = [line for line in _SKILL_MD.splitlines() if "| `amicus_delegate` |" in line]
@@ -511,10 +524,10 @@ def test_the_brief_rules_bind_every_paid_route():
 
 
 def test_the_unchanged_call_ban_exempts_the_keyed_replay():
-    # Finding 2: the root banned every unchanged retry while the recovery rules repeat a keyed
-    # call to reattach to its run. Both now name that one exception.
-    results = _flat(_BINDING_RULES.partition("\n### Results\n")[2].split("\n### ", 1)[0])
-    assert "retry an unchanged call, except a keyed replay" in results
+    # Finding 2: an unchanged retry was banned outright while the recovery rules repeat a
+    # keyed call to reattach to its run. The ban now has one statement, which names that one
+    # exception; the result rules send a failure to it rather than restating it.
+    assert "follow [options and errors](options-and-errors.md) → Rules" in _flat(_RESULTS_RULES)
     assert "has not changed**, except the keyed replay" in _flat(_OPTIONS_RULES)
 
 
@@ -533,7 +546,7 @@ def test_reaching_the_roots_never_commits_on_the_users_behalf():
 def test_a_non_null_diagnostic_is_not_read_as_loss_alone():
     # Finding 4: some reasons leave every finding intact, so the root no longer says a
     # non-null diagnostic means content could not be carried.
-    results = _flat(_BINDING_RULES.partition("\n### Results\n")[2].split("\n### ", 1)[0])
+    results = _flat(_RESULTS_RULES)
     assert "reports normalization or loss, and its `reasons` say which" in results
     assert "means the backend reported something amicus could not carry intact" not in results
 
@@ -554,7 +567,7 @@ def test_composed_workflow_overrides_of_the_shared_brief_rules_hold():
     # host's belief in a call field.
     workflows = _flat((_SKILL / "references" / "active-workflows.md").read_text(encoding="utf-8"))
     assert "or in `task` on `amicus_delegate`, which takes no `extra_context`" in workflows
-    scope = _flat(_BINDING_RULES.partition("\n### Scope and inputs\n")[2].split("\n### ", 1)[0])
+    scope = _flat(_rules_section("Required reading"))
     assert "except where a composed workflow's reference overrides one by name" in scope
     attempt = (_SKILL / "references" / "independent-attempt.md").read_text(encoding="utf-8")
     rules = _flat(attempt.partition("\n## Rules\n")[2].split("\n## ", 1)[0])
@@ -588,8 +601,11 @@ def test_the_routing_rule_binds_before_the_verb_is_chosen():
     workflow = _SKILL_MD.partition("\n## Shared workflow\n")[2].split("\n## ", 1)[0]
     resolve = workflow.index("Resolve the harness and model")
     assert resolve < workflow.index("Choose the verb")
-    procedure = _flat(_BACKENDS_REF.partition("\n## Rules\n")[2].split("\n## ", 1)[0])
-    assert "### Routing procedure" in procedure
+    # #487: the procedure had two statements that drifted. The body's is the only one; the
+    # reference keeps the worked examples and says so.
+    assert "Routing procedure" not in _BACKENDS_REF
+    procedure = _flat(_BACKENDS_REF.partition("\n## Worked routes\n")[2].split("\n## ", 1)[0])
+    assert "SKILL.md → Binding rules → Routing is the procedure" in procedure
     examples = (
         '"collaborate with codex"',
         '"ask kimi"',
@@ -753,3 +769,80 @@ def test_the_slash_commands_carry_the_mode_aware_claude_exception():
     for name in ("consult", "review", "adversarial"):
         text = _flat((commands / f"{name}.md").read_text(encoding="utf-8"))
         assert "`config_mode`" in text and "Binding rules → Discovery" in text, name
+
+
+# ADR 0048 (#487): the body loads on every trigger, so it carries what binds every use and
+# sends the agent to a reference's `## Rules` block for the rest. That only keeps ADR 0016's
+# promise if no such block can go unread.
+def test_every_reference_rules_block_is_required_reading():
+    required = _flat(_rules_section("Required reading"))
+    composed = {"independent-attempt.md", "review-revise.md", "blind-comparison.md"}
+    owners = sorted(
+        p.name for p in _SKILL.glob("references/*.md") if "\n## Rules\n" in p.read_text("utf-8")
+    )
+    assert len(owners) == 10, f"control: every reference owns a Rules block, found {owners}"
+    for name in owners:
+        if name in composed:
+            continue
+        assert f"(references/{name}) → Rules before" in required, (
+            f"no Required reading rule sends an agent to {name} → Rules"
+        )
+    assert "a composed workflow's own reference → Rules before its first paid call" in required
+    for name in composed:
+        [row] = [line for line in _SKILL_MD.splitlines() if f"(references/{name})" in line]
+        assert row.startswith("| "), f"{name} is not routed from the route table"
+
+
+def test_a_free_failure_and_a_host_denial_reach_the_error_rules():
+    # Codex's review of the #487 design: a trigger of "a paid result" would leave a failed
+    # free call, a failed resource read and a host's denial with no rule ever read.
+    required = _flat(_rules_section("Required reading"))
+    [rule] = [b for b in _bullets(_rules_section("Required reading")) if "options-and-errors" in b]
+    rule = _flat(rule)
+    for trigger in ("`ok: false`", "`amicus://` resource", "host's denial", "free tools included"):
+        assert trigger in rule, trigger
+    assert "interpreting, acting on or reporting what any paid tool returned" in required
+    options = _flat(_OPTIONS_RULES)
+    assert "**Report a host's denial of an amicus call to the user rather than working" in options
+    assert "name a causing backend only when the host gave evidence of one" in options
+
+
+def test_synthesis_and_brief_rules_keep_a_home_every_paid_route_reads():
+    # The same review: these three bound every route, not only the three named workflows, so
+    # they moved to the two blocks every paid call reads rather than into the workflows' own.
+    results = _flat(_RESULTS_RULES)
+    assert "**Preserve disagreement when you combine results" in results
+    assert "**Never let a backend's stated preference between candidates stand in" in results
+    workflows = _flat(_reference_rules("active-workflows.md"))
+    assert "**Never ask a backend to invoke another agent**" in workflows
+    assert "Count paid calls across the whole decision" in _flat(_rules_section("Spend"))
+
+
+def test_the_workspace_rule_is_checkable_and_claims_no_read_boundary():
+    # #487: "a workspace you would not hand to the provider" tested the agent's willingness,
+    # which no transcript shows. The rule now turns on what the user or project said.
+    exposure = _flat(_rules_section("Data exposure"))
+    assert "you would not hand" not in exposure
+    assert "the user or the project's instructions have said must not be disclosed" in exposure
+    assert "never present a workspace as a boundary on what is read" in exposure
+    assert "and the provider the call sends to, before the first paid call" in _flat(
+        _rules_section("Routing")
+    )
+
+
+# #487: the body was 24.9 KB and a plain consult read about 67 KB before its first call. These
+# are regrowth guards, not targets: raise one only with a reason recorded beside it.
+_BODY_CEILING = 18_500
+_PLAIN_CONSULT_CEILING = 48_000
+
+
+def test_the_skill_body_and_a_plain_consults_reads_stay_within_their_ceilings():
+    body = len(_SKILL_MD.encode("utf-8"))
+    assert body <= _BODY_CEILING, body
+    # What Required reading makes a single-route consult with inline evidence read, counted
+    # as whole files because a host loads a file, not a section of one.
+    plain = body + sum(
+        len((_SKILL / "references" / name).read_bytes())
+        for name in ("active-workflows.md", "reading-results.md")
+    )
+    assert plain <= _PLAIN_CONSULT_CEILING, plain

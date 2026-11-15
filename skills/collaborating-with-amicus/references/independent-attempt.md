@@ -37,7 +37,7 @@ attempt, as the framing rule below states. These are this file's own:
 - **Count paid calls across the whole workflow, not per backend.**
 - **Never spend a further call to resolve a disagreement you can resolve from evidence.**
 
-Synthesis itself is governed by SKILL.md → Binding rules → Composed workflows.
+Synthesis itself is governed by [reading results](reading-results.md) → Rules.
 
 ## Order of work
 

@@ -12,7 +12,7 @@ Request: $ARGUMENTS
 and `amicus_adversarial_review` supports the `claude` harness only — do not route an
 adversarial-review request to `codex`, `kimi` or `pi`, even one running an Anthropic model.
 Resolve the request by the routing procedure in the `collaborating-with-amicus` skill
-(`references/choosing-a-backend.md` → Routing procedure) and never substitute silently: when
+(Binding rules → Routing) and never substitute silently: when
 `claude` is not ready, say so rather than switching verb or harness. Whether or not the request
 names `claude`, call `amicus_backends` with `detail="full"` first and check `enabled: true`,
 `status.installed: true` and `status.authenticated: true` for `claude`. That last field speaks

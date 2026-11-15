@@ -9,57 +9,30 @@ actually see the evidence the task needs**.
 
 ## Rules
 
-Eligibility, freshness and authority are governed by SKILL.md → Binding rules → Discovery, the
-`access` and `config_mode` decision by SKILL.md → Binding rules → Scope and inputs, and what
-may be sent to `kimi` by SKILL.md → Binding rules → Data exposure; they are not restated here.
-These are this file's own:
+SKILL.md → Binding rules → Required reading sends you here before a paid call routed to `pi` or
+`kimi`, before choosing among several routes, and before a call that needs the backend to read
+files or sets `backend_options`. Eligibility, the routing procedure and model-diversity claims
+are governed by SKILL.md → Binding rules → Discovery, Routing and Composed workflows, the
+`access` and `config_mode` decision by Scope and inputs, and what may be sent to `kimi` by Data
+exposure; they are not restated here. These are this file's own:
 
-- **Resolve the harness and the model by the routing procedure below before choosing the verb.**
 - **Never spend a paid call to break a tie** between backends that are equally suitable.
-- **Compare resolved models, never backend ids, when you claim diversity.** Two calls are
-  different models only when their resolved `provider/id` (or, off `pi`, the model each harness
-  reports running) differ; never claim two different model families without evidence of the
-  underlying models.
-- **Never inspect a user's provider configuration to establish model identity or what `pi` can
-  reach.** Report the diversity as unverified instead, and read `pi`'s reach from
-  `amicus_models(backend="pi")`.
 - **For `pi`, pass `model` as an exact `provider/id` that `amicus_models(backend="pi")` lists,
   or, when that listing is `truncated`, one past its cut that you know exactly, unless
   `AMICUS_PI_MODEL` is set and is the model you mean.** pi checks the exact model and its
   `reasoning_effort` pre-spend either way, and refuses one it cannot resolve.
+- **For a `pi` model whose row lists only `off`, pass `reasoning_effort: "off"` explicitly.**
+  It is a non-thinking model: amicus refuses any other value pre-spend, and omitting it inherits
+  `AMICUS_PI_REASONING_EFFORT`.
+- **When you offer `pi` in place of a named harness, name its provider — the `provider/id`
+  prefix, which may be a router — and that pi has no OS sandbox and a pi delegate no network
+  block.**
 - **Put the project's constraints in a `pi` brief yourself.** pi runs with
   `--no-context-files`, so it loads no `AGENTS.md`.
 
-### Routing procedure
+## Worked routes
 
-Binding: SKILL.md → Binding rules → Routing states it in short; this is the full procedure.
-Run it after the free discovery calls and before choosing the verb.
-
-1. **A named harness wins.** A backend id or CLI name — `codex`, `claude` or Claude Code, `pi`,
-   and bare `kimi`, which still means the deprecated kimi harness — selects that harness.
-   Capitalization changes nothing. A model named alongside it is passed as that harness's
-   `model`. An exact `provider/id` is pi's own model syntax, so it selects `pi` the same way.
-2. **A model-only request** — GPT, Opus, Sonnet, Kimi K3 — goes to the native harness for that
-   family when it is ready and supports the verb: `codex` for OpenAI models, `claude` for
-   Anthropic models, and `kimi` for Kimi models while that deprecated harness remains, with its
-   deprecation disclosed. A family with none of these, or a request whose native harness is not ready or
-   lacks the verb, goes to `pi` with an exact model `amicus_models(backend="pi")` lists. That is
-   routing, not substitution: no confirmation is needed, but name the harness, the model and
-   the provider before the paid call.
-3. **Never substitute for a named harness silently.** When the harness the user named is not
-   ready or lacks the verb, say so and offer the alternative route — `pi` plus an exact listed
-   model — naming its provider (the `provider/id` prefix, which may be a router) and its
-   containment (pi has no OS sandbox, and a pi delegate has no network block). Proceed only
-   when the user chooses it. Every route offered or taken must support the requested verb: when
-   none does, as for an adversarial review with `claude` not ready, report that no eligible
-   route exists; changing the verb is a separate choice for the user.
-4. **Learn what `pi` can reach from `amicus_models(backend="pi")`**, never from provider
-   configuration. A missing or truncated listing does not prove a model unreachable; it means
-   you cannot vouch for it, so say that rather than calling it unavailable.
-5. **Ask once, before spending,** only when the routes that still match after free discovery
-   differ in spend, exposure, containment or verb. Otherwise take the one route left; whether
-   an unrequested call may be made at all is SKILL.md → Binding rules → Spend, not this step.
-
+SKILL.md → Binding rules → Routing is the procedure; this table only applies it.
 Worked examples, each after `amicus_backends(detail="full")`:
 
 | Request | Route |
@@ -209,7 +182,7 @@ Beyond the feature gate and the evidence question, amicus does not rank backends
 - **What is usable right now.** A backend that is enabled but unauthenticated, rate limited, or
   reporting `status.warnings` is not a good choice however well suited it looks.
 - **Effects.** Approval friction follows the worst *enabled* backend, not the one you pick for
-  this call (SKILL.md → Annotations follow the worst enabled backend). Picking a different
+  this call ([options and errors](options-and-errors.md)). Picking a different
   `backend` does not change it, and `effects` is a static per-backend declaration rather than a
   statement about your call.
 

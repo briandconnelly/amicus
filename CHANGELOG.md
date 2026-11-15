@@ -22,6 +22,15 @@ per-change, as its own lead says.
 
 ### Changed
 
+- The `collaborating-with-amicus` skill's body is about a quarter smaller (18.1 KB, from
+  24.9 KB), and a plain consult reads 46 KB of the skill before its first call instead of 67 KB.
+  The body keeps the rules that bind every use; the rules for reading a result, recovering from
+  an error or a host's denial, and polling a job moved to the `Rules` block of the reference
+  that owns each, and a new Required reading group in the body says when each block must be
+  read. The routing procedure has one statement, in the body, where it had two that had
+  drifted. The workspace rule now turns on what the user or the project has said may be
+  disclosed, and the provider is named before the first paid call. The description is shorter
+  and drops triggers a host uses for its own model switching (#487, ADR 0048).
 - The `collaborating-with-amicus` skill asks the user before a paid call they did not request:
   a situation its description names is a reason to offer the call, not consent to spend or to
   send workspace content (#481). A user's request alone now selects a composed workflow; the

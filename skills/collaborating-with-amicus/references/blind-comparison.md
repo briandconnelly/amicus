@@ -11,8 +11,8 @@ stake in either is the instrument that addresses that.
 
 ## Rules
 
-Cap declaration, call counting and synthesis are governed by SKILL.md → Binding rules → Spend and
-Composed workflows; the brief and the workspace-content prohibition on `instructions_append` by
+Cap declaration and call counting are governed by SKILL.md → Binding rules → Spend, and synthesis
+by [reading results](reading-results.md) → Rules; the brief and the workspace-content prohibition on `instructions_append` by
 [active workflows](active-workflows.md) → Rules; backend identity claims by
 [choosing a backend](choosing-a-backend.md) → Rules. One inherited rule is overridden here: the
 belief-disclosure rule in active workflows does not apply to the call fields of a blind
@@ -88,7 +88,7 @@ Each step names the rule that governs it; the rules are the authoritative statem
    substance, the remainder noted for the report (blinding and disclosure rules).
 7. Call the consult verb with the candidates in `extra_context` (routing rule), async when the
    candidates are large ([sync vs async](sync-vs-async.md)).
-8. Read the result under SKILL.md → Binding rules → Results, including `findings_diagnostics`
+8. Read the result under [reading results](reading-results.md) → Rules, including `findings_diagnostics`
    and `lists_diagnostics`.
 9. Verify the load-bearing reasons against the candidates, decide, and report with the order,
    the diversity status, your own authorship, and any disagreement preserved (finding and

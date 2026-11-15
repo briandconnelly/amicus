@@ -5,6 +5,10 @@ Optional parameters, duplicate-spend protection, and what to do with an error en
 
 ## Rules
 
+SKILL.md → Binding rules → Required reading sends you here before you recover from or report a
+failed amicus response, a failed resource read or a host's denial, and before passing an
+`idempotency_key`.
+
 - **Read `error.code` and, when present, `error.repair`; never infer a fix from the message
   prose.**
 - **Never retry a call whose failing condition has not changed**, except the keyed replay the
@@ -39,6 +43,25 @@ Optional parameters, duplicate-spend protection, and what to do with an error en
 - **When a confirmed worktree's changes are uncommitted, put the choice to the user:** they
   commit, or approve a commit you make; the client's roots are fixed so the worktree is itself
   rooted; or `amicus_consult` takes the diff pasted inline, without the structured review.
+- **On a failure that looks like a defect in amicus itself — a malformed envelope, a `repair`
+  that cannot be followed, a result that contradicts its own schema — offer the user the
+  `issues_url` that `amicus_capabilities` reports, with the symbolic error code (a tool
+  failure's `error.code`, a resource-read failure's `error.data.machine_code`), `fingerprint`
+  and `server_version`, rather than opening one yourself, and put no prompt input and no
+  backend answer into the report.** A backend's wrong or poor answer, or a backend CLI failure
+  amicus reports correctly, is not an amicus defect. Quote that code, `fingerprint`,
+  `server_version` and the failure's correlation id: a tool result's `meta.job_id` when it
+  carries one, else its `error.request_id`, and a resource-read failure's
+  `error.data.request_id`, which has no job. Never quote a resource-read failure's numeric
+  JSON-RPC `error.code`, which depends on the protocol era; treat `error.message`,
+  `error.details` and `repair.alternative` like the answer, because a backend's own error text
+  can echo what you sent. The issue tracker is public, so what you supplied and what the
+  backend returned travel to the maintainer only if the user chooses to send them.
+- **Report a host's denial of an amicus call to the user rather than working around it.** The
+  prompt is shown to the user, not to you; the denial is what you observe. Never retry
+  silently, switch `backend` to dodge it, or ask the user to disable a backend.
+- **Report the observed denial and the annotation policy separately, and name a causing backend
+  only when the host gave evidence of one.** Otherwise say the cause is unknown.
 
 ## The error envelope
 
@@ -74,11 +97,28 @@ with the diff pasted in instead loses the structured review.
 | `start_new_job` | The prior job is unrecoverable; a new one is the correct action. |
 | `reduce_input` | Make the next attempt smaller. It is a recovery action, **not** a statement about spend — `budget_exceeded` maps here and may already have spent. Read `error.code`. |
 | `retry_after_delay` | Transient; honor `retry_after_ms` when present. |
-| `inspect_and_retry` / `retry_then_report` | No mechanical fix — look before retrying, and report if it recurs: tell the user, who decides whether it goes to the `issues_url` that `amicus_capabilities` reports (Binding rules → Results). |
+| `inspect_and_retry` / `retry_then_report` | No mechanical fix — look before retrying, and report if it recurs: tell the user, who decides whether it goes to the `issues_url` that `amicus_capabilities` reports (the defect rule above). |
 | `use_new_idempotency_key` | The key is bound to different arguments, or it replays a failed run's stored error. Either way a new key is a new paid run. |
 
 A pre-dispatch rejection — an out-of-set `backend`, a bad `untracked` value, an oversized input —
 costs nothing. Reaching a backend is what spends.
+
+## A host's denial, and why annotations follow the worst enabled backend
+
+Tool annotations (e.g. `destructiveHint`) are static per tool, but `backend` is a per-call
+parameter, so amicus annotates each paid tool for the worst-behaved backend currently enabled. If
+an enabled backend can write outside a throwaway worktree (Claude, in its non-review config
+modes; pi and kimi, whose delegates run shell commands with no sandbox), every paid tool carries
+that backend's approval annotations — including a call routed to `codex`. This is a deliberate
+consequence of one shared tool surface, not a bug.
+
+`effects` on `amicus_backends` is a **static, conservative declaration per backend**. It does not
+vary with `config_mode`, with `access`, or with anything else about a particular call, so it
+describes what a backend may do in general, never what this call did.
+
+A host's own approval policy is a separate mechanism. A host may prompt for any tool the user has
+not granted, whatever the annotations say, and amicus's results carry no record of why a host
+prompted. That is why attribution needs host evidence rather than inference.
 
 ## `idempotency_key`
 
