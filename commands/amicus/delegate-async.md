@@ -10,8 +10,8 @@ Request: $ARGUMENTS
 
 `backend` is required — amicus has no default backend. It names the harness (the CLI that
 runs the call), not the model. Resolve the harness and model from the request by the routing
-procedure in the `collaborating-with-amicus` skill (`references/choosing-a-backend.md` →
-Routing procedure) and never substitute one silently: a named harness wins, and bare `kimi`
+procedure in the `collaborating-with-amicus` skill (Binding rules →
+Routing) and never substitute one silently: a named harness wins, and bare `kimi`
 means the deprecated kimi harness. Whether or not the request names one, call
 `amicus_backends` with `detail="full"` first and use only a harness it reports
 `enabled: true`, `status.installed: true`, ready for the model

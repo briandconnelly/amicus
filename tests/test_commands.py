@@ -186,7 +186,7 @@ def test_paid_commands_make_the_first_full_discovery_unconditional():
 def test_paid_commands_point_at_the_routing_procedure():
     for name in _PAID_COMMANDS:
         text = " ".join((COMMANDS / name).read_text().split())
-        assert "`references/choosing-a-backend.md` → Routing procedure" in text, name
+        assert "(Binding rules → Routing)" in text, name
         assert "never substitute" in text, name
 
 

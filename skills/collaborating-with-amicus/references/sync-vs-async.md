@@ -6,10 +6,20 @@ you get the result back.
 
 ## Rules
 
-Every obligation this file depends on is stated in SKILL.md → Binding rules — the `_async`
-preference and job recovery under Spend, and polling, fetching and `amicus_job_result` under Jobs.
-That is their authoritative home; this file adds none of its own, and explains how to carry them
-out.
+SKILL.md → Binding rules → Required reading sends you here before the first `_async` call, keyed
+sync call or job-lifecycle call. Choosing `_async` and recovering a job are governed by SKILL.md →
+Binding rules → Spend, and the ban on reading the job store by SKILL.md → Binding rules → Jobs.
+These are this file's own:
+
+- **Poll only while `status == "running"`.** Once a job is terminal, fetch its result or its
+  terminal error instead of polling again.
+- **While `status == "running"`, wait at least the returned `poll_after_ms` before the next
+  poll, or pass `amicus_job_status` a positive `wait_seconds`, which is itself the wait: when
+  that call returns `running`, call again at once.**
+- **Fetch a job's result in the same turn `amicus_job_status` reports it terminal**, rather
+  than leaving it to expire or to fill the per-workspace cap.
+- **Prefer `amicus_job_result` over `amicus_job_consume_result`** whenever another step may still
+  need the artifact.
 
 ## The deadline
 

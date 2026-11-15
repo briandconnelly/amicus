@@ -37,7 +37,7 @@ attempt, as the framing rule below states. These are this file's own:
 - **Count paid calls across the whole workflow, not per backend.**
 - **Never spend a further call to resolve a disagreement you can resolve from evidence.**
 
-Synthesis itself is governed by SKILL.md → Binding rules → Composed workflows.
+Synthesis itself is governed by [reading results](reading-results.md) → Rules.
 
 ## Order of work
 
@@ -117,4 +117,5 @@ Agreement is weak evidence: both attempts may inherit the same framing from the 
 and may share blind spots regardless. Spend the synthesis on disagreements, differing assumptions,
 and the experiment that would distinguish them.
 
-What you report preserves disagreement and missing evidence, per the root's synthesis rule.
+What you report preserves disagreement and missing evidence, per the synthesis rule in
+[reading results](reading-results.md) → Rules.
