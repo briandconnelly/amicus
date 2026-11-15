@@ -13,12 +13,13 @@ import pytest
 from fastmcp import Client, FastMCP
 from fastmcp.client import extension_hooks
 from fastmcp.exceptions import NotFoundError, ResourceError
+from jsonschema import Draft202012Validator
 from mcp import MCPError
 from mcp.types import Implementation
 from pydantic import BaseModel, ConfigDict, Field
 
 from amicus import config, middleware, server
-from amicus.schemas.envelope import Meta
+from amicus.schemas.envelope import ERROR_ENVELOPE_SCHEMA, Meta
 
 
 class _Opts(BaseModel):
@@ -456,6 +457,14 @@ async def test_the_boundary_falls_back_when_the_envelope_cannot_be_built(monkeyp
         res = await c.call_tool("probe", {}, raise_on_error=False)
     assert res.is_error
     assert res.structured_content["error"]["code"] == "internal_error"
+    Draft202012Validator(ERROR_ENVELOPE_SCHEMA).validate(res.structured_content)
+
+
+@pytest.mark.parametrize("after", [False, True])
+async def test_the_boundary_envelope_matches_the_error_schema(after):
+    async with Client(_boundary_app(RuntimeError("x"), after=after)) as c:
+        res = await c.call_tool("probe", {}, raise_on_error=False)
+    Draft202012Validator(ERROR_ENVELOPE_SCHEMA).validate(res.structured_content)
 
 
 def test_the_server_installs_the_boundary_outermost():

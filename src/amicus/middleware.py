@@ -344,7 +344,9 @@ _FALLBACK_ENVELOPE: dict[str, Any] = {
     "error": {
         "code": "internal_error",
         "message": "tool call failed unexpectedly",
+        "backend": None,
         "temporary": True,
+        "retry_after_ms": None,
     },
     "meta": {},
 }
