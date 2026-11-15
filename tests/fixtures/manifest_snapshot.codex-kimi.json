@@ -1890,7 +1890,7 @@
           },
           "PartialWork": {
             "additionalProperties": false,
-            "description": "What a delegate left in its worktree when its backend was stopped at a deadline\n(#508): captured, redacted and bounded exactly as a finished delegate's diff, and an\nunverified, incomplete proposal, never a finished one. `diff` is null when the backend\nhad changed nothing; meta.truncated reports a bounded diff, as it does on a success.",
+            "description": "What a delegate left in its worktree when its backend was stopped at a deadline\n(#508): captured, redacted and bounded exactly as a finished delegate's diff, and an\nunverified, incomplete proposal, never a finished one. `diff` and `diffstat` are\nomitted when the backend had changed nothing; meta.truncated reports a bounded diff, as\nit does on a success.",
             "properties": {
               "diff": {
                 "anyOf": [
@@ -4351,7 +4351,7 @@
       "description": "The full ErrorResult schema; tool outputSchemas carry only an opaque error branch.",
       "mimeType": "application/schema+json",
       "name": "amicus-error-envelope",
-      "size": 17370,
+      "size": 17390,
       "title": "amicus error envelope schema",
       "uri": "amicus://error-envelope"
     },
