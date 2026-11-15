@@ -1,0 +1,6 @@
+# zizmor configuration (https://docs.zizmor.sh/configuration/).
+rules:
+  self-repository:
+    # Keep `./.github/workflows/...` for the local reusable-workflow call until the
+    # `$/` self-repository syntax is adopted deliberately in its own change.
+    disable: true
