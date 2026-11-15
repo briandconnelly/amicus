@@ -8,7 +8,6 @@
   "license": "MIT",
   "keywords": ["mcp", "codex", "kimi", "pi", "claude-code", "code-review", "delegation", "second-opinion"],
   "skills": "./skills/",
-  "commands": "./commands/",
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "amicus",

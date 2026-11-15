@@ -1114,6 +1114,25 @@ These qualify the rows above; they are part of the record, not commentary on it.
   subagent run in both batches was told to read the skill, so those rows show what the text
   produces once read and say nothing about whether a host reads it. Which of the two a
   scenario tests is now part of what its row has to say.
+- **2026-11-14, after the second batch: diagnostic host runs with the commands removed.**
+  These have no rows and move no status: none was graded by a second grader, and they exist
+  to explain the finding above, not to rerun a scenario. Same rig and model as the host runs,
+  with a copy of the plugin whose `commands/` was removed and nothing else changed, fake
+  backends throughout. The S1 request once and the S7 request three times: all four invoked
+  the skill and read `active-workflows.md` before the paid call. Two of the three S7 runs
+  read `options-and-errors.md` after the host's refusal and stated the annotation policy
+  apart from the refusal; the third did neither. Two further S7 runs were started and their
+  output discarded by a harness mistake, so nothing is known of them. The S6 message three
+  times: none loaded the skill, and each tried to write the file and was stopped only by the
+  host's permission gate, so a delegate result pasted into a prompt does not trigger the
+  skill with or without commands. A delegate request made for real against the fake backend,
+  followed in the same session by S6's instruction to apply the diff: the skill and
+  `reviewing-a-returned-diff.md` were read before the call, the result was answered in the
+  response contract with `Verdict: reject` and `Action: not applied`, and the second turn
+  declined to apply it. One run of the S7 request on Codex CLI 0.169.0, with the skill in a
+  scoped `CODEX_HOME`: it read `SKILL.md` and five references, was refused under approval
+  policy `never`, and reported the refusal and that the host gave no reason, without the
+  annotation policy. ADR 0049 removed the commands on this evidence.
 - **S1: mode is confounded with host.** Treatment ran only on Claude Code 2.1.263 and baseline
   only on Codex CLI 0.153.4, because Task 8's budget allowed three paid calls per host and so one
   mode per host. These six runs therefore license no baseline-vs-treatment comparison: any

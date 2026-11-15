@@ -38,6 +38,14 @@ per-change, as its own lead says.
 - The skill's blind-comparison rules now say that a candidate whose model is unknown leaves
   model-family diversity `unverified`: the harness that produced it does not establish a family.
 
+### Removed
+
+- The Claude Code slash commands (`/amicus:consult`, `/amicus:review`, `/amicus:delegate`,
+  `/amicus:delegate-async`, `/amicus:adversarial`, `/amicus:dry-run`, `/amicus:jobs` and
+  `/amicus:status`). Ask in your own words instead: the `collaborating-with-amicus` skill covers
+  every one of them. Claude Code offers a plugin's commands to the model beside its skill, and
+  in host runs the model took the command and never loaded the skill's rules (ADR 0049).
+
 ### Fixed
 
 - **Surface**: `amicus/0.1/schema-68`. The `base` and `scope` parameter descriptions say `base`

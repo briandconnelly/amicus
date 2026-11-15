@@ -254,20 +254,25 @@ def test_plugin_manifest_version_matches_the_package():
     assert _read(".codex-plugin/plugin.json")["version"] == package_version
 
 
-def test_claude_manifest_declares_skills_and_commands():
-    manifest = _read(".claude-plugin/plugin.json")
-    assert manifest["skills"] == "./skills/"
-    assert manifest["commands"] == "./commands/"
+def test_both_manifests_declare_the_skill_and_no_commands():
+    """The plugin ships one skill and no slash commands, on either host (ADR 0049).
+
+    On Claude Code a command is offered to the model beside the skill, and the model took
+    the command and never loaded the skill's rules."""
+    for path in (".claude-plugin/plugin.json", ".codex-plugin/plugin.json"):
+        manifest = _read(path)
+        assert manifest["skills"] == "./skills/", path
+        assert "commands" not in manifest, path
+    assert not (ROOT / "commands").exists()
 
 
 def test_the_directories_both_manifests_point_at_exist():
-    """Both manifests name `./skills/` and `./commands/`; nothing checked they are there.
+    """Both manifests name `./skills/`; nothing checked it is there.
 
     Deleting `skills/` failed no test, because every assertion about it compared strings
     inside the JSON to strings in the test. A manifest that points at a directory the
     distribution does not carry is a broken plugin at install time, not at test time."""
-    assert (ROOT / "skills").is_dir(), ".claude-plugin/plugin.json points at ./skills/"
-    assert (ROOT / "commands").is_dir(), "both manifests point at ./commands/"
+    assert (ROOT / "skills").is_dir(), "both manifests point at ./skills/"
 
 
 async def test_server_boots_in_process_with_no_amicus_env_set(monkeypatch):
