@@ -20,7 +20,8 @@ is read; the sections below explain each field they name.
   `ok: true` and still cover nothing.
 - **Read `findings_diagnostics.reasons`, never its `dropped` count alone, before acting on an
   empty or short `findings` list.** A non-null value reports normalization or loss, and its
-  `reasons` say which.
+  `reasons` say which: `dropped: 0` still means content was lost when `extra_fields_omitted` is
+  present, and `dropped: null` means the count was unknowable.
 - **Read `lists_diagnostics` before treating an empty prose list as the backend saying none.**
   A null field, or a null member, means that list was carried intact.
 - **On `review_status: unstructured`, read `raw_response.text`, which is delivered at either

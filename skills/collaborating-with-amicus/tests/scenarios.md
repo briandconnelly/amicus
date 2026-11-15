@@ -686,7 +686,8 @@ On 2026-11-14 the maintainer authorized one run of each scenario below, and of S
 prompts an agent authored from these descriptions (issue #479). Those prompts and their setup
 fixtures carry their own ids, suffixed `-AGENT-A`, and their `sha256` values are in the table
 under "Agent-authored prompts" below; the operator's ids stay reserved and unused. The bodies were
-passed to the subject in its task prompt and to `sha256` over stdin, and were written to no file.
+passed to the subject in its task prompt and to `sha256` over stdin. They are committed nowhere;
+the host that ran the subjects keeps its own session transcript, which holds them on that machine.
 
 Every scenario below is **describe-only and free**: each is gradable from the shape of the call the
 model says it would make, so none spends quota. All are treatment-only unless stated, and all are
@@ -1052,7 +1053,8 @@ say anything but `unrun` until a matching row exists here.
 These qualify the rows above; they are part of the record, not commentary on it.
 
 - **2026-11-14 runs: what all thirteen share, and how they differ from every earlier row.**
-  Each ran once, in a fresh subagent started with Claude Code's Agent tool, against the skill at
+  Twelve scenarios make thirteen runs, because S15 has two prompts. Each prompt ran once, in a
+  fresh subagent started with Claude Code's Agent tool, against the skill at
   commit `8cea100`, after the restructure of issue #487; none was repeated, and each is recorded
   as it came out. The subject was told to read `SKILL.md` and whatever it required with the Read
   tool, to use no other tool, and to describe every amicus call instead of making it. That is

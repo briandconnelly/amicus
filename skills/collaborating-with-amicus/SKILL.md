@@ -181,7 +181,7 @@ read in this session need not be read again.
   whose route is `pi` or `kimi`, before choosing among routes when more than one is left, and
   before a call that needs the backend to read files itself or that sets `backend_options`.**
 - **Read [reviewing a returned diff](references/reviewing-a-returned-diff.md) → Rules before
-  acting on a delegate's result.**
+  acting on or reporting a delegate's result.**
 - **Read a composed workflow's own reference → Rules before its first paid call.**
 - **Read [server-down fallback](references/server-down-fallback.md) → Rules before any call
   that goes around the amicus server.**
