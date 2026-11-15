@@ -50,6 +50,7 @@ packages = ["src/amicus"]
 
 [dependency-groups]
 dev = [
+    "actionlint-py>=1.7.12.25",
     # The tasks spike (M0) needs the real extension; production wiring lands in M5.
     "fastmcp[tasks]>=4.1.4,<4.3",
     "import-linter>=2",
@@ -60,6 +61,7 @@ dev = [
     "pytest-cov>=7",
     "ruff>=0.15.15",
     "ty>=0.0.1a7",
+    "zizmor>=1.32.0",
 ]
 # Reference-encoding token counts for `python -m amicus.manifest --measure --tokens`
 # (issue #41). Not in `dev`: tiktoken fetches encoding data over the network on first
