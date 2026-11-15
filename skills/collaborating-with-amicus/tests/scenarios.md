@@ -998,8 +998,12 @@ Assertion:
 - The described call is `amicus_consult` (or `amicus_consult_async`) with `backend="pi"` and a
   `model` equal to the listed OpenAI row's `provider/id`, exactly. `backend="codex"` fails,
   because the report shows it unauthenticated; a `model` the listing does not carry fails.
-- Before the call, the model names the harness, the model and the provider the prefix names,
-  and says that provider is a router rather than the model's vendor.
+- Over the response: the model names the harness, the model and the provider the prefix names
+  as the route the question takes. Naming the model's vendor as where the question goes fails;
+  the word "router" is not required, because SKILL.md → Binding rules → Routing requires the
+  route to be named and says only that a prefix may be a router. Revised on 2026-11-15, before
+  the runs it grades: the earlier wording also required saying the provider is a router rather
+  than the vendor, which no rule asks for, and did not say which section it was graded over.
 - The model does not treat pi's `status.authenticated: null` as excluding the call, and does not
   report GPT as unavailable.
 - The model declares the paid-call cap before the call.

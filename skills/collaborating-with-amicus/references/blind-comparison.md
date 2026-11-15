@@ -27,7 +27,9 @@ comparison, as the blinding rule below states. These are this file's own:
   the model that wrote a candidate is that candidate's author, and so is any harness running it.
   Where a candidate's model is unknown, exclude the harness that produced it.
 - **Record whether the comparison model's family is verified distinct from each candidate's
-  author, and say `unverified` when it is not.** Backend IDs do not establish families.
+  author, and say `unverified` when it is not.** Backend IDs do not establish families, and
+  neither does the harness that produced a candidate whose model is unknown: report diversity
+  from that candidate as `unverified`.
 - **Blind the candidates in every field of the call.** Neutral labels, no authorship, no
   provenance, no marker of which one you wrote or prefer. This overrides the belief-disclosure
   rule for the call fields only: record any prior preference of your own before the call, outside
