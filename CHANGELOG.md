@@ -57,6 +57,9 @@ per-change, as its own lead says.
   `user_config_rejected` for `pi` as well as `codex` (#486).
 - Scenarios S1, S4 and S16 match the rules in force, and S18 covers a model-only request
   routed through `pi` (#479).
+- Scenarios S9 to S18, and S4 and S8, each have a recorded run against the restructured skill:
+  ten pass, S16 fails its model-diversity clause and S18 is inconclusive on one clause whose
+  grading scope the scenario does not state (#479).
 
 ## [0.14.0] - 2026-11-14
 
