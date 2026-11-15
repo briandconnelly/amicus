@@ -56,6 +56,11 @@ per-change, as its own lead says.
   a rejected diff is applied at the user's direction. Scenario S7 has a passing run.
   `tests/support/fake_codex.py` takes `FAKE_CODEX_WRITE_CONTENT` (#479).
 
+- The skill's blind-comparison rule asks the comparator for the single inspection or
+  experiment whose result would most likely change its preference, where it asked for what
+  "would settle the largest disagreement", a phrase that names no parties when one model
+  compares. Scenario S16's clause follows it (#479).
+
 ### Removed
 
 - The Claude Code slash commands (`/amicus:consult`, `/amicus:review`, `/amicus:delegate`,
