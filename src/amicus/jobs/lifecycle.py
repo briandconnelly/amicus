@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import errno
 import sys
 import tempfile
 import time
@@ -168,13 +169,53 @@ def job_started_handle(
     ).model_dump(mode="json")
 
 
+def _interpreter_gone() -> bool:
+    """True only when stat confirms this server's interpreter is absent. Any other stat
+    failure (a parent that denies traversal, say) is not proof of absence, and
+    `Path.exists` would hide it, or raise it on an older Python."""
+    try:
+        Path(sys.executable).stat()
+    except FileNotFoundError:
+        return True
+    except OSError:
+        return False
+    return False
+
+
 def _spawn_failure(exc: Exception, meta: Meta, plugin: BackendPlugin) -> dict[str, Any]:
+    """The envelope for an OSError while starting a job (#501). The worker is this
+    server's own interpreter, so a missing file most often means that interpreter's
+    environment was removed under a running server (a cleaned uv cache, a deleted venv):
+    retrying cannot help, a restart can. Only a permission error points at the state
+    dir. The message names the exception type and errno symbol, never its text."""
+    kind = obs.safe_type_name(exc)
+    code = errno.errorcode.get(exc.errno, "") if isinstance(exc, OSError) and exc.errno else ""
+    label = f"{kind} ({code})" if code else kind
+    if isinstance(exc, FileNotFoundError) and _interpreter_gone():
+        return error_envelope(
+            "internal_error",
+            "failed to start background job: this server's Python interpreter no longer exists",
+            meta,
+            plugin=plugin,
+            temporary=False,
+            repair_alternative=(
+                "The amicus server's environment was removed while it was running (for "
+                "example by `uv cache clean` or a deleted virtualenv). Restart the MCP "
+                "server, then retry."
+            ),
+        )
+    if isinstance(exc, PermissionError):
+        alternative = "Check the job state-dir permissions (AMICUS_STATE_DIR) and retry."
+    else:
+        alternative = (
+            "Retry once; if it recurs, restart the MCP server and report it with this request_id."
+        )
     return error_envelope(
         "internal_error",
-        f"failed to start background job: {obs.safe_type_name(exc)}",
+        f"failed to start background job: {label}",
         meta,
         plugin=plugin,
-        repair_alternative="Check the job state-dir permissions (AMICUS_STATE_DIR) and retry.",
+        repair_alternative=alternative,
     )
 
 
