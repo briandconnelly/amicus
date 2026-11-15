@@ -169,6 +169,19 @@ def job_started_handle(
     ).model_dump(mode="json")
 
 
+def _interpreter_gone() -> bool:
+    """True only when stat confirms this server's interpreter is absent. Any other stat
+    failure (a parent that denies traversal, say) is not proof of absence, and
+    `Path.exists` would hide it, or raise it on an older Python."""
+    try:
+        Path(sys.executable).stat()
+    except FileNotFoundError:
+        return True
+    except OSError:
+        return False
+    return False
+
+
 def _spawn_failure(exc: Exception, meta: Meta, plugin: BackendPlugin) -> dict[str, Any]:
     """The envelope for an OSError while starting a job (#501). The worker is this
     server's own interpreter, so a missing file most often means that interpreter's
@@ -178,7 +191,7 @@ def _spawn_failure(exc: Exception, meta: Meta, plugin: BackendPlugin) -> dict[st
     kind = obs.safe_type_name(exc)
     code = errno.errorcode.get(exc.errno, "") if isinstance(exc, OSError) and exc.errno else ""
     label = f"{kind} ({code})" if code else kind
-    if isinstance(exc, FileNotFoundError) and not Path(sys.executable).exists():
+    if isinstance(exc, FileNotFoundError) and _interpreter_gone():
         return error_envelope(
             "internal_error",
             "failed to start background job: this server's Python interpreter no longer exists",

@@ -8,6 +8,7 @@ import dataclasses
 import errno
 import json
 import logging
+import os
 import sys
 import threading
 import time
@@ -193,6 +194,24 @@ async def test_spawn_failure_with_the_interpreter_present_names_errno(tmp_path, 
     err = out["error"]
     assert err["message"] == "failed to start background job: FileNotFoundError (ENOENT)"
     assert "AMICUS_STATE_DIR" not in err["repair"]["alternative"]
+
+
+async def test_an_unstattable_interpreter_is_not_reported_gone(tmp_path, monkeypatch):
+    """A stat that fails for any reason but absence is not proof the interpreter is gone."""
+    real_stat = os.stat
+
+    def denied(path, *args, **kwargs):
+        if os.fspath(path) == lifecycle.sys.executable:
+            raise PermissionError(errno.EACCES, "denied")
+        return real_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(os, "stat", denied)
+    out = await _spawn_fails_with(
+        tmp_path, monkeypatch, FileNotFoundError(errno.ENOENT, "No such file", "x")
+    )
+    err = out["error"]
+    assert err["message"] == "failed to start background job: FileNotFoundError (ENOENT)"
+    assert err["temporary"] is True
 
 
 async def test_spawn_permission_failure_points_at_the_state_dir(tmp_path, monkeypatch):
