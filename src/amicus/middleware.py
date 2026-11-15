@@ -8,7 +8,13 @@ import unicodedata
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
-from fastmcp.exceptions import DisabledError, FastMCPError, NotFoundError, ResourceError
+from fastmcp.exceptions import (
+    DisabledError,
+    FastMCPError,
+    NotFoundError,
+    ResourceError,
+    ToolError,
+)
 from fastmcp.exceptions import ValidationError as FastMCPValidationError
 from fastmcp.server.middleware import Middleware
 from fastmcp.tools import ToolResult
@@ -352,45 +358,54 @@ _FALLBACK_ENVELOPE: dict[str, Any] = {
 }
 
 
+_DELIBERATE_ERRORS = (FastMCPError, NotFoundError, DisabledError, MCPError, ValidationError)
+
+
 class UnexpectedErrorMiddleware(Middleware):
     """The outermost tools/call boundary (#502). An exception the per-tool guard cannot
-    see (one raised by another middleware, by FastMCP before the handler runs, or while it
-    converts the handler's result) would otherwise reach the MCP runner, which answers
-    with a bare "Internal server error": no envelope and no request_id. This returns the
-    documented internal_error envelope instead.
+    see would otherwise leave amicus without its envelope:
 
-    Passed through untouched: cancellation and other BaseExceptions; FastMCP's own errors
-    (unknown tool, ToolError, its ValidationError), which its handler already turns into a
-    result; MCPError, a deliberate protocol error; and a pydantic ValidationError, which
-    the runner maps to its own wire error. Neither the reply nor the log carries the
-    exception's text, which may hold a prompt input (AGENTS.md rule 18)."""
+    - one raised by another middleware reaches the MCP runner, which answers with a bare
+      "Internal server error" and no request_id;
+    - one raised while FastMCP converts the handler's result is wrapped by FastMCP in a
+      ToolError whose message carries the exception's text.
+
+    Both become the documented internal_error envelope. A ToolError is unwrapped only when
+    its cause is such an unexpected exception; one FastMCP raised for its own reasons, and
+    every other deliberate error (unknown tool, MCPError, either ValidationError), passes
+    through untouched, as do cancellation and other BaseExceptions. Neither the reply nor
+    the log carries the exception's text, which may hold a prompt input (AGENTS.md rule
+    18), and the log carries no client-supplied tool name."""
 
     async def on_call_tool(self, context, call_next):  # type: ignore[no-untyped-def]
         try:
             return await call_next(context)
-        except (FastMCPError, NotFoundError, DisabledError, MCPError, ValidationError):
+        except ToolError as exc:
+            cause = exc.__cause__
+            if not isinstance(cause, Exception) or isinstance(cause, _DELIBERATE_ERRORS):
+                raise
+            return _unexpected_error_result(cause)
+        except _DELIBERATE_ERRORS:
             raise
         except Exception as exc:
-            name = getattr(getattr(context, "message", None), "name", None)
-            try:
-                kind = obs.safe_type_name(exc)
-                obs.get_logger(__name__).exception(
-                    "tools/call %s failed outside the tool guard: %s",
-                    redaction.sanitize_echo(str(name)),
-                    kind,
-                )
-                envelope = serialize_error(
-                    ErrorResult(
-                        error=make_error(
-                            "internal_error",
-                            f"tool call failed unexpectedly: {kind}",
-                        ),
-                        meta=Meta(),
-                    )
-                )
-            except Exception:
-                envelope = copy.deepcopy(_FALLBACK_ENVELOPE)
-            return ToolResult(structured_content=envelope, is_error=True)
+            return _unexpected_error_result(exc)
+
+
+def _unexpected_error_result(exc: Exception) -> ToolResult:
+    try:
+        kind = obs.safe_type_name(exc)
+        obs.get_logger(__name__).error(
+            "tools/call failed outside the tool guard: %s", kind, exc_info=exc
+        )
+        envelope = serialize_error(
+            ErrorResult(
+                error=make_error("internal_error", f"tool call failed unexpectedly: {kind}"),
+                meta=Meta(),
+            )
+        )
+    except Exception:
+        envelope = copy.deepcopy(_FALLBACK_ENVELOPE)
+    return ToolResult(structured_content=envelope, is_error=True)
 
 
 class SemanticErrorMiddleware(Middleware):

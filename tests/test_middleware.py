@@ -12,7 +12,8 @@ from typing import Annotated, Literal
 import pytest
 from fastmcp import Client, FastMCP
 from fastmcp.client import extension_hooks
-from fastmcp.exceptions import NotFoundError, ResourceError
+from fastmcp.exceptions import NotFoundError, ResourceError, ToolError
+from fastmcp.tools.function_tool import FunctionTool
 from jsonschema import Draft202012Validator
 from mcp import MCPError
 from mcp.types import Implementation
@@ -470,3 +471,42 @@ async def test_the_boundary_envelope_matches_the_error_schema(after):
 def test_the_server_installs_the_boundary_outermost():
     app = server.create_app(config.settings({}))
     assert isinstance(app.middleware[0], middleware.UnexpectedErrorMiddleware)
+
+
+async def test_a_result_conversion_failure_is_enveloped(monkeypatch):
+    """FastMCP wraps a convert_result failure in a ToolError carrying the exception's
+    text; the boundary returns the envelope instead (#502, the conversion seam that
+    tests/test_guard.py exercises)."""
+    marker = "PROMPTMARKER502C"
+
+    def boom(self, result):
+        raise RuntimeError(marker)
+
+    monkeypatch.setattr(FunctionTool, "convert_result", boom)
+    app = FastMCP(name="scratch")
+    app.add_middleware(middleware.UnexpectedErrorMiddleware())
+
+    @app.tool(name="probe")
+    async def probe() -> dict:
+        return {"ok": True}
+
+    async with Client(app) as c:
+        res = await c.call_tool("probe", {}, raise_on_error=False)
+    assert res.is_error
+    err = res.structured_content["error"]
+    assert err["code"] == "internal_error"
+    assert err["message"] == "tool call failed unexpectedly: RuntimeError"
+    assert err["request_id"]
+    assert marker not in json.dumps(res.structured_content)
+    assert all(marker not in getattr(c, "text", "") for c in res.content)
+    Draft202012Validator(ERROR_ENVELOPE_SCHEMA).validate(res.structured_content)
+
+
+async def test_a_deliberate_tool_error_passes_through():
+    mw = middleware.UnexpectedErrorMiddleware()
+
+    async def raise_it(_context):
+        raise ToolError("deliberate")
+
+    with pytest.raises(ToolError):
+        await mw.on_call_tool(SimpleNamespace(message=SimpleNamespace(name="probe")), raise_it)
