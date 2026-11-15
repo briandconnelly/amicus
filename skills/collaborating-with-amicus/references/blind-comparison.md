@@ -52,9 +52,10 @@ comparison, as the blinding rule below states. These are this file's own:
   attack, not to compare.
 - **Omit `instructions_append`, or fix neutral output-shape guidance before the first call and
   hold it byte-identical across both calls.**
-- **Ask for a per-criterion comparison with reasons, one stated preference, and the inspection
-  or experiment that would settle the largest disagreement.** Never ask for, and never report, a
-  score, a grade, a rank order beyond the preference, or a probability.
+- **Ask for a per-criterion comparison with reasons, one stated preference, and the single
+  inspection or experiment whose result would most likely change that preference.** Never ask
+  for, and never report, a score, a grade, a rank order beyond the preference, or a
+  probability.
 - **Treat the preference as a finding.** Verify each reason it rests on against the candidates
   before it moves the decision; a reason you cannot trace to the candidates carries no weight,
   whatever the preference says.
