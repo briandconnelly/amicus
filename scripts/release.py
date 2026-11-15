@@ -101,6 +101,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -817,7 +818,9 @@ def cmd_post_merge(ctx: Context, args: argparse.Namespace) -> int:
 
 # --- post-publish: after the publish workflow, before the pointer moves -----------------
 
-PYPI_JSON_URL = "https://pypi.org/pypi/amicus/json"
+# The version-specific document, not the project one: right after an upload PyPI's CDN can
+# serve the project JSON stale while this one already lists the files (#464).
+PYPI_VERSION_JSON_URL = "https://pypi.org/pypi/amicus/{version}/json"
 SERVER_NAME = "amicus"
 CONSOLE_SCRIPT = "amicus-mcp"
 # A tag no release can carry: not X.Y.Z, so no release tooling makes it, and the `v*` ruleset
@@ -876,21 +879,23 @@ def _install_source(ctx: Context, ref: str) -> str:
 
 
 def _pypi_problems(ctx: Context, version: str) -> list[str]:
-    """PyPI's `releases[version]` must exist and list files: the project page alone proves
-    only that some version of amicus was ever published, which is all the hand-run
-    `curl .../json | head` this replaces could show.
+    """PyPI's version document must exist and list files in `urls`: the project page alone
+    proves only that some version of amicus was ever published, and its JSON can lag the
+    upload on PyPI's CDN (#464). The version document 404s for a version PyPI lacks.
     """
+    url = PYPI_VERSION_JSON_URL.format(version=version)
     try:
-        data = json.loads(ctx.http_get(PYPI_JSON_URL))
+        data = json.loads(ctx.http_get(url))
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            return [f"PyPI has no release {version}; has the publish workflow's `pypi` job run?"]
+        return [f"could not read {url}: {exc}"]
     except (OSError, ValueError) as exc:
-        return [f"could not read {PYPI_JSON_URL}: {exc}"]
-    releases = data.get("releases") if isinstance(data, dict) else None
-    if not isinstance(releases, dict):
-        return [f"{PYPI_JSON_URL} carries no `releases` table"]
-    if version not in releases:
-        return [f"PyPI has no release {version}; has the publish workflow's `pypi` job run?"]
-    files = releases[version]
-    if not isinstance(files, list) or not files:
+        return [f"could not read {url}: {exc}"]
+    files = data.get("urls") if isinstance(data, dict) else None
+    if not isinstance(files, list):
+        return [f"{url} carries no `urls` list"]
+    if not files:
         return [f"PyPI lists {version} with no files; the upload did not land"]
     return []
 

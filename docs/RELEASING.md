@@ -358,8 +358,8 @@ uv run python scripts/release.py post-publish --version X.Y.Z
 Step 7's `pointer` runs the same checks itself, so a maintainer moving the pointer straight away may skip this and run that.
 Each check is there for a reason:
 
-1. PyPI's `releases` table must list files for exactly `X.Y.Z`, read from `https://pypi.org/pypi/amicus/json`.
-   The project's metadata alone, which is what a 200 from that URL shows, says only that some version of amicus was ever published, not that this one was.
+1. PyPI must list files for exactly `X.Y.Z` in the `urls` of `https://pypi.org/pypi/amicus/X.Y.Z/json`, the version-specific document, because the project-level JSON can lag an upload on PyPI's CDN.
+   A 200 from that URL shows only that PyPI knows the version; a 404 means it has none, and an empty `urls` list means the upload did not land.
 2. The canonical repository, `https://github.com/briandconnelly/amicus.git`, must have the tag `vX.Y.Z` and its peeled `^{}` entry (`git ls-remote`): a missing tag, or a lightweight one with no peeled entry, fails, and so does a lookup that could not run.
    `origin` must report the same tag object and peeled commit exactly.
    The install and the marketplace pointer both name the canonical repository, while step 7 fetches the tag from `origin`, which may be a fork or a mirror; a tag there that differs would put a `sha` in the pointer that users do not install.
