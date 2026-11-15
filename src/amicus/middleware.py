@@ -165,6 +165,17 @@ def _long_text_hints(errors: list[Any], param_names: set[str]) -> list[str]:
     return hints
 
 
+def _backend_literal_offers_pi(errors: list[Any], property_schemas: dict[str, Any]) -> bool:
+    """True when `backend` got an unknown value on a tool whose backend enum includes pi,
+    the harness that runs other providers' models."""
+    if not any(
+        err.get("type") == "literal_error" and tuple(err.get("loc") or ())[:1] == ("backend",)
+        for err in errors
+    ):
+        return False
+    return "pi" in (_enum_for_property(property_schemas.get("backend"), element=False) or [])
+
+
 def invalid_arguments_envelope(
     tool_name: str,
     *,
@@ -211,6 +222,12 @@ def invalid_arguments_envelope(
         hints.append("provide the required argument(s)")
     if "literal_error" in types:
         hints.append("use one of the field's allowed_values")
+        if _backend_literal_offers_pi(errors, property_schemas):
+            hints.append(
+                "backend names a harness, not a model: for another provider's model, find its "
+                'provider/id with amicus_models(backend="pi") and call with backend="pi" and '
+                "that model"
+            )
     if "string_too_long" in types:
         hints.append("supply each over-long string within its field's maxLength")
         hints.extend(_long_text_hints(errors, param_names))

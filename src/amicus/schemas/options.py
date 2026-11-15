@@ -71,7 +71,7 @@ def option_violations(backend: str, options: BackendOptions | None) -> list[Inva
                     field=f"backend_options.{key}",
                     reason=(
                         f"{key} is not accepted by backend {backend!r}; it applies to "
-                        f"{', '.join(sorted(accepted))}"
+                        f"{', '.join(sorted(accepted))}; remove it"
                     ),
                 )
             )

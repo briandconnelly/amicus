@@ -407,6 +407,12 @@ The schema-68 DROP (-101 bytes on every profile: all 116163 -> 116062) is #478. 
 say `base` is required for scope=branch, in fewer bytes, on every tool that carries them.
 Measured on the wire. MEASURED and BUDGET both move down by the 101 bytes, so the budget keeps
 no headroom.
+
+The schema-69 growth (+194 bytes on every profile: all 116062 -> 116256) is #503. Agents in
+past sessions sent wait_seconds over its cap and scope=commit without `commit`, so the
+wait_seconds and amicus_job_status descriptions now state the 0-50 bound and the scope and
+commit descriptions state that scope=commit requires `commit`. Measured on the wire. MEASURED
+and BUDGET both move up by the 194 bytes, so the budget keeps no headroom.
 """
 
 from __future__ import annotations
@@ -417,10 +423,10 @@ from tests.conftest import spawned_server_env
 from amicus import manifest
 
 MEASURED: dict[str, int] = {
-    "all": 116062,
-    "codex": 116070,
-    "codex-kimi": 116062,
-    "claude": 116062,
+    "all": 116256,
+    "codex": 116264,
+    "codex-kimi": 116256,
+    "claude": 116256,
 }
 # The budget is a literal, not MEASURED rounded up to the next kilobyte as it was until
 # 2026-09-14. The rounding left up to 1 KB of growth per bucket that no PR had to own, and
@@ -430,10 +436,10 @@ MEASURED: dict[str, int] = {
 # Any growth now fails until a PR raises BUDGET and says why; a shrink passes and shows as
 # drift against MEASURED. Raising one means re-measuring and moving both.
 BUDGET: dict[str, int] = {
-    "all": 116062,
-    "codex": 116070,
-    "codex-kimi": 116062,
-    "claude": 116062,
+    "all": 116256,
+    "codex": 116264,
+    "codex-kimi": 116256,
+    "claude": 116256,
 }
 
 
