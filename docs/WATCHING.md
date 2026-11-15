@@ -3,6 +3,7 @@
 amicus depends on things that release on their own schedule: four backend CLIs and the `fastmcp` and `mcp` packages it caps to a minor line.
 This page is how a new release of any of them turns into an issue without anyone having to notice it.
 It reports and files; it never installs, validates, widens a cap or changes a supported set, which stay manual, in their own PRs.
+For a kimi, pi or claude issue, `.github/workflows/backend-release-eval.yml` then evaluates the release and may open a draft support PR, as `docs/UPGRADING-BACKENDS.md` describes; the watch itself still only files.
 
 ## Who watches what
 
@@ -104,3 +105,12 @@ A non-zero exit fails the run, so an `unknown` stream or a `failed` filing shows
 Its first two dispatches, runs 40608709624 and 40608881778, filed #393, #394 and #395 and then reported each as `exists`, filing and editing nothing.
 A Claude Code cloud routine was tried first and dropped, because the `gh` token a routine runs with cannot use the GitHub API.
 `--dry-run` shows locally what a run would file or edit without changing anything; it still runs the `gh issue list` reads.
+
+## Handing a new issue to the evaluation
+
+An issue the watch files with the job's `GITHUB_TOKEN` starts no `issues` workflow, because GitHub starts no workflow for an event that token causes.
+So the workflow's second job, `evaluate`, reads the run's `filings` and dispatches `backend-release-eval.yml` once for each kimi, pi or claude issue whose `action` is `filed`; a dispatch is the one event that token may start.
+That job holds only `actions: write`, and it runs even when the watch failed on another stream, so an issue that was filed is still evaluated.
+A claude issue the watch moves forward (`edited`) is not dispatched again, and neither is an issue that already `exists`.
+Re-run the evaluation for any open tracking issue by hand with `gh workflow run backend-release-eval.yml -f issue=<number>`.
+A tracking issue a maintainer opens by hand starts the evaluation itself, through the `issues: opened` trigger.
