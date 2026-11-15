@@ -24,9 +24,6 @@ exposure; they are not restated here. These are this file's own:
 - **For a `pi` model whose row lists only `off`, pass `reasoning_effort: "off"` explicitly.**
   It is a non-thinking model: amicus refuses any other value pre-spend, and omitting it inherits
   `AMICUS_PI_REASONING_EFFORT`.
-- **When you offer `pi` in place of a named harness, name its provider — the `provider/id`
-  prefix, which may be a router — and that pi has no OS sandbox and a pi delegate no network
-  block.**
 - **Put the project's constraints in a `pi` brief yourself.** pi runs with
   `--no-context-files`, so it loads no `AGENTS.md`.
 
@@ -49,7 +46,7 @@ Worked examples, each after `amicus_backends(detail="full")`:
 ## `kimi` is deprecated
 
 `kimi` is deprecated in favour of `pi`, since 0.13.0, and is removed in 0.15.0 or later. It still
-works, and the routing procedure above still sends it a request that names `kimi` or a Kimi
+works, and SKILL.md → Binding rules → Routing still sends it a request that names `kimi` or a Kimi
 model, with its deprecation disclosed; recommend `pi` when a user asks how to move off it: it
 serves the same verbs (`consult`, `review_changes`, `delegate`) and can run the same model when
 `AMICUS_PI_MODEL` names it as an exact `provider/id`. The `deprecation` marker on kimi's

@@ -799,8 +799,18 @@ def test_a_free_failure_and_a_host_denial_reach_the_error_rules():
     required = _flat(_rules_section("Required reading"))
     [rule] = [b for b in _bullets(_rules_section("Required reading")) if "options-and-errors" in b]
     rule = _flat(rule)
-    for trigger in ("`ok: false`", "`amicus://` resource", "host's denial", "free tools included"):
+    for trigger in (
+        "`ok: false`",
+        "looks malformed or contradicts its own schema whatever its `ok`",
+        "`amicus://` resource",
+        "host's denial",
+        "free tools included",
+    ):
         assert trigger in rule, trigger
+    # A fallback's answer has no envelope and comes from no paid tool, so its own block sends
+    # it to the verification rules (Codex's review of this change).
+    fallback = _flat(_reference_rules("server-down-fallback.md"))
+    assert "(reading-results.md) → Rules before acting on a fallback's answer" in fallback
     assert "interpreting, acting on or reporting what any paid tool returned" in required
     options = _flat(_OPTIONS_RULES)
     assert "**Report a host's denial of an amicus call to the user rather than working" in options
@@ -839,6 +849,14 @@ _PLAIN_CONSULT_CEILING = 48_000
 def test_the_skill_body_and_a_plain_consults_reads_stay_within_their_ceilings():
     body = len(_SKILL_MD.encode("utf-8"))
     assert body <= _BODY_CEILING, body
+    # The set is asserted, not assumed: a third block made mandatory for every paid call
+    # fails here until it is added to the measured set below.
+    always = {
+        re.search(r"\(references/([a-z-]+\.md)\)", bullet).group(1)  # ty: ignore[possibly-missing-attribute]
+        for bullet in _bullets(_rules_section("Required reading"))
+        if "every paid call" in _flat(bullet) or "any paid tool returned" in _flat(bullet)
+    }
+    assert always == {"active-workflows.md", "reading-results.md"}, always
     # What Required reading makes a single-route consult with inline evidence read, counted
     # as whole files because a host loads a file, not a section of one.
     plain = body + sum(

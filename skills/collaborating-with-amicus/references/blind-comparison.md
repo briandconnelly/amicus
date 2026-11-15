@@ -14,7 +14,7 @@ stake in either is the instrument that addresses that.
 Cap declaration and call counting are governed by SKILL.md → Binding rules → Spend, and synthesis
 by [reading results](reading-results.md) → Rules; the brief and the workspace-content prohibition on `instructions_append` by
 [active workflows](active-workflows.md) → Rules; backend identity claims by
-[choosing a backend](choosing-a-backend.md) → Rules. One inherited rule is overridden here: the
+SKILL.md → Binding rules → Composed workflows. One inherited rule is overridden here: the
 belief-disclosure rule in active workflows does not apply to the call fields of a blind
 comparison, as the blinding rule below states. These are this file's own:
 

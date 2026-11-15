@@ -15,6 +15,9 @@ failure, not a tool returning `ok: false`. A tool that answers is not a server t
   the filesystem; the prompt is not the limit of what it sends.
 - **Point `WORKSPACE` only at a directory the user has approved for disclosure.**
 - **Never retry either route while the transport condition is unchanged.**
+- **Read [reading results](reading-results.md) → Rules before acting on a fallback's answer.**
+  It has no envelope, so the field rules have nothing to read; the rules on unverified claims,
+  matching verification to the claim, and preserving disagreement bind it unchanged.
 
 ## Why the plugin path is preferred
 

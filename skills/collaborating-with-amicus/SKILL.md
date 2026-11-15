@@ -106,7 +106,9 @@ This is the one statement of the routing procedure;
   call.** That is routing, not substitution, so it needs no confirmation.
 - **Never substitute for a named harness silently.** When the harness the user named is not
   ready or lacks the verb, say so, offer the alternative route (`pi` plus an exact listed model)
-  naming its provider and its containment, and proceed only when the user chooses it.
+  naming its provider (the `provider/id` prefix, which may be a router) and its containment
+  (pi has no OS sandbox, and a pi delegate no network block), and proceed only when the user
+  chooses it.
 - **Route only to a harness that supports the verb.** When none does — an adversarial review
   with `claude` not ready — report that no eligible route exists; changing the verb is a
   separate choice for the user.
@@ -169,8 +171,9 @@ read in this session need not be read again.
   on or reporting what any paid tool returned**, whether it came back directly or through
   `amicus_job_result`.
 - **Read [options and errors](references/options-and-errors.md) → Rules before recovering from
-  or reporting any amicus response with `ok: false`, any failed read of an `amicus://` resource,
-  or a host's denial of an amicus call**, free tools included, and before passing an
+  or reporting any amicus response with `ok: false`, any response that looks malformed or
+  contradicts its own schema whatever its `ok`, any failed read of an `amicus://` resource, or
+  a host's denial of an amicus call**, free tools included, and before passing an
   `idempotency_key`.
 - **Read [sync vs async](references/sync-vs-async.md) → Rules before the first `_async` call,
   keyed sync call or job-lifecycle call.**

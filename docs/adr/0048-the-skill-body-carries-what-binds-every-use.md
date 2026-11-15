@@ -21,6 +21,7 @@ The ban on reading the job store binds an ordinary sync call, which is a job too
 The synthesis rules and the ban on asking a backend to invoke another agent bound every route, not only the three named workflows.
 A row in the route table is a map entry, not a rule, so it does not make a block mandatory.
 Each of those was checked against the files and held.
+A Codex review of the finished change then found three more triggers narrower than their rules, each of which also held and is fixed: a malformed response that carries no `ok: false`, an offer of `pi` made before the block that said what to disclose about it was required, and the answer of the server-down fallback, which no paid tool returns.
 
 ## Decision
 
@@ -44,7 +45,7 @@ It forbids a paid call from a workspace the user or the project's instructions h
 
 ## Consequences
 
-The body is 18.1 KB, down from 24.9 KB at `de9602a`, and what a single-route consult with inline evidence must read is 46.2 KB, down from 67.2 KB, counted as whole files.
+The body is 18.3 KB, down from 24.9 KB at `de9602a`, and what a single-route consult with inline evidence must read is 46.4 KB, down from 67.2 KB, counted as whole files.
 `choosing-a-backend.md` is no longer read on every call: it is required for a `pi` or `kimi` route, for a choice among several routes, and for a call that needs the backend to read files or sets `backend_options`.
 `tests/test_skill_contract.py` asserts each moved rule against the block that now owns it, asserts that every reference's `Rules` block is named by a Required reading rule, and holds the body and the plain-consult read under byte ceilings so the size cannot return unnoticed.
 The ceilings are regrowth guards, set just above the measured sizes, not targets.

@@ -10,7 +10,8 @@ SKILL.md → Binding rules → Required reading sends you here before you interp
 report what any paid tool returned. These rules are the authoritative statement of how a result
 is read; the sections below explain each field they name.
 
-- **Branch on `ok` first.** On `ok: false`, stop reading success fields and follow
+- **Branch on `ok` first.** On `ok: false`, or on a response that looks malformed or
+  contradicts its own schema, stop reading success fields and follow
   [options and errors](options-and-errors.md) → Rules.
 - **Branch on the concrete tool before reading any success field.**
 - **Check each of `review_status`, `coverage`, `findings_diagnostics`, `lists_diagnostics`,

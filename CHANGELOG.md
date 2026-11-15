@@ -22,7 +22,7 @@ per-change, as its own lead says.
 
 ### Changed
 
-- The `collaborating-with-amicus` skill's body is about a quarter smaller (18.1 KB, from
+- The `collaborating-with-amicus` skill's body is about a quarter smaller (18.3 KB, from
   24.9 KB), and a plain consult reads 46 KB of the skill before its first call instead of 67 KB.
   The body keeps the rules that bind every use; the rules for reading a result, recovering from
   an error or a host's denial, and polling a job moved to the `Rules` block of the reference
