@@ -8,7 +8,7 @@ import unicodedata
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
-from fastmcp.exceptions import DisabledError, NotFoundError, ResourceError
+from fastmcp.exceptions import DisabledError, FastMCPError, NotFoundError, ResourceError
 from fastmcp.exceptions import ValidationError as FastMCPValidationError
 from fastmcp.server.middleware import Middleware
 from fastmcp.tools import ToolResult
@@ -335,6 +335,60 @@ class InputSchemaDialectMiddleware(Middleware):
             else tool
             for tool in tools
         ]
+
+
+# The fixed envelope the boundary returns when even building the normal one fails; it
+# carries no request_id because minting one is part of what may have failed.
+_FALLBACK_ENVELOPE: dict[str, Any] = {
+    "ok": False,
+    "error": {
+        "code": "internal_error",
+        "message": "tool call failed unexpectedly",
+        "temporary": True,
+    },
+    "meta": {},
+}
+
+
+class UnexpectedErrorMiddleware(Middleware):
+    """The outermost tools/call boundary (#502). An exception the per-tool guard cannot
+    see (one raised by another middleware, by FastMCP before the handler runs, or while it
+    converts the handler's result) would otherwise reach the MCP runner, which answers
+    with a bare "Internal server error": no envelope and no request_id. This returns the
+    documented internal_error envelope instead.
+
+    Passed through untouched: cancellation and other BaseExceptions; FastMCP's own errors
+    (unknown tool, ToolError, its ValidationError), which its handler already turns into a
+    result; MCPError, a deliberate protocol error; and a pydantic ValidationError, which
+    the runner maps to its own wire error. Neither the reply nor the log carries the
+    exception's text, which may hold a prompt input (AGENTS.md rule 18)."""
+
+    async def on_call_tool(self, context, call_next):  # type: ignore[no-untyped-def]
+        try:
+            return await call_next(context)
+        except (FastMCPError, NotFoundError, DisabledError, MCPError, ValidationError):
+            raise
+        except Exception as exc:
+            name = getattr(getattr(context, "message", None), "name", None)
+            try:
+                kind = obs.safe_type_name(exc)
+                obs.get_logger(__name__).exception(
+                    "tools/call %s failed outside the tool guard: %s",
+                    redaction.sanitize_echo(str(name)),
+                    kind,
+                )
+                envelope = serialize_error(
+                    ErrorResult(
+                        error=make_error(
+                            "internal_error",
+                            f"tool call failed unexpectedly: {kind}",
+                        ),
+                        meta=Meta(),
+                    )
+                )
+            except Exception:
+                envelope = copy.deepcopy(_FALLBACK_ENVELOPE)
+            return ToolResult(structured_content=envelope, is_error=True)
 
 
 class SemanticErrorMiddleware(Middleware):

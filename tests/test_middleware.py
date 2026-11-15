@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
 import re
 from types import SimpleNamespace
@@ -10,12 +12,12 @@ from typing import Annotated, Literal
 import pytest
 from fastmcp import Client, FastMCP
 from fastmcp.client import extension_hooks
-from fastmcp.exceptions import ResourceError
+from fastmcp.exceptions import NotFoundError, ResourceError
 from mcp import MCPError
 from mcp.types import Implementation
 from pydantic import BaseModel, ConfigDict, Field
 
-from amicus import config, middleware
+from amicus import config, middleware, server
 from amicus.schemas.envelope import Meta
 
 
@@ -364,3 +366,98 @@ async def test_overlong_focus_on_a_tool_without_extra_context_names_no_alternati
     alternative = res.structured_content["error"]["repair"]["alternative"]
     assert "within its field's maxLength" in alternative
     assert "extra_context" not in alternative
+
+
+# --- #502: exceptions raised outside the per-tool guard ------------------------------
+
+
+class _Raise(middleware.Middleware):
+    """Raises `exc` before the handler (`after=False`) or after it returned (`after=True`),
+    standing in for a failure in another middleware or in FastMCP's result conversion."""
+
+    def __init__(self, exc: BaseException, *, after: bool) -> None:
+        self.exc = exc
+        self.after = after
+
+    async def on_call_tool(self, context, call_next):  # type: ignore[no-untyped-def]
+        if not self.after:
+            raise self.exc
+        await call_next(context)
+        raise self.exc
+
+
+def _boundary_app(exc: BaseException, *, after: bool) -> FastMCP:
+    app = FastMCP(name="scratch")
+    app.add_middleware(middleware.UnexpectedErrorMiddleware())
+    app.add_middleware(_Raise(exc, after=after))
+
+    @app.tool(name="probe")
+    async def probe() -> dict:
+        return {"ok": True}
+
+    return app
+
+
+@pytest.mark.parametrize("after", [False, True])
+async def test_an_exception_outside_the_guard_is_enveloped(after):
+    marker = "PROMPTMARKER502"
+    async with Client(_boundary_app(RuntimeError(marker), after=after)) as c:
+        res = await c.call_tool("probe", {}, raise_on_error=False)
+    assert res.is_error
+    err = res.structured_content["error"]
+    assert err["code"] == "internal_error"
+    assert err["message"] == "tool call failed unexpectedly: RuntimeError"
+    assert err["request_id"]
+    assert marker not in json.dumps(res.structured_content)
+    assert marker not in res.content[0].text
+
+
+async def test_the_boundary_does_not_swallow_cancellation():
+    mw = middleware.UnexpectedErrorMiddleware()
+
+    async def cancelled(_context):
+        raise asyncio.CancelledError
+
+    with pytest.raises(asyncio.CancelledError):
+        await mw.on_call_tool(SimpleNamespace(message=SimpleNamespace(name="probe")), cancelled)
+
+
+@pytest.mark.parametrize(
+    "exc",
+    [
+        NotFoundError("Unknown tool"),
+        MCPError(code=-32602, message="deliberate"),
+    ],
+)
+async def test_the_boundary_passes_deliberate_errors_through(exc):
+    mw = middleware.UnexpectedErrorMiddleware()
+
+    async def raise_it(_context):
+        raise exc
+
+    with pytest.raises(type(exc)):
+        await mw.on_call_tool(SimpleNamespace(message=SimpleNamespace(name="probe")), raise_it)
+
+
+async def test_unknown_tool_is_unchanged_behind_the_boundary():
+    async with Client(_boundary_app(RuntimeError("x"), after=True)) as c:
+        res = await c.call_tool("nope", {}, raise_on_error=False)
+    assert res.is_error
+    assert res.structured_content is None
+    assert "Unknown tool" in res.content[0].text
+
+
+async def test_the_boundary_falls_back_when_the_envelope_cannot_be_built(monkeypatch):
+    def broken(*args, **kwargs):
+        raise TypeError("broken")
+
+    monkeypatch.setattr(middleware, "make_error", broken)
+    async with Client(_boundary_app(RuntimeError("x"), after=False)) as c:
+        res = await c.call_tool("probe", {}, raise_on_error=False)
+    assert res.is_error
+    assert res.structured_content["error"]["code"] == "internal_error"
+
+
+def test_the_server_installs_the_boundary_outermost():
+    app = server.create_app(config.settings({}))
+    assert isinstance(app.middleware[0], middleware.UnexpectedErrorMiddleware)
