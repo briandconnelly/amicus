@@ -22,6 +22,7 @@ from amicus.middleware import (
     InputSchemaDialectMiddleware,
     ResourceErrorMiddleware,
     SemanticErrorMiddleware,
+    UnexpectedErrorMiddleware,
     ValidationEnvelopeMiddleware,
 )
 from amicus.registry import BackendRegistry
@@ -294,6 +295,9 @@ def create_app(
     _install_static_read_ttl(app)
     _install_meta_strip(app)
     app.add_transform(NullDefaultStrip())
+    # Outermost, ahead of FastMCP's own middleware too, so an exception from any other
+    # middleware is enveloped (#502).
+    app.middleware.insert(0, UnexpectedErrorMiddleware())
     app.add_middleware(ConnectionLogMiddleware())
     app.add_middleware(InputSchemaDialectMiddleware())
     app.add_middleware(SemanticErrorMiddleware())
