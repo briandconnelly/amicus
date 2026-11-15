@@ -20,6 +20,13 @@ per-change, as its own lead says.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Surface**: `amicus/0.1/schema-68`. The `base` and `scope` parameter descriptions say `base`
+  is required for `scope="branch"`. They had said an omitted `base` meant the upstream, which
+  nothing resolves: the call was, and is, refused as `invalid_base`. The skill's scope table
+  says the same (#478).
+
 ## [0.14.0] - 2026-11-14
 
 This release corrects what the tool surface says about itself, and has two breaking changes.

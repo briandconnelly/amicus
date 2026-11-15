@@ -74,12 +74,13 @@ the changes** — the scope parameters do, and their defaults are specific:
 | Parameter | Default | What it means |
 | --- | --- | --- |
 | `scope` | `working_tree` | tracked changes vs `HEAD` |
-| `base` | the upstream | only read when `scope="branch"` |
+| `base` | — | required when `scope="branch"`, and only read there; no upstream is resolved, so an omitted `base` is refused as `invalid_base` |
 | `commit` | — | required when `scope="commit"` |
 | `paths` | all | repo-relative restriction |
 | `untracked` | `explicit_only` | untracked files only when named in `paths`; `include` opts every non-ignored untracked file into egress; `exclude` drops them |
 
-So "review this branch before I open the PR" is `scope="branch"`, not the default. Left at
+So "review this branch before I open the PR" is `scope="branch"` with the PR's target as
+`base`, not the default. Left at
 `working_tree` on a clean tree it gathers nothing and returns `review_status: not_run` — an
 `ok: true` result that reviewed nothing ([reading results](reading-results.md)).
 

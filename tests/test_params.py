@@ -211,3 +211,19 @@ def test_the_sync_only_parameters_have_contracts_and_short_inline_summaries():
     assert "job record keeps" in p.PARAMETER_CONTRACTS["detail"].full
     assert "10-600" in p.PARAMETER_CONTRACTS["timeout_seconds"].summary
     assert "raw_response" in p.PARAMETER_CONTRACTS["detail"].summary
+
+
+def test_the_base_descriptions_promise_no_default_the_code_does_not_resolve(tmp_path):
+    # #478: both descriptions said an omitted `base` meant "the upstream", while a branch
+    # diff refuses an omitted base and nothing resolves an upstream ref.
+    import subprocess
+
+    from amicus.orchestration import gitdiff
+
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    with pytest.raises(gitdiff.InvalidBaseError, match="omitted"):
+        gitdiff.gather_diff(str(tmp_path), "branch", base=None, timeout=30, max_bytes=1000)
+    for annotated in (p.BaseParam, p.ScopeParam):
+        [field] = [m for m in annotated.__metadata__ if hasattr(m, "description")]
+        assert "upstream" not in field.description, field.description
+        assert "required" in field.description, field.description

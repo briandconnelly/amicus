@@ -1668,7 +1668,7 @@
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-67",
+                "default": "amicus/0.1/schema-68",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -4706,7 +4706,7 @@
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-67",
+            "default": "amicus/0.1/schema-68",
             "title": "Fingerprint",
             "type": "string"
           },
@@ -5051,7 +5051,7 @@
                 "type": "null"
               }
             ],
-            "description": "Base ref for scope=branch; omit for the upstream. Control characters rejected."
+            "description": "Base ref, required for scope=branch. Control characters rejected."
           },
           "commit": {
             "anyOf": [
@@ -5847,7 +5847,7 @@
                 "type": "null"
               }
             ],
-            "description": "Base ref for scope=branch; omit for the upstream. Control characters rejected."
+            "description": "Base ref, required for scope=branch. Control characters rejected."
           },
           "commit": {
             "anyOf": [
@@ -10178,7 +10178,7 @@
                 "type": "null"
               }
             ],
-            "description": "Base ref for scope=branch; omit for the upstream. Control characters rejected."
+            "description": "Base ref, required for scope=branch. Control characters rejected."
           },
           "commit": {
             "anyOf": [
@@ -10291,7 +10291,7 @@
           },
           "scope": {
             "default": "working_tree",
-            "description": "working_tree (tracked changes vs HEAD), branch (vs `base`, default the upstream), or commit (one commit).",
+            "description": "working_tree (tracked changes vs HEAD), branch (vs `base`, required), or commit (one commit).",
             "enum": [
               "branch",
               "commit",
@@ -10966,7 +10966,7 @@
                 "type": "null"
               }
             ],
-            "description": "Base ref for scope=branch; omit for the upstream. Control characters rejected."
+            "description": "Base ref, required for scope=branch. Control characters rejected."
           },
           "commit": {
             "anyOf": [
@@ -11070,7 +11070,7 @@
           },
           "scope": {
             "default": "working_tree",
-            "description": "working_tree (tracked changes vs HEAD), branch (vs `base`, default the upstream), or commit (one commit).",
+            "description": "working_tree (tracked changes vs HEAD), branch (vs `base`, required), or commit (one commit).",
             "enum": [
               "branch",
               "commit",
@@ -11409,7 +11409,7 @@
                 "type": "null"
               }
             ],
-            "description": "Base ref for scope=branch; omit for the upstream. Control characters rejected."
+            "description": "Base ref, required for scope=branch. Control characters rejected."
           },
           "commit": {
             "anyOf": [
@@ -11500,7 +11500,7 @@
           },
           "scope": {
             "default": "working_tree",
-            "description": "working_tree (tracked changes vs HEAD), branch (vs `base`, default the upstream), or commit (one commit).",
+            "description": "working_tree (tracked changes vs HEAD), branch (vs `base`, required), or commit (one commit).",
             "enum": [
               "branch",
               "commit",

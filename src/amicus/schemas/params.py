@@ -466,8 +466,8 @@ ScopeParam = Annotated[
     ReviewScope,
     Field(
         description=(
-            "working_tree (tracked changes vs HEAD), branch (vs `base`, default the "
-            "upstream), or commit (one commit)."
+            "working_tree (tracked changes vs HEAD), branch (vs `base`, required), "
+            "or commit (one commit)."
         )
     ),
 ]
@@ -482,9 +482,7 @@ OptionalScopeParam = Annotated[
 BaseParam = Annotated[
     str | None,
     Field(
-        description=(
-            "Base ref for scope=branch; omit for the upstream. Control characters rejected."
-        ),
+        description=("Base ref, required for scope=branch. Control characters rejected."),
         pattern=CONTROL_CHAR_FREE_PATTERN,
         max_length=256,
     ),

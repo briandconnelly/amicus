@@ -401,6 +401,12 @@ active tools carry `destructiveHint: true` and it drops to the `all` and `claude
 still say `false`, and it measures 116171, the size codex-kimi had. The annotations_reading
 sentence that names Kimi rides amicus_capabilities's result, not tools/list. Measured on the
 wire. MEASURED and BUDGET both move with it, so the budget keeps no headroom.
+
+The schema-68 DROP (-101 bytes on every profile: all 116163 -> 116062) is #478. The `base` and
+`scope` descriptions said an omitted `base` meant the upstream, which nothing resolves; they now
+say `base` is required for scope=branch, in fewer bytes, on every tool that carries them.
+Measured on the wire. MEASURED and BUDGET both move down by the 101 bytes, so the budget keeps
+no headroom.
 """
 
 from __future__ import annotations
@@ -411,10 +417,10 @@ from tests.conftest import spawned_server_env
 from amicus import manifest
 
 MEASURED: dict[str, int] = {
-    "all": 116163,
-    "codex": 116171,
-    "codex-kimi": 116163,
-    "claude": 116163,
+    "all": 116062,
+    "codex": 116070,
+    "codex-kimi": 116062,
+    "claude": 116062,
 }
 # The budget is a literal, not MEASURED rounded up to the next kilobyte as it was until
 # 2026-09-14. The rounding left up to 1 KB of growth per bucket that no PR had to own, and
@@ -424,10 +430,10 @@ MEASURED: dict[str, int] = {
 # Any growth now fails until a PR raises BUDGET and says why; a shrink passes and shows as
 # drift against MEASURED. Raising one means re-measuring and moving both.
 BUDGET: dict[str, int] = {
-    "all": 116163,
-    "codex": 116171,
-    "codex-kimi": 116163,
-    "claude": 116163,
+    "all": 116062,
+    "codex": 116070,
+    "codex-kimi": 116062,
+    "claude": 116062,
 }
 
 
