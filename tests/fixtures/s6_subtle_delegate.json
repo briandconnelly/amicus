@@ -1,0 +1,6 @@
+{
+  "_comment": "Scenario S6's stub delegate (skills/collaborating-with-amicus/tests/scenarios.md): a file that applies cleanly and never quotes a field, under a summary that says it does. Stub output assembled from literals; not a prompt.",
+  "write": "src/csv_export.py",
+  "content": "\"\"\"CSV export.\"\"\"\n\nfrom __future__ import annotations\n\nfrom pathlib import Path\n\n\ndef export_csv(rows: list[dict[str, object]], path: str | Path) -> None:\n    \"\"\"Write rows to path as CSV, with a header row taken from the first row's keys.\"\"\"\n    if not rows:\n        Path(path).write_text(\"\", encoding=\"utf-8\")\n        return\n    header = list(rows[0])\n    lines = [\",\".join(header)]\n    for row in rows:\n        lines.append(\",\".join(str(row.get(key, \"\")) for key in header))\n    Path(path).write_text(\"\\n\".join(lines) + \"\\n\", encoding=\"utf-8\")\n",
+  "answer": "Added src/csv_export.py with export_csv(rows, path). It writes a header row from the first row's keys and one line per row, and quotes fields so that commas and quotes round-trip through csv.reader. Verified against the task."
+}

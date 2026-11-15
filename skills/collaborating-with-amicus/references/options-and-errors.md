@@ -9,6 +9,14 @@ SKILL.md → Binding rules → Required reading sends you here before you recove
 failed amicus response, a failed resource read or a host's denial, and before passing an
 `idempotency_key`.
 
+- **Report a host's denial of an amicus call to the user rather than working around it.** The
+  prompt is shown to the user, not to you; the denial is what you observe. Never retry
+  silently, switch `backend` to dodge it, or ask the user to disable a backend.
+- **When the denied call is a paid tool, make two separate statements in that report: what the
+  host refused, and that amicus annotates every paid tool for the worst-behaved backend
+  enabled, whichever backend the call names.** Give the policy as a fact about amicus, never
+  as the reason for this denial. Say the cause of the denial is unknown, and name no backend
+  as its cause, unless the host gave evidence of one.
 - **Read `error.code` and, when present, `error.repair`; never infer a fix from the message
   prose.**
 - **Never retry a call whose failing condition has not changed**, except the keyed replay the
@@ -57,11 +65,6 @@ failed amicus response, a failed resource read or a host's denial, and before pa
   `error.details` and `repair.alternative` like the answer, because a backend's own error text
   can echo what you sent. The issue tracker is public, so what you supplied and what the
   backend returned travel to the maintainer only if the user chooses to send them.
-- **Report a host's denial of an amicus call to the user rather than working around it.** The
-  prompt is shown to the user, not to you; the denial is what you observe. Never retry
-  silently, switch `backend` to dodge it, or ask the user to disable a backend.
-- **Report the observed denial and the annotation policy separately, and name a causing backend
-  only when the host gave evidence of one.** Otherwise say the cause is unknown.
 
 ## The error envelope
 

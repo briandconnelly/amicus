@@ -29,6 +29,7 @@ def app(tmp_path, fake_codex, monkeypatch):
         "FAKE_CODEX_STDERR",
         "FAKE_CODEX_ANSWER",
         "FAKE_CODEX_WRITE",
+        "FAKE_CODEX_WRITE_CONTENT",
         "FAKE_CODEX_EVENTS",
         "FAKE_CODEX_SLEEP",
     ):
@@ -161,6 +162,32 @@ async def test_review_and_delegate_async_run_in_the_background(
     _r, payload = store.result_payload(str(repo), dele["job_id"])
     assert rec["result_ok"] is True and "b.py" in (payload["diff"] or "")
     assert not (repo / "b.py").exists()
+
+
+async def test_a_stored_delegate_result_delivers_its_next_steps_at_summary_detail(
+    app, store, repo, monkeypatch
+):
+    """The server's guidance is what a host without the skill has (ADR 0050), so it must
+    reach a caller who fetches the job at the default detail."""
+    monkeypatch.setenv("FAKE_CODEX_WRITE", "b.py")
+    async with Client(app) as c:
+        started = (
+            await c.call_tool(
+                "amicus_delegate_async",
+                {"backend": "codex", "task": "add b", "workspace_root": str(repo)},
+            )
+        ).structured_content
+        await _wait_done(store, repo, started["job_id"])
+        fetched = (
+            await c.call_tool(
+                "amicus_job_result",
+                {"job_id": started["job_id"], "workspace_root": str(repo)},
+            )
+        ).structured_content
+    assert fetched["ok"] is True and fetched["tool"] == "amicus_delegate"
+    steps = fetched["next_steps"]
+    assert len(steps) == 3 and steps[0].startswith("amicus has not applied the returned diff")
+    assert "never report the task complete" in steps[2]
 
 
 async def test_async_pre_spend_refusals_never_spawn(app, tmp_path):

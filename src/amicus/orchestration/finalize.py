@@ -42,6 +42,22 @@ if TYPE_CHECKING:  # pragma: no cover
     from amicus.sdk.backend.protocol import ClassifiedFailure, ExecResult
     from amicus.sdk.core.runtime import CommandRun
 
+# What a delegate result tells a host that never loads the skill (ADR 0050). Each line claims
+# only what amicus knows: it applied nothing, which is not the same as the tree being
+# unchanged (a kimi or pi run can write outside the worktree), and `summary` is amicus's own
+# text when the backend's answer could not be read, so it is never called the backend's.
+_DELEGATE_NEXT_STEPS = (
+    "amicus has not applied the returned diff to your working tree; the diff is a proposal.",
+    "Check the diff against the task before applying it; `summary` is not independent "
+    "verification of the change.",
+    "Tell the user what the check found before applying it, and never report the task "
+    "complete on `summary` alone.",
+)
+_NO_DIFF_NEXT_STEPS = (
+    "No diff was returned, and amicus has applied nothing to your working tree.",
+    "Never report the task complete on `summary` alone.",
+)
+
 _PROSE_KEYS = ("summary", "questions", "assumptions", "next_steps")
 _LIST_KEYS = ("questions", "assumptions", "next_steps")
 _FINDING_PROSE_KEYS = ("title", "evidence", "suggestion")
@@ -612,7 +628,7 @@ def delegate_result(
             raw_response=RawResponse(
                 text=last_message, session_id=meta.session_id, model=meta.model
             ),
-            next_steps=["Review the returned diff; apply it to your tree only if correct."],
+            next_steps=list(_DELEGATE_NEXT_STEPS if bounded else _NO_DIFF_NEXT_STEPS),
             meta=meta,
         )
     )
