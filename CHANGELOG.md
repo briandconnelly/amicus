@@ -37,6 +37,14 @@ per-change, as its own lead says.
   stakes test applies only where the task declares one (#481).
 - The skill's blind-comparison rules now say that a candidate whose model is unknown leaves
   model-family diversity `unverified`: the harness that produced it does not establish a family.
+- A delegate result's `next_steps` now carry three lines where there was one: amicus has not
+  applied the returned diff, which is a proposal; check it against the task before applying
+  it; and tell the user what the check found first, never reporting the task complete on
+  `summary` alone. A result with no diff says so and keeps the last of those. The lines no
+  longer imply the working tree is unchanged, which amicus cannot know (ADR 0050).
+- The skill's diff-review rules let a diff with a `reject` or `cannot-assess` verdict be
+  applied when the user directs it after seeing that verdict. Applying before the review, and
+  reporting the task complete, stay forbidden (ADR 0050).
 
 ### Removed
 

@@ -208,6 +208,32 @@ def test_review_folds_coverage():
     assert defaults["findings_diagnostics"]["reasons"] == ["missing_findings"]
 
 
+def test_delegate_next_steps_say_what_amicus_knows_and_what_the_host_owes():
+    """The wording is written out here, not read from the constant: a host that never loads
+    the skill has only these lines to go on (ADR 0050), and they claim only what amicus
+    knows. It applied nothing; it cannot know the tree is unchanged."""
+    diff = "diff --git a/f.md b/f.md\n+x\n"
+    out = fz.delegate_result(
+        ExecResult(answer="done"), Meta(), diff=diff, aliases=(), max_diff_bytes=10_000
+    )
+    assert out["next_steps"] == [
+        "amicus has not applied the returned diff to your working tree; the diff is a proposal.",
+        "Check the diff against the task before applying it; `summary` is not independent "
+        "verification of the change.",
+        "Tell the user what the check found before applying it, and never report the task "
+        "complete on `summary` alone.",
+    ]
+    none = fz.delegate_result(
+        ExecResult(answer="done"), Meta(), diff="", aliases=(), max_diff_bytes=10_000
+    )
+    assert none["diff"] is None
+    assert none["next_steps"] == [
+        "No diff was returned, and amicus has applied nothing to your working tree.",
+        "Never report the task complete on `summary` alone.",
+    ]
+    assert not any("unchanged" in step for step in out["next_steps"] + none["next_steps"])
+
+
 def test_delegate_relativizes_redacts_and_bounds(tmp_path):
     wt = str(tmp_path / "amicus-wt-x" / "tree")
     aliases = pathalias.path_aliases(wt)

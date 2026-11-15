@@ -1,6 +1,6 @@
 # Delegate next step: design
 
-Status: proposed, awaiting the maintainer's approval.
+Status: approved by the maintainer on 2026-11-14 and built; ADR 0050 records the decision.
 Revised once after a Codex review, whose six findings were each checked against the source and held.
 Size: a small change.
 
