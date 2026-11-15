@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import builtins
 import dataclasses
+import errno
 import json
 import logging
 import sys
@@ -150,6 +151,57 @@ async def test_spawn_failure_is_an_internal_error_with_no_record(tmp_path, monke
     )
     assert marker not in json.dumps(out)
     assert store.list_jobs(str(tmp_path)) == []
+
+
+async def _spawn_fails_with(tmp_path, monkeypatch, exc):
+    store = lifecycle.job_store(_settings(tmp_path))
+
+    def fail_start(*args, **kwargs):
+        raise exc
+
+    monkeypatch.setattr(store, "start", fail_start)
+    spec = _spec(str(tmp_path))
+    return await lifecycle.run_sync(
+        store,
+        spec,
+        meta_for(spec),
+        fakeplugin.make_plugin(),
+        timeout=10,
+        detail="summary",
+        ctx=None,
+    )
+
+
+async def test_spawn_failure_with_a_vanished_interpreter_says_restart(tmp_path, monkeypatch):
+    """#501: ENOENT with the server's own interpreter gone is not a state-dir problem and
+    a retry cannot fix it."""
+    monkeypatch.setattr(lifecycle.sys, "executable", str(tmp_path / "gone" / "python"))
+    out = await _spawn_fails_with(
+        tmp_path, monkeypatch, FileNotFoundError(errno.ENOENT, "No such file", "x")
+    )
+    err = out["error"]
+    assert err["code"] == "internal_error" and err["temporary"] is False
+    assert "interpreter no longer exists" in err["message"]
+    assert "Restart the MCP server" in err["repair"]["alternative"]
+    assert "AMICUS_STATE_DIR" not in err["repair"]["alternative"]
+
+
+async def test_spawn_failure_with_the_interpreter_present_names_errno(tmp_path, monkeypatch):
+    out = await _spawn_fails_with(
+        tmp_path, monkeypatch, FileNotFoundError(errno.ENOENT, "No such file", "x")
+    )
+    err = out["error"]
+    assert err["message"] == "failed to start background job: FileNotFoundError (ENOENT)"
+    assert "AMICUS_STATE_DIR" not in err["repair"]["alternative"]
+
+
+async def test_spawn_permission_failure_points_at_the_state_dir(tmp_path, monkeypatch):
+    out = await _spawn_fails_with(
+        tmp_path, monkeypatch, PermissionError(errno.EACCES, "denied", "x")
+    )
+    err = out["error"]
+    assert err["message"] == "failed to start background job: PermissionError (EACCES)"
+    assert "AMICUS_STATE_DIR" in err["repair"]["alternative"]
 
 
 async def test_orphaned_start_cleanup_cancels_the_spawned_job(tmp_path, monkeypatch):
