@@ -220,6 +220,7 @@ async def test_backend_options_are_validated_before_availability():
     err = res.structured_content["error"]
     assert err["code"] == "invalid_arguments"
     assert err["details"]["field"] == "backend_options.config_mode"
+    assert err["details"]["reason"].endswith("; remove it")
     assert err["repair"]["tool"] == "amicus_consult"
     err = bad_value.structured_content["error"]
     assert err["details"]["allowed_values"] == ["inherit", "ignore-skills"]
@@ -276,6 +277,19 @@ async def test_unknown_backend_is_a_boundary_invalid_arguments():
     assert err["code"] == "invalid_arguments"
     assert err["details"]["field"] == "backend"
     assert err["details"]["allowed_values"] == ["codex", "kimi", "claude", "pi"]
+    # #503: agents name a model's vendor as the backend; point them at pi.
+    assert 'amicus_models(backend="pi")' in err["repair"]["alternative"]
+
+
+async def test_unknown_backend_without_pi_gets_no_pi_hint():
+    async with Client(_app()) as c:
+        res = await c.call_tool(
+            "amicus_adversarial_review", {"backend": "gemini", "target": "t"}, raise_on_error=False
+        )
+    err = res.structured_content["error"]
+    assert err["code"] == "invalid_arguments"
+    assert "pi" not in (err["details"]["allowed_values"] or [])
+    assert "amicus_models" not in err["repair"]["alternative"]
 
 
 @pytest.mark.parametrize(

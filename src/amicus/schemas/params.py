@@ -467,7 +467,7 @@ ScopeParam = Annotated[
     Field(
         description=(
             "working_tree (tracked changes vs HEAD), branch (vs `base`, required), "
-            "or commit (one commit)."
+            "or commit (the `commit` ref, required)."
         )
     ),
 ]
@@ -475,7 +475,8 @@ OptionalScopeParam = Annotated[
     ReviewScope | None,
     Field(
         description=(
-            "Optionally attach a git diff to the critique: working_tree | branch | commit."
+            "Optionally attach a git diff to the critique: working_tree | branch (requires "
+            "`base`) | commit (requires `commit`)."
         )
     ),
 ]
@@ -490,7 +491,7 @@ BaseParam = Annotated[
 CommitParam = Annotated[
     str | None,
     Field(
-        description="Commit ref for scope=commit. Control characters rejected.",
+        description="Commit ref, required for scope=commit. Control characters rejected.",
         pattern=CONTROL_CHAR_FREE_PATTERN,
         max_length=256,
     ),
@@ -531,8 +532,9 @@ WaitSecondsParam = Annotated[
     int,
     Field(
         description=(
-            "Hold the call up to this many seconds while the job runs, returning as soon as "
-            "it is terminal; 0 returns at once. Wait here, never on amicus's job store."
+            f"Hold the call up to this many seconds (0-{MAX_STATUS_WAIT_SECONDS}) while the job "
+            "runs, returning as soon as it is terminal; 0 returns at once. Wait here, never on "
+            "amicus's job store."
         ),
         ge=0,
         le=MAX_STATUS_WAIT_SECONDS,
