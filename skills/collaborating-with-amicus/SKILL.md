@@ -172,9 +172,11 @@ read in this session need not be read again.
   `amicus_job_result`.
 - **Read [options and errors](references/options-and-errors.md) → Rules before recovering from
   or reporting any amicus response with `ok: false`, any response that looks malformed or
-  contradicts its own schema whatever its `ok`, any failed read of an `amicus://` resource, or
-  a host's denial of an amicus call**, free tools included, and before passing an
-  `idempotency_key`.
+  contradicts its own schema whatever its `ok`, or any failed read of an `amicus://`
+  resource**, free tools included, and before passing an `idempotency_key`.
+- **When a host denies an amicus call, free tools included, read
+  [options and errors](references/options-and-errors.md) → Rules before replying to the user.**
+  A denial is not an amicus response, so no result sends you there.
 - **Read [sync vs async](references/sync-vs-async.md) → Rules before the first `_async` call,
   keyed sync call or job-lifecycle call.**
 - **Read [choosing a backend](references/choosing-a-backend.md) → Rules before a paid call

@@ -46,6 +46,16 @@ per-change, as its own lead says.
   applied when the user directs it after seeing that verdict. Applying before the review, and
   reporting the task complete, stay forbidden (ADR 0050).
 
+- The skill's two rules for a host's denial of an amicus call lead the `Rules` block of
+  `options-and-errors.md`, and the body sends an agent there with a Required reading rule of
+  its own. The second rule asks for the annotation policy as a fact about amicus, never as the
+  reason for the denial. On the earlier text, two host runs in three reported a refusal
+  without the policy (#479).
+- Scenario S6 runs against a delegate diff that applies cleanly and breaks one stated
+  requirement, where the stub could only write a placeholder line, and covers the reply after
+  a rejected diff is applied at the user's direction. Scenario S7 has a passing run.
+  `tests/support/fake_codex.py` takes `FAKE_CODEX_WRITE_CONTENT` (#479).
+
 ### Removed
 
 - The Claude Code slash commands (`/amicus:consult`, `/amicus:review`, `/amicus:delegate`,
