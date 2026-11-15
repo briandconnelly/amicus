@@ -29,6 +29,10 @@ per-change, as its own lead says.
 
 ### Fixed
 
+- **Surface**: `amicus/0.1/schema-68`. The `base` and `scope` parameter descriptions say `base`
+  is required for `scope="branch"`. They had said an omitted `base` meant the upstream, which
+  nothing resolves: the call was, and is, refused as `invalid_base`. The skill's scope table
+  says the same (#478).
 - The skill's routing rules no longer require naming a model no surface reports, and say the
   kind of work requested is an input to resolving the harness (#480).
 - The skill reads `claude`'s `status.authenticated` as speaking for the default `config_mode`
