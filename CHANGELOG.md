@@ -48,6 +48,19 @@ per-change, as its own lead says.
   terms from the provider's catalog rather than from memory, and read the token limits as a
   screen with headroom — and a section on what the listing does and does not establish. Its
   rule against paying to break a tie now names models on one backend as well as backends.
+- **Surface**: `amicus/0.1/schema-73`. `backend_options.max_budget_usd` now applies to `pi`
+  as well as `claude`. pi has no budget flag, so amicus enforces the cap itself from pi's event
+  stream: it stops pi before another model call once the provider-reported spend reaches the
+  cap, so a run can exceed it by one call, as with claude, or by one whole compaction, whose
+  summary calls pi reports only once they are done. It fails closed: a run that would
+  continue after a call whose cost the provider did not report (`totalFromProvider` not true)
+  is stopped too. Either stop is `budget_exceeded`, with the spend so far on `meta.usage` when
+  the provider reported it, and a stopped delegate carries its worktree diff as `partial`. A
+  compaction pi starts after its final answer is stopped over the cap too, but the answer
+  stands and the call succeeds. pi has no default cap; `AMICUS_PI_MAX_BUDGET_USD` sets one
+  (#454).
+- **Fixed**: pi's `meta.usage` now counts the model calls its context compactions make, and
+  reports `cost_usd` as unknown when a compaction's cost was not provider-reported.
 
 ### Changed
 

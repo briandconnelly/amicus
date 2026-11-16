@@ -19,7 +19,7 @@ OPTION_ALLOWED_VALUES: dict[str, dict[str, tuple[str, ...] | None]] = {
     },
     "config_mode": {"claude": ("inherit", "scoped", "safe", "bare")},
     "access": {"claude": ("toolless", "readonly")},
-    "max_budget_usd": {"claude": None},
+    "max_budget_usd": {"claude": None, "pi": None},
 }
 
 
@@ -46,9 +46,9 @@ class BackendOptions(BaseModel):
         ge=MAX_BUDGET_BOUNDS[0],
         le=MAX_BUDGET_BOUNDS[1],
         description=(
-            "claude only: per-call stop threshold in USD, 0.01–5.00, checked only between "  # noqa: RUF001
-            "model calls, so the estimated cost can exceed it. Omit for the server default "
-            "(AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
+            "claude, pi: per-call USD stop threshold, 0.01–5.00, checked between model "  # noqa: RUF001
+            "calls, so cost can exceed it. Omit for the AMICUS_<BACKEND>_MAX_BUDGET_USD "
+            "default (claude 1.00, pi none)."
         ),
     )
 

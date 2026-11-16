@@ -11,7 +11,7 @@ import json
 import re
 from typing import TYPE_CHECKING, Literal
 
-from amicus.backends.pi import contract
+from amicus.backends.pi import budget, contract
 from amicus.sdk.backend.protocol import ClassifiedFailure, RepairHint
 from amicus.sdk.core import redaction, runtime
 
@@ -122,6 +122,37 @@ def version_display(version: str | None) -> str | None:
 
 
 # --- classification --------------------------------------------------------------------------
+
+
+BUDGET_REPAIR = (
+    "Before making another call, raise backend_options.max_budget_usd (up to 5.00), narrow the "
+    "request, or, when the stop says the cost was unverifiable, choose a model whose provider "
+    "reports its cost (OpenRouter does) or run uncapped: omit max_budget_usd when "
+    "AMICUS_PI_MAX_BUDGET_USD is unset, since that default applies otherwise. amicus checks "
+    "the cap only between pi's model calls, so a run can exceed it by one call or one "
+    "compaction, and any retry spends again."
+)
+BUDGET_DETAIL = (
+    "amicus stopped pi at the max-budget threshold before another model call. It checks the "
+    "threshold only between model calls, so the cost can exceed it by one call or one "
+    "compaction: a stop threshold, not a ceiling."
+)
+UNVERIFIABLE_DETAIL = (
+    "amicus stopped pi before another model call because a call's cost was not reported by "
+    "the provider (or its event was lost), so spend could not be checked against "
+    "max_budget_usd. A cap fails closed: it never lets a run continue on spend it cannot measure."
+)
+
+
+def budget_failure(reason: str | None, cap_usd: float | None) -> ClassifiedFailure:
+    """The `budget_exceeded` failure for a run the spend probe stopped (#454). The spend so
+    far rides the envelope's `meta.usage`, from the stream, when the provider reported it."""
+    detail = UNVERIFIABLE_DETAIL if reason == budget.UNVERIFIABLE else BUDGET_DETAIL
+    if cap_usd is not None:
+        detail += f" The cap was {cap_usd:.2f} USD."
+    return ClassifiedFailure(
+        code="budget_exceeded", detail=detail, details={"field": "backend_options.max_budget_usd"}
+    )
 
 
 def classify_failure(

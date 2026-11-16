@@ -30,7 +30,8 @@ def test_registry_loads_the_in_tree_pi_plugin(fake_pi, monkeypatch):
     assert plugin.effects == in_tree.KNOWN_EFFECTS["pi"]
     assert plugin.effects.paid_calls_destructive is True
     assert plugin.contract.display_name == in_tree.KNOWN_DISPLAY_NAMES["pi"]
-    assert plugin.env.prefix == contract.CONTRACT.env_prefix and plugin.local_codes == {}
+    assert plugin.env.prefix == contract.CONTRACT.env_prefix
+    assert set(plugin.local_codes) == {"budget_exceeded"}
 
 
 def test_plugin_passes_the_conformance_kit(fake_pi):
@@ -62,7 +63,8 @@ def test_options_carry_the_configured_defaults():
         }
     )
     by_name = {o.name: o for o in plugin.options}
-    assert set(by_name) == {"model", "reasoning_effort"}
+    assert set(by_name) == {"max_budget_usd", "model", "reasoning_effort"}
+    assert by_name["max_budget_usd"].default is None
     assert by_name["model"].default == MODEL and by_name["reasoning_effort"].default == "high"
 
 

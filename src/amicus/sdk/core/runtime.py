@@ -37,6 +37,8 @@ _STDERR_RESERVE = 1 * 1024 * 1024
 # queue entries to pile up; this cap ensures at most 8 MiB waits in the queue at
 # any time, complementing the existing count limit (maxsize=10_000).
 _OBSERVER_QUEUE_BYTES = 8 * 1024 * 1024
+# How often a run with a stop probe checks whether the probe asked to stop.
+_STOP_POLL_SECONDS = 0.1
 
 # Generic module: log via the stdlib only (no parent imports). Records propagate
 # to the consuming bridge's logging config, whose handlers must go to stderr —
@@ -73,6 +75,10 @@ class CommandRun:
     # in the capture's own `truncated`.
     stdout_truncated: bool = field(default=False)
     stdout_capture_failed: bool = field(default=False)
+    # The reason a `stop_on_line` probe returned when it stopped the run, else None. A
+    # stopped run's process tree was killed like a timed-out one's, but `timed_out` stays
+    # False: the stop is the backend's own decision, not the deadline.
+    stop_reason: str | None = field(default=None)
 
     @property
     def binary_missing(self) -> bool:
@@ -272,6 +278,7 @@ class _Drained(NamedTuple):
     capture_failed: bool
     stdout_truncated: bool
     stdout_capture_failed: bool
+    stop_reason: str | None = None
 
 
 def _wait_streaming(  # noqa: PLR0915
@@ -281,6 +288,7 @@ def _wait_streaming(  # noqa: PLR0915
     timeout_seconds: int,
     max_output_bytes: int,
     orphan_marker: str | None = None,
+    stop_on_line: Callable[[str], str | None] | None = None,
 ) -> _Drained:
     """Drain stdout/stderr concurrently under independent byte caps, optionally
     calling ``on_stdout_line`` per stdout line. Returns a ``_Drained``: the two
@@ -295,7 +303,14 @@ def _wait_streaming(  # noqa: PLR0915
     whole process group is killed via ``_kill_group``, which closes any pipes
     held by descendants so the pumps reach EOF and the joins complete. The
     observer queue is bounded and drops under flood (it needs counts/timestamps
-    only)."""
+    only).
+
+    ``stop_on_line``, when given, is called on the stdout pump thread for EVERY captured
+    line, in order and as soon as its newline arrives (stdout is then read with
+    ``iter_bounded_lines_live``), so it must be cheap and must not block. The first non-None
+    reason it returns stops the run: the process group is killed and swept as on a
+    timeout, and the reason is returned as ``stop_reason``. A probe that raises is logged
+    and never consulted again. Without it, every path is unchanged."""
     stdout_cap = max_output_bytes
     stderr_cap = _STDERR_RESERVE
     out = streamcap.BoundedCapture(stdout_cap)
@@ -317,14 +332,38 @@ def _wait_streaming(  # noqa: PLR0915
     capture_failures: list[BaseException] = []
     stdout_failed = threading.Event()
     stdout_line_cut = threading.Event()
+    stop_requested = threading.Event()
+    stop_reasons: list[str] = []
+    probe: list[Callable[[str], str | None]] = [stop_on_line] if stop_on_line else []
+
+    def _probe(line: str) -> None:
+        if not probe or stop_requested.is_set():
+            return
+        try:
+            reason = probe[0](line)
+        except Exception:
+            # The probe reads stdout, which can echo a prompt input (AGENTS.md rule 18), so
+            # nothing of the exception is logged: not its message, type or traceback.
+            logger.error("stop_on_line probe failed; it is no longer consulted")
+            probe.clear()
+            return
+        if reason is not None:
+            stop_reasons.append(reason)
+            stop_requested.set()
+
+    def _stdout_lines(stream: TextIO):
+        if stop_on_line is not None:
+            return streamcap.iter_bounded_lines_live(stream, stdout_cap)
+        return streamcap.iter_bounded_lines(stream, stdout_cap)
 
     def _pump_stdout() -> None:
         try:
             if proc.stdout is not None:
-                for line in streamcap.iter_bounded_lines(cast("TextIO", proc.stdout), stdout_cap):
+                for line in _stdout_lines(cast("TextIO", proc.stdout)):
                     if streamcap.is_loss_marker(line):
                         stdout_line_cut.set()
                     out.add(line)
+                    _probe(line)
                     if observe:
                         # F2: byte-bound the queue; drop silently under flood, never
                         # stall draining. Also keep the count guard (queue.Full).
@@ -395,9 +434,28 @@ def _wait_streaming(  # noqa: PLR0915
     if observer is not None:
         observer.start()
     deadline = time.monotonic() + timeout_seconds
-    # 1. Wait for the DIRECT child, bounded by the timeout.
-    with contextlib.suppress(subprocess.TimeoutExpired):
-        proc.wait(timeout=timeout_seconds)
+    # 1. Wait for the DIRECT child, bounded by the timeout. With a stop probe, wait in short
+    #    slices so a requested stop is acted on promptly rather than at the deadline.
+    if stop_on_line is None:
+        with contextlib.suppress(subprocess.TimeoutExpired):
+            proc.wait(timeout=timeout_seconds)
+    else:
+        # Wait on the stop event, which wakes the moment the probe asks, and check the child
+        # between waits: a stop must reach pi before its next call, not up to a slice later.
+        while proc.poll() is None:
+            left = deadline - time.monotonic()
+            if left <= 0 or stop_requested.wait(timeout=min(_STOP_POLL_SECONDS, left)):
+                break
+    stopped = stop_requested.is_set() and proc.poll() is None
+    if stopped:
+        logger.warning("subprocess pid=%s stopped by its probe; killing process group", proc.pid)
+        _kill_group(proc)
+        if orphan_marker:
+            reclaimed = sweep_orphans(orphan_marker)
+            if reclaimed:
+                logger.warning("reclaimed %d orphaned process(es) after a stop", len(reclaimed))
+        with contextlib.suppress(subprocess.TimeoutExpired):
+            proc.wait(timeout=5)
     # 2. Join only the subprocess-bound pump threads within the remaining budget.
     #    A descendant that inherited a pipe can keep a pump blocked past the child's
     #    own exit, and a child can close its fds yet keep running — both gaps are
@@ -409,7 +467,7 @@ def _wait_streaming(  # noqa: PLR0915
     #    exceeded: kill the whole process group and reap.  This runs on the MAIN thread
     #    and proc is still unreaped, so proc.pid is a valid pgid and there is no
     #    killpg-after-reap race.
-    timed_out = proc.poll() is None or any(t.is_alive() for t in pumps)
+    timed_out = not stopped and (proc.poll() is None or any(t.is_alive() for t in pumps))
     if timed_out:
         logger.warning(
             "subprocess pid=%s exceeded %ss; killing process group", proc.pid, timeout_seconds
@@ -454,6 +512,7 @@ def _wait_streaming(  # noqa: PLR0915
         capture_failed=bool(capture_failures),
         stdout_truncated=stdout_truncated,
         stdout_capture_failed=stdout_failed.is_set(),
+        stop_reason=stop_reasons[0] if stopped else None,
     )
 
 
@@ -467,6 +526,7 @@ async def run_async(
     on_stdout_line: Callable[[str], None] | None = None,
     max_output_bytes: int = DEFAULT_MAX_OUTPUT_BYTES,
     orphan_marker: str | None = None,
+    stop_on_line: Callable[[str], str | None] | None = None,
 ) -> CommandRun:
     """Run `cmd` as a subprocess, returning a CommandRun. Never raises for process
     failures; a missing binary or timeout is reported via the CommandRun fields.
@@ -509,6 +569,7 @@ async def run_async(
             timeout_seconds,
             max_output_bytes,
             orphan_marker=orphan_marker,
+            stop_on_line=stop_on_line,
         )
 
     try:
@@ -551,6 +612,7 @@ async def run_async(
         "capture_failed": drained.capture_failed,
         "stdout_truncated": drained.stdout_truncated,
         "stdout_capture_failed": drained.stdout_capture_failed,
+        "stop_reason": drained.stop_reason,
     }
     if drained.timed_out:
         return CommandRun(drained.stdout, TIMED_OUT, -9, elapsed, True, **losses)

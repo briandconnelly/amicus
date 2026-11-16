@@ -393,11 +393,12 @@ def backend_timeout(spec: RunSpec, now: float | None = None) -> int:
 
 
 def _with_partial(
-    envelope: dict[str, Any], spec: RunSpec, site: Any, *, timed_out: bool
+    envelope: dict[str, Any], spec: RunSpec, site: Any, *, stopped: bool
 ) -> dict[str, Any]:
-    """A timed-out delegate's failure, with the worktree's diff attached as `partial` when it
-    can be captured. A capture failure never replaces the timeout it would accompany (#508)."""
-    if spec.kind != "delegate" or not timed_out:
+    """A delegate's failure after amicus stopped its backend (a timeout, #508, or a spend
+    stop, #454), with the worktree's diff attached as `partial` when it can be captured. A
+    capture failure never replaces the failure it would accompany."""
+    if spec.kind != "delegate" or not stopped:
         return envelope
     try:
         diff = site.capture_diff()
@@ -461,6 +462,7 @@ async def run_request(
                     on_stdout_line=on_event,
                     max_output_bytes=spec.max_output_bytes,
                     orphan_marker=prepared.orphan_marker,
+                    stop_on_line=prepared.stop_on_line,
                 )
                 # Inside the context on purpose: staging is torn down on exit.
                 artifact_texts, refused = _read_artifacts(prepared)
@@ -482,7 +484,13 @@ async def run_request(
             refs = finalize.artifact_refs(prepared.artifacts, prepared.staging_dir)
             finalize.apply_exec(meta, result)
             failure = inspect_outcome(plugin.backend, outcome, request)
-            if failure is None and (run.exit_code != 0 or run.binary_missing or run.timed_out):
+            # A stop the backend's probe asked for is the backend's to judge: its inspector
+            # has already said whether the run failed (#454: post-answer work cut off).
+            if failure is None and (
+                run.timed_out
+                or run.binary_missing
+                or (run.exit_code != 0 and run.stop_reason is None)
+            ):
                 failure = plugin.backend.classify_failure(outcome, request)
             # An answer file amicus refused is not the backend saying nothing (#162). Every
             # failure is the more accurate account and wins, with one exception: a clean
@@ -512,7 +520,7 @@ async def run_request(
                     ),
                     spec,
                     site,
-                    timed_out=run.timed_out,
+                    stopped=run.timed_out or run.stop_reason is not None,
                 )
             diff = site.capture_diff() if spec.kind == "delegate" else None
             aliases = site.aliases

@@ -123,6 +123,7 @@ def scripted_run_async(
         on_stdout_line=None,
         max_output_bytes=0,
         orphan_marker=None,
+        stop_on_line=None,
     ):
         if calls is not None:
             calls.append(

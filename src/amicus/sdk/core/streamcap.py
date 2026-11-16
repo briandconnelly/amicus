@@ -97,6 +97,18 @@ def _drain_chunks(stream: TextIO, chunk_size: int) -> Iterator[str]:
         yield chunk
 
 
+def _live_text_chunks(stream: TextIO, chunk_size: int) -> Iterator[str]:
+    """Chunk source for a live text stream: ``TextIOWrapper.readline(n)`` returns at a
+    newline, at ``n`` characters or at EOF, whichever comes first, because the wrapper
+    refills from its buffer's ``read1``. So a line surfaces on its newline while the
+    producer is still running, and no chunk exceeds ``chunk_size`` characters."""
+    while True:
+        chunk = stream.readline(chunk_size)
+        if not chunk:
+            return
+        yield chunk
+
+
 def _available_chunks(stream: io.BufferedIOBase, chunk_size: int, encoding: str) -> Iterator[str]:
     """Chunk source for a live stream, yielding whatever bytes have arrived.
 
@@ -194,6 +206,17 @@ def iter_bounded_lines(
     Correct callers run a subprocess to completion and read what it wrote."""
     _validate_sep(sep)
     return _assemble_bounded_lines(_drain_chunks(stream, chunk_size), max_line_bytes, sep)
+
+
+def iter_bounded_lines_live(
+    stream: TextIO, max_line_bytes: int, chunk_size: int = 65536
+) -> Iterator[str]:
+    """Yield complete ``\\n`` records from a text ``stream`` whose producer is still
+    running, each as soon as its newline arrives, capping any single record at
+    ``max_line_bytes``. For a drained pipe whose reader must act on a line before the
+    producer exits (a spend stop); the result is the same records ``iter_bounded_lines``
+    would yield, only sooner."""
+    return _assemble_bounded_lines(_live_text_chunks(stream, chunk_size), max_line_bytes, "\n")
 
 
 def iter_bounded_lines_interactive(

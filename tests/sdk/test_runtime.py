@@ -1075,3 +1075,87 @@ async def test_a_dead_pump_is_attributed_to_its_stream(tmp_path, monkeypatch, de
     )
     assert run.capture_failed
     assert run.stdout_capture_failed is (dead == "stdout")
+
+
+# --- stop_on_line (#454) ----------------------------------------------------------------
+
+
+async def test_stop_on_line_stops_a_running_child_promptly(tmp_path):
+    code = "import sys, time\nprint('go', flush=True)\ntime.sleep(30)\nprint('late')\n"
+    run = await runtime.run_async(
+        _py(code),
+        cwd=str(tmp_path),
+        timeout_seconds=20,
+        stop_on_line=lambda line: "halt" if line.startswith("go") else None,
+    )
+    assert run.stop_reason == "halt"
+    assert run.timed_out is False and run.exit_code != 0
+    assert run.elapsed_ms < 10_000 and "late" not in run.stdout
+
+
+async def test_stop_on_line_sees_every_line_in_order(tmp_path):
+    seen: list[str] = []
+
+    def probe(line: str) -> None:
+        seen.append(line.strip())
+
+    code = "for i in range(50):\n    print(f'l{i}')\n"
+    run = await runtime.run_async(
+        _py(code), cwd=str(tmp_path), timeout_seconds=20, stop_on_line=probe
+    )
+    assert run.exit_code == 0 and run.stop_reason is None
+    assert seen == [f"l{i}" for i in range(50)]
+    assert run.stdout.splitlines() == seen
+
+
+async def test_a_stop_asked_for_after_the_child_exited_is_not_a_stop(tmp_path):
+    run = await runtime.run_async(
+        _py("print('done')"), cwd=str(tmp_path), timeout_seconds=20, stop_on_line=lambda _: "x"
+    )
+    # The child may exit before the main thread notices; either way nothing was cut short.
+    assert run.timed_out is False
+    assert run.stdout.strip() == "done"
+    assert run.stop_reason in (None, "x")
+
+
+async def test_a_raising_probe_is_dropped_and_the_run_completes(tmp_path, caplog):
+    calls: list[str] = []
+
+    def bad(line: str) -> str | None:
+        calls.append(line)
+        raise RuntimeError(f"echo of {line!r}")
+
+    code = "print('a'); print('b')"
+    run = await runtime.run_async(
+        _py(code), cwd=str(tmp_path), timeout_seconds=20, stop_on_line=bad
+    )
+    assert run.exit_code == 0 and run.stop_reason is None and run.stdout == "a\nb\n"
+    assert len(calls) == 1
+    # The line can echo a prompt input (rule 18): nothing of the exception is logged.
+    assert any("probe failed" in r.getMessage() for r in caplog.records)
+    assert all("echo of" not in r.getMessage() and r.exc_info is None for r in caplog.records)
+
+
+async def test_stop_on_line_does_not_change_the_timeout_path(tmp_path):
+    run = await runtime.run_async(
+        _py("import time; time.sleep(30)"),
+        cwd=str(tmp_path),
+        timeout_seconds=1,
+        stop_on_line=lambda _: None,
+    )
+    assert run.timed_out is True and run.stop_reason is None
+    assert run.stderr == runtime.TIMED_OUT
+
+
+def test_live_reader_surfaces_a_line_before_eof():
+    r, w = os.pipe()
+    reader = os.fdopen(r, "r", encoding="utf-8")
+    writer = os.fdopen(w, "w", encoding="utf-8")
+    writer.write("first\n")
+    writer.flush()
+    lines = streamcap.iter_bounded_lines_live(reader, 1024)
+    assert next(lines) == "first\n"  # would block forever on the drain reader
+    writer.write("second")
+    writer.close()
+    assert list(lines) == ["second"]
+    reader.close()
