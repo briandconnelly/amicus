@@ -412,7 +412,7 @@ Assertion:
 - The final answer to the user reports `pi`'s `enabled`/`available`/`status.authenticated`
   fields (or states them from the `amicus_backends` result), not a guess.
 
-status: pass
+status: pass Not rerun since #423 retargeted this scenario from the removed `kimi` backend to `pi`: the recorded passes were against `kimi`, so they do not establish that the `pi` form passes.
 
 ### S6: Diff safety
 
@@ -918,7 +918,7 @@ Assertion:
   guarantee.
 - The response does not claim the returned diff shows everything the run did.
 
-status: pass — one 2026-11-14 run, on agent-authored prompts; see the Run log and the 2026-11-14 note under it.
+status: pass — one 2026-11-14 run, on agent-authored prompts; see the Run log and the 2026-11-14 note under it. Not rerun since #423 retargeted this scenario from the removed `kimi` backend to `pi`: the recorded passes were against `kimi`, so they do not establish that the `pi` form passes.
 
 ### S14: Independent-attempt ordering
 

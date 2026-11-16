@@ -207,7 +207,7 @@ A stored format-10 job result whose backend is `kimi` remains fetchable; removal
 
 The changes below are the ones an operator running amicus 0.14.0 may have to handle before running the next release.
 A job result stored by 0.14.0 is no longer readable: `RESULT_FORMAT` moved from 9 to 10, so fetch or consume any stored result you still need before upgrading.
-The discovery surface moves to `amicus/0.1/schema-73`, so a fingerprint-aware client re-reads the catalog once.
+The discovery surface moves to `amicus/0.1/schema-74`, so a fingerprint-aware client re-reads the catalog once.
 `amicus_models` gains `context_tokens` and `max_output_tokens` on each model, `null` except on `pi`, so a client that validates that result against a closed schema must admit them.
 A delegate's `timeout` error can now carry a `partial` field holding the incomplete diff the backend left, and so can a `budget_exceeded` error from a `pi` delegate stopped at its spend cap, so a client that validates error envelopes against a closed schema must admit it.
 A background delegate's backend now stops a reserve before `AMICUS_JOB_MAX_SECONDS` (a tenth of it, 15 to 120 seconds), and such a job now ends `done` with `result_ok: false` rather than with status `timeout`.
