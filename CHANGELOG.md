@@ -33,6 +33,21 @@ per-change, as its own lead says.
   description now say to narrow the task, keep slow verification such as a full test suite out
   of it, or raise `AMICUS_JOB_MAX_SECONDS`. A job result an earlier release stored is refused
   as `job_result_incompatible` (#508).
+- **Surface**: `amicus/0.1/schema-71`. `amicus_models` and `amicus://models/{backend}` carry
+  two new fields on each model, `context_tokens` and `max_output_tokens`: the context window and
+  output limit the backend advertises, or `null` where it advertises none. Only `pi` fills them
+  today, from the `context` and `max-out` columns of `pi --list-models`, which amicus used to
+  discard, so choosing among pi's several hundred models meant consulting the provider's catalog
+  just to learn whether a prompt would fit. pi prints those columns rounded to one decimal of a
+  thousand or a million, so a value is approximate (within 50 tokens in the thousands, within
+  50,000 in the millions) and a cell amicus cannot read is `null` rather than a guess. A client
+  that validates the result against the previous closed schema must admit the two keys.
+- The `collaborating-with-amicus` skill says how to choose among pi's listed models when the
+  user named none. `references/choosing-a-backend.md` gains four rules — never trial a candidate
+  model outside amicus, never put the user's text into a provider's catalog tool, take price and
+  terms from the provider's catalog rather than from memory, and read the token limits as a
+  screen with headroom — and a section on what the listing does and does not establish. Its
+  rule against paying to break a tie now names models on one backend as well as backends.
 
 ### Changed
 
