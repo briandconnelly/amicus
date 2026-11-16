@@ -30,7 +30,7 @@ def test_applicability_table():
         "claude": ("inherit", "scoped", "safe", "bare")
     }
     assert o.OPTION_ALLOWED_VALUES["access"] == {"claude": ("toolless", "readonly")}
-    assert o.OPTION_ALLOWED_VALUES["max_budget_usd"] == {"claude": None}
+    assert o.OPTION_ALLOWED_VALUES["max_budget_usd"] == {"claude": None, "pi": None}
 
 
 def _literal_values(annotation: object) -> set[str]:

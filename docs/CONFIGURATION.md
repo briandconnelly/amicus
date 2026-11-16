@@ -241,6 +241,12 @@ Unset by default.
 Default reasoning effort when a call omits `reasoning_effort`.
 Unset by default.
 
+### `AMICUS_PI_MAX_BUDGET_USD`
+
+Default backend_options.max_budget_usd (0.01-5.00) for pi.
+Unset, the default, means no cap. amicus enforces it from pi's stream between model calls and stops a run whose spend the provider did not report.
+Unset by default.
+
 ### `AMICUS_PI_SUPPORTED_VERSIONS`
 
 Comma-separated pi major.minor versions treated as supported (advisory).

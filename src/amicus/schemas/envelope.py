@@ -315,10 +315,10 @@ class ErrorInfo(BaseModel):
 
 class PartialWork(BaseModel):
     """What a delegate left in its worktree when its backend was stopped at a deadline
-    (#508): captured, redacted and bounded exactly as a finished delegate's diff, and an
-    unverified, incomplete proposal, never a finished one. `diff` and `diffstat` are
-    omitted when the backend had changed nothing; meta.truncated reports a bounded diff, as
-    it does on a success."""
+    (#508) or a spend cap amicus enforces (#454): captured, redacted and bounded exactly as
+    a finished delegate's diff, and an unverified, incomplete proposal, never a finished
+    one. `diff` and `diffstat` are omitted when the backend had changed nothing;
+    meta.truncated reports a bounded diff, as it does on a success."""
 
     model_config = ConfigDict(extra="forbid")
     incomplete: Literal[True] = True
@@ -332,7 +332,8 @@ class ErrorResult(BaseModel):
     ok: Literal[False] = False
     error: ErrorInfo
     meta: Meta
-    # Only on a delegate `timeout` whose worktree diff could be captured (#508).
+    # Only on a delegate `timeout` (#508) or amicus-enforced `budget_exceeded` (#454) whose
+    # worktree diff could be captured.
     partial: PartialWork | None = None
 
 

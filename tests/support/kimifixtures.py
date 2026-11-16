@@ -104,6 +104,7 @@ def scripted_run_async(
         on_stdout_line=None,
         max_output_bytes=0,
         orphan_marker=None,
+        stop_on_line=None,
     ):
         pointer = cmd[cmd.index("--prompt") + 1] if "--prompt" in cmd else ""
         if calls is not None:

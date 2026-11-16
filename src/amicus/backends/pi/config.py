@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 from amicus.backends.pi import contract
 from amicus.config import settings as global_settings
 from amicus.config.envspec import EnvConflictError, EnvNamespace, EnvVar, is_env_placeholder
+from amicus.schemas.options import MAX_BUDGET_BOUNDS
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Mapping
@@ -52,6 +53,13 @@ ENV = EnvNamespace(
             None,
         ),
         EnvVar(
+            f"{PREFIX}MAX_BUDGET_USD",
+            "Default backend_options.max_budget_usd (0.01-5.00) for pi. Unset, the default, "
+            "means no cap. amicus enforces it from pi's stream between model calls and stops a "
+            "run whose spend the provider did not report.",
+            None,
+        ),
+        EnvVar(
             f"{PREFIX}SUPPORTED_VERSIONS",
             "Comma-separated pi major.minor versions treated as supported (advisory).",
             None,
@@ -65,6 +73,7 @@ class PiConfig:
     bin_override: str | None
     model: str | None
     reasoning_effort: str | None
+    max_budget_usd: float | None
     supported_versions: frozenset[tuple[int, int]]
     state_dir: Path
     warnings: tuple[str, ...] = ()
@@ -82,6 +91,23 @@ def agent_dir_error(environ: Mapping[str, str] | None = None) -> str | None:
     if not raw or raw == "~" or raw.startswith("~/") or Path(raw).is_absolute():
         return None
     return AGENT_DIR_NOT_ABSOLUTE
+
+
+def _budget(name: str, value: str | None, warnings: list[str]) -> float | None:
+    """The operator's default cap, or None (no cap). A bad value is dropped with a warning
+    rather than guessed at; the message never carries the value."""
+    if value is None or value == "":
+        return None
+    try:
+        parsed = float(value)
+    except ValueError:
+        warnings.append(f"{name} is not a number; no default cap applies")
+        return None
+    low, high = MAX_BUDGET_BOUNDS
+    if not (low <= parsed <= high):
+        warnings.append(f"{name} is outside {low}-{high}; no default cap applies")
+        return None
+    return parsed
 
 
 def _parse_supported_versions(raw: str | None) -> frozenset[tuple[int, int]]:
@@ -126,6 +152,7 @@ def load_config(environ: Mapping[str, str] | None = None) -> PiConfig:
         bin_override=get(f"{PREFIX}BIN") or None,
         model=model,
         reasoning_effort=get(f"{PREFIX}REASONING_EFFORT") or None,
+        max_budget_usd=_budget(f"{PREFIX}MAX_BUDGET_USD", get(f"{PREFIX}MAX_BUDGET_USD"), warnings),
         supported_versions=_parse_supported_versions(get(f"{PREFIX}SUPPORTED_VERSIONS")),
         state_dir=global_settings(environ).state_dir,
         warnings=tuple(warnings),

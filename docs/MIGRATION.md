@@ -52,6 +52,7 @@ Its value is never read, not even to recognise an unexpanded `${...}` placeholde
 | `AMICUS_CLAUDE_MAX_BUDGET_USD` | `CLAUDE_IN_CODEX_MAX_BUDGET_USD` | `1.0` |
 | `AMICUS_CLAUDE_SUPPORTED_MAJORS` | `CLAUDE_IN_CODEX_SUPPORTED_MAJORS` | — |
 | `AMICUS_PI_BIN` | — | — |
+| `AMICUS_PI_MAX_BUDGET_USD` | — | — |
 | `AMICUS_PI_MODEL` | — | — |
 | `AMICUS_PI_REASONING_EFFORT` | — | — |
 | `AMICUS_PI_SUPPORTED_VERSIONS` | — | — |

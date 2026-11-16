@@ -265,8 +265,8 @@ PARAMETER_CONTRACTS: dict[str, ParamContract] = {
         name="backend_options",
         summary=(
             "One closed object of backend knobs: isolation (codex, kimi); config_mode, "
-            "access, max_budget_usd (claude). A key or value the selected backend rejects "
-            f"fails pre-spend. Values: {PARAMS_RESOURCE_URI}."
+            "access (claude); max_budget_usd (claude, pi). A key or value the backend "
+            f"rejects fails pre-spend. Values: {PARAMS_RESOURCE_URI}."
         ),
         full=(
             "A key the selected backend does not accept, or a value it does not accept for "
@@ -281,8 +281,12 @@ PARAMETER_CONTRACTS: dict[str, ParamContract] = {
             "differ, with default null. access — claude: toolless|readonly; review_changes "
             "defaults to readonly and other verbs to toolless unless AMICUS_CLAUDE_ACCESS is "
             "set, which then applies to every verb. max_budget_usd "
-            "— claude: per-call stop threshold in USD, 0.01–5.00, checked only between "  # noqa: RUF001
-            "model calls, so the estimated cost can exceed it. Unset keys "
+            "— claude, pi: per-call stop threshold in USD, 0.01–5.00, checked only between "  # noqa: RUF001
+            "model calls, so the cost can exceed it by one call. claude enforces it itself and "
+            "defaults to AMICUS_CLAUDE_MAX_BUDGET_USD (1.00); amicus enforces it for pi from "
+            "pi's stream, with no cap unless AMICUS_PI_MAX_BUDGET_USD is set, and stops as "
+            "budget_exceeded a pi run that would continue after a model call whose cost the "
+            "provider did not report. Unset keys "
             "take the backend's defaults; amicus_review_changes_dry_run echoes review_changes "
             "values."
         ),

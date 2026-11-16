@@ -7,12 +7,13 @@ from amicus.backends.pi import contract
 from amicus.backends.pi.options import options_for
 
 
-def test_namespace_declares_four_settings_and_no_tombstones():
+def test_namespace_declares_five_settings_and_no_tombstones():
     names = pc.ENV.names()
     assert names == (
         "AMICUS_PI_BIN",
         "AMICUS_PI_MODEL",
         "AMICUS_PI_REASONING_EFFORT",
+        "AMICUS_PI_MAX_BUDGET_USD",
         "AMICUS_PI_SUPPORTED_VERSIONS",
     )
     assert all(pc.ENV.var(n).legacy == () and pc.ENV.var(n).removed == () for n in names)
@@ -59,7 +60,11 @@ def test_supported_versions_and_version_parsing():
 
 
 def test_no_isolation_option():
-    assert {o.name for o in options_for(pc.load_config({}))} == {"model", "reasoning_effort"}
+    assert {o.name for o in options_for(pc.load_config({}))} == {
+        "max_budget_usd",
+        "model",
+        "reasoning_effort",
+    }
 
 
 def test_options_carry_defaults_and_verbs():

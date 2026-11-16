@@ -12,7 +12,7 @@ import os
 import time
 from typing import TYPE_CHECKING, Literal
 
-from amicus.backends.pi import cli, contract, normalize
+from amicus.backends.pi import budget, cli, contract, normalize
 from amicus.backends.pi import config as pi_config
 from amicus.backends.pi.binary import BinaryNotFoundError
 from amicus.backends.pi.models import HELP_CACHE_TTL_SECONDS, is_batch_only
@@ -135,6 +135,9 @@ class PiBackend:
         if request.reasoning_effort is not None:
             return request.reasoning_effort
         return self._config.reasoning_effort
+
+    def _budget(self, request: RunRequest) -> float | None:
+        return request.budget_usd if request.budget_usd is not None else self._config.max_budget_usd
 
     @staticmethod
     def _read_only(request: RunRequest) -> bool:
@@ -388,6 +391,7 @@ class PiBackend:
             orphan_marker=request.cwd
             if len(request.cwd) >= runtime.MIN_ORPHAN_MARKER_LENGTH
             else None,
+            stop_on_line=budget.SpendProbe(cap) if (cap := self._budget(request)) else None,
         )
 
     def finalize(self, outcome: RunOutcome, request: RunRequest) -> ExecResult:
@@ -441,9 +445,11 @@ class PiBackend:
         whether or not it carries an `errorMessage`: any text before it is a partial answer.
         A zero-exit run with no answer text is `empty_response`: a success with nothing in it
         would launder the loss into a result."""
+        run = outcome.run
+        if run.stop_reason in budget.REASONS:
+            return cli.budget_failure(run.stop_reason, self._budget(request))
         if normalize.failed_stop(self._events(outcome)) is not None:
             return self._classify(outcome, request)
-        run = outcome.run
         if run.exit_code != 0 or run.timed_out or run.binary_missing:
             return None
         if normalize.extract_final_message(self._events(outcome)):

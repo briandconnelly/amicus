@@ -609,9 +609,9 @@ def present_diff(diff: str, meta: Meta, max_bytes: int) -> tuple[str, str | None
 
 
 def with_partial_work(envelope: dict[str, Any], diff: str, max_bytes: int) -> dict[str, Any]:
-    """Attach a timed-out delegate's captured diff to its `timeout` envelope as `partial`
-    (#508), presented like a finished delegate's, and stamp its truncation and redaction on
-    the envelope's meta."""
+    """Attach a stopped delegate's captured diff to its `timeout` (#508) or
+    `budget_exceeded` (#454) envelope as `partial`, presented like a finished delegate's,
+    and stamp its truncation and redaction on the envelope's meta."""
     result = ErrorResult.model_validate(envelope)
     meta = result.meta.model_copy(deep=True)
     meta.context_summary = _diffstat(diff)

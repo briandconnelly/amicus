@@ -179,11 +179,13 @@ job returns its terminal error, and `meta.consume` reports its discard too.
 Some codes belong to particular backends and are preserved verbatim rather than generalized:
 `user_config_rejected` (codex — the user's own CLI config carries something the installed CLI
 refuses at startup; pi — `PI_CODING_AGENT_DIR` is a relative path; zero spend on either, and
-the repair says which fix applies), and `budget_exceeded`, `claude_permission_error`,
-`api_key_invalid`, `api_key_missing` (claude). `budget_exceeded` is the one to read carefully: the
-best-effort spend threshold stopped the run, and it **may already have spent**. claude checks the
-threshold only between model calls, so `meta.usage.cost_usd` can exceed `max_budget_usd`; read
-the threshold as a stop, never as a ceiling.
+the repair says which fix applies), `budget_exceeded` (claude, pi), and
+`claude_permission_error`, `api_key_invalid`, `api_key_missing` (claude). `budget_exceeded` is
+the one to read carefully: the best-effort spend threshold stopped the run, and it **may already
+have spent**. The threshold is checked only between model calls (by claude itself, and by amicus
+from pi's stream), so `meta.usage.cost_usd` can exceed `max_budget_usd`; read the threshold as a
+stop, never as a ceiling. pi has no cap unless one is passed or `AMICUS_PI_MAX_BUDGET_USD` is
+set, and a capped pi run is also stopped when a call's cost was not reported by the provider.
 
 A backend a verb does not accept — a delegate routed to `claude`, for example, or any id outside
 the tool's `backend` enum, in-tree or not — is rejected at the boundary as `invalid_arguments` with

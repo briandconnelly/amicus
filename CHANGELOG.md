@@ -33,6 +33,14 @@ per-change, as its own lead says.
   description now say to narrow the task, keep slow verification such as a full test suite out
   of it, or raise `AMICUS_JOB_MAX_SECONDS`. A job result an earlier release stored is refused
   as `job_result_incompatible` (#508).
+- **Surface**: `amicus/0.1/schema-71`. `backend_options.max_budget_usd` now applies to `pi`
+  as well as `claude`. pi has no budget flag, so amicus enforces the cap itself from pi's event
+  stream: it stops pi before another model call once the provider-reported spend reaches the
+  cap, so a run can exceed it by one call, as with claude. It fails closed: a run that would
+  continue after a call whose cost the provider did not report (`totalFromProvider` not true)
+  is stopped too. Either stop is `budget_exceeded`, with the spend so far on `meta.usage` when
+  the provider reported it, and a stopped delegate carries its worktree diff as `partial`. pi
+  has no default cap; `AMICUS_PI_MAX_BUDGET_USD` sets one (#454).
 
 ### Changed
 
