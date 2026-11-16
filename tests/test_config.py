@@ -9,7 +9,7 @@ from amicus import config
 
 def test_defaults(clean_env):
     s = config.settings({})
-    assert s.enabled_backends == ("codex", "kimi", "claude", "pi")
+    assert s.enabled_backends == ("codex", "claude", "pi")
     assert s.timeout_seconds == 300
     assert s.max_input_bytes == 200_000
     assert (s.job_ttl_seconds, s.job_max_seconds, s.job_max_count) == (86_400, 1_800, 50)
@@ -23,17 +23,17 @@ def test_defaults(clean_env):
 def test_profile_parsing_keeps_order_and_drops_unknown_with_an_error(clean_env):
     s = config.settings({"AMICUS_BACKENDS": "claude, codex"})
     assert s.enabled_backends == ("claude", "codex")
-    s = config.settings({"AMICUS_BACKENDS": "codex,gemini"})
+    s = config.settings({"AMICUS_BACKENDS": "codex,kimi"})
     assert s.enabled_backends == ("codex",)
-    assert any("gemini" in e for e in s.config_errors)
+    assert any("kimi" in e for e in s.config_errors)
     s = config.settings({"AMICUS_BACKENDS": ""})
-    assert s.enabled_backends == ("codex", "kimi", "claude", "pi")
+    assert s.enabled_backends == ("codex", "claude", "pi")
 
 
 def test_profile_with_no_valid_backend_enables_none_and_is_fatal(clean_env):
     """#308: explicit and wrong is not unset. The all-backends default would enable what
     the operator tried to restrict, so nothing is enabled and main() refuses to start."""
-    for raw in ("bogus", "Codex", "gemini, "):
+    for raw in ("bogus", "Codex", "gemini, ", "kimi"):
         s = config.settings({"AMICUS_BACKENDS": raw})
         assert s.enabled_backends == (), raw
         [problem] = s.fatal_errors
@@ -41,9 +41,9 @@ def test_profile_with_no_valid_backend_enables_none_and_is_fatal(clean_env):
         assert "AMICUS_BACKENDS" in problem and "case-sensitive" in problem
     # Blank tokens are not wrong tokens: only separators is still unset.
     s = config.settings({"AMICUS_BACKENDS": " , "})
-    assert s.enabled_backends == ("codex", "kimi", "claude", "pi") and s.fatal_errors == ()
+    assert s.enabled_backends == ("codex", "claude", "pi") and s.fatal_errors == ()
     # One valid name beside a wrong one stays a non-fatal error, as before.
-    s = config.settings({"AMICUS_BACKENDS": "codex,gemini"})
+    s = config.settings({"AMICUS_BACKENDS": "codex,kimi"})
     assert s.enabled_backends == ("codex",) and s.fatal_errors == ()
 
 

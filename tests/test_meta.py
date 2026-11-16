@@ -151,11 +151,11 @@ def test_effects_for_is_destructive_when_any_enabled_backend_is():
     assert _meta.effects_for(benign).job_reads_read_only is True
 
 
-@pytest.mark.parametrize("profile", ["kimi", "codex,kimi"])
-def test_enabling_kimi_makes_paid_tools_destructive(profile):
-    """kimi has no sandbox: its delegate runs shell and writes files ungated, and the
+@pytest.mark.parametrize("profile", ["pi", "codex,pi"])
+def test_enabled_pi_profile_makes_paid_tools_destructive(profile):
+    """pi has no sandbox: its delegate runs shell and writes files ungated, and the
     worktree changes its cwd, not its reach (#426). Effects come from the enabled set, so
-    this holds with no kimi plugin loaded at all."""
+    this holds with no pi plugin loaded at all."""
     settings = config.settings({"AMICUS_BACKENDS": profile})
     assert _meta.effects_for(settings).paid_calls_destructive is True
     assert _meta.annotations_for("active", settings)["destructiveHint"] is True
@@ -165,7 +165,7 @@ def test_enabling_pi_makes_paid_tools_destructive():
     """A pi delegate runs unsandboxed bash, edit and write tools, so its writes are not
     confined to the throwaway worktree (Ruling 14)."""
     assert _meta.effects_for(config.settings({"AMICUS_BACKENDS": "pi"})).paid_calls_destructive
-    with_pi = config.settings({"AMICUS_BACKENDS": "codex,kimi,pi"})
+    with_pi = config.settings({"AMICUS_BACKENDS": "codex,pi"})
     assert _meta.annotations_for("active", with_pi)["destructiveHint"] is True
 
 

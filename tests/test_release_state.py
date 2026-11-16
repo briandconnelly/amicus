@@ -45,7 +45,7 @@ PREVIOUS = "1.2.2"
 PREVIOUS_SHA = "c" * 40
 MARKETPLACE_URL = "https://github.com/briandconnelly/amicus.git"
 
-BACKENDS = ("codex", "kimi", "claude", "pi")
+BACKENDS = ("codex", "claude", "pi")
 
 
 def _record(**overrides):
@@ -880,7 +880,7 @@ def test_a_record_naming_another_commit_is_rejected():
 
 def test_a_record_with_a_failed_suite_is_rejected():
     record = _record()
-    record["backends"]["kimi"]["exit_status"] = 1
+    record["backends"]["pi"]["exit_status"] = 1
     problems = _check_tag(message=json.dumps(record))
     assert any("exit_status" in problem for problem in problems), problems
 
@@ -1239,8 +1239,7 @@ def test_the_static_read_of_the_deprecation_table_matches_the_runtime_table():
 
 
 def test_the_static_read_of_the_backend_deprecation_table_matches_the_runtime_table():
-    """The same pin for `DEPRECATED_BACKENDS`. It is not `{} == {}`: kimi is in the table
-    (deprecated in favour of pi), so a shape the parser misses fails here."""
+    """The production table is empty; the synthetic backend windows above cover positives."""
     from amicus import backends
 
     repo_root = Path(__file__).resolve().parent.parent
@@ -1250,7 +1249,7 @@ def test_the_static_read_of_the_backend_deprecation_table_matches_the_runtime_ta
         table_name="DEPRECATED_BACKENDS",
     )
     assert problems == [], "; ".join(problems)
-    assert windows, "known positive: the runtime table is expected to be non-empty"
+    assert windows == {}
     assert windows == {
         name: (deprecation.since, deprecation.removal_at_or_after)
         for name, deprecation in backends.DEPRECATED_BACKENDS.items()

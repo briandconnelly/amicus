@@ -1,7 +1,7 @@
 # Claude Code 2.1.265 — S6 F3-isolation attempt, reconstructed fixture
 
 Mode: treatment.
-`AMICUS_BACKENDS=codex`, `AMICUS_CODEX_BIN`/`AMICUS_KIMI_BIN`/`AMICUS_CLAUDE_BIN` pointed at `tests/support/fake_codex.py`/`fake_kimi.py`/`fake_claude.py` (defense in depth; unused — see Spend below).
+`AMICUS_BACKENDS=codex`, `AMICUS_CODEX_BIN`/`AMICUS_KIMI_BIN`/`AMICUS_CLAUDE_BIN` pointed at `tests/support/fake_codex.py`/`the retired Kimi stub`/`fake_claude.py` (defense in depth; unused — see Spend below).
 Harness: `claude -p --strict-mcp-config --mcp-config <scratch>/.mcp.json --plugin-dir <scratch
 plugin> --allowedTools mcp__amicus --permission-mode bypassPermissions`, fresh context, cwd a scratch git repo seeded with two commits — the same invocation line `docs/host-captures/s6-response-contract/claude-code/2.1.263/transcript.md` records for run 4.
 The `--plugin-dir` copy carries this worktree's HEAD `skills/collaborating-with-amicus/` (current response-contract text), copied verbatim from the tree, not rolled back.

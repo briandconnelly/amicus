@@ -38,12 +38,6 @@ Its value is never read, not even to recognise an unexpanded `${...}` placeholde
 | `AMICUS_CODEX_REASONING_EFFORT` | `CODEX_IN_CLAUDE_REASONING_EFFORT` | — |
 | `AMICUS_CODEX_ISOLATION` | `CODEX_IN_CLAUDE_ISOLATION` | `inherit` |
 | `AMICUS_CODEX_SUPPORTED_VERSIONS` | `CODEX_IN_CLAUDE_SUPPORTED_VERSIONS` | — |
-| `AMICUS_KIMI_BIN` | — | — |
-| `AMICUS_KIMI_EXTRA_ARGS` | `MOONBRIDGE_EXTRA_ARGS` | — |
-| `AMICUS_KIMI_MODEL` | `MOONBRIDGE_MODEL` | — |
-| `AMICUS_KIMI_REASONING_EFFORT` | `MOONBRIDGE_REASONING_EFFORT` | — |
-| `AMICUS_KIMI_ISOLATION` | `MOONBRIDGE_ISOLATION` | `inherit` |
-| `AMICUS_KIMI_SUPPORTED_VERSIONS` | `MOONBRIDGE_SUPPORTED_VERSIONS` | — |
 | `AMICUS_CLAUDE_BIN` | — | — |
 | `AMICUS_CLAUDE_CONFIG_MODE` | `CLAUDE_IN_CODEX_CLAUDE_CONFIG` | `inherit` |
 | `AMICUS_CLAUDE_ACCESS` | `CLAUDE_IN_CODEX_ACCESS` | `toolless` |
@@ -57,15 +51,15 @@ Its value is never read, not even to recognise an unexpanded `${...}` placeholde
 | `AMICUS_PI_REASONING_EFFORT` | — | — |
 | `AMICUS_PI_SUPPORTED_VERSIONS` | — | — |
 
-`AMICUS_KIMI_BIN` and `AMICUS_CLAUDE_BIN` have no sibling equivalent, because neither `moonbridge` nor `claude-in-codex` offered a CLI-path override to rename.
+`AMICUS_CLAUDE_BIN` has no sibling equivalent, because `claude-in-codex` offered no CLI-path override to rename.
 `AMICUS_CODEX_BIN` had one — `CODEX_IN_CLAUDE_CODEX_BIN`, as the table above shows — because `codex-in-claude` did.
-`AMICUS_STATE_DIR`, `AMICUS_TASKS`, `AMICUS_TASKS_BACKEND_URL`, `AMICUS_HOST_NAME`, `AMICUS_ALLOW_CWD_WORKSPACE`, `AMICUS_BACKENDS`, `AMICUS_KIMI_BIN`, and `AMICUS_CLAUDE_BIN` are new in amicus and have no sibling equivalent.
-The four `AMICUS_PI_*` names are new too: the pi backend has no sibling, so none of them ever had a former name.
+`AMICUS_STATE_DIR`, `AMICUS_TASKS`, `AMICUS_TASKS_BACKEND_URL`, `AMICUS_HOST_NAME`, `AMICUS_ALLOW_CWD_WORKSPACE`, `AMICUS_BACKENDS`, and `AMICUS_CLAUDE_BIN` are new in amicus and have no sibling equivalent.
+The `AMICUS_PI_*` names are new too: the pi backend has no sibling, so none of them ever had a former name.
 
 ## Tool-name mapping
 
-Most amicus tools take `backend` as a required parameter (no default); pick `"codex"`, `"kimi"`, or `"claude"` to reproduce a sibling's behavior.
-The `kimi` backend is deprecated in favour of `pi`, since 0.13.0, for removal in 0.15.0 or later: a `moonbridge` user moving now should map its calls to `backend="pi"` on the same model, following the migration text on `amicus_backends`, and the `backend="kimi"` rows below hold only until then.
+Most amicus tools take `backend` as a required parameter (no default); pick `"codex"`, `"pi"`, or `"claude"` to reproduce a sibling's behavior.
+The `kimi` backend has been removed; map `moonbridge` calls to `backend="pi"` with an exact listed `provider/id`.
 `amicus_backends` and `amicus_job_list` take `backend` as an optional filter instead (omit it to see every backend or every job).
 `amicus_capabilities` has no `backend` parameter at all: it reports the whole server (tool inventory, fingerprint, error catalog), not one backend's readiness — use `amicus_backends(backend=...)` for that.
 
@@ -95,17 +89,17 @@ The `kimi` backend is deprecated in favour of `pi`, since 0.13.0, for removal in
 
 | old tool | new call |
 | --- | --- |
-| `kimi_consult` | `amicus_consult(backend="kimi", ...)` |
-| `kimi_consult_async` | `amicus_consult_async(backend="kimi", ...)` |
-| `kimi_review_changes` | `amicus_review_changes(backend="kimi", ...)` |
-| `kimi_review_changes_async` | `amicus_review_changes_async(backend="kimi", ...)` |
-| `kimi_delegate` | `amicus_delegate(backend="kimi", ...)` |
-| `kimi_delegate_async` | `amicus_delegate_async(backend="kimi", ...)` |
-| `kimi_delegate_dry_run` | `amicus_delegate_dry_run(backend="kimi", ...)` |
-| `kimi_dry_run` | `amicus_review_changes_dry_run(backend="kimi", ...)` |
-| `kimi_status` | `amicus_backends(backend="kimi")` |
-| `kimi_capabilities` | `amicus_capabilities()` (server-wide now; per-backend detail is `amicus_backends(backend="kimi")`) |
-| `kimi_models` | `amicus_models(backend="kimi")` |
+| `kimi_consult` | `amicus_consult(backend="pi", ...)` |
+| `kimi_consult_async` | `amicus_consult_async(backend="pi", ...)` |
+| `kimi_review_changes` | `amicus_review_changes(backend="pi", ...)` |
+| `kimi_review_changes_async` | `amicus_review_changes_async(backend="pi", ...)` |
+| `kimi_delegate` | `amicus_delegate(backend="pi", ...)` |
+| `kimi_delegate_async` | `amicus_delegate_async(backend="pi", ...)` |
+| `kimi_delegate_dry_run` | `amicus_delegate_dry_run(backend="pi", ...)` |
+| `kimi_dry_run` | `amicus_review_changes_dry_run(backend="pi", ...)` |
+| `kimi_status` | `amicus_backends(backend="pi")` |
+| `kimi_capabilities` | `amicus_capabilities()` (server-wide now; per-backend detail is `amicus_backends(backend="pi")`) |
+| `kimi_models` | `amicus_models(backend="pi")` |
 | `kimi_job_status` | `amicus_job_status(...)` |
 | `kimi_job_result` | `amicus_job_result(...)` |
 | `kimi_job_consume_result` | `amicus_job_consume_result(...)` |
@@ -133,7 +127,7 @@ The `kimi` backend is deprecated in favour of `pi`, since 0.13.0, for removal in
 | `claude_job_list` | `amicus_job_list(...)` |
 
 `claude-in-codex` had no `claude_delegate`: Claude is review-only in amicus too, so `amicus_delegate` and `amicus_delegate_async` reject `backend="claude"` at the boundary as `invalid_arguments` with `details.allowed_values`, because each tool's `backend` enum is the set it accepts, and any backend outside it, in-tree or not, is `invalid_arguments`; `feature_unsupported` is only a defensive check, returned if the named backend's declared features lack the verb, which no backend a tool's enum accepts does today.
-`amicus_adversarial_review(_async)` is the only pair that rejects `backend="codex"` and `backend="kimi"`, because only Claude declares the `adversarial_review` capability.
+`amicus_adversarial_review(_async)` is the only pair that rejects `backend="codex"` and `backend="pi"`, because only Claude declares the `adversarial_review` capability.
 
 ## Behavior deltas
 
@@ -167,9 +161,9 @@ These are the differences a user migrating from a single-model server actually h
 
 **Approval friction follows the worst enabled backend (ADR 0001).**
 One tool serves every backend, so its annotations are static and must cover the strictest case.
-Enabling the Claude, pi or kimi backend gives *every* tool mutation-grade annotations, including `amicus_consult(backend="codex", ...)`; a pi or kimi delegate runs shell commands and writes files with no sandbox.
+Enabling the Claude or pi backend gives *every* tool mutation-grade annotations, including `amicus_consult(backend="codex", ...)`; a pi delegate runs shell commands and writes files with no sandbox.
 A call that never prompted under `codex-in-claude` alone can now prompt for approval once Claude is enabled.
-Unlike `moonbridge`, which advertised `destructiveHint: false`, amicus advertises `true` whenever kimi is enabled, because a worktree changes kimi's working directory, not its reach.
+A `pi` delegate runs shell commands and writes files without an OS sandbox, so its worktree does not confine its reach.
 Enable only the codex backend (`AMICUS_BACKENDS=codex`) to get the old, lighter approval friction back.
 `amicus_backends` publishes each backend's own `AnnotationEffects` so an agent can read the per-backend truth directly.
 
@@ -181,7 +175,7 @@ Delete each sibling's entry from your host's MCP configuration in the same chang
 
 **One server, one job store.**
 Jobs started against any backend share the same job store under `AMICUS_STATE_DIR`, instead of each sibling keeping its own.
-`AMICUS_JOB_MAX_COUNT` is enforced per workspace, but the underlying task map is one file per state directory, so jobs from `codex`, `kimi`, `claude` and `pi` calls are visible to `amicus_job_list` together.
+`AMICUS_JOB_MAX_COUNT` is enforced per workspace, but the underlying task map is one file per state directory, so jobs from `codex`, `claude` and `pi` calls are visible to `amicus_job_list` together.
 Point `AMICUS_STATE_DIR` at separate directories only if you need to keep job history isolated per backend or per project.
 
 **`backend_options` is a closed superset (ADR 0002).**
@@ -203,6 +197,13 @@ The `amicus://backends/{backend}` resource is always the full entry.
 `amicus_capabilities(detail="contracts")` is removed: pass `include_tool_details=false` for the same rowless payload, and `detail` now selects only how much each `tool_details` row carries (`summary` is `name`, `cost`, `stability`, `backends`; `full` adds the rest, including `error_codes`).
 
 ## Upgrading from 0.14.0
+
+**Breaking: the deprecated `kimi` backend has been removed (#423).**
+Install and authenticate pi, enable `pi`, set `AMICUS_PI_MODEL` to an exact `provider/id` listed by `amicus_models(backend="pi")` (for example `openrouter/moonshotai/kimi-k3`), and change calls to `backend="pi"`.
+`AMICUS_KIMI_*` settings are now undeclared and ignored; remove them and use the corresponding `AMICUS_PI_*` settings where available.
+`isolation="ignore-skills"` is no longer accepted, and `backend_options.isolation` applies only to `codex`.
+`AMICUS_BACKENDS=kimi` is fatal because it enables no in-tree backend; `codex,kimi` keeps `codex` enabled and reports a nonfatal configuration error for `kimi`.
+A stored format-10 job result whose backend is `kimi` remains fetchable; removal does not change `RESULT_FORMAT`.
 
 The changes below are the ones an operator running amicus 0.14.0 may have to handle before running the next release.
 A job result stored by 0.14.0 is no longer readable: `RESULT_FORMAT` moved from 9 to 10, so fetch or consume any stored result you still need before upgrading.

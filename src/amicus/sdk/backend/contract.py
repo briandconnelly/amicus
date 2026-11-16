@@ -104,7 +104,7 @@ class Limits:
 class BackendContract:
     """The static contract for one backend CLI."""
 
-    backend_id: str  # "codex" | "kimi" | "claude" | ...
+    backend_id: str  # "codex" | "pi" | "claude" | ...
     display_name: str
     bin_name: str
     env_prefix: str  # e.g. "MOONBRIDGE_" — the BRIDGE's env namespace

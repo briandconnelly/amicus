@@ -538,7 +538,7 @@ async def test_list_filters_and_the_task_id_lookup(app, store, settings, tmp_pat
         ).structured_content
         assert by_status["jobs"] == []
         by_backend = (
-            await c.call_tool("amicus_job_list", {"backend": "kimi", **ws})
+            await c.call_tool("amicus_job_list", {"backend": "pi", **ws})
         ).structured_content
         assert by_backend["jobs"] == []
         status = (
@@ -1333,3 +1333,24 @@ async def test_error_backend_null_and_the_details_projection_stay(app, tmp_path)
     first = err["invalid_arguments"][0]
     assert err["details"] == {k: first[k] for k in err["details"]}
     assert err["details"]["field"] == first["field"] == "wait_seconds"
+
+
+async def test_stored_format_10_kimi_result_is_still_fetchable(app, store, tmp_path):
+    async with Client(app) as c:
+        job_id = await _start(c, tmp_path)
+        await _wait_done(store, tmp_path, job_id)
+        jd = store._job_dir(str(tmp_path), job_id)
+        payload = json.loads((jd / "result.json").read_text())
+        payload["meta"]["backend"] = "kimi"
+        (jd / "result.json").write_text(json.dumps(payload))
+        record = json.loads((jd / "meta.json").read_text())
+        record["extra"].update(backend="kimi", result_format=10)
+        (jd / "meta.json").write_text(json.dumps(record))
+        result = (
+            await c.call_tool(
+                "amicus_job_result", {"job_id": job_id, "workspace_root": str(tmp_path)}
+            )
+        ).structured_content
+    assert result["ok"] is True
+    assert result["meta"]["backend"] == "kimi"
+    assert result["summary"] == "Looks fine"

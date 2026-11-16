@@ -110,6 +110,13 @@ per-change, as its own lead says.
   `/amicus:status`). Ask in your own words instead: the `collaborating-with-amicus` skill covers
   every one of them. Claude Code offers a plugin's commands to the model beside its skill, and
   in host runs the model took the command and never loaded the skill's rules (ADR 0049).
+- **Breaking**: `amicus/0.1/schema-74`. The deprecated `kimi` backend (#423). Route Kimi models
+  through `pi` with an exact listed `provider/id` (docs/MIGRATION.md). `backend="kimi"` is
+  refused as `invalid_arguments` before any spend, `isolation="ignore-skills"` is rejected,
+  `AMICUS_BACKENDS=kimi` refuses to start while `codex,kimi` keeps `codex` with a config error,
+  and `AMICUS_KIMI_*` settings are ignored. A stored result naming `kimi` remains fetchable.
+  The kimi live gate leaves the release evidence, which now names the codex, claude and pi
+  suites, and the kimi upstream watch stream is retired.
 
 ### Fixed
 

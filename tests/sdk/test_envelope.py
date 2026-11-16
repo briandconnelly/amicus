@@ -88,5 +88,5 @@ def test_auth_indeterminate_is_temporary_not_found_is_not():
 
 def test_universal_codes_are_backend_free():
     for code in envelope.UNIVERSAL_CODES:
-        assert not code.startswith(("codex_", "kimi_", "claude_")), code
+        assert not code.startswith(("codex_", "kimi_", "claude_", "pi_")), code
         assert code not in envelope.FEATURE_CODES.get("transfer", ()), code

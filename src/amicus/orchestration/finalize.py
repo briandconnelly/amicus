@@ -50,7 +50,7 @@ if TYPE_CHECKING:  # pragma: no cover
 
 # What a delegate result tells a host that never loads the skill (ADR 0050). Each line claims
 # only what amicus knows: it applied nothing, which is not the same as the tree being
-# unchanged (a kimi or pi run can write outside the worktree), and `summary` is amicus's own
+# unchanged (a pi run can write outside the worktree), and `summary` is amicus's own
 # text when the backend's answer could not be read, so it is never called the backend's.
 _DELEGATE_NEXT_STEPS = (
     "amicus has not applied the returned diff to your working tree; the diff is a proposal.",
@@ -152,10 +152,8 @@ def _normalize_severity(item: dict) -> tuple[dict, bool]:
     return {**item, "severity": normalized}, True
 
 
-# What a reference to one of amicus's own staged temp files becomes (#140). Kimi is handed its
-# prompt as a file, so its answer can cite `<tmp>/amicus-kimi-handshake-XXXX/prompt.md:28`: a
-# path deleted before the caller reads the result, a line number into amicus's framing, and
-# the handshake location besides.
+# Replace references to staged temporary files, whose paths disappear before delivery.
+# The generic SDK supports artifacts even when no in-tree backend stages prompt files.
 ARTIFACT_PLACEHOLDER = "[amicus temporary file]"
 # What may follow a staged FILE's path and still be that file: `prompt.md:28` and a sentence's
 # closing `prompt.md.` are; `prompt.md.bak` and `prompt.mdx` are other files.

@@ -66,7 +66,7 @@ Rev 2 absorbs every finding:
 | Error taxonomy + repair symbols, prompt framings, annotation builders, `HelpProbe`, fingerprint check | `pontonier.conventions.*` | vocabulary, not wiring; repair rules are defaults |
 | Surface honesty, conformance (`check_contract` AND `check_backend`), pair parity | `pontonier.testing.*` | issue #15: a clean result is weak evidence |
 | Codex adapter, CLI contract, argv builder, normalize, models cache, binary resolver, field policy | `codex-in-claude/src/codex_in_claude/{backend,cli_contract,codex,normalize,codex_models,binpath,binresolve,field_policy}.py` | → `amicus/backends/codex/` |
-| Kimi adapter, CLI contract, handshake + read-only agent profile | `moonbridge/src/moonbridge/{backend,cli_contract,kimi,normalize,kimi_models}.py` | → `amicus/backends/kimi/`; `runspace.py` becomes a strategy |
+| Kimi adapter, CLI contract, handshake + read-only agent profile | `moonbridge/src/moonbridge/{backend,cli_contract,kimi,normalize,kimi_models}.py` | → `the retired Kimi backend package`; `runspace.py` becomes a strategy |
 | Claude adapter, CLI contract, config-mode/access flags, envelope normalize, auth probe, critic prompt | `claude-in-codex/src/claude_in_codex/{backend,cli_contract,claude,config,normalize,claude_models}.py` | → `amicus/backends/claude/`; `normalize_envelope` failure branch becomes the outcome inspector |
 | Middlewares, guards, capability suppression, `main()`, param aliases | `codex-in-claude/server.py:300-782, 1473-1558` | plus claude-in-codex `_repair_action` (`server.py:490-621`) |
 | Sync-through-detached-job lifecycle, delivery chokepoint | `codex-in-claude/server.py:3624-4143, 4709-5187` | |

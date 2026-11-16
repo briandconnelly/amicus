@@ -34,7 +34,7 @@ from amicus.registry import BackendRegistry
 PROFILES: dict[str, dict[str, str]] = {
     "all": {},
     "codex": {"AMICUS_BACKENDS": "codex"},
-    "codex-kimi": {"AMICUS_BACKENDS": "codex,kimi"},
+    "codex-pi": {"AMICUS_BACKENDS": "codex,pi"},
     "claude": {"AMICUS_BACKENDS": "claude"},
 }
 _FASTMCP_META_KEY = "fastmcp"

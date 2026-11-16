@@ -37,16 +37,16 @@ PROSE = {
 JUNIT_WITH_PROSE = f"""<?xml version="1.0" encoding="utf-8"?>
 <testsuites>
   <testsuite name="pytest" errors="1" failures="1" skipped="1" tests="4" time="177.3">
-    <testcase classname="tests.test_kimi_live" name="test_consult_live" time="10.0"/>
-    <testcase classname="tests.test_kimi_live" name="test_review_changes_live" time="20.0">
+    <testcase classname="tests.test_pi_live" name="test_consult_live" time="10.0"/>
+    <testcase classname="tests.test_pi_live" name="test_review_changes_live" time="20.0">
       <failure message="{PROSE["summary_attr"]}">{PROSE["traceback_text"]}</failure>
       <system-out>{PROSE["system_out"]}</system-out>
       <system-err>{PROSE["system_err"]}</system-err>
     </testcase>
-    <testcase classname="tests.test_kimi_live" name="test_models_live" time="1.0">
+    <testcase classname="tests.test_pi_live" name="test_models_live" time="1.0">
       <error message="{PROSE["error_attr"]}" type="RuntimeError">boom</error>
     </testcase>
-    <testcase classname="tests.test_kimi_live" name="test_safe_mode_live" time="0.0">
+    <testcase classname="tests.test_pi_live" name="test_safe_mode_live" time="0.0">
       <skipped message="no auth" type="pytest.skip"/>
     </testcase>
   </testsuite>
@@ -74,9 +74,9 @@ def test_it_names_the_tests_that_did_not_pass(tmp_path):
     assert summary["total"] == 4
     assert summary["counts"] == {"failure": 1, "error": 1, "skipped": 1}
     assert summary["not_passed"] == [
-        {"test": "tests.test_kimi_live::test_review_changes_live", "outcome": "failure"},
-        {"test": "tests.test_kimi_live::test_models_live", "outcome": "error"},
-        {"test": "tests.test_kimi_live::test_safe_mode_live", "outcome": "skipped"},
+        {"test": "tests.test_pi_live::test_review_changes_live", "outcome": "failure"},
+        {"test": "tests.test_pi_live::test_models_live", "outcome": "error"},
+        {"test": "tests.test_pi_live::test_safe_mode_live", "outcome": "skipped"},
     ]
 
 
@@ -175,9 +175,9 @@ class TestBoundedCliVersion:
         assert evidence._bound_version("codex-cli 0.153.4\n") == "codex-cli 0.153.4"
 
     def test_only_the_first_line_is_kept(self):
-        raw = f"kimi 0.41.0\n{PROSE['system_out']}\nmore\n"
+        raw = f"pi 1.5.0\n{PROSE['system_out']}\nmore\n"
         bounded = evidence._bound_version(raw)
-        assert bounded == "kimi 0.41.0"
+        assert bounded == "pi 1.5.0"
         assert "MODELPROSE" not in bounded
 
     def test_a_long_payload_is_capped(self):

@@ -2,7 +2,7 @@
 
 Give your coding agent a second opinion from a different model.
 
-amicus is one MCP server that fronts **Codex**, **Kimi**, **Pi** and **Claude**. The backend is a
+amicus is one MCP server that fronts **Codex**, **Pi** and **Claude**. The backend is a
 parameter, not a separate installation — so instead of running a server per model and learning a
 tool surface for each, you ask for a consult, a review, or a delegated task and say which model should
 answer.
@@ -69,13 +69,13 @@ client that has no notion of a working directory looks like this:
 - macOS or Linux: amicus refuses to start on a non-POSIX platform, because its background-job
   safety layer depends on POSIX process semantics.
 - Python 3.11 or newer, and [`uv`](https://docs.astral.sh/uv/).
-- The CLI for each backend you enable, installed and authenticated: `codex`, `kimi`, `pi`, `claude`.
+- The CLI for each backend you enable, installed and authenticated: `codex`, `pi`, `claude`.
   amicus drives those CLIs; it does not talk to the providers itself, and it stores no credentials.
 
 ## Using it
 
 Choose which backends are available with `AMICUS_BACKENDS` — a comma-separated list of `codex`,
-`kimi`, `pi` and `claude` (case-sensitive). Unset, all four are enabled; set, only the backends you
+`pi` and `claude` (case-sensitive). Unset, all three are enabled; set, only the backends you
 name are. An enabled backend whose CLI is missing or not logged in still appears in
 `amicus_backends`, with `status.installed` and `status.authenticated` saying so.
 
@@ -116,17 +116,14 @@ its quota.
 
 Not every backend does everything:
 
-| Verb | Codex | Kimi | Pi | Claude |
-| --- | --- | --- | --- | --- |
-| `consult`, `review_changes` | yes | yes | yes | yes |
-| `delegate` | yes | yes | yes | no |
-| `adversarial_review` | no | no | no | yes |
-
-Kimi is deprecated in favour of Pi, since 0.13.0, and is removed in 0.15.0 or later; it works
-until then. The `deprecation` marker on its `amicus_backends` entry says how to move.
+| Verb | Codex | Pi | Claude |
+| --- | --- | --- | --- |
+| `consult`, `review_changes` | yes | yes | yes |
+| `delegate` | yes | yes | no |
+| `adversarial_review` | no | no | yes |
 
 A `no` is amicus's routing policy, not a model limitation. Claude is review-only, and the
-dedicated adversarial-review verb is scoped to Claude. To ask Codex, Kimi or Pi for an adversarial
+dedicated adversarial-review verb is scoped to Claude. To ask Codex or Pi for an adversarial
 review, use `consult` or `review_changes` and supply the stance yourself; the dedicated verb adds
 a fixed critic stance and the `target` and `evidence` inputs.
 
@@ -154,15 +151,12 @@ does today.
   recorded since delivery tracking (#244), whichever release recorded it. When only running jobs
   and such results remain, a new paid call is refused with `job_cap_reached` instead ([ADR 0038](docs/adr/0038-the-job-cap-never-evicts-an-unreturned-result.md)). It can
   quote what you sent. Your inputs themselves are never written there ([ADR 0035](docs/adr/0035-a-backend-answer-is-kept-on-the-job-record.md)).
-- **Kimi keeps its own copy.** The kimi CLI writes its own session files (observed under
-  `~/.kimi-code/sessions`), which can hold the whole prompt and any answer produced. amicus found
-  no documented way to switch that off and does not delete them, and none of the retention controls above reach it; Codex, Pi and Claude
-  run with their session persistence disabled.
+- Codex, Pi and Claude run with their session persistence disabled.
 
 ## Configuration
 
 `AMICUS_BACKENDS` is the one most people set. Beyond it, each backend takes an optional model,
-reasoning effort, and binary path (`AMICUS_CODEX_MODEL`, `AMICUS_KIMI_REASONING_EFFORT`,
+reasoning effort, and binary path (`AMICUS_CODEX_MODEL`, `AMICUS_PI_REASONING_EFFORT`,
 `AMICUS_CLAUDE_BIN`, and so on), and there are limits for timeouts, job retention and payload
 sizes. Every variable, what it does and its default is in [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md), rendered from the declarations in the code.
 
@@ -178,18 +172,14 @@ the new ones.
 
 ## Status and known limits
 
-0.14.0 is the current release. Its dry-run tools now run the selected backend's own pre-spend
-validation, so a preview is refused where the paid call would be, and a profile that enables
-`kimi` now advertises the paid tools as `destructiveHint: true`. It supports codex-cli 0.169.
-`kimi` stays deprecated in favour of `pi`, for removal in 0.15.0 or later, and is frozen at Kimi
-Code 2.5. The discovery surface moves to `amicus/0.1/schema-67`, and `RESULT_FORMAT` did not
-move, so a job result 0.13.0 stored can still be read.
-[`docs/MIGRATION.md`](docs/MIGRATION.md#upgrading-from-0130) explains how to upgrade, and
-[`CHANGELOG.md`](CHANGELOG.md) lists every user-visible change.
+The `kimi` backend has been removed in favour of `pi` (#423). Use `backend="pi"` with an
+exact listed `provider/id`; `AMICUS_KIMI_*` settings are ignored. See
+[`docs/MIGRATION.md`](docs/MIGRATION.md#upgrading-from-0140) for upgrade instructions and
+[`CHANGELOG.md`](CHANGELOG.md) for every user-visible change.
 
 Two known limits: a third-party backend distribution can load through the `amicus.backends`
 entry-point group, but cannot yet be enabled or called, since `AMICUS_BACKENDS` and the
-`backend` parameter accept only the four in-tree ids; and a shell command a `pi` delegate
+`backend` parameter accept only the three in-tree ids; and a shell command a `pi` delegate
 leaves running in the background can outlive the run (#424).
 
 ## Development
@@ -209,7 +199,7 @@ version.
 | Architecture decisions | `docs/adr/` |
 | How a release is cut | `docs/RELEASING.md` |
 | How a new codex minor becomes supported | `docs/UPGRADING-CODEX.md` |
-| How new kimi, pi, claude, fastmcp and mcp releases become issues | `docs/WATCHING.md` |
+| How new pi, claude, fastmcp and mcp releases become issues | `docs/WATCHING.md` |
 | How a `FINGERPRINT` bump regenerates its test pins | `scripts/regenerate_fingerprint_pins.py` (its docstring) |
 | Every environment variable, its meaning and default | `docs/CONFIGURATION.md` |
 | The router skill an agent loads to call amicus | `skills/collaborating-with-amicus/` |

@@ -43,7 +43,7 @@ def declared_env_names() -> tuple[str, ...]:
 def vendor_auth_env_names() -> tuple[str, ...]:
     """Vendor credential names a backend needs passed through.
 
-    Read defensively: codex and kimi authenticate through their own CLI login and declare
+    Read defensively: codex authenticates through its own CLI login and declares
     no credential env vars, so a missing attribute is normal, not an error."""
     names: set[str] = set()
     for backend_id in BACKEND_IDS:

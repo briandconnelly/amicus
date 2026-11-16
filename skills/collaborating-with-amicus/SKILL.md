@@ -1,17 +1,14 @@
 ---
 name: collaborating-with-amicus
-description: Use when calling another model or coding-agent harness through the amicus MCP server (backends codex, claude, pi, deprecated kimi), or when reading what an amicus_* tool returned. Covers second opinions, code and adversarial reviews, delegated implementation returned as a diff, independent two-model attempts, review–revise passes and blind comparisons. Trigger on "ask another model", "get a second opinion", "collaborate with Codex", "have Codex/Pi/Kimi review this", "get GPT's opinion", "delegate this to Codex", "which models can amicus use", "is Codex available in amicus", "check amicus backend status", an amicus_* error or a host denial of an amicus call, and, as an offer only, decisions another opinion would change — a hard-to-reverse choice, two failed fixes, risky work about to be called complete.
+description: Use when calling another model or coding-agent harness through the amicus MCP server (backends codex, claude, pi), or when reading what an amicus_* tool returned. Covers second opinions, code and adversarial reviews, delegated implementation returned as a diff, independent two-model attempts, review–revise passes and blind comparisons. Trigger on "ask another model", "get a second opinion", "collaborate with Codex", "have Codex/Pi/Kimi review this", "get GPT's opinion", "delegate this to Codex", "which models can amicus use", "is Codex available in amicus", "check amicus backend status", an amicus_* error or a host denial of an amicus call, and, as an offer only, decisions another opinion would change — a hard-to-reverse choice, two failed fixes, risky work about to be called complete.
 ---
 
 # Collaborating with amicus
 
 amicus is one MCP server that calls other models through their CLI harnesses. Every paid tool
-takes a `backend` parameter naming the **harness** that runs the call (`codex`, `claude`, `pi`,
-or the deprecated `kimi`), not the model: `codex` runs OpenAI models, `claude` runs Anthropic
+takes a `backend` parameter naming the **harness** that runs the call (`codex`, `claude`, `pi`), not the model: `codex` runs OpenAI models, `claude` runs Anthropic
 models, and `pi` runs any provider's model it lists, by exact `provider/id`, so two harnesses
-can run the same model. `kimi` is deprecated in favour of `pi` (removal at or after 0.15.0): it
-still serves a request that names it or a Kimi model, with its deprecation disclosed; read the
-`deprecation` marker `amicus_backends` carries for it.
+can run the same model.
 
 You are the host. A backend is a worker you consult; it does not own the decision, the
 verification, or the working tree.
@@ -37,7 +34,7 @@ statement — this list is a map, not a second copy.
 | One answer, design critique, or second opinion (including on a diff you paste inline) | `amicus_consult` | [active workflows](references/active-workflows.md) |
 | Review changes already represented in git | `amicus_review_changes` | [active workflows](references/active-workflows.md) |
 | A fixed adversarial critic attacking a plan, claim, or decision before you commit to it (`claude` only) | `amicus_adversarial_review` | [active workflows](references/active-workflows.md) |
-| A self-contained coding task implemented in a throwaway worktree, returned as a diff (`codex`, `kimi` or `pi` only) | `amicus_delegate` | [active workflows](references/active-workflows.md), [reviewing a returned diff](references/reviewing-a-returned-diff.md) |
+| A self-contained coding task implemented in a throwaway worktree, returned as a diff (`codex` or `pi` only) | `amicus_delegate` | [active workflows](references/active-workflows.md), [reviewing a returned diff](references/reviewing-a-returned-diff.md) |
 | Any of the above when the work can exceed the sync deadline | the matching `_async` tool | that route's references, and [sync vs async](references/sync-vs-async.md) |
 | Which backend to pick, and what evidence it can actually inspect | `amicus_backends` (free) | [choosing a backend](references/choosing-a-backend.md) |
 | You and one backend attempt the same problem independently, then you synthesize | independent attempt | [independent attempt](references/independent-attempt.md) |
@@ -95,13 +92,11 @@ This is the one statement of the routing procedure;
   route is resolved is selecting the tool and reading its references. Where the call takes a
   harness's default model and no surface reports which model that is, name it as that harness's
   default rather than guessing a slug.
-- **Let a named harness win.** `codex`, `claude` or Claude Code, `pi`, and bare `kimi` (the
-  deprecated kimi harness) select that harness, whatever the capitalization, and a model named
+- **Let a named harness win.** `codex`, `claude` or Claude Code, and `pi` select that harness, whatever the capitalization, and a model named
   alongside it is passed as that harness's `model`. An exact `provider/id` is pi's model syntax,
   so it selects `pi`.
 - **Send a model-only request to its native harness — `codex` for an OpenAI model, `claude` for
-  an Anthropic model, `kimi` for a Kimi model while that deprecated harness remains, disclosing
-  its deprecation — when that harness is ready and supports the verb; otherwise route it to
+  an Anthropic model — when that harness is ready and supports the verb; otherwise route it to
   `pi` with an exact model `amicus_models(backend="pi")` lists, and name that route before the
   call.** That is routing, not substitution, so it needs no confirmation.
 - **Never substitute for a named harness silently.** When the harness the user named is not
@@ -180,7 +175,7 @@ read in this session need not be read again.
 - **Read [sync vs async](references/sync-vs-async.md) → Rules before the first `_async` call,
   keyed sync call or job-lifecycle call.**
 - **Read [choosing a backend](references/choosing-a-backend.md) → Rules before a paid call
-  whose route is `pi` or `kimi`, before choosing among routes when more than one is left, and
+  whose route is `pi`, before choosing among routes when more than one is left, and
   before a call that needs the backend to read files itself or that sets `backend_options`.**
 - **Read [reviewing a returned diff](references/reviewing-a-returned-diff.md) → Rules before
   acting on or reporting a delegate's result.**
@@ -213,7 +208,6 @@ read in this session need not be read again.
   `provider/id` prefix names — **and never present a workspace as a boundary on what is read.**
   A backend can read whatever the OS user running it can, so choosing a different workspace
   does not keep other files from it.
-- **Never send `kimi` text you would not leave on this machine's disk.**
 
 ### Composed workflows
 
@@ -245,8 +239,7 @@ paid call is a job (`meta.job_id`).
 Every free-text field you supply reaches the selected backend's provider raw; amicus carries it
 over stdin and never logs it, but how it then reaches the backend CLI is the backend's choice,
 and `carriers` on `amicus_backends(detail="full")` is authoritative: on `codex`,
-`instructions_append` rides argv, and the kimi CLI's own session store keeps what it is sent on
-this machine's disk. On `pi` the provider is the one the model's `provider/id` prefix names, a
+`instructions_append` rides argv. On `pi` the provider is the one the model's `provider/id` prefix names, a
 router included, so the model you pick is also the egress destination. A backend can read files
 outside the workspace during a call, redaction covers only gathered diffs and returned output,
 and a dry run calls no model (it runs only the backend's free pre-spend checks), so it proves

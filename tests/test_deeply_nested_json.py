@@ -12,9 +12,6 @@ import pytest
 from amicus import _worker
 from amicus.backends.claude import normalize as claude_normalize
 from amicus.backends.codex import normalize as codex_normalize
-from amicus.backends.kimi import cli as kimi_cli
-from amicus.backends.kimi import models as kimi_models
-from amicus.backends.kimi import normalize as kimi_normalize
 from amicus.backends.pi import cli as pi_cli
 from amicus.backends.pi import normalize as pi_normalize
 from amicus.schemas import structured
@@ -43,12 +40,6 @@ def test_codex_event_readers_skip_a_deep_line():
     assert codex_normalize._unwrap_json_message(DEEP) == DEEP
 
 
-def test_kimi_event_readers_skip_a_deep_line():
-    assert kimi_normalize.parse_event_metadata(DEEP) == (None, None)
-    assert kimi_normalize.extract_error_message(DEEP) is None
-    assert kimi_normalize._unwrap_json_message(DEEP) == DEEP
-
-
 def test_claude_envelope_is_none_for_a_deep_document():
     assert claude_normalize.parse_envelope(DEEP) is None
     assert claude_normalize.parse_envelope(SHALLOW) == {"a": [[1]]}, "control"
@@ -68,14 +59,6 @@ def _capture(stdout: str) -> SimpleNamespace:
     return SimpleNamespace(
         stdout=stdout, stderr="", exit_code=0, binary_missing=False, timed_out=False
     )
-
-
-def test_kimi_probes_read_a_deep_payload_as_unreadable(monkeypatch):
-    assert kimi_cli._provider_count(DEEP) is None
-    monkeypatch.setattr(kimi_models.runtime, "run_sync_capture", lambda *a, **k: _capture(DEEP))
-    assert kimi_models.probe_catalog("kimi") is None
-    monkeypatch.setattr(kimi_models.runtime, "run_sync_capture", lambda *a, **k: _capture(SHALLOW))
-    assert kimi_models.probe_catalog("kimi") == {"a": [[1]]}, "control"
 
 
 def test_pi_auth_probe_reads_a_deep_payload_as_unknown(monkeypatch):

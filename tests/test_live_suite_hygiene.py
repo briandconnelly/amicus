@@ -33,7 +33,6 @@ LIVE_SUITES = sorted(TESTS_DIR.glob("test_*_live.py"))
 REQUIRED_SUITES = (
     "test_claude_live.py",
     "test_codex_live.py",
-    "test_kimi_live.py",
     "test_pi_live.py",
 )
 

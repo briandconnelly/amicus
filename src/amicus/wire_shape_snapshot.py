@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from amicus import backends
 from amicus.errors import make_error, serialize_error
 from amicus.jobs import lifecycle, lookup
 from amicus.jobs.delivery import attach_consume_disposition, finished_job_envelope
@@ -21,6 +22,7 @@ from amicus.schemas.envelope import (
     ErrorResult,
     InstructionsFingerprint,
     Meta,
+    ToolDeprecation,
     Usage,
     dump_success,
     slim_meta,
@@ -165,8 +167,9 @@ def _stored_envelopes() -> dict[str, dict[str, Any]]:
                     security_warnings=["baseline warning"],
                     compat_warnings=["--model"],
                     # A deprecated backend's run (#423): the chokepoint attaches the
-                    # delivery-only `deprecation`, so it is populated on the wire too.
-                    backend="kimi",
+                    # delivery-only `deprecation`, so it is populated on the wire too. No
+                    # shipped backend is deprecated, so build_snapshot registers this one.
+                    backend=_DEPRECATED_EXAMPLE,
                 ),
             )
         ),
@@ -405,7 +408,27 @@ def _handles() -> dict[str, Any]:
     }
 
 
+# A synthetic backend inside its deprecation window, registered only while the snapshot is
+# built, so `meta.deprecation` stays populated now that no shipped backend is deprecated.
+_DEPRECATED_EXAMPLE = "retired"
+_DEPRECATED_EXAMPLE_MARKER = ToolDeprecation(
+    since="0.0.0",
+    removal_at_or_after="0.0.1",
+    replaced_by="pi",
+    migration='Pass backend: "pi".',
+)
+
+
 def build_snapshot() -> dict[str, Any]:
+    table = backends.DEPRECATED_BACKENDS
+    table[_DEPRECATED_EXAMPLE] = _DEPRECATED_EXAMPLE_MARKER
+    try:
+        return _build_snapshot()
+    finally:
+        del table[_DEPRECATED_EXAMPLE]
+
+
+def _build_snapshot() -> dict[str, Any]:
     stored = _stored_envelopes()
     return {
         "delivered": {

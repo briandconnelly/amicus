@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Check each backend CLI against what amicus was built for, without spending anything.
 
-A release vouches for the `codex`, `kimi`, `claude` and `pi` that were installed when its rule-20
+A release vouches for the `codex`, `claude` and `pi` that were installed when its rule-20
 evidence was recorded, and those CLIs release far more often than amicus does. This is the
 mechanical half of the precondition in docs/RELEASING.md ("The backend CLIs are current and
 checked"): for every in-tree backend it reports
@@ -13,7 +13,7 @@ checked"): for every in-tree backend it reports
       `docs/<backend>-help/<version>/` does not, and the reverse. Flags, not text: claude
       wraps its help to the terminal width and a capture may have been trimmed, so a text
       diff reports a change on every run. `--diff` prints the text diff for a reader;
-    * the latest upstream release, npm's `latest` dist-tag for all four, and whether the
+    * the latest upstream release, npm's `latest` dist-tag for all three, and whether the
       installed CLI is behind it or ahead of it. A lookup that fails is reported as unknown,
       never guessed, and fails the check unless `--offline` was given. A deprecated backend is
       frozen at its supported set, so being behind is reported for it and does not fail.
@@ -42,10 +42,10 @@ Subcommands (a first argument naming one selects it; anything else is the check 
     watch [--json] [--file-issues [--dry-run]] [--repo OWNER/NAME] [--docs-root docs]
           [--pyproject pyproject.toml]
 
-`watch` (#378) reads only npm and PyPI metadata, so it needs no installed CLI: kimi's and pi's
+`watch` (#378) reads only npm and PyPI metadata, so it needs no installed CLI: pi's
 latest minors against the shipped sets, claude's latest against the newest docs/claude-help
 capture, and fastmcp's and mcp's latest against their pyproject.toml caps. `--file-issues`
-files one issue per kimi, pi, fastmcp or mcp minor unless an open or closed issue has its exact
+files one issue per pi, fastmcp or mcp minor unless an open or closed issue has its exact
 title, and moves claude's one open tracking issue forward instead of filing another.
 A lookup that fails is unknown, files nothing and exits 1. docs/WATCHING.md is its contract.
 
@@ -104,7 +104,6 @@ from amicus import backends as in_tree
 from amicus.backends.claude import contract as claude_contract
 from amicus.backends.codex import cli as codex_cli
 from amicus.backends.codex import contract as codex_contract
-from amicus.backends.kimi import contract as kimi_contract
 from amicus.backends.pi import contract as pi_contract
 from amicus.registry import BackendRegistry
 from amicus.sdk.conventions.preflight import FlagSupport
@@ -113,12 +112,10 @@ from amicus.sdk.core import runtime
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Callable
 
-BACKENDS: tuple[str, ...] = ("codex", "kimi", "claude", "pi")
-# Where npm publishes each backend's CLI. Kimi Code updates itself through `kimi upgrade`,
-# but it is published as an npm package too, which is what makes its latest readable.
+BACKENDS: tuple[str, ...] = ("codex", "claude", "pi")
+# Where npm publishes each backend's CLI.
 NPM_PACKAGES: dict[str, str] = {
     "codex": "@openai/codex",
-    "kimi": "@moonshot-ai/kimi-code",
     "claude": "@anthropic-ai/claude-code",
     "pi": "@earendil-works/pi-coding-agent",
 }
@@ -126,8 +123,7 @@ NPM_PACKAGES: dict[str, str] = {
 # (claude's `next`), and a CLI that self-updates can land on one of those, ahead of this (#323).
 NPM_DIST_TAG = "latest"
 # How to install one exact release, where that is known. Claude Code's native installer pins
-# with `claude install`; an npm upgrade does not move the native install. Kimi Code updates
-# itself through `kimi upgrade`, which takes no version, so it gets prose, not a command.
+# with `claude install`; an npm upgrade does not move the native install.
 PIN_COMMANDS: dict[str, str] = {
     "codex": "npm install -g @openai/codex@{version}",
     "claude": "claude install {version}",
@@ -138,7 +134,7 @@ _SEMVER = re.compile(r"(\d+)\.(\d+)\.(\d+)")
 _RELEASE = re.compile(r"(\d+\.\d+\.\d+)((?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)")
 # An option ROW: a shallow indent, then the declaration column up to the gap before its
 # description. codex indents rows by 2 or 6 and puts the description on the next line;
-# kimi and claude indent by 2 and describe on the same line. Description text wraps at 10
+# claude indents by 2 and describe on the same line. Description text wraps at 10
 # columns or deeper, and may itself begin with a flag, so the indent is what tells them apart.
 _OPTION_ROW = re.compile(r"^ {1,8}(-\S.*?)(?: {2,}|$)", re.MULTILINE)
 _LONG_FLAG = re.compile(r"(?<![\w-])--[A-Za-z][\w-]*")
@@ -192,7 +188,7 @@ def builtin_supported(backend: str, version: str | None) -> bool:
         return False
     if backend == "claude":
         return parsed[0] in claude_contract.SUPPORTED_MAJORS
-    contracts = {"codex": codex_contract, "kimi": kimi_contract, "pi": pi_contract}
+    contracts = {"codex": codex_contract, "pi": pi_contract}
     shipped = contracts[backend].SUPPORTED_VERSIONS
     return parsed[:2] in shipped
 
@@ -1132,7 +1128,7 @@ def compare_main(argv: list[str]) -> int:
 
 # --- watch: metadata-only upstream release watch (#378) ------------------------------------
 
-WATCH_STREAMS: tuple[str, ...] = ("kimi", "claude", "pi", "fastmcp", "mcp")
+WATCH_STREAMS: tuple[str, ...] = ("claude", "pi", "fastmcp", "mcp")
 # Codex is not a stream here: the scheduled routine docs/UPGRADING-CODEX.md describes keeps
 # its `codex-upgrade` issues, each holding a release-notes evaluation this command cannot write.
 PYPI_JSON_URL = "https://pypi.org/pypi/{package}/json"
@@ -1143,7 +1139,6 @@ _CAP = re.compile(r"<\s*(\d+)\.(\d+)")
 # A backend stream's issue also carries its `backend: <id>` label, so every issue about one
 # backend is found by that label; the package streams have no backend to name.
 WATCH_LABELS: dict[str, tuple[str, ...]] = {
-    "kimi": ("dependencies", "chore", "backend: kimi"),
     "claude": ("dependencies", "chore", "backend: claude"),
     "pi": ("dependencies", "chore", "backend: pi"),
     "fastmcp": ("dependencies", "chore"),
@@ -1235,27 +1230,6 @@ def pyproject_cap(pyproject: Path, package: str) -> tuple[int, int] | None:
 def _minor(version: str) -> tuple[int, int] | None:
     parts = re.match(r"(\d+)\.(\d+)", version)
     return (int(parts[1]), int(parts[2])) if parts else None
-
-
-def watch_kimi(npm: Callable[[str], str | None]) -> Finding:
-    shipped = ", ".join(f"{a}.{b}" for a, b in sorted(kimi_contract.SUPPORTED_VERSIONS))
-    baseline = f"the shipped kimi set is {{{shipped}}}"
-    latest = npm("kimi")
-    minor = _minor(latest) if latest else None
-    if latest is None or minor is None:
-        return Finding("kimi", "unknown", baseline=baseline, detail="npm lookup failed")
-    if builtin_supported("kimi", latest):
-        return Finding("kimi", "current", latest, baseline)
-    key = f"{minor[0]}.{minor[1]}"
-    return Finding(
-        "kimi",
-        "update",
-        latest,
-        f"{baseline}, which does not name {key}",
-        key,
-        f"chore(backends): track kimi {key}",
-        WATCH_LABELS["kimi"],
-    )
 
 
 def watch_pi(npm: Callable[[str], str | None]) -> Finding:
@@ -1357,7 +1331,6 @@ def watch_all(
     npm = npm or latest_upstream
     pypi = pypi or latest_pypi
     readers: dict[str, Callable[[], Finding]] = {
-        "kimi": lambda: watch_kimi(npm),
         "claude": lambda: watch_claude(npm, docs_root),
         "pi": lambda: watch_pi(npm),
         "fastmcp": lambda: watch_pypi("fastmcp", pypi, pyproject),

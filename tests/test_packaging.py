@@ -86,7 +86,7 @@ def test_declared_names_cover_the_global_namespace():
 
 def test_declared_names_cover_every_in_tree_backend():
     names = packaging.declared_env_names()
-    for expected in ("AMICUS_CODEX_BIN", "AMICUS_KIMI_BIN", "AMICUS_CLAUDE_BIN"):
+    for expected in ("AMICUS_CODEX_BIN", "AMICUS_PI_BIN", "AMICUS_CLAUDE_BIN"):
         assert expected in names
 
 
@@ -102,7 +102,7 @@ def test_vendor_auth_includes_the_claude_credentials():
 EXPECTED_ENV_VARS = [
     # Pinned by review, not derived: comparing a generated file to its own generator is not an
     # oracle. This list is the independent expectation; the generator must reproduce it exactly.
-    # 39 declared (16 global + 6 codex + 6 kimi + 7 claude + 4 pi) + 2 vendor = 41.
+    # 33 declared (16 global + 6 codex + 7 claude + 4 pi) + 2 vendor = 35.
     "AMICUS_ALLOW_CWD_WORKSPACE",
     "AMICUS_BACKENDS",
     "AMICUS_CLAUDE_ACCESS",
@@ -123,12 +123,6 @@ EXPECTED_ENV_VARS = [
     "AMICUS_JOB_MAX_COUNT",
     "AMICUS_JOB_MAX_SECONDS",
     "AMICUS_JOB_TTL",
-    "AMICUS_KIMI_BIN",
-    "AMICUS_KIMI_EXTRA_ARGS",
-    "AMICUS_KIMI_ISOLATION",
-    "AMICUS_KIMI_MODEL",
-    "AMICUS_KIMI_REASONING_EFFORT",
-    "AMICUS_KIMI_SUPPORTED_VERSIONS",
     "AMICUS_LOG_FILE",
     "AMICUS_LOG_LEVEL",
     "AMICUS_MAX_DELEGATE_DIFF_BYTES",

@@ -31,7 +31,7 @@ def _app(env=None, registry=None):
 def _mixed_registry():
     return BackendRegistry(
         {"codex": fakeplugin.make_plugin("codex", egress="sends to OpenAI", carriers="argv")},
-        {"kimi": UnavailableBackend("kimi", "import_failed", "no module amicus.backends.kimi")},
+        {"pi": UnavailableBackend("pi", "import_failed", "no module amicus.backends.pi")},
     )
 
 
@@ -170,12 +170,12 @@ async def test_dry_runs_validate_options_then_report_backend_state():
         ok = await c.call_tool(
             "amicus_review_changes_dry_run", {"backend": "codex"}, raise_on_error=False
         )
-        kimi = await c.call_tool(
-            "amicus_delegate_dry_run", {"backend": "kimi", "task": "t"}, raise_on_error=False
+        pi = await c.call_tool(
+            "amicus_delegate_dry_run", {"backend": "pi", "task": "t"}, raise_on_error=False
         )
     assert bad.structured_content["error"]["details"]["field"] == "backend_options.access"
     assert ok.structured_content["error"]["code"] == "invalid_workspace_root"
-    assert kimi.structured_content["error"]["code"] == "backend_unavailable"
+    assert pi.structured_content["error"]["code"] == "backend_unavailable"
 
 
 async def test_delegate_dry_run_needs_a_workspace_once_the_backend_resolves():
@@ -196,18 +196,18 @@ async def test_delegate_dry_run_rejects_a_blank_task():
 
 async def test_backends_catalog_reports_enabled_available_and_unavailable():
     app = _app(
-        env={"AMICUS_BACKENDS": "codex,kimi", "MOONBRIDGE_TIMEOUT_SECONDS": "60"},
+        env={"AMICUS_BACKENDS": "codex,pi", "MOONBRIDGE_TIMEOUT_SECONDS": "60"},
         registry=_mixed_registry(),
     )
     async with Client(app) as c:
         res = await c.call_tool("amicus_backends", {"detail": "full"})
         tool = next(t for t in await c.list_tools() if t.name == "amicus_backends")
-        only = await c.call_tool("amicus_backends", {"backend": "kimi"})
+        only = await c.call_tool("amicus_backends", {"backend": "pi"})
     payload = res.structured_content
     Draft202012Validator(tool.output_schema).validate(payload)
     assert payload["omitted_fields"] == []
     by_id = {b["id"]: b for b in payload["backends"]}
-    assert set(by_id) == {"codex", "kimi", "claude", "pi"}
+    assert set(by_id) == {"codex", "claude", "pi"}
     assert by_id["codex"]["enabled"] and by_id["codex"]["available"]
     assert by_id["codex"]["status"] == {
         "installed": True,
@@ -217,8 +217,8 @@ async def test_backends_catalog_reports_enabled_available_and_unavailable():
     }
     assert by_id["codex"]["features"] == ["delegate"]
     assert by_id["codex"]["egress"] == "sends to OpenAI" and by_id["codex"]["carriers"] == "argv"
-    # full keeps a null where no loaded plugin declares one (kimi's plugin did not load).
-    assert by_id["kimi"]["egress"] is None and "egress" in by_id["kimi"]
+    # full keeps a null where no loaded plugin declares one (pi's plugin did not load).
+    assert by_id["pi"]["egress"] is None and "egress" in by_id["pi"]
     assert {o["name"] for o in by_id["codex"]["options"]} == {"isolation"}
     assert by_id["codex"]["options"][0]["allowed_values"] == [
         "inherit",
@@ -229,17 +229,17 @@ async def test_backends_catalog_reports_enabled_available_and_unavailable():
         "paid_calls_destructive": False,
         "job_reads_read_only": True,
     }
-    assert by_id["kimi"]["enabled"] and not by_id["kimi"]["available"]
+    assert by_id["pi"]["enabled"] and not by_id["pi"]["available"]
     assert not by_id["claude"]["enabled"]
     assert by_id["claude"]["effects"]["paid_calls_destructive"] is True
     assert payload["unavailable"] == [
-        {"id": "kimi", "reason": "import_failed", "detail": "no module amicus.backends.kimi"}
+        {"id": "pi", "reason": "import_failed", "detail": "no module amicus.backends.pi"}
     ]
     # A retired sibling name (#176) is reported in the top-level env_warnings, never read.
     assert any(
         "MOONBRIDGE_TIMEOUT_SECONDS is set but not read" in w for w in payload["env_warnings"]
     )
-    assert [b["id"] for b in only.structured_content["backends"]] == ["kimi"]
+    assert [b["id"] for b in only.structured_content["backends"]] == ["pi"]
 
 
 async def test_backends_status_probe_does_not_stall_the_event_loop():
@@ -293,7 +293,7 @@ async def test_a_backend_tombstone_is_reported_only_through_that_backend_s_statu
     }
     settings = config.settings(environ)
     # The real codex plugin, from the same environ (its status probe is what carries the
-    # backend's config warnings); kimi is not enabled, so no kimi plugin exists at all.
+    # backend's config warnings); pi is not enabled, so no pi plugin exists at all.
     registry = BackendRegistry({"codex": codex.plugin(environ)}, {})
     async with Client(server.create_app(settings, registry)) as c:
         res = await c.call_tool("amicus_backends", {})
@@ -303,7 +303,7 @@ async def test_a_backend_tombstone_is_reported_only_through_that_backend_s_statu
     assert "CODEX_IN_CLAUDE_ISOLATION is set but not read" in codex_warnings
     assert "AMICUS_CODEX_ISOLATION" in codex_warnings
     assert not any("CODEX_IN_CLAUDE_ISOLATION" in w for w in payload["env_warnings"])
-    assert by_id["kimi"]["status"] is None and not by_id["kimi"]["enabled"]
+    assert by_id["pi"]["status"] is None and not by_id["pi"]["enabled"]
     assert "MOONBRIDGE_MODEL" not in json.dumps(payload)
 
 
@@ -327,9 +327,9 @@ async def test_models_reports_a_truncated_catalog():
         def read(self):
             return ModelListing(models=(ModelEntry(slug="m0"),), source="live", truncated=True)
 
-    reg = BackendRegistry({"kimi": fakeplugin.make_plugin("kimi", models=_Cut())}, {})
+    reg = BackendRegistry({"pi": fakeplugin.make_plugin("pi", models=_Cut())}, {})
     async with Client(_app(registry=reg)) as c:
-        res = await c.call_tool("amicus_models", {"backend": "kimi"})
+        res = await c.call_tool("amicus_models", {"backend": "pi"})
         tool = next(t for t in await c.list_tools() if t.name == "amicus_models")
     Draft202012Validator(tool.output_schema).validate(res.structured_content)
     assert res.structured_content["truncated"] is True
@@ -364,8 +364,8 @@ async def test_a_truncated_pi_listing_says_the_exact_model_is_still_checked():
     assert "cannot check" not in hint and "is still valid" not in hint
 
 
-async def test_a_truncated_kimi_listing_does_not_vouch_for_a_slug_past_the_cut():
-    tool, resource = await _models_both_ways("kimi")
+async def test_a_truncated_codex_listing_does_not_vouch_for_a_slug_past_the_cut():
+    tool, resource = await _models_both_ways("codex")
     assert tool["truncation_hint"] == resource["truncation_hint"]
     hint = tool["truncation_hint"]
     assert "these 1 models" in hint and "may still be valid" in hint
@@ -399,7 +399,7 @@ async def test_models_carry_token_limits_on_the_tool_and_the_resource():
 async def test_models_for_available_and_unavailable_backends():
     async with Client(_app(registry=_mixed_registry())) as c:
         codex = await c.call_tool("amicus_models", {"backend": "codex"})
-        kimi = await c.call_tool("amicus_models", {"backend": "kimi"}, raise_on_error=False)
+        pi = await c.call_tool("amicus_models", {"backend": "pi"}, raise_on_error=False)
         tool = next(t for t in await c.list_tools() if t.name == "amicus_models")
     Draft202012Validator(tool.output_schema).validate(codex.structured_content)
     assert codex.structured_content["models"] == [
@@ -418,9 +418,9 @@ async def test_models_for_available_and_unavailable_backends():
     # amicus_models on an unavailable backend now reports the same backend_unavailable
     # envelope every paid tool reports, rather than the resource's informational
     # available:false payload (that stays on amicus://models/{backend}).
-    assert kimi.is_error
-    Draft202012Validator(tool.output_schema).validate(kimi.structured_content)
-    err = kimi.structured_content["error"]
+    assert pi.is_error
+    Draft202012Validator(tool.output_schema).validate(pi.structured_content)
+    err = pi.structured_content["error"]
     assert err["code"] == "backend_unavailable"
     assert err["repair"]["tool"] == "amicus_backends"
     assert "unavailable" in err["message"]
@@ -430,7 +430,7 @@ async def test_backends_summary_omits_the_disclosures_and_says_so():
     """The default projection drops the four disclosure KEYS (not nulls them, which would
     read as "no loaded plugin declares one") and names them in omitted_fields; the
     resource never does."""
-    app = _app(env={"AMICUS_BACKENDS": "codex,kimi"}, registry=_mixed_registry())
+    app = _app(env={"AMICUS_BACKENDS": "codex,pi"}, registry=_mixed_registry())
     async with Client(app) as c:
         tool = next(t for t in await c.list_tools() if t.name == "amicus_backends")
         summary = (await c.call_tool("amicus_backends", {})).structured_content
@@ -486,7 +486,7 @@ async def test_capabilities_summary_full_row_selection_and_include_schemas():
     assert summary["meta_fields"] == list(Meta.model_fields)
     assert len(summary["surface_digest"]) == 64
     assert summary["tasks"]["enabled"] is False and summary["tasks"]["task_tools"] == []
-    assert summary["enabled_backends"] == ["codex", "kimi", "claude", "pi"]
+    assert summary["enabled_backends"] == ["codex", "claude", "pi"]
     assert {d["name"] for d in summary["tool_details"]} == set(tools.TOOL_ORDER)
     # detail changes field density only: same rows, same order, at both levels.
     assert [d["name"] for d in summary["tool_details"]] == [d["name"] for d in full["tool_details"]]
@@ -584,15 +584,15 @@ def test_sync_paid_tools_advertise_the_idempotency_codes():
         assert set(discovery._IDEMPOTENCY_CODES) <= async_codes, async_name
 
 
-def test_empty_response_is_listed_exactly_where_kimi_can_run_the_tool():
-    """Kimi's inspector emits empty_response on every paid verb it runs; a tool no kimi call
+def test_empty_response_is_listed_exactly_where_pi_can_run_the_tool():
+    """Pi's inspector emits empty_response on every paid verb it runs; a tool no pi call
     can reach (claude-only adversarial review, the free tools) must not promise it."""
     from amicus.tools.discovery import TOOL_DETAILS
 
     paid = {n: r for n, r in TOOL_DETAILS.items() if r["cost"] == "active"}
     assert paid, "no paid tools found: the instrument is broken"
     for name, row in paid.items():
-        assert ("empty_response" in row["error_codes"]) == ("kimi" in row["backends"]), name
+        assert ("empty_response" in row["error_codes"]) == ("pi" in row["backends"]), name
     # The job-read tools deliver a paid tool's stored envelope, so they inherit it (#440).
     free = [
         r
@@ -655,7 +655,7 @@ def test_invalid_model_is_listed_by_tool_role():
         contract = importlib.import_module(f"amicus.backends.{backend_id}.contract").CONTRACT
         if "model_validation" in contract.supported_features:
             validating.add(backend_id)
-    assert validating == {"kimi", "pi"}
+    assert validating == {"pi"}
     expected = {
         name
         for name, (verb, _is_async) in TOOL_VERB.items()
@@ -760,9 +760,6 @@ def _destructive_sentence(reading: str) -> str:
 
 _CLAUDE_REASON = "Claude Code is enabled and its config modes may run workspace hooks"
 _PI_REASON = "Pi is enabled and its delegate runs unsandboxed shell commands"
-_KIMI_REASON = (
-    "Kimi is enabled and its delegate runs shell commands and writes files with no sandbox"
-)
 _CONFINED = "every enabled backend confines writes to a throwaway worktree"
 
 
@@ -771,10 +768,9 @@ _CONFINED = "every enabled backend confines writes to a throwaway worktree"
     [
         ("pi", [_PI_REASON], [_CLAUDE_REASON, "Claude Code"]),
         ("claude", [_CLAUDE_REASON], [_PI_REASON, "Pi "]),
-        (None, [_KIMI_REASON, _CLAUDE_REASON, _PI_REASON], []),
+        (None, [_CLAUDE_REASON, _PI_REASON], []),
         ("pi,claude", [_CLAUDE_REASON, _PI_REASON], []),
-        ("kimi", [_KIMI_REASON], [_CLAUDE_REASON, _PI_REASON, "Codex"]),
-        ("codex,kimi", [_KIMI_REASON], [_CLAUDE_REASON, _PI_REASON, "Codex"]),
+        ("codex,pi", [_PI_REASON], [_CLAUDE_REASON, "Codex"]),
     ],
 )
 async def test_annotations_reading_names_each_enabled_destructive_backend(profile, named, unnamed):
@@ -798,13 +794,13 @@ async def test_annotations_reading_names_each_enabled_destructive_backend(profil
 
 
 async def test_annotations_reading_keeps_the_confined_sentence_without_a_destructive_backend():
-    """codex alone is the one profile left whose paid tools are not destructive: kimi has
+    """codex alone is the one profile left whose paid tools are not destructive: pi has
     no sandbox, so enabling it makes them destructive (#426)."""
     reading, destructive = await _annotations_reading(config.settings({"AMICUS_BACKENDS": "codex"}))
     sentence = _destructive_sentence(reading)
     assert destructive is False
     assert f"destructiveHint false for this profile because {_CONFINED}" in sentence
-    for absent in ("Claude Code", "Pi ", "Kimi"):
+    for absent in ("Claude Code", "Pi ", "Pi"):
         assert absent not in sentence, absent
 
 
@@ -834,7 +830,7 @@ def test_every_destructive_backend_declares_its_reason():
     from amicus.backends import DESTRUCTIVE_REASONS, KNOWN_EFFECTS
 
     destructive = {b for b, e in KNOWN_EFFECTS.items() if e.paid_calls_destructive}
-    assert destructive == {"claude", "kimi", "pi"}
+    assert destructive == {"claude", "pi"}
     assert set(DESTRUCTIVE_REASONS) == destructive
     assert all(r.strip() and not r.endswith(".") for r in DESTRUCTIVE_REASONS.values())
 
@@ -858,7 +854,7 @@ async def _loaded_backends():
     plugin loaded through the real registry path (the autouse guards in conftest make each
     binary unreachable, so no backend CLI runs). The manifest snapshots are built with an
     empty registry and never see a plugin's disclosures, so this is the instrument for them."""
-    ids = ("codex", "kimi", "claude", "pi")
+    ids = ("codex", "claude", "pi")
     registry = BackendRegistry.load(ids, entry_points=())
     assert registry.unavailable == {}
     app = _app(registry=registry)
@@ -875,7 +871,6 @@ async def _loaded_backends():
 # What leaves and to whom: each backend's egress names its recipient and the inputs it sends.
 _EGRESS_NAMES: dict[str, tuple[str, ...]] = {
     "codex": ("OpenAI", "question/task", "extra_context", "instructions_append", "diff"),
-    "kimi": ("Kimi provider", "question/task", "extra_context", "instructions_append", "diff"),
     "claude": ("Anthropic", "question/target/evidence", "extra_context", "diff"),
     "pi": ("provider",),
 }

@@ -93,32 +93,6 @@ def test_positive_control_a_usable_override_does_resolve(monkeypatch):
     assert plugin.binary.resolve() is not None
 
 
-# --- the never-spawn guard for Kimi: AMICUS_KIMI_BIN is unusable
-
-
-def test_never_spawn_kimi_env_is_set_to_the_unusable_path():
-    from tests.conftest import NEVER_SPAWN_KIMI
-
-    assert os.environ["AMICUS_KIMI_BIN"] == NEVER_SPAWN_KIMI
-    assert not Path(NEVER_SPAWN_KIMI).exists()
-
-
-def test_the_real_kimi_plugin_config_does_not_resolve_a_binary():
-    from amicus.backends.kimi import binary, config
-
-    assert binary.KimiBinary(config.load_config()).resolve() is None
-
-
-def test_positive_control_a_usable_kimi_override_does_resolve(monkeypatch, tmp_path):
-    from amicus.backends.kimi import binary, config
-
-    exe = tmp_path / "kimi"
-    exe.write_text("#!/bin/sh\nexit 0\n")
-    exe.chmod(0o755)
-    monkeypatch.setenv("AMICUS_KIMI_BIN", str(exe))
-    assert binary.KimiBinary(config.load_config()).resolve() == str(exe)
-
-
 # --- the never-spawn guard for Claude: AMICUS_CLAUDE_BIN is unusable
 
 

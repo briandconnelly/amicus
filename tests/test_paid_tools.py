@@ -28,7 +28,7 @@ def _app(env: dict | None = None, registry: BackendRegistry | None = None):
     # None -> create_app's own BackendRegistry.load(settings.enabled_backends), which
     # tries to import the not-yet-shipped in-tree backend packages. The codex package exists
     # but its plugin factory lands in Task 6, so the registry records it as load_failed;
-    # kimi loads since M3, claude since M4 and pi since M9. This is the realistic
+    # claude loads since M4 and pi since M9. This is the realistic
     # intermediate state this milestone is in.
     return server.create_app(config.settings(env or {}), registry)
 
@@ -80,14 +80,14 @@ async def test_backend_enums_are_per_verb_and_match_tool_details():
     equals the `backends` its amicus_capabilities row publishes."""
     by_name = await _tools(_app())
     expected = {
-        "amicus_consult": ["codex", "kimi", "claude", "pi"],
-        "amicus_consult_async": ["codex", "kimi", "claude", "pi"],
-        "amicus_review_changes": ["codex", "kimi", "claude", "pi"],
-        "amicus_review_changes_async": ["codex", "kimi", "claude", "pi"],
-        "amicus_review_changes_dry_run": ["codex", "kimi", "claude", "pi"],
-        "amicus_delegate": ["codex", "kimi", "pi"],
-        "amicus_delegate_async": ["codex", "kimi", "pi"],
-        "amicus_delegate_dry_run": ["codex", "kimi", "pi"],
+        "amicus_consult": ["codex", "claude", "pi"],
+        "amicus_consult_async": ["codex", "claude", "pi"],
+        "amicus_review_changes": ["codex", "claude", "pi"],
+        "amicus_review_changes_async": ["codex", "claude", "pi"],
+        "amicus_review_changes_dry_run": ["codex", "claude", "pi"],
+        "amicus_delegate": ["codex", "pi"],
+        "amicus_delegate_async": ["codex", "pi"],
+        "amicus_delegate_dry_run": ["codex", "pi"],
         "amicus_adversarial_review": ["claude"],
         "amicus_adversarial_review_async": ["claude"],
     }
@@ -98,7 +98,6 @@ async def test_backend_enums_are_per_verb_and_match_tool_details():
     # The lookup tools keep the whole set: they answer for any known backend.
     assert by_name["amicus_models"].input_schema["properties"]["backend"]["enum"] == [
         "codex",
-        "kimi",
         "claude",
         "pi",
     ]
@@ -185,11 +184,11 @@ async def test_a_backend_outside_the_verbs_enum_is_rejected_at_the_boundary():
     (tests/test_prepare.py)."""
     app = _app(registry=_fake_registry())
     calls = (
-        ("amicus_delegate", {"backend": "claude", "task": "t"}, ["codex", "kimi", "pi"]),
-        ("amicus_delegate_async", {"backend": "claude", "task": "t"}, ["codex", "kimi", "pi"]),
-        ("amicus_delegate_dry_run", {"backend": "claude", "task": "t"}, ["codex", "kimi", "pi"]),
+        ("amicus_delegate", {"backend": "claude", "task": "t"}, ["codex", "pi"]),
+        ("amicus_delegate_async", {"backend": "claude", "task": "t"}, ["codex", "pi"]),
+        ("amicus_delegate_dry_run", {"backend": "claude", "task": "t"}, ["codex", "pi"]),
         ("amicus_adversarial_review", {"backend": "codex", "target": "t"}, ["claude"]),
-        ("amicus_adversarial_review_async", {"backend": "kimi", "target": "t"}, ["claude"]),
+        ("amicus_adversarial_review_async", {"backend": "pi", "target": "t"}, ["claude"]),
     )
     async with Client(app) as c:
         for name, args, allowed in calls:
@@ -209,7 +208,7 @@ async def test_backend_options_are_validated_before_availability():
         )
         bad_value = await c.call_tool(
             "amicus_review_changes",
-            {"backend": "kimi", "backend_options": {"isolation": "ignore-rules"}},
+            {"backend": "codex", "backend_options": {"isolation": "ignore-skills"}},
             raise_on_error=False,
         )
         unknown_key = await c.call_tool(
@@ -223,7 +222,8 @@ async def test_backend_options_are_validated_before_availability():
     assert err["details"]["reason"].endswith("; remove it")
     assert err["repair"]["tool"] == "amicus_consult"
     err = bad_value.structured_content["error"]
-    assert err["details"]["allowed_values"] == ["inherit", "ignore-skills"]
+    assert err["code"] == "invalid_arguments"
+    assert err["details"]["field"] == "backend_options.isolation"
     err = unknown_key.structured_content["error"]
     assert (
         err["code"] == "invalid_arguments" and err["details"]["field"] == "backend_options.sandbox"
@@ -276,7 +276,7 @@ async def test_unknown_backend_is_a_boundary_invalid_arguments():
     err = res.structured_content["error"]
     assert err["code"] == "invalid_arguments"
     assert err["details"]["field"] == "backend"
-    assert err["details"]["allowed_values"] == ["codex", "kimi", "claude", "pi"]
+    assert err["details"]["allowed_values"] == ["codex", "claude", "pi"]
     # #503: agents name a model's vendor as the backend; point them at pi.
     assert 'amicus_models(backend="pi")' in err["repair"]["alternative"]
 
@@ -297,7 +297,7 @@ async def test_unknown_backend_without_pi_gets_no_pi_hint():
     [
         ({}, True),
         ({"AMICUS_BACKENDS": "codex"}, False),
-        ({"AMICUS_BACKENDS": "codex,kimi"}, True),
+        ({"AMICUS_BACKENDS": "codex,pi"}, True),
         ({"AMICUS_BACKENDS": "claude"}, True),
     ],
 )
@@ -366,3 +366,25 @@ async def test_an_empty_idempotency_key_is_refused_pre_spend(name):
     err = res.structured_content["error"]
     assert res.is_error and err["code"] == "invalid_arguments"
     assert err["details"]["field"] == "idempotency_key"
+
+
+@pytest.mark.parametrize(
+    "tool,args",
+    [
+        ("amicus_consult", {"question": "q"}),
+        ("amicus_consult_async", {"question": "q"}),
+        ("amicus_review_changes", {}),
+        ("amicus_review_changes_async", {}),
+        ("amicus_review_changes_dry_run", {}),
+        ("amicus_delegate", {"task": "t"}),
+        ("amicus_delegate_async", {"task": "t"}),
+        ("amicus_delegate_dry_run", {"task": "t"}),
+    ],
+)
+async def test_removed_kimi_backend_is_rejected_before_spend(tool, args):
+    async with Client(_app()) as c:
+        result = await c.call_tool(tool, {"backend": "kimi", **args}, raise_on_error=False)
+    error = result.structured_content["error"]
+    assert error["code"] == "invalid_arguments"
+    assert error["details"]["field"] == "backend"
+    assert "kimi" not in error["details"]["allowed_values"]

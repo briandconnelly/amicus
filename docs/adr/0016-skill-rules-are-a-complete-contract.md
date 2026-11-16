@@ -17,7 +17,7 @@ The same audit found the converse problem inside the rules: they carried enough 
 **A guarantee was ported across backends that does not hold for all of them.**
 `reviewing-a-returned-diff.md` said "Delegate runs have no network egress", and concluded that an install, a remote git operation, `gh`, or a publish step could not have happened inside a run.
 That is true for `codex`, where amicus pins `sandbox_workspace_write.network_access=false` (`src/amicus/backends/codex/cli.py:67`).
-It is false for `kimi`, which has no sandbox at all (`src/amicus/backends/kimi/contract.py:7`); a worktree changes kimi's working directory, not its reach.
+It is false for `kimi`, which has no sandbox at all (`the retired Kimi contract`); a worktree changes kimi's working directory, not its reach.
 
 The sentence descends from the single-backend ancestor skills in `codex-in-claude` and `moonbridge`, where the same wording appears in `references/active-workflows.md`.
 It is worth recording that this was not simply mis-generalized on the way into amicus: `moonbridge`'s copy carries the claim while `moonbridge`'s own `SKILL.md` states the opposite in bold, so the ancestor is internally inconsistent and the false half is the one that was inherited.

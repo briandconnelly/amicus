@@ -121,17 +121,17 @@ def test_a_record_taken_on_a_dirty_tree_is_rejected():
 
 def test_a_missing_backend_is_rejected():
     record = _record()
-    del record["backends"]["kimi"]
+    del record["backends"]["pi"]
     problems = evidence.validate(record, head=HEAD, tree_clean=True, now=NOW)
-    assert any("kimi" in p for p in problems), problems
+    assert any("pi" in p for p in problems), problems
 
 
-def test_a_three_suite_record_without_pi_is_rejected():
+def test_a_two_suite_record_without_pi_is_rejected():
     record = _record()
     del record["backends"]["pi"]
     problems = evidence.validate(record, head=HEAD, tree_clean=True, now=NOW)
     assert any("pi" in p for p in problems), problems
-    assert evidence.BACKENDS == ("codex", "kimi", "claude", "pi")
+    assert evidence.BACKENDS == ("codex", "claude", "pi")
     assert evidence._BINARY_ENV_VARS["pi"] == "AMICUS_PI_BIN"
     assert evidence._TEST_FILES["pi"] == "tests/test_pi_live.py"
 
@@ -177,9 +177,9 @@ def test_a_non_object_backend_entry_is_rejected(bad):
     """Issue #19 item 1: an entry that is not an object is rejected by name, and only that
     backend is: the other two entries are still read and still pass."""
     record = _record()
-    record["backends"]["kimi"] = bad
+    record["backends"]["pi"] = bad
     problems = evidence.validate(record, head=HEAD, tree_clean=True, now=NOW)
-    assert problems == ["record entry for backend 'kimi' is not an object"], problems
+    assert problems == ["record entry for backend 'pi' is not an object"], problems
 
 
 def test_a_future_timestamp_is_rejected():
@@ -207,23 +207,23 @@ def test_a_non_string_batch_id_is_rejected():
 
 def test_a_backend_entry_with_a_mismatched_batch_id_is_rejected():
     record = _record()
-    record["backends"]["kimi"]["batch_id"] = "different-batch"
+    record["backends"]["pi"]["batch_id"] = "different-batch"
     problems = evidence.validate(record, head=HEAD, tree_clean=True, now=NOW)
-    assert any("kimi" in p and "batch_id" in p for p in problems), problems
+    assert any("pi" in p and "batch_id" in p for p in problems), problems
 
 
 def test_a_backend_entry_with_the_wrong_test_file_is_rejected():
     record = _record()
-    record["backends"]["codex"]["test_file"] = "tests/test_kimi_live.py"
+    record["backends"]["codex"]["test_file"] = "tests/test_pi_live.py"
     problems = evidence.validate(record, head=HEAD, tree_clean=True, now=NOW)
     assert any("codex" in p and "test_file" in p for p in problems), problems
 
 
-def test_a_codex_entry_duplicated_from_kimis_is_rejected():
+def test_a_codex_entry_duplicated_from_pis_is_rejected():
     """The honest-mistake case the module docstring calls out: hand-repairing a record after
     one gate failed by copying a sibling backend's entry instead of re-running the gate."""
     record = _record()
-    record["backends"]["codex"] = dict(record["backends"]["kimi"])
+    record["backends"]["codex"] = dict(record["backends"]["pi"])
     problems = evidence.validate(record, head=HEAD, tree_clean=True, now=NOW)
     assert any("codex" in p and "test_file" in p for p in problems), problems
 
@@ -289,14 +289,14 @@ def test_main_writes_failure_not_evidence_when_one_backend_fails(tmp_path):
         **_RELEASE_TREE,
         git_head=lambda: HEAD,
         git_dirty_paths=list,
-        run_gate=_failing_gate("kimi"),
+        run_gate=_failing_gate("pi"),
     )
     assert rc == 1
     assert not (tmp_path / evidence.EVIDENCE_PATH).exists()
     failure_path = tmp_path / evidence.FAILURE_PATH
     assert failure_path.exists()
     record = json.loads(failure_path.read_text())
-    assert record["backends"]["kimi"]["exit_status"] == 1
+    assert record["backends"]["pi"]["exit_status"] == 1
     assert record["backends"]["codex"]["exit_status"] == 0
 
 
@@ -531,7 +531,7 @@ def test_the_script_entry_point_passes_its_command_line_to_main(tmp_path):
     """The entry point, not only `main`, must hand over argv: before #242 it called `main()`.
 
     PATH names an empty directory, so if `--help` were ignored again the script would fail at
-    its first `git` call with no `uv`, `codex`, `kimi` or `claude` reachable, rather than spend.
+    its first `git` call with no `uv`, `codex`, `claude` or `pi` reachable, rather than spend.
     """
     proc = subprocess.run(
         [sys.executable, str(_SCRIPT), "--help"],

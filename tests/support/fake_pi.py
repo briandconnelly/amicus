@@ -103,7 +103,7 @@ def _probe(argv: list[str]) -> int | None:
         # The verbatim 1.5.0 capture, copied beside this script by the `fake_pi` fixture.
         help_file = os.environ.get("FAKE_PI_HELP_FILE") or Path(__file__).with_name("pi-help.txt")
         sys.stdout.write(Path(help_file).read_text(encoding="utf-8"))
-        return 0
+        return int(os.environ.get("FAKE_PI_HELP_EXIT", "0"))
     if stripped is not None and stripped[:1] == ["--list-models"] and len(stripped) <= 2:
         return _list_models(stripped[1] if len(stripped) == 2 else None)
     if "-p" not in argv:

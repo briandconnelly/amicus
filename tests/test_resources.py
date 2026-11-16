@@ -70,18 +70,18 @@ async def test_templates_are_listed_and_readable():
         assert {"egress", "carriers", "readonly_honesty", "implicit_context"} <= set(entry_body)
         [models] = await c.read_resource("amicus://models/codex")
         assert json.loads(models.text)["models"][0]["slug"] == "fake-1"
-        [kimi] = await c.read_resource("amicus://backends/kimi")
-        assert json.loads(kimi.text)["available"] is False
+        [pi] = await c.read_resource("amicus://backends/pi")
+        assert json.loads(pi.text)["available"] is False
         # Unlike the amicus_models TOOL (backend_unavailable envelope), the resource
         # keeps the informational available:false payload for a known-but-unloaded
         # backend. That is a choice, not a missing carrier: a resource read's error does
         # carry error.data.repair (resource_not_found for an unknown id).
-        [kimi_models] = await c.read_resource("amicus://models/kimi")
-        kimi_models_body = json.loads(kimi_models.text)
-        assert kimi_models_body["ok"] is True
-        assert kimi_models_body["available"] is False
-        assert kimi_models_body["models"] == []
-        assert kimi_models_body["source"] == "none"
+        [pi_models] = await c.read_resource("amicus://models/pi")
+        pi_models_body = json.loads(pi_models.text)
+        assert pi_models_body["ok"] is True
+        assert pi_models_body["available"] is False
+        assert pi_models_body["models"] == []
+        assert pi_models_body["source"] == "none"
         with pytest.raises(MCPError) as exc:
             await c.read_resource("amicus://backends/gemini")
         assert exc.value.error.data["machine_code"] == "resource_not_found"
@@ -107,7 +107,6 @@ async def test_completion_for_the_backend_template_variable():
         ref = ResourceTemplateReference(uri="amicus://models/{backend}")
         assert (await c.complete(ref, {"name": "backend", "value": ""})).values == [
             "codex",
-            "kimi",
             "claude",
             "pi",
         ]

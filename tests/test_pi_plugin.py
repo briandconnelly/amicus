@@ -84,8 +84,8 @@ def test_unusable_override_still_builds_a_plugin_that_probes_that_value():
 
 
 def test_pi_loads_beside_the_other_in_tree_plugins():
-    reg = registry.BackendRegistry.load(("codex", "kimi", "claude", "pi"), entry_points=())
-    assert set(reg.ids) == {"codex", "kimi", "claude", "pi"} and reg.unavailable == {}
+    reg = registry.BackendRegistry.load(("codex", "claude", "pi"), entry_points=())
+    assert set(reg.ids) == {"codex", "claude", "pi"} and reg.unavailable == {}
 
 
 # --- end to end against the fake pi ----------------------------------------------------------
