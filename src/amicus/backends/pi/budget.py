@@ -24,11 +24,15 @@ its own retries and reports only once they are done.
 It fails closed. A cost pi did not get from the provider (`totalFromProvider` not true: pi
 priced it from its own table, or not at all) cannot be measured against the cap, so a run
 that would continue past such a call is stopped as `unverifiable`; so is one with a stream
-line cut at the capture cap, since what it held is lost."""
+line cut at the capture cap, since what it held is lost. A total that is not a finite,
+non-negative number is no measurement either: NaN would make every later comparison false
+and a negative one would refund the cap. And a probe that fails on a line stops the run
+there, because the runtime never consults a probe again once it has raised."""
 
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass
 
 from amicus.sdk.core import streamcap
@@ -51,6 +55,23 @@ _GATES = frozenset({"auto_retry_start", "compaction_start"})
 _NEEDLES = ('"message_end"', '"compaction_end"', *(f'"{g}"' for g in sorted(_GATES)))
 
 
+def provider_cost(usage: object) -> float | None:
+    """The cost of one model call as the provider reported it, or None when the usage
+    carries no such figure: pi priced it itself, or the total is not a finite,
+    non-negative number."""
+    cost = usage.get("cost") if isinstance(usage, dict) else None
+    if not isinstance(cost, dict) or cost.get("totalFromProvider") is not True:
+        return None
+    total = cost.get("total")
+    if isinstance(total, bool) or not isinstance(total, int | float):
+        return None
+    try:
+        measured = float(total)
+    except OverflowError:
+        return None
+    return measured if math.isfinite(measured) and measured >= 0 else None
+
+
 @dataclass
 class SpendProbe:
     """One run's running spend; a fresh instance per run (`PreparedRun.stop_on_line`)."""
@@ -63,6 +84,14 @@ class SpendProbe:
     last_stop: object = None
 
     def __call__(self, line: str) -> str | None:
+        try:
+            return self._judge(line)
+        except Exception:
+            # Fail closed: the runtime drops a probe that raises, leaving the run uncapped.
+            self.unverified = True
+            return UNVERIFIABLE
+
+    def _judge(self, line: str) -> str | None:
         if streamcap.is_loss_marker(line):
             # A line cut at the capture cap may have been a message_end, whose cost and stop
             # reason are now unknowable. Cut lines are rare (one line past the whole cap).
@@ -112,14 +141,8 @@ class SpendProbe:
         return BUDGET if self.spent_usd >= self.cap_usd else None
 
     def _count(self, usage: object) -> None:
-        cost = usage.get("cost") if isinstance(usage, dict) else None
-        total = cost.get("total") if isinstance(cost, dict) else None
-        if (
-            isinstance(cost, dict)
-            and cost.get("totalFromProvider") is True
-            and isinstance(total, int | float)
-            and not isinstance(total, bool)
-        ):
-            self.spent_usd += total
-        else:
+        cost = provider_cost(usage)
+        if cost is None:
             self.unverified = True
+        else:
+            self.spent_usd += cost
