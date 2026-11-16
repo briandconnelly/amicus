@@ -58,9 +58,9 @@ per-change, as its own lead says.
   the provider reported it, and a stopped delegate carries its worktree diff as `partial`. A
   compaction pi starts after its final answer is stopped over the cap too, but the answer
   stands and the call succeeds. pi has no default cap; `AMICUS_PI_MAX_BUDGET_USD` sets one
-  (#454).
-- **Fixed**: pi's `meta.usage` now counts the model calls its context compactions make, and
-  reports `cost_usd` as unknown when a compaction's cost was not provider-reported.
+  (#454). On pi 1.5.2 only OpenRouter reports a cost the cap can measure, so a capped run
+  through any other provider is stopped after its first model call unless that call is its
+  last.
 
 ### Changed
 
@@ -117,6 +117,31 @@ per-change, as its own lead says.
   is required for `scope="branch"`. They had said an omitted `base` meant the upstream, which
   nothing resolves: the call was, and is, refused as `invalid_base`. The skill's scope table
   says the same (#478).
+- **Surface**: `amicus/0.1/schema-69`. Parameter descriptions and refusals state constraints
+  callers kept violating. `wait_seconds` and `amicus_job_status` give the 0 to 50 second
+  bound; `scope` and `commit` say `scope="commit"` requires `commit`; a `backend_options` key
+  the backend does not accept is refused with "remove it"; and an unknown `backend` value, on
+  a tool that offers `pi`, is refused with a hint that `backend` names a harness, not a model,
+  and that another provider's model is reached through `amicus_models(backend="pi")` (#503).
+- **Surface**: `amicus/0.1/schema-72`. amicus no longer describes pi's reasoning-effort list
+  as the model's own. `pi --list-models` reports only whether a model thinks, so a thinking
+  row lists pi's whole vocabulary: `supported_reasoning_efforts`, the `amicus_models`
+  description and the `reasoning_effort` parameter now call the values advisory. pi's
+  pre-spend refusal covers only a token outside that vocabulary or a non-`off` effort on a
+  non-thinking model, and its repair text no longer implies every clamp is refused: pi may
+  run a listed effort at another level (#511).
+- An exception raised outside a tool's own guard, by a middleware or while FastMCP converts
+  the tool's result, now returns the documented `internal_error` envelope naming only the
+  exception's type. It had reached the client as a bare "Internal server error" with no
+  envelope and no `request_id`, or as an error whose message carried the exception's text
+  (#502).
+- A background job that cannot start because the server's own Python interpreter no longer
+  exists, as after `uv cache clean` or a deleted virtualenv under a running server, now says
+  to restart the MCP server and is not marked `temporary`. It had pointed at
+  `AMICUS_STATE_DIR` permissions, which only a permission error still does; any other start
+  failure names its errno symbol and says to retry once, then restart and report (#501).
+- pi's `meta.usage` now counts the model calls its context compactions make, and reports
+  `cost_usd` as unknown when a compaction's cost was not provider-reported.
 - The skill's routing rules no longer require naming a model no surface reports, and say the
   kind of work requested is an input to resolving the harness (#480).
 - The skill reads `claude`'s `status.authenticated` as speaking for the default `config_mode`
