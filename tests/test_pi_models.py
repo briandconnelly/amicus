@@ -11,6 +11,7 @@ from amicus.sdk.core import runtime
 from amicus.sdk.core.runtime import CommandRun
 
 CAPTURE = Path(__file__).parent.parent / "docs/pi-help/1.5.0/list-models-shape.txt"
+CAPTURE_152 = Path(__file__).parent.parent / "docs/pi-help/1.5.2/list-models-shape.txt"
 HEADER = "provider  model  context  max-out  thinking  images\n"
 
 
@@ -57,6 +58,52 @@ def test_no_thinking_model_accepts_only_off():
     a, b = listing.models
     assert a.supported_reasoning_efforts == ("off",)
     assert b.supported_reasoning_efforts == contract.EFFORTS
+
+
+@pytest.mark.parametrize(
+    ("cell", "tokens"),
+    [
+        ("200K", 200_000),
+        ("131.1K", 131_100),
+        ("1M", 1_000_000),
+        ("1.0M", 1_000_000),
+        ("943.7K", 943_700),
+        ("512", 512),
+        ("0", 0),
+        # Anything pi's formatter cannot have printed is unknown, never a guess.
+        ("1.25M", None),
+        ("1.5", None),
+        ("1G", None),
+        ("-1K", None),
+        ("n/a", None),
+        ("1e6", None),
+        ("٣K", None),
+        ("9" * 13, None),
+    ],
+)
+def test_token_cells_parse_to_integers_or_none(cell, tokens):
+    listing = models.parse_table(HEADER + f"p  m  {cell}  {cell}  no  no\n")
+    assert listing is not None
+    [entry] = listing.models
+    assert entry.context_tokens == tokens
+    assert entry.max_output_tokens == tokens
+
+
+def test_an_unreadable_token_cell_keeps_the_row_and_the_other_cell():
+    listing = models.parse_table(HEADER + "p  m  ???  16.4K  yes  no\n")
+    assert listing is not None
+    [entry] = listing.models
+    assert entry.slug == "p/m"
+    assert entry.context_tokens is None
+    assert entry.max_output_tokens == 16_400
+    assert entry.supported_reasoning_efforts == contract.EFFORTS
+
+
+def test_the_captured_table_carries_token_limits():
+    listing = models.parse_table(CAPTURE_152.read_text())
+    assert listing is not None
+    [k3] = [m for m in listing.models if m.slug == "openrouter/moonshotai/kimi-k3"]
+    assert (k3.context_tokens, k3.max_output_tokens) == (1_000_000, 943_700)
 
 
 def test_openrouter_batch_rows_are_dropped():

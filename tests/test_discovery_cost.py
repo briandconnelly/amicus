@@ -421,6 +421,16 @@ verification such as a full test suite belongs outside the task, which is what r
 delegate into the deadline. The `partial` field itself rides only error results, which no
 outputSchema carries. Measured on the wire. MEASURED and BUDGET both move up by the 174 bytes,
 so the budget keeps no headroom.
+
+The schema-71 growth (+322 bytes on every profile: all 116432 -> 116754) is the token limits on
+amicus_models. All of it is that tool's outputSchema: ModelInfo gains `context_tokens` and
+`max_output_tokens`, two nullable integers, each with a kept description (87 and 70 bytes of
+text). pi's listing already printed both columns and amicus discarded them, so a caller could
+not tell from amicus whether a prompt fits a model. The descriptions are kept rather than
+stripped because pi's figures are parsed from a rounded display: an integer that does not say
+so reads as exact. A first draft cost 59 bytes more, 32 of them a clause in the tool
+description that the schema already carries. Measured on the wire. MEASURED and BUDGET both
+move up by the 322 bytes, so the budget keeps no headroom.
 """
 
 from __future__ import annotations
@@ -431,10 +441,10 @@ from tests.conftest import spawned_server_env
 from amicus import manifest
 
 MEASURED: dict[str, int] = {
-    "all": 116432,
-    "codex": 116440,
-    "codex-kimi": 116432,
-    "claude": 116432,
+    "all": 116754,
+    "codex": 116762,
+    "codex-kimi": 116754,
+    "claude": 116754,
 }
 # The budget is a literal, not MEASURED rounded up to the next kilobyte as it was until
 # 2026-09-14. The rounding left up to 1 KB of growth per bucket that no PR had to own, and
@@ -444,10 +454,10 @@ MEASURED: dict[str, int] = {
 # Any growth now fails until a PR raises BUDGET and says why; a shrink passes and shows as
 # drift against MEASURED. Raising one means re-measuring and moving both.
 BUDGET: dict[str, int] = {
-    "all": 116432,
-    "codex": 116440,
-    "codex-kimi": 116432,
-    "claude": 116432,
+    "all": 116754,
+    "codex": 116762,
+    "codex-kimi": 116754,
+    "claude": 116754,
 }
 
 

@@ -55,6 +55,10 @@ class ModelEntry:
     display_name: str | None = None
     default_reasoning_effort: str | None = None
     supported_reasoning_efforts: tuple[str, ...] | None = None
+    # The token limits the backend advertises for the model, None where it advertises none or
+    # the reader could not tell. A reader says in its own module how exact its source is.
+    context_tokens: int | None = None
+    max_output_tokens: int | None = None
 
 
 @dataclass(frozen=True)

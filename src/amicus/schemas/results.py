@@ -595,12 +595,23 @@ class BackendsResult(BaseModel):
     server_version: str | None = server_version_field()
 
 
+# Kept, because the caveat is the contract: pi's figures are parsed from a rounded display
+# (amicus.backends.pi.models), and an integer with no such note reads as exact.
+_CONTEXT_TOKENS_DESC = (
+    "Advertised context window in tokens; pi's is rounded, so leave headroom. null: unknown."
+)
+_MAX_OUTPUT_TOKENS_DESC = "Advertised output limit in tokens; rounded and null as context_tokens."
+publish.KEPT_DESCRIPTIONS.update((_CONTEXT_TOKENS_DESC, _MAX_OUTPUT_TOKENS_DESC))
+
+
 class ModelInfo(BaseModel):
     model_config = ConfigDict(extra="forbid")
     slug: str
     display_name: str | None = None
     default_reasoning_effort: str | None = None
     supported_reasoning_efforts: list[str] | None = None
+    context_tokens: int | None = Field(default=None, description=_CONTEXT_TOKENS_DESC)
+    max_output_tokens: int | None = Field(default=None, description=_MAX_OUTPUT_TOKENS_DESC)
 
 
 _CATALOG_TRUNCATED_DESC = (

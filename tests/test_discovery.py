@@ -373,6 +373,29 @@ async def test_a_truncated_kimi_listing_does_not_vouch_for_a_slug_past_the_cut()
     assert "cannot check a reasoning_effort" in hint
 
 
+async def test_models_carry_token_limits_on_the_tool_and_the_resource():
+    class _Sized:
+        def read(self):
+            entry = ModelEntry(slug="p/m", context_tokens=131_100, max_output_tokens=None)
+            return ModelListing(models=(entry,), source="live")
+
+    reg = BackendRegistry({"pi": fakeplugin.make_plugin("pi", models=_Sized())}, {})
+    async with Client(_app(env={"AMICUS_BACKENDS": "pi"}, registry=reg)) as c:
+        res = await c.call_tool("amicus_models", {"backend": "pi"})
+        [content] = await c.read_resource("amicus://models/pi")
+        tool = next(t for t in await c.list_tools() if t.name == "amicus_models")
+    Draft202012Validator(tool.output_schema).validate(res.structured_content)
+    [row] = res.structured_content["models"]
+    assert (row["context_tokens"], row["max_output_tokens"]) == (131_100, None)
+    assert json.loads(content.text)["models"] == [row]
+    # The caveat is the field's contract: a pi value is parsed from a rounded display, so
+    # the advertised schema has to say so where the caller reads the field.
+    advertised = json.dumps(tool.output_schema)
+    for desc in (results._CONTEXT_TOKENS_DESC, results._MAX_OUTPUT_TOKENS_DESC):
+        assert "rounded" in desc and "null" in desc
+        assert json.dumps(desc) in advertised
+
+
 async def test_models_for_available_and_unavailable_backends():
     async with Client(_app(registry=_mixed_registry())) as c:
         codex = await c.call_tool("amicus_models", {"backend": "codex"})
@@ -385,6 +408,8 @@ async def test_models_for_available_and_unavailable_backends():
             "display_name": None,
             "default_reasoning_effort": None,
             "supported_reasoning_efforts": None,
+            "context_tokens": None,
+            "max_output_tokens": None,
         }
     ]
     assert codex.structured_content["source"] == "static"

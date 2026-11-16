@@ -33,6 +33,15 @@ per-change, as its own lead says.
   description now say to narrow the task, keep slow verification such as a full test suite out
   of it, or raise `AMICUS_JOB_MAX_SECONDS`. A job result an earlier release stored is refused
   as `job_result_incompatible` (#508).
+- **Surface**: `amicus/0.1/schema-71`. `amicus_models` and `amicus://models/{backend}` carry
+  two new fields on each model, `context_tokens` and `max_output_tokens`: the context window and
+  output limit the backend advertises, or `null` where it advertises none. Only `pi` fills them
+  today, from the `context` and `max-out` columns of `pi --list-models`, which amicus used to
+  discard, so choosing among pi's several hundred models meant consulting the provider's catalog
+  just to learn whether a prompt would fit. pi prints those columns rounded to one decimal of a
+  thousand or a million, so a value is approximate (within 50 tokens in the thousands, within
+  50,000 in the millions) and a cell amicus cannot read is `null` rather than a guess. A client
+  that validates the result against the previous closed schema must admit the two keys.
 
 ### Changed
 
