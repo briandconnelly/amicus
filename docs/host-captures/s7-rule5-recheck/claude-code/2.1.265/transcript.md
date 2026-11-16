@@ -2,7 +2,7 @@
 
 Mode: treatment, real host, zero-spend design.
 `AMICUS_BACKENDS=claude,codex` with `AMICUS_CLAUDE_ACCESS=write` (matches the failing baseline row in `skills/collaborating-with-amicus/tests/scenarios.md`).
-`AMICUS_CODEX_BIN`/`AMICUS_KIMI_BIN`/`AMICUS_CLAUDE_BIN` pointed at this repo's `tests/support/fake_codex.py`/`fake_kimi.py`/`fake_claude.py` (copied to a scratch directory and made executable, since the tree copies are not `chmod +x` and a non-executable path makes `amicus_backends` report the backend as not installed — see "A first, failed attempt" below).
+`AMICUS_CODEX_BIN`/`AMICUS_KIMI_BIN`/`AMICUS_CLAUDE_BIN` pointed at this repo's `tests/support/fake_codex.py`/`the retired Kimi stub`/`fake_claude.py` (copied to a scratch directory and made executable, since the tree copies are not `chmod +x` and a non-executable path makes `amicus_backends` report the backend as not installed — see "A first, failed attempt" below).
 Harness: `claude -p --strict-mcp-config --mcp-config <scratch>/.mcp.json --plugin-dir <scratch
 plugin> --allowedTools "mcp__amicus__amicus_backends,mcp__amicus__amicus_capabilities,mcp__amicus__amicus_delegate_dry_run"`, fresh context, cwd a scratch git repo seeded with two commits.
 No `--permission-mode` flag was passed, deliberately (this is not default mode: see "Correction" below), since `docs/host-captures/install-smoke/claude-code/2.1.263/notes.md` records that this host's `-p` mode refuses every MCP tool call not present in `--allowedTools` — `amicus_delegate` was left out of that list on purpose, to reproduce the refused-before-dispatch condition the existing S7 baseline row and this repo's own zero-spend design both rely on.

@@ -266,13 +266,12 @@ def test_no_contract_declares_a_baseline_verb_as_a_feature():
     # declared one would make the text wrong while every docs-reading test stayed green.
     from amicus.backends.claude.contract import CONTRACT as claude
     from amicus.backends.codex.contract import CONTRACT as codex
-    from amicus.backends.kimi.contract import CONTRACT as kimi
     from amicus.backends.pi.contract import CONTRACT as pi
     from amicus.schemas.codes import VERBS
     from amicus.tools._resolve import FEATURE_FOR_VERB
 
     ungated = set(VERBS) - set(FEATURE_FOR_VERB)
-    for backend_id, contract in (("codex", codex), ("kimi", kimi), ("claude", claude), ("pi", pi)):
+    for backend_id, contract in (("codex", codex), ("claude", claude), ("pi", pi)):
         assert not (ungated & contract.supported_features), (
             f"{backend_id} declares an ungated verb in supported_features; the skill says none do"
         )
@@ -281,7 +280,6 @@ def test_no_contract_declares_a_baseline_verb_as_a_feature():
 def test_the_backend_reference_names_every_declared_feature():
     from amicus.backends.claude.contract import CONTRACT as claude
     from amicus.backends.codex.contract import CONTRACT as codex
-    from amicus.backends.kimi.contract import CONTRACT as kimi
     from amicus.backends.pi.contract import CONTRACT as pi
     from amicus.schemas.codes import VERBS
     from amicus.tools._resolve import FEATURE_FOR_VERB
@@ -289,12 +287,7 @@ def test_the_backend_reference_names_every_declared_feature():
     section = _BACKENDS_REF.partition("\n## What `features` contains\n")[2].split("\n## ", 1)[0]
     assert section, "choosing-a-backend.md has no `## What `features` contains` section"
     named = set(re.findall(r"`([a-z_]+)`", section))
-    declared = (
-        codex.supported_features
-        | kimi.supported_features
-        | claude.supported_features
-        | pi.supported_features
-    )
+    declared = codex.supported_features | claude.supported_features | pi.supported_features
     assert declared <= named, f"undocumented features: {sorted(declared - named)}"
     assert set(VERBS) <= named, "every verb must be placed as gated or baseline"
     assert "(the verbs it supports)" not in _BACKENDS_REF, (
@@ -305,7 +298,7 @@ def test_the_backend_reference_names_every_declared_feature():
     for verb, feature in FEATURE_FOR_VERB.items():
         bullet = next(b for b in _bullets(section) if b.startswith(f"- `amicus_{verb}`"))
         first_sentence = bullet.partition(":")[2].partition(".")[0]
-        backends = (("codex", codex), ("kimi", kimi), ("claude", claude), ("pi", pi))
+        backends = (("codex", codex), ("claude", claude), ("pi", pi))
         for backend_id, contract in backends:
             listed = f"`{backend_id}`" in first_sentence
             assert listed == (feature in contract.supported_features), (
@@ -391,22 +384,11 @@ def test_the_disclosure_rules_name_the_full_detail_level():
     assert "pass detail=full on that first read" in INSTRUCTIONS
 
 
-def test_the_carrier_table_names_kimis_session_store():
-    """The kimi row said the text is only briefly on local disk. The kimi CLI also keeps it
-    in its own session store, which amicus never removes (#179), so the row must say so
-    rather than leave the handshake cleanup standing as the whole story."""
-    [row] = [line for line in _BACKENDS_REF.splitlines() if line.startswith("| `kimi` | a file")]
-    assert "session store" in row and "amicus does not delete" in row
-    assert "briefly on local disk" not in row
-    # The table is context. What the agent must do about it is a rule, and a binding one in
-    # SKILL.md: a route that never reads this file still meets the obligation (review of
-    # 2026-10-11, finding 1).
-    rules = _BINDING_RULES.partition("\n### Data exposure\n")[2].split("\n### ", 1)[0]
-    [rule] = [b for b in _bullets(rules) if "`kimi`" in b]
-    assert " ".join(rule.split()).startswith(
-        "- **Never send `kimi` text you would not leave on this machine's disk.**"
-    )
-    assert "send nothing" not in row, "the directive belongs under `## Rules`, not in the table"
+def test_the_carrier_table_names_only_supported_backends():
+    rows = [line for line in _BACKENDS_REF.splitlines() if line.startswith("| `")]
+    assert not any(line.startswith("| `kimi` |") for line in rows)
+    [pi] = [line for line in rows if line.startswith("| `pi` | stdin")]
+    assert "--no-session" in pi and "no session file" in pi
 
 
 def test_the_jobs_rules_say_to_wait_through_the_tool_never_the_store():
@@ -586,8 +568,7 @@ def test_the_routing_rule_binds_before_the_verb_is_chosen():
     for obligation in (
         "**Resolve the harness and the model before choosing the verb",
         "**Let a named harness win.**",
-        "bare `kimi` (the deprecated kimi harness)",
-        "`codex` for an OpenAI model, `claude` for an Anthropic model, `kimi` for a Kimi model",
+        "**Send a model-only request to its native harness",
         "**Never substitute for a named harness silently.**",
         "proceed only when the user chooses it",
         "An exact `provider/id` is pi's model syntax, so it selects `pi`.",

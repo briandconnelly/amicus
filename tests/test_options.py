@@ -9,7 +9,6 @@ from pydantic import ValidationError
 
 from amicus.backends.claude import contract as claude_contract
 from amicus.backends.codex import config as codex_config
-from amicus.backends.kimi import config as kimi_config
 from amicus.schemas import options as o
 
 
@@ -24,7 +23,6 @@ def test_schema_is_closed_and_lists_every_option():
 def test_applicability_table():
     assert o.OPTION_ALLOWED_VALUES["isolation"] == {
         "codex": ("inherit", "ignore-config", "ignore-rules"),
-        "kimi": ("inherit", "ignore-skills"),
     }
     assert o.OPTION_ALLOWED_VALUES["config_mode"] == {
         "claude": ("inherit", "scoped", "safe", "bare")
@@ -50,7 +48,6 @@ def test_allowed_values_agree_across_every_source():
         if table_values:
             assert _literal_values(fields[name].annotation) == table_values, name
     assert o.OPTION_ALLOWED_VALUES["isolation"]["codex"] == codex_config.VALID_ISOLATIONS
-    assert o.OPTION_ALLOWED_VALUES["isolation"]["kimi"] == kimi_config.VALID_ISOLATIONS
     assert o.OPTION_ALLOWED_VALUES["config_mode"]["claude"] == claude_contract.CONFIG_MODES
     assert o.OPTION_ALLOWED_VALUES["access"]["claude"] == claude_contract.ACCESS_MODES
 
@@ -69,10 +66,9 @@ def test_inapplicable_key_names_the_key_and_the_backends_that_accept_it():
     assert "codex" in v.reason
 
 
-def test_wrong_value_for_this_backend_lists_its_allowed_values():
-    [v] = o.option_violations("kimi", o.BackendOptions(isolation="ignore-rules"))
-    assert v.field == "backend_options.isolation"
-    assert v.allowed_values == ["inherit", "ignore-skills"]
+def test_removed_ignore_skills_isolation_is_rejected():
+    with pytest.raises(ValidationError):
+        o.BackendOptions(isolation="ignore-skills")
 
 
 def test_budget_bounds_are_in_the_schema_and_enforced():
@@ -83,7 +79,7 @@ def test_budget_bounds_are_in_the_schema_and_enforced():
     with pytest.raises(ValidationError):
         o.BackendOptions(max_budget_usd=0)
     assert o.option_violations("claude", o.BackendOptions(max_budget_usd=1.5)) == []
-    [v] = o.option_violations("kimi", o.BackendOptions(max_budget_usd=1.5))
+    [v] = o.option_violations("codex", o.BackendOptions(max_budget_usd=1.5))
     assert v.field == "backend_options.max_budget_usd"
 
 
@@ -96,7 +92,7 @@ def test_several_violations_are_all_reported_in_field_order():
     fields = [
         v.field
         for v in o.option_violations(
-            "kimi", o.BackendOptions(config_mode="safe", access="readonly")
+            "codex", o.BackendOptions(config_mode="safe", access="readonly")
         )
     ]
     assert fields == ["backend_options.config_mode", "backend_options.access"]

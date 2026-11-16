@@ -17,9 +17,8 @@ _spec.loader.exec_module(compat)
 
 
 @pytest.fixture
-def fakes(clean_env, fake_codex, fake_kimi, fake_claude, fake_pi):
+def fakes(clean_env, fake_codex, fake_claude, fake_pi):
     clean_env.setenv("AMICUS_CODEX_BIN", str(fake_codex))
-    clean_env.setenv("AMICUS_KIMI_BIN", str(fake_kimi))
     clean_env.setenv("AMICUS_CLAUDE_BIN", str(fake_claude))
     clean_env.setenv("AMICUS_PI_BIN", str(fake_pi))
     clean_env.setenv("AMICUS_PI_MODEL", "openrouter/moonshotai/kimi-k3")
@@ -45,7 +44,7 @@ def _capture(root: Path, backend: str, version: str, help_text: str) -> None:
 
 def test_every_in_tree_backend_is_checked_and_a_clean_one_passes(fakes, tmp_path):
     reports = compat.check_all(tmp_path, latest=_no_network, offline=True)
-    assert [r.backend for r in reports] == ["codex", "kimi", "claude", "pi"]
+    assert [r.backend for r in reports] == ["codex", "claude", "pi"]
     for report in reports:
         assert report.installed and report.help_ok and report.declared, report.backend
         assert report.missing_flags == [], report
@@ -56,42 +55,42 @@ def test_every_in_tree_backend_is_checked_and_a_clean_one_passes(fakes, tmp_path
 
 
 def test_a_capture_is_compared_to_the_live_help_and_the_newest_one_is_chosen(fakes, tmp_path):
-    live = compat.check_backend("kimi", tmp_path, latest=_no_network)
-    _capture(tmp_path, "kimi", "0.9.0", "an older capture\n")
-    _capture(tmp_path, "kimi", "0.10.0", live.help_text)
-    same = compat.check_backend("kimi", tmp_path, latest=_no_network)
+    live = compat.check_backend("pi", tmp_path, latest=_no_network)
+    _capture(tmp_path, "pi", "0.9.0", "an older capture\n")
+    _capture(tmp_path, "pi", "0.10.0", live.help_text)
+    same = compat.check_backend("pi", tmp_path, latest=_no_network)
     # 0.10.0 sorts after 0.9.0 as a version and before it as a string.
     assert same.capture is not None and same.capture.name == "0.10.0"
     assert same.capture_state == "identical" and same.help_diff == []
     # Re-wrapping and a trimmed trailing line are not a change: claude wraps its help to the
-    # terminal width, and the committed kimi capture was trimmed.
+    # terminal width, and the committed pi capture was trimmed.
     rewrapped = live.help_text.replace("  ", "\n      ", 3).rstrip("\n")
-    _capture(tmp_path, "kimi", "0.10.1", rewrapped)
-    assert compat.check_backend("kimi", tmp_path, latest=_no_network).capture_state == "identical"
-    _capture(tmp_path, "kimi", "0.10.2", live.help_text.replace("Show help", "Display help"))
-    assert compat.check_backend("kimi", tmp_path, latest=_no_network).capture_state == "reworded"
+    _capture(tmp_path, "pi", "0.10.1", rewrapped)
+    assert compat.check_backend("pi", tmp_path, latest=_no_network).capture_state == "identical"
+    _capture(tmp_path, "pi", "0.10.2", live.help_text.replace("Show this help", "Display help"))
+    assert compat.check_backend("pi", tmp_path, latest=_no_network).capture_state == "reworded"
     # The capture is what was committed; the live help is what is installed. A flag only the
     # capture has was REMOVED upstream, and one only the live help has was ADDED.
-    _capture(tmp_path, "kimi", "0.11.0", live.help_text + "  --gone-upstream    dropped since\n")
-    drift = compat.check_backend("kimi", tmp_path, latest=_no_network)
+    _capture(tmp_path, "pi", "0.11.0", live.help_text + "  --gone-upstream    dropped since\n")
+    drift = compat.check_backend("pi", tmp_path, latest=_no_network)
     assert drift.capture_state == "flags_differ"
     assert drift.flags_removed == ["--gone-upstream"] and drift.flags_added == []
     assert any("--gone-upstream" in line for line in drift.help_diff)
 
 
 def test_a_flag_amicus_always_sends_that_help_no_longer_lists_is_a_failure(fakes, tmp_path):
-    ok = compat.check_backend("kimi", tmp_path, latest=_no_network, offline=True)
+    ok = compat.check_backend("pi", tmp_path, latest=_no_network, offline=True)
     assert compat.problems(ok) == []
-    assert "--agent-file" in ok.declared, "control: the flag is declared before it is dropped"
+    assert "--no-session" in ok.declared, "control: the flag is declared before it is dropped"
     dropped = compat.check_backend(
-        "kimi",
+        "pi",
         tmp_path,
         latest=_no_network,
         offline=True,
-        help_text=ok.help_text.replace("--agent-file", "--agent-phile"),
+        help_text=ok.help_text.replace("--no-session", "--no-seshion"),
     )
-    assert dropped.missing_flags == ["--agent-file"]
-    assert any("--agent-file" in p for p in compat.problems(dropped))
+    assert dropped.missing_flags == ["--no-session"]
+    assert any("--no-session" in p for p in compat.problems(dropped))
 
 
 def test_an_installed_version_behind_upstream_or_unsupported_is_a_failure(fakes, tmp_path):
@@ -107,19 +106,19 @@ def test_an_installed_version_behind_upstream_or_unsupported_is_a_failure(fakes,
 
 
 def test_a_missing_cli_is_reported_not_crashed_on(clean_env, tmp_path):
-    clean_env.setenv("AMICUS_KIMI_BIN", "/nonexistent/amicus-test-kimi")
-    report = compat.check_backend("kimi", tmp_path, latest=_no_network)
+    clean_env.setenv("AMICUS_PI_BIN", "/nonexistent/amicus-test-pi")
+    report = compat.check_backend("pi", tmp_path, latest=_no_network)
     assert report.installed is False and report.help_text == ""
     assert any("not installed" in p for p in compat.problems(report))
 
 
 def test_write_saves_a_capture_under_the_installed_version(fakes, tmp_path):
-    report = compat.check_backend("kimi", tmp_path, latest=_no_network)
+    report = compat.check_backend("pi", tmp_path, latest=_no_network)
     folder = compat.write_capture(report, tmp_path)
-    assert folder == tmp_path / "kimi-help" / report.version
-    assert (folder / "kimi-help.txt").read_text() == report.help_text
-    assert (folder / "kimi-version.txt").read_text().strip() == report.version
-    again = compat.check_backend("kimi", tmp_path, latest=_no_network)
+    assert folder == tmp_path / "pi-help" / report.version
+    assert (folder / "pi-help.txt").read_text() == report.help_text
+    assert (folder / "pi-version.txt").read_text().strip() == report.version
+    again = compat.check_backend("pi", tmp_path, latest=_no_network)
     assert again.capture_state == "identical"
 
 
@@ -128,7 +127,7 @@ def test_main_exits_nonzero_on_a_problem_and_zero_when_clean(fakes, tmp_path, ca
     monkeypatch.setattr(compat, "latest_upstream", _current(installed))
     assert compat.main(["--docs-root", str(tmp_path)]) == 0
     out = capsys.readouterr().out
-    for backend in ("codex", "kimi", "claude", "pi"):
+    for backend in ("codex", "claude", "pi"):
         assert backend in out
     assert "carrier" in out.lower(), "the rule-18 re-check is prompted, since no script can do it"
     monkeypatch.setattr(compat, "latest_upstream", lambda _b: "9.9.9")
@@ -140,15 +139,15 @@ def test_a_flag_that_survives_only_in_another_options_prose_is_missing(fakes, tm
     a stray match sends a harmless flag. For a compatibility gate it is wrong: claude's help
     names `--mcp-config` inside two other options' descriptions, so dropping the option
     itself would go unnoticed. Only a declared option row counts."""
-    live = compat.check_backend("kimi", tmp_path, latest=_no_network)
-    row = next(line for line in live.help_text.splitlines() if "--agent-file" in line)
-    prose = " " * 40 + "--agent-file is still named here, in a description."
+    live = compat.check_backend("pi", tmp_path, latest=_no_network)
+    row = next(line for line in live.help_text.splitlines() if "--no-session" in line)
+    prose = " " * 40 + "--no-session is still named here, in a description."
     dropped = compat.check_backend(
-        "kimi", tmp_path, latest=_no_network, help_text=live.help_text.replace(row, prose)
+        "pi", tmp_path, latest=_no_network, help_text=live.help_text.replace(row, prose)
     )
-    assert "--agent-file" in dropped.help_text, "control: the token is still in the text"
-    assert "--agent-file" not in dropped.declared
-    assert dropped.missing_flags == ["--agent-file"]
+    assert "--no-session" in dropped.help_text, "control: the token is still in the text"
+    assert "--no-session" not in dropped.declared
+    assert dropped.missing_flags == ["--no-session"]
 
 
 def test_declared_rows_are_read_in_each_clis_own_layout():
@@ -172,13 +171,13 @@ def test_declared_rows_are_read_in_each_clis_own_layout():
 
 def test_help_that_could_not_be_read_is_a_failure_not_a_clean_run(fakes, tmp_path):
     """An empty probe used to mean "no flag is missing", because nothing was parsed."""
-    blank = compat.check_backend("kimi", tmp_path, latest=_no_network, help_text="")
+    blank = compat.check_backend("pi", tmp_path, latest=_no_network, help_text="")
     assert blank.help_ok is False and blank.missing_flags == []
     assert any("--help" in p and "could not be read" in p for p in compat.problems(blank))
     # A help command that exits nonzero is not trusted even though it printed its usual
     # text: a CLI that prints usage on an argument error does exactly that.
-    fakes.setenv("FAKE_KIMI_HELP_EXIT", "3")
-    failing = compat.check_backend("kimi", tmp_path, latest=_no_network)
+    fakes.setenv("FAKE_PI_HELP_EXIT", "3")
+    failing = compat.check_backend("pi", tmp_path, latest=_no_network)
     assert failing.help_ok is False and failing.declared == frozenset()
     assert any("could not be read" in p for p in compat.problems(failing))
 
@@ -186,17 +185,15 @@ def test_help_that_could_not_be_read_is_a_failure_not_a_clean_run(fakes, tmp_pat
 @pytest.mark.parametrize("state", [False, None])
 def test_a_backend_that_is_not_authenticated_is_a_failure(fakes, tmp_path, state):
     """The evidence run needs every backend logged in, and RELEASING.md says yes means so."""
-    report = compat.check_backend("kimi", tmp_path, latest=_no_network, offline=True)
+    report = compat.check_backend("pi", tmp_path, latest=_no_network, offline=True)
     assert report.authenticated is True and compat.problems(report) == []
     report.authenticated = state
     assert any("authenticated" in p for p in compat.problems(report))
 
 
-@pytest.mark.parametrize("backend", ["codex", "kimi", "claude", "pi"])
+@pytest.mark.parametrize("backend", ["codex", "claude", "pi"])
 def test_an_unreadable_latest_is_a_failure_for_every_backend(fakes, tmp_path, backend):
-    """All four CLIs are on npm (kimi as @moonshot-ai/kimi-code, which #202 established; it
-    was first treated as unreadable). So a missing latest is a lookup that failed, and it
-    must not look like a version that matched."""
+    """Every supported CLI is on npm: a missing latest is a failed lookup, never a match."""
     assert backend in compat.NPM_PACKAGES
     report = compat.check_backend(backend, tmp_path, latest=_no_network)
     assert report.latest is None
@@ -228,8 +225,8 @@ def test_an_ambient_support_override_cannot_vouch_for_an_unchecked_version(fakes
     [
         ("codex", "0.155.1", True),
         ("codex", "0.999.0", False),
-        ("kimi", "0.43.9", True),
-        ("kimi", "0.999.0", False),
+        ("pi", "1.5.9", True),
+        ("pi", "0.999.0", False),
         ("claude", "2.9.9", True),
         ("claude", "3.0.0", False),
         ("codex", "nightly", False),
@@ -249,7 +246,7 @@ def test_builtin_support_is_read_from_each_contract(backend, version, want):
         ("codex-cli 0.155.1--beta.1", ("0.155.1", "--beta.1")),
         ("0.155.1-beta.1\n", ("0.155.1", "-beta.1")),
         ("2.1.278 (Claude Code)", ("2.1.278", "")),
-        ("kimi, version 2.0.2", ("2.0.2", "")),
+        ("pi, version 2.0.2", ("2.0.2", "")),
         ("no version here", None),
     ],
 )
@@ -328,9 +325,9 @@ def test_a_cli_ahead_of_latest_is_told_to_pin_back_not_to_upgrade():
     assert "claude install 2.1.293" in ahead and "upgrade" not in ahead, ahead
     (codex,) = _off_latest("codex", "0.163.0", "0.162.0")
     assert "npm install -g @openai/codex@0.162.0" in codex, codex
-    (kimi,) = _off_latest("kimi", "2.2.0", "2.1.1")
-    assert "ahead of" in kimi and "installing 2.1.1 however" in kimi, kimi
-    assert "`install" not in kimi, "no command is offered where none is known"
+    (pi,) = _off_latest("pi", "2.2.0", "2.1.1")
+    assert "ahead of" in pi and "pin back" in pi, pi
+    assert "installing 2.1.1 however" in pi and "`install" not in pi
 
 
 def test_a_cli_behind_latest_is_told_to_upgrade():
@@ -347,25 +344,33 @@ def test_a_deprecated_backend_behind_latest_is_frozen_not_a_failure(monkeypatch)
     """A deprecated backend is frozen at its supported set until it is removed: no newer
     release is validated, so "behind latest" cannot be fixed by upgrading and must not
     block a release. Only that one failure is waived."""
-    assert compat.in_tree.backend_deprecation("kimi") is not None, "control: kimi is deprecated"
-    assert _off_latest("kimi", "2.5.2", "2.6.2") == []
-    report = compat.Report("kimi", installed=True, version="2.5.2", authenticated=True)
+    from amicus.schemas.envelope import ToolDeprecation
+
+    monkeypatch.setitem(
+        compat.in_tree.DEPRECATED_BACKENDS,
+        "pi",
+        ToolDeprecation(
+            since="0.13.0", removal_at_or_after="0.15.0", replaced_by="codex", migration="m"
+        ),
+    )
+    assert _off_latest("pi", "2.5.2", "2.6.2") == []
+    report = compat.Report("pi", installed=True, version="2.5.2", authenticated=True)
     report.builtin_supported = report.help_ok = True
     report.latest = "2.6.2"
     assert any("frozen" in line and "2.6.2" in line for line in compat._describe(report))
     # Ahead of latest, a prerelease, and an unsupported version still fail.
-    (ahead,) = _off_latest("kimi", "2.7.0", "2.6.2")
+    (ahead,) = _off_latest("pi", "2.7.0", "2.6.2")
     assert "ahead of" in ahead, ahead
-    (pre,) = _off_latest("kimi", "2.5.2-beta.1", "2.6.2")
+    (pre,) = _off_latest("pi", "2.5.2-beta.1", "2.6.2")
     assert "prerelease" in pre, pre
     report.builtin_supported = False
     assert any("outside the built-in contract" in p for p in compat.problems(report))
     # A backend that is not deprecated is still told to upgrade.
     (behind,) = _off_latest("codex", "0.167.0", "0.169.0")
     assert "behind" in behind, behind
-    # And kimi itself is, once nothing marks it deprecated.
+    # And pi itself is, once nothing marks it deprecated.
     monkeypatch.setattr(compat.in_tree, "DEPRECATED_BACKENDS", {})
-    (unfrozen,) = _off_latest("kimi", "2.5.2", "2.6.2")
+    (unfrozen,) = _off_latest("pi", "2.5.2", "2.6.2")
     assert "behind" in unfrozen, unfrozen
 
 

@@ -22,7 +22,7 @@ The committed `.mcp.json` in this worktree was never modified; `git status` stay
 
 ## Zero-spend mechanism
 
-`AMICUS_CODEX_BIN`, `AMICUS_KIMI_BIN`, and `AMICUS_CLAUDE_BIN` were pointed at `tests/support/fake_codex.py`, `fake_kimi.py`, and `fake_claude.py` for every run in this capture.
+`AMICUS_CODEX_BIN`, `AMICUS_KIMI_BIN`, and `AMICUS_CLAUDE_BIN` were pointed at `tests/support/fake_codex.py`, `the retired Kimi stub`, and `fake_claude.py` for every run in this capture.
 This is defense in depth: even a paid call the model made despite the harness's describe-only instruction would have hit a local stdlib stub process, never a real provider.
 For S3, S4, and S8 the harness prompt also instructed the model not to invoke any paid verb, only to describe the call it would make; `server.log` in this directory independently confirms no paid `tools/call` line appears for any of those three scenarios.
 For S6 no tool call was needed at all, since the scenario supplies a fabricated `amicus_delegate` result inline in the prompt.

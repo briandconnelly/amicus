@@ -19,7 +19,6 @@ from tests.support.fingerprint_pins import REGEN_COMMAND, REGEN_STEPS, load_pins
 
 import amicus.backends.claude as claude_pkg
 import amicus.backends.codex as codex_pkg
-import amicus.backends.kimi as kimi_pkg
 import amicus.backends.pi as pi_pkg
 from amicus import errors, manifest, server
 from amicus.backends import IN_TREE
@@ -213,9 +212,9 @@ async def test_profiles_differ_where_annotations_differ():
     assert consult_b["annotations"]["destructiveHint"] is True
 
 
-async def test_codex_kimi_profile_is_destructive():
-    """kimi has no sandbox, so a profile that enables it is destructive (#426)."""
-    m = await manifest.build_manifest(manifest.app_for_profile("codex-kimi"))
+async def test_codex_pi_profile_is_destructive():
+    """pi has no sandbox, so a profile that enables it is destructive (#426)."""
+    m = await manifest.build_manifest(manifest.app_for_profile("codex-pi"))
     consult = next(t for t in m["tools"] if t["name"] == "amicus_consult")
     assert consult["annotations"]["destructiveHint"] is True
 
@@ -223,7 +222,6 @@ async def test_codex_kimi_profile_is_destructive():
 def _in_tree_plugins() -> dict[str, Any]:
     return {
         "codex": codex_pkg.plugin({}),
-        "kimi": kimi_pkg.plugin({}),
         "claude": claude_pkg.plugin({}),
         "pi": pi_pkg.plugin({"AMICUS_PI_BIN": NEVER_SPAWN_PI}),
     }

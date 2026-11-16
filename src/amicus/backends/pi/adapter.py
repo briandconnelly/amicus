@@ -1,6 +1,6 @@
 """PiBackend: the behavior half of the pi contract on the SDK lifecycle.
 
-Three things set it apart from kimi's adapter. The model check fails closed: pi sends an
+The adapter enforces three guarantees. The model check fails closed: pi sends an
 unknown id anyway, so a model the catalog cannot vouch for is refused before spending. The
 prompt rides stdin and nothing is staged on disk. And a provider failure exits 0, so the
 outcome inspector reads the stream's final `stopReason` whatever the exit code."""

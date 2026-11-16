@@ -88,7 +88,7 @@ def _input_schema(tool: str) -> dict:
     ("code", "backend", "tool", "arguments"),
     [
         ("invalid_model", "codex", "amicus_models", {"backend": "codex"}),
-        ("invalid_reasoning_effort", "kimi", "amicus_models", {"backend": "kimi"}),
+        ("invalid_reasoning_effort", "pi", "amicus_models", {"backend": "pi"}),
         ("backend_unavailable", "claude", "amicus_backends", {"backend": "claude"}),
         ("api_key_missing", "claude", "amicus_backends", {"backend": "claude"}),
         ("backend_unavailable", None, "amicus_backends", {}),
@@ -140,11 +140,11 @@ def test_lookup_repairs_never_name_a_backend_the_lookup_rejects():
 @pytest.mark.parametrize(
     ("tool", "hinted", "expected"),
     [
-        ("amicus_models", {"backend": "kimi"}, ("amicus_models", {"backend": "kimi"})),
+        ("amicus_models", {"backend": "pi"}, ("amicus_models", {"backend": "pi"})),
         ("amicus_models", {}, (None, None)),
         ("amicus_models", {"backend": "fake"}, (None, None)),
-        ("amicus_models", {"backend": "kimi", "x": 1}, (None, None)),
-        ("amicus_backends", {"backend": "kimi"}, ("amicus_backends", {"backend": "kimi"})),
+        ("amicus_models", {"backend": "pi", "x": 1}, (None, None)),
+        ("amicus_backends", {"backend": "pi"}, ("amicus_backends", {"backend": "pi"})),
         ("amicus_backends", {}, ("amicus_backends", {})),
         ("amicus_backends", {"backend": "fake"}, ("amicus_backends", {})),
         ("amicus_backends", {"x": 1}, ("amicus_backends", {})),
@@ -221,8 +221,8 @@ def test_serialize_error_mirrors_meta_request_id_onto_error():
 
 
 def test_error_envelope_helper():
-    out = errors.error_envelope("feature_unsupported", "later", Meta(), backend="kimi")
-    assert out["error"]["code"] == "feature_unsupported" and out["error"]["backend"] == "kimi"
+    out = errors.error_envelope("feature_unsupported", "later", Meta(), backend="pi")
+    assert out["error"]["code"] == "feature_unsupported" and out["error"]["backend"] == "pi"
 
 
 def test_render_failure_generalizes_minted_codes_and_names_the_backend():
@@ -493,26 +493,13 @@ def test_keyed_stored_error_passes_everything_else_through():
 
 def _migrated_hints():
     """Every backend hint #444 moved off `correct_arguments`, built by the adapter itself."""
-    from tests.support import kimifixtures as kf
     from tests.support import pifixtures as pf
 
-    from amicus.backends.kimi import cli as kimi_cli
     from amicus.backends.pi import adapter as pi_adapter
     from amicus.backends.pi import cli as pi_cli
     from amicus.sdk.core.runtime import CommandRun
 
     pi = pf.make_backend()
-    _, kimi = kf.make_backend(catalog=kf.K3)
-    kimi_effort = kimi.validate_request(
-        RunRequest(
-            kind="consult",
-            prompt="why?",
-            cwd="/repo",
-            timeout_seconds=60,
-            model="k3",
-            reasoning_effort="xhigh",
-        )
-    )
     return [
         ("pi", "invalid_model", pi_adapter._invalid_model("d", "no_exact_row")),
         ("pi", "invalid_arguments", pi._missing_model()),
@@ -526,18 +513,19 @@ def _migrated_hints():
                 sanitize=None,
             ),
         ),
-        ("kimi", "invalid_reasoning_effort", kimi_effort),
-        (
-            "kimi",
-            "invalid_model",
-            kimi_cli.classify_failure(
-                CommandRun("", 'error: Model "x" is not configured in config.toml.', 1, 1, False),
-                last_message=None,
-                events=None,
-                reasoning_effort=None,
-                sanitize=None,
-            ),
-        ),
+        # The SDK repair vocabulary also works for a synthetic plugin on another backend.
+        *[
+            (
+                "codex",
+                code,
+                ClassifiedFailure(
+                    code=code,
+                    detail="d",
+                    repair=RepairHint(next_step="use_allowed_value", tool="amicus_models"),
+                ),
+            )
+            for code in ("invalid_reasoning_effort", "invalid_model")
+        ],
     ]
 
 

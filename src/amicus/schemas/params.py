@@ -231,8 +231,8 @@ PARAMETER_CONTRACTS: dict[str, ParamContract] = {
         ),
         full=(
             "Appended BEHIND this server's always-leading framing (codex: "
-            "developer_instructions on argv; claude, kimi and pi: a leading section of the "
-            "stdin/handshake prompt). Normalized once (stripped; blank means omitted); "
+            "developer_instructions on argv; claude and pi: a leading section of the "
+            "stdin prompt). Normalized once (stripped; blank means omitted); "
             f"refused pre-spend as invalid_arguments when over {MAX_INSTRUCTIONS_APPEND_BYTES} "
             "bytes, when it carries a NUL, another C0 control (tab/LF/CR excepted), DEL, or "
             "a lone surrogate, or when it contains one of the server's framing marker lines. "
@@ -253,8 +253,8 @@ PARAMETER_CONTRACTS: dict[str, ParamContract] = {
             "Omitted, the backend resolves its own default. The value is validated by the "
             "backend, and amicus_models's per-model set is advisory. A backend-rejected "
             "value fails as invalid_reasoning_effort (repair steers to amicus_models). "
-            "Backends whose CLI does not reject a bad effort (claude, kimi, pi) are "
-            "validated pre-spend: claude against a fixed list, kimi from its model listing, "
+            "Backends whose CLI does not reject a bad effort (claude, pi) are "
+            "validated pre-spend: claude against a fixed list "
             "and pi from its own lookup of the exact model, which a truncated amicus_models "
             "listing does not limit; pi refuses only a token outside its vocabulary or a non-off "
             "effort on a non-thinking model, and may run a thinking model at another level, "
@@ -266,7 +266,7 @@ PARAMETER_CONTRACTS: dict[str, ParamContract] = {
     "backend_options": ParamContract(
         name="backend_options",
         summary=(
-            "One closed object of backend knobs: isolation (codex, kimi); config_mode, "
+            "One closed object of backend knobs: isolation (codex); config_mode, "
             "access (claude); max_budget_usd (claude, pi). A key or value the backend "
             f"rejects fails pre-spend. Values: {PARAMS_RESOURCE_URI}."
         ),
@@ -275,7 +275,7 @@ PARAMETER_CONTRACTS: dict[str, ParamContract] = {
             "a key it does, fails pre-spend as invalid_arguments naming "
             "backend_options.<key>. "
             "isolation — codex: inherit|ignore-config|ignore-rules (drop $CODEX_HOME "
-            "config, then also execpolicy rules); kimi: inherit|ignore-skills. "
+            "config, then also execpolicy rules). "
             "config_mode — claude: inherit|scoped|safe|bare (how much of the user's Claude "
             "config the run inherits). Claude adversarial_review defaults to safe (bare when "
             "AMICUS_CLAUDE_CONFIG_MODE=bare); other verbs use the configured default. Explicit "
@@ -342,23 +342,15 @@ def params_resource_body() -> dict[str, Any]:
 
 BackendParam = Annotated[
     BackendId,
-    Field(description=("Harness to run: codex | kimi (deprecated) | claude | pi. Required.")),
+    Field(description=("Harness to run: codex | claude | pi. Required.")),
 ]
 OptionalBackendParam = Annotated[
     BackendId | None,
-    Field(
-        description=(
-            "Restrict to one harness: codex | kimi (deprecated) | claude | pi. Omit for all."
-        )
-    ),
+    Field(description=("Restrict to one harness: codex | claude | pi. Omit for all.")),
 ]
 DelegateBackendParam = Annotated[
     DelegateBackendId,
-    Field(
-        description=(
-            "Harness to run: codex | kimi (deprecated) | pi (claude has no delegate). Required."
-        )
-    ),
+    Field(description=("Harness to run: codex | pi (claude has no delegate). Required.")),
 ]
 
 

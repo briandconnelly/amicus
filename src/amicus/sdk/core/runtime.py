@@ -117,9 +117,8 @@ def _kill_group(proc: subprocess.Popen) -> None:
 # --- Orphan sweep -----------------------------------------------------------------------
 # A process-group kill is not always enough. Some agent CLIs spawn each shell command in
 # its OWN process group, which is then reparented to init, so killing the direct child's
-# group leaves those commands running forever. Verified against kimi-code 0.35.0: after
-# killpg on kimi's group, a `sleep 240` it had started survived with its own pgid and
-# ppid 1.
+# group leaves those commands running forever. A detached command can survive
+# with its own pgid and ppid 1.
 #
 # The sweep is a second pass keyed on a caller-supplied marker that the stray's command
 # line embeds verbatim — for this server, the unique per-run worktree path, which appears
@@ -212,9 +211,9 @@ def _orphan_process_groups(marker: str) -> list[int]:
     """Process groups to kill for `marker`, never including our own group.
 
     Killing only the matched pids is NOT enough: a matched process's own children do not
-    carry the marker, so they are stranded with ppid 1 and keep running. Observed live —
-    the sweep killed kimi's marked `bash -c cd '<worktree>' && sleep 300` and left the
-    `sleep` behind, while a marker-only search reported the sweep clean.
+    carry the marker, so they are stranded with ppid 1 and keep running. For example, killing
+    a marked `bash -c cd '<worktree>' && sleep 300` can leave the `sleep` behind, while a
+    marker-only search reports the sweep clean.
     """
     self_group = os.getpgrp() if hasattr(os, "getpgrp") else None
     groups: list[int] = []

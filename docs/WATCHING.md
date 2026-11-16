@@ -1,6 +1,6 @@
 # Watching upstream releases
 
-amicus depends on things that release on their own schedule: four backend CLIs and the `fastmcp` and `mcp` packages it caps to a minor line.
+amicus depends on things that release on their own schedule: three backend CLIs and the `fastmcp` and `mcp` packages it caps to a minor line.
 This page is how a new release of any of them turns into an issue without anyone having to notice it.
 It reports and files; it never installs, validates, widens a cap or changes a supported set, which stay manual, in their own PRs.
 
@@ -9,7 +9,6 @@ It reports and files; it never installs, validates, widens a cap or changes a su
 | Stream | Baseline it is compared with | Watched by |
 | --- | --- | --- |
 | `codex` | the shipped `SUPPORTED_VERSIONS` in `src/amicus/backends/codex/contract.py` | the codex routine, which opens a draft support PR for each new minor (`docs/UPGRADING-CODEX.md`) |
-| `kimi` | the shipped `SUPPORTED_VERSIONS` in `src/amicus/backends/kimi/contract.py` | `watch` |
 | `pi` | the shipped `SUPPORTED_VERSIONS` in `src/amicus/backends/pi/contract.py` | `watch` |
 | `claude` | the newest capture under `docs/claude-help/`, because the shipped set is major-only and a patch never leaves it | `watch` |
 | `fastmcp`, `mcp` | the `<X.Y` cap in `pyproject.toml`'s `[project].dependencies`, which `.github/dependabot.yml` tells Dependabot not to cross (#106) | `watch` |
@@ -23,7 +22,7 @@ Its routine does the zero-spend upgrade steps and writes a release-notes evaluat
 uv run python scripts/check_backend_compat.py watch [--json] [--file-issues [--dry-run]] [--repo OWNER/NAME]
 ```
 
-It reads npm's `latest` dist-tag for `@moonshot-ai/kimi-code`, `@earendil-works/pi-coding-agent` and `@anthropic-ai/claude-code`, and PyPI's JSON API for `fastmcp` and `mcp`.
+It reads npm's `latest` dist-tag for `@earendil-works/pi-coding-agent` and `@anthropic-ai/claude-code`, and PyPI's JSON API for `fastmcp` and `mcp`.
 It needs no installed backend CLI and no credentials for that, and it sends no prompt, so it spends nothing.
 `--file-issues` additionally needs an authenticated `gh` with permission to read and create issues.
 
@@ -51,15 +50,14 @@ Each `update` finding has a stable key, its stream and a version, and a title bu
 
 | Stream | Key | Title |
 | --- | --- | --- |
-| `kimi` | the latest release's `<major>.<minor>` | `chore(backends): track kimi <major>.<minor>` |
 | `pi` | the latest release's `<major>.<minor>` | `chore(backends): track pi <major>.<minor>` |
 | `claude` | the latest release's full version | `chore(backends): track claude <version>` |
 | `fastmcp`, `mcp` | the latest release's `<major>.<minor>` | `chore(deps): track <package> <major>.<minor> past the cap` |
 
-The kimi and pi titles follow the codex tracking issues' `chore(backends): track codex <major>.<minor>`.
+The pi titles follow the codex tracking issues' `chore(backends): track codex <major>.<minor>`.
 Claude is keyed by full version because its baseline is a capture of one version, not a minor.
 
-### kimi, pi, fastmcp and mcp: one issue per minor
+### pi, fastmcp and mcp: one issue per minor
 
 An issue is created only when no issue, open or closed, has exactly that title.
 The check is two reads, and the title must match one of their rows character for character:
@@ -90,7 +88,7 @@ Close the issue once a capture at or past its release is committed under `docs/c
 Closing re-arms the watch: the next claude release past the newest capture opens a new issue.
 An open issue is moved forward even when a closed issue already has the latest release's title.
 
-Each issue is labelled `dependencies` and `chore`, and a kimi, claude or pi issue also carries its `backend: <id>` label (`backend: kimi`, `backend: claude`, `backend: pi`), all existing labels.
+Each issue is labelled `dependencies` and `chore`, and a claude or pi issue also carries its `backend: <id>` label (`backend: claude`, `backend: pi`), all existing labels.
 Its body says the release is available upstream, never that it is supported, because nothing was installed or run.
 A claude issue's body also says that it rolls forward and that closing it re-arms the watch.
 

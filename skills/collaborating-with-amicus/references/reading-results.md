@@ -84,14 +84,14 @@ one object in a preamble, a fence or a sign-off is read as that object and stays
 one that holds two objects, or whose preamble has a `{` or sign-off a `}`, is `unstructured`
 rather than guessed at. That reading is for reviews only: a consult answered in prose keeps its
 whole answer in `summary`. Two cases are still errors, because in both amicus has no answer to
-deliver: an empty one (`invalid_json`, or `empty_response` on `kimi` and `pi`, which detect it before a
+deliver: an empty one (`invalid_json`, or `empty_response` on `pi`, which detects it before a
 result is built) and one amicus refused to read (`answer_unavailable`).
 
 `answer_unavailable` is a different fact from either: the backend **did** answer, and amicus
 could not read the answer whole. `error.details.reason` says why. For an answer file amicus
 refused, it is `artifact_oversize` (over the read limit, with `limit_bytes` and, when known,
 `actual_bytes`), `artifact_not_regular` (a symlink, FIFO or device) or `artifact_unreadable`.
-For an answer on the output stream (`claude`, `pi`, which has no answer file, and `kimi` when it wrote none), it is
+For an answer on the output stream (`claude`, `pi`, which has no answer file), it is
 `stream_truncated`, the output passed `AMICUS_MAX_OUTPUT_BYTES` and the part carrying the answer
 was dropped, or `stream_capture_failed`; on `pi` it can also be `model_output_limit`, the model
 stopped at its own output-token limit, which `AMICUS_MAX_OUTPUT_BYTES` cannot help. Read `error.temporary` rather than assume: it is true
@@ -100,8 +100,8 @@ call (the same key replays the error), and even then a retry is a new paid run. 
 stream or a model output limit, narrow the task or ask for a shorter answer. A delegate whose summary file was refused, and which has no other whole answer
 from the backend, still comes back `ok: true` when its diff was captured: with the diff,
 amicus's own summary saying the backend's could not be read, a null `raw_response.text`, and a
-`meta.security_warnings` entry. Where the backend's stream did carry its whole answer (`kimi`, `pi`),
-that answer is the summary and the raw response, beside the same warning. A `kimi` or `pi` delegate whose
+`meta.security_warnings` entry. Where the backend's stream did carry its whole answer (`pi`),
+that answer is the summary and the raw response, beside the same warning. A `pi` delegate whose
 stream lost its summary, or a `pi` delegate whose summary the model's output limit cut off, also comes back `ok: true` with its diff and amicus's own summary saying
 which, but with no warning, since nothing was refused. Read `meta.truncated` and `meta.redacted_paths` for whether that
 diff is whole, as on any delegate.
@@ -146,7 +146,7 @@ finding intact:
 | --- | --- |
 | `severity_normalized` | A severity differed only in case or surrounding space. The finding is intact. |
 | `extra_fields_omitted` | The backend added keys amicus's `Finding` has no home for. Every field amicus recognizes survives; whatever those extra keys said does not. |
-| `backend_artifact_reference_removed` | The finding cited one of amicus's own temporary files (Kimi is handed its prompt as one). The path is replaced by `[amicus temporary file]` in the finding's text, and a `file` naming it is cleared together with its `line`. The finding is intact, and no location you could have opened was lost: treat it as a finding about what you sent, not about a file. |
+| `backend_artifact_reference_removed` | The finding cited one of amicus's own temporary files. The path is replaced by `[amicus temporary file]` in the finding's text, and a `file` naming it is cleared together with its `line`. The finding is intact, and no location you could have opened was lost: treat it as a finding about what you sent, not about a file. |
 | `invalid_entry` | An entry could not be represented at all and was dropped. Its content is not in the result. |
 | `invalid_container` | The `findings` member was present but was not a list. Nothing could be read from it. |
 | `missing_findings` | The `findings` member was absent. The output schema requires it, so this is not the backend saying "none". |

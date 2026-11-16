@@ -134,7 +134,7 @@ IMPLICIT_CONTEXT_DISCLOSURE = (
     "ANTHROPIC_API_KEY. Every mode strips the user's MCP servers."
 )
 # Wire prose that would teach a mechanism claude lacks or a sibling's vocabulary. The
-# sibling's "kimi"/"moonbridge" canaries are NOT carried: this server hosts Kimi.
+# Keep foreign CLI syntax out of Claude's published surface.
 FORBIDDEN_SURFACE_PHRASES = ("codex exec", "kimi exec", "read-only sandbox", "applies the diff")
 
 # --- Failure signatures ----------------------------------------------------------------------

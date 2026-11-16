@@ -12,9 +12,9 @@ from amicus.sdk.conventions import envelope as pe
 
 
 def test_backend_ids_are_the_v1_set_in_order():
-    assert codes.BACKEND_IDS == ("codex", "kimi", "claude", "pi")
+    assert codes.BACKEND_IDS == ("codex", "claude", "pi")
     assert get_args(codes.BackendId) == codes.BACKEND_IDS
-    assert codes.VERB_BACKENDS["delegate"] == ("codex", "kimi", "pi")
+    assert codes.VERB_BACKENDS["delegate"] == ("codex", "pi")
     assert codes.VERB_BACKENDS["adversarial_review"] == ("claude",)
     assert (
         codes.VERB_BACKENDS["consult"] == codes.VERB_BACKENDS["review_changes"] == codes.BACKEND_IDS
@@ -77,7 +77,7 @@ def test_repair_steps_are_pontoniers_vocabulary():
 
 def test_generalize_rewrites_only_the_four_minted_codes():
     assert codes.generalize_code("codex_not_found", "codex") == "backend_not_found"
-    assert codes.generalize_code("kimi_rate_limited", "kimi") == "backend_rate_limited"
+    assert codes.generalize_code("pi_rate_limited", "pi") == "backend_rate_limited"
     assert codes.generalize_code("claude_auth_indeterminate", "claude") == (
         "backend_auth_indeterminate"
     )
@@ -85,7 +85,7 @@ def test_generalize_rewrites_only_the_four_minted_codes():
     # A backend-local code is preserved verbatim.
     assert codes.generalize_code("user_config_rejected", "codex") == "user_config_rejected"
     # Another backend's minted code is not this backend's to rewrite.
-    assert codes.generalize_code("codex_not_found", "kimi") == "codex_not_found"
+    assert codes.generalize_code("codex_not_found", "pi") == "codex_not_found"
 
 
 def test_fingerprint_constants():

@@ -138,45 +138,6 @@ Comma-separated codex major.minor versions treated as supported (advisory).
 Unset by default.
 Former names, no longer read: `CODEX_IN_CLAUDE_SUPPORTED_VERSIONS`.
 
-## Kimi
-
-The `kimi` backend is deprecated in favour of `pi`, since 0.13.0, for removal in 0.15.0 or later; see `amicus_backends` for the migration.
-
-### `AMICUS_KIMI_BIN`
-
-Absolute path to the kimi executable; used exactly as given.
-Unset by default.
-
-### `AMICUS_KIMI_EXTRA_ARGS`
-
-Operator passthrough of extra kimi options; kimi exposes no option amicus can pass safely, so any value is refused and reported by `amicus_backends`.
-Unset by default.
-Former names, no longer read: `MOONBRIDGE_EXTRA_ARGS`.
-
-### `AMICUS_KIMI_MODEL`
-
-Default model ALIAS (from kimi's config.toml) when a call omits `model`.
-Unset by default.
-Former names, no longer read: `MOONBRIDGE_MODEL`.
-
-### `AMICUS_KIMI_REASONING_EFFORT`
-
-Default reasoning effort when a call omits `reasoning_effort`.
-Unset by default.
-Former names, no longer read: `MOONBRIDGE_REASONING_EFFORT`.
-
-### `AMICUS_KIMI_ISOLATION`
-
-Default backend_options.isolation: inherit | ignore-skills.
-Default: `inherit`.
-Former names, no longer read: `MOONBRIDGE_ISOLATION`.
-
-### `AMICUS_KIMI_SUPPORTED_VERSIONS`
-
-Comma-separated kimi major.minor versions treated as supported (advisory).
-Unset by default.
-Former names, no longer read: `MOONBRIDGE_SUPPORTED_VERSIONS`.
-
 ## Claude
 
 ### `AMICUS_CLAUDE_BIN`

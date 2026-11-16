@@ -17,9 +17,8 @@ from amicus import config
 
 _BACKENDS = [
     ("codex", "AMICUS_CODEX_BIN", "codex_bin", "CodexBinary"),
-    ("kimi", "AMICUS_KIMI_BIN", "kimi_bin", "KimiBinary"),
-    ("claude", "AMICUS_CLAUDE_BIN", "claude_bin", "ClaudeBinary"),
     ("pi", "AMICUS_PI_BIN", "pi_bin", "PiBinary"),
+    ("claude", "AMICUS_CLAUDE_BIN", "claude_bin", "ClaudeBinary"),
 ]
 
 

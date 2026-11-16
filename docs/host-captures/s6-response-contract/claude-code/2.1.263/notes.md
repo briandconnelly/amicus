@@ -31,7 +31,7 @@ Both numbers are in `transcript.md`, because which of the two changes did the wo
 
 ## Zero-spend mechanism
 
-`AMICUS_BACKENDS=codex`, with `AMICUS_CODEX_BIN`, `AMICUS_KIMI_BIN` and `AMICUS_CLAUDE_BIN` pointed at this repo's `tests/support/fake_codex.py`, `fake_kimi.py` and `fake_claude.py`.
+`AMICUS_BACKENDS=codex`, with `AMICUS_CODEX_BIN`, `AMICUS_KIMI_BIN` and `AMICUS_CLAUDE_BIN` pointed at this repo's `tests/support/fake_codex.py`, `the retired Kimi stub` and `fake_claude.py`.
 S6 needs no amicus call at all: the scenario supplies a fabricated `amicus_delegate` result inline in the prompt.
 `server.log` here confirms it independently — one start line and the two shutdown lines, and no `tools/call` line of any kind.
 The stubs' invocation-capture files (`FAKE_CODEX_ARGV_FILE` and friends) were left unset, so there is no on-disk record even of a fake invocation, and none occurred.

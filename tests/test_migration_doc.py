@@ -33,7 +33,7 @@ async def _tool_param_names() -> dict[str, set[str]]:
     registry = BackendRegistry(
         {
             backend: fakeplugin.make_plugin(backend, egress="x", carriers="argv")
-            for backend in ("codex", "kimi", "claude")
+            for backend in ("codex", "claude", "pi")
         },
         {},
     )

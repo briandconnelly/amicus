@@ -28,7 +28,6 @@ fastmcp.settings.mcp_camelcase_compat = False
 ENV_PREFIXES = config.ENV_PREFIXES
 
 NEVER_SPAWN_CODEX = "/nonexistent/amicus-test-codex"
-NEVER_SPAWN_KIMI = "/nonexistent/amicus-test-kimi"
 NEVER_SPAWN_CLAUDE = "/nonexistent/amicus-test-claude"
 NEVER_SPAWN_PI = "/nonexistent/amicus-test-pi"
 
@@ -68,14 +67,6 @@ def _never_spawn_real_codex(monkeypatch):
     codex run short-circuit to backend_not_found. Tests that want a run point the override
     at the `fake_codex` fixture; the live suite (tests/test_codex_live.py) deletes it."""
     monkeypatch.setenv("AMICUS_CODEX_BIN", NEVER_SPAWN_CODEX)
-
-
-@pytest.fixture(autouse=True)
-def _never_spawn_real_kimi(monkeypatch):
-    """No unit test may run the real kimi CLI: an unusable AMICUS_KIMI_BIN makes every kimi
-    run, probe and catalog read short-circuit. Tests that want a run point the override at
-    the `fake_kimi` fixture; the live suite (tests/test_kimi_live.py) deletes it."""
-    monkeypatch.setenv("AMICUS_KIMI_BIN", NEVER_SPAWN_KIMI)
 
 
 @pytest.fixture(autouse=True)
@@ -226,7 +217,6 @@ def clean_env(monkeypatch):
         if key.startswith(ENV_PREFIXES):
             monkeypatch.delenv(key, raising=False)
     monkeypatch.setenv("AMICUS_CODEX_BIN", NEVER_SPAWN_CODEX)
-    monkeypatch.setenv("AMICUS_KIMI_BIN", NEVER_SPAWN_KIMI)
     monkeypatch.setenv("AMICUS_CLAUDE_BIN", NEVER_SPAWN_CLAUDE)
     monkeypatch.setenv("AMICUS_PI_BIN", NEVER_SPAWN_PI)
     return monkeypatch
@@ -248,7 +238,6 @@ def spawned_server_env() -> dict[str, str]:
     env = {k: v for k, v in os.environ.items() if not k.startswith(ENV_PREFIXES)}
     return env | {
         "AMICUS_CODEX_BIN": NEVER_SPAWN_CODEX,
-        "AMICUS_KIMI_BIN": NEVER_SPAWN_KIMI,
         "AMICUS_CLAUDE_BIN": NEVER_SPAWN_CLAUDE,
         "AMICUS_PI_BIN": NEVER_SPAWN_PI,
     }
@@ -276,17 +265,6 @@ def pinned_codex_bin(monkeypatch):
 
 
 @pytest.fixture
-def pinned_kimi_bin(monkeypatch):
-    """Let AMICUS_KIMI_BIN=/KIMI resolve without a file on disk (argv tests only)."""
-    from amicus.backends.kimi import binary
-
-    monkeypatch.setattr(
-        binary, "_is_executable_file", lambda path: str(path) == "/KIMI" or path.is_file()
-    )
-    return monkeypatch
-
-
-@pytest.fixture
 def pinned_claude_bin(monkeypatch):
     """Let AMICUS_CLAUDE_BIN=/CLAUDE resolve without a file on disk (argv tests only)."""
     from amicus.backends.claude import binary
@@ -302,16 +280,6 @@ def fake_codex(tmp_path_factory) -> Path:
     """An executable stand-in `codex` (tests/support/fake_codex.py) for spend-free runs."""
     src = Path(__file__).parent / "support" / "fake_codex.py"
     exe = tmp_path_factory.mktemp("fake-codex") / "codex"
-    shutil.copy(src, exe)
-    exe.chmod(exe.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP)
-    return exe
-
-
-@pytest.fixture(scope="session")
-def fake_kimi(tmp_path_factory) -> Path:
-    """An executable stand-in `kimi` (tests/support/fake_kimi.py) for spend-free runs."""
-    src = Path(__file__).parent / "support" / "fake_kimi.py"
-    exe = tmp_path_factory.mktemp("fake-kimi") / "kimi"
     shutil.copy(src, exe)
     exe.chmod(exe.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP)
     return exe
@@ -357,32 +325,6 @@ def live_codex(monkeypatch, tmp_path):
     if status.returncode != 0:
         (pytest.fail if require else pytest.skip)("codex is not logged in")
     return codex
-
-
-@pytest.fixture
-def live_kimi(monkeypatch, tmp_path):
-    """Opt back into the real kimi CLI for `-m integration` tests. Skips when kimi is absent
-    or has no provider, unless AMICUS_REQUIRE_LIVE=1 makes that a failure."""
-    import json
-    import shutil
-    import subprocess
-
-    monkeypatch.delenv("AMICUS_KIMI_BIN", raising=False)
-    monkeypatch.setenv("AMICUS_STATE_DIR", str(tmp_path / "state"))
-    require = os.environ.get("AMICUS_REQUIRE_LIVE") == "1"
-    kimi = shutil.which("kimi")
-    if kimi is None:
-        (pytest.fail if require else pytest.skip)("kimi CLI not installed")
-    probe = subprocess.run(
-        [kimi, "provider", "list", "--json"], capture_output=True, text=True, check=False
-    )
-    try:
-        providers = json.loads(probe.stdout).get("providers") or {}
-    except (json.JSONDecodeError, AttributeError):
-        providers = {}
-    if probe.returncode != 0 or not providers:
-        (pytest.fail if require else pytest.skip)("kimi has no configured provider")
-    return kimi
 
 
 @pytest.fixture

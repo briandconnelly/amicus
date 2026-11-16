@@ -12,7 +12,7 @@ What follows is the allowlist: tool name, argument shape (field names and the `b
 Every run: `claude -p`, fresh context, Claude Code 2.1.263.
 The amicus MCP server came from a locally built wheel (`uv build --wheel` from this worktree), substituted for the committed `.mcp.json`'s `git+...@v0.1.0` reference.
 This is the same substitution `docs/host-captures/install-smoke/claude-code/2.1.263/notes.md` used for Task 8.
-`AMICUS_CODEX_BIN`, `AMICUS_KIMI_BIN`, and `AMICUS_CLAUDE_BIN` were pointed at this repo's `tests/support/fake_codex.py` / `fake_kimi.py` / `fake_claude.py` for every run.
+`AMICUS_CODEX_BIN`, `AMICUS_KIMI_BIN`, and `AMICUS_CLAUDE_BIN` were pointed at this repo's `tests/support/fake_codex.py` / `the retired Kimi stub` / `fake_claude.py` for every run.
 That way even a paid call the model made despite instructions would hit a local stub process rather than a real provider.
 `--allowedTools mcp__amicus --permission-mode bypassPermissions` was used with the intent of withholding Bash/Read/Write so the run could not wander.
 

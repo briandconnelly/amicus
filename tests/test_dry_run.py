@@ -723,19 +723,19 @@ async def test_a_claude_dry_run_refuses_bare_mode_without_a_key(tmp_path, repo, 
     assert err["details"]["field"] == "backend_options.config_mode"
 
 
-async def test_a_kimi_dry_run_refuses_an_unknown_effort(tmp_path, repo, monkeypatch):
-    app = _app(tmp_path, monkeypatch)
+async def test_a_pi_dry_run_refuses_an_unknown_effort(tmp_path, repo, fake_pi, monkeypatch):
+    app, _registry = _pi_registry(tmp_path, fake_pi, monkeypatch)
     (repo / "a.py").write_text("x = 2\n")
     async with Client(app) as c:
         review = await c.call_tool(
             "amicus_review_changes_dry_run",
-            {"backend": "kimi", "workspace_root": str(repo), "reasoning_effort": "turbo"},
+            {"backend": "pi", "workspace_root": str(repo), "reasoning_effort": "turbo"},
             raise_on_error=False,
         )
         delegate = await c.call_tool(
             "amicus_delegate_dry_run",
             {
-                "backend": "kimi",
+                "backend": "pi",
                 "task": "do it",
                 "workspace_root": str(repo),
                 "reasoning_effort": "turbo",

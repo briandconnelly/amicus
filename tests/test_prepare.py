@@ -115,7 +115,7 @@ async def test_explicit_values_beat_defaults_and_backend_options_are_echoed(tmp_
 
 
 async def test_unavailable_backend_feature_gate_and_placeholders(tmp_path):
-    out = await _prep(tmp_path, backend="kimi", registry=BackendRegistry({}, {}))
+    out = await _prep(tmp_path, backend="pi", registry=BackendRegistry({}, {}))
     assert out["error"]["code"] == "backend_unavailable"
     out = await _prep(
         tmp_path,

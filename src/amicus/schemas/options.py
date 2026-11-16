@@ -15,7 +15,6 @@ MAX_BUDGET_BOUNDS: tuple[float, float] = (0.01, 5.0)
 OPTION_ALLOWED_VALUES: dict[str, dict[str, tuple[str, ...] | None]] = {
     "isolation": {
         "codex": ("inherit", "ignore-config", "ignore-rules"),
-        "kimi": ("inherit", "ignore-skills"),
     },
     "config_mode": {"claude": ("inherit", "scoped", "safe", "bare")},
     "access": {"claude": ("toolless", "readonly")},
@@ -27,11 +26,10 @@ class BackendOptions(BaseModel):
     """The union of every backend's options; applicability is validated pre-spend."""
 
     model_config = ConfigDict(extra="forbid")
-    isolation: Literal["inherit", "ignore-config", "ignore-rules", "ignore-skills"] | None = Field(
+    isolation: Literal["inherit", "ignore-config", "ignore-rules"] | None = Field(
         default=None,
         description=(
-            "codex: inherit|ignore-config|ignore-rules; kimi: inherit|ignore-skills. "
-            "Omit for the backend default (inherit)."
+            "codex: inherit|ignore-config|ignore-rules. Omit for the backend default (inherit)."
         ),
     )
     config_mode: Literal["inherit", "scoped", "safe", "bare"] | None = Field(

@@ -98,7 +98,7 @@ CAPABILITY_SUMMARY = (
     "(amicus_consult), a git-change review (amicus_review_changes), an adversarial plan "
     "critique (amicus_adversarial_review, claude only) or a coding task in a throwaway "
     "worktree (amicus_delegate, not claude); `backend` names the harness (codex, claude, "
-    "pi; kimi is deprecated), not the model; pi runs any listed provider/id. amicus does "
+    "pi), not the model; pi runs any listed provider/id. amicus does "
     "not apply anything to your working tree (delegate returns a diff); it does not bypass "
     "any backend's sandbox or approvals; and every paid call sends your inputs to that "
     "backend's provider raw. Backend CLIs can read anything the OS user can, so no choice "

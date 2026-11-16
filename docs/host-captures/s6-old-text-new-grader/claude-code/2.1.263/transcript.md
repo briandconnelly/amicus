@@ -52,7 +52,7 @@ The isolating experiment — identical inputs, varying only the skill text — r
 
 ## Conditions, including every one that differs from run 4
 
-Matched: host `claude -p`, Claude Code 2.1.263, model `claude-opus-5[1m]`, fresh context, `AMICUS_BACKENDS=codex`, all three `*_BIN` variables pointed at this repo's `tests/support/fake_codex.py` / `fake_kimi.py` / `fake_claude.py`, a locally built wheel substituted for the committed `.mcp.json`'s one `--from` argument in a scratch copy of the manifest, cwd a scratch git repo seeded with two commits, and the same flags: `--strict-mcp-config --mcp-config <scratch>/.mcp.json --plugin-dir <scratch plugin> --allowedTools mcp__amicus --permission-mode bypassPermissions`.
+Matched: host `claude -p`, Claude Code 2.1.263, model `claude-opus-5[1m]`, fresh context, `AMICUS_BACKENDS=codex`, all three `*_BIN` variables pointed at this repo's `tests/support/fake_codex.py` / `the retired Kimi stub` / `fake_claude.py`, a locally built wheel substituted for the committed `.mcp.json`'s one `--from` argument in a scratch copy of the manifest, cwd a scratch git repo seeded with two commits, and the same flags: `--strict-mcp-config --mcp-config <scratch>/.mcp.json --plugin-dir <scratch plugin> --allowedTools mcp__amicus --permission-mode bypassPermissions`.
 The committed `.mcp.json` was not modified.
 
 Differing, and disclosed:

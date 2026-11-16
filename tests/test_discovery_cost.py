@@ -237,7 +237,7 @@ budget keeps no headroom.
 
 The schema-45 -> schema-46 move (#248) changes nothing here: the new `root_not_a_directory`
 token is in the `workspace_root` contract at `amicus://params`, a resource body, not
-tools/list. Measured on the wire: all 112817, codex-kimi 112825, claude 112817, as before.
+tools/list. Measured on the wire: all 112817, codex-pi 112825, claude 112817, as before.
 
 The schema-47 drop (-396 bytes on every profile: all 112817 -> 112421) is #250: every tool
 record lost FastMCP's `_meta.fastmcp` block, which `server._install_meta_strip` removes after
@@ -395,10 +395,10 @@ both move by the 123 bytes, so the budget keeps no headroom.
 
 The schema-67 move (#426) adds no byte to any tool record and moves no profile's size; it moves
 which profile carries which size. kimi now declares its paid calls destructive, because it has
-no sandbox and a worktree changes its cwd, not its reach, so the codex-kimi profile's eight
+no sandbox and a worktree changes its cwd, not its reach, so the codex-pi profile's eight
 active tools carry `destructiveHint: true` and it drops to the `all` and `claude` size,
 116171 -> 116163, one byte per active tool. The new `codex` profile is the one whose paid tools
-still say `false`, and it measures 116171, the size codex-kimi had. The annotations_reading
+still say `false`, and it measures 116171, the size codex-pi had. The annotations_reading
 sentence that names Kimi rides amicus_capabilities's result, not tools/list. Measured on the
 wire. MEASURED and BUDGET both move with it, so the budget keeps no headroom.
 
@@ -451,7 +451,7 @@ from amicus import manifest
 MEASURED: dict[str, int] = {
     "all": 116854,
     "codex": 116862,
-    "codex-kimi": 116854,
+    "codex-pi": 116854,
     "claude": 116854,
 }
 # The budget is a literal, not MEASURED rounded up to the next kilobyte as it was until
@@ -464,7 +464,7 @@ MEASURED: dict[str, int] = {
 BUDGET: dict[str, int] = {
     "all": 116854,
     "codex": 116862,
-    "codex-kimi": 116854,
+    "codex-pi": 116854,
     "claude": 116854,
 }
 

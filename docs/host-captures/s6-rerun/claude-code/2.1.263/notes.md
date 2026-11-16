@@ -31,7 +31,7 @@ The committed `.mcp.json` in this worktree was never modified; `git diff .mcp.js
 
 ## Zero-spend mechanism
 
-`AMICUS_CODEX_BIN`, `AMICUS_KIMI_BIN` and `AMICUS_CLAUDE_BIN` pointed at this repo's `tests/support/fake_codex.py`, `fake_kimi.py` and `fake_claude.py`, so even a paid call made despite the harness instruction would have hit a local stdlib stub rather than a provider.
+`AMICUS_CODEX_BIN`, `AMICUS_KIMI_BIN` and `AMICUS_CLAUDE_BIN` pointed at this repo's `tests/support/fake_codex.py`, `the retired Kimi stub` and `fake_claude.py`, so even a paid call made despite the harness instruction would have hit a local stdlib stub rather than a provider.
 S6 needs no amicus call at all: the scenario supplies a fabricated `amicus_delegate` result inline in the prompt.
 `server.log` in this directory independently confirms that: it contains only start and shutdown lines and no `tools/call` line of any kind.
 The stubs' own invocation-capture files (`FAKE_CODEX_ARGV_FILE`, `FAKE_KIMI_ARGV_FILE`, `FAKE_CLAUDE_ARGV_FILE`) were left unset, so there is no on-disk record even of a fake invocation.

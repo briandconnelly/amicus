@@ -137,7 +137,7 @@ DELEGATE_SUMMARY_OUTPUT_LIMIT = (
     "output, and is still delivered."
 )
 # A clean exit an inspector diagnosed as one of these is explained by a lost stream answer:
-# kimi finds no message in a stream whose every message was dropped, and claude finds no
+# pi finds no message in a stream whose every message was dropped, and claude finds no
 # JSON in an envelope that was cut. Any other clean-exit failure is its own fact.
 _LOSS_EXPLAINS = frozenset({"empty_response", "invalid_json"})
 
@@ -471,12 +471,10 @@ async def run_request(
             outcome = RunOutcome(run=run, events=run.stdout, artifact_texts=artifact_texts)
             _stamp_spawn(meta, run, prepared, spec.cwd)
             # Parse usage/session_id from the process output BEFORE classifying: a run
-            # can fail (or, like kimi's empty_response, be reclassified from an exit-0
+            # can fail (or, like pi's empty_response, be reclassified from an exit-0
             # outcome) after the model already reported a session id or token count, and
-            # that accounting belongs on the error envelope's meta too (ported from
-            # moonbridge's runspace.apply_run_meta / orchestration._stamp_meta, both of
-            # which stamp meta before checking whether the run succeeded). Both backends'
-            # `finalize` tolerate an empty or malformed answer, so calling it unconditionally
+            # that accounting belongs on the error envelope's meta too. Every backend's
+            # `finalize` tolerates an empty or malformed answer, so calling it unconditionally
             # is safe.
             result = plugin.backend.finalize(outcome, request)
             # The staged files are gone, but their paths are still here, and neither an
@@ -526,7 +524,7 @@ async def run_request(
             aliases = site.aliases
             summary_override = None
             if refusal is not None or loss is not None:
-                # The other channel (kimi's stream) is a substitute for a refused file only
+                # The other channel (the output stream) is a substitute for a refused file only
                 # if the backend found it whole: a damaged capture can lose the true final
                 # message while an earlier one still parses.
                 if (result.answer or "").strip() and loss is None:

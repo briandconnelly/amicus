@@ -10,10 +10,11 @@ from typing import TYPE_CHECKING, Any
 from pydantic import BaseModel, ValidationError
 
 from amicus.backends import backend_deprecation
-from amicus.errors import error_envelope, serialize_error
+from amicus.errors import complete_lookup, error_envelope, serialize_error
 from amicus.jobs.polling import job_status_arguments, poll_hint_ms
 from amicus.orchestration.finalize import sanitize_finding, sanitize_prose_value
-from amicus.schemas.envelope import ConsumeDisposition, ErrorResult, slim_meta
+from amicus.schemas.codes import BACKEND_IDS
+from amicus.schemas.envelope import ConsumeDisposition, ErrorResult, Repair, slim_meta
 from amicus.schemas.fingerprint import FINGERPRINT, RESULT_FORMAT
 from amicus.schemas.results import (
     AdversarialReviewResult,
@@ -275,6 +276,19 @@ def attach_backend_deprecation(envelope: dict[str, Any]) -> dict[str, Any]:
     return envelope
 
 
+def _reconcile_stored_repair(repair: Repair, backend: str | None) -> None:
+    """Make a stored error's repair callable on THIS server (#423). A record written before
+    a backend was removed can name it in its repair arguments, and that call would now fail
+    as invalid_arguments. A lookup repair is completed by the same policy a live error uses
+    (`complete_lookup`); any other repair naming a backend outside the enum loses its call
+    and stays symbolic. Delivery-only: the stored record is unchanged. Mutates."""
+    tool, arguments = complete_lookup(repair.tool, repair.arguments, backend)
+    named = (arguments or {}).get("backend")
+    if named is not None and named not in BACKEND_IDS:
+        tool, arguments = None, None
+    repair.tool, repair.arguments = tool, arguments
+
+
 def finished_job_envelope(
     rec: dict[str, Any],
     payload: dict[str, Any] | None,
@@ -346,6 +360,8 @@ def _finished_job_envelope(
             error.error.repair.alternative = redaction.sanitize_echo_prose(
                 error.error.repair.alternative
             )
+        if error.error.repair is not None:
+            _reconcile_stored_repair(error.error.repair, error.error.backend)
         return serialize_error(error), True
     if state == "done":
         # done but payload is None: result.json was gone by the payload read. The record

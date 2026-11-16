@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Run the four live backend gates and record whether they PASSED on this commit.
+"""Run the three live backend gates and record whether they PASSED on this commit.
 
 This is an honest-mistake guard, not an attestation. The record it writes
 (`.release-evidence/live-gates.json`) is a gitignored local file a maintainer can hand-edit,
@@ -7,7 +7,7 @@ so it proves nothing against a determined author. What it catches is the ordinar
 evidence taken on the wrong commit, on a dirty tree, from a partial run, or too long ago.
 
 AGENTS.md rule 20 requires that the live gates — tests/test_codex_live.py,
-tests/test_kimi_live.py, tests/test_claude_live.py and tests/test_pi_live.py — have all
+tests/test_claude_live.py and tests/test_pi_live.py — have all
 PASSED (not merely run) on the exact commit being tagged, with that outcome recorded here.
 A record showing a failed suite is not evidence; it is a reason not to tag.
 
@@ -87,12 +87,11 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 EVIDENCE_PATH = Path(".release-evidence/live-gates.json")
 FAILURE_PATH = Path(".release-evidence/live-gates.failed.json")
 
-BACKENDS = ("codex", "kimi", "claude", "pi")
+BACKENDS = ("codex", "claude", "pi")
 
 _TEST_FILES = {name: f"tests/test_{name}_live.py" for name in BACKENDS}
 _BINARY_ENV_VARS = {
     "codex": "AMICUS_CODEX_BIN",
-    "kimi": "AMICUS_KIMI_BIN",
     "claude": "AMICUS_CLAUDE_BIN",
     "pi": "AMICUS_PI_BIN",
 }
@@ -545,7 +544,7 @@ def validate(
     manual mutations of a file on disk.
 
     Returns a list of human-readable problems; an empty list means the record is usable release
-    evidence -- i.e. it shows all four live gates (codex, kimi, claude, pi) PASSED, on this exact
+    evidence -- i.e. it shows all three live gates (codex, claude, pi) PASSED, on this exact
     commit, on a clean tree, recently enough to still be trustworthy, each backend entry
     naming the suite that backend's gate actually runs (`test_file` matches `_TEST_FILES`),
     and every entry sharing the record's own `batch_id` -- proof they came from the

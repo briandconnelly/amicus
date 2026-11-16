@@ -111,7 +111,7 @@ costs nothing. Reaching a backend is what spends.
 Tool annotations (e.g. `destructiveHint`) are static per tool, but `backend` is a per-call
 parameter, so amicus annotates each paid tool for the worst-behaved backend currently enabled. If
 an enabled backend can write outside a throwaway worktree (Claude, in its non-review config
-modes; pi and kimi, whose delegates run shell commands with no sandbox), every paid tool carries
+modes; pi, whose delegate runs shell commands with no sandbox), every paid tool carries
 that backend's approval annotations — including a call routed to `codex`. This is a deliberate
 consequence of one shared tool surface, not a bug.
 

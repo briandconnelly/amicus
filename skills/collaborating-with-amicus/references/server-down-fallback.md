@@ -85,13 +85,7 @@ The installed codex may be a later release: `amicus_backends` reports its versio
 amicus was built against it. Confirm each flag is still accepted rather than assuming; a
 rejection is CLI drift worth reporting, never a flag to drop.
 
-## Why there is no kimi, claude or pi fallback here
-
-`kimi` ignores stdin and crashes on a long argv, so any hand-rolled kimi call must put the prompt
-in a file or on the command line. *amicus's own* handshake file is a disclosed carrier surfaced
-on `amicus_backends`; a command you compose yourself has no such standing under the rule above.
-**There is no hand-rolled kimi fallback that keeps the prompt off disk and off the command line.
-Restore the server.**
+## Why there is no claude or pi fallback here
 
 `claude` does take its prompt on stdin, so the prompt-carrier rule is not what stops it. Its read-only tier is a
 tool allowlist assembled from several flags rather than a single sandbox switch, and no verified

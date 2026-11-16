@@ -98,17 +98,17 @@ _COMMON_PAID_CODES = [
     "job_cap_reached",
     "internal_error",
 ]
-# Kimi's and pi's inspectors report a zero-exit run with no answer as empty_response on every
-# verb they run, so only a tool that can select kimi or pi lists it; adversarial review is
+# Pi's inspector reports a zero-exit run with no answer as empty_response on every
+# verb it runs, so only a tool that can select pi lists it; adversarial review is
 # claude-only.
 _EMPTY_RESPONSE_CODES = ["empty_response"]
-# A backend that declares model_validation (kimi, pi) refuses a model it cannot vouch for: pi
-# before spending, kimi from the run. Listed by tool role, on each paid tool whose verb
+# A backend that declares model_validation (pi) refuses a model it cannot vouch for: pi
+# before spending. Listed by tool role, on each paid tool whose verb
 # accepts one of them, so not on adversarial review, which is claude-only (#440).
 _MODEL_VALIDATION_CODES = ["invalid_model"]
 # The backend answered and amicus could not read the answer whole: an answer FILE (codex's
-# last message, kimi's delegate answer) its bounded reader refused (#162), or an answer on
-# the output stream (claude's envelope, kimi's and pi's final message) its capture cut or
+# last message) its bounded reader refused (#162), or an answer on
+# the output stream (claude's envelope, pi's final message) its capture cut or
 # lost (#198), or one pi reports the model cut off at its output-token limit (#425). Every
 # backend can produce it, so every paid tool lists it.
 _ANSWER_UNAVAILABLE_CODES = ["answer_unavailable"]
@@ -619,8 +619,8 @@ def models_payload(registry: BackendRegistry, backend: str) -> dict[str, Any]:
 # What a cut listing changes for the next call depends on what the backend checks (#443).
 # pi looks the exact model up on its own (PiModels.lookup) and checks the effort against that
 # row before spending, so only the listing is short; that lookup has a bound of its own, and
-# pi refuses what it cannot resolve, so the hint never promises acceptance. Every other
-# backend's effort check, where it has one, reads this listing (kimi, ADR 0009).
+# pi refuses what it cannot resolve, so the hint never promises acceptance. Other
+# backends do not promise validation past a truncated listing's cut.
 _PAST_THE_CUT_CHECKED = frozenset({"pi"})
 
 
@@ -689,7 +689,7 @@ async def capabilities_payload(
         error_codes=list(ERROR_CODES),
         scope=[
             "Second opinions, git-change reviews, adversarial critiques and delegated diffs "
-            "from Codex, Kimi, Claude Code or Pi, selected per call.",
+            "from Codex, Claude Code or Pi, selected per call.",
             "Durable background jobs for every paid verb, plus the tasks extension when enabled.",
         ],
         negative_scope=[

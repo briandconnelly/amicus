@@ -5,7 +5,7 @@
 
 **Goal:** Add a `pi` backend at `kimi`'s parity (consult, review_changes, delegate) behind the existing `BackendPlugin` seam.
 
-**Architecture:** A new package `src/amicus/backends/pi/` mirrors `src/amicus/backends/kimi/` file for file (`contract`, `config`, `binary`, `options`, `models`, `cli`, `normalize`, `adapter`, `status`, `__init__`), with the prompt on stdin, a hardened fixed flag set, an exact `provider/id` model validated before spending, and exit-0 provider failures caught by the outcome inspector.
+**Architecture:** A new package `src/amicus/backends/pi/` mirrors `the retired Kimi backend package` file for file (`contract`, `config`, `binary`, `options`, `models`, `cli`, `normalize`, `adapter`, `status`, `__init__`), with the prompt on stdin, a hardened fixed flag set, an exact `provider/id` model validated before spending, and exit-0 provider failures caught by the outcome inspector.
 Unit tests drive a stand-in executable, `tests/support/fake_pi.py`, never the real CLI.
 
 **Tech Stack:** Python, FastMCP, the in-tree `amicus.sdk`, pytest, uv.
@@ -209,7 +209,7 @@ def test_generic_detail_is_sanitized_before_the_cut(): ...  # port kimi's stradd
 ### Task 6: The adapter
 
 **Files:**
-- Create: `src/amicus/backends/pi/adapter.py`, `tests/support/pifixtures.py` (`make_backend(environ, catalog, auth, version)` pinning the binary to `/PI`, like `kimifixtures.make_backend`)
+- Create: `src/amicus/backends/pi/adapter.py`, `tests/support/pifixtures.py` (`make_backend(environ, catalog, auth, version)` pinning the binary to `/PI`, like `the retired Kimi fixture factory`)
 - Test: `tests/test_pi_adapter.py`
 
 **Interfaces:**

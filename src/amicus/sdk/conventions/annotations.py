@@ -1,16 +1,14 @@
 """MCP tool-annotation builders, parameterized by each bridge's declared effects.
 
-The bridges disagree on annotation values DELIBERATELY, not accidentally:
+The backends declare different annotation values deliberately:
 
-* claude-in-codex marks paid tools ``destructiveHint: true`` because its
-  inherit/scoped config modes may execute arbitrary workspace hooks, and marks
-  job pollers non-read-only because polling performs lazy deadline-kill/TTL
-  maintenance.
-* codex-in-claude marks paid tools ``destructiveHint: false`` because writes
-  stay inside a throwaway worktree, and advertises job reads as read-only.
-  moonbridge (now amicus's kimi backend) also marked paid tools
-  ``destructiveHint: false``; amicus marks kimi ``true``, because kimi has no
-  sandbox and a worktree changes its cwd, not its reach (issue #426).
+* claude marks paid tools ``destructiveHint: true`` because its config modes may
+  execute arbitrary workspace hooks.
+* codex marks paid tools ``destructiveHint: false`` because its sandbox bounds writes.
+* pi marks paid tools ``destructiveHint: true`` because its delegate runs
+  unsandboxed shell commands.
+
+All in-tree backends advertise job reads as read-only.
 
 A universal constant dict would silently change someone's wire. These builders
 make the POLICY explicit instead: a bridge declares its observable effects once
