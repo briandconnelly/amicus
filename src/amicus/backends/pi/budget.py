@@ -26,7 +26,10 @@ REASONS = frozenset({BUDGET, UNVERIFIABLE})
 # "deferred", or a value a later pi adds) means pi may call the model again.
 _TERMINAL_STOPS = frozenset({"stop", "length", "error", "aborted"})
 # Every `message_end` event carries this; a line without it cannot be one, so the probe
-# parses only the lines that might matter.
+# parses only the lines that might matter. The gate is worth keeping: pi streams a
+# `message_update` per delta, each repeating the message so far, so parsing every line would
+# be quadratic in the answer. A pi that renamed the event would break normalize too, and
+# its pinned stream fixtures would say so.
 _MESSAGE_END = '"message_end"'
 
 

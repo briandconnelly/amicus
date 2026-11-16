@@ -391,7 +391,9 @@ class PiBackend:
             orphan_marker=request.cwd
             if len(request.cwd) >= runtime.MIN_ORPHAN_MARKER_LENGTH
             else None,
-            stop_on_line=budget.SpendProbe(cap) if (cap := self._budget(request)) else None,
+            stop_on_line=(
+                budget.SpendProbe(cap) if (cap := self._budget(request)) is not None else None
+            ),
         )
 
     def finalize(self, outcome: RunOutcome, request: RunRequest) -> ExecResult:
