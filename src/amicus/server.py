@@ -288,7 +288,7 @@ def create_app(
     state = AppState(
         settings=settings, registry=registry, config_errors=list(settings.config_errors)
     )
-    app._amicus_state = state  # ty: ignore[unresolved-attribute]
+    app._amicus_state = state  # ty: ignore[missing-attribute]
     lowlevel = app._mcp_server
     lowlevel.get_capabilities = _filter_capabilities(lowlevel.get_capabilities)
     _install_cache_hints(app)
