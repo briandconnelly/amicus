@@ -431,6 +431,14 @@ stripped because pi's figures are parsed from a rounded display: an integer that
 so reads as exact. A first draft cost 59 bytes more, 32 of them a clause in the tool
 description that the schema already carries. Measured on the wire. MEASURED and BUDGET both
 move up by the 322 bytes, so the budget keeps no headroom.
+
+The schema-72 raise (+100 bytes on every profile: all 116754 -> 116854) is #511. ModelInfo's
+`supported_reasoning_efforts` gains a kept description, 115 bytes with its key, saying pi lists
+its own vocabulary rather than the model's levels and may run another; the field name alone
+read as the model's real set, and a caller that chose a cheaper listed effort could be billed
+for a higher one. The reasoning_effort summary and the amicus_models description each shrink a
+little, as they drop "each model's set" and "advertised". Measured on the wire. MEASURED and
+BUDGET both move up by the 100 bytes, so the budget keeps no headroom.
 """
 
 from __future__ import annotations
@@ -441,10 +449,10 @@ from tests.conftest import spawned_server_env
 from amicus import manifest
 
 MEASURED: dict[str, int] = {
-    "all": 116754,
-    "codex": 116762,
-    "codex-kimi": 116754,
-    "claude": 116754,
+    "all": 116854,
+    "codex": 116862,
+    "codex-kimi": 116854,
+    "claude": 116854,
 }
 # The budget is a literal, not MEASURED rounded up to the next kilobyte as it was until
 # 2026-09-14. The rounding left up to 1 KB of growth per bucket that no PR had to own, and
@@ -454,10 +462,10 @@ MEASURED: dict[str, int] = {
 # Any growth now fails until a PR raises BUDGET and says why; a shrink passes and shows as
 # drift against MEASURED. Raising one means re-measuring and moving both.
 BUDGET: dict[str, int] = {
-    "all": 116754,
-    "codex": 116762,
-    "codex-kimi": 116754,
-    "claude": 116754,
+    "all": 116854,
+    "codex": 116862,
+    "codex-kimi": 116854,
+    "claude": 116854,
 }
 
 
