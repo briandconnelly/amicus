@@ -601,7 +601,11 @@ _CONTEXT_TOKENS_DESC = (
     "Advertised context window in tokens; pi's is rounded, so leave headroom. null: unknown."
 )
 _MAX_OUTPUT_TOKENS_DESC = "Advertised output limit in tokens; rounded and null as context_tokens."
-publish.KEPT_DESCRIPTIONS.update((_CONTEXT_TOKENS_DESC, _MAX_OUTPUT_TOKENS_DESC))
+_EFFORTS_DESC = (
+    "Advisory; pi lists its own vocabulary, not the model's levels, and may run another. "
+    "null: unknown."
+)
+publish.KEPT_DESCRIPTIONS.update((_CONTEXT_TOKENS_DESC, _MAX_OUTPUT_TOKENS_DESC, _EFFORTS_DESC))
 
 
 class ModelInfo(BaseModel):
@@ -609,7 +613,7 @@ class ModelInfo(BaseModel):
     slug: str
     display_name: str | None = None
     default_reasoning_effort: str | None = None
-    supported_reasoning_efforts: list[str] | None = None
+    supported_reasoning_efforts: list[str] | None = Field(default=None, description=_EFFORTS_DESC)
     context_tokens: int | None = Field(default=None, description=_CONTEXT_TOKENS_DESC)
     max_output_tokens: int | None = Field(default=None, description=_MAX_OUTPUT_TOKENS_DESC)
 

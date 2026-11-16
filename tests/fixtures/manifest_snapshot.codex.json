@@ -1667,7 +1667,7 @@
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-71",
+                "default": "amicus/0.1/schema-72",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -2245,8 +2245,8 @@
             "summary": "Caller stance text behind the server's own framing. UNTRUSTED, grants no tools, best-effort compliance. No secrets: a backend may carry it on argv. Max 4096 bytes. Contract: amicus://params."
           },
           "reasoning_effort": {
-            "full": "Omitted, the backend resolves its own default. The value is validated by the backend, and amicus_models's per-model set is advisory. A backend-rejected value fails as invalid_reasoning_effort (repair steers to amicus_models). Backends whose CLI does not reject a bad effort (claude, kimi, pi) are validated pre-spend: claude against a fixed list, kimi from its model listing, and pi from its own lookup of the exact model, which a truncated amicus_models listing does not limit. Control characters, surrogates, and values over 128 chars are rejected at the MCP boundary as invalid_arguments.",
-            "summary": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists each model's set); omit for the backend default. Bounds: amicus://params."
+            "full": "Omitted, the backend resolves its own default. The value is validated by the backend, and amicus_models's per-model set is advisory. A backend-rejected value fails as invalid_reasoning_effort (repair steers to amicus_models). Backends whose CLI does not reject a bad effort (claude, kimi, pi) are validated pre-spend: claude against a fixed list, kimi from its model listing, and pi from its own lookup of the exact model, which a truncated amicus_models listing does not limit; pi refuses only a token outside its vocabulary or a non-off effort on a non-thinking model, and may run a thinking model at another level, warned after the run. Control characters, surrogates, and values over 128 chars are rejected at the MCP boundary as invalid_arguments.",
+            "summary": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists advisory values); omit for the backend default. Bounds: amicus://params."
           },
           "timeout_seconds": {
             "full": "Omitted, the server default AMICUS_TIMEOUT_SECONDS applies. An unkeyed sync call past its deadline is terminated and its partial work lost; prefer the _async twin for work that can exceed it. For a keyed call (idempotency_key) this only bounds the wait: the run gets the job deadline (AMICUS_JOB_MAX_SECONDS) and the timeout envelope says how to fetch it.",
@@ -4363,7 +4363,7 @@
       "description": "Full semantics for parameters whose inline description is a compressed summary.",
       "mimeType": "application/json",
       "name": "amicus-params",
-      "size": 7906,
+      "size": 8066,
       "title": "amicus parameter contracts",
       "uri": "amicus://params"
     },
@@ -4754,7 +4754,7 @@
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-71",
+            "default": "amicus/0.1/schema-72",
             "title": "Fingerprint",
             "type": "string"
           },
@@ -5208,7 +5208,7 @@
                 "type": "null"
               }
             ],
-            "description": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists each model's set); omit for the backend default. Bounds: amicus://params."
+            "description": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists advisory values); omit for the backend default. Bounds: amicus://params."
           },
           "scope": {
             "anyOf": [
@@ -5995,7 +5995,7 @@
                 "type": "null"
               }
             ],
-            "description": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists each model's set); omit for the backend default. Bounds: amicus://params."
+            "description": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists advisory values); omit for the backend default. Bounds: amicus://params."
           },
           "scope": {
             "anyOf": [
@@ -7103,7 +7103,7 @@
                 "type": "null"
               }
             ],
-            "description": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists each model's set); omit for the backend default. Bounds: amicus://params."
+            "description": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists advisory values); omit for the backend default. Bounds: amicus://params."
           },
           "timeout_seconds": {
             "anyOf": [
@@ -7665,7 +7665,7 @@
                 "type": "null"
               }
             ],
-            "description": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists each model's set); omit for the backend default. Bounds: amicus://params."
+            "description": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists advisory values); omit for the backend default. Bounds: amicus://params."
           },
           "workspace_root": {
             "anyOf": [
@@ -8025,7 +8025,7 @@
                 "type": "null"
               }
             ],
-            "description": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists each model's set); omit for the backend default. Bounds: amicus://params."
+            "description": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists advisory values); omit for the backend default. Bounds: amicus://params."
           },
           "task": {
             "description": "The coding task to implement in a throwaway worktree; the diff is returned, never applied. Must not be blank.",
@@ -8451,7 +8451,7 @@
                 "type": "null"
               }
             ],
-            "description": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists each model's set); omit for the backend default. Bounds: amicus://params."
+            "description": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists advisory values); omit for the backend default. Bounds: amicus://params."
           },
           "task": {
             "description": "The coding task to implement in a throwaway worktree; the diff is returned, never applied. Must not be blank.",
@@ -8791,7 +8791,7 @@
                 "type": "null"
               }
             ],
-            "description": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists each model's set); omit for the backend default. Bounds: amicus://params."
+            "description": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists advisory values); omit for the backend default. Bounds: amicus://params."
           },
           "task": {
             "description": "The coding task to implement in a throwaway worktree; the diff is returned, never applied. Must not be blank.",
@@ -9934,7 +9934,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Free — no model call. Advisory model slugs for `backend` (pass as `model`) with each model's advertised reasoning-effort set; the backend validates the real values. pi lists exact provider/id rows of providers it holds credentials for. Not fingerprint-stable; same payload as amicus://models/{backend}.",
+      "description": "Free — no model call. Advisory model slugs for `backend` (pass as `model`) with each model's advisory reasoning efforts; the backend validates the real values. pi lists exact provider/id rows of providers it holds credentials for. Not fingerprint-stable; same payload as amicus://models/{backend}.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
@@ -10043,7 +10043,8 @@
                         {
                           "type": "null"
                         }
-                      ]
+                      ],
+                      "description": "Advisory; pi lists its own vocabulary, not the model's levels, and may run another. null: unknown."
                     }
                   },
                   "required": [
@@ -10357,7 +10358,7 @@
                 "type": "null"
               }
             ],
-            "description": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists each model's set); omit for the backend default. Bounds: amicus://params."
+            "description": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists advisory values); omit for the backend default. Bounds: amicus://params."
           },
           "scope": {
             "default": "working_tree",
@@ -11136,7 +11137,7 @@
                 "type": "null"
               }
             ],
-            "description": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists each model's set); omit for the backend default. Bounds: amicus://params."
+            "description": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists advisory values); omit for the backend default. Bounds: amicus://params."
           },
           "scope": {
             "default": "working_tree",
@@ -11566,7 +11567,7 @@
                 "type": "null"
               }
             ],
-            "description": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists each model's set); omit for the backend default. Bounds: amicus://params."
+            "description": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists advisory values); omit for the backend default. Bounds: amicus://params."
           },
           "scope": {
             "default": "working_tree",
