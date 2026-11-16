@@ -3,10 +3,17 @@
 
 `lookup` passes the full model string as pi's search term and then requires an exact row: the
 search is fuzzy, so a hit is not a match. A provider may contain "/", but it is still one
-column, so rows are split on whitespace and the slug is the first two columns joined."""
+column, so rows are split on whitespace and the slug is the first two columns joined.
+
+The `context` and `max-out` cells are display strings, not counts: pi 1.5.2's
+`formatTokenCount` prints a count below 1000 as is, and otherwise divides by 1000 (`K`) or
+1 000 000 (`M`) and keeps one decimal unless the quotient is whole. `tokens` reverses that, so
+a `K` value is within 50 tokens of pi's own figure and an `M` value within 50 000, and a
+cell of any other shape is None rather than a guess."""
 
 from __future__ import annotations
 
+import re
 import time
 from typing import TYPE_CHECKING, Literal
 
@@ -24,6 +31,20 @@ HELP_CACHE_TTL_SECONDS = 300
 MODELS_CACHE_MAX_BYTES = 1_048_576
 MAX_ENTRIES = 1024
 _HEADER = ["provider", "model", "context", "max-out", "thinking", "images"]
+# The three shapes pi's formatter prints: `512`, `200K` or `1M`, `131.1K` or `1.0M`.
+_TOKEN_CELL = re.compile(r"(?P<whole>[0-9]{1,12})(?:(?:\.(?P<tenth>[0-9]))?(?P<unit>[KM]))?")
+_UNIT = {"K": 1_000, "M": 1_000_000}
+
+
+def tokens(cell: str) -> int | None:
+    """The token count a `context` or `max-out` cell displays, or None when the cell is not
+    one of the shapes pi's formatter prints. Approximate for a `K` or `M` cell: see the
+    module docstring."""
+    match = _TOKEN_CELL.fullmatch(cell)
+    if match is None:
+        return None
+    unit = _UNIT.get(match["unit"] or "", 1)
+    return int(match["whole"]) * unit + int(match["tenth"] or 0) * unit // 10
 
 
 def is_batch_only(slug: str) -> bool:
@@ -52,7 +73,14 @@ def parse_table(stdout: str) -> ModelListing | None:
         if is_batch_only(slug):
             continue
         efforts = contract.EFFORTS if cols[4] == "yes" else ("off",)
-        entries.append(ModelEntry(slug=slug, supported_reasoning_efforts=efforts))
+        entries.append(
+            ModelEntry(
+                slug=slug,
+                supported_reasoning_efforts=efforts,
+                context_tokens=tokens(cols[2]),
+                max_output_tokens=tokens(cols[3]),
+            )
+        )
     return ModelListing(models=tuple(entries), source="live", truncated=truncated)
 
 

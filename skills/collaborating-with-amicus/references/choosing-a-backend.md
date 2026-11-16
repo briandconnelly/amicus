@@ -16,7 +16,8 @@ are governed by SKILL.md → Binding rules → Discovery, Routing and Composed w
 `access` and `config_mode` decision by Scope and inputs, and what may be sent to `kimi` by Data
 exposure; they are not restated here. These are this file's own:
 
-- **Never spend a paid call to break a tie** between backends that are equally suitable.
+- **Never spend a paid call to break a tie** between backends, or between models on one
+  backend, that are equally suitable.
 - **For `pi`, pass `model` as an exact `provider/id` that `amicus_models(backend="pi")` lists,
   or, when that listing is `truncated`, one past its cut that you know exactly, unless
   `AMICUS_PI_MODEL` is set and is the model you mean.** pi checks the exact model and its
@@ -26,6 +27,13 @@ exposure; they are not restated here. These are this file's own:
   `AMICUS_PI_REASONING_EFFORT`.
 - **Put the project's constraints in a `pi` brief yourself.** pi runs with
   `--no-context-files`, so it loads no `AGENTS.md`.
+- **Never trial a candidate `pi` model outside amicus**, through a provider's inference API
+  or any other tool that runs a model.
+- **Never put the user's text into a provider's catalog or search tool.**
+- **Take a candidate's price and terms from its provider's catalog as read in this session,
+  never from memory**, and say which facts you could not establish rather than supplying them.
+- **Read `context_tokens` and `max_output_tokens` as a screen with headroom, never as proof a
+  call fits, and never read a `null` as evidence that it does.**
 
 ## Worked routes
 
@@ -42,6 +50,55 @@ Worked examples, each after `amicus_backends(detail="full")`:
 | "have Claude adversarially review this" while `claude` is not ready | no eligible route: only `claude` has `adversarial_review`, so say so rather than switching harness or verb |
 | "use `<provider>/<id>`" (an exact `provider/id`) | `pi`, as a named harness, with that `model`, once `amicus_models(backend="pi")` lists it; its egress is the provider the prefix names, which may be a router rather than the model's vendor |
 | "use Kimi K3" | the `kimi` harness, its native harness, while it remains and is ready, disclosing its deprecation and that `pi` is the replacement; otherwise `pi` with a listed `provider/id` for it, named before the call |
+
+## Choosing among pi's listed models
+
+`amicus_models(backend="pi")` can list several hundred rows, and amicus does not rank them. When
+the user named a model, SKILL.md → Binding rules → Routing has already chosen; this section is
+for the request that names none ("a cheap second opinion", "something that is not you").
+
+What the listing establishes, and what it does not:
+
+| Question | Source |
+| --- | --- |
+| Which exact `provider/id` pi can call, and its effort vocabulary | the row's `slug` and `supported_reasoning_efforts` |
+| Roughly how much the model accepts and can return | the row's `context_tokens` and `max_output_tokens` |
+| Where the prompt goes | the `provider/` prefix, which may be a router rather than the model's vendor |
+| Price, rate limits, retention terms, how good the model is at the task | the provider's own catalog; amicus carries none of it |
+
+- **Token limits are approximate on `pi`.** pi prints them rounded, so a value in the
+  thousands is within about 50 tokens of pi's own figure and one in the millions within about
+  50,000. What a call sends is more than the text supplied: amicus's framing, the gathered
+  diff, files pi reads for itself, and the answer all count against the same limits.
+  `amicus_review_changes_dry_run` reports a review's `prompt_bytes` for free, in bytes rather
+  than tokens. `null` is unknown, neither zero nor unlimited, and other backends report `null`
+  today.
+- **An effort a row lists is advertised, not guaranteed.** A thinking model's row lists pi's
+  whole vocabulary; where the model lacks the level passed, pi runs another and the result
+  says so on `meta.security_warnings`. An omitted `reasoning_effort` inherits
+  `AMICUS_PI_REASONING_EFFORT`, else pi's own default, which no amicus surface reports. An
+  explicit one avoids that unreported default. It selects a level; it caps neither tokens nor
+  cost.
+- **A catalog describes; it does not rank.** A provider's listing gives advertised
+  specifications and prices, which can separate candidates against what the task needs (a
+  narrow mechanical review needs less than an architectural question). It does not establish
+  how well a model does the task, and it can leave several candidates tied. Whether a paid
+  call may settle a tie is the first rule above.
+- **Trialling a candidate is not a free comparison.** A call to a provider's own inference
+  API or tool spends outside the cap declared for the decision, and sends text to a
+  destination no `amicus_backends` disclosure covers.
+- **The listing does not say which ids are aliases.** A provider may list a floating alias
+  that follows its newest model beside version-specific ids, and nothing in a row marks which
+  kind a slug is; the provider's documentation does. A version-specific id reduces drift but
+  does not guarantee the same weights or a repeatable answer.
+- **Checking an id is free.** pi refuses a model it cannot resolve before spending
+  (`invalid_model`), so an exact listed slug, or a dry run that names it, is the evidence the
+  exact-`provider/id` rule above asks for.
+- **A free-tier id is a different route.** Its rate limits and retention terms can differ
+  from the paid id's, so where both remain it is a choice between routes that differ in spend
+  or exposure, which SKILL.md → Binding rules → Routing puts to the user.
+- **Whether a candidate is a second opinion at all** is SKILL.md → Binding rules → Composed
+  workflows: by resolved model, never by vendor or backend id.
 
 ## `kimi` is deprecated
 
@@ -175,7 +232,8 @@ Beyond the feature gate and the evidence question, amicus does not rank backends
   the host forwards it to the amicus server; credentials saved by pi's `/login` need nothing.
 - **Task shape.** A broad architectural question benefits from strong general reasoning; a narrow
   mechanical review benefits more from speed and cost. `amicus_models` lists each backend's
-  advertised models and reasoning-effort sets.
+  advertised models and reasoning-effort sets, and on `pi` their approximate token limits
+  (Choosing among pi's listed models, above).
 - **What is usable right now.** A backend that is enabled but unauthenticated, rate limited, or
   reporting `status.warnings` is not a good choice however well suited it looks.
 - **Effects.** Approval friction follows the worst *enabled* backend, not the one you pick for

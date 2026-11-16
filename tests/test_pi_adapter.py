@@ -639,7 +639,10 @@ def test_a_model_past_a_truncated_listing_is_checked_by_its_own_lookup(monkeypat
     assert listing.truncated is True
     assert "late/plain" not in {e.slug for e in listing.models}
     assert real.lookup("late/plain") == ModelEntry(
-        slug="late/plain", supported_reasoning_efforts=("off",)
+        slug="late/plain",
+        supported_reasoning_efforts=("off",),
+        context_tokens=1_000,
+        max_output_tokens=1_000,
     )
     assert backend.validate_request(_req(model="late/plain")) is None
     refused = backend.validate_request(_req(model="late/plain", reasoning_effort="high"))

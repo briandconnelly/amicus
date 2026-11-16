@@ -246,7 +246,7 @@ PARAMETER_CONTRACTS: dict[str, ParamContract] = {
         name="reasoning_effort",
         summary=(
             "Per-call reasoning effort, an open per-model string (commonly "
-            "minimal|low|medium|high|xhigh; amicus_models lists each model's set); omit for "
+            "minimal|low|medium|high|xhigh; amicus_models lists advisory values); omit for "
             f"the backend default. Bounds: {PARAMS_RESOURCE_URI}."
         ),
         full=(
@@ -256,7 +256,9 @@ PARAMETER_CONTRACTS: dict[str, ParamContract] = {
             "Backends whose CLI does not reject a bad effort (claude, kimi, pi) are "
             "validated pre-spend: claude against a fixed list, kimi from its model listing, "
             "and pi from its own lookup of the exact model, which a truncated amicus_models "
-            "listing does not limit. Control characters, surrogates, and "
+            "listing does not limit; pi refuses only a token outside its vocabulary or a non-off "
+            "effort on a non-thinking model, and may run a thinking model at another level, "
+            "warned after the run. Control characters, surrogates, and "
             f"values over {REASONING_EFFORT_MAX_LENGTH} chars are rejected at the MCP "
             "boundary as invalid_arguments."
         ),
