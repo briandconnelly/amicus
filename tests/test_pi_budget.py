@@ -147,6 +147,21 @@ def test_a_probe_that_fails_stops_the_run_and_stays_unverifiable(monkeypatch):
     assert probe(_end("toolUse", 0.01)) == budget.UNVERIFIABLE
 
 
+@pytest.mark.parametrize(
+    "line",
+    [
+        _raw_cost_end("9" * 5000),  # past Python's integer-conversion digit limit
+        '{"type":"message_end","message":{"role":"assistant"',
+        '{"type":"compaction_end","result":' + "[" * 100_000,
+    ],
+)
+def test_a_watched_event_that_does_not_parse_fails_closed(line):
+    """Its cost was dropped unseen, so a later gate let the run continue uncounted."""
+    probe = budget.SpendProbe(5.0)
+    assert probe(line) == budget.UNVERIFIABLE
+    assert probe(pf.line({"type": "auto_retry_start"})) == budget.UNVERIFIABLE
+
+
 @pytest.mark.parametrize("total", ["NaN", "-1"])
 def test_usage_reports_an_unmeasurable_cost_as_unknown(total):
     from amicus.backends.pi import normalize

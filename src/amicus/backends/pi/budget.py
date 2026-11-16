@@ -26,7 +26,8 @@ priced it from its own table, or not at all) cannot be measured against the cap,
 that would continue past such a call is stopped as `unverifiable`; so is one with a stream
 line cut at the capture cap, since what it held is lost. A total that is not a finite,
 non-negative number is no measurement either: NaN would make every later comparison false
-and a negative one would refund the cap. And a probe that fails on a line stops the run
+and a negative one would refund the cap. A line that names one of these events and does
+not parse is treated like a cut one. And a probe that fails on a line stops the run
 there, because the runtime never consults a probe again once it has raised."""
 
 from __future__ import annotations
@@ -101,7 +102,10 @@ class SpendProbe:
         try:
             event = json.loads(line)
         except (ValueError, RecursionError):
-            return None
+            # A line naming a watched event that will not parse (a cost of more digits than
+            # Python converts, say) may have carried a spend, which is now unknowable.
+            self.unverified = True
+            return UNVERIFIABLE
         if not isinstance(event, dict):
             return None
         kind = event.get("type")
