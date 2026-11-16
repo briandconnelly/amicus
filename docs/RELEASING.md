@@ -217,7 +217,8 @@ The tag therefore deliberately points at a commit that is in `main`'s history bu
    Run the command the preflight printed, which is `uv run python scripts/record_live_gate_evidence.py --version X.Y.Z` in the worktree.
    The script itself forces `AMICUS_REQUIRE_LIVE=1` into each backend's subprocess environment, so prefixing the command with it is optional; its own usage string documents `AMICUS_REQUIRE_LIVE=1 uv run python scripts/record_live_gate_evidence.py --version X.Y.Z`, and either form runs the same live gates.
    The pi gate also needs `AMICUS_PI_MODEL` exported as an exact `provider/id` whose provider is ready, or it fails rather than skips.
-   That gate's spend-cap test fails when the run finishes under the 0.01 USD cap, so a model priced far below a cent for a twenty-call task cannot serve as `AMICUS_PI_MODEL` for it.
+   That gate's spend-cap test fails when the run finishes under the 0.01 USD cap, so a model whose provider reports its cost and prices a twenty-call task far below a cent cannot serve as `AMICUS_PI_MODEL` for it.
+   A model whose provider reports no cost passes at any price, because the cap stops such a run after its first model call.
    Credentials saved by pi's `/login` need nothing more; a provider API key must be exported in the shell that runs the script.
    This spends real quota on all four backends and requires the maintainer's authorization in the session where it runs; a passing preflight is not that authorization.
    Before any gate runs, it refuses when the checkout declares a version other than `--version`, which is what the main checkout does between releases, and when a local tag `vX.Y.Z` already exists.

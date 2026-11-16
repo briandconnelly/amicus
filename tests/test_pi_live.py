@@ -125,7 +125,8 @@ async def test_delegate_live(live_pi, tmp_path):
     assert listed.strip().count("\n") == 0
 
 
-# The lowest cap the surface accepts, so the run costs about a cent whatever the model.
+# The lowest cap the surface accepts. It is a threshold checked between model calls, not a
+# ceiling: the run costs whatever its calls cost up to and including the one that crosses it.
 BUDGET_CAP_USD = 0.01
 BUDGET_FILES = 20
 
