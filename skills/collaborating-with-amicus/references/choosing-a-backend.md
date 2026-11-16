@@ -16,7 +16,8 @@ are governed by SKILL.md → Binding rules → Discovery, Routing and Composed w
 `access` and `config_mode` decision by Scope and inputs, and what may be sent to `kimi` by Data
 exposure; they are not restated here. These are this file's own:
 
-- **Never spend a paid call to break a tie** between backends that are equally suitable.
+- **Never spend a paid call to break a tie** between backends, or between models on one
+  backend, that are equally suitable.
 - **For `pi`, pass `model` as an exact `provider/id` that `amicus_models(backend="pi")` lists,
   or, when that listing is `truncated`, one past its cut that you know exactly, unless
   `AMICUS_PI_MODEL` is set and is the model you mean.** pi checks the exact model and its
@@ -26,18 +27,13 @@ exposure; they are not restated here. These are this file's own:
   `AMICUS_PI_REASONING_EFFORT`.
 - **Put the project's constraints in a `pi` brief yourself.** pi runs with
   `--no-context-files`, so it loads no `AGENTS.md`.
-- **Never trial a candidate `pi` model outside amicus, and never put the user's text into a
-  provider's catalog or search tool.** Calling a provider's inference API or tool to compare
-  models spends outside the declared cap and sends text to a destination no
-  `amicus_backends` disclosure covers. Choose from catalog metadata alone.
+- **Never trial a candidate `pi` model outside amicus**, through a provider's inference API
+  or any other tool that runs a model.
+- **Never put the user's text into a provider's catalog or search tool.**
 - **Take a candidate's price and terms from its provider's catalog as read in this session,
   never from memory**, and say which facts you could not establish rather than supplying them.
 - **Read `context_tokens` and `max_output_tokens` as a screen with headroom, never as proof a
-  call fits.** pi's are rounded, the prompt also carries amicus's framing, the diff and
-  whatever pi reads for itself, and `null` means unknown, neither zero nor unlimited.
-- **Put a free-tier or otherwise differently-termed id to the user before using it, unless
-  they named it**: it is a route that differs in spend or exposure under SKILL.md → Binding
-  rules → Routing.
+  call fits, and never read a `null` as evidence that it does.**
 
 ## Worked routes
 
@@ -72,25 +68,35 @@ What the listing establishes, and what it does not:
 
 - **Token limits are approximate on `pi`.** pi prints them rounded, so a value in the
   thousands is within about 50 tokens of pi's own figure and one in the millions within about
-  50,000. Compare them with what the call will send (`amicus_review_changes_dry_run` reports
-  a review's `prompt_bytes` for free, in bytes rather than tokens) and keep a margin for
-  files pi reads itself and for the answer. Other backends report `null` today.
+  50,000. What a call sends is more than the text supplied: amicus's framing, the gathered
+  diff, files pi reads for itself, and the answer all count against the same limits.
+  `amicus_review_changes_dry_run` reports a review's `prompt_bytes` for free, in bytes rather
+  than tokens. `null` is unknown, neither zero nor unlimited, and other backends report `null`
+  today.
 - **An effort a row lists is advertised, not guaranteed.** A thinking model's row lists pi's
-  whole vocabulary; where the model lacks the level you passed, pi runs another and the result
-  says so on `meta.security_warnings`. Omitting `reasoning_effort` inherits
-  `AMICUS_PI_REASONING_EFFORT`, else pi's own default, which no amicus surface reports, so
-  pass it when the spend level matters. It selects a level; it caps neither tokens nor cost.
+  whole vocabulary; where the model lacks the level passed, pi runs another and the result
+  says so on `meta.security_warnings`. An omitted `reasoning_effort` inherits
+  `AMICUS_PI_REASONING_EFFORT`, else pi's own default, which no amicus surface reports. An
+  explicit one avoids that unreported default. It selects a level; it caps neither tokens nor
+  cost.
 - **A catalog describes; it does not rank.** A provider's listing gives advertised
-  specifications and prices. Match them to the task (a narrow mechanical review needs less
-  than an architectural question) and report what the metadata left undecided. When nothing
-  distinguishes the remaining candidates, pick any; the tie-break rule above forbids paying
-  to find out.
-- **Prefer a pinned id to an alias when the result should be reproducible.** A provider may
-  list an alias that follows its newest model. Even a pinned id is not a promise that the
-  provider serves the same weights tomorrow.
+  specifications and prices, which can separate candidates against what the task needs (a
+  narrow mechanical review needs less than an architectural question). It does not establish
+  how well a model does the task, and it can leave several candidates tied. Whether a paid
+  call may settle a tie is the first rule above.
+- **Trialling a candidate is not a free comparison.** A call to a provider's own inference
+  API or tool spends outside the cap declared for the decision, and sends text to a
+  destination no `amicus_backends` disclosure covers.
+- **The listing does not say which ids are aliases.** A provider may list a floating alias
+  that follows its newest model beside version-specific ids, and nothing in a row marks which
+  kind a slug is; the provider's documentation does. A version-specific id reduces drift but
+  does not guarantee the same weights or a repeatable answer.
 - **Checking an id is free.** pi refuses a model it cannot resolve before spending
-  (`invalid_model`), so confirm the exact slug with `amicus_models` or a dry run rather than
-  guessing at one.
+  (`invalid_model`), so an exact listed slug, or a dry run that names it, is the evidence the
+  exact-`provider/id` rule above asks for.
+- **A free-tier id is a different route.** Its rate limits and retention terms can differ
+  from the paid id's, so where both remain it is a choice between routes that differ in spend
+  or exposure, which SKILL.md → Binding rules → Routing puts to the user.
 - **Whether a candidate is a second opinion at all** is SKILL.md → Binding rules → Composed
   workflows: by resolved model, never by vendor or backend id.
 

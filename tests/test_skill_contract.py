@@ -642,7 +642,7 @@ def test_the_pi_model_section_names_only_fields_the_listing_carries():
     assert named <= set(ModelInfo.model_fields)
     rules = _flat(_reference_rules("choosing-a-backend.md"))
     assert "**Read `context_tokens` and `max_output_tokens` as a screen with headroom" in rules
-    assert "`null` means unknown, neither zero nor unlimited" in rules
+    assert "`null` is unknown, neither zero nor unlimited" in _flat(_pi_model_section())
 
 
 def test_the_pi_model_section_states_the_parsers_own_error_bounds():
@@ -673,16 +673,49 @@ def test_the_pi_model_section_does_not_promise_a_listed_effort():
 
 
 def test_candidate_models_are_never_trialled_outside_amicus():
-    # The obligations sit in the Rules block, which Required reading makes a pi route read;
-    # the section below them is explanation and binds nothing.
+    # Each obligation is asserted inside the Rules block, which Required reading makes a pi
+    # route read. The section below it explains and binds nothing; no test can recognize
+    # every misplaced instruction, so that boundary stays a matter for review.
     rules = _flat(_reference_rules("choosing-a-backend.md"))
-    assert "**Never trial a candidate `pi` model outside amicus" in rules
-    assert "never put the user's text into a provider's catalog or search tool" in rules
-    assert "never from memory" in rules
-    assert "**Put a free-tier or otherwise differently-termed id to the user" in rules
-    assert "\n- **Never" not in _pi_model_section()
+    assert "**Never trial a candidate `pi` model outside amicus**" in rules
+    assert "**Never put the user's text into a provider's catalog or search tool.**" in rules
+    assert "as read in this session, never from memory**" in rules
+    assert "say which facts you could not establish rather than supplying them" in rules
+    assert "never read a `null` as evidence that it does.**" in rules
+
+
+def test_the_tie_break_rule_covers_models_on_one_backend():
+    # The section applies the rule to several candidates on pi, so its owner has to say so.
+    rules = _flat(_reference_rules("choosing-a-backend.md"))
+    assert (
+        "**Never spend a paid call to break a tie** between backends, or between models on "
+        "one backend, that are equally suitable." in rules
+    )
+    assert "Whether a paid call may settle a tie is the first rule above." in _flat(
+        _pi_model_section()
+    )
+
+
+def test_the_pi_model_section_points_at_the_owners_it_does_not_restate():
+    section = _flat(_pi_model_section())
+    # A free-tier id is Routing's question, asked when routes differ; this file adds no rule.
+    assert "differ in spend, exposure, containment or verb" in _flat(_rules_section("Routing"))
+    assert "which SKILL.md → Binding rules → Routing puts to the user" in section
+    assert "free-tier" not in _reference_rules("choosing-a-backend.md")
     # Diversity keeps one owner: the section points at it and restates no vendor rule.
-    assert "by resolved model, never by vendor or backend id" in _flat(_pi_model_section())
+    assert "by resolved model, never by vendor or backend id" in section
+
+
+def test_the_pi_model_section_does_not_claim_the_listing_marks_aliases():
+    # Review of #512: "prefer a pinned id" was an instruction outside Rules, and one a host
+    # could not check, because no ModelInfo field says which kind of id a slug is.
+    from amicus.schemas.results import ModelInfo
+
+    assert not {"alias", "pinned", "is_alias"} & set(ModelInfo.model_fields)
+    section = _flat(_pi_model_section())
+    assert "nothing in a row marks which kind a slug is" in section
+    assert "does not guarantee the same weights or a repeatable answer" in section
+    assert "Prefer a pinned id" not in section
 
 
 def test_diversity_is_judged_by_model_not_backend_id():

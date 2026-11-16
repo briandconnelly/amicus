@@ -44,10 +44,10 @@ per-change, as its own lead says.
   that validates the result against the previous closed schema must admit the two keys.
 - The `collaborating-with-amicus` skill says how to choose among pi's listed models when the
   user named none. `references/choosing-a-backend.md` gains four rules — never trial a candidate
-  model outside amicus or put the user's text into a provider's catalog tool, take price and
-  terms from the provider's catalog rather than from memory, read the token limits as a screen
-  with headroom, and put a free-tier id to the user before using it — and a section on what the
-  listing does and does not establish.
+  model outside amicus, never put the user's text into a provider's catalog tool, take price and
+  terms from the provider's catalog rather than from memory, and read the token limits as a
+  screen with headroom — and a section on what the listing does and does not establish. Its
+  rule against paying to break a tie now names models on one backend as well as backends.
 
 ### Changed
 
