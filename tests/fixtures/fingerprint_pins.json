@@ -1,15 +1,15 @@
 {
-  "fingerprint": "amicus/0.1/schema-70",
+  "fingerprint": "amicus/0.1/schema-71",
   "manifest_hash": {
-    "all": "10766718a381b5cf5749d24382bdc2c226fe7ff44aac8610186ea629393370cb",
-    "claude": "cf75e43d978de937e8a646ffa498b18e9398e95bb693e76d1fab9541596b5b5e",
-    "codex": "732d4d27a698746b53f04e7690faaa84311ef281ced5477de6a9299b40e57518",
-    "codex-kimi": "046aeb08230eb93ebfbfbb62572f8d52388278c4d0b6d4aec957d3ca79af5d40"
+    "all": "0057dcccfc5389a6ef7078e86fee7db0757480651759e459bc7ba9c8eb378e8f",
+    "claude": "c92b599bd51eff849bc22aacf163cb937e99279824f32076f337132f60ca94aa",
+    "codex": "b803b5adb82257fcaf17720c7d9cb730ee2b940d0d222a00b06500bac3e6bb7d",
+    "codex-kimi": "3b20a07304b5b8a5e222e1258d767df9be40a484bfdb849a6fc300b9e925fc99"
   },
   "surface_digest": {
-    "all": "bbef0a1510d4d7d1863137601a1ba89ece7c7562ab16d5931cced87188ad4eb8",
-    "claude": "bbef0a1510d4d7d1863137601a1ba89ece7c7562ab16d5931cced87188ad4eb8",
-    "codex": "b2d17b9e4785adf7445110c493959603ea4d24f540ff1c59c5c700ae3291da6a",
-    "codex-kimi": "bbef0a1510d4d7d1863137601a1ba89ece7c7562ab16d5931cced87188ad4eb8"
+    "all": "55b80d0e9b4ecf8126ace8b6f60e8e433926bbfe681de0aa1b6a887375890c1e",
+    "claude": "55b80d0e9b4ecf8126ace8b6f60e8e433926bbfe681de0aa1b6a887375890c1e",
+    "codex": "4a084831b19d3d23efbbc1c2deb441713959c23a5db54ca3787af1fea7e60128",
+    "codex-kimi": "55b80d0e9b4ecf8126ace8b6f60e8e433926bbfe681de0aa1b6a887375890c1e"
   }
 }
