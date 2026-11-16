@@ -87,11 +87,10 @@ def pub(tmp_path) -> Published:
     return Published(repo, origin, sha, tag_object)
 
 
-def _pypi(releases: dict) -> bytes:
-    return json.dumps({"info": {"name": "amicus", "version": NEXT}, "releases": releases}).encode()
-
-
 class FakePyPI:
+    """PyPI's version-specific JSON: `releases` maps each version PyPI has to its `urls`
+    list; any other version answers 404, as PyPI does."""
+
     def __init__(self, releases: dict | None = None, error: Exception | None = None):
         self.releases = (
             {NEXT: [{"filename": f"amicus-{NEXT}.tar.gz"}]} if releases is None else releases
@@ -103,7 +102,10 @@ class FakePyPI:
         self.urls.append(url)
         if self.error is not None:
             raise self.error
-        return _pypi(self.releases)
+        for version, files in self.releases.items():
+            if url == release.PYPI_VERSION_JSON_URL.format(version=version):
+                return json.dumps({"info": {"version": version}, "urls": files}).encode()
+        raise urllib.error.HTTPError(url, 404, "Not Found", {}, None)  # type: ignore[arg-type]
 
 
 def _reply(name: str = "amicus", version: str = NEXT) -> str:
@@ -204,7 +206,7 @@ def test_post_publish_holds_for_a_published_release(pub, capsys):
     assert out.err == ""
     assert f"post-publish checks hold for {NEXT}" in out.out
     assert pub.sha in out.out
-    assert pypi.urls == [release.PYPI_JSON_URL]
+    assert pypi.urls == [release.PYPI_VERSION_JSON_URL.format(version=NEXT)]
     assert [call["ref"] for call in uvx.calls] == [TAG, NEGATIVE]
     # Each install gets its own empty caches: a shared one would let the control reuse a build.
     assert len({call["cache"] for call in uvx.calls}) == 2
@@ -240,16 +242,16 @@ def test_a_release_with_no_files_fails(pub, capsys):
 
 
 def test_an_unreachable_pypi_fails(pub, capsys):
-    error = urllib.error.HTTPError(release.PYPI_JSON_URL, 503, "unavailable", {}, None)  # type: ignore[arg-type]
+    error = urllib.error.HTTPError(release.PYPI_VERSION_JSON_URL, 503, "unavailable", {}, None)  # type: ignore[arg-type]
     _post_publish_refused(pub, capsys, "could not read", pypi=FakePyPI(error=error))
 
 
-def test_pypi_answering_without_a_releases_table_fails(pub, capsys):
-    class NoReleases(FakePyPI):
+def test_pypi_answering_without_a_urls_list_fails(pub, capsys):
+    class NoUrls(FakePyPI):
         def __call__(self, url):
             return b'{"info": {}}'
 
-    _post_publish_refused(pub, capsys, "no `releases` table", pypi=NoReleases())
+    _post_publish_refused(pub, capsys, "no `urls` list", pypi=NoUrls())
 
 
 # --- post-publish: the remote tag ---------------------------------------------------------

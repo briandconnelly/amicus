@@ -152,7 +152,7 @@
     ],
     "protocol_revision": "2026-07-28",
     "resource_error_carrier": "JSON-RPC error; the envelope (machine_code/human_message/backend/temporary/retry_after_ms/repair/resource_uri/request_id) is in error.data. Classify by error.data.machine_code: the numeric is era-bound (-32002 on a 2025-11-25 connection, -32602 on 2026-07-28; -32603 for a read failure on both).",
-    "result_format": 9,
+    "result_format": 10,
     "result_meta_resource": "amicus://result-meta",
     "scope": [
       "Second opinions, git-change reviews, adversarial critiques and delegated diffs from Codex, Kimi, Claude Code or Pi, selected per call.",
@@ -810,7 +810,7 @@
         "required_params": [
           "backend"
         ],
-        "returns": "advisory model slugs with effort sets and the catalog source.",
+        "returns": "advisory model slugs with effort sets, token limits where the backend advertises them, and the catalog source.",
         "stability": "experimental",
         "use_when": "Before overriding model or reasoning_effort."
       },
@@ -1667,7 +1667,7 @@
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-69",
+                "default": "amicus/0.1/schema-73",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -1887,6 +1887,44 @@
             "title": "Meta",
             "type": "object"
           },
+          "PartialWork": {
+            "additionalProperties": false,
+            "description": "What a delegate left in its worktree when its backend was stopped at a deadline\n(#508) or a spend cap amicus enforces (#454): captured, redacted and bounded exactly as\na finished delegate's diff, and an unverified, incomplete proposal, never a finished\none. `diff` and `diffstat` are omitted when the backend had changed nothing;\nmeta.truncated reports a bounded diff, as it does on a success.",
+            "properties": {
+              "diff": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Diff"
+              },
+              "diffstat": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Diffstat"
+              },
+              "incomplete": {
+                "const": true,
+                "default": true,
+                "title": "Incomplete",
+                "type": "boolean"
+              }
+            },
+            "title": "PartialWork",
+            "type": "object"
+          },
           "Repair": {
             "additionalProperties": false,
             "description": "Machine-actionable recovery: a symbolic `next_step`, the single callable\n`tool`/`arguments`, and an optional prose `alternative` ([6.repair-object]).",
@@ -2092,6 +2130,17 @@
             "default": false,
             "title": "Ok",
             "type": "boolean"
+          },
+          "partial": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialWork"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           }
         },
         "required": [
@@ -2176,8 +2225,8 @@
         "description": "Full semantics for parameters whose tools/list description is a compressed summary. Each entry's `summary` ships inline; `full` is the authoritative contract.",
         "params": {
           "backend_options": {
-            "full": "A key the selected backend does not accept, or a value it does not accept for a key it does, fails pre-spend as invalid_arguments naming backend_options.<key>. isolation — codex: inherit|ignore-config|ignore-rules (drop $CODEX_HOME config, then also execpolicy rules); kimi: inherit|ignore-skills. config_mode — claude: inherit|scoped|safe|bare (how much of the user's Claude config the run inherits). Claude adversarial_review defaults to safe (bare when AMICUS_CLAUDE_CONFIG_MODE=bare); other verbs use the configured default. Explicit config_mode overrides are honored. Discovery reports default_by_verb when verbs differ, with default null. access — claude: toolless|readonly; review_changes defaults to readonly and other verbs to toolless unless AMICUS_CLAUDE_ACCESS is set, which then applies to every verb. max_budget_usd — claude: per-call stop threshold in USD, 0.01–5.00, checked only between model calls, so the estimated cost can exceed it. Unset keys take the backend's defaults; amicus_review_changes_dry_run echoes review_changes values.",
-            "summary": "One closed object of backend knobs: isolation (codex, kimi); config_mode, access, max_budget_usd (claude). A key or value the selected backend rejects fails pre-spend. Values: amicus://params."
+            "full": "A key the selected backend does not accept, or a value it does not accept for a key it does, fails pre-spend as invalid_arguments naming backend_options.<key>. isolation — codex: inherit|ignore-config|ignore-rules (drop $CODEX_HOME config, then also execpolicy rules); kimi: inherit|ignore-skills. config_mode — claude: inherit|scoped|safe|bare (how much of the user's Claude config the run inherits). Claude adversarial_review defaults to safe (bare when AMICUS_CLAUDE_CONFIG_MODE=bare); other verbs use the configured default. Explicit config_mode overrides are honored. Discovery reports default_by_verb when verbs differ, with default null. access — claude: toolless|readonly; review_changes defaults to readonly and other verbs to toolless unless AMICUS_CLAUDE_ACCESS is set, which then applies to every verb. max_budget_usd — claude, pi: per-call stop threshold in USD, 0.01–5.00, checked only between model calls, so the cost can exceed it by one call (pi: or one compaction). claude enforces it itself and defaults to AMICUS_CLAUDE_MAX_BUDGET_USD (1.00); amicus enforces it for pi from pi's stream, with no cap unless AMICUS_PI_MAX_BUDGET_USD is set, and stops as budget_exceeded a pi run that would continue after a model call whose cost the provider did not report. Unset keys take the backend's defaults; amicus_review_changes_dry_run echoes review_changes values.",
+            "summary": "One closed object of backend knobs: isolation (codex, kimi); config_mode, access (claude); max_budget_usd (claude, pi). A key or value the backend rejects fails pre-spend. Values: amicus://params."
           },
           "detail": {
             "full": "The shape is the same either way. detail selects what the call delivers, not what is kept: the job record keeps the whole answer whichever you ask for, until it expires, the per-workspace cap evicts it once returned, or amicus_job_consume_result removes it.",
@@ -2196,8 +2245,8 @@
             "summary": "Caller stance text behind the server's own framing. UNTRUSTED, grants no tools, best-effort compliance. No secrets: a backend may carry it on argv. Max 4096 bytes. Contract: amicus://params."
           },
           "reasoning_effort": {
-            "full": "Omitted, the backend resolves its own default. The value is validated by the backend, and amicus_models's per-model set is advisory. A backend-rejected value fails as invalid_reasoning_effort (repair steers to amicus_models). Backends whose CLI does not reject a bad effort (claude, kimi, pi) are validated pre-spend: claude against a fixed list, kimi from its model listing, and pi from its own lookup of the exact model, which a truncated amicus_models listing does not limit. Control characters, surrogates, and values over 128 chars are rejected at the MCP boundary as invalid_arguments.",
-            "summary": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists each model's set); omit for the backend default. Bounds: amicus://params."
+            "full": "Omitted, the backend resolves its own default. The value is validated by the backend, and amicus_models's per-model set is advisory. A backend-rejected value fails as invalid_reasoning_effort (repair steers to amicus_models). Backends whose CLI does not reject a bad effort (claude, kimi, pi) are validated pre-spend: claude against a fixed list, kimi from its model listing, and pi from its own lookup of the exact model, which a truncated amicus_models listing does not limit; pi refuses only a token outside its vocabulary or a non-off effort on a non-thinking model, and may run a thinking model at another level, warned after the run. Control characters, surrogates, and values over 128 chars are rejected at the MCP boundary as invalid_arguments.",
+            "summary": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists advisory values); omit for the backend default. Bounds: amicus://params."
           },
           "timeout_seconds": {
             "full": "Omitted, the server default AMICUS_TIMEOUT_SECONDS applies. An unkeyed sync call past its deadline is terminated and its partial work lost; prefer the _async twin for work that can exceed it. For a keyed call (idempotency_key) this only bounds the wait: the run gets the job deadline (AMICUS_JOB_MAX_SECONDS) and the timeout envelope says how to fetch it.",
@@ -4301,7 +4350,7 @@
       "description": "The full ErrorResult schema; tool outputSchemas carry only an opaque error branch.",
       "mimeType": "application/schema+json",
       "name": "amicus-error-envelope",
-      "size": 16530,
+      "size": 17428,
       "title": "amicus error envelope schema",
       "uri": "amicus://error-envelope"
     },
@@ -4314,7 +4363,7 @@
       "description": "Full semantics for parameters whose inline description is a compressed summary.",
       "mimeType": "application/json",
       "name": "amicus-params",
-      "size": 7906,
+      "size": 8392,
       "title": "amicus parameter contracts",
       "uri": "amicus://params"
     },
@@ -4705,7 +4754,7 @@
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-69",
+            "default": "amicus/0.1/schema-73",
             "title": "Fingerprint",
             "type": "string"
           },
@@ -5028,7 +5077,7 @@
                         "type": "null"
                       }
                     ],
-                    "description": "claude only: per-call stop threshold in USD, 0.01–5.00, checked only between model calls, so the estimated cost can exceed it. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
+                    "description": "claude, pi: per-call USD stop threshold, 0.01–5.00, checked between model calls, so cost can exceed it. Omit for the AMICUS_<BACKEND>_MAX_BUDGET_USD default (claude 1.00, pi none)."
                   }
                 },
                 "type": "object"
@@ -5037,7 +5086,7 @@
                 "type": "null"
               }
             ],
-            "description": "One closed object of backend knobs: isolation (codex, kimi); config_mode, access, max_budget_usd (claude). A key or value the selected backend rejects fails pre-spend. Values: amicus://params."
+            "description": "One closed object of backend knobs: isolation (codex, kimi); config_mode, access (claude); max_budget_usd (claude, pi). A key or value the backend rejects fails pre-spend. Values: amicus://params."
           },
           "base": {
             "anyOf": [
@@ -5159,7 +5208,7 @@
                 "type": "null"
               }
             ],
-            "description": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists each model's set); omit for the backend default. Bounds: amicus://params."
+            "description": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists advisory values); omit for the backend default. Bounds: amicus://params."
           },
           "scope": {
             "anyOf": [
@@ -5824,7 +5873,7 @@
                         "type": "null"
                       }
                     ],
-                    "description": "claude only: per-call stop threshold in USD, 0.01–5.00, checked only between model calls, so the estimated cost can exceed it. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
+                    "description": "claude, pi: per-call USD stop threshold, 0.01–5.00, checked between model calls, so cost can exceed it. Omit for the AMICUS_<BACKEND>_MAX_BUDGET_USD default (claude 1.00, pi none)."
                   }
                 },
                 "type": "object"
@@ -5833,7 +5882,7 @@
                 "type": "null"
               }
             ],
-            "description": "One closed object of backend knobs: isolation (codex, kimi); config_mode, access, max_budget_usd (claude). A key or value the selected backend rejects fails pre-spend. Values: amicus://params."
+            "description": "One closed object of backend knobs: isolation (codex, kimi); config_mode, access (claude); max_budget_usd (claude, pi). A key or value the backend rejects fails pre-spend. Values: amicus://params."
           },
           "base": {
             "anyOf": [
@@ -5946,7 +5995,7 @@
                 "type": "null"
               }
             ],
-            "description": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists each model's set); omit for the backend default. Bounds: amicus://params."
+            "description": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists advisory values); omit for the backend default. Bounds: amicus://params."
           },
           "scope": {
             "anyOf": [
@@ -6971,7 +7020,7 @@
                         "type": "null"
                       }
                     ],
-                    "description": "claude only: per-call stop threshold in USD, 0.01–5.00, checked only between model calls, so the estimated cost can exceed it. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
+                    "description": "claude, pi: per-call USD stop threshold, 0.01–5.00, checked between model calls, so cost can exceed it. Omit for the AMICUS_<BACKEND>_MAX_BUDGET_USD default (claude 1.00, pi none)."
                   }
                 },
                 "type": "object"
@@ -6980,7 +7029,7 @@
                 "type": "null"
               }
             ],
-            "description": "One closed object of backend knobs: isolation (codex, kimi); config_mode, access, max_budget_usd (claude). A key or value the selected backend rejects fails pre-spend. Values: amicus://params."
+            "description": "One closed object of backend knobs: isolation (codex, kimi); config_mode, access (claude); max_budget_usd (claude, pi). A key or value the backend rejects fails pre-spend. Values: amicus://params."
           },
           "detail": {
             "default": "summary",
@@ -7054,7 +7103,7 @@
                 "type": "null"
               }
             ],
-            "description": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists each model's set); omit for the backend default. Bounds: amicus://params."
+            "description": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists advisory values); omit for the backend default. Bounds: amicus://params."
           },
           "timeout_seconds": {
             "anyOf": [
@@ -7542,7 +7591,7 @@
                         "type": "null"
                       }
                     ],
-                    "description": "claude only: per-call stop threshold in USD, 0.01–5.00, checked only between model calls, so the estimated cost can exceed it. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
+                    "description": "claude, pi: per-call USD stop threshold, 0.01–5.00, checked between model calls, so cost can exceed it. Omit for the AMICUS_<BACKEND>_MAX_BUDGET_USD default (claude 1.00, pi none)."
                   }
                 },
                 "type": "object"
@@ -7551,7 +7600,7 @@
                 "type": "null"
               }
             ],
-            "description": "One closed object of backend knobs: isolation (codex, kimi); config_mode, access, max_budget_usd (claude). A key or value the selected backend rejects fails pre-spend. Values: amicus://params."
+            "description": "One closed object of backend knobs: isolation (codex, kimi); config_mode, access (claude); max_budget_usd (claude, pi). A key or value the backend rejects fails pre-spend. Values: amicus://params."
           },
           "extra_context": {
             "anyOf": [
@@ -7616,7 +7665,7 @@
                 "type": "null"
               }
             ],
-            "description": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists each model's set); omit for the backend default. Bounds: amicus://params."
+            "description": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists advisory values); omit for the backend default. Bounds: amicus://params."
           },
           "workspace_root": {
             "anyOf": [
@@ -7919,7 +7968,7 @@
                         "type": "null"
                       }
                     ],
-                    "description": "claude only: per-call stop threshold in USD, 0.01–5.00, checked only between model calls, so the estimated cost can exceed it. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
+                    "description": "claude, pi: per-call USD stop threshold, 0.01–5.00, checked between model calls, so cost can exceed it. Omit for the AMICUS_<BACKEND>_MAX_BUDGET_USD default (claude 1.00, pi none)."
                   }
                 },
                 "type": "object"
@@ -7928,7 +7977,7 @@
                 "type": "null"
               }
             ],
-            "description": "One closed object of backend knobs: isolation (codex, kimi); config_mode, access, max_budget_usd (claude). A key or value the selected backend rejects fails pre-spend. Values: amicus://params."
+            "description": "One closed object of backend knobs: isolation (codex, kimi); config_mode, access (claude); max_budget_usd (claude, pi). A key or value the backend rejects fails pre-spend. Values: amicus://params."
           },
           "detail": {
             "default": "summary",
@@ -7976,7 +8025,7 @@
                 "type": "null"
               }
             ],
-            "description": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists each model's set); omit for the backend default. Bounds: amicus://params."
+            "description": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists advisory values); omit for the backend default. Bounds: amicus://params."
           },
           "task": {
             "description": "The coding task to implement in a throwaway worktree; the diff is returned, never applied. Must not be blank.",
@@ -8274,7 +8323,7 @@
         "openWorldHint": true,
         "readOnlyHint": false
       },
-      "description": "PAID — spends the selected backend's quota on every new call. Async twin of amicus_delegate: returns a job handle; poll amicus_job_status while status is running, then read amicus_job_result. Same egress and feature gate. Starting a job commits to spend. The job record keeps the whole answer — best-effort secret-redacted, and it can quote your inputs — whatever `detail` delivered, until it expires (AMICUS_JOB_TTL, default 24h; an expired record is removed on a later job call, not by a daemon), the per-workspace cap evicts it once returned, or amicus_job_consume_result removes it. Deadline: AMICUS_JOB_MAX_SECONDS (default 1800s).",
+      "description": "PAID — spends the selected backend's quota on every new call. Async twin of amicus_delegate: returns a job handle; poll amicus_job_status while status is running, then read amicus_job_result. Same egress and feature gate. Starting a job commits to spend. The job record keeps the whole answer — best-effort secret-redacted, and it can quote your inputs — whatever `detail` delivered, until it expires (AMICUS_JOB_TTL, default 24h; an expired record is removed on a later job call, not by a daemon), the per-workspace cap evicts it once returned, or amicus_job_consume_result removes it. Deadline: AMICUS_JOB_MAX_SECONDS (default 1800s); the backend stops a short reserve before it and the timeout error carries its incomplete diff as `partial`. Keep slow verification such as a full test suite out of the task.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
@@ -8354,7 +8403,7 @@
                         "type": "null"
                       }
                     ],
-                    "description": "claude only: per-call stop threshold in USD, 0.01–5.00, checked only between model calls, so the estimated cost can exceed it. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
+                    "description": "claude, pi: per-call USD stop threshold, 0.01–5.00, checked between model calls, so cost can exceed it. Omit for the AMICUS_<BACKEND>_MAX_BUDGET_USD default (claude 1.00, pi none)."
                   }
                 },
                 "type": "object"
@@ -8363,7 +8412,7 @@
                 "type": "null"
               }
             ],
-            "description": "One closed object of backend knobs: isolation (codex, kimi); config_mode, access, max_budget_usd (claude). A key or value the selected backend rejects fails pre-spend. Values: amicus://params."
+            "description": "One closed object of backend knobs: isolation (codex, kimi); config_mode, access (claude); max_budget_usd (claude, pi). A key or value the backend rejects fails pre-spend. Values: amicus://params."
           },
           "idempotency_key": {
             "anyOf": [
@@ -8402,7 +8451,7 @@
                 "type": "null"
               }
             ],
-            "description": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists each model's set); omit for the backend default. Bounds: amicus://params."
+            "description": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists advisory values); omit for the backend default. Bounds: amicus://params."
           },
           "task": {
             "description": "The coding task to implement in a throwaway worktree; the diff is returned, never applied. Must not be blank.",
@@ -8707,7 +8756,7 @@
                         "type": "null"
                       }
                     ],
-                    "description": "claude only: per-call stop threshold in USD, 0.01–5.00, checked only between model calls, so the estimated cost can exceed it. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
+                    "description": "claude, pi: per-call USD stop threshold, 0.01–5.00, checked between model calls, so cost can exceed it. Omit for the AMICUS_<BACKEND>_MAX_BUDGET_USD default (claude 1.00, pi none)."
                   }
                 },
                 "type": "object"
@@ -8716,7 +8765,7 @@
                 "type": "null"
               }
             ],
-            "description": "One closed object of backend knobs: isolation (codex, kimi); config_mode, access, max_budget_usd (claude). A key or value the selected backend rejects fails pre-spend. Values: amicus://params."
+            "description": "One closed object of backend knobs: isolation (codex, kimi); config_mode, access (claude); max_budget_usd (claude, pi). A key or value the backend rejects fails pre-spend. Values: amicus://params."
           },
           "model": {
             "anyOf": [
@@ -8742,7 +8791,7 @@
                 "type": "null"
               }
             ],
-            "description": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists each model's set); omit for the backend default. Bounds: amicus://params."
+            "description": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists advisory values); omit for the backend default. Bounds: amicus://params."
           },
           "task": {
             "description": "The coding task to implement in a throwaway worktree; the diff is returned, never applied. Must not be blank.",
@@ -9885,7 +9934,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Free — no model call. Advisory model slugs for `backend` (pass as `model`) with each model's advertised reasoning-effort set; the backend validates the real values. pi lists exact provider/id rows of providers it holds credentials for. Not fingerprint-stable; same payload as amicus://models/{backend}.",
+      "description": "Free — no model call. Advisory model slugs for `backend` (pass as `model`) with each model's advisory reasoning efforts; the backend validates the real values. pi lists exact provider/id rows of providers it holds credentials for. Not fingerprint-stable; same payload as amicus://models/{backend}.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
@@ -9938,6 +9987,17 @@
                 "items": {
                   "additionalProperties": false,
                   "properties": {
+                    "context_tokens": {
+                      "anyOf": [
+                        {
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Advertised context window in tokens; pi's is rounded, so leave headroom. null: unknown."
+                    },
                     "default_reasoning_effort": {
                       "anyOf": [
                         {
@@ -9958,6 +10018,17 @@
                         }
                       ]
                     },
+                    "max_output_tokens": {
+                      "anyOf": [
+                        {
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Advertised output limit in tokens; rounded and null as context_tokens."
+                    },
                     "slug": {
                       "type": "string"
                     },
@@ -9972,7 +10043,8 @@
                         {
                           "type": "null"
                         }
-                      ]
+                      ],
+                      "description": "Advisory; pi lists its own vocabulary, not the model's levels, and may run another. null: unknown."
                     }
                   },
                   "required": [
@@ -10155,7 +10227,7 @@
                         "type": "null"
                       }
                     ],
-                    "description": "claude only: per-call stop threshold in USD, 0.01–5.00, checked only between model calls, so the estimated cost can exceed it. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
+                    "description": "claude, pi: per-call USD stop threshold, 0.01–5.00, checked between model calls, so cost can exceed it. Omit for the AMICUS_<BACKEND>_MAX_BUDGET_USD default (claude 1.00, pi none)."
                   }
                 },
                 "type": "object"
@@ -10164,7 +10236,7 @@
                 "type": "null"
               }
             ],
-            "description": "One closed object of backend knobs: isolation (codex, kimi); config_mode, access, max_budget_usd (claude). A key or value the selected backend rejects fails pre-spend. Values: amicus://params."
+            "description": "One closed object of backend knobs: isolation (codex, kimi); config_mode, access (claude); max_budget_usd (claude, pi). A key or value the backend rejects fails pre-spend. Values: amicus://params."
           },
           "base": {
             "anyOf": [
@@ -10286,7 +10358,7 @@
                 "type": "null"
               }
             ],
-            "description": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists each model's set); omit for the backend default. Bounds: amicus://params."
+            "description": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists advisory values); omit for the backend default. Bounds: amicus://params."
           },
           "scope": {
             "default": "working_tree",
@@ -10943,7 +11015,7 @@
                         "type": "null"
                       }
                     ],
-                    "description": "claude only: per-call stop threshold in USD, 0.01–5.00, checked only between model calls, so the estimated cost can exceed it. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
+                    "description": "claude, pi: per-call USD stop threshold, 0.01–5.00, checked between model calls, so cost can exceed it. Omit for the AMICUS_<BACKEND>_MAX_BUDGET_USD default (claude 1.00, pi none)."
                   }
                 },
                 "type": "object"
@@ -10952,7 +11024,7 @@
                 "type": "null"
               }
             ],
-            "description": "One closed object of backend knobs: isolation (codex, kimi); config_mode, access, max_budget_usd (claude). A key or value the selected backend rejects fails pre-spend. Values: amicus://params."
+            "description": "One closed object of backend knobs: isolation (codex, kimi); config_mode, access (claude); max_budget_usd (claude, pi). A key or value the backend rejects fails pre-spend. Values: amicus://params."
           },
           "base": {
             "anyOf": [
@@ -11065,7 +11137,7 @@
                 "type": "null"
               }
             ],
-            "description": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists each model's set); omit for the backend default. Bounds: amicus://params."
+            "description": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists advisory values); omit for the backend default. Bounds: amicus://params."
           },
           "scope": {
             "default": "working_tree",
@@ -11386,7 +11458,7 @@
                         "type": "null"
                       }
                     ],
-                    "description": "claude only: per-call stop threshold in USD, 0.01–5.00, checked only between model calls, so the estimated cost can exceed it. Omit for the server default (AMICUS_CLAUDE_MAX_BUDGET_USD, 1.00)."
+                    "description": "claude, pi: per-call USD stop threshold, 0.01–5.00, checked between model calls, so cost can exceed it. Omit for the AMICUS_<BACKEND>_MAX_BUDGET_USD default (claude 1.00, pi none)."
                   }
                 },
                 "type": "object"
@@ -11395,7 +11467,7 @@
                 "type": "null"
               }
             ],
-            "description": "One closed object of backend knobs: isolation (codex, kimi); config_mode, access, max_budget_usd (claude). A key or value the selected backend rejects fails pre-spend. Values: amicus://params."
+            "description": "One closed object of backend knobs: isolation (codex, kimi); config_mode, access (claude); max_budget_usd (claude, pi). A key or value the backend rejects fails pre-spend. Values: amicus://params."
           },
           "base": {
             "anyOf": [
@@ -11495,7 +11567,7 @@
                 "type": "null"
               }
             ],
-            "description": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists each model's set); omit for the backend default. Bounds: amicus://params."
+            "description": "Per-call reasoning effort, an open per-model string (commonly minimal|low|medium|high|xhigh; amicus_models lists advisory values); omit for the backend default. Bounds: amicus://params."
           },
           "scope": {
             "default": "working_tree",

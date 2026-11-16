@@ -313,11 +313,28 @@ class ErrorInfo(BaseModel):
         return self
 
 
+class PartialWork(BaseModel):
+    """What a delegate left in its worktree when its backend was stopped at a deadline
+    (#508) or a spend cap amicus enforces (#454): captured, redacted and bounded exactly as
+    a finished delegate's diff, and an unverified, incomplete proposal, never a finished
+    one. `diff` and `diffstat` are omitted when the backend had changed nothing;
+    meta.truncated reports a bounded diff, as it does on a success."""
+
+    model_config = ConfigDict(extra="forbid")
+    incomplete: Literal[True] = True
+    # Defaulted: a serialized envelope drops a null, and an empty partial must read back.
+    diff: str | None = None
+    diffstat: str | None = None
+
+
 class ErrorResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
     ok: Literal[False] = False
     error: ErrorInfo
     meta: Meta
+    # Only on a delegate `timeout` (#508) or amicus-enforced `budget_exceeded` (#454) whose
+    # worktree diff could be captured.
+    partial: PartialWork | None = None
 
 
 _OFFENDING_VALUE_POLICY = (

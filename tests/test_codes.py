@@ -93,7 +93,7 @@ def test_fingerprint_constants():
     # scripts/regenerate_fingerprint_pins.py moves with every other pin of a bump (#373).
     # RESULT_FORMAT stays a literal here: moving it is rule 11's own decision, never the tool's.
     assert load_pins()["fingerprint"] == fingerprint.FINGERPRINT
-    assert fingerprint.RESULT_FORMAT == 9
+    assert fingerprint.RESULT_FORMAT == 10
     assert fingerprint.JSON_SCHEMA_DIALECT == "https://json-schema.org/draft/2020-12/schema"
     assert fingerprint.LIFECYCLE_META_KEY == "dev.bconnelly.amicus/lifecycle"
     assert fingerprint.PROTOCOL_REVISION == "2026-07-28"

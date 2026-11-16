@@ -13,9 +13,15 @@ from typing import TYPE_CHECKING, Any, cast, get_args
 
 from pydantic import ValidationError
 
-from amicus.errors import error_envelope
+from amicus.errors import error_envelope, serialize_error
 from amicus.orchestration import review as review_mod
-from amicus.schemas.envelope import ContextSummary, Usage, dump_success
+from amicus.schemas.envelope import (
+    ContextSummary,
+    ErrorResult,
+    PartialWork,
+    Usage,
+    dump_success,
+)
 from amicus.schemas.results import (
     AdversarialReviewResult,
     ConsultResult,
@@ -584,6 +590,36 @@ def _bound_diff(diff: str, meta: Meta, max_bytes: int) -> str:
     return encoded[:max_bytes].decode("utf-8", "ignore")
 
 
+def present_diff(diff: str, meta: Meta, max_bytes: int) -> tuple[str, str | None]:
+    """A captured worktree diff as a delegate result carries it: redacted, bounded, and with
+    its one-line diffstat; ("", None) for an empty one. One path for a finished delegate and
+    for a timed-out one's partial work (#508), so the two cannot be presented differently."""
+    if not diff.strip():
+        return "", None
+    stat = _diffstat(diff)
+    redacted, meta.redacted_paths = redaction.redact(diff)
+    bounded = _bound_diff(redacted, meta, max_bytes)
+    plural = lambda n, word: f"{n} {word}{'' if n == 1 else 's'}"  # noqa: E731
+    diffstat = (
+        f"{plural(stat.files_changed, 'file')} changed, "
+        f"{plural(stat.lines_added, 'insertion')}(+), "
+        f"{plural(stat.lines_removed, 'deletion')}(-)"
+    )
+    return bounded, diffstat
+
+
+def with_partial_work(envelope: dict[str, Any], diff: str, max_bytes: int) -> dict[str, Any]:
+    """Attach a stopped delegate's captured diff to its `timeout` (#508) or
+    `budget_exceeded` (#454) envelope as `partial`, presented like a finished delegate's,
+    and stamp its truncation and redaction on the envelope's meta."""
+    result = ErrorResult.model_validate(envelope)
+    meta = result.meta.model_copy(deep=True)
+    meta.context_summary = _diffstat(diff)
+    bounded, diffstat = present_diff(diff, meta, max_bytes)
+    partial = PartialWork(diff=bounded or None, diffstat=diffstat)
+    return serialize_error(result.model_copy(update={"meta": meta, "partial": partial}))
+
+
 def delegate_result(
     result: ExecResult,
     meta: Meta,
@@ -608,18 +644,7 @@ def delegate_result(
     )
     if not diff.strip():
         summary = f"The backend made no changes. {summary}"
-        bounded = ""
-    else:
-        redacted, meta.redacted_paths = redaction.redact(diff)
-        bounded = _bound_diff(redacted, meta, max_diff_bytes)
-    plural = lambda n, word: f"{n} {word}{'' if n == 1 else 's'}"  # noqa: E731
-    diffstat = (
-        f"{plural(stat.files_changed, 'file')} changed, "
-        f"{plural(stat.lines_added, 'insertion')}(+), "
-        f"{plural(stat.lines_removed, 'deletion')}(-)"
-        if diff.strip()
-        else None
-    )
+    bounded, diffstat = present_diff(diff, meta, max_diff_bytes)
     return dump_success(
         DelegateResult(
             summary=summary,

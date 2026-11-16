@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
 from amicus.sdk.conventions.envelope import REPAIR_STEPS
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from contextlib import AbstractAsyncContextManager
 
     from amicus.sdk.core.runtime import CommandRun
@@ -102,6 +103,12 @@ class PreparedRun:
     # beside it (Codex lists its output schema there too). A consumer that refuses to read
     # one of these has refused the answer; refusing any other artifact says nothing about it.
     answer_artifacts: tuple[str, ...] = ()
+    # A per-run probe the runtime calls on each stdout line as it arrives; a non-None
+    # reason stops the run (``runtime.run_async``'s ``stop_on_line``), and the reason comes
+    # back as ``CommandRun.stop_reason`` for the backend's own inspector to classify. Made
+    # fresh for each run by ``prepare``, since it carries that run's state (pi's spend
+    # cap). None, the default, leaves the run exactly as it was.
+    stop_on_line: Callable[[str], str | None] | None = None
 
 
 @dataclass(frozen=True)

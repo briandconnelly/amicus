@@ -11,6 +11,10 @@ No model call was made for the captures; the live suite below did spend quota.
   Every flag the amicus contract sends is still advertised with the same text, and the `--thinking` vocabulary is unchanged.
 - `list-models-shape.txt`: the first four lines of `pi --list-models kimi-k3` with the suppression flags.
   The columns are unchanged; trailing whitespace was stripped.
+- The `context` and `max-out` columns are display strings.
+  `formatTokenCount` in the installed 1.5.2 release (`dist/cli/list-models.js` of `@earendil-works/pi-coding-agent`, read 2026-11-15) prints a count below 1000 as is, and otherwise divides by 1000 for `K` or by 1 000 000 for `M` and keeps one decimal unless the quotient is whole.
+  So `131.1K` stands for a count within 50 of 131 100, and `1.0M` for one within 50 000 of 1 000 000; `amicus.backends.pi.models.tokens` reverses exactly that and reads any other shape as unknown.
+  `pi --list-models` has no JSON form on this release, so the exact counts are not available without a model call.
 - `pi auth --help` on 1.5.2 lists `pi auth login <provider>` and `pi auth logout <provider>`, which 1.5.0 lacked.
   amicus's login hint still names `/login` and the API-key variable, which work on both releases.
 

@@ -604,3 +604,23 @@ def test_a_self_repair_is_never_completed_or_dropped_as_a_lookup():
     # Without a failing tool the table's tool stands, as the manifest's per-code pin says.
     bare = errors.make_error("invalid_commit", "m", backend="codex")
     assert bare.repair is not None and bare.repair.tool is None
+
+
+def test_a_keyed_stored_error_keeps_a_timed_out_delegates_partial_work():
+    # #508: keyed normalization rewrites only `error`, so the incomplete diff survives it.
+    plain = _rate_limited()
+    plain["partial"] = {"incomplete": True, "diff": "+x\n", "diffstat": "1 file changed"}
+    keyed = errors.keyed_stored_error(plain, "amicus_delegate_async")
+    assert keyed["error"]["temporary"] is False
+    assert keyed["partial"] == plain["partial"]
+    ErrorResult.model_validate(keyed)
+
+
+def test_an_error_result_refuses_a_partial_that_claims_completion():
+    with pytest.raises(ValueError, match="incomplete"):
+        ErrorResult.model_validate(
+            {
+                **errors.error_envelope("timeout", "t", Meta()),
+                "partial": {"incomplete": False, "diff": None},
+            }
+        )

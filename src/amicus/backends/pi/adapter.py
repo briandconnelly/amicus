@@ -12,7 +12,7 @@ import os
 import time
 from typing import TYPE_CHECKING, Literal
 
-from amicus.backends.pi import cli, contract, normalize
+from amicus.backends.pi import budget, cli, contract, normalize
 from amicus.backends.pi import config as pi_config
 from amicus.backends.pi.binary import BinaryNotFoundError
 from amicus.backends.pi.models import HELP_CACHE_TTL_SECONDS, is_batch_only
@@ -136,6 +136,9 @@ class PiBackend:
             return request.reasoning_effort
         return self._config.reasoning_effort
 
+    def _budget(self, request: RunRequest) -> float | None:
+        return request.budget_usd if request.budget_usd is not None else self._config.max_budget_usd
+
     @staticmethod
     def _read_only(request: RunRequest) -> bool:
         # Fail closed: the tool allowlist is the only thing making a pi consult read-only,
@@ -158,9 +161,10 @@ class PiBackend:
                 tool="amicus_models",
                 alternative=(
                     f"Pass one of: {', '.join(allowed)} — or omit reasoning_effort to use the "
-                    "model's default. amicus_models lists each model's declared efforts. "
-                    "Refused locally (zero spend): pi clamps an effort the model lacks "
-                    "instead of rejecting it, so the run would use another level than asked."
+                    "model's default. amicus_models lists pi's vocabulary, or only off for a "
+                    "non-thinking model. "
+                    "Refused locally (zero spend); a listed effort the model lacks is not "
+                    "refused, and pi may run it at another, possibly higher, level."
                 ),
             ),
         )
@@ -340,7 +344,7 @@ class PiBackend:
             allowed = entry.supported_reasoning_efforts or contract.EFFORTS
             if effort not in allowed:
                 return self._effort_refusal(
-                    "the requested reasoning_effort is not one this model supports.", allowed
+                    "the requested reasoning_effort is not one pi accepts for this model.", allowed
                 )
         return self._local_refusal(request)
 
@@ -388,6 +392,9 @@ class PiBackend:
             orphan_marker=request.cwd
             if len(request.cwd) >= runtime.MIN_ORPHAN_MARKER_LENGTH
             else None,
+            stop_on_line=(
+                budget.SpendProbe(cap) if (cap := self._budget(request)) is not None else None
+            ),
         )
 
     def finalize(self, outcome: RunOutcome, request: RunRequest) -> ExecResult:
@@ -441,9 +448,18 @@ class PiBackend:
         whether or not it carries an `errorMessage`: any text before it is a partial answer.
         A zero-exit run with no answer text is `empty_response`: a success with nothing in it
         would launder the loss into a result."""
+        run = outcome.run
+        if run.stop_reason == budget.AFTER_FINAL and not run.timed_out:
+            # amicus killed post-answer work: judge the run by what pi had settled on.
+            if normalize.failed_stop(self._events(outcome)) is not None:
+                return self._classify(outcome, request)
+            if normalize.extract_final_message(self._events(outcome)):
+                return None
+            return ClassifiedFailure(code="empty_response", detail=EMPTY_RESPONSE_DETAIL)
+        if run.stop_reason in budget.REASONS:
+            return cli.budget_failure(run.stop_reason, self._budget(request))
         if normalize.failed_stop(self._events(outcome)) is not None:
             return self._classify(outcome, request)
-        run = outcome.run
         if run.exit_code != 0 or run.timed_out or run.binary_missing:
             return None
         if normalize.extract_final_message(self._events(outcome)):

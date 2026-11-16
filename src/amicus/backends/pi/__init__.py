@@ -6,8 +6,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from amicus.backends.pi import cli, contract
 from amicus.backends.pi import config as pi_config
-from amicus.backends.pi import contract
 from amicus.backends.pi.adapter import PiBackend
 from amicus.backends.pi.binary import PiBinary
 from amicus.backends.pi.models import HELP_CACHE_TTL_SECONDS, PiModels
@@ -15,7 +15,7 @@ from amicus.backends.pi.options import options_for
 from amicus.backends.pi.status import PiStatus
 from amicus.plugin import BackendPlugin
 from amicus.sdk.conventions.annotations import AnnotationEffects
-from amicus.sdk.conventions.envelope import BackendErrorVocabulary
+from amicus.sdk.conventions.envelope import BackendErrorVocabulary, RepairRule
 from amicus.sdk.conventions.preflight import HelpProbe
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -28,6 +28,10 @@ VOCABULARY = BackendErrorVocabulary(
     login_hint=contract.LOGIN_HINT,
     status_tool="amicus_backends",
 )
+# Overrides the neutral budget_exceeded rule for pi's own wording (#454).
+LOCAL_CODES: dict[str, RepairRule] = {
+    "budget_exceeded": RepairRule("reduce_input", None, False, cli.BUDGET_REPAIR),
+}
 EGRESS = contract.EGRESS
 CARRIERS = contract.CARRIERS
 
@@ -58,4 +62,5 @@ def plugin(environ: Mapping[str, str] | None = None) -> BackendPlugin:
         effects=AnnotationEffects(paid_calls_destructive=True, job_reads_read_only=True),
         egress=EGRESS,
         carriers=CARRIERS,
+        local_codes=LOCAL_CODES,
     )
