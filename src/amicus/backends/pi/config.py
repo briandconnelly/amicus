@@ -73,9 +73,9 @@ class PiConfig:
     bin_override: str | None
     model: str | None
     reasoning_effort: str | None
-    max_budget_usd: float | None
     supported_versions: frozenset[tuple[int, int]]
     state_dir: Path
+    max_budget_usd: float | None = None
     warnings: tuple[str, ...] = ()
     errors: tuple[str, ...] = ()
     agent_dir_error: str | None = None
