@@ -2,8 +2,8 @@ name: Upstream watch
 
 on:
   schedule:
-    # Daily: kimi, claude, pi, fastmcp and mcp releases past amicus's baselines become
-    # issues (docs/WATCHING.md). Codex stays with its own routine.
+    # Daily: releases past amicus's baselines, on the streams scripts/check_backend_compat.py
+    # watches, become issues (docs/WATCHING.md). Codex stays with its own routine.
     - cron: "30 15 * * *"
   workflow_dispatch:
 
