@@ -41,11 +41,41 @@ def test_probe_stops_only_before_another_model_call():
 def test_probe_lets_a_terminal_message_through_even_over_the_cap():
     probe = budget.SpendProbe(0.1)
     assert probe(_end("stop", 3.0)) is None
-    for stop in ("length", "error", "aborted"):
+    for stop in ("error", "aborted"):
         assert budget.SpendProbe(0.1)(_end(stop, 3.0)) is None
 
 
-@pytest.mark.parametrize("stop", ["toolUse", "pending", "deferred", "something-new"])
+def test_an_error_stop_is_let_through_but_its_retry_is_gated():
+    """pi retries a retryable error itself and announces it with auto_retry_start (#454 review)."""
+    probe = budget.SpendProbe(0.5)
+    assert probe(_end("error", 0.6)) is None
+    assert probe(pf.line({"type": "auto_retry_start", "attempt": 1})) == budget.BUDGET
+    unpriced = budget.SpendProbe(5.0)
+    assert unpriced(_end("error", None)) is None
+    assert unpriced(pf.line({"type": "auto_retry_start"})) == budget.UNVERIFIABLE
+
+
+def test_compaction_is_gated_and_its_spend_counted():
+    probe = budget.SpendProbe(1.0)
+    assert probe(_end("toolUse", 0.5)) is None
+    assert probe(pf.line({"type": "compaction_start", "reason": "threshold"})) is None
+    usage = {"cost": {"total": 0.6, "totalFromProvider": True}}
+    end = {"type": "compaction_end", "reason": "threshold", "result": {"usage": usage}}
+    assert probe(pf.line(end)) is None
+    assert probe.spent_usd == pytest.approx(1.1)
+    assert probe(pf.line({"type": "compaction_start", "reason": "overflow"})) == budget.BUDGET
+
+
+def test_unpriced_compaction_fails_closed_and_a_failed_one_counts_nothing():
+    probe = budget.SpendProbe(5.0)
+    assert probe(pf.line({"type": "compaction_end", "result": None, "aborted": True})) is None
+    assert not probe.unverified
+    unpriced = {"type": "compaction_end", "result": {"usage": {"cost": {"total": 0.1}}}}
+    assert probe(pf.line(unpriced)) is None
+    assert probe(_end("toolUse", 0.01)) == budget.UNVERIFIABLE
+
+
+@pytest.mark.parametrize("stop", ["toolUse", "length", "pending", "deferred", "something-new"])
 def test_any_non_terminal_stop_counts_as_continuing(stop):
     assert budget.SpendProbe(0.1)(_end(stop, 0.2)) == budget.BUDGET
 
@@ -193,3 +223,22 @@ def test_the_option_maps_to_the_request_budget():
     cfg = pc.load_config({"AMICUS_PI_MAX_BUDGET_USD": "2"})
     opt = next(o for o in options_for(cfg) if o.name == "max_budget_usd")
     assert opt.maps_to == "budget_usd" and opt.default == 2.0
+
+
+async def test_a_stop_lands_before_a_quick_next_call(tmp_path):
+    """The kill must not wait out a poll slice (#454 review): a continuation that follows the
+    over-cap message closely is not allowed to start, let alone finish."""
+    over, final = _end("toolUse", 0.6), _end("stop", 0.1)
+    code = (
+        "import sys, time\n"
+        f"sys.stdout.write({over!r}); sys.stdout.flush(); time.sleep(0.05)\n"
+        f"sys.stdout.write({final!r}); sys.stdout.flush()\n"
+    )
+    run = await runtime.run_async(
+        [sys.executable, "-c", code],
+        cwd=str(tmp_path),
+        timeout_seconds=20,
+        stop_on_line=budget.SpendProbe(0.5),
+    )
+    assert run.stop_reason == budget.BUDGET
+    assert run.stdout.count("message_end") == 1

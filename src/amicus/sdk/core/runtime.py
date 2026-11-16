@@ -438,13 +438,11 @@ def _wait_streaming(  # noqa: PLR0915
         with contextlib.suppress(subprocess.TimeoutExpired):
             proc.wait(timeout=timeout_seconds)
     else:
-        while not stop_requested.is_set():
+        # Wait on the stop event, which wakes the moment the probe asks, and check the child
+        # between waits: a stop must reach pi before its next call, not up to a slice later.
+        while proc.poll() is None:
             left = deadline - time.monotonic()
-            if left <= 0:
-                break
-            with contextlib.suppress(subprocess.TimeoutExpired):
-                proc.wait(timeout=min(_STOP_POLL_SECONDS, left))
-            if proc.poll() is not None:
+            if left <= 0 or stop_requested.wait(timeout=min(_STOP_POLL_SECONDS, left)):
                 break
     stopped = stop_requested.is_set() and proc.poll() is None
     if stopped:
