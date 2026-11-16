@@ -813,7 +813,7 @@
         "required_params": [
           "backend"
         ],
-        "returns": "advisory model slugs with effort sets and the catalog source.",
+        "returns": "advisory model slugs with effort sets, token limits where the backend advertises them, and the catalog source.",
         "stability": "experimental",
         "use_when": "Before overriding model or reasoning_effort."
       },
@@ -1670,7 +1670,7 @@
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-70",
+                "default": "amicus/0.1/schema-71",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -4757,7 +4757,7 @@
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-70",
+            "default": "amicus/0.1/schema-71",
             "title": "Fingerprint",
             "type": "string"
           },
@@ -9990,6 +9990,17 @@
                 "items": {
                   "additionalProperties": false,
                   "properties": {
+                    "context_tokens": {
+                      "anyOf": [
+                        {
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Advertised context window in tokens; pi's is rounded, so leave headroom. null: unknown."
+                    },
                     "default_reasoning_effort": {
                       "anyOf": [
                         {
@@ -10009,6 +10020,17 @@
                           "type": "null"
                         }
                       ]
+                    },
+                    "max_output_tokens": {
+                      "anyOf": [
+                        {
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Advertised output limit in tokens; rounded and null as context_tokens."
                     },
                     "slug": {
                       "type": "string"
