@@ -46,8 +46,11 @@ _FINAL_STOPS = frozenset({"stop", "error", "aborted"})
 _GATES = frozenset({"auto_retry_start", "compaction_start"})
 # The probe parses only lines naming an event it acts on. The gate is worth keeping: pi
 # streams a `message_update` per delta, each repeating the message so far, so parsing every
-# line would be quadratic in the answer. A pi that renamed these events would break
-# normalize too, and its pinned stream fixtures would say so.
+# line would be quadratic in the answer. Nothing else pins these names: normalize reads
+# `message_end` and `compaction_end` but neither gate event, and the stream fixtures are
+# written by hand. A pi that renamed a gate would run past the cap unstopped, so the names
+# are re-read in pi's source for each supported release (docs/pi-help/<version>/FINDINGS.md),
+# and tests/test_pi_live.py holds the `message_end` path against the real CLI.
 _NEEDLES = ('"message_end"', '"compaction_end"', *(f'"{g}"' for g in sorted(_GATES)))
 
 
