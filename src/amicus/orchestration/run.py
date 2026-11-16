@@ -484,7 +484,13 @@ async def run_request(
             refs = finalize.artifact_refs(prepared.artifacts, prepared.staging_dir)
             finalize.apply_exec(meta, result)
             failure = inspect_outcome(plugin.backend, outcome, request)
-            if failure is None and (run.exit_code != 0 or run.binary_missing or run.timed_out):
+            # A stop the backend's probe asked for is the backend's to judge: its inspector
+            # has already said whether the run failed (#454: post-answer work cut off).
+            if failure is None and (
+                run.timed_out
+                or run.binary_missing
+                or (run.exit_code != 0 and run.stop_reason is None)
+            ):
                 failure = plugin.backend.classify_failure(outcome, request)
             # An answer file amicus refused is not the backend saying nothing (#162). Every
             # failure is the more accurate account and wins, with one exception: a clean

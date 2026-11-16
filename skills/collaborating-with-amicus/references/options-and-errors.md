@@ -183,7 +183,8 @@ the repair says which fix applies), `budget_exceeded` (claude, pi), and
 `claude_permission_error`, `api_key_invalid`, `api_key_missing` (claude). `budget_exceeded` is
 the one to read carefully: the best-effort spend threshold stopped the run, and it **may already
 have spent**. The threshold is checked only between model calls (by claude itself, and by amicus
-from pi's stream), so `meta.usage.cost_usd` can exceed `max_budget_usd`; read the threshold as a
+from pi's stream, where a whole context compaction also counts as one step), so
+`meta.usage.cost_usd` can exceed `max_budget_usd`; read the threshold as a
 stop, never as a ceiling. pi has no cap unless one is passed or `AMICUS_PI_MAX_BUDGET_USD` is
 set, and a capped pi run is also stopped when a call's cost was not reported by the provider.
 

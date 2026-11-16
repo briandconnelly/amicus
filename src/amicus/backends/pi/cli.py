@@ -127,13 +127,15 @@ def version_display(version: str | None) -> str | None:
 BUDGET_REPAIR = (
     "Before making another call, raise backend_options.max_budget_usd (up to 5.00), narrow the "
     "request, or, when the stop says the cost was unverifiable, choose a model whose provider "
-    "reports its cost (OpenRouter does) or omit max_budget_usd. amicus checks the cap only "
-    "between pi's model calls, so a run can exceed it by one call, and any retry spends again."
+    "reports its cost (OpenRouter does) or run uncapped: omit max_budget_usd when "
+    "AMICUS_PI_MAX_BUDGET_USD is unset, since that default applies otherwise. amicus checks "
+    "the cap only between pi's model calls, so a run can exceed it by one call or one "
+    "compaction, and any retry spends again."
 )
 BUDGET_DETAIL = (
     "amicus stopped pi at the max-budget threshold before another model call. It checks the "
-    "threshold only between model calls, so the cost can exceed it: a stop threshold, not a "
-    "ceiling."
+    "threshold only between model calls, so the cost can exceed it by one call or one "
+    "compaction: a stop threshold, not a ceiling."
 )
 UNVERIFIABLE_DETAIL = (
     "amicus stopped pi before another model call because a call's cost was not reported by "

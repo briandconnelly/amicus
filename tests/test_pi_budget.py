@@ -132,6 +132,41 @@ def test_other_lines_are_ignored(line):
     assert probe.spent_usd == 0 and not probe.unverified
 
 
+def _compaction_start(reason: str = "threshold") -> str:
+    return pf.line({"type": "compaction_start", "reason": reason})
+
+
+def test_a_post_answer_compaction_over_the_cap_is_stopped_as_after_final():
+    """pi compacts after a settled answer; stopping it must not withhold that answer."""
+    probe = budget.SpendProbe(1.0)
+    assert probe(_end("stop", 1.1)) is None
+    assert probe(_compaction_start("overflow")) == budget.AFTER_FINAL
+    under = budget.SpendProbe(5.0)
+    assert under(_end("stop", 1.1)) is None
+    assert under(_compaction_start()) is None
+
+
+def test_a_compaction_after_an_error_settles_only_when_it_will_not_retry():
+    probe = budget.SpendProbe(0.5)
+    assert probe(_end("error", 0.6)) is None
+    assert probe(_compaction_start("threshold")) == budget.AFTER_FINAL
+    retrying = budget.SpendProbe(0.5)
+    assert retrying(_end("error", 0.6)) is None
+    assert retrying(_compaction_start("overflow")) == budget.BUDGET
+
+
+def test_a_compaction_that_will_retry_is_gated_at_its_end():
+    """pi resumes with agent.continue() straight after a willRetry compaction_end."""
+    probe = budget.SpendProbe(1.0)
+    assert probe(_end("length", 0.4)) is None
+    assert probe(_compaction_start("overflow")) is None
+    usage = {"cost": {"total": 0.7, "totalFromProvider": True}}
+    end = {"type": "compaction_end", "result": {"usage": usage}, "willRetry": True}
+    assert probe(pf.line(end)) == budget.BUDGET
+    settled = budget.SpendProbe(1.0)
+    assert settled(pf.line({**end, "willRetry": False})) is None
+
+
 # --- wiring ----------------------------------------------------------------------------------
 
 
@@ -175,6 +210,46 @@ def test_the_spend_so_far_rides_usage():
     run = CommandRun(stream, "", -9, 5, False, stop_reason=budget.BUDGET)
     result = pf.make_backend().finalize(RunOutcome(run=run, events=stream), _req(budget_usd=0.5))
     assert result.usage is not None and result.usage.cost_usd == pytest.approx(0.6)
+
+
+def test_a_post_answer_stop_keeps_the_answer():
+    stream = pf.SESSION + _end("stop", 1.1)
+    run = CommandRun(stream, "", -9, 5, False, stop_reason=budget.AFTER_FINAL)
+    backend = pf.make_backend()
+    outcome = RunOutcome(run=run, events=stream)
+    assert backend.inspect_outcome(outcome, _req(budget_usd=0.5)) is None
+    assert backend.finalize(outcome, _req(budget_usd=0.5)).answer == "x"
+
+
+def test_a_post_answer_stop_after_an_error_reports_the_error():
+    stream = pf.SESSION + _end("error", 0.6)
+    run = CommandRun(stream, "", -9, 5, False, stop_reason=budget.AFTER_FINAL)
+    failure = pf.make_backend().inspect_outcome(RunOutcome(run=run, events=stream), _req())
+    assert failure is not None and failure.code != "budget_exceeded"
+
+
+def test_a_post_answer_stop_with_no_answer_is_empty():
+    stream = pf.SESSION + pf.assistant_end(None, stop="stop", usage=pf.usage())
+    run = CommandRun(stream, "", -9, 5, False, stop_reason=budget.AFTER_FINAL)
+    failure = pf.make_backend().inspect_outcome(RunOutcome(run=run, events=stream), _req())
+    assert failure is not None and failure.code == "empty_response"
+
+
+def test_compaction_spend_rides_usage_and_an_unpriced_one_makes_it_unknown():
+    cost = {"total": 0.6, "totalFromProvider": True}
+    compaction = {"type": "compaction_end", "result": {"usage": {"input": 100, "cost": cost}}}
+    run = CommandRun("", "", -9, 5, False, stop_reason=budget.BUDGET)
+    stream = pf.SESSION + _end("toolUse", 0.5) + pf.line(compaction)
+    result = pf.make_backend().finalize(RunOutcome(run=run, events=stream), _req())
+    assert result.usage is not None and result.usage.cost_usd == pytest.approx(1.1)
+    compaction["result"]["usage"]["cost"] = {"total": 0.6}
+    stream = pf.SESSION + _end("toolUse", 0.5) + pf.line(compaction)
+    result = pf.make_backend().finalize(RunOutcome(run=run, events=stream), _req())
+    assert result.usage is not None and result.usage.cost_usd is None
+
+
+def test_the_repair_says_a_configured_default_still_applies():
+    assert "AMICUS_PI_MAX_BUDGET_USD" in cli.BUDGET_REPAIR
 
 
 def test_budget_failure_without_a_cap_omits_it():

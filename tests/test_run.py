@@ -822,6 +822,21 @@ async def test_a_budget_stopped_delegate_returns_its_partial_diff(monkeypatch, r
     assert "+x = 3" in out["partial"]["diff"] and out["partial"]["incomplete"] is True
 
 
+async def test_a_probe_stop_the_inspector_accepts_is_a_success(monkeypatch):
+    # #454 review: amicus cutting off pi's post-answer compaction leaves the answer standing.
+    import dataclasses
+
+    scripted = cf.scripted_run_async(exit_code=-9)
+
+    async def stopped(*args, **kwargs):
+        run = await scripted(*args, **kwargs)
+        return dataclasses.replace(run, stop_reason="budget_after_final")
+
+    monkeypatch.setattr(run_mod.runtime, "run_async", stopped)
+    out = await run_mod.run_request(_spec(), fakeplugin.make_plugin(backend=_BudgetStops()))
+    assert out["ok"] is True
+
+
 async def test_a_failed_delegate_amicus_did_not_stop_carries_no_partial(monkeypatch, repo):
     scripted = cf.scripted_run_async(exit_code=1, write_in_cwd={"a.py": "x = 3\n"})
     monkeypatch.setattr(run_mod.runtime, "run_async", scripted)

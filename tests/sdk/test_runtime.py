@@ -1118,12 +1118,12 @@ async def test_a_stop_asked_for_after_the_child_exited_is_not_a_stop(tmp_path):
     assert run.stop_reason in (None, "x")
 
 
-async def test_a_raising_probe_is_dropped_and_the_run_completes(tmp_path):
+async def test_a_raising_probe_is_dropped_and_the_run_completes(tmp_path, caplog):
     calls: list[str] = []
 
     def bad(line: str) -> str | None:
         calls.append(line)
-        raise RuntimeError("boom")
+        raise RuntimeError(f"echo of {line!r}")
 
     code = "print('a'); print('b')"
     run = await runtime.run_async(
@@ -1131,6 +1131,9 @@ async def test_a_raising_probe_is_dropped_and_the_run_completes(tmp_path):
     )
     assert run.exit_code == 0 and run.stop_reason is None and run.stdout == "a\nb\n"
     assert len(calls) == 1
+    # The line can echo a prompt input (rule 18): nothing of the exception is logged.
+    assert any("probe failed" in r.getMessage() for r in caplog.records)
+    assert all("echo of" not in r.getMessage() and r.exc_info is None for r in caplog.records)
 
 
 async def test_stop_on_line_does_not_change_the_timeout_path(tmp_path):

@@ -282,8 +282,9 @@ PARAMETER_CONTRACTS: dict[str, ParamContract] = {
             "defaults to readonly and other verbs to toolless unless AMICUS_CLAUDE_ACCESS is "
             "set, which then applies to every verb. max_budget_usd "
             "— claude, pi: per-call stop threshold in USD, 0.01–5.00, checked only between "  # noqa: RUF001
-            "model calls, so the cost can exceed it by one call. claude enforces it itself and "
-            "defaults to AMICUS_CLAUDE_MAX_BUDGET_USD (1.00); amicus enforces it for pi from "
+            "model calls, so the cost can exceed it by one call (pi: or one compaction). "
+            "claude enforces it itself and defaults to AMICUS_CLAUDE_MAX_BUDGET_USD (1.00); "
+            "amicus enforces it for pi from "
             "pi's stream, with no cap unless AMICUS_PI_MAX_BUDGET_USD is set, and stops as "
             "budget_exceeded a pi run that would continue after a model call whose cost the "
             "provider did not report. Unset keys "

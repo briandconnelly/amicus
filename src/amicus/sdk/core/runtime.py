@@ -342,7 +342,9 @@ def _wait_streaming(  # noqa: PLR0915
         try:
             reason = probe[0](line)
         except Exception:
-            logger.exception("stop_on_line probe failed; it is no longer consulted")
+            # The probe reads stdout, which can echo a prompt input (AGENTS.md rule 18), so
+            # nothing of the exception is logged: not its message, type or traceback.
+            logger.error("stop_on_line probe failed; it is no longer consulted")
             probe.clear()
             return
         if reason is not None:

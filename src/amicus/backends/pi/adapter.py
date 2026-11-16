@@ -448,6 +448,13 @@ class PiBackend:
         A zero-exit run with no answer text is `empty_response`: a success with nothing in it
         would launder the loss into a result."""
         run = outcome.run
+        if run.stop_reason == budget.AFTER_FINAL and not run.timed_out:
+            # amicus killed post-answer work: judge the run by what pi had settled on.
+            if normalize.failed_stop(self._events(outcome)) is not None:
+                return self._classify(outcome, request)
+            if normalize.extract_final_message(self._events(outcome)):
+                return None
+            return ClassifiedFailure(code="empty_response", detail=EMPTY_RESPONSE_DETAIL)
         if run.stop_reason in budget.REASONS:
             return cli.budget_failure(run.stop_reason, self._budget(request))
         if normalize.failed_stop(self._events(outcome)) is not None:

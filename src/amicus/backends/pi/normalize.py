@@ -135,16 +135,28 @@ def parse_event_metadata(events: str) -> tuple[Usage | None, str | None]:
     return _usage(events), session_id
 
 
+def _usage_blobs(events: str):
+    """Each model call's usage: every assistant message's, and every finished compaction's,
+    whose summary calls produce no message of their own (#454 review)."""
+    for event in _events(events):
+        message = _assistant_message(event)
+        if message is not None:
+            blob = message.get("usage")
+        elif event.get("type") == "compaction_end" and isinstance(event.get("result"), dict):
+            blob = event["result"].get("usage")
+        else:
+            continue
+        if isinstance(blob, dict):
+            yield blob
+
+
 def _usage(events: str) -> Usage | None:
     counted = 0
     sums = {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "total": 0}
     seen = dict.fromkeys(sums, False)
     cost = 0.0
     cost_ok = True
-    for message in _assistant_messages(events):
-        blob = message.get("usage")
-        if not isinstance(blob, dict):
-            continue
+    for blob in _usage_blobs(events):
         counted += 1
         for key in ("input", "output", "cacheRead", "cacheWrite"):
             value = _int(blob.get(key))

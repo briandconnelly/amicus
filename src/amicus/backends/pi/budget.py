@@ -10,11 +10,16 @@ where pi is about to call a model again:
   later pi adds);
 - `auto_retry_start`, pi retrying a failed call (an "error" message is let through, since
   stopping there would race pi's own exit and hide the real provider error);
-- `compaction_start`, which precedes the compaction's own model calls.
+- `compaction_start`, which precedes the compaction's own model calls;
+- `compaction_end` with `willRetry`, after which pi resumes the interrupted request.
 
 A "stop" message is let through, since its spend is already incurred and stopping would
-only throw its answer away. So, like claude's own cap, it is a stop threshold checked
-between model calls, not a ceiling, and a run can exceed it by one call.
+only throw its answer away. A compaction pi runs after the run has settled (after a "stop",
+or a threshold compaction after an "error") is still stopped over the cap, but as
+`AFTER_FINAL`: the answer stands and the run is not a failure. So, like claude's own cap,
+it is a stop threshold checked between model calls, not a ceiling. A run can exceed it by
+one model call, or by one whole compaction, which pi runs as up to two summary calls with
+its own retries and reports only once they are done.
 
 It fails closed. A cost pi did not get from the provider (`totalFromProvider` not true: pi
 priced it from its own table, or not at all) cannot be measured against the cap, so a run
@@ -31,6 +36,8 @@ from amicus.sdk.core import streamcap
 BUDGET = "budget"
 UNVERIFIABLE = "budget_unverifiable"
 REASONS = frozenset({BUDGET, UNVERIFIABLE})
+# A stop of work pi starts after the run has settled: the answer stands (#454 review).
+AFTER_FINAL = "budget_after_final"
 
 # Stop reasons after which pi will not call the model again on its own; a retry after
 # "error" is announced by `auto_retry_start`, which is a gate below.
@@ -51,6 +58,9 @@ class SpendProbe:
     cap_usd: float
     spent_usd: float = 0.0
     unverified: bool = False
+    # The stopReason of the latest assistant message, which says whether a compaction
+    # that follows continues the request or only tidies up after it.
+    last_stop: object = None
 
     def __call__(self, line: str) -> str | None:
         if streamcap.is_loss_marker(line):
@@ -66,22 +76,34 @@ class SpendProbe:
         if not isinstance(event, dict):
             return None
         kind = event.get("type")
+        if kind == "compaction_start" and self._settled(event.get("reason")):
+            return AFTER_FINAL if self._verdict() is not None else None
         if kind in _GATES:
             return self._verdict()
         if kind == "compaction_end":
             result = event.get("result")
             if isinstance(result, dict) and "usage" in result:
                 self._count(result.get("usage"))
-            return None
+            # pi calls agent.continue() after a compaction that will retry, with no other event
+            # first, so this is the last point before that call (#454 review).
+            return self._verdict() if event.get("willRetry") is True else None
         if kind != "message_end":
             return None
         message = event.get("message")
         if not isinstance(message, dict) or message.get("role") != "assistant":
             return None
         self._count(message.get("usage"))
+        self.last_stop = message.get("stopReason")
         if message.get("stopReason") in _FINAL_STOPS:
             return None
         return self._verdict()
+
+    def _settled(self, reason: object) -> bool:
+        """Whether a compaction starting now follows a settled run. After "stop" pi never
+        continues; after "error" or "aborted" only an overflow compaction retries."""
+        if self.last_stop == "stop":
+            return True
+        return self.last_stop in ("error", "aborted") and reason != "overflow"
 
     def _verdict(self) -> str | None:
         """Whether pi may make its next model call."""
