@@ -20,6 +20,16 @@ per-change, as its own lead says.
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-11-16
+
+This release removes the deprecated `kimi` backend (#423): route Kimi models through `pi`
+with an exact listed `provider/id`, as docs/MIGRATION.md describes. Its other breaking change: a
+delegate that times out now returns the partial diff it left behind, which moves
+`RESULT_FORMAT` to 10, so fetch any result a 0.14.0 server stored before upgrading. `pi` also
+gains a per-call spend cap through `backend_options.max_budget_usd`. The Claude Code slash
+commands are gone in favour of the `collaborating-with-amicus` skill, which is smaller and
+asks before a paid call the user did not request.
+
 ### Added
 
 - **Breaking**: `amicus/0.1/schema-70`, `RESULT_FORMAT` 10. A delegate whose backend times out
@@ -2021,7 +2031,8 @@ per-change rather than net, so they also name intermediate states that no releas
 - The tagged publish path to pypi.org has never run. Only the TestPyPI dispatch path has been exercised.
 - Eval scenario S6 in `skills/collaborating-with-amicus/tests/scenarios.md` passed on one run (status: `pass`, validated by that run alone); an M7 follow-up run against the current skill text did not isolate the still-open F3 finding, so F3 remains open. S7 (real-host approval friction) has failed both of its recorded runs (status: `fail`); an M7 zero-spend recheck reached neither a pass nor a fail and is recorded as inconclusive, so it does not move S7's status. See their `status` fields and ADR 0012.
 
-[Unreleased]: https://github.com/briandconnelly/amicus/compare/v0.14.0...HEAD
+[Unreleased]: https://github.com/briandconnelly/amicus/compare/v0.15.0...HEAD
+[0.15.0]: https://github.com/briandconnelly/amicus/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/briandconnelly/amicus/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/briandconnelly/amicus/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/briandconnelly/amicus/compare/v0.11.1...v0.12.0
