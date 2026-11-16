@@ -814,7 +814,7 @@ def register(
         meta=lifecycle_meta("amicus_models"),
         description=(
             f"{FREE_MARKER} Advisory model slugs for `backend` (pass as `model`) with each "
-            "model's advertised reasoning-effort set; the backend validates the real values. "
+            "model's advisory reasoning efforts; the backend validates the real values. "
             "pi lists exact provider/id rows of providers it holds credentials for. "
             "Not fingerprint-stable; same payload as amicus://models/{backend}."
         ),

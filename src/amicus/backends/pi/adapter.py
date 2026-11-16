@@ -158,9 +158,10 @@ class PiBackend:
                 tool="amicus_models",
                 alternative=(
                     f"Pass one of: {', '.join(allowed)} — or omit reasoning_effort to use the "
-                    "model's default. amicus_models lists each model's declared efforts. "
-                    "Refused locally (zero spend): pi clamps an effort the model lacks "
-                    "instead of rejecting it, so the run would use another level than asked."
+                    "model's default. amicus_models lists pi's vocabulary, or only off for a "
+                    "non-thinking model. "
+                    "Refused locally (zero spend); a listed effort the model lacks is not "
+                    "refused, and pi may run it at another, possibly higher, level."
                 ),
             ),
         )
@@ -340,7 +341,7 @@ class PiBackend:
             allowed = entry.supported_reasoning_efforts or contract.EFFORTS
             if effort not in allowed:
                 return self._effort_refusal(
-                    "the requested reasoning_effort is not one this model supports.", allowed
+                    "the requested reasoning_effort is not one pi accepts for this model.", allowed
                 )
         return self._local_refusal(request)
 
