@@ -623,6 +623,68 @@ def test_pi_eligibility_is_model_aware():
     assert 'that `amicus_models(backend="pi")` lists' in discovery
 
 
+def _pi_model_section() -> str:
+    section = _BACKENDS_REF.partition("\n## Choosing among pi's listed models\n")[2]
+    assert section, "choosing-a-backend.md has no `## Choosing among pi's listed models`"
+    return section.split("\n## ", 1)[0]
+
+
+def test_the_pi_model_section_names_only_fields_the_listing_carries():
+    # The section tells a host which row field answers which question, so a renamed or
+    # removed ModelInfo field has to fail here rather than leave the skill pointing at nothing.
+    from amicus.schemas.results import ModelInfo
+
+    [sources] = [
+        row for row in _pi_model_section().splitlines() if row.startswith("| Roughly how much")
+    ]
+    named = set(re.findall(r"`([a-z_]+)`", sources))
+    assert named == {"context_tokens", "max_output_tokens"}
+    assert named <= set(ModelInfo.model_fields)
+    rules = _flat(_reference_rules("choosing-a-backend.md"))
+    assert "**Read `context_tokens` and `max_output_tokens` as a screen with headroom" in rules
+    assert "`null` means unknown, neither zero nor unlimited" in rules
+
+
+def test_the_pi_model_section_states_the_parsers_own_error_bounds():
+    # pi prints one decimal of K or M, so half of a tenth of the unit is the most the parsed
+    # figure can be off by. The skill quotes both bounds; they are derived, not remembered.
+    from amicus.backends.pi import models
+
+    section = _flat(_pi_model_section())
+    assert models._UNIT["K"] // 20 == 50 and "within about 50 tokens" in section
+    assert models._UNIT["M"] // 20 == 50_000 and "within about 50,000" in section
+    assert models.tokens("131.1K") == 131_100
+
+
+def test_the_pi_model_section_does_not_promise_a_listed_effort():
+    # Observed 2026-11-15: a row listing `medium` ran at `high`, reported on
+    # meta.security_warnings. A thinking row carries pi's whole vocabulary, not the model's.
+    from amicus.backends.pi import contract, models
+
+    listing = models.parse_table(
+        "provider model context max-out thinking images\np m 1K 1K yes no\n"
+    )
+    assert listing is not None
+    assert listing.models[0].supported_reasoning_efforts == contract.EFFORTS
+    section = _flat(_pi_model_section())
+    assert "An effort a row lists is advertised, not guaranteed." in section
+    assert "`meta.security_warnings`" in section
+    assert "It selects a level; it caps neither tokens nor cost." in section
+
+
+def test_candidate_models_are_never_trialled_outside_amicus():
+    # The obligations sit in the Rules block, which Required reading makes a pi route read;
+    # the section below them is explanation and binds nothing.
+    rules = _flat(_reference_rules("choosing-a-backend.md"))
+    assert "**Never trial a candidate `pi` model outside amicus" in rules
+    assert "never put the user's text into a provider's catalog or search tool" in rules
+    assert "never from memory" in rules
+    assert "**Put a free-tier or otherwise differently-termed id to the user" in rules
+    assert "\n- **Never" not in _pi_model_section()
+    # Diversity keeps one owner: the section points at it and restates no vendor rule.
+    assert "by resolved model, never by vendor or backend id" in _flat(_pi_model_section())
+
+
 def test_diversity_is_judged_by_model_not_backend_id():
     composed = _flat(_rules_section("Composed workflows"))
     assert "Judge model diversity by resolved model (`provider/id` where known)" in composed

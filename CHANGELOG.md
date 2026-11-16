@@ -42,6 +42,12 @@ per-change, as its own lead says.
   thousand or a million, so a value is approximate (within 50 tokens in the thousands, within
   50,000 in the millions) and a cell amicus cannot read is `null` rather than a guess. A client
   that validates the result against the previous closed schema must admit the two keys.
+- The `collaborating-with-amicus` skill says how to choose among pi's listed models when the
+  user named none. `references/choosing-a-backend.md` gains four rules — never trial a candidate
+  model outside amicus or put the user's text into a provider's catalog tool, take price and
+  terms from the provider's catalog rather than from memory, read the token limits as a screen
+  with headroom, and put a free-tier id to the user before using it — and a section on what the
+  listing does and does not establish.
 
 ### Changed
 
