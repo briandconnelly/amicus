@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 
+from amicus.backends.pi import budget
 from amicus.schemas.structured import classify_structured
 from amicus.sdk.backend.protocol import Usage
 from amicus.sdk.core import streamcap
@@ -168,17 +169,11 @@ def _usage(events: str) -> Usage | None:
             total = (_int(blob.get("input")) or 0) + (_int(blob.get("output")) or 0)
         sums["total"] += total
         seen["total"] = True
-        blob_cost = blob.get("cost")
-        total_cost = blob_cost.get("total") if isinstance(blob_cost, dict) else None
-        from_provider = isinstance(blob_cost, dict) and blob_cost.get("totalFromProvider") is True
-        if (
-            from_provider
-            and isinstance(total_cost, int | float)
-            and not isinstance(total_cost, bool)
-        ):
-            cost += total_cost
-        else:
+        call_cost = budget.provider_cost(blob)
+        if call_cost is None:
             cost_ok = False
+        else:
+            cost += call_cost
     if counted == 0:
         return None
 

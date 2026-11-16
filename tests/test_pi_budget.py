@@ -109,6 +109,67 @@ def test_an_earlier_unverifiable_message_stops_a_later_continuation():
     assert fresh(_end("toolUse", 0.01)) == budget.UNVERIFIABLE
 
 
+def _raw_cost_end(total: str) -> str:
+    """A toolUse message_end whose cost total is the JSON token `total`, which Python's
+    parser reads where a strict one would not (`NaN`, `Infinity`)."""
+    return (
+        '{"type":"message_end","message":{"role":"assistant","stopReason":"toolUse",'
+        f'"usage":{{"cost":{{"total":{total},"totalFromProvider":true}}}}}}}}'
+    )
+
+
+@pytest.mark.parametrize("total", ["NaN", "Infinity", "-Infinity", "-5.0", "1e999"])
+def test_a_cost_that_is_not_a_finite_non_negative_number_fails_closed(total):
+    """A NaN total made every later comparison false and a negative one refunded the cap,
+    so either let the run continue past it."""
+    probe = budget.SpendProbe(0.05)
+    assert probe(_raw_cost_end(total)) == budget.UNVERIFIABLE
+    assert probe.spent_usd == 0.0
+    assert probe(_end("toolUse", 10.0)) == budget.UNVERIFIABLE
+
+
+def test_a_zero_cost_is_a_measured_cost():
+    probe = budget.SpendProbe(0.05)
+    assert probe(_end("toolUse", 0)) is None
+    assert not probe.unverified
+
+
+def test_a_probe_that_fails_stops_the_run_and_stays_unverifiable(monkeypatch):
+    """The runtime stops consulting a probe that raises, which would leave the run uncapped."""
+    probe = budget.SpendProbe(5.0)
+
+    def boom(_line):
+        raise RuntimeError("unexpected")
+
+    monkeypatch.setattr(budget.json, "loads", boom)
+    assert probe(_end("stop", 0.01)) == budget.UNVERIFIABLE
+    monkeypatch.undo()
+    assert probe(_end("toolUse", 0.01)) == budget.UNVERIFIABLE
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        _raw_cost_end("9" * 5000),  # past Python's integer-conversion digit limit
+        '{"type":"message_end","message":{"role":"assistant"',
+        '{"type":"compaction_end","result":' + "[" * 100_000,
+    ],
+)
+def test_a_watched_event_that_does_not_parse_fails_closed(line):
+    """Its cost was dropped unseen, so a later gate let the run continue uncounted."""
+    probe = budget.SpendProbe(5.0)
+    assert probe(line) == budget.UNVERIFIABLE
+    assert probe(pf.line({"type": "auto_retry_start"})) == budget.UNVERIFIABLE
+
+
+@pytest.mark.parametrize("total", ["NaN", "-1"])
+def test_usage_reports_an_unmeasurable_cost_as_unknown(total):
+    from amicus.backends.pi import normalize
+
+    usage, _ = normalize.parse_event_metadata(_raw_cost_end(total) + "\n")
+    assert usage is not None and usage.cost_usd is None
+
+
 def test_a_cut_line_fails_closed():
     cut = '{"type":"message_end","message":{' + streamcap._LINE_TRUNC_SENTINEL
     assert streamcap.is_loss_marker(cut)
