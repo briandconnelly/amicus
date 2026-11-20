@@ -95,14 +95,24 @@ class TaskJobMap:
     def __init__(self, path: Path) -> None:
         self._path = Path(path)
 
-    def _read(self) -> dict[str, str]:
+    def _load(self) -> dict[str, str]:
+        """The map on disk. A missing file, or one that is not a JSON object, is an empty
+        map. Any other OSError propagates: it says nothing about what the file holds, so
+        a writer that took it for an empty map would replace every entry with its own."""
         try:
             raw = json.loads(self._path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
+        except (FileNotFoundError, ValueError):
             return {}
         if not isinstance(raw, dict):
             return {}
         return {str(k): str(v) for k, v in raw.items()}
+
+    def _read(self) -> dict[str, str]:
+        """``_load`` for a lookup, which writes nothing: a failed read is an empty map."""
+        try:
+            return self._load()
+        except OSError:
+            return {}
 
     def entries(self) -> dict[str, str]:
         return self._read()
@@ -124,7 +134,8 @@ class TaskJobMap:
     def record(self, task_id: str, job_id: str) -> None:
         """Read-modify-write the whole map under an exclusive cross-process lock, so
         concurrent tasked runs never clobber each other's entries. Raises OSError (never
-        blocks indefinitely) if the lock cannot be taken within LOCK_ACQUIRE_TIMEOUT_S.
+        blocks indefinitely) if the lock cannot be taken within LOCK_ACQUIRE_TIMEOUT_S, or
+        if the existing map cannot be read, in which case nothing is written.
 
         Prunes under the SAME lock, before writing: once the map would hold more than
         MAX_ENTRIES, the oldest entries (by insertion order, i.e. JSON object key order —
@@ -138,7 +149,7 @@ class TaskJobMap:
         try:
             _acquire_flock(lock_fd, LOCK_ACQUIRE_TIMEOUT_S)
             try:
-                data = self._read()
+                data = self._load()
                 data[task_id] = job_id
                 if len(data) > MAX_ENTRIES:
                     for stale_task_id in list(data)[: len(data) - MAX_ENTRIES]:
