@@ -94,7 +94,9 @@ _TERMINATING: set[Path] = set()
 # it has published in ``_TERMINATING`` (added at the same point, under ``_LOCK``), or
 # ``None`` outside one. It is also the nesting flag: a nested section sees it set and
 # lets ``_Overrun`` propagate to the outermost, the only frame whose exit really releases
-# ``_LOCK`` and the record flock, and the outermost clears whatever it published.
+# ``_LOCK`` and the record flock, and the outermost clears whatever it published. Also
+# ``stopped``: jobs this section terminated whose finalization could not read their
+# result, left for the retried body to read inside its caller's own handler.
 _SECTION = threading.local()
 
 # The only job-id shape this store ever mints (``uuid4().hex``). A job id is used
@@ -524,11 +526,15 @@ class JobStore:
         without a timeout and the job is finalized there (``_finalize_overrun``), so its
         outcome never depends on the retry reaching it again. The retry then re-reads
         everything from disk under its own locks. Each finalization stamps the job, or
-        finds it stamped or gone, so it never overruns again and the retries end."""
+        finds it stamped or gone, so it never overruns again and the retries end; one
+        that cannot read the result stamps nothing, and the job joins ``stopped``, which
+        ``_status_of`` finalizes in place rather than terminating again, so a worker that
+        survived its signals cannot make the retries loop either."""
         if getattr(_SECTION, "published", None) is not None:
             return attempt()
         published: set[Path] = set()
-        _SECTION.published = published
+        stopped: set[Path] = set()
+        _SECTION.published, _SECTION.stopped = published, stopped
         try:
             while True:
                 try:
@@ -543,9 +549,16 @@ class JobStore:
                     with _LOCK, self._ws_record_lock(jd.parent):
                         _TERMINATING.discard(jd)
                         published.discard(jd)
-                        self._finalize_overrun(jd)
+                        try:
+                            self._finalize_overrun(jd)
+                        except ResultUnreadable:
+                            # Not raised here, outside the body: the retried body reads
+                            # the stopped job itself and raises it inside its caller's
+                            # own handler (counted as held, skipped, DELETE_FAILED, the
+                            # retention bound), as before #531. Nothing is stamped.
+                            stopped.add(jd)
         finally:
-            _SECTION.published = None
+            _SECTION.published = _SECTION.stopped = None
             if published:
                 # A termination or finalization that raised: release its marker, so this
                 # process does not read the job as running forever.
@@ -999,6 +1012,17 @@ class JobStore:
             return "running"  # a thread is terminating it and will finalize it
         if self._job_running(jd, meta):
             if time.time() > meta.get("deadline_epoch", float("inf")):
+                if jd in (getattr(_SECTION, "stopped", None) or ()):
+                    # Terminated by this section yet still read as running (a worker that
+                    # survived its signals): finalize it as the in-lock path did, never
+                    # terminate it again, so the retries end.
+                    env = self._read_envelope(jd)
+                    if env is not None:
+                        self._mark_done(jd, meta, env)
+                        return "done"
+                    manifest = self._read_cleanup_manifest(jd)
+                    self._finalize_cleanup(jd, meta, "timeout", manifest)
+                    return "timeout"
                 # Published and owned in one step, so the section that must clear the
                 # marker always knows of it.
                 _TERMINATING.add(jd)

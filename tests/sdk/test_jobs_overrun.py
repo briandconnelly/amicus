@@ -13,6 +13,7 @@ import os
 import sys
 import threading
 import time
+from pathlib import Path
 
 import pytest
 
@@ -41,6 +42,39 @@ def _overrun_job(store: JobStore, cwd: str) -> tuple[str, int]:
     meta["deadline_epoch"] = time.time() - 1  # already overran
     store._write_meta(jd, meta)
     return job_id, meta["pid"]
+
+
+def _bounded(fn):
+    """Run ``fn`` on its own thread and require it to finish within ``_WAIT``, so a call
+    that blocks on the store's locks fails the test instead of hanging the suite."""
+    out: list = []
+
+    def run() -> None:
+        try:
+            out.append((True, fn()))
+        except BaseException as exc:
+            out.append((False, exc))
+
+    t = threading.Thread(target=run, daemon=True)
+    t.start()
+    t.join(_WAIT)
+    assert not t.is_alive(), "store call blocked while a termination was in its grace"
+    ok, value = out[0]
+    if not ok:
+        raise value
+    return value
+
+
+def _deny_result_read(monkeypatch, jd) -> None:
+    """result.json is present but its open fails, as a permission blip would."""
+    real_read_text = Path.read_text
+
+    def denied(self, *args, **kwargs):
+        if self == jd / "result.json":
+            raise PermissionError("result read denied")
+        return real_read_text(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", denied)
 
 
 def _flock_free(path) -> bool:
@@ -222,11 +256,12 @@ def test_concurrent_readers_of_one_overrun_job_terminate_it_once(tmp_path, monke
     try:
         t.start()
         assert entered.wait(_WAIT)
-        assert store.status(cwd, job_id)["status"] == "running"
-        assert [s["status"] for s in store.list_jobs(cwd)] == ["running"]
+        assert _bounded(lambda: store.status(cwd, job_id))["status"] == "running"
+        assert [s["status"] for s in _bounded(lambda: store.list_jobs(cwd))] == ["running"]
         with pytest.raises(job_store.JobCapReached):  # held, not evicted, mid-termination
-            store.start(_factory("pass"), cwd, kind="k")
-        assert store.discard(cwd, job_id, expected="failed") is DiscardOutcome.STATE_CHANGED
+            _bounded(lambda: store.start(_factory("pass"), cwd, kind="k"))
+        discarded = _bounded(lambda: store.discard(cwd, job_id, expected="failed"))
+        assert discarded is DiscardOutcome.STATE_CHANGED
     finally:
         release.set()
         t.join(_WAIT)
@@ -334,10 +369,13 @@ def test_cancel_during_overrun_termination_finalizes_timeout(tmp_path, monkeypat
     entered, release = threading.Event(), threading.Event()
     real_pid = pid
 
+    paused: list[int] = []
+
     def fake_terminate(pid, grace_seconds, **kwargs):
-        if threading.current_thread() is not threading.main_thread():
+        if not paused:  # the overrun termination stays paused, no timeout
+            paused.append(pid)
             entered.set()
-            release.wait()  # the overrun termination stays paused, no timeout
+            release.wait()
         job_store._kill_pid_tree(pid)
 
     monkeypatch.setattr(job_store, "_terminate_pid_tree", fake_terminate)
@@ -346,7 +384,7 @@ def test_cancel_during_overrun_termination_finalizes_timeout(tmp_path, monkeypat
     try:
         t.start()
         assert entered.wait(_WAIT)
-        cancelled = store.cancel(cwd, job_id)
+        cancelled = _bounded(lambda: store.cancel(cwd, job_id))
     finally:
         release.set()
         t.join(_WAIT)
@@ -354,3 +392,88 @@ def test_cancel_during_overrun_termination_finalizes_timeout(tmp_path, monkeypat
     assert cancelled["status"] == "timeout"
     assert first[0]["status"] == "timeout"
     assert not job_store._TERMINATING
+
+
+def _overrun_unreadable(store, cwd, monkeypatch, calls):
+    job_id, pid = _overrun_job(store, cwd)
+    jd = store._job_dir(cwd, job_id)
+
+    def fake_terminate(pid, grace_seconds, **kwargs):
+        calls.append(pid)
+        (jd / "result.json").write_text('{"ok": true, "tool": "t"}')
+        job_store._kill_pid_tree(pid)
+        _deny_result_read(monkeypatch, jd)
+
+    monkeypatch.setattr(job_store, "_terminate_pid_tree", fake_terminate)
+    return job_id, pid, jd
+
+
+def _assert_unstamped_and_kept(store, jd):
+    meta = store._read_meta(jd)
+    assert meta is not None and meta.get("terminal_status") is None
+    assert not job_store._TERMINATING
+
+
+def test_start_at_cap_counts_an_unreadable_overrun_as_held(tmp_path, monkeypatch):
+    store = _store(tmp_path, max_count=1)
+    cwd = str(tmp_path)
+    calls: list[int] = []
+    _job_id, pid, jd = _overrun_unreadable(store, cwd, monkeypatch, calls)
+    try:
+        with pytest.raises(job_store.JobCapReached):
+            store.start(_factory("pass"), cwd, kind="k")
+    finally:
+        job_store._kill_pid_tree(pid)
+    assert calls == [pid]
+    _assert_unstamped_and_kept(store, jd)
+
+
+def test_discard_of_an_unreadable_overrun_is_delete_failed(tmp_path, monkeypatch):
+    store = _store(tmp_path)
+    cwd = str(tmp_path)
+    calls: list[int] = []
+    job_id, pid, jd = _overrun_unreadable(store, cwd, monkeypatch, calls)
+    try:
+        assert store.discard(cwd, job_id, expected="timeout") is DiscardOutcome.DELETE_FAILED
+    finally:
+        job_store._kill_pid_tree(pid)
+    assert calls == [pid]
+    _assert_unstamped_and_kept(store, jd)
+
+
+def test_status_of_an_unreadable_overrun_raises_result_unreadable(tmp_path, monkeypatch):
+    store = _store(tmp_path)
+    cwd = str(tmp_path)
+    calls: list[int] = []
+    job_id, pid, jd = _overrun_unreadable(store, cwd, monkeypatch, calls)
+    try:
+        with pytest.raises(job_store.ResultUnreadable):
+            store.status(cwd, job_id)
+    finally:
+        job_store._kill_pid_tree(pid)
+    assert calls == [pid]
+    _assert_unstamped_and_kept(store, jd)
+
+
+def test_a_worker_surviving_termination_is_finalized_not_retried(tmp_path, monkeypatch):
+    # A termination that leaves the worker running and its result unreadable must not
+    # loop: the retry finalizes from what it can read, as the in-lock path did.
+    store = _store(tmp_path)
+    cwd = str(tmp_path)
+    job_id, pid = _overrun_job(store, cwd)
+    jd = store._job_dir(cwd, job_id)
+    calls: list[int] = []
+
+    def fake_terminate(pid, grace_seconds, **kwargs):  # signals nothing
+        calls.append(pid)
+        (jd / "result.json").write_text('{"ok": true, "tool": "t"}')
+        _deny_result_read(monkeypatch, jd)
+
+    monkeypatch.setattr(job_store, "_terminate_pid_tree", fake_terminate)
+    try:
+        with pytest.raises(job_store.ResultUnreadable):
+            _bounded(lambda: store.status(cwd, job_id))
+    finally:
+        job_store._kill_pid_tree(pid)
+    assert calls == [pid]
+    _assert_unstamped_and_kept(store, jd)
