@@ -8,6 +8,8 @@ terminates it unlocked and re-validates the record before finalizing it.
 
 from __future__ import annotations
 
+import fcntl
+import os
 import sys
 import threading
 import time
@@ -41,8 +43,28 @@ def _overrun_job(store: JobStore, cwd: str) -> tuple[str, int]:
     return job_id, meta["pid"]
 
 
-def _locks_free() -> bool:
-    """From another thread: is ``_LOCK`` free, and is no record flock held?"""
+def _flock_free(path) -> bool:
+    """Can a separate file descriptor take this flock right now? No lock dir yet means
+    nobody holds it."""
+    if not path.parent.is_dir():
+        return True
+    fd = os.open(path, os.O_CREAT | os.O_RDWR, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        return False
+    else:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        return True
+    finally:
+        os.close(fd)
+
+
+def _locks_free(store: JobStore, cwd: str) -> bool:
+    """From another thread: are ``_LOCK``, the record flock and the index flock free?"""
+    ws = store._ws_dir(cwd)
+    if not (_flock_free(ws / ".records.lock") and _flock_free(ws / ".idem" / ".lock")):
+        return False
     seen: list[bool] = []
 
     def probe() -> None:
@@ -68,7 +90,7 @@ def test_status_in_another_workspace_finishes_during_termination_grace(tmp_path,
 
     def fake_terminate(pid, grace_seconds, **kwargs):
         entered.set()
-        release.wait(_WAIT)  # still inside the grace period until released
+        release.wait()  # inside the grace period until the test has looked, no timeout
         job_store._kill_pid_tree(pid)
 
     monkeypatch.setattr(job_store, "_terminate_pid_tree", fake_terminate)
@@ -119,7 +141,7 @@ def test_every_entry_point_terminates_an_overrun_job_unlocked(tmp_path, monkeypa
     calls: list[bool] = []
 
     def fake_terminate(pid, grace_seconds, **kwargs):
-        calls.append(_locks_free())
+        calls.append(_locks_free(store, cwd))
         job_store._kill_pid_tree(pid)
 
     monkeypatch.setattr(job_store, "_terminate_pid_tree", fake_terminate)
@@ -191,7 +213,7 @@ def test_concurrent_readers_of_one_overrun_job_terminate_it_once(tmp_path, monke
     def fake_terminate(pid, grace_seconds, **kwargs):
         calls.append(pid)
         entered.set()
-        release.wait(_WAIT)
+        release.wait()  # held until the test has made its checks, no timeout
         job_store._kill_pid_tree(pid)
 
     monkeypatch.setattr(job_store, "_terminate_pid_tree", fake_terminate)
@@ -222,7 +244,7 @@ def test_make_room_terminates_then_evicts_an_overrun_job(tmp_path, monkeypatch):
     job_id, pid = _overrun_job(store, cwd)
 
     def fake_terminate(pid, grace_seconds, **kwargs):
-        assert _locks_free()
+        assert _locks_free(store, cwd)
         job_store._kill_pid_tree(pid)
 
     monkeypatch.setattr(job_store, "_terminate_pid_tree", fake_terminate)
@@ -251,3 +273,84 @@ def test_termination_error_releases_the_job(tmp_path, monkeypatch):
         assert store.status(cwd, job_id)["status"] == "timeout"
     finally:
         job_store._kill_pid_tree(pid)
+
+
+def _declare(store: JobStore, cwd: str, job_id: str, root) -> object:
+    wt = root / "wt-leak"
+    wt.mkdir()
+    (store._job_dir(cwd, job_id) / "cleanup.json").write_text(
+        '{"paths": ["%s"]}' % wt  # noqa: UP031
+    )
+    return wt
+
+
+def test_overrun_is_finalized_even_when_the_retry_gives_up(tmp_path, monkeypatch):
+    # start_idempotent's retry runs under what is left of lock_timeout; here the index
+    # flock is held when it retries, so it returns in_progress without revisiting the
+    # job. The job is still stamped timeout, with its declared paths cleaned up.
+    root = tmp_path / "wtroot"
+    root.mkdir()
+    store = _store(tmp_path, cleanup_root=root, cleanup_prefix="wt-")
+    cwd = str(tmp_path / "w")
+    job_id, pid = _overrun_job(store, cwd)
+    wt = _declare(store, cwd, job_id, root)
+    idx = store._ws_dir(cwd) / ".idem" / ".lock"
+    blocker: list[int] = []
+
+    def fake_terminate(pid, grace_seconds, **kwargs):
+        job_store._kill_pid_tree(pid)
+        fd = os.open(idx, os.O_CREAT | os.O_RDWR, 0o600)
+        fcntl.flock(fd, fcntl.LOCK_EX)  # a peer process takes the index meanwhile
+        blocker.append(fd)
+
+    monkeypatch.setattr(job_store, "_terminate_pid_tree", fake_terminate)
+    try:
+        out = store.start_idempotent(
+            _factory("pass"),
+            cwd,
+            kind="k",
+            tool="t",
+            key="k1",
+            arg_hash=idempotency.arg_hash({}),
+            lock_timeout=0.0,
+        )
+    finally:
+        for fd in blocker:
+            os.close(fd)
+        job_store._kill_pid_tree(pid)
+    assert out == {"kind": idempotency.IN_PROGRESS}
+    meta = store._read_meta(store._job_dir(cwd, job_id))
+    assert meta["terminal_status"] == "timeout"
+    assert not wt.exists()
+    assert not job_store._TERMINATING
+
+
+def test_cancel_during_overrun_termination_finalizes_timeout(tmp_path, monkeypatch):
+    # A cancel that lands while another thread terminates the overrun job must not
+    # stamp it cancelled: it timed out, as a cancel serialized behind it used to see.
+    store = _store(tmp_path)
+    cwd = str(tmp_path)
+    job_id, pid = _overrun_job(store, cwd)
+    entered, release = threading.Event(), threading.Event()
+    real_pid = pid
+
+    def fake_terminate(pid, grace_seconds, **kwargs):
+        if threading.current_thread() is not threading.main_thread():
+            entered.set()
+            release.wait()  # the overrun termination stays paused, no timeout
+        job_store._kill_pid_tree(pid)
+
+    monkeypatch.setattr(job_store, "_terminate_pid_tree", fake_terminate)
+    first: list[dict | None] = []
+    t = threading.Thread(target=lambda: first.append(store.status(cwd, job_id)))
+    try:
+        t.start()
+        assert entered.wait(_WAIT)
+        cancelled = store.cancel(cwd, job_id)
+    finally:
+        release.set()
+        t.join(_WAIT)
+        job_store._kill_pid_tree(real_pid)
+    assert cancelled["status"] == "timeout"
+    assert first[0]["status"] == "timeout"
+    assert not job_store._TERMINATING

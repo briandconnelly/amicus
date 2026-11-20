@@ -86,13 +86,15 @@ _RECORD_LOCKS: dict[Path, list[int]] = {}
 # Job dirs whose overrun worker a thread of this process is terminating with the locks
 # released (#531). Touched only under ``_LOCK``. Every other thread reads such a job as
 # ``running`` until the terminating thread re-takes the locks and finalizes it, so it is
-# never reported ``failed``, reaped, evicted or terminated a second time meanwhile.
+# never reported ``failed``, reaped, evicted or terminated a second time meanwhile, and a
+# ``cancel`` that stops it in that window finalizes it as the overrun it is.
 _TERMINATING: set[Path] = set()
 
-# Per-thread state of the outermost locked section running on this thread: the job dirs
-# it has terminated and must finalize on its next pass, or ``None`` outside one. A
-# nested section sees it set and lets ``_Overrun`` propagate to the outermost, which is
-# the only frame whose exit really releases ``_LOCK`` and the record flock.
+# Per-thread state of the outermost locked section running on this thread: the markers
+# it has published in ``_TERMINATING`` (added at the same point, under ``_LOCK``), or
+# ``None`` outside one. It is also the nesting flag: a nested section sees it set and
+# lets ``_Overrun`` propagate to the outermost, the only frame whose exit really releases
+# ``_LOCK`` and the record flock, and the outermost clears whatever it published.
 _SECTION = threading.local()
 
 # The only job-id shape this store ever mints (``uuid4().hex``). A job id is used
@@ -106,8 +108,9 @@ _JOB_ID_RE = re.compile(r"[0-9a-f]{32}")
 class _Overrun(Exception):
     """Raised by ``_status_of`` under the locks for a running job past its deadline,
     after marking it in ``_TERMINATING``. The outermost locked section catches it,
-    terminates the worker with the locks released, and runs its body again, whose
-    ``_status_of`` then finalizes the job from a fresh read (#531)."""
+    terminates the worker with the locks released, re-takes them to finalize the job
+    from a fresh read, and runs its body again (#531). The job dir's parent is the
+    workspace dir whose record lock that finalization takes."""
 
     def __init__(self, jd: Path, meta: dict) -> None:
         super().__init__(jd.name)
@@ -469,14 +472,21 @@ class JobStore:
         job as ``failed`` (#237). Every section that reads, writes or deletes records
         takes it, so a delete and its restore are atomic to every reader. Lock order
         is ``_LOCK``, then the idempotency index's flock, then this; nothing takes them
-        in another order. No section waits for a worker to exit while holding any of
-        them: an overrun worker is terminated with all three released (#531,
-        ``_terminate_overruns``). The workspace directory is created if it is missing, since
+        in another order. An overrun worker is terminated with all three released
+        (#531, ``_terminate_overruns``), as ``cancel`` terminates; the one wait for a
+        worker under them is ``start``'s rollback of a worker it spawned but could not
+        record. The workspace directory is created if it is missing, since
         another process can create it, and records in it, during this section; a lock
         that cannot be opened or taken raises rather than letting the section run
         unlocked. ``timeout`` bounds the wait as ``IdempotencyIndex.lock``'s does,
         raising ``idempotency.LockTimeout``; a nested section never waits."""
-        ws = self._ws_dir(cwd)
+        with self._ws_record_lock(self._ws_dir(cwd), timeout=timeout):
+            yield
+
+    @staticmethod
+    @contextlib.contextmanager
+    def _ws_record_lock(ws: Path, *, timeout: float | None = None) -> Generator[None]:
+        """``_record_lock`` for a workspace dir rather than a cwd."""
         held = _RECORD_LOCKS.get(ws)
         if held is not None:
             held[1] += 1
@@ -502,43 +512,65 @@ class JobStore:
 
     def _terminate_overruns(self, attempt: Callable[[], _T]) -> _T:
         """Run ``attempt`` (which takes ``_LOCK`` and the record flock itself), and for
-        each overrun job it meets, terminate the worker with every lock released, then
-        run it again (#531).
+        each overrun job it meets, terminate the worker with every lock released,
+        finalize it, then run ``attempt`` again (#531).
 
-        ``_status_of`` never waits for a worker: on an overrun it marks the job in
+        ``_status_of`` never waits for a worker: on an overrun it publishes the job in
         ``_TERMINATING`` and raises ``_Overrun``, which unwinds ``attempt`` and so
         releases its locks. Only the outermost section on a thread does this; a nested
         one (``start`` inside ``start_idempotent``, the index's resolve) runs ``attempt``
         directly, because leaving a nested ``with`` does not release a re-entrant lock.
-        The retry re-reads everything from disk under the locks, so a record finished,
-        finalized, discarded or evicted in the gap is seen as it now is; a job this
-        section terminated is finalized there, as ``done`` if its result appeared and
-        ``timeout`` otherwise. Each pass terminates a job it has not terminated before,
-        so the retries end."""
-        if getattr(_SECTION, "terminated", None) is not None:
+        Once the worker is stopped, ``_LOCK`` and that job's record lock are taken
+        without a timeout and the job is finalized there (``_finalize_overrun``), so its
+        outcome never depends on the retry reaching it again. The retry then re-reads
+        everything from disk under its own locks. Each finalization stamps the job, or
+        finds it stamped or gone, so it never overruns again and the retries end."""
+        if getattr(_SECTION, "published", None) is not None:
             return attempt()
-        terminated: set[Path] = set()
-        _SECTION.terminated = terminated
+        published: set[Path] = set()
+        _SECTION.published = published
         try:
             while True:
                 try:
                     return attempt()
                 except _Overrun as overrun:
                     jd, meta = overrun.jd, overrun.meta
-                    terminated.add(jd)
                     _terminate_pid_tree(
                         _meta_pid(meta),
                         self.terminate_grace_seconds,
                         is_alive=lambda jd=jd, meta=meta: self._job_running(jd, meta),
                     )
+                    with _LOCK, self._ws_record_lock(jd.parent):
+                        _TERMINATING.discard(jd)
+                        published.discard(jd)
+                        self._finalize_overrun(jd)
         finally:
-            _SECTION.terminated = None
-            if terminated:
-                # Normally emptied as each job is finalized; this covers a termination
-                # that raised, or a retry that never revisited the job, so the job is
-                # not read as running by this process forever.
+            _SECTION.published = None
+            if published:
+                # A termination or finalization that raised: release its marker, so this
+                # process does not read the job as running forever.
                 with _LOCK:
-                    _TERMINATING.difference_update(terminated)
+                    _TERMINATING.difference_update(published)
+
+    def _finalize_overrun(self, jd: Path) -> tuple[dict, str] | None:
+        """Finalize an overrun job whose worker was just stopped, under ``_LOCK`` and its
+        record lock, from a fresh read: ``None`` if the record is gone, its stamp if it
+        has one, else ``done`` if the worker wrote its result in time (result-first),
+        else ``timeout`` with its declared paths cleaned up (the manifest re-read now).
+        An unreadable result raises ``ResultUnreadable`` with nothing written: the worker
+        is stopped either way, and the next read finalizes what it can then see."""
+        meta = self._read_meta(jd)
+        if meta is None:
+            return None
+        terminal = meta.get("terminal_status")
+        if terminal:
+            return meta, terminal
+        env = self._read_envelope(jd)
+        if env is not None:
+            self._mark_done(jd, meta, env)
+            return meta, "done"
+        self._finalize_cleanup(jd, meta, "timeout", self._read_cleanup_manifest(jd))
+        return meta, "timeout"
 
     def _locked(self, cwd: str, body: Callable[[], _T]) -> _T:
         """Run ``body`` under ``_LOCK`` and the workspace's record lock, terminating
@@ -950,12 +982,11 @@ class JobStore:
         """Compute the live status, finalizing a job that overran once it is stopped.
 
         Never waits for a worker, since every caller holds ``_LOCK`` and the record
-        lock (#531). A running job past its deadline is marked in ``_TERMINATING`` and
-        reported by raising ``_Overrun``; the outermost locked section terminates it with
-        the locks released and reads again, and that read, finding the job among the
-        ones this section terminated, finalizes it as the old in-lock path did: ``done``
-        if the worker wrote its result, else ``timeout`` with its declared paths cleaned
-        up. A job another thread of this process is terminating reads as ``running``.
+        lock (#531). A running job past its deadline is published in ``_TERMINATING``
+        and reported by raising ``_Overrun``; the outermost locked section terminates it
+        with the locks released and finalizes it (``_finalize_overrun``) as the old
+        in-lock path did. A job a thread of this process is terminating reads as
+        ``running``.
 
         Raises ``ResultUnreadable`` when a stopped worker's result.json exists but cannot
         be read (#280): the job is then neither finalized nor reported, since reading it
@@ -964,24 +995,16 @@ class JobStore:
         terminal = meta.get("terminal_status")
         if terminal:
             return terminal
-        if jd in (getattr(_SECTION, "terminated", None) or ()):
-            # This section terminated the overrun worker with the locks released; meta
-            # is a fresh read taken since. The worker may have completed during the
-            # grace window — prefer its result over masking it as a timeout (result-
-            # first finalization). An unreadable one propagates: the worker is stopped
-            # either way, and the next read finalizes whichever it can then see.
-            _TERMINATING.discard(jd)
-            env = self._read_envelope(jd)
-            if env is not None:
-                self._mark_done(jd, meta, env)
-                return "done"
-            self._finalize_cleanup(jd, meta, "timeout", self._read_cleanup_manifest(jd))
-            return "timeout"
         if jd in _TERMINATING:
-            return "running"  # another thread is terminating it and will finalize it
+            return "running"  # a thread is terminating it and will finalize it
         if self._job_running(jd, meta):
             if time.time() > meta.get("deadline_epoch", float("inf")):
+                # Published and owned in one step, so the section that must clear the
+                # marker always knows of it.
                 _TERMINATING.add(jd)
+                owned = getattr(_SECTION, "published", None)
+                if owned is not None:
+                    owned.add(jd)
                 raise _Overrun(jd, meta)
             return "running"
         env = self._read_envelope(jd)
@@ -1338,6 +1361,11 @@ class JobStore:
             is_alive=lambda m=meta: self._job_running(jd, m),
         )
         with _LOCK, self._record_lock(cwd):
+            if jd in _TERMINATING:
+                # A thread is terminating it as an overrun: finalize it as that, never
+                # as cancelled, as the cancel would have found it before #531.
+                done = self._finalize_overrun(jd)
+                return None if done is None else self._status_dict(jd, *done)
             # Re-validate: during the unlocked grace window the record may have been
             # consumed/evicted, finalized by another path, or the worker may have
             # finished on its own. Re-read fresh state and never clobber it.
