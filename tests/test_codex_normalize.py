@@ -102,3 +102,13 @@ def test_parse_structured_refuses_a_repeated_key_instead_of_keeping_the_last():
     text = '{"summary":"s","findings":[{"title":"t"}],"findings":[]}'
     assert normalize.parse_structured(text) is None
     assert normalize.classify_structured(text) == ("invalid_json", None)
+
+
+def test_a_raw_unicode_line_separator_inside_an_event_does_not_split_it():
+    # serde_json writes U+2028, U+2029 and U+0085 raw inside a string, and str.splitlines()
+    # treats each as a line boundary; the stream's only record separator is "\n".
+    for sep in ("\u2028", "\u2029", "\u0085"):
+        event = {"type": "session.created", "session_id": "sess-123", "note": f"a{sep}b"}
+        events = json.dumps(event, ensure_ascii=False) + "\n"
+        assert sep in events
+        assert normalize.parse_event_metadata(events)[1] == "sess-123"
