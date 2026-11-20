@@ -17,6 +17,7 @@ from jsonschema import Draft202012Validator
 
 from amicus import config, server
 from amicus.jobs import delivery, lifecycle, lookup
+from amicus.jobs import store as job_store_mod
 from amicus.jobs.store import DiscardOutcome, JobStore, ResultUnreadable
 from amicus.registry import BackendRegistry
 
@@ -1402,3 +1403,40 @@ async def test_a_stored_error_repair_naming_a_removed_backend_is_made_callable(
     assert repair.get("arguments") == expected_arguments
     assert repair["next_step"] == "use_allowed_value"
     assert json.loads((jd / "result.json").read_text())["error"]["repair"]["tool"] == tool
+
+
+async def test_cancel_whose_meta_read_fails_before_signalling_says_so(
+    app, store, tmp_path, monkeypatch
+):
+    """#530: a cancel whose first read of meta.json fails has signalled nothing, so the
+    envelope never claims the worker is stopped and its free repair is the cancel again."""
+    monkeypatch.setenv("FAKE_CODEX_SLEEP", "30")
+    cwd = str(tmp_path)
+    ws = {"workspace_root": cwd}
+    signals: list = []
+    monkeypatch.setattr(job_store_mod, "_terminate_pid_tree", lambda *a, **k: signals.append(a))
+    async with Client(app) as c:
+        schemas = await _schemas(c)
+        job_id = await _start(c, tmp_path)
+        jd = store._job_dir(cwd, job_id)
+        real_read_text = Path.read_text
+
+        def denied(self, *args, **kwargs):
+            if self == jd / "meta.json":
+                raise PermissionError("meta read denied")
+            return real_read_text(self, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "read_text", denied)
+        res = await c.call_tool("amicus_job_cancel", {"job_id": job_id, **ws}, raise_on_error=False)
+        monkeypatch.setattr(Path, "read_text", real_read_text)
+        assert res.is_error
+        body = res.structured_content
+        schemas["amicus_job_cancel"].validate(body)
+        _assert_unreadable(body, repair_tool="amicus_job_cancel", job_id=job_id, ws=ws)
+        msg = body["error"]["message"]
+        assert "no further cancel" not in msg and "not signalled" in msg
+        assert "job record" in msg and "stored result" not in msg
+        assert signals == []
+        assert store.status(cwd, job_id)["status"] == "running"
+        monkeypatch.undo()
+        store.cancel(cwd, job_id)

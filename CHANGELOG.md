@@ -28,7 +28,9 @@ per-change, as its own lead says.
   as a missing or expired job: status, result, cancel and consume report it as the temporary,
   re-readable storage error an unreadable result already gets, and an idempotency key keeps
   replaying to that job rather than being reclaimed. A listing still omits the record until it
-  reads back, and a missing or unparsable `meta.json` is treated as before.
+  reads back, and a missing or unparsable `meta.json` is treated as before. A cancel whose
+  read of the record fails before it signalled the worker says the worker's state is unknown and
+  names the cancel as the call to retry, rather than claiming the worker is stopped.
 
 - `pi` no longer returns an earlier assistant message as the answer when the final one
   contains a raw U+2028, U+2029 or U+0085. The event stream was split with

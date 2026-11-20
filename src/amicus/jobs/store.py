@@ -100,13 +100,26 @@ class ResultUnreadable(Exception):
     ``failed`` (whose repair says to pay again). Carries ``errno`` only: the message of
     an ``OSError`` can name a path, which never leaves the store.
 
-    ``_read_meta`` raises it too, for a ``meta.json`` that exists but cannot be read
-    (#530): the record's state is just as unknowable, and the same guarantees hold.
+    ``_read_meta`` raises the subclass ``MetaUnreadable`` for a ``meta.json`` that
+    exists but cannot be read (#530): the record's state is just as unknowable, and the
+    same guarantees hold.
     """
 
     def __init__(self, errno: int | None) -> None:
         super().__init__(f"result unreadable (errno {errno})")
         self.errno = errno
+
+
+class MetaUnreadable(ResultUnreadable):
+    """A job's ``meta.json`` exists but could not be read (#530). Unlike an unreadable
+    result, which a read reaches only once the worker is stopped, this can meet a running
+    worker. ``signalled`` is True only when ``cancel`` raised it after signalling the
+    worker; otherwise nothing is known about the worker, and nothing was sent to it."""
+
+    def __init__(self, errno: int | None, *, signalled: bool = False) -> None:
+        super().__init__(errno)
+        self.args = (f"job record unreadable (errno {errno})",)
+        self.signalled = signalled
 
 
 class DiscardOutcome(StrEnum):
@@ -512,7 +525,7 @@ class JobStore:
         except FileNotFoundError:
             return None
         except OSError as exc:
-            raise ResultUnreadable(exc.errno) from None
+            raise MetaUnreadable(exc.errno) from None
         try:
             return json.loads(text)
         except json.JSONDecodeError:
@@ -1227,7 +1240,11 @@ class JobStore:
             # Re-validate: during the unlocked grace window the record may have been
             # consumed/evicted, finalized by another path, or the worker may have
             # finished on its own. Re-read fresh state and never clobber it.
-            meta = self._read_meta(jd)
+            try:
+                meta = self._read_meta(jd)
+            except MetaUnreadable as exc:
+                exc.signalled = True  # the worker was signalled before this read failed
+                raise
             if meta is None:
                 return None  # consumed or expired while we waited
             terminal = meta.get("terminal_status")

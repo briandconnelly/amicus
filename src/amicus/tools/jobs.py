@@ -22,7 +22,7 @@ from amicus.jobs.delivery import (
     unreadable_result_envelope,
 )
 from amicus.jobs.polling import job_status_arguments
-from amicus.jobs.store import MAX_POLL_AFTER_MS, ResultUnreadable
+from amicus.jobs.store import MAX_POLL_AFTER_MS, MetaUnreadable, ResultUnreadable
 from amicus.schemas.envelope import InvalidArgument
 from amicus.schemas.params import (
     MAX_STATUS_WAIT_SECONDS,
@@ -115,17 +115,24 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
             if row is not None and cancel and lookup.backend_of(row) is not None:
                 row = await asyncio.to_thread(store().cancel, cwd, job_id)
         except ResultUnreadable as exc:
-            # The store raises only for a stopped worker whose result exists but cannot
-            # be read (#280): report that, never a state. A cancel's worker is stopped
-            # whether this came from its first read or its post-termination one.
+            # Report the read error, never a state. An unreadable result is met only once
+            # the worker is stopped (#280), so a cancel's worker is stopped then. An
+            # unreadable job record (#530) can meet a running worker: it is stopped only
+            # when the store signalled it before the read failed, and otherwise the
+            # free repair is the cancel itself.
+            record = isinstance(exc, MetaUnreadable)
+            stopped = cancel and (not record or (isinstance(exc, MetaUnreadable) and exc.signalled))
+            unsent = cancel and not stopped
             return unreadable_result_envelope(
                 lookup.job_meta(cwd, source, roots_source),
-                tool="amicus_job_status",
-                next_step="poll_job_status",
+                tool="amicus_job_cancel" if unsent else "amicus_job_status",
+                next_step="retry_after_delay" if unsent else "poll_job_status",
                 arguments=job_status_arguments(job_id, workspace_root),
                 job_id=job_id,
                 errno=exc.errno,
-                signalled=cancel,
+                signalled=stopped,
+                record=record,
+                unsent_cancel=unsent,
             )
         if row is None or lookup.backend_of(row) is None:
             return lookup.job_not_found(
@@ -161,6 +168,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
                 arguments={**job_status_arguments(job_id, workspace_root), "detail": detail},
                 job_id=job_id,
                 errno=exc.errno,
+                record=isinstance(exc, MetaUnreadable),
             )
         backend = lookup.backend_of(rec) if rec is not None else None
         if rec is None or backend is None:

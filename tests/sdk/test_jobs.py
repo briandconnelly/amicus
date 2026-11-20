@@ -2600,3 +2600,25 @@ def test_a_record_whose_meta_cannot_be_read_is_never_reported_absent(tmp_path, m
     assert store.list_jobs(cwd) == []  # a listing omits what it cannot read
     monkeypatch.undo()
     assert store.status(cwd, first)["status"] == "failed"
+
+
+def test_cancel_whose_meta_read_fails_after_signalling_finalizes_nothing(tmp_path, monkeypatch):
+    # #530: the post-termination re-read fails on meta.json. The worker was signalled, so
+    # the error says so; nothing is stamped cancelled and nothing is deleted.
+    store = _store(tmp_path)
+    cwd = str(tmp_path)
+    job_id, _ = store.start(_factory("import time; time.sleep(30)"), cwd, kind="k")
+    jd = store._job_dir(cwd, job_id)
+    pid = store._read_meta(jd)["pid"]
+    try:
+        monkeypatch.setattr(
+            job_store, "_terminate_pid_tree", lambda *a, **k: _deny_meta_read(monkeypatch, jd)
+        )
+        with pytest.raises(job_store.MetaUnreadable) as info:
+            store.cancel(cwd, job_id)
+        assert info.value.signalled is True
+        monkeypatch.undo()
+        meta = json.loads((jd / "meta.json").read_text())
+        assert meta["terminal_status"] is None
+    finally:
+        job_store._terminate_pid_tree(pid, grace_seconds=0.0)
