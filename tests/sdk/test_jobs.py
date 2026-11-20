@@ -2556,3 +2556,71 @@ def test_expired_unstamped_record_with_an_unreadable_result_is_reaped_on_read(
     store._write_meta(jd, meta)
     assert store.status(cwd, job_id) is None
     assert store._gone(jd)
+
+
+def _deny_meta_read(monkeypatch, jd: Path, exc: type[OSError] = PermissionError) -> None:
+    """Make meta.json present but unreadable (#530), as ``_deny_result_read`` does for
+    result.json: a missing meta.json is a different fact (not a record yet)."""
+    real_read_text = Path.read_text
+
+    def denied(self, *args, **kwargs):
+        if self == jd / "meta.json":
+            raise exc("meta read denied")
+        return real_read_text(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", denied)
+
+
+def test_count_cap_counts_and_keeps_a_record_whose_meta_cannot_be_read(tmp_path, monkeypatch):
+    # #530: a failed record is evictable, but one whose meta.json cannot be read is
+    # unknowable, so it holds its slot and is never deleted, as an unreadable result is.
+    store = _store(tmp_path, max_count=1)
+    cwd = str(tmp_path)
+    first = _failed_job(store, cwd)
+    jd = store._job_dir(cwd, first)
+    _deny_meta_read(monkeypatch, jd, OSError)
+    with pytest.raises(JobCapReached):
+        store.start(_factory(_WRITE_DONE), cwd, kind="k")
+    assert (jd / "meta.json").exists()
+
+
+def test_a_record_whose_meta_cannot_be_read_is_never_reported_absent(tmp_path, monkeypatch):
+    store = _store(tmp_path)
+    cwd = str(tmp_path)
+    first = _failed_job(store, cwd)
+    jd = store._job_dir(cwd, first)
+    _deny_meta_read(monkeypatch, jd)
+    with pytest.raises(ResultUnreadable):
+        store.status(cwd, first)
+    with pytest.raises(ResultUnreadable):
+        store.cancel(cwd, first)
+    assert store.discard(cwd, first, expected="failed") is DiscardOutcome.DELETE_FAILED
+    facts = store._resolve_job_facts(cwd, first)
+    assert facts is not None and facts.exists and not facts.terminal
+    with pytest.raises(job_store.MetaUnreadable):
+        store.list_jobs(cwd)  # never omitted: a cursor would skip it for good
+    assert (jd / "meta.json").exists()
+    monkeypatch.undo()
+    assert store.status(cwd, first)["status"] == "failed"
+
+
+def test_cancel_whose_meta_read_fails_after_signalling_finalizes_nothing(tmp_path, monkeypatch):
+    # #530: the post-termination re-read fails on meta.json. The worker was signalled, so
+    # the error says so; nothing is stamped cancelled and nothing is deleted.
+    store = _store(tmp_path)
+    cwd = str(tmp_path)
+    job_id, _ = store.start(_factory("import time; time.sleep(30)"), cwd, kind="k")
+    jd = store._job_dir(cwd, job_id)
+    pid = store._read_meta(jd)["pid"]
+    try:
+        monkeypatch.setattr(
+            job_store, "_terminate_pid_tree", lambda *a, **k: _deny_meta_read(monkeypatch, jd)
+        )
+        with pytest.raises(job_store.MetaUnreadable) as info:
+            store.cancel(cwd, job_id)
+        assert info.value.signalled is True
+        monkeypatch.undo()
+        meta = json.loads((jd / "meta.json").read_text())
+        assert meta["terminal_status"] is None
+    finally:
+        job_store._terminate_pid_tree(pid, grace_seconds=0.0)

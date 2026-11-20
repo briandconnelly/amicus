@@ -22,7 +22,7 @@ from amicus.jobs.delivery import (
     unreadable_result_envelope,
 )
 from amicus.jobs.polling import job_status_arguments
-from amicus.jobs.store import MAX_POLL_AFTER_MS, ResultUnreadable
+from amicus.jobs.store import MAX_POLL_AFTER_MS, MetaUnreadable, ResultUnreadable
 from amicus.schemas.envelope import InvalidArgument
 from amicus.schemas.params import (
     MAX_STATUS_WAIT_SECONDS,
@@ -115,17 +115,24 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
             if row is not None and cancel and lookup.backend_of(row) is not None:
                 row = await asyncio.to_thread(store().cancel, cwd, job_id)
         except ResultUnreadable as exc:
-            # The store raises only for a stopped worker whose result exists but cannot
-            # be read (#280): report that, never a state. A cancel's worker is stopped
-            # whether this came from its first read or its post-termination one.
+            # Report the read error, never a state. An unreadable result is met only once
+            # the worker is stopped (#280), so a cancel's worker is stopped then. An
+            # unreadable job record (#530) can meet a running worker: it is stopped only
+            # when the store signalled it before the read failed, and otherwise the
+            # free repair is the cancel itself.
+            record = isinstance(exc, MetaUnreadable)
+            stopped = cancel and (not record or (isinstance(exc, MetaUnreadable) and exc.signalled))
+            unsent = cancel and not stopped
             return unreadable_result_envelope(
                 lookup.job_meta(cwd, source, roots_source),
-                tool="amicus_job_status",
-                next_step="poll_job_status",
+                tool="amicus_job_cancel" if unsent else "amicus_job_status",
+                next_step="retry_after_delay" if unsent else "poll_job_status",
                 arguments=job_status_arguments(job_id, workspace_root),
                 job_id=job_id,
                 errno=exc.errno,
-                signalled=cancel,
+                signalled=stopped,
+                record=record,
+                unsent_cancel=unsent,
             )
         if row is None or lookup.backend_of(row) is None:
             return lookup.job_not_found(
@@ -161,6 +168,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
                 arguments={**job_status_arguments(job_id, workspace_root), "detail": detail},
                 job_id=job_id,
                 errno=exc.errno,
+                record=isinstance(exc, MetaUnreadable),
             )
         backend = lookup.backend_of(rec) if rec is not None else None
         if rec is None or backend is None:
@@ -334,10 +342,10 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
         try:
             rows = await asyncio.to_thread(store().list_jobs, cwd)
         except ResultUnreadable as exc:
-            # One record's result exists but cannot be read (#280). The whole listing is
-            # refused rather than served without that row: a page that silently omits a
-            # job would let the next cursor step past it, and the schema has no way to
-            # say a row is missing. The repair repeats this exact call.
+            # One record's result (#280) or job record (#530) exists but cannot be
+            # read. The whole listing is refused rather than served without that row:
+            # a page that silently omits a job would let the next cursor step past it,
+            # and the schema has no way to say a row is missing. The repair repeats this exact call.
             filters = {
                 "limit": limit,
                 "cursor": cursor,
@@ -355,6 +363,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
                 },
                 job_id=None,
                 errno=exc.errno,
+                record=isinstance(exc, MetaUnreadable),
             )
         tasks = lookup.task_map(settings).entries()
         # First association wins, as TaskJobMap.task_for does: a keyed replay from another

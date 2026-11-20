@@ -18,7 +18,7 @@ from amicus import obs
 from amicus.errors import async_twin_for, error_envelope
 from amicus.jobs.delivery import finished_job_envelope, unreadable_result_envelope
 from amicus.jobs.polling import job_status_arguments, poll_hint_ms
-from amicus.jobs.store import JobCapReached, JobStore, ResultUnreadable
+from amicus.jobs.store import JobCapReached, JobStore, MetaUnreadable, ResultUnreadable
 from amicus.orchestration.isolation import WORKTREE_PREFIX
 from amicus.schemas.fingerprint import RESULT_FORMAT
 from amicus.schemas.results import JobFollowUp, JobResultFollowUp, JobStarted
@@ -541,9 +541,9 @@ def _unreadable_result(
     *,
     detail: str | None = None,
 ) -> dict[str, Any]:
-    """A sync wait or a keyed replay met a stored result that could not be read (#280).
-    The store raises only once the worker is stopped, so the job is left exactly as it
-    is, keyed or not, and the caller fetches it free once the file reads back, at the
+    """A sync wait or a keyed replay met a stored result (#280) or a job record (#530)
+    that could not be read. Nothing is signalled or deleted on either, so the job is left
+    exactly as it is, keyed or not, and the caller fetches it free once the file reads back, at the
     detail the wait was asked for where that is known (a replay's start has none)."""
     arguments = job_status_arguments(job_id, cwd)
     if detail is not None:
@@ -556,6 +556,7 @@ def _unreadable_result(
         job_id=job_id,
         errno=exc.errno,
         plugin=plugin,
+        record=isinstance(exc, MetaUnreadable),
     )
 
 

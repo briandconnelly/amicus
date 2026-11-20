@@ -130,6 +130,8 @@ def unreadable_result_envelope(
     errno: int | None,
     plugin: BackendPlugin | None = None,
     signalled: bool = False,
+    record: bool = False,
+    unsent_cancel: bool = False,
 ) -> dict[str, Any]:
     """The envelope for ``ResultUnreadable`` (#280): a stored result exists but could not
     be read just now. Temporary, with a repair naming the FREE read to repeat (``tool``
@@ -138,7 +140,11 @@ def unreadable_result_envelope(
     ``_corrupt`` (#277): that one parsed and fails the same way on every re-read; this one
     did not parse because it could not be opened, and the identical read can succeed.
     ``signalled`` is for a cancel whose worker was stopped before the read failed; it
-    promises no outcome, because an unreadable file may still parse as no result."""
+    promises no outcome, because an unreadable file may still parse as no result.
+    ``record`` is for a job record (meta.json) that could not be read (#530): there may be
+    no result yet, the reaper skips the record until it reads back, and, for a cancel that
+    was not ``signalled`` (``unsent_cancel``), the worker's state is unknown and nothing
+    was sent to it, so the repair is the cancel itself."""
     if job_id is not None:
         meta.job_id = job_id
     subject = f"job {job_id}" if job_id is not None else "a job record in this workspace"
@@ -151,12 +157,25 @@ def unreadable_result_envelope(
         " The worker is stopped, so no further cancel is needed; its outcome is read once "
         "the file reads back."
         if signalled
-        else ""
+        else (
+            " The worker's state is unknown and it was not signalled; retry the cancel."
+            if unsent_cancel
+            else ""
+        )
     )
+    what = "its job record" if record else "its stored result"
+    retention = (
+        "The record is kept and holds a slot of the per-workspace job cap while it cannot "
+        "be read; its expiry under AMICUS_JOB_TTL is evaluated once it reads back."
+        if record
+        else "The record stays until AMICUS_JOB_TTL expires it and holds a slot of the "
+        "per-workspace job cap meanwhile; a consume keeps it."
+    )
+    state = "Its state could not be determined" if record else "The job is not failed"
     return error_envelope(
         "internal_error",
-        f"{subject}: its stored result exists but could not be read ({cause}). The job is "
-        f"not failed and the record is kept; do not start a new job.{stopped}",
+        f"{subject}: {what} exists but could not be read ({cause}). {state} "
+        f"and the record is kept; do not start a new job.{stopped}",
         meta,
         plugin=plugin,
         temporary=True,
@@ -168,8 +187,7 @@ def unreadable_result_envelope(
             f"Retry {tool} with these arguments after retry_after_ms; it is free and reads "
             "the same record. If this persists, the file is unreadable to this server "
             "(permissions, a full descriptor table, a failing disk): fix that, then retry. "
-            "The record stays until AMICUS_JOB_TTL expires it and holds a slot of the "
-            "per-workspace job cap meanwhile; a consume keeps it."
+            + retention
         ),
     )
 
