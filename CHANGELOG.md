@@ -22,6 +22,14 @@ per-change, as its own lead says.
 
 ### Fixed
 
+- A job record whose `meta.json` exists but cannot be read (`EACCES`, `EIO`, `EMFILE`) now
+  holds its slot under the per-workspace cap and is never evicted, so a paid start is no longer
+  admitted past a full cap on a transient read error. The same read error is no longer reported
+  as a missing or expired job: status, result, cancel and consume report it as the temporary,
+  re-readable storage error an unreadable result already gets, and an idempotency key keeps
+  replaying to that job rather than being reclaimed. A listing still omits the record until it
+  reads back, and a missing or unparsable `meta.json` is treated as before.
+
 - `pi` no longer returns an earlier assistant message as the answer when the final one
   contains a raw U+2028, U+2029 or U+0085. The event stream was split with
   `str.splitlines()`, which breaks on those characters as well as on the stream's own `\n`,
