@@ -496,9 +496,9 @@ class JobStore:
         takes it, so a delete and its restore are atomic to every reader. Lock order
         is ``_LOCK``, then the idempotency index's flock, then this; nothing takes them
         in another order. An overrun worker is terminated with all three released
-        (#531, ``_terminate_overruns``), as ``cancel`` terminates; the one wait for a
-        worker under them is ``start``'s rollback of a worker it spawned but could not
-        record. The workspace directory is created if it is missing, since
+        (#531, ``_terminate_overruns``), as ``cancel`` terminates, and so is a worker
+        ``start`` spawned but could not record (#536); no wait for a worker happens
+        under them. The workspace directory is created if it is missing, since
         another process can create it, and records in it, during this section; a lock
         that cannot be opened or taken raises rather than letting the section run
         unlocked. ``timeout`` bounds the wait as ``IdempotencyIndex.lock``'s does,
@@ -553,7 +553,9 @@ class JobStore:
         if getattr(_SECTION, "published", None) is not None:
             return attempt()
         published: set[Path] = set()
+        rollbacks: list[tuple[int, Path]] = []
         _SECTION.published = published
+        _SECTION.rollbacks = rollbacks
         try:
             while True:
                 try:
@@ -577,6 +579,11 @@ class JobStore:
                             self._finalize_overrun(jd)
         finally:
             _SECTION.published = None
+            _SECTION.rollbacks = None
+            # A start that spawned a worker it could not record (#536): every lock is
+            # released by now, and any idempotency reservation already dropped.
+            for pid, jd in rollbacks:
+                self._rollback_unrecorded(pid, jd)
             if published:
                 # A termination or finalization that raised: release its marker, so this
                 # process does not read the job as running forever.
@@ -968,15 +975,33 @@ class JobStore:
             # Persistence failed after a successful spawn (disk full, fs error). A paid
             # worker is already running detached; reap its process group so no orphaned
             # worker survives — mirrors the `except OSError` around Popen above.
-            _terminate_pid_tree(proc.pid, self.terminate_grace_seconds)
-            # The worker may have already registered an external worktree in cleanup.json
-            # before being killed (and a SIGKILLed worker can't self-clean), so run the
-            # guarded external-path cleanup *before* dropping the job dir — otherwise
-            # deleting jd destroys the only manifest and leaks that worktree.
-            self._cleanup_external_paths(self._read_cleanup_manifest(jd))
-            shutil.rmtree(jd, ignore_errors=True)
+            # The wait for it runs with every lock released (#536): the outermost section
+            # (`_terminate_overruns`) runs the rollback after it unwinds. jd has no
+            # meta.json, so no other section counts, reaps or deletes it meanwhile.
+            pending = getattr(_SECTION, "rollbacks", None)
+            if pending is not None:
+                pending.append((proc.pid, jd))
+            else:
+                self._rollback_unrecorded(proc.pid, jd)
             raise
         return job_id, meta["started_at"]
+
+    def _rollback_unrecorded(self, pid: int, jd: Path) -> None:
+        """Stop a worker ``start`` spawned but could not record, then drop its dir.
+        Runs with no lock held. The worker may have already registered an external
+        worktree in cleanup.json before being killed (and a SIGKILLed worker can't
+        self-clean), so the guarded external-path cleanup runs after it is stopped and
+        *before* jd goes — otherwise deleting jd destroys the only manifest and leaks
+        that worktree. Errors are logged, not raised, so the caller's original
+        persistence error is the one that surfaces; on one, jd is kept so its manifest
+        is not lost."""
+        try:
+            _terminate_pid_tree(pid, self.terminate_grace_seconds)
+            self._cleanup_external_paths(self._read_cleanup_manifest(jd))
+        except Exception:
+            logger.exception("rollback of unrecorded job %s failed", jd.name)
+            return
+        shutil.rmtree(jd, ignore_errors=True)
 
     # ------------------------------------------------------------ status calc
     @staticmethod

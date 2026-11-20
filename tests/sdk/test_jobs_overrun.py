@@ -651,3 +651,109 @@ def test_cancel_racing_an_overrun_marks_an_unreadable_meta_signalled(tmp_path, m
         t.join(_WAIT)
         job_store._kill_pid_tree(pid)
     assert info.value.signalled is True
+
+
+def _failing_meta_write(monkeypatch, store: JobStore) -> None:
+    """The first meta.json write after a spawn fails, as a full disk would."""
+
+    def boom(jd, meta):
+        raise OSError(errno.ENOSPC, "no space left")
+
+    monkeypatch.setattr(store, "_write_meta", boom)
+
+
+@pytest.mark.parametrize("idempotent", [False, True])
+def test_start_rollback_terminates_the_unrecorded_worker_unlocked(
+    tmp_path, monkeypatch, idempotent
+):
+    """#536: a start whose meta.json write fails stops its worker with every lock
+    released, so a status lookup in another workspace finishes inside the grace, and
+    an idempotent retry is a fresh miss rather than in_progress."""
+    store = _store(tmp_path)
+    cwd_a, cwd_b = str(tmp_path / "a"), str(tmp_path / "b")
+    job_b, _ = store.start(_factory(_SLEEP), cwd_b, kind="k")
+    _failing_meta_write(monkeypatch, store)
+    entered, release = threading.Event(), threading.Event()
+    seen: dict[str, object] = {}
+
+    def fake_terminate(pid, grace_seconds, **kwargs):
+        seen["locks_free"] = _locks_free(store, cwd_a)
+        seen["job_dirs"] = [d.name for d in store._job_dirs(store._ws_dir(cwd_a))]
+        entered.set()
+        release.wait()
+        job_store._kill_pid_tree(pid)
+
+    monkeypatch.setattr(job_store, "_terminate_pid_tree", fake_terminate)
+
+    def start_a():
+        if idempotent:
+            return store.start_idempotent(
+                _factory(_SLEEP), cwd_a, kind="k", tool="t", key="key", arg_hash="h"
+            )
+        return store.start(_factory(_SLEEP), cwd_a, kind="k")
+
+    errors: list[BaseException] = []
+
+    def run_a():
+        try:
+            start_a()
+        except BaseException as exc:
+            errors.append(exc)
+
+    t_a = threading.Thread(target=run_a)
+    try:
+        t_a.start()
+        assert entered.wait(_WAIT)
+        status_b = _bounded(lambda: store.status(cwd_b, job_b))
+    finally:
+        release.set()
+        t_a.join(_WAIT)
+        monkeypatch.undo()
+        store.cancel(cwd_b, job_b)
+    assert seen["locks_free"] is True
+    assert len(seen["job_dirs"]) == 1  # the dir is still there for the manifest read
+    assert status_b["status"] == "running"
+    assert len(errors) == 1 and isinstance(errors[0], OSError)
+    assert store._job_dirs(store._ws_dir(cwd_a)) == []
+    if idempotent:
+        retried = store.start_idempotent(
+            _factory("pass"), cwd_a, kind="k", tool="t", key="key", arg_hash="h"
+        )
+        assert retried["kind"] == "created"
+
+
+def test_start_rollback_cleans_declared_paths_before_dropping_the_dir(tmp_path, monkeypatch):
+    store = _store(tmp_path)
+    cwd = str(tmp_path / "a")
+    _failing_meta_write(monkeypatch, store)
+    order: list[str] = []
+    monkeypatch.setattr(
+        job_store,
+        "_terminate_pid_tree",
+        lambda pid, g, **kw: (order.append("terminate"), job_store._kill_pid_tree(pid)),
+    )
+    real_cleanup = store._cleanup_external_paths
+
+    def cleanup(paths):
+        order.append("cleanup")
+        return real_cleanup(paths)
+
+    monkeypatch.setattr(store, "_cleanup_external_paths", cleanup)
+    with pytest.raises(OSError):
+        store.start(_factory(_SLEEP), cwd, kind="k")
+    assert order == ["terminate", "cleanup"]
+    assert store._job_dirs(store._ws_dir(cwd)) == []
+
+
+def test_start_rollback_keeps_the_dir_when_cleanup_raises(tmp_path, monkeypatch):
+    store = _store(tmp_path)
+    cwd = str(tmp_path / "a")
+    _failing_meta_write(monkeypatch, store)
+
+    def bad_manifest(jd):
+        raise UnicodeDecodeError("utf-8", b"\xff", 0, 1, "bad")
+
+    monkeypatch.setattr(store, "_read_cleanup_manifest", bad_manifest)
+    with pytest.raises(OSError, match="no space"):
+        store.start(_factory(_SLEEP), cwd, kind="k")
+    assert len(store._job_dirs(store._ws_dir(cwd))) == 1
