@@ -21,7 +21,7 @@ import pytest
 
 from amicus.jobs import idempotency
 from amicus.jobs import store as job_store
-from amicus.jobs.store import DiscardOutcome, JobStore, ResultUnreadable
+from amicus.jobs.store import DiscardOutcome, JobStore, MetaUnreadable, ResultUnreadable
 
 _SLEEP = "import time; time.sleep(30)"
 _WAIT = 10.0  # generous bound on an event that should fire at once
@@ -527,11 +527,13 @@ def test_overrun_meta_unreadable_at_finalize_still_times_out(tmp_path, monkeypat
     monkeypatch.setattr(Path, "read_text", flaky)
     monkeypatch.setattr(job_store, "_terminate_pid_tree", fake_terminate)
     try:
-        _bounded(lambda: store.status(cwd, job_id))  # whatever this call can report
+        # The retried body reads meta.json fine and finalizes the pending job itself.
+        first = _bounded(lambda: store.status(cwd, job_id))
         st = _bounded(lambda: store.status(cwd, job_id))
     finally:
         job_store._kill_pid_tree(pid)
     assert stamped_when_failed == [None]
+    assert first["status"] == "timeout"
     assert st["status"] == "timeout"
     assert not wt.exists()
     assert calls == [pid]
@@ -567,3 +569,85 @@ def test_overrun_result_unreadable_then_absent_times_out_on_another_thread(tmp_p
     assert not wt.exists()
     assert calls == [pid]
     assert not job_store._OVERRAN
+
+
+def _deny_meta_read(mp, jd) -> None:
+    real_read_text = Path.read_text
+
+    def denied(self, *args, **kwargs):
+        if self == jd / "meta.json":
+            raise OSError(errno.EIO, "meta read failed")
+        return real_read_text(self, *args, **kwargs)
+
+    mp.setattr(Path, "read_text", denied)
+
+
+@pytest.mark.parametrize("entry", ["status", "cancel"])
+def test_overrun_meta_unreadable_until_later_stays_pending(tmp_path, monkeypatch, entry):
+    # meta.json stays unreadable through the finalize read and the retried body: the call
+    # reports MetaUnreadable (signalled, for a cancel: the overrun termination signalled
+    # the worker), nothing is stamped, and once readable the job is a timeout with cleanup.
+    store, root = _cleanup_store(tmp_path)
+    cwd = str(tmp_path / "w")
+    job_id, pid = _overrun_job(store, cwd)
+    jd = store._job_dir(cwd, job_id)
+    wt = _declare(store, cwd, job_id, root)
+    calls: list[int] = []
+    deny = pytest.MonkeyPatch()
+
+    def fake_terminate(pid, grace_seconds, **kwargs):
+        calls.append(pid)
+        job_store._kill_pid_tree(pid)
+        _deny_meta_read(deny, jd)
+
+    monkeypatch.setattr(job_store, "_terminate_pid_tree", fake_terminate)
+    call = getattr(store, entry)
+    try:
+        with pytest.raises(MetaUnreadable) as info:
+            _bounded(lambda: call(cwd, job_id))
+    finally:
+        deny.undo()
+        job_store._kill_pid_tree(pid)
+    assert info.value.signalled is (entry == "cancel")
+    assert store._read_meta(jd)["terminal_status"] is None
+    assert jd in job_store._OVERRAN
+    st = _bounded(lambda: call(cwd, job_id))
+    assert st["status"] == "timeout"
+    assert not wt.exists()
+    assert calls == [pid]
+    assert not job_store._OVERRAN
+
+
+def test_cancel_racing_an_overrun_marks_an_unreadable_meta_signalled(tmp_path, monkeypatch):
+    # cancel's phase 2 meets a job another thread is terminating as an overrun, and its
+    # finalize read of meta.json fails: the cancel did signal the worker, so it says so.
+    store = _store(tmp_path)
+    cwd = str(tmp_path)
+    job_id, pid = _overrun_job(store, cwd)
+    jd = store._job_dir(cwd, job_id)
+    entered, release = threading.Event(), threading.Event()
+    paused: list[int] = []
+    deny = pytest.MonkeyPatch()
+
+    def fake_terminate(pid, grace_seconds, **kwargs):
+        if not paused:  # the overrun termination stays paused, no timeout
+            paused.append(pid)
+            entered.set()
+            release.wait()
+            return
+        job_store._kill_pid_tree(pid)  # the cancel's own termination
+        _deny_meta_read(deny, jd)
+
+    monkeypatch.setattr(job_store, "_terminate_pid_tree", fake_terminate)
+    t = threading.Thread(target=lambda: store.status(cwd, job_id), daemon=True)
+    try:
+        t.start()
+        assert entered.wait(_WAIT)
+        with pytest.raises(MetaUnreadable) as info:
+            _bounded(lambda: store.cancel(cwd, job_id))
+    finally:
+        deny.undo()
+        release.set()
+        t.join(_WAIT)
+        job_store._kill_pid_tree(pid)
+    assert info.value.signalled is True

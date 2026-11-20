@@ -583,26 +583,13 @@ class JobStore:
                 with _LOCK:
                     _TERMINATING.difference_update(published)
 
-    @staticmethod
-    def _read_meta_or_raise(jd: Path) -> dict | None:
-        """``_read_meta`` that tells a missing record (``None``) from one that is there
-        but cannot be read (``ResultUnreadable``); corrupt JSON reads as no record, as
-        it does everywhere. Folds into ``_read_meta`` once #530's fix lands."""
-        try:
-            return json.loads((jd / "meta.json").read_text())
-        except FileNotFoundError:
-            return None
-        except OSError as exc:
-            raise ResultUnreadable(exc.errno) from None
-        except json.JSONDecodeError:
-            return None
-
     def _finalize_overrun(self, jd: Path) -> tuple[dict, str] | None:
         """Finalize a pending overrun job (``_OVERRAN``) under ``_LOCK`` and its record
         lock, from a fresh read: ``None`` if the record is gone, else its state as
-        ``_finish_overrun`` gives it. Raises ``ResultUnreadable`` if meta.json or
-        result.json cannot be read, with nothing written and the job left pending."""
-        meta = self._read_meta_or_raise(jd)
+        ``_finish_overrun`` gives it. Raises ``MetaUnreadable`` or ``ResultUnreadable``
+        if meta.json or result.json cannot be read, with nothing written and the job
+        left pending."""
+        meta = self._read_meta(jd)
         if meta is None:
             _OVERRAN.discard(jd)
             return None
@@ -1413,7 +1400,13 @@ class JobStore:
             return None  # before the lock: a malformed id touches nothing
 
         def first() -> dict | tuple[Path, dict] | None:
-            live = self._read_live_job(cwd, job_id)
+            try:
+                live = self._read_live_job(cwd, job_id)
+            except MetaUnreadable as exc:
+                # A pending overrun's worker was signalled by its termination, though
+                # its record cannot be read now; anything else was never signalled.
+                exc.signalled = self._job_dir(cwd, job_id) in _OVERRAN
+                raise
             if live is None:
                 return None
             jd, meta, state = live
@@ -1441,7 +1434,11 @@ class JobStore:
             if jd in _TERMINATING or jd in _OVERRAN:
                 # Terminated, or being terminated, as an overrun: finalize it as that,
                 # never as cancelled, as the cancel would have found it before #531.
-                done = self._finalize_overrun(jd)
+                try:
+                    done = self._finalize_overrun(jd)
+                except MetaUnreadable as exc:
+                    exc.signalled = True  # this cancel signalled the worker first
+                    raise
                 return None if done is None else self._status_dict(jd, *done)
             # Re-validate: during the unlocked grace window the record may have been
             # consumed/evicted, finalized by another path, or the worker may have
