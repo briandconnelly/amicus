@@ -22,6 +22,12 @@ per-change, as its own lead says.
 
 ### Fixed
 
+- Stopping a job that ran past its deadline no longer stalls every other job call the server
+  is handling (#531). The first job read to find it overrun waited up to the terminate grace
+  (5 s by default) for the worker to exit while holding the server's job lock, so status,
+  result, list, cancel and start calls for every workspace waited with it. The worker is now
+  stopped with the lock released, as `amicus_job_cancel` already did, and the record is
+  re-read before it is marked `timeout`; the outcome a job reports is unchanged.
 - A job record whose `meta.json` exists but cannot be read (`EACCES`, `EIO`, `EMFILE`) now
   holds its slot under the per-workspace cap and is never evicted, so a paid start is no longer
   admitted past a full cap on a transient read error. The same read error is no longer reported
@@ -31,7 +37,6 @@ per-change, as its own lead says.
   rather than omitting the record, and a missing or unparsable `meta.json` is treated as before. A cancel whose
   read of the record fails before it signalled the worker says the worker's state is unknown and
   names the cancel as the call to retry, rather than claiming the worker is stopped.
-
 - `pi` no longer returns an earlier assistant message as the answer when the final one
   contains a raw U+2028, U+2029 or U+0085. The event stream was split with
   `str.splitlines()`, which breaks on those characters as well as on the stream's own `\n`,

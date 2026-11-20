@@ -55,6 +55,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
+from typing import TypeVar
 from uuid import uuid4
 
 from amicus.jobs import idempotency
@@ -71,6 +72,8 @@ _IDEM_DIRNAME = ".idem"
 # same inode.
 _RECORD_LOCK_NAME = ".records.lock"
 
+_T = TypeVar("_T")
+
 _TERMINAL = frozenset({"done", "failed", "cancelled", "timeout"})
 _LOCK = threading.RLock()
 
@@ -80,12 +83,46 @@ _LOCK = threading.RLock()
 # flock this process already holds.
 _RECORD_LOCKS: dict[Path, list[int]] = {}
 
+# Job dirs whose overrun worker a thread of this process is terminating with the locks
+# released (#531). Touched only under ``_LOCK``. Every other thread reads such a job as
+# ``running`` until the terminating thread re-takes the locks and finalizes it, so it is
+# never reported ``failed``, reaped, evicted or terminated a second time meanwhile, and a
+# ``cancel`` that stops it in that window finalizes it as the overrun it is.
+_TERMINATING: set[Path] = set()
+
+# Per-thread state of the outermost locked section running on this thread: the markers
+# it has published in ``_TERMINATING`` (added at the same point, under ``_LOCK``), or
+# ``None`` outside one. It is also the nesting flag: a nested section sees it set and
+# lets ``_Overrun`` propagate to the outermost, the only frame whose exit really releases
+# ``_LOCK`` and the record flock, and the outermost clears whatever it published.
+_SECTION = threading.local()
+
+# Job dirs whose worker this process terminated as an overrun and whose record is not
+# yet stamped (#531). Touched only under ``_LOCK``. Whichever read, on any thread, first
+# reads both meta.json and result.json finalizes such a job the overrun way (``done`` or
+# ``timeout``), never ``failed``; a read error stamps nothing and leaves it pending. An
+# entry goes once its record is stamped or confirmed absent.
+_OVERRAN: set[Path] = set()
+
 # The only job-id shape this store ever mints (``uuid4().hex``). A job id is used
 # verbatim as a path component under the workspace directory, so its shape is
 # confined at the join: anything else (separators, traversal, empty) must never
 # reach the filesystem. Consumers validating ids at their own boundary should pin
 # the same shape.
 _JOB_ID_RE = re.compile(r"[0-9a-f]{32}")
+
+
+class _Overrun(Exception):
+    """Raised by ``_status_of`` under the locks for a running job past its deadline,
+    after marking it in ``_TERMINATING``. The outermost locked section catches it,
+    terminates the worker with the locks released, re-takes them to finalize the job
+    from a fresh read, and runs its body again (#531). The job dir's parent is the
+    workspace dir whose record lock that finalization takes."""
+
+    def __init__(self, jd: Path, meta: dict) -> None:
+        super().__init__(jd.name)
+        self.jd = jd
+        self.meta = meta
 
 
 class ResultUnreadable(Exception):
@@ -458,12 +495,21 @@ class JobStore:
         job as ``failed`` (#237). Every section that reads, writes or deletes records
         takes it, so a delete and its restore are atomic to every reader. Lock order
         is ``_LOCK``, then the idempotency index's flock, then this; nothing takes them
-        in another order. The workspace directory is created if it is missing, since
+        in another order. An overrun worker is terminated with all three released
+        (#531, ``_terminate_overruns``), as ``cancel`` terminates; the one wait for a
+        worker under them is ``start``'s rollback of a worker it spawned but could not
+        record. The workspace directory is created if it is missing, since
         another process can create it, and records in it, during this section; a lock
         that cannot be opened or taken raises rather than letting the section run
         unlocked. ``timeout`` bounds the wait as ``IdempotencyIndex.lock``'s does,
         raising ``idempotency.LockTimeout``; a nested section never waits."""
-        ws = self._ws_dir(cwd)
+        with self._ws_record_lock(self._ws_dir(cwd), timeout=timeout):
+            yield
+
+    @staticmethod
+    @contextlib.contextmanager
+    def _ws_record_lock(ws: Path, *, timeout: float | None = None) -> Generator[None]:
+        """``_record_lock`` for a workspace dir rather than a cwd."""
         held = _RECORD_LOCKS.get(ws)
         if held is not None:
             held[1] += 1
@@ -486,6 +532,96 @@ class JobStore:
             del _RECORD_LOCKS[ws]
             idempotency._release_flock(fd)
             os.close(fd)
+
+    def _terminate_overruns(self, attempt: Callable[[], _T]) -> _T:
+        """Run ``attempt`` (which takes ``_LOCK`` and the record flock itself), and for
+        each overrun job it meets, terminate the worker with every lock released,
+        finalize it, then run ``attempt`` again (#531).
+
+        ``_status_of`` never waits for a worker: on an overrun it publishes the job in
+        ``_TERMINATING`` and raises ``_Overrun``, which unwinds ``attempt`` and so
+        releases its locks. Only the outermost section on a thread does this; a nested
+        one (``start`` inside ``start_idempotent``, the index's resolve) runs ``attempt``
+        directly, because leaving a nested ``with`` does not release a re-entrant lock.
+        Once the worker is stopped, ``_LOCK`` and that job's record lock are taken
+        without a timeout and the job is finalized there (``_finalize_overrun``), so its
+        outcome never depends on the retry reaching it again. The retry then re-reads
+        everything from disk under its own locks. The retries end: a job raises
+        ``_Overrun`` only while it is in neither ``_TERMINATING`` nor ``_OVERRAN``, and
+        once terminated it stays in ``_OVERRAN`` until it is stamped or gone, so this
+        process terminates each job at most once, and a section meets finitely many."""
+        if getattr(_SECTION, "published", None) is not None:
+            return attempt()
+        published: set[Path] = set()
+        _SECTION.published = published
+        try:
+            while True:
+                try:
+                    return attempt()
+                except _Overrun as overrun:
+                    jd, meta = overrun.jd, overrun.meta
+                    _terminate_pid_tree(
+                        _meta_pid(meta),
+                        self.terminate_grace_seconds,
+                        is_alive=lambda jd=jd, meta=meta: self._job_running(jd, meta),
+                    )
+                    with _LOCK, self._ws_record_lock(jd.parent):
+                        _TERMINATING.discard(jd)
+                        published.discard(jd)
+                        _OVERRAN.add(jd)
+                        # Not raised here, outside the body: the job stays pending and
+                        # the retried body reads it itself, raising inside its caller's
+                        # own handler (counted as held, skipped, DELETE_FAILED, the
+                        # retention bound), as before #531. Nothing is stamped.
+                        with contextlib.suppress(ResultUnreadable):
+                            self._finalize_overrun(jd)
+        finally:
+            _SECTION.published = None
+            if published:
+                # A termination or finalization that raised: release its marker, so this
+                # process does not read the job as running forever.
+                with _LOCK:
+                    _TERMINATING.difference_update(published)
+
+    def _finalize_overrun(self, jd: Path) -> tuple[dict, str] | None:
+        """Finalize a pending overrun job (``_OVERRAN``) under ``_LOCK`` and its record
+        lock, from a fresh read: ``None`` if the record is gone, else its state as
+        ``_finish_overrun`` gives it. Raises ``MetaUnreadable`` or ``ResultUnreadable``
+        if meta.json or result.json cannot be read, with nothing written and the job
+        left pending."""
+        meta = self._read_meta(jd)
+        if meta is None:
+            _OVERRAN.discard(jd)
+            return None
+        return meta, self._finish_overrun(jd, meta)
+
+    def _finish_overrun(self, jd: Path, meta: dict) -> str:
+        """The overrun outcome of a stopped job, from ``meta`` as just read: its stamp if
+        it has one, else ``done`` if the worker wrote its result in time (result-first),
+        else ``timeout`` with its declared paths cleaned up (the manifest re-read now).
+        Drops the job from ``_OVERRAN`` once stamped; an unreadable result raises
+        ``ResultUnreadable`` and leaves it pending."""
+        terminal = meta.get("terminal_status")
+        if not terminal:
+            env = self._read_envelope(jd)
+            if env is not None:
+                self._mark_done(jd, meta, env)
+                terminal = "done"
+            else:
+                self._finalize_cleanup(jd, meta, "timeout", self._read_cleanup_manifest(jd))
+                terminal = "timeout"
+        _OVERRAN.discard(jd)
+        return terminal
+
+    def _locked(self, cwd: str, body: Callable[[], _T]) -> _T:
+        """Run ``body`` under ``_LOCK`` and the workspace's record lock, terminating
+        any overrun job it meets with both released (``_terminate_overruns``)."""
+
+        def attempt() -> _T:
+            with _LOCK, self._record_lock(cwd):
+                return body()
+
+        return self._terminate_overruns(attempt)
 
     def _idem_index(self, cwd: str) -> idempotency.IdempotencyIndex:
         """The dedup index for a workspace. The horizon is a conservative floor: a job's
@@ -758,68 +894,89 @@ class JobStore:
         design). With ``None`` (the default) the worker gets ``DEVNULL``,
         byte-identical to the prior behavior.
         """
-        with _LOCK, self._record_lock(cwd):
-            self._make_room(cwd)
-            job_id = uuid4().hex
-            jd = self._job_dir(cwd, job_id)
-            jd.mkdir(parents=True, exist_ok=True)
-            # Results can contain a diff; keep the workspace tree user-only.
-            with contextlib.suppress(OSError):
-                self._ws_dir(cwd).chmod(0o700)
-            if write_spec is not None:
-                (jd / "spec.json").write_text(json.dumps(write_spec))
-            cmd = cmd_factory(jd)
-            started = time.time()
-            log_path = jd / "stderr.log"
-            try:
-                with log_path.open("w") as ef:
-                    proc = subprocess.Popen(
-                        cmd,
-                        cwd=str(jd),
-                        stdin=subprocess.DEVNULL if stdin_text is None else subprocess.PIPE,
-                        stdout=ef,
-                        stderr=ef,
-                        start_new_session=True,
-                        text=stdin_text is not None,
-                        encoding="utf-8" if stdin_text is not None else None,
-                    )
-                if stdin_text is not None:
-                    threading.Thread(
-                        target=_write_stdin, args=(proc, stdin_text), daemon=True
-                    ).start()
-            except OSError:
-                shutil.rmtree(jd, ignore_errors=True)
-                raise
-            meta = {
-                "job_id": job_id,
-                "kind": kind,
-                "pid": proc.pid,
-                "owner": _PROCESS_OWNER,
-                "started_epoch": started,
-                "started_at": datetime.now(UTC).isoformat(),
-                "deadline_epoch": started + self.max_seconds,
-                "completed_epoch": None,
-                "terminal_status": None,
-                # Present-and-null marks a record whose delivery is tracked; one without
-                # the key predates tracking, and the cap evicts it as it always did.
-                "delivered_epoch": None,
-                "extra": extra or {},
-            }
-            try:
-                self._write_meta(jd, meta)
-            except BaseException:
-                # Persistence failed after a successful spawn (disk full, fs error). A paid
-                # worker is already running detached; reap its process group so no orphaned
-                # worker survives — mirrors the `except OSError` around Popen above.
-                _terminate_pid_tree(proc.pid, self.terminate_grace_seconds)
-                # The worker may have already registered an external worktree in cleanup.json
-                # before being killed (and a SIGKILLed worker can't self-clean), so run the
-                # guarded external-path cleanup *before* dropping the job dir — otherwise
-                # deleting jd destroys the only manifest and leaks that worktree.
-                self._cleanup_external_paths(self._read_cleanup_manifest(jd))
-                shutil.rmtree(jd, ignore_errors=True)
-                raise
-            return job_id, meta["started_at"]
+        return self._locked(
+            cwd,
+            lambda: self._start_locked(
+                cmd_factory,
+                cwd,
+                kind=kind,
+                extra=extra,
+                write_spec=write_spec,
+                stdin_text=stdin_text,
+            ),
+        )
+
+    def _start_locked(
+        self,
+        cmd_factory: CmdFactory,
+        cwd: str,
+        *,
+        kind: str,
+        extra: dict | None,
+        write_spec: dict | None,
+        stdin_text: str | None,
+    ) -> tuple[str, str]:
+        """``start``'s body, under ``_LOCK`` and the record lock. ``_make_room`` runs
+        first and may raise ``_Overrun`` before anything is spawned."""
+        self._make_room(cwd)
+        job_id = uuid4().hex
+        jd = self._job_dir(cwd, job_id)
+        jd.mkdir(parents=True, exist_ok=True)
+        # Results can contain a diff; keep the workspace tree user-only.
+        with contextlib.suppress(OSError):
+            self._ws_dir(cwd).chmod(0o700)
+        if write_spec is not None:
+            (jd / "spec.json").write_text(json.dumps(write_spec))
+        cmd = cmd_factory(jd)
+        started = time.time()
+        log_path = jd / "stderr.log"
+        try:
+            with log_path.open("w") as ef:
+                proc = subprocess.Popen(
+                    cmd,
+                    cwd=str(jd),
+                    stdin=subprocess.DEVNULL if stdin_text is None else subprocess.PIPE,
+                    stdout=ef,
+                    stderr=ef,
+                    start_new_session=True,
+                    text=stdin_text is not None,
+                    encoding="utf-8" if stdin_text is not None else None,
+                )
+            if stdin_text is not None:
+                threading.Thread(target=_write_stdin, args=(proc, stdin_text), daemon=True).start()
+        except OSError:
+            shutil.rmtree(jd, ignore_errors=True)
+            raise
+        meta = {
+            "job_id": job_id,
+            "kind": kind,
+            "pid": proc.pid,
+            "owner": _PROCESS_OWNER,
+            "started_epoch": started,
+            "started_at": datetime.now(UTC).isoformat(),
+            "deadline_epoch": started + self.max_seconds,
+            "completed_epoch": None,
+            "terminal_status": None,
+            # Present-and-null marks a record whose delivery is tracked; one without
+            # the key predates tracking, and the cap evicts it as it always did.
+            "delivered_epoch": None,
+            "extra": extra or {},
+        }
+        try:
+            self._write_meta(jd, meta)
+        except BaseException:
+            # Persistence failed after a successful spawn (disk full, fs error). A paid
+            # worker is already running detached; reap its process group so no orphaned
+            # worker survives — mirrors the `except OSError` around Popen above.
+            _terminate_pid_tree(proc.pid, self.terminate_grace_seconds)
+            # The worker may have already registered an external worktree in cleanup.json
+            # before being killed (and a SIGKILLed worker can't self-clean), so run the
+            # guarded external-path cleanup *before* dropping the job dir — otherwise
+            # deleting jd destroys the only manifest and leaks that worktree.
+            self._cleanup_external_paths(self._read_cleanup_manifest(jd))
+            shutil.rmtree(jd, ignore_errors=True)
+            raise
+        return job_id, meta["started_at"]
 
     # ------------------------------------------------------------ status calc
     @staticmethod
@@ -872,32 +1029,38 @@ class JobStore:
         return _worker_lock_held(jd / "worker.lock") is False and not _pid_alive(pid)
 
     def _status_of(self, jd: Path, meta: dict) -> str:
-        """Compute the live status, killing + marking jobs that overran.
+        """Compute the live status, finalizing a job that overran once it is stopped.
+
+        Never waits for a worker, since every caller holds ``_LOCK`` and the record
+        lock (#531). A running job past its deadline is published in ``_TERMINATING``
+        and reported by raising ``_Overrun``; the outermost locked section terminates it
+        with the locks released and finalizes it (``_finalize_overrun``) as the old
+        in-lock path did. A job a thread of this process is terminating reads as
+        ``running``; one it has terminated but not yet stamped (``_OVERRAN``) is
+        finalized here the overrun way, by whichever read first can read it.
 
         Raises ``ResultUnreadable`` when a stopped worker's result.json exists but cannot
         be read (#280): the job is then neither finalized nor reported, since reading it
         as absent would stamp ``timeout`` or report ``failed`` for a result that is still
         there. A record already stamped terminal never reads the file at all."""
+        if jd in _OVERRAN:
+            # This process terminated it as an overrun: finalize it that way whatever the
+            # worker now reads as, never terminating it again or deriving failed.
+            return self._finish_overrun(jd, meta)
         terminal = meta.get("terminal_status")
         if terminal:
             return terminal
+        if jd in _TERMINATING:
+            return "running"  # a thread is terminating it and will finalize it
         if self._job_running(jd, meta):
             if time.time() > meta.get("deadline_epoch", float("inf")):
-                _terminate_pid_tree(
-                    _meta_pid(meta),
-                    self.terminate_grace_seconds,
-                    is_alive=lambda: self._job_running(jd, meta),
-                )
-                # The worker may have completed during the grace window — prefer its
-                # result over masking it as a timeout (result-first finalization). An
-                # unreadable one propagates: the worker is stopped either way, and the
-                # next read finalizes whichever of done or timeout it can then see.
-                env = self._read_envelope(jd)
-                if env is not None:
-                    self._mark_done(jd, meta, env)
-                    return "done"
-                self._finalize_cleanup(jd, meta, "timeout", self._read_cleanup_manifest(jd))
-                return "timeout"
+                # Published and owned in one step, so the section that must clear the
+                # marker always knows of it.
+                _TERMINATING.add(jd)
+                owned = getattr(_SECTION, "published", None)
+                if owned is not None:
+                    owned.add(jd)
+                raise _Overrun(jd, meta)
             return "running"
         env = self._read_envelope(jd)
         if env is not None:
@@ -1078,7 +1241,11 @@ class JobStore:
         this check until the new record is written, so server processes sharing a state
         root that all take it never overshoot the cap; an older release sharing the root
         does not take it, and can overshoot by one start per process. An overshoot deletes
-        nothing."""
+        nothing. An overrun job met here (by the reap or the count) raises ``_Overrun``
+        before anything is evicted, so ``start`` releases the locks, terminates it, and
+        runs this again, when it reads as finalized and is evictable like any terminal
+        error; a job another thread is terminating reads as ``running``, so it is counted
+        as held and never evicted while its worker may live (#531)."""
         self._reap_workspace(cwd)
         records: list[tuple[Path, dict, str | None]] = []
         for jd in self._job_dirs(self._ws_dir(cwd)):
@@ -1114,12 +1281,15 @@ class JobStore:
     def status(self, cwd: str, job_id: str) -> dict | None:
         if not _is_job_id(job_id):
             return None  # before the lock: a malformed id touches nothing
-        with _LOCK, self._record_lock(cwd):
+
+        def body() -> dict | None:
             live = self._read_live_job(cwd, job_id)
             if live is None:
                 return None
             jd, meta, state = live
             return self._status_dict(jd, meta, state)
+
+        return self._locked(cwd, body)
 
     def result_payload(self, cwd: str, job_id: str) -> tuple[dict | None, dict | None]:
         """Return (status_dict, result_envelope). Read-only.
@@ -1134,7 +1304,8 @@ class JobStore:
         """
         if not _is_job_id(job_id):
             return None, None  # before the lock: a malformed id touches nothing
-        with _LOCK, self._record_lock(cwd):
+
+        def body() -> tuple[dict | None, dict | None]:
             live = self._read_live_job(cwd, job_id)
             if live is None:
                 return None, None
@@ -1144,6 +1315,8 @@ class JobStore:
                 return rec, None
             return rec, self._read_envelope(jd)
 
+        return self._locked(cwd, body)
+
     def mark_delivered(self, cwd: str, job_id: str) -> bool:
         """Stamp a ``done`` record as returned once, which lets the count cap evict it
         (#244). Call it only after a stored result was validated and handed back: it
@@ -1152,7 +1325,8 @@ class JobStore:
         untracked or already-stamped record is left unchanged."""
         if not _is_job_id(job_id):
             return False  # before the lock: a malformed id touches nothing
-        with _LOCK, self._record_lock(cwd):
+
+        def body() -> bool:
             live = self._read_live_job(cwd, job_id)
             if live is None:
                 return False
@@ -1164,6 +1338,8 @@ class JobStore:
             meta["delivered_epoch"] = time.time()
             self._write_meta(jd, meta)
             return True
+
+        return self._locked(cwd, body)
 
     def discard(self, cwd: str, job_id: str, *, expected: str = "done") -> DiscardOutcome:
         """Delete a terminal job record, but only in the state the caller names.
@@ -1192,7 +1368,8 @@ class JobStore:
             raise ValueError(f"expected must be a terminal state, not {expected!r}")
         if not _is_job_id(job_id):
             return DiscardOutcome.MISSING  # before the lock: a malformed id touches nothing
-        with _LOCK, self._record_lock(cwd):
+
+        def body() -> DiscardOutcome:
             try:
                 live, left = self._read_or_expire(cwd, job_id)
                 if live is None:
@@ -1216,17 +1393,34 @@ class JobStore:
             self._rmtree(jd)
             return DiscardOutcome.REMOVED if self._gone(jd) else DiscardOutcome.DELETE_FAILED
 
+        return self._locked(cwd, body)
+
     def cancel(self, cwd: str, job_id: str) -> dict | None:
         if not _is_job_id(job_id):
             return None  # before the lock: a malformed id touches nothing
-        with _LOCK, self._record_lock(cwd):
-            live = self._read_live_job(cwd, job_id)
+
+        def first() -> dict | tuple[Path, dict] | None:
+            try:
+                live = self._read_live_job(cwd, job_id)
+            except MetaUnreadable as exc:
+                # A pending overrun's worker was signalled by its termination, though
+                # its record cannot be read now; anything else was never signalled.
+                exc.signalled = self._job_dir(cwd, job_id) in _OVERRAN
+                raise
             if live is None:
                 return None
             jd, meta, state = live
             if state in _TERMINAL:
                 return self._status_dict(jd, meta, state)
-            pid = _meta_pid(meta)
+            return jd, meta
+
+        # An overrun job is terminated and finalized (timeout, or done) here, so it
+        # reads terminal and is returned as such, as it was before #531.
+        found = self._locked(cwd, first)
+        if not isinstance(found, tuple):
+            return found
+        jd, meta = found
+        pid = _meta_pid(meta)
         # Terminate with the lock released: the graceful-shutdown grace wait must
         # not block status/list/result calls for every workspace. Liveness stays
         # lock-aware throughout, so a worker that exits mid-grace (and a PID then
@@ -1237,6 +1431,15 @@ class JobStore:
             is_alive=lambda m=meta: self._job_running(jd, m),
         )
         with _LOCK, self._record_lock(cwd):
+            if jd in _TERMINATING or jd in _OVERRAN:
+                # Terminated, or being terminated, as an overrun: finalize it as that,
+                # never as cancelled, as the cancel would have found it before #531.
+                try:
+                    done = self._finalize_overrun(jd)
+                except MetaUnreadable as exc:
+                    exc.signalled = True  # this cancel signalled the worker first
+                    raise
+                return None if done is None else self._status_dict(jd, *done)
             # Re-validate: during the unlocked grace window the record may have been
             # consumed/evicted, finalized by another path, or the worker may have
             # finished on its own. Re-read fresh state and never clobber it.
@@ -1272,20 +1475,22 @@ class JobStore:
             return self._status_dict(jd, meta, "cancelled")
 
     def list_jobs(self, cwd: str) -> list[dict]:
-        with _LOCK, self._record_lock(cwd):
-            self._reap_workspace(cwd)
-            ws = self._ws_dir(cwd)
-            summaries: list[dict] = []
-            for jd in self._job_dirs(ws):
-                meta = self._read_meta(jd)  # MetaUnreadable propagates, as for a result
-                if meta is None:
-                    continue
-                state = self._status_of(jd, meta)
-                summaries.append(self._status_dict(jd, meta, state))
-            summaries.sort(
-                key=lambda s: (s["started_epoch"], s["job_id"]), reverse=True
-            )  # newest first, id breaks ties (#249)
-            return summaries
+        return self._locked(cwd, lambda: self._list_jobs_locked(cwd))
+
+    def _list_jobs_locked(self, cwd: str) -> list[dict]:
+        self._reap_workspace(cwd)
+        ws = self._ws_dir(cwd)
+        summaries: list[dict] = []
+        for jd in self._job_dirs(ws):
+            meta = self._read_meta(jd)  # MetaUnreadable propagates, as for a result
+            if meta is None:
+                continue
+            state = self._status_of(jd, meta)
+            summaries.append(self._status_dict(jd, meta, state))
+        summaries.sort(
+            key=lambda s: (s["started_epoch"], s["job_id"]), reverse=True
+        )  # newest first, id breaks ties (#249)
+        return summaries
 
     def start_idempotent(
         self,
@@ -1337,75 +1542,83 @@ class JobStore:
             raise ValueError(f"lock_timeout must be finite and non-negative, got {lock_timeout!r}")
         deadline = None if lock_timeout is None else time.monotonic() + lock_timeout
 
-        if deadline is None:
-            _LOCK.acquire()
-        elif not _LOCK.acquire(timeout=max(0.0, deadline - time.monotonic())):
-            # A peer thread holds _LOCK (itself likely stuck on the flock); don't pile up
-            # this worker behind it — degrade to a retryable in_progress.
-            return {"kind": idempotency.IN_PROGRESS}
-        try:
-            index = self._idem_index(cwd)
-
-            def resolve(job_id: str) -> idempotency.JobFacts | None:
-                return self._resolve_job_facts(cwd, job_id)
-
-            # Hold the index's cross-process lock across sweep → reserve → spawn →
-            # publish so a stale-entry reclaim (unlink + re-create) or a late publish
-            # cannot interleave with another process and let two callers both win. The
-            # record lock is taken next, under what is left of the same deadline, so the
-            # resolve and start inside reuse it rather than wait unbounded (#237). Both
-            # flocks are taken on `with` entry, so a bounded LockTimeout surfaces here;
-            # nothing inside the body raises LockTimeout, so catching it is unambiguous.
-            def lock_wait() -> float | None:
-                return None if deadline is None else max(0.0, deadline - time.monotonic())
-
-            try:
-                with (
-                    index.lock(timeout=lock_wait()),
-                    self._record_lock(cwd, timeout=lock_wait()),
-                ):
-                    index.sweep(resolve)  # bounded maintenance: drop entries past horizon
-                    outcome = index.reserve(tool, key, arg_hash, resolve)
-                    if outcome.kind != idempotency.WON:
-                        if outcome.kind == idempotency.REPLAY:
-                            return {"kind": "replay", "job_id": outcome.job_id}
-                        return {"kind": outcome.kind}  # conflict|unavailable|in_progress|io_error
-                    try:
-                        job_id, started_at = self.start(
-                            cmd_factory,
-                            cwd,
-                            kind=kind,
-                            stdin_text=stdin_text,
-                            # Caller extra is opaque record metadata, same as start()'s;
-                            # the digest is protocol data the store owns, so it wins any
-                            # key collision.
-                            extra={
-                                **(extra or {}),
-                                "idempotency_key_digest": idempotency.key_digest(tool, key),
-                            },
-                            write_spec=write_spec,
-                        )
-                    except BaseException:
-                        # Spawn failed after we won the reservation: drop it so a clean
-                        # retry is a fresh miss rather than a phantom in-progress.
-                        index.remove(outcome.path)
-                        raise
-                    try:
-                        index.publish(outcome, job_id)
-                    except Exception:
-                        # The worker is already spawned and spend is committed, so a
-                        # publish failure must NOT surface as "failed to start" — that is
-                        # false, and a retry would spawn a second paid run. Hand back the
-                        # real running handle (the caller uses it and won't retry) and
-                        # leave the un-promoted reservation to fail closed (in_progress
-                        # until the horizon) for any other caller reusing this key (#200).
-                        # Never log the raw key; job_id is a random handle, safe to log.
-                        logger.exception(
-                            "idempotency publish failed after spawn; returning running job %s",
-                            job_id,
-                        )
-                    return {"kind": "created", "job_id": job_id, "started_at": started_at}
-            except idempotency.LockTimeout:
+        # An overrun job met by the index's resolve or by start's _make_room unwinds
+        # this whole section, releasing the index flock too, and the reservation
+        # with it (start's except below); the retry reserves afresh (#531).
+        def attempt() -> dict:
+            if deadline is None:
+                _LOCK.acquire()
+            elif not _LOCK.acquire(timeout=max(0.0, deadline - time.monotonic())):
+                # A peer thread holds _LOCK (itself likely stuck on the flock); don't pile up
+                # this worker behind it — degrade to a retryable in_progress.
                 return {"kind": idempotency.IN_PROGRESS}
-        finally:
-            _LOCK.release()
+            try:
+                index = self._idem_index(cwd)
+
+                def resolve(job_id: str) -> idempotency.JobFacts | None:
+                    return self._resolve_job_facts(cwd, job_id)
+
+                # Hold the index's cross-process lock across sweep → reserve → spawn →
+                # publish so a stale-entry reclaim (unlink + re-create) or a late publish
+                # cannot interleave with another process and let two callers both win. The
+                # record lock is taken next, under what is left of the same deadline, so the
+                # resolve and start inside reuse it rather than wait unbounded (#237). Both
+                # flocks are taken on `with` entry, so a bounded LockTimeout surfaces here;
+                # nothing inside the body raises LockTimeout, so catching it is unambiguous.
+                def lock_wait() -> float | None:
+                    return None if deadline is None else max(0.0, deadline - time.monotonic())
+
+                try:
+                    with (
+                        index.lock(timeout=lock_wait()),
+                        self._record_lock(cwd, timeout=lock_wait()),
+                    ):
+                        index.sweep(resolve)  # bounded maintenance: drop entries past horizon
+                        outcome = index.reserve(tool, key, arg_hash, resolve)
+                        if outcome.kind != idempotency.WON:
+                            if outcome.kind == idempotency.REPLAY:
+                                return {"kind": "replay", "job_id": outcome.job_id}
+                            return {
+                                "kind": outcome.kind
+                            }  # conflict|unavailable|in_progress|io_error
+                        try:
+                            job_id, started_at = self.start(
+                                cmd_factory,
+                                cwd,
+                                kind=kind,
+                                stdin_text=stdin_text,
+                                # Caller extra is opaque record metadata, same as start()'s;
+                                # the digest is protocol data the store owns, so it wins any
+                                # key collision.
+                                extra={
+                                    **(extra or {}),
+                                    "idempotency_key_digest": idempotency.key_digest(tool, key),
+                                },
+                                write_spec=write_spec,
+                            )
+                        except BaseException:
+                            # Spawn failed after we won the reservation: drop it so a clean
+                            # retry is a fresh miss rather than a phantom in-progress.
+                            index.remove(outcome.path)
+                            raise
+                        try:
+                            index.publish(outcome, job_id)
+                        except Exception:
+                            # The worker is already spawned and spend is committed, so a
+                            # publish failure must NOT surface as "failed to start" — that is
+                            # false, and a retry would spawn a second paid run. Hand back the
+                            # real running handle (the caller uses it and won't retry) and
+                            # leave the un-promoted reservation to fail closed (in_progress
+                            # until the horizon) for any other caller reusing this key (#200).
+                            # Never log the raw key; job_id is a random handle, safe to log.
+                            logger.exception(
+                                "idempotency publish failed after spawn; returning running job %s",
+                                job_id,
+                            )
+                        return {"kind": "created", "job_id": job_id, "started_at": started_at}
+                except idempotency.LockTimeout:
+                    return {"kind": idempotency.IN_PROGRESS}
+            finally:
+                _LOCK.release()
+
+        return self._terminate_overruns(attempt)
