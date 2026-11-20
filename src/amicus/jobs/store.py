@@ -99,11 +99,27 @@ class ResultUnreadable(Exception):
     why a caller reports it as a temporary error naming a free re-read, never as
     ``failed`` (whose repair says to pay again). Carries ``errno`` only: the message of
     an ``OSError`` can name a path, which never leaves the store.
+
+    ``_read_meta`` raises the subclass ``MetaUnreadable`` for a ``meta.json`` that
+    exists but cannot be read (#530): the record's state is just as unknowable, and the
+    same guarantees hold.
     """
 
     def __init__(self, errno: int | None) -> None:
         super().__init__(f"result unreadable (errno {errno})")
         self.errno = errno
+
+
+class MetaUnreadable(ResultUnreadable):
+    """A job's ``meta.json`` exists but could not be read (#530). Unlike an unreadable
+    result, which a read reaches only once the worker is stopped, this can meet a running
+    worker. ``signalled`` is True only when ``cancel`` raised it after signalling the
+    worker; otherwise nothing is known about the worker, and nothing was sent to it."""
+
+    def __init__(self, errno: int | None, *, signalled: bool = False) -> None:
+        super().__init__(errno)
+        self.args = (f"job record unreadable (errno {errno})",)
+        self.signalled = signalled
 
 
 class DiscardOutcome(StrEnum):
@@ -501,9 +517,18 @@ class JobStore:
     # --------------------------------------------------------------- meta i/o
     @staticmethod
     def _read_meta(jd: Path) -> dict | None:
+        """Parse meta.json, or None if absent (not a record yet) or unparsable. One that
+        exists but cannot be read raises ``ResultUnreadable`` (#530), as ``_read_envelope``
+        does: the record is there, so it is neither absent nor safe to delete or evict."""
         try:
-            return json.loads((jd / "meta.json").read_text())
-        except (OSError, json.JSONDecodeError):
+            text = (jd / "meta.json").read_text()
+        except FileNotFoundError:
+            return None
+        except OSError as exc:
+            raise MetaUnreadable(exc.errno) from None
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
             return None
 
     @staticmethod
@@ -1011,7 +1036,10 @@ class JobStore:
             return
         now = time.time()
         for jd in self._job_dirs(ws):
-            meta = self._read_meta(jd)
+            try:
+                meta = self._read_meta(jd)
+            except ResultUnreadable:
+                continue  # its age is unknowable, so it is never reaped on this read
             if meta is None:
                 continue
             try:
@@ -1054,7 +1082,13 @@ class JobStore:
         self._reap_workspace(cwd)
         records: list[tuple[Path, dict, str | None]] = []
         for jd in self._job_dirs(self._ws_dir(cwd)):
-            meta = self._read_meta(jd)
+            try:
+                meta = self._read_meta(jd)
+            except ResultUnreadable:
+                # A meta.json that exists but cannot be read is a record (#530): counted
+                # as held and never evicted, like an unreadable result below.
+                records.append((jd, {}, None))
+                continue
             if meta is None:
                 continue
             try:
@@ -1206,7 +1240,11 @@ class JobStore:
             # Re-validate: during the unlocked grace window the record may have been
             # consumed/evicted, finalized by another path, or the worker may have
             # finished on its own. Re-read fresh state and never clobber it.
-            meta = self._read_meta(jd)
+            try:
+                meta = self._read_meta(jd)
+            except MetaUnreadable as exc:
+                exc.signalled = True  # the worker was signalled before this read failed
+                raise
             if meta is None:
                 return None  # consumed or expired while we waited
             terminal = meta.get("terminal_status")
@@ -1239,7 +1277,7 @@ class JobStore:
             ws = self._ws_dir(cwd)
             summaries: list[dict] = []
             for jd in self._job_dirs(ws):
-                meta = self._read_meta(jd)
+                meta = self._read_meta(jd)  # MetaUnreadable propagates, as for a result
                 if meta is None:
                     continue
                 state = self._status_of(jd, meta)
