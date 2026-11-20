@@ -220,3 +220,28 @@ def test_failed_stop_keys_on_the_stop_reason_not_the_message():
     assert normalize.failed_stop(STREAM) is None, "control: a successful run did not fail"
     assert normalize.failed_stop("") is None
     assert normalize.final_error(stream("error", errorMessage="  ")) is None
+
+
+# Node's JSON.stringify writes these three raw inside a string, and str.splitlines() treats
+# each as a line boundary; the stream's only record separator is "\n".
+_RAW_SEPARATORS = pytest.mark.parametrize("sep", ["\u2028", "\u2029", "\u0085"])
+
+
+def _raw_line(obj: dict) -> str:
+    return json.dumps(obj, ensure_ascii=False) + "\n"
+
+
+@_RAW_SEPARATORS
+def test_a_raw_unicode_line_separator_does_not_split_the_final_message(sep):
+    final = f"final{sep}answer"
+    events = _line({"type": "message_end", "message": _assistant(_text("intermediate"))})
+    events += _raw_line({"type": "message_end", "message": _assistant(_text(final))})
+    assert sep in events
+    assert normalize.extract_final_message(events) == final
+
+
+@_RAW_SEPARATORS
+def test_a_loss_before_a_final_message_holding_a_raw_separator_leaves_it_trusted(sep):
+    events = "[output truncated]\n"
+    events += _raw_line({"type": "message_end", "message": _assistant(_text(f"a{sep}b"))})
+    assert normalize.lost_after_final_message(events) is False

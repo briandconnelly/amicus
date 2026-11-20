@@ -24,8 +24,15 @@ def _event(raw_line: str) -> dict | None:
     return event if isinstance(event, dict) else None
 
 
+def _records(events: str) -> list[str]:
+    """The stream's records. The only separator is "\n": `str.splitlines()` also breaks on
+    U+2028, U+2029 and U+0085, which pi writes raw inside a JSON string, and a record cut
+    there no longer parses, so an earlier message would be read as the final one."""
+    return events.split("\n")
+
+
 def _events(events: str):
-    for raw_line in events.splitlines():
+    for raw_line in _records(events):
         event = _event(raw_line)
         if event is not None:
             yield event
@@ -113,7 +120,7 @@ def lost_after_final_message(events: str) -> bool:
     """Whether a capture loss marker sits after the last assistant `message_end`, or anywhere
     when there is none (#198): the final message may then be the one that was evicted."""
     lost = False
-    for raw_line in events.splitlines():
+    for raw_line in _records(events):
         if streamcap.is_loss_marker(raw_line):
             lost = True
         elif (event := _event(raw_line)) is not None and _assistant_message(event) is not None:

@@ -52,7 +52,7 @@ def is_loss_marker(line: str) -> bool:
     ``BoundedCapture`` puts where it evicted lines, or a record the assembler cut short at
     its per-record cap. Either means bytes the producer wrote are not in the capture, so a
     reader that takes the LAST record of a kind cannot know it saw the last one past it.
-    The record's own separator is optional, so a caller may pass a ``splitlines()`` line."""
+    The record's own separator is optional, so a caller may pass a line already split off it."""
     record = line.rstrip("\n\0")
     return record == _OUTPUT_TRUNC_MARKER.rstrip("\n") or record.endswith(_LINE_TRUNC_SENTINEL)
 

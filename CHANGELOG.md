@@ -20,6 +20,15 @@ per-change, as its own lead says.
 
 ## [Unreleased]
 
+### Fixed
+
+- `pi` no longer returns an earlier assistant message as the answer when the final one
+  contains a raw U+2028, U+2029 or U+0085. The event stream was split with
+  `str.splitlines()`, which breaks on those characters as well as on the stream's own `\n`,
+  so the final record was cut in two and discarded; a run with a single message returned no
+  answer. `codex` read its event stream the same way and lost the usage or session id of an
+  event holding one of them; its answer comes from a separate file and was unaffected.
+
 ## [0.15.0] - 2026-11-16
 
 This release removes the deprecated `kimi` backend (#423): route Kimi models through `pi`
