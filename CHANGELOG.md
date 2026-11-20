@@ -28,6 +28,10 @@ per-change, as its own lead says.
   so the final record was cut in two and discarded; a run with a single message returned no
   answer. `codex` read its event stream the same way and lost the usage or session id of an
   event holding one of them; its answer comes from a separate file and was unaffected.
+- A read error on the task-to-job map no longer erases it. Recording a tasked run's job read a
+  map it could not open as empty and wrote that back with only the new entry, so every other
+  task lost the entry that recovers its job by task id. The record now fails, is logged as
+  before, and leaves the file as it was; a missing file is still an empty map.
 
 ## [0.15.0] - 2026-11-16
 

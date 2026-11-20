@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import threading
+from pathlib import Path
+
+import pytest
 
 from amicus.jobs import taskmap
 from amicus.jobs.taskmap import MAX_ENTRIES, TaskJobMap
@@ -96,3 +99,38 @@ def test_pruning_keeps_the_most_recently_recorded_entries(tmp_path):
     # proving pruning never evicts a mapping for a job that could still be live.
     for i in range(overflow, total):
         assert entries[f"task-{i}"] == f"job-{i}"
+
+
+def test_a_failed_read_aborts_the_record_and_keeps_the_existing_entries(tmp_path, monkeypatch):
+    """A read that fails for any reason but a missing file says nothing about what the map
+    holds, so record() must not write over it: that would drop every other task's entry."""
+    path = tmp_path / "tasks.json"
+    task_map = TaskJobMap(path)
+    task_map.record("t1", "j1")
+    real_read_text = Path.read_text
+
+    def _fail_once(self, *args, **kwargs):
+        if self == path:
+            monkeypatch.setattr(Path, "read_text", real_read_text)
+            raise OSError(5, "Input/output error")
+        return real_read_text(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", _fail_once)
+    with pytest.raises(OSError, match="Input/output error"):
+        task_map.record("t2", "j2")
+    assert task_map.entries() == {"t1": "j1"}
+    assert not list(tmp_path.glob("*.tmp"))
+    task_map.record("t2", "j2")
+    assert task_map.entries() == {"t1": "j1", "t2": "j2"}, "control: the retry lands"
+
+
+def test_a_failed_read_still_reads_as_empty_for_a_lookup(tmp_path, monkeypatch):
+    path = tmp_path / "tasks.json"
+    task_map = TaskJobMap(path)
+    task_map.record("t1", "j1")
+
+    def _fail(self, *args, **kwargs):
+        raise OSError(5, "Input/output error")
+
+    monkeypatch.setattr(Path, "read_text", _fail)
+    assert task_map.entries() == {} and task_map.job_for("t1") is None
