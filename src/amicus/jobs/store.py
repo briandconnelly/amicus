@@ -594,7 +594,8 @@ class JobStore:
                     try:
                         rollback()
                     except BaseException as exc:
-                        first = first or exc
+                        if first is None:
+                            first = exc
             finally:
                 if published:
                     # A termination or finalization that raised: release its marker, so
