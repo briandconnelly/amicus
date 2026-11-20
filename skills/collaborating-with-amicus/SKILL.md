@@ -228,8 +228,10 @@ obligation.
 
 `backend` has no default, and each tool's `backend` enum is the set it accepts: any other
 pairing is rejected pre-spend as `invalid_arguments`. Those restrictions belong to harnesses: an
-Anthropic model run through `pi` can delegate and still has no `adversarial_review`. `pi` has no
-default model, so a pi call needs an exact `provider/id`. `AMICUS_BACKENDS` says which backends
+Anthropic model run through `pi` can delegate and still has no `adversarial_review`. `pi` takes
+its model from the call or the server: a `model` passed as an exact `provider/id` wins, an
+omitted `model` uses `AMICUS_PI_MODEL`, and a call with neither is refused pre-spend as
+`invalid_arguments`; amicus never falls back to pi's own default. `AMICUS_BACKENDS` says which backends
 this deployment enables, not which to prefer. An unkeyed sync call past `timeout_seconds` is
 terminated and its work is lost; a keyed sync call or an `_async` call keeps the result. Every
 paid call is a job (`meta.job_id`).

@@ -207,9 +207,9 @@ Beyond the feature gate and the evidence question, amicus does not rank backends
   diversity as **unverified** rather than assuming it. Separate attempts and complementary review
   scopes are still useful without it — they just do not establish independence or correctness on
   their own.
-- **Pi's model is yours to name.** `pi` has no default model: it uses `AMICUS_PI_MODEL` or the
-  call's `model`, an exact `provider/id`, and refuses the call before it spends when neither is
-  set. Until `AMICUS_PI_MODEL` is set, `status.authenticated` is unknown (`null`) rather than
+- **Pi's model is yours to name.** A call's `model`, an exact `provider/id`, wins; an omitted
+  `model` uses `AMICUS_PI_MODEL`; and a call with neither is refused before it spends. amicus
+  never falls back to pi's own default. Until `AMICUS_PI_MODEL` is set, `status.authenticated` is unknown (`null`) rather than
   false, and a call with a listed `model` is still eligible. The model's provider prefix, a
   router included, decides where the prompt goes, and `amicus_models` lists only models of
   providers pi holds credentials for. An unknown id is `invalid_model`, refused pre-spend because pi
