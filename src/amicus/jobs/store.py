@@ -1277,10 +1277,7 @@ class JobStore:
             ws = self._ws_dir(cwd)
             summaries: list[dict] = []
             for jd in self._job_dirs(ws):
-                try:
-                    meta = self._read_meta(jd)
-                except ResultUnreadable:
-                    continue  # omitted from this listing; the next one shows it (#530)
+                meta = self._read_meta(jd)  # MetaUnreadable propagates, as for a result
                 if meta is None:
                     continue
                 state = self._status_of(jd, meta)

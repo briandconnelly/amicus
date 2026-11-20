@@ -171,10 +171,11 @@ def unreadable_result_envelope(
         else "The record stays until AMICUS_JOB_TTL expires it and holds a slot of the "
         "per-workspace job cap meanwhile; a consume keeps it."
     )
+    state = "Its state could not be determined" if record else "The job is not failed"
     return error_envelope(
         "internal_error",
-        f"{subject}: {what} exists but could not be read ({cause}). The job is "
-        f"not failed and the record is kept; do not start a new job.{stopped}",
+        f"{subject}: {what} exists but could not be read ({cause}). {state} "
+        f"and the record is kept; do not start a new job.{stopped}",
         meta,
         plugin=plugin,
         temporary=True,

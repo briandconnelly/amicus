@@ -1043,7 +1043,7 @@ async def _unobserved(store, cwd, job_id, monkeypatch):
     raise AssertionError("worker did not finish in time")
 
 
-def _assert_unreadable(body, *, repair_tool, job_id, ws, detail=None):
+def _assert_unreadable(body, *, repair_tool, job_id, ws, detail=None, record=False):
     err = body["error"]
     assert body["ok"] is False and err["code"] == "internal_error"
     assert err["temporary"] is True and err["retry_after_ms"] == delivery.RESULT_READ_RETRY_MS
@@ -1051,7 +1051,8 @@ def _assert_unreadable(body, *, repair_tool, job_id, ws, detail=None):
     expected = {"job_id": job_id, **ws} | ({"detail": detail} if detail else {})
     assert err["repair"]["arguments"] == expected
     assert body["meta"]["job_id"] == job_id
-    assert "not failed" in err["message"] and "do not start a new job" in err["message"]
+    state = "could not be determined" if record else "not failed"
+    assert state in err["message"] and "do not start a new job" in err["message"]
     assert ws["workspace_root"] not in err["message"]
 
 
@@ -1080,6 +1081,8 @@ async def test_job_tools_report_an_unreadable_result_as_temporary(
             schemas[tool].validate(body)
             detail = "summary" if "result" in tool else None
             _assert_unreadable(body, repair_tool=repair_tool, job_id=job_id, ws=ws, detail=detail)
+            assert "its stored result exists" in body["error"]["message"]
+            assert "could not be determined" not in body["error"]["message"]
             assert ("no further cancel" in body["error"]["message"]) is (
                 tool == "amicus_job_cancel"
             )
@@ -1432,7 +1435,7 @@ async def test_cancel_whose_meta_read_fails_before_signalling_says_so(
         assert res.is_error
         body = res.structured_content
         schemas["amicus_job_cancel"].validate(body)
-        _assert_unreadable(body, repair_tool="amicus_job_cancel", job_id=job_id, ws=ws)
+        _assert_unreadable(body, repair_tool="amicus_job_cancel", job_id=job_id, ws=ws, record=True)
         msg = body["error"]["message"]
         assert "no further cancel" not in msg and "not signalled" in msg
         assert "job record" in msg and "stored result" not in msg
@@ -1440,3 +1443,41 @@ async def test_cancel_whose_meta_read_fails_before_signalling_says_so(
         assert store.status(cwd, job_id)["status"] == "running"
         monkeypatch.undo()
         store.cancel(cwd, job_id)
+
+
+async def test_a_listing_with_an_unreadable_job_record_is_temporary(
+    app, store, tmp_path, monkeypatch
+):
+    """#530: the listing is refused, not served without the row, as for an unreadable
+    result; the message never asserts the job is not failed, and it recovers on re-read."""
+    cwd = str(tmp_path)
+    ws = {"workspace_root": cwd}
+    async with Client(app) as c:
+        job_id = await _start(c, tmp_path)
+        jd = store._job_dir(cwd, job_id)
+        _wait = time.monotonic() + 15
+        while store.status(cwd, job_id)["status"] == "running" and time.monotonic() < _wait:
+            await asyncio.sleep(0.02)
+        real_read_text = Path.read_text
+
+        def denied(self, *args, **kwargs):
+            if self == jd / "meta.json":
+                raise PermissionError("meta read denied")
+            return real_read_text(self, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "read_text", denied)
+        listed = await c.call_tool("amicus_job_list", ws, raise_on_error=False)
+        status = await c.call_tool(
+            "amicus_job_status", {"job_id": job_id, **ws}, raise_on_error=False
+        )
+        monkeypatch.setattr(Path, "read_text", real_read_text)
+        assert listed.is_error
+        err = listed.structured_content["error"]
+        assert err["code"] == "internal_error" and err["temporary"] is True
+        assert err["repair"]["tool"] == "amicus_job_list"
+        for msg in (err["message"], status.structured_content["error"]["message"]):
+            assert "job record exists" in msg and "not failed" not in msg
+            assert "could not be determined" in msg and "do not start a new job" in msg
+        assert (jd / "meta.json").exists()
+        jobs = (await c.call_tool("amicus_job_list", ws)).structured_content["jobs"]
+        assert [j["job_id"] for j in jobs] == [job_id]

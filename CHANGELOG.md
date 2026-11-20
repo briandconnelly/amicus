@@ -27,8 +27,8 @@ per-change, as its own lead says.
   admitted past a full cap on a transient read error. The same read error is no longer reported
   as a missing or expired job: status, result, cancel and consume report it as the temporary,
   re-readable storage error an unreadable result already gets, and an idempotency key keeps
-  replaying to that job rather than being reclaimed. A listing still omits the record until it
-  reads back, and a missing or unparsable `meta.json` is treated as before. A cancel whose
+  replaying to that job rather than being reclaimed. A listing reports the same temporary error
+  rather than omitting the record, and a missing or unparsable `meta.json` is treated as before. A cancel whose
   read of the record fails before it signalled the worker says the worker's state is unknown and
   names the cancel as the call to retry, rather than claiming the worker is stopped.
 

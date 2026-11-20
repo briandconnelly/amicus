@@ -2597,7 +2597,9 @@ def test_a_record_whose_meta_cannot_be_read_is_never_reported_absent(tmp_path, m
     assert store.discard(cwd, first, expected="failed") is DiscardOutcome.DELETE_FAILED
     facts = store._resolve_job_facts(cwd, first)
     assert facts is not None and facts.exists and not facts.terminal
-    assert store.list_jobs(cwd) == []  # a listing omits what it cannot read
+    with pytest.raises(job_store.MetaUnreadable):
+        store.list_jobs(cwd)  # never omitted: a cursor would skip it for good
+    assert (jd / "meta.json").exists()
     monkeypatch.undo()
     assert store.status(cwd, first)["status"] == "failed"
 

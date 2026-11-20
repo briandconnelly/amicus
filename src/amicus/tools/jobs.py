@@ -342,10 +342,10 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
         try:
             rows = await asyncio.to_thread(store().list_jobs, cwd)
         except ResultUnreadable as exc:
-            # One record's result exists but cannot be read (#280). The whole listing is
-            # refused rather than served without that row: a page that silently omits a
-            # job would let the next cursor step past it, and the schema has no way to
-            # say a row is missing. The repair repeats this exact call.
+            # One record's result (#280) or job record (#530) exists but cannot be
+            # read. The whole listing is refused rather than served without that row:
+            # a page that silently omits a job would let the next cursor step past it,
+            # and the schema has no way to say a row is missing. The repair repeats this exact call.
             filters = {
                 "limit": limit,
                 "cursor": cursor,
@@ -363,6 +363,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
                 },
                 job_id=None,
                 errno=exc.errno,
+                record=isinstance(exc, MetaUnreadable),
             )
         tasks = lookup.task_map(settings).entries()
         # First association wins, as TaskJobMap.task_for does: a keyed replay from another
