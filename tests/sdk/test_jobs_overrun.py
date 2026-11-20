@@ -651,3 +651,165 @@ def test_cancel_racing_an_overrun_marks_an_unreadable_meta_signalled(tmp_path, m
         t.join(_WAIT)
         job_store._kill_pid_tree(pid)
     assert info.value.signalled is True
+
+
+def _failing_meta_write(monkeypatch, store: JobStore) -> None:
+    """The first meta.json write after a spawn fails, as a full disk would."""
+
+    def boom(jd, meta):
+        raise OSError(errno.ENOSPC, "no space left")
+
+    monkeypatch.setattr(store, "_write_meta", boom)
+
+
+@pytest.mark.parametrize("idempotent", [False, True])
+def test_start_rollback_terminates_the_unrecorded_worker_unlocked(
+    tmp_path, monkeypatch, idempotent
+):
+    """#536: a start whose meta.json write fails stops its worker with every lock
+    released, so a status lookup in another workspace finishes inside the grace, and
+    an idempotent retry is a fresh miss rather than in_progress."""
+    store = _store(tmp_path)
+    cwd_a, cwd_b = str(tmp_path / "a"), str(tmp_path / "b")
+    job_b, _ = store.start(_factory(_SLEEP), cwd_b, kind="k")
+    _failing_meta_write(monkeypatch, store)
+    entered, release = threading.Event(), threading.Event()
+    seen: dict[str, object] = {}
+
+    def fake_terminate(pid, grace_seconds, **kwargs):
+        seen["locks_free"] = _locks_free(store, cwd_a)
+        seen["job_dirs"] = [d.name for d in store._job_dirs(store._ws_dir(cwd_a))]
+        entered.set()
+        release.wait()
+        job_store._kill_pid_tree(pid)
+
+    monkeypatch.setattr(job_store, "_terminate_pid_tree", fake_terminate)
+
+    def start_a():
+        if idempotent:
+            return store.start_idempotent(
+                _factory(_SLEEP), cwd_a, kind="k", tool="t", key="key", arg_hash="h"
+            )
+        return store.start(_factory(_SLEEP), cwd_a, kind="k")
+
+    errors: list[BaseException] = []
+
+    def run_a():
+        try:
+            start_a()
+        except BaseException as exc:
+            errors.append(exc)
+
+    t_a = threading.Thread(target=run_a)
+    try:
+        t_a.start()
+        assert entered.wait(_WAIT)
+        status_b = _bounded(lambda: store.status(cwd_b, job_b))
+        if idempotent:
+            # The reservation is gone while the first worker is still in its grace.
+            monkeypatch.setattr(store, "_write_meta", JobStore._write_meta)
+            seen["retried"] = _bounded(
+                lambda: store.start_idempotent(
+                    _factory("pass"), cwd_a, kind="k", tool="t", key="key", arg_hash="h"
+                )
+            )
+    finally:
+        release.set()
+        t_a.join(_WAIT)
+        monkeypatch.undo()
+        store.cancel(cwd_b, job_b)
+    assert seen["locks_free"] is True
+    assert len(seen["job_dirs"]) == 1  # the dir is still there for the manifest read
+    assert status_b["status"] == "running"
+    assert len(errors) == 1 and isinstance(errors[0], OSError)
+    if idempotent:
+        assert seen["retried"]["kind"] == "created"
+        assert len(store._job_dirs(store._ws_dir(cwd_a))) == 1  # only the retry's
+    else:
+        assert store._job_dirs(store._ws_dir(cwd_a)) == []
+
+
+def test_start_rollback_cleans_declared_paths_before_dropping_the_dir(tmp_path, monkeypatch):
+    """The manifest is read after the worker is stopped: a path it declares as it
+    dies is still cleaned up, and the job dir goes after."""
+    root = tmp_path / "wt"
+    root.mkdir()
+    store = _store(tmp_path, cleanup_root=root)
+    cwd = str(tmp_path / "a")
+    _failing_meta_write(monkeypatch, store)
+    declared = root / "late"
+
+    def fake_terminate(pid, grace_seconds, **kwargs):
+        job_store._kill_pid_tree(pid)
+        (jd,) = store._job_dirs(store._ws_dir(cwd))
+        declared.mkdir()
+        (jd / "cleanup.json").write_text(json.dumps({"paths": [str(declared)]}))
+
+    monkeypatch.setattr(job_store, "_terminate_pid_tree", fake_terminate)
+    with pytest.raises(OSError):
+        store.start(_factory(_SLEEP), cwd, kind="k")
+    assert not declared.exists()
+    assert store._job_dirs(store._ws_dir(cwd)) == []
+
+
+def test_start_rollback_keeps_the_dir_when_cleanup_raises(tmp_path, monkeypatch):
+    store = _store(tmp_path)
+    cwd = str(tmp_path / "a")
+    _failing_meta_write(monkeypatch, store)
+
+    def bad_manifest(jd):
+        raise UnicodeDecodeError("utf-8", b"\xff", 0, 1, "bad")
+
+    monkeypatch.setattr(store, "_read_cleanup_manifest", bad_manifest)
+    with pytest.raises(OSError, match="no space"):
+        store.start(_factory(_SLEEP), cwd, kind="k")
+    assert len(store._job_dirs(store._ws_dir(cwd))) == 1
+
+
+def test_start_rollback_runs_on_the_store_that_queued_it(tmp_path, monkeypatch):
+    """A start nested in another store's section rolls back with its own settings."""
+    root = tmp_path / "wt"
+    root.mkdir()
+    outer, inner = _store(tmp_path / "o"), _store(tmp_path / "i", cleanup_root=root)
+    cwd = str(tmp_path / "a")
+    _failing_meta_write(monkeypatch, inner)
+    declared = root / "late"
+
+    def fake_terminate(pid, grace_seconds, **kwargs):
+        job_store._kill_pid_tree(pid)
+        (jd,) = inner._job_dirs(inner._ws_dir(cwd))
+        declared.mkdir()
+        (jd / "cleanup.json").write_text(json.dumps({"paths": [str(declared)]}))
+
+    monkeypatch.setattr(job_store, "_terminate_pid_tree", fake_terminate)
+
+    def body():
+        inner.start(_factory(_SLEEP), cwd, kind="k")
+
+    with pytest.raises(OSError):
+        outer._locked(cwd, body)
+    assert not declared.exists()
+
+
+def test_start_rollback_withdraws_a_published_meta_under_the_lock(tmp_path, monkeypatch):
+    store = _store(tmp_path)
+    cwd = str(tmp_path / "a")
+    real_write = JobStore._write_meta
+
+    def publish_then_fail(jd, meta):
+        real_write(jd, meta)
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(store, "_write_meta", publish_then_fail)
+    seen: list[bool] = []
+
+    def fake_terminate(pid, grace_seconds, **kwargs):
+        (jd,) = store._job_dirs(store._ws_dir(cwd))
+        seen.append((jd / "meta.json").exists())
+        job_store._kill_pid_tree(pid)
+
+    monkeypatch.setattr(job_store, "_terminate_pid_tree", fake_terminate)
+    with pytest.raises(KeyboardInterrupt):
+        store.start(_factory(_SLEEP), cwd, kind="k")
+    assert seen == [False]
+    assert store._job_dirs(store._ws_dir(cwd)) == []
