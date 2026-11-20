@@ -39,6 +39,7 @@ platforms without it degrade to the owned-child check (and never signal unowned 
 from __future__ import annotations
 
 import contextlib
+import functools
 import hashlib
 import json
 import logging
@@ -553,7 +554,7 @@ class JobStore:
         if getattr(_SECTION, "published", None) is not None:
             return attempt()
         published: set[Path] = set()
-        rollbacks: list[tuple[int, Path]] = []
+        rollbacks: list[Callable[[], None]] = []
         _SECTION.published = published
         _SECTION.rollbacks = rollbacks
         try:
@@ -582,8 +583,10 @@ class JobStore:
             _SECTION.rollbacks = None
             # A start that spawned a worker it could not record (#536): every lock is
             # released by now, and any idempotency reservation already dropped.
-            for pid, jd in rollbacks:
-                self._rollback_unrecorded(pid, jd)
+            # Each is bound to the store that queued it, so its grace and cleanup root
+            # are that store's, not this one's.
+            for rollback in rollbacks:
+                rollback()
             if published:
                 # A termination or finalization that raised: release its marker, so this
                 # process does not read the job as running forever.
@@ -977,10 +980,14 @@ class JobStore:
             # worker survives — mirrors the `except OSError` around Popen above.
             # The wait for it runs with every lock released (#536): the outermost section
             # (`_terminate_overruns`) runs the rollback after it unwinds. jd has no
-            # meta.json, so no other section counts, reaps or deletes it meanwhile.
+            # meta.json, so no other section counts, reaps or deletes it meanwhile; one
+            # the write published before failing (an interrupt after its rename) is
+            # withdrawn here, under the record lock, so that stays true.
+            with contextlib.suppress(OSError):
+                (jd / "meta.json").unlink(missing_ok=True)
             pending = getattr(_SECTION, "rollbacks", None)
             if pending is not None:
-                pending.append((proc.pid, jd))
+                pending.append(functools.partial(self._rollback_unrecorded, proc.pid, jd))
             else:
                 self._rollback_unrecorded(proc.pid, jd)
             raise

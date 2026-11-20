@@ -705,6 +705,14 @@ def test_start_rollback_terminates_the_unrecorded_worker_unlocked(
         t_a.start()
         assert entered.wait(_WAIT)
         status_b = _bounded(lambda: store.status(cwd_b, job_b))
+        if idempotent:
+            # The reservation is gone while the first worker is still in its grace.
+            monkeypatch.setattr(store, "_write_meta", JobStore._write_meta)
+            seen["retried"] = _bounded(
+                lambda: store.start_idempotent(
+                    _factory("pass"), cwd_a, kind="k", tool="t", key="key", arg_hash="h"
+                )
+            )
     finally:
         release.set()
         t_a.join(_WAIT)
@@ -714,34 +722,33 @@ def test_start_rollback_terminates_the_unrecorded_worker_unlocked(
     assert len(seen["job_dirs"]) == 1  # the dir is still there for the manifest read
     assert status_b["status"] == "running"
     assert len(errors) == 1 and isinstance(errors[0], OSError)
-    assert store._job_dirs(store._ws_dir(cwd_a)) == []
     if idempotent:
-        retried = store.start_idempotent(
-            _factory("pass"), cwd_a, kind="k", tool="t", key="key", arg_hash="h"
-        )
-        assert retried["kind"] == "created"
+        assert seen["retried"]["kind"] == "created"
+        assert len(store._job_dirs(store._ws_dir(cwd_a))) == 1  # only the retry's
+    else:
+        assert store._job_dirs(store._ws_dir(cwd_a)) == []
 
 
 def test_start_rollback_cleans_declared_paths_before_dropping_the_dir(tmp_path, monkeypatch):
-    store = _store(tmp_path)
+    """The manifest is read after the worker is stopped: a path it declares as it
+    dies is still cleaned up, and the job dir goes after."""
+    root = tmp_path / "wt"
+    root.mkdir()
+    store = _store(tmp_path, cleanup_root=root)
     cwd = str(tmp_path / "a")
     _failing_meta_write(monkeypatch, store)
-    order: list[str] = []
-    monkeypatch.setattr(
-        job_store,
-        "_terminate_pid_tree",
-        lambda pid, g, **kw: (order.append("terminate"), job_store._kill_pid_tree(pid)),
-    )
-    real_cleanup = store._cleanup_external_paths
+    declared = root / "late"
 
-    def cleanup(paths):
-        order.append("cleanup")
-        return real_cleanup(paths)
+    def fake_terminate(pid, grace_seconds, **kwargs):
+        job_store._kill_pid_tree(pid)
+        (jd,) = store._job_dirs(store._ws_dir(cwd))
+        declared.mkdir()
+        (jd / "cleanup.json").write_text(json.dumps({"paths": [str(declared)]}))
 
-    monkeypatch.setattr(store, "_cleanup_external_paths", cleanup)
+    monkeypatch.setattr(job_store, "_terminate_pid_tree", fake_terminate)
     with pytest.raises(OSError):
         store.start(_factory(_SLEEP), cwd, kind="k")
-    assert order == ["terminate", "cleanup"]
+    assert not declared.exists()
     assert store._job_dirs(store._ws_dir(cwd)) == []
 
 
@@ -757,3 +764,52 @@ def test_start_rollback_keeps_the_dir_when_cleanup_raises(tmp_path, monkeypatch)
     with pytest.raises(OSError, match="no space"):
         store.start(_factory(_SLEEP), cwd, kind="k")
     assert len(store._job_dirs(store._ws_dir(cwd))) == 1
+
+
+def test_start_rollback_runs_on_the_store_that_queued_it(tmp_path, monkeypatch):
+    """A start nested in another store's section rolls back with its own settings."""
+    root = tmp_path / "wt"
+    root.mkdir()
+    outer, inner = _store(tmp_path / "o"), _store(tmp_path / "i", cleanup_root=root)
+    cwd = str(tmp_path / "a")
+    _failing_meta_write(monkeypatch, inner)
+    declared = root / "late"
+
+    def fake_terminate(pid, grace_seconds, **kwargs):
+        job_store._kill_pid_tree(pid)
+        (jd,) = inner._job_dirs(inner._ws_dir(cwd))
+        declared.mkdir()
+        (jd / "cleanup.json").write_text(json.dumps({"paths": [str(declared)]}))
+
+    monkeypatch.setattr(job_store, "_terminate_pid_tree", fake_terminate)
+
+    def body():
+        inner.start(_factory(_SLEEP), cwd, kind="k")
+
+    with pytest.raises(OSError):
+        outer._locked(cwd, body)
+    assert not declared.exists()
+
+
+def test_start_rollback_withdraws_a_published_meta_under_the_lock(tmp_path, monkeypatch):
+    store = _store(tmp_path)
+    cwd = str(tmp_path / "a")
+    real_write = JobStore._write_meta
+
+    def publish_then_fail(jd, meta):
+        real_write(jd, meta)
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(store, "_write_meta", publish_then_fail)
+    seen: list[bool] = []
+
+    def fake_terminate(pid, grace_seconds, **kwargs):
+        (jd,) = store._job_dirs(store._ws_dir(cwd))
+        seen.append((jd / "meta.json").exists())
+        job_store._kill_pid_tree(pid)
+
+    monkeypatch.setattr(job_store, "_terminate_pid_tree", fake_terminate)
+    with pytest.raises(KeyboardInterrupt):
+        store.start(_factory(_SLEEP), cwd, kind="k")
+    assert seen == [False]
+    assert store._job_dirs(store._ws_dir(cwd)) == []
