@@ -813,3 +813,26 @@ def test_start_rollback_withdraws_a_published_meta_under_the_lock(tmp_path, monk
         store.start(_factory(_SLEEP), cwd, kind="k")
     assert seen == [False]
     assert store._job_dirs(store._ws_dir(cwd)) == []
+
+
+def test_an_interrupted_rollback_does_not_skip_the_rest(tmp_path):
+    """An interrupt in one queued rollback still runs the others, releases the
+    section's published markers, and is re-raised."""
+    store = _store(tmp_path)
+    marker = tmp_path / "job"
+    ran: list[str] = []
+
+    def interrupted():
+        ran.append("interrupted")
+        raise KeyboardInterrupt
+
+    def attempt():
+        job_store._SECTION.rollbacks.extend([interrupted, lambda: ran.append("next")])
+        job_store._SECTION.published.add(marker)
+        job_store._TERMINATING.add(marker)
+        raise OSError(errno.ENOSPC, "no space left")
+
+    with pytest.raises(KeyboardInterrupt):
+        store._terminate_overruns(attempt)
+    assert ran == ["interrupted", "next"]
+    assert marker not in job_store._TERMINATING
