@@ -585,13 +585,24 @@ class JobStore:
             # released by now, and any idempotency reservation already dropped.
             # Each is bound to the store that queued it, so its grace and cleanup root
             # are that store's, not this one's.
-            for rollback in rollbacks:
-                rollback()
-            if published:
-                # A termination or finalization that raised: release its marker, so this
-                # process does not read the job as running forever.
-                with _LOCK:
-                    _TERMINATING.difference_update(published)
+            # One that raises, even an interrupt during its grace, does not skip the
+            # rest: each left unrun is an orphaned paid worker. The first raise is
+            # re-raised once all have run and the markers below are released.
+            first: BaseException | None = None
+            try:
+                for rollback in rollbacks:
+                    try:
+                        rollback()
+                    except BaseException as exc:
+                        first = first or exc
+            finally:
+                if published:
+                    # A termination or finalization that raised: release its marker, so
+                    # this process does not read the job as running forever.
+                    with _LOCK:
+                        _TERMINATING.difference_update(published)
+            if first is not None:
+                raise first
 
     def _finalize_overrun(self, jd: Path) -> tuple[dict, str] | None:
         """Finalize a pending overrun job (``_OVERRAN``) under ``_LOCK`` and its record
@@ -985,11 +996,11 @@ class JobStore:
             # withdrawn here, under the record lock, so that stays true.
             with contextlib.suppress(OSError):
                 (jd / "meta.json").unlink(missing_ok=True)
+            # `start` always runs inside a section; rolling back here instead would wait
+            # out the grace under the locks, which is #536 again.
             pending = getattr(_SECTION, "rollbacks", None)
-            if pending is not None:
-                pending.append(functools.partial(self._rollback_unrecorded, proc.pid, jd))
-            else:
-                self._rollback_unrecorded(proc.pid, jd)
+            assert pending is not None, "start ran outside _terminate_overruns"
+            pending.append(functools.partial(self._rollback_unrecorded, proc.pid, jd))
             raise
         return job_id, meta["started_at"]
 
