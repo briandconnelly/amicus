@@ -8,7 +8,9 @@ terminates it unlocked and re-validates the record before finalizing it.
 
 from __future__ import annotations
 
+import errno
 import fcntl
+import json
 import os
 import sys
 import threading
@@ -19,10 +21,19 @@ import pytest
 
 from amicus.jobs import idempotency
 from amicus.jobs import store as job_store
-from amicus.jobs.store import DiscardOutcome, JobStore
+from amicus.jobs.store import DiscardOutcome, JobStore, ResultUnreadable
 
 _SLEEP = "import time; time.sleep(30)"
 _WAIT = 10.0  # generous bound on an event that should fire at once
+
+
+@pytest.fixture(autouse=True)
+def _fresh_process_sets():
+    """``_TERMINATING`` and ``_OVERRAN`` are process-wide; a test that leaves a job
+    pending on purpose must not leak it into the next."""
+    yield
+    job_store._TERMINATING.clear()
+    job_store._OVERRAN.clear()
 
 
 def _store(tmp_path, **kw) -> JobStore:
@@ -201,6 +212,7 @@ def test_overrun_record_removed_during_grace_reads_missing(tmp_path, monkeypatch
     monkeypatch.setattr(job_store, "_terminate_pid_tree", fake_terminate)
     assert store.status(cwd, job_id) is None
     assert store.list_jobs(cwd) == []
+    assert not job_store._OVERRAN  # confirmed gone: not left pending
 
 
 def test_overrun_result_written_during_grace_is_done(tmp_path, monkeypatch):
@@ -412,6 +424,8 @@ def _assert_unstamped_and_kept(store, jd):
     meta = store._read_meta(jd)
     assert meta is not None and meta.get("terminal_status") is None
     assert not job_store._TERMINATING
+    assert jd in job_store._OVERRAN  # still pending: a later read finalizes it
+    assert len(job_store._OVERRAN) == 1
 
 
 def test_start_at_cap_counts_an_unreadable_overrun_as_held(tmp_path, monkeypatch):
@@ -477,3 +491,79 @@ def test_a_worker_surviving_termination_is_finalized_not_retried(tmp_path, monke
         job_store._kill_pid_tree(pid)
     assert calls == [pid]
     _assert_unstamped_and_kept(store, jd)
+
+
+def _cleanup_store(tmp_path):
+    root = tmp_path / "wtroot"
+    root.mkdir()
+    return _store(tmp_path, cleanup_root=root, cleanup_prefix="wt-"), root
+
+
+def test_overrun_meta_unreadable_at_finalize_still_times_out(tmp_path, monkeypatch):
+    # The finalize read of meta.json fails once (EIO): the record is not taken as gone,
+    # nothing is stamped, and the next read finalizes it as timeout with its cleanup.
+    store, root = _cleanup_store(tmp_path)
+    cwd = str(tmp_path / "w")
+    job_id, pid = _overrun_job(store, cwd)
+    jd = store._job_dir(cwd, job_id)
+    wt = _declare(store, cwd, job_id, root)
+    real_read_text = Path.read_text
+    armed: list[bool] = []
+    stamped_when_failed: list[object] = []
+    calls: list[int] = []
+
+    def flaky(self, *args, **kwargs):
+        if armed and self == jd / "meta.json":
+            armed.clear()
+            stamped_when_failed.append(json.loads(real_read_text(self))["terminal_status"])
+            raise OSError(errno.EIO, "meta read failed")
+        return real_read_text(self, *args, **kwargs)
+
+    def fake_terminate(pid, grace_seconds, **kwargs):
+        calls.append(pid)
+        job_store._kill_pid_tree(pid)  # stopped, no result
+        armed.append(True)
+
+    monkeypatch.setattr(Path, "read_text", flaky)
+    monkeypatch.setattr(job_store, "_terminate_pid_tree", fake_terminate)
+    try:
+        _bounded(lambda: store.status(cwd, job_id))  # whatever this call can report
+        st = _bounded(lambda: store.status(cwd, job_id))
+    finally:
+        job_store._kill_pid_tree(pid)
+    assert stamped_when_failed == [None]
+    assert st["status"] == "timeout"
+    assert not wt.exists()
+    assert calls == [pid]
+    assert not job_store._OVERRAN
+
+
+def test_overrun_result_unreadable_then_absent_times_out_on_another_thread(tmp_path, monkeypatch):
+    # result.json cannot be read at finalize (nor by the retried body), then reads back
+    # absent: a later call on another thread finalizes timeout with cleanup, not failed.
+    store, root = _cleanup_store(tmp_path)
+    cwd = str(tmp_path / "w")
+    job_id, pid = _overrun_job(store, cwd)
+    jd = store._job_dir(cwd, job_id)
+    wt = _declare(store, cwd, job_id, root)
+    calls: list[int] = []
+    deny = pytest.MonkeyPatch()
+
+    def fake_terminate(pid, grace_seconds, **kwargs):
+        calls.append(pid)
+        job_store._kill_pid_tree(pid)
+        _deny_result_read(deny, jd)
+
+    monkeypatch.setattr(job_store, "_terminate_pid_tree", fake_terminate)
+    try:
+        with pytest.raises(ResultUnreadable):
+            _bounded(lambda: store.status(cwd, job_id))
+        assert store._read_meta(jd)["terminal_status"] is None
+    finally:
+        deny.undo()
+        job_store._kill_pid_tree(pid)
+    st = _bounded(lambda: store.status(cwd, job_id))
+    assert st["status"] == "timeout"
+    assert not wt.exists()
+    assert calls == [pid]
+    assert not job_store._OVERRAN

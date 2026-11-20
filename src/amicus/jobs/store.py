@@ -94,10 +94,15 @@ _TERMINATING: set[Path] = set()
 # it has published in ``_TERMINATING`` (added at the same point, under ``_LOCK``), or
 # ``None`` outside one. It is also the nesting flag: a nested section sees it set and
 # lets ``_Overrun`` propagate to the outermost, the only frame whose exit really releases
-# ``_LOCK`` and the record flock, and the outermost clears whatever it published. Also
-# ``stopped``: jobs this section terminated whose finalization could not read their
-# result, left for the retried body to read inside its caller's own handler.
+# ``_LOCK`` and the record flock, and the outermost clears whatever it published.
 _SECTION = threading.local()
+
+# Job dirs whose worker this process terminated as an overrun and whose record is not
+# yet stamped (#531). Touched only under ``_LOCK``. Whichever read, on any thread, first
+# reads both meta.json and result.json finalizes such a job the overrun way (``done`` or
+# ``timeout``), never ``failed``; a read error stamps nothing and leaves it pending. An
+# entry goes once its record is stamped or confirmed absent.
+_OVERRAN: set[Path] = set()
 
 # The only job-id shape this store ever mints (``uuid4().hex``). A job id is used
 # verbatim as a path component under the workspace directory, so its shape is
@@ -525,16 +530,14 @@ class JobStore:
         Once the worker is stopped, ``_LOCK`` and that job's record lock are taken
         without a timeout and the job is finalized there (``_finalize_overrun``), so its
         outcome never depends on the retry reaching it again. The retry then re-reads
-        everything from disk under its own locks. Each finalization stamps the job, or
-        finds it stamped or gone, so it never overruns again and the retries end; one
-        that cannot read the result stamps nothing, and the job joins ``stopped``, which
-        ``_status_of`` finalizes in place rather than terminating again, so a worker that
-        survived its signals cannot make the retries loop either."""
+        everything from disk under its own locks. The retries end: a job raises
+        ``_Overrun`` only while it is in neither ``_TERMINATING`` nor ``_OVERRAN``, and
+        once terminated it stays in ``_OVERRAN`` until it is stamped or gone, so this
+        process terminates each job at most once, and a section meets finitely many."""
         if getattr(_SECTION, "published", None) is not None:
             return attempt()
         published: set[Path] = set()
-        stopped: set[Path] = set()
-        _SECTION.published, _SECTION.stopped = published, stopped
+        _SECTION.published = published
         try:
             while True:
                 try:
@@ -549,41 +552,63 @@ class JobStore:
                     with _LOCK, self._ws_record_lock(jd.parent):
                         _TERMINATING.discard(jd)
                         published.discard(jd)
-                        try:
+                        _OVERRAN.add(jd)
+                        # Not raised here, outside the body: the job stays pending and
+                        # the retried body reads it itself, raising inside its caller's
+                        # own handler (counted as held, skipped, DELETE_FAILED, the
+                        # retention bound), as before #531. Nothing is stamped.
+                        with contextlib.suppress(ResultUnreadable):
                             self._finalize_overrun(jd)
-                        except ResultUnreadable:
-                            # Not raised here, outside the body: the retried body reads
-                            # the stopped job itself and raises it inside its caller's
-                            # own handler (counted as held, skipped, DELETE_FAILED, the
-                            # retention bound), as before #531. Nothing is stamped.
-                            stopped.add(jd)
         finally:
-            _SECTION.published = _SECTION.stopped = None
+            _SECTION.published = None
             if published:
                 # A termination or finalization that raised: release its marker, so this
                 # process does not read the job as running forever.
                 with _LOCK:
                     _TERMINATING.difference_update(published)
 
-    def _finalize_overrun(self, jd: Path) -> tuple[dict, str] | None:
-        """Finalize an overrun job whose worker was just stopped, under ``_LOCK`` and its
-        record lock, from a fresh read: ``None`` if the record is gone, its stamp if it
-        has one, else ``done`` if the worker wrote its result in time (result-first),
-        else ``timeout`` with its declared paths cleaned up (the manifest re-read now).
-        An unreadable result raises ``ResultUnreadable`` with nothing written: the worker
-        is stopped either way, and the next read finalizes what it can then see."""
-        meta = self._read_meta(jd)
-        if meta is None:
+    @staticmethod
+    def _read_meta_or_raise(jd: Path) -> dict | None:
+        """``_read_meta`` that tells a missing record (``None``) from one that is there
+        but cannot be read (``ResultUnreadable``); corrupt JSON reads as no record, as
+        it does everywhere. Folds into ``_read_meta`` once #530's fix lands."""
+        try:
+            return json.loads((jd / "meta.json").read_text())
+        except FileNotFoundError:
             return None
+        except OSError as exc:
+            raise ResultUnreadable(exc.errno) from None
+        except json.JSONDecodeError:
+            return None
+
+    def _finalize_overrun(self, jd: Path) -> tuple[dict, str] | None:
+        """Finalize a pending overrun job (``_OVERRAN``) under ``_LOCK`` and its record
+        lock, from a fresh read: ``None`` if the record is gone, else its state as
+        ``_finish_overrun`` gives it. Raises ``ResultUnreadable`` if meta.json or
+        result.json cannot be read, with nothing written and the job left pending."""
+        meta = self._read_meta_or_raise(jd)
+        if meta is None:
+            _OVERRAN.discard(jd)
+            return None
+        return meta, self._finish_overrun(jd, meta)
+
+    def _finish_overrun(self, jd: Path, meta: dict) -> str:
+        """The overrun outcome of a stopped job, from ``meta`` as just read: its stamp if
+        it has one, else ``done`` if the worker wrote its result in time (result-first),
+        else ``timeout`` with its declared paths cleaned up (the manifest re-read now).
+        Drops the job from ``_OVERRAN`` once stamped; an unreadable result raises
+        ``ResultUnreadable`` and leaves it pending."""
         terminal = meta.get("terminal_status")
-        if terminal:
-            return meta, terminal
-        env = self._read_envelope(jd)
-        if env is not None:
-            self._mark_done(jd, meta, env)
-            return meta, "done"
-        self._finalize_cleanup(jd, meta, "timeout", self._read_cleanup_manifest(jd))
-        return meta, "timeout"
+        if not terminal:
+            env = self._read_envelope(jd)
+            if env is not None:
+                self._mark_done(jd, meta, env)
+                terminal = "done"
+            else:
+                self._finalize_cleanup(jd, meta, "timeout", self._read_cleanup_manifest(jd))
+                terminal = "timeout"
+        _OVERRAN.discard(jd)
+        return terminal
 
     def _locked(self, cwd: str, body: Callable[[], _T]) -> _T:
         """Run ``body`` under ``_LOCK`` and the workspace's record lock, terminating
@@ -999,12 +1024,17 @@ class JobStore:
         and reported by raising ``_Overrun``; the outermost locked section terminates it
         with the locks released and finalizes it (``_finalize_overrun``) as the old
         in-lock path did. A job a thread of this process is terminating reads as
-        ``running``.
+        ``running``; one it has terminated but not yet stamped (``_OVERRAN``) is
+        finalized here the overrun way, by whichever read first can read it.
 
         Raises ``ResultUnreadable`` when a stopped worker's result.json exists but cannot
         be read (#280): the job is then neither finalized nor reported, since reading it
         as absent would stamp ``timeout`` or report ``failed`` for a result that is still
         there. A record already stamped terminal never reads the file at all."""
+        if jd in _OVERRAN:
+            # This process terminated it as an overrun: finalize it that way whatever the
+            # worker now reads as, never terminating it again or deriving failed.
+            return self._finish_overrun(jd, meta)
         terminal = meta.get("terminal_status")
         if terminal:
             return terminal
@@ -1012,17 +1042,6 @@ class JobStore:
             return "running"  # a thread is terminating it and will finalize it
         if self._job_running(jd, meta):
             if time.time() > meta.get("deadline_epoch", float("inf")):
-                if jd in (getattr(_SECTION, "stopped", None) or ()):
-                    # Terminated by this section yet still read as running (a worker that
-                    # survived its signals): finalize it as the in-lock path did, never
-                    # terminate it again, so the retries end.
-                    env = self._read_envelope(jd)
-                    if env is not None:
-                        self._mark_done(jd, meta, env)
-                        return "done"
-                    manifest = self._read_cleanup_manifest(jd)
-                    self._finalize_cleanup(jd, meta, "timeout", manifest)
-                    return "timeout"
                 # Published and owned in one step, so the section that must clear the
                 # marker always knows of it.
                 _TERMINATING.add(jd)
@@ -1385,9 +1404,9 @@ class JobStore:
             is_alive=lambda m=meta: self._job_running(jd, m),
         )
         with _LOCK, self._record_lock(cwd):
-            if jd in _TERMINATING:
-                # A thread is terminating it as an overrun: finalize it as that, never
-                # as cancelled, as the cancel would have found it before #531.
+            if jd in _TERMINATING or jd in _OVERRAN:
+                # Terminated, or being terminated, as an overrun: finalize it as that,
+                # never as cancelled, as the cancel would have found it before #531.
                 done = self._finalize_overrun(jd)
                 return None if done is None else self._status_dict(jd, *done)
             # Re-validate: during the unlocked grace window the record may have been
