@@ -16,7 +16,12 @@ The table has no prices. `read` therefore asks pi a second time, over its RPC mo
 definition: `cost` in USD per million tokens and the exact `contextWindow` and `maxTokens`.
 That reply only ENRICHES the table's rows, matched by slug. The table stays the authority
 on which rows exist and in what order, because the two sources order rows differently (the
-table sorts, RPC does not), and the cut at MAX_ENTRIES must not move. A row the reply does not
+table sorts, RPC does not), and the cut must not move.
+
+`read` scans up to MAX_SCAN_ENTRIES rows so that an `amicus_models` query can examine rows
+past the plain listing's cut, and marks the listing's `display_limit` as MAX_ENTRIES: a plain
+listing still shows the first MAX_ENTRIES rows (ADR 0053). `truncated` is true only when the
+scan bound cut the table. A row the reply does not
 describe, or describes twice, keeps the table's values and no price, and so does every row
 when the second probe fails. `lookup`, the pre-spend gate, never uses it.
 
@@ -56,6 +61,9 @@ PROBE_TIMEOUT_SECONDS = 10
 HELP_CACHE_TTL_SECONDS = 300
 MODELS_CACHE_MAX_BYTES = 1_048_576
 MAX_ENTRIES = 1024
+# How many rows `read` examines for a query; the plain listing shows MAX_ENTRIES of them. At
+# pi 1.6.0's sizes this many rows fit both byte caps below unchanged.
+MAX_SCAN_ENTRIES = 4096
 # The RPC reply is one JSON line of about 0.6 KB a model (753 KB for 1 332 models on pi 1.6.0
 # with every provider credentialed), captured under this cap while pi runs. A reply cut at
 # it is discarded whole.
@@ -88,9 +96,10 @@ def is_batch_only(slug: str) -> bool:
     return slug.startswith("openrouter/") and slug.endswith(":batch")
 
 
-def parse_table(stdout: str) -> ModelListing | None:
+def parse_table(stdout: str, *, max_entries: int = MAX_ENTRIES) -> ModelListing | None:
     """The listing from a `--list-models` table, or None without the header (including pi's
-    `No models matching ...` message). At most MAX_ENTRIES rows are read."""
+    `No models matching ...` message). At most `max_entries` rows are read, and `truncated`
+    is true only when an eligible row lay past them."""
     lines = stdout.splitlines()
     start = next((i for i, line in enumerate(lines) if line.split() == _HEADER), None)
     if start is None:
@@ -101,12 +110,12 @@ def parse_table(stdout: str) -> ModelListing | None:
         cols = line.split()
         if len(cols) < len(_HEADER):
             continue
-        if len(entries) >= MAX_ENTRIES:
-            truncated = True
-            break
         slug = f"{cols[0]}/{cols[1]}"
         if is_batch_only(slug):
             continue
+        if len(entries) >= max_entries:
+            truncated = True
+            break
         thinks = cols[4] == "yes"
         entries.append(
             ModelEntry(
@@ -358,10 +367,11 @@ class PiModels:
         if binary is None or cwd is None:
             return ModelListing(models=(), source="none")
         out = _probe(binary, cwd=cwd)
-        listing = parse_table(out) if out is not None else None
+        listing = parse_table(out, max_entries=MAX_SCAN_ENTRIES) if out is not None else None
         if listing is None:
             # A failed probe is transient; do not cache "none" for the whole TTL.
             return ModelListing(models=(), source="none")
+        listing = dataclasses.replace(listing, display_limit=MAX_ENTRIES)
         ttl: float = HELP_CACHE_TTL_SECONDS
         if listing.models:
             details = _probe_details(binary, cwd)

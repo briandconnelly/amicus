@@ -660,7 +660,9 @@ def models_payload(registry: BackendRegistry, backend: str, settings: Settings) 
             backend=backend, available=False, models=[], source="none", model_policy=state
         ).model_dump(mode="json")
     listing = plugin.models.read()
-    allowed = [m for m in listing.models if policy.denied_by(backend, m.slug) is None]
+    rows = listing.models[: listing.display_limit]
+    truncated = listing.truncated or len(rows) < len(listing.models)
+    allowed = [m for m in rows if policy.denied_by(backend, m.slug) is None]
     return ModelCatalogResult(
         backend=backend,
         available=True,
@@ -683,11 +685,9 @@ def models_payload(registry: BackendRegistry, backend: str, settings: Settings) 
         ],
         source=listing.source,
         fetched_at=listing.fetched_at,
-        truncated=listing.truncated,
-        truncation_hint=_truncation_hint(backend, len(listing.models), len(allowed))
-        if listing.truncated
-        else None,
-        hidden_by_policy=len(listing.models) - len(allowed),
+        truncated=truncated,
+        truncation_hint=_truncation_hint(backend, len(rows), len(allowed)) if truncated else None,
+        hidden_by_policy=len(rows) - len(allowed),
         model_policy=state,
     ).model_dump(mode="json")
 

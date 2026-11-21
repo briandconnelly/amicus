@@ -213,11 +213,54 @@ def test_read_failure_is_none_source_and_uncached(monkeypatch):
     assert len(calls) == 2
 
 
-def test_read_caps_entries(monkeypatch):
-    rows = "".join(f"p  m{i}  1K  1K  no  no\n" for i in range(models.MAX_ENTRIES + 5))
-    cat, _ = _catalog(monkeypatch, [_run(HEADER + rows)])
+def _rows(n, prefix="m"):
+    return "".join(f"p  {prefix}{i:04d}  1K  1K  no  no\n" for i in range(n))
+
+
+def test_read_scans_past_the_display_cut(monkeypatch):
+    """#560: `read` examines up to MAX_SCAN_ENTRIES rows; a plain listing shows the first
+    `display_limit`, and `truncated` says only that the scan itself was cut."""
+    cat, _ = _catalog(monkeypatch, [_run(HEADER + _rows(1030))])
     listing = cat.read()
-    assert len(listing.models) == models.MAX_ENTRIES and listing.truncated is True
+    assert len(listing.models) == 1030
+    assert listing.display_limit == models.MAX_ENTRIES == 1024
+    assert listing.truncated is False
+
+
+def test_read_caps_entries_at_the_scan_bound(monkeypatch):
+    cat, _ = _catalog(monkeypatch, [_run(HEADER + _rows(models.MAX_SCAN_ENTRIES + 5))])
+    listing = cat.read()
+    assert models.MAX_SCAN_ENTRIES == 4096
+    assert len(listing.models) == models.MAX_SCAN_ENTRIES and listing.truncated is True
+
+
+def test_parse_table_cuts_at_its_bound():
+    listing = models.parse_table(HEADER + _rows(5), max_entries=3)
+    assert listing is not None
+    assert len(listing.models) == 3 and listing.truncated is True
+
+
+def test_a_batch_only_row_past_the_bound_does_not_truncate():
+    table = HEADER + _rows(3) + "openrouter  x/y:batch  1K  1K  no  no\n"
+    listing = models.parse_table(table, max_entries=3)
+    assert listing is not None
+    assert len(listing.models) == 3 and listing.truncated is False
+
+
+def test_a_second_read_inside_the_ttl_reuses_the_scan_and_lookup_still_probes(monkeypatch):
+    cat, calls = _catalog(monkeypatch, [_run(HEADER + _rows(1030))])
+    first = cat.read()
+    assert cat.read() is first and len(first.models) == 1030
+    assert len(calls) == 1
+    cat.lookup("p/m1027")
+    assert len(calls) == 2 and calls[1][len(contract.LIST_MODELS_ARGS) + 1] == "p/m1027"
+
+
+def test_a_table_over_the_byte_cap_still_reads_as_none(monkeypatch):
+    big = HEADER + _rows(10) + "#" * models.MODELS_CACHE_MAX_BYTES
+    cat, _ = _catalog(monkeypatch, [_run(big)])
+    listing = cat.read()
+    assert listing.source == "none" and listing.models == ()
 
 
 # --- the RPC reply: prices and exact limits -------------------------------------------------
@@ -647,3 +690,16 @@ def test_a_thinking_yes_row_the_reply_does_not_describe_once_stays_unknown(rows)
     assert entry.advertised_reasoning_efforts is None
     assert entry.supported_reasoning_efforts == contract.EFFORTS
     _assert_kept(entry, 1_000, 1_000, None)
+
+
+# --- the scan past the display cut, end to end (#560) ---------------------------------------
+
+
+def test_rpc_enrichment_reaches_a_row_past_the_display_cut(fake_pi, tmp_path, monkeypatch):
+    rows = [f"p  m{i:04d}  1K  1K  no  no" for i in range(1030)]
+    monkeypatch.setenv("FAKE_PI_MODELS", "\n".join([HEADER.rstrip("\n"), *rows]))
+    monkeypatch.setenv("FAKE_PI_RPC_MODELS", json.dumps([_model("p", "m1025")]))
+    listing = _fake_plugin(fake_pi, tmp_path).models.read(force=True)
+    assert len(listing.models) == 1030 and listing.truncated is False
+    row = listing.models[1025]
+    assert (row.slug, row.pricing, row.context_tokens) == ("p/m1025", PRICE, 1024)
