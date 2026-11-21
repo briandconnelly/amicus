@@ -600,7 +600,11 @@ class BackendsResult(BaseModel):
 _CONTEXT_TOKENS_DESC = (
     "Advertised context window in tokens; pi's is rounded, so leave headroom. null: unknown."
 )
-_MAX_OUTPUT_TOKENS_DESC = "Advertised output limit in tokens; rounded and null as context_tokens."
+_MAX_OUTPUT_TOKENS_DESC = (
+    "Advertised output limit in tokens; rounded and null as context_tokens. pi requests this "
+    "whole limit on every call, so a prepaid provider may refuse a call unless the balance "
+    "covers it at the output price."
+)
 _EFFORTS_DESC = (
     "Advisory; pi lists its own vocabulary, not the model's levels, and may run another. "
     "null: unknown."

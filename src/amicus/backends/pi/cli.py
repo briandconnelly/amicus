@@ -163,7 +163,8 @@ def classify_failure(
     stop_reason: str | None = None,
 ) -> ClassifiedFailure:
     """Map a non-success run into the shared taxonomy, in the SDK's order: binary missing,
-    timeout, drift, auth, rate limit, invalid model, nonzero_exit. pi can fail with exit 0 and
+    timeout, OpenRouter's output-reservation 402 (#542), drift, auth, rate limit, invalid model,
+    nonzero_exit. pi can fail with exit 0 and
     an error in its event stream, so `error_message` (already extracted) is read alongside
     stderr. stdout is never read: under `--mode json` it is the event stream, which echoes
     the system prompt, the user's prompt and the answer, so a prompt mentioning "401" would
@@ -181,6 +182,12 @@ def classify_failure(
     if run.timed_out:
         return ClassifiedFailure(code="timeout", detail="pi exceeded the timeout.")
     texts = (run.stderr, error_message)
+    # Before the generic signatures: the 402's token figures can hold "401" or "429".
+    if contract.is_output_reservation_refused(*texts):
+        return _output_reservation_failure(
+            _generic_detail(run, error_message, sanitize, stop_reason),
+            contract.output_reservation_figures(*texts),
+        )
     if contract.is_contract_drift(*texts):
         return ClassifiedFailure(
             code="cli_contract_changed",
@@ -214,14 +221,22 @@ def classify_failure(
                 alternative="Pass one of the model ids amicus_models lists for pi.",
             ),
         )
+    return ClassifiedFailure(
+        code="nonzero_exit", detail=_generic_detail(run, error_message, sanitize, stop_reason)
+    )
+
+
+def _generic_detail(
+    run: CommandRun,
+    error_message: str | None,
+    sanitize: Callable[[str], str] | None,
+    stop_reason: str | None,
+) -> str:
     raw = (error_message or "").strip() or run.stderr.strip()
     if run.exit_code == 0 and stop_reason:
         prefix = f"pi stopped with reason {stop_reason!r}"
         if not raw:
-            return ClassifiedFailure(
-                code="nonzero_exit",
-                detail=f"{prefix} and wrote no error message and nothing to stderr.",
-            )
+            return f"{prefix} and wrote no error message and nothing to stderr."
     else:
         prefix = f"pi exited {run.exit_code}"
     stripped_ansi = _strip_ansi(raw or NO_DIAGNOSTIC)
@@ -230,4 +245,32 @@ def classify_failure(
         if sanitize is not None
         else redaction.sanitize_echo_prose(stripped_ansi)
     )
-    return ClassifiedFailure(code="nonzero_exit", detail=f"{prefix}: {sanitized[:300]}")
+    return f"{prefix}: {sanitized[:300]}"
+
+
+OUTPUT_RESERVATION_REPAIR = (
+    "The provider refused the request before running it: pi asks for the model's whole "
+    "output limit, and the account balance does not cover that worst case. Retrying the "
+    "same call cannot succeed. Either add credit, or cap the model's output in pi's "
+    "models.json, in $PI_CODING_AGENT_DIR when that is set and ~/.pi/agent otherwise, e.g. "
+    '{"providers":{"openrouter":{"modelOverrides":{"<model id>":{"maxTokens":32000}}}}}, '
+    "or pick a model with a smaller max-out from amicus_models."
+)
+
+
+def _output_reservation_failure(detail: str, figures: tuple[int, int] | None) -> ClassifiedFailure:
+    """#542: nonzero_exit, but never temporary, with the remedy named. Not a new code, so
+    the published error catalog is unchanged."""
+    details: dict[str, str] = {"field": "model"}
+    if figures is not None:
+        requested, affordable = figures
+        details["reason"] = (
+            f"requested up to {requested} output tokens; the balance covers {affordable}"
+        )
+    return ClassifiedFailure(
+        code="nonzero_exit",
+        detail=detail,
+        retryable=False,
+        details=details,
+        repair=RepairHint(next_step="correct_config", alternative=OUTPUT_RESERVATION_REPAIR),
+    )

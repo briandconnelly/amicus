@@ -20,8 +20,21 @@ per-change, as its own lead says.
 
 ## [Unreleased]
 
+### Changed
+
+- `amicus_models`'s `max_output_tokens` description now says that pi requests that whole limit
+  on every call, so a prepaid provider may refuse a call the balance does not cover at the
+  output price (#542). The fingerprint moves to `amicus/0.1/schema-75`.
+
 ### Fixed
 
+- A pi call that OpenRouter refuses with HTTP 402 because the balance does not cover the model's
+  whole output limit is no longer reported as temporary (#542). pi asks for that limit on every
+  call, so retrying cannot succeed. The error is still `nonzero_exit`, now with
+  `temporary: false`, `details.field: "model"`, the requested and affordable token counts in
+  `details.reason`, and a `correct_config` repair that names both remedies: add credit, or cap
+  the model's `maxTokens` in pi's `models.json` (in `$PI_CODING_AGENT_DIR` when set, otherwise
+  `~/.pi/agent/`). The README's pi section says the same.
 - Stopping a job that ran past its deadline no longer stalls every other job call the server
   is handling (#531). The first job read to find it overrun waited up to the terminate grace
   (5 s by default) for the worker to exit while holding the server's job lock, so status,

@@ -1653,7 +1653,7 @@
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-74",
+                "default": "amicus/0.1/schema-75",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -4334,7 +4334,7 @@
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-74",
+            "default": "amicus/0.1/schema-75",
             "title": "Fingerprint",
             "type": "string"
           },
@@ -9592,7 +9592,7 @@
                           "type": "null"
                         }
                       ],
-                      "description": "Advertised output limit in tokens; rounded and null as context_tokens."
+                      "description": "Advertised output limit in tokens; rounded and null as context_tokens. pi requests this whole limit on every call, so a prepaid provider may refuse a call unless the balance covers it at the output price."
                     },
                     "slug": {
                       "type": "string"
