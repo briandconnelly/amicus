@@ -24,7 +24,6 @@ No model call was made for the captures; the live suite below did spend quota.
 `tests/test_pi_live.py`, run as `AMICUS_REQUIRE_LIVE=1 AMICUS_PI_MODEL=openrouter/moonshotai/kimi-k3 uv run pytest -m integration --no-cov tests/test_pi_live.py`, passed its four paid tests on pi 1.6.0, including `test_delegate_stops_at_the_budget_cap_live`.
 `test_backends_reports_pi_ready_live` failed in that run only because it requires the installed minor to be the newest in `SUPPORTED_VERSIONS`, which was still `(1, 5)`; it was re-run after the bump recorded beside this file.
 This is a compatibility check, not rule-20 release evidence.
-No `models.json` was present for this run, so no per-model override applied; the same holds for 1.5.2's captures.
 
 ## A precondition the first run hit
 
@@ -37,3 +36,4 @@ A live run on kimi-k3 therefore needs a balance above that worst case, whatever 
 - The zero-spend probe on issue #423 was not repeated on 1.6.0, so the flags' effects are inferred from the unchanged help and the passing live suite.
 - No `find` comparison of `~/.pi` was taken for this capture.
 - The budget-cap test holds only the `message_end` path; the retry and compaction gates rest on the source reading above.
+- Whether `models.json` existed during these captures and the live suite was not recorded at the time, so it is unknown.

@@ -141,7 +141,8 @@ If one has appeared, the exemption no longer holds for that carrier, and using t
 If none has, say so in the release PR, naming the three versions, so the next reader can see the looking was done and on what.
 pi holds no exemption, because its prompt rides stdin and `--no-session` wrote no session file on 1.5.0, so the re-check has no pi carrier to look for.
 What the pi capture did and did not test is `docs/pi-help/1.5.0/FINDINGS.md`.
-A new `docs/pi-help/<version>/FINDINGS.md` states whether `models.json` was present when its captures and live suite ran and, if so, which override keys and values applied to the model it used, under the same limits as the evidence note above.
+A new `docs/pi-help/<version>/FINDINGS.md` states whether `models.json` was present when its captures and live suite ran and, if so, which override keys and values applied to the model it used, recording only override keys and values and never a credential, a header value or a `!command` value.
+It says `unknown` where no presence check was made at the time of the run.
 
 ## The release sequence
 
@@ -221,7 +222,7 @@ The tag therefore deliberately points at a commit that is in `main`'s history bu
    That tag check reads local tags only: it stops a collision with an earlier attempt, and it is no evidence that `vX.Y.Z` was never published, which the preflight's `origin` lookup is for.
    Neither check establishes that `HEAD` is the PR C branch tip, which is what the preflight is for.
    pi loads `models.json` from `$PI_CODING_AGENT_DIR` when that is set and `~/.pi/agent` otherwise, and its per-model overrides, such as a `maxTokens` cap, change what the pi gate exercises.
-   Note in the release PR whether that file was present and, if so, which override keys and values apply to `AMICUS_PI_MODEL`'s provider and model, such as `baseUrl`, `api` or `maxTokens`; never record a credential, a header value or a `!command` value.
+   Note in the release PR whether that file was present, or `unknown` if it was not checked, and, if so, which override keys and values apply to `AMICUS_PI_MODEL`'s provider and model, such as `baseUrl`, `api` or `maxTokens`; never record a credential, a header value or a `!command` value.
    That note is the maintainer's statement, like the record itself, and rule 23 applies to it.
    Confirm the new record names the release commit before going on:
 

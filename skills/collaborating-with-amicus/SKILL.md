@@ -242,7 +242,8 @@ Every free-text field you supply reaches the selected backend's provider raw; am
 over stdin and never logs it, but how it then reaches the backend CLI is the backend's choice,
 and `carriers` on `amicus_backends(detail="full")` is authoritative: on `codex`,
 `instructions_append` rides argv. On `pi` the provider is the one the model's `provider/id` prefix names, a
-router included, so the model you pick is also the egress destination. A backend can read files
+router included, so the model you pick is also the egress destination, unless pi's `models.json`
+overrides that provider's endpoint (`baseUrl`), which amicus does not inspect. A backend can read files
 outside the workspace during a call, redaction covers only gathered diffs and returned output,
 and a dry run calls no model (it runs only the backend's free pre-spend checks), so it proves
 nothing about what a paid call reads or sends.
