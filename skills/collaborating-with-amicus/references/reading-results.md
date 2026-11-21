@@ -129,10 +129,11 @@ before you spend. It is a preview: the tree can change before you call.
 
 **The degradation is one-directional, and this matters.** A model `pass` over partial coverage is
 delivered as `verdict: unknown`, `confidence: low`, with the reasons also named in the summary. A
-`concerns` or `fail` verdict is **passed through unchanged** — it is not degraded, because a
-concrete finding stands on its own. So a `concerns` verdict over a truncated diff looks exactly
-like a `concerns` verdict over a complete one. Read `coverage` yourself; the verdict will not
-tell you.
+`concerns` or `fail` verdict keeps its verdict and its confidence — it is not degraded, because a
+concrete finding stands on its own — but its summary now begins `Review coverage was partial
+(<reasons>). This verdict applies to the reviewed scope.` Unreviewed changes may hold more. Still
+branch on `coverage`, not on the summary text: it is the structured field, and the verdict alone
+will not tell you.
 
 ## `findings_diagnostics`: what amicus normalized or could not carry of what the backend said
 
