@@ -440,16 +440,18 @@ for a higher one. The reasoning_effort summary and the amicus_models description
 little, as they drop "each model's set" and "advertised". Measured on the wire. MEASURED and
 BUDGET both move up by the 100 bytes, so the budget keeps no headroom.
 
-The schema-78 raise (+501 bytes on every profile: all 116854 -> 117355) is #554, pi's catalog
+The schema-78 raise (+535 bytes on every profile: all 116854 -> 117389) is #554, pi's catalog
 prices on amicus_models. All of it is that tool's outputSchema: ModelInfo gains a nullable
 `pricing` object of four rates and a `tiers` array of five-field objects, both closed, and one
-kept description of 230 bytes. A host could not tell from amicus what a pi model costs, nor
+kept description of 264 bytes. A host could not tell from amicus what a pi model costs, nor
 whether a prepaid provider would refuse a call. The description is kept because the two
 readings a bare number invites are both wrong: the figures are a snapshot of pi's cached
 catalog rather than a quote, and null is unknown rather than free. Tiers are carried in full
-because a base rate alone understates a long request. A first draft cost 27 bytes more, a
-clause in the tool description that the schema already carries. Measured on the wire. MEASURED
-and BUDGET both move up by the 501 bytes, so the budget keeps no headroom.
+because a base rate alone understates a long request, and 34 of the bytes say that a tier's
+threshold counts cache reads and writes, as pi's does: without them a caller comparing the
+uncached input alone picks the wrong tier. A first draft cost 27 bytes more, a clause in the
+tool description that the schema already carries. Measured on the wire. MEASURED and BUDGET
+both move up by the 535 bytes, so the budget keeps no headroom.
 """
 
 from __future__ import annotations
@@ -460,10 +462,10 @@ from tests.conftest import spawned_server_env
 from amicus import manifest
 
 MEASURED: dict[str, int] = {
-    "all": 117355,
-    "codex": 117363,
-    "codex-pi": 117355,
-    "claude": 117355,
+    "all": 117389,
+    "codex": 117397,
+    "codex-pi": 117389,
+    "claude": 117389,
 }
 # The budget is a literal, not MEASURED rounded up to the next kilobyte as it was until
 # 2026-09-14. The rounding left up to 1 KB of growth per bucket that no PR had to own, and
@@ -473,10 +475,10 @@ MEASURED: dict[str, int] = {
 # Any growth now fails until a PR raises BUDGET and says why; a shrink passes and shows as
 # drift against MEASURED. Raising one means re-measuring and moving both.
 BUDGET: dict[str, int] = {
-    "all": 117355,
-    "codex": 117363,
-    "codex-pi": 117355,
-    "claude": 117355,
+    "all": 117389,
+    "codex": 117397,
+    "codex-pi": 117389,
+    "claude": 117389,
 }
 
 
