@@ -35,6 +35,7 @@ JOB_TOOLS: tuple[str, ...] = (
     "amicus_job_status",
     "amicus_job_result",
     "amicus_job_consume_result",
+    "amicus_job_export_diff",
     "amicus_job_cancel",
     "amicus_job_list",
 )

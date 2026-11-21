@@ -69,7 +69,27 @@ def test_populated_optionals_survive_and_every_producible_optional_is_populated_
     assert "consume" not in populated
     assert set(snap["consumed"]) == {"removed", "missing", "state_changed", "delete_failed"}
     populated.add("consume")
+    # `diff_export` likewise only on what amicus_job_export_diff returns, in `exported`,
+    # for a delegate success and a stopped run's partial (#556).
+    assert "diff_export" not in populated
+    assert {
+        name: env["meta"]["diff_export"]["source"] for name, env in snap["exported"].items()
+    } == {"diff": "diff", "partial": "partial"}
+    assert snap["exported"]["diff"]["diff"] is None
+    assert snap["exported"]["partial"]["partial"]["diff"] is None
+    populated.add("diff_export")
     assert optional - impossible <= populated
+
+
+def test_exported_envelopes_validate_against_the_published_contracts():
+    from amicus.schemas.envelope import ERROR_ENVELOPE_SCHEMA
+
+    snap = wss.build_snapshot()
+    meta = Draft202012Validator(RESULT_META_SCHEMA)
+    for name, env in snap["exported"].items():
+        assert [e.message for e in meta.iter_errors(env["meta"])] == [], name
+    errors = Draft202012Validator(ERROR_ENVELOPE_SCHEMA)
+    assert [e.message for e in errors.iter_errors(snap["exported"]["partial"])] == []
 
 
 def test_one_envelope_stays_sparse_and_payload_keys_survive():

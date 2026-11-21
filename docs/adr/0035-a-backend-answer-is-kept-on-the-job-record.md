@@ -31,6 +31,7 @@ The result amicus builds from the answer is covered the same way: its parsed fie
 It still goes to no log, no argv and no other file, so `obs.py`'s exception-text policy, the fixed `FindingReason` vocabulary and the hashed host captures stay as they are.
 What the repository commits of an answer stays bound wherever the answer repeats a prompt anyone sent.
 Rule 18 is amended in its own governance PR to say both things, and its "copied, derived or replayed" clause now names its subject: amicus itself, or anyone working in this repository.
+Note (2026-11-21): [ADR 0054](0054-a-delegates-diff-can-be-exported-to-a-path-the-caller-names.md) adds one other file, a delegate's diff written on request to a new file at a path the caller names, and rule 18 was amended for it.
 
 **The retention is disclosed where the spend is.**
 Every paid tool description, sync and async, carries one sentence (`tools/_resolve.RECORD_RETENTION`): the record keeps the whole answer, best-effort secret-redacted and able to quote the caller's inputs, whatever `detail` delivered, until it expires, the cap evicts it or consume removes it.

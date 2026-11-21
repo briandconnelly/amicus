@@ -201,6 +201,39 @@
           "title": "Coverage",
           "type": "object"
         },
+        "DiffExportInfo": {
+          "additionalProperties": false,
+          "properties": {
+            "bytes": {
+              "title": "Bytes",
+              "type": "integer"
+            },
+            "path": {
+              "title": "Path",
+              "type": "string"
+            },
+            "sha256": {
+              "title": "Sha256",
+              "type": "string"
+            },
+            "source": {
+              "enum": [
+                "diff",
+                "partial"
+              ],
+              "title": "Source",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "bytes",
+            "sha256",
+            "source"
+          ],
+          "title": "DiffExportInfo",
+          "type": "object"
+        },
         "Finding": {
           "additionalProperties": false,
           "properties": {
@@ -494,6 +527,17 @@
               "anyOf": [
                 {
                   "$ref": "#/$defs/ToolDeprecation"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "diff_export": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DiffExportInfo"
                 },
                 {
                   "type": "null"
@@ -1167,6 +1211,39 @@
           "title": "ContextSummary",
           "type": "object"
         },
+        "DiffExportInfo": {
+          "additionalProperties": false,
+          "properties": {
+            "bytes": {
+              "title": "Bytes",
+              "type": "integer"
+            },
+            "path": {
+              "title": "Path",
+              "type": "string"
+            },
+            "sha256": {
+              "title": "Sha256",
+              "type": "string"
+            },
+            "source": {
+              "enum": [
+                "diff",
+                "partial"
+              ],
+              "title": "Source",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "bytes",
+            "sha256",
+            "source"
+          ],
+          "title": "DiffExportInfo",
+          "type": "object"
+        },
         "Finding": {
           "additionalProperties": false,
           "properties": {
@@ -1460,6 +1537,17 @@
               "anyOf": [
                 {
                   "$ref": "#/$defs/ToolDeprecation"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "diff_export": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DiffExportInfo"
                 },
                 {
                   "type": "null"
@@ -2059,6 +2147,39 @@
           "title": "ContextSummary",
           "type": "object"
         },
+        "DiffExportInfo": {
+          "additionalProperties": false,
+          "properties": {
+            "bytes": {
+              "title": "Bytes",
+              "type": "integer"
+            },
+            "path": {
+              "title": "Path",
+              "type": "string"
+            },
+            "sha256": {
+              "title": "Sha256",
+              "type": "string"
+            },
+            "source": {
+              "enum": [
+                "diff",
+                "partial"
+              ],
+              "title": "Source",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "bytes",
+            "sha256",
+            "source"
+          ],
+          "title": "DiffExportInfo",
+          "type": "object"
+        },
         "Finding": {
           "additionalProperties": false,
           "properties": {
@@ -2275,6 +2396,17 @@
               "anyOf": [
                 {
                   "$ref": "#/$defs/ToolDeprecation"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "diff_export": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DiffExportInfo"
                 },
                 {
                   "type": "null"
@@ -2887,6 +3019,39 @@
           "title": "ContextSummary",
           "type": "object"
         },
+        "DiffExportInfo": {
+          "additionalProperties": false,
+          "properties": {
+            "bytes": {
+              "title": "Bytes",
+              "type": "integer"
+            },
+            "path": {
+              "title": "Path",
+              "type": "string"
+            },
+            "sha256": {
+              "title": "Sha256",
+              "type": "string"
+            },
+            "source": {
+              "enum": [
+                "diff",
+                "partial"
+              ],
+              "title": "Source",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "bytes",
+            "sha256",
+            "source"
+          ],
+          "title": "DiffExportInfo",
+          "type": "object"
+        },
         "ErrorDetail": {
           "additionalProperties": false,
           "properties": {
@@ -3013,6 +3178,7 @@
                 "cli_contract_changed",
                 "context_too_large",
                 "empty_response",
+                "export_failed",
                 "extra_args_rejected",
                 "feature_unsupported",
                 "git_unavailable",
@@ -3307,6 +3473,17 @@
               "anyOf": [
                 {
                   "$ref": "#/$defs/ToolDeprecation"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "diff_export": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DiffExportInfo"
                 },
                 {
                   "type": "null"
@@ -3997,6 +4174,39 @@
           "title": "Coverage",
           "type": "object"
         },
+        "DiffExportInfo": {
+          "additionalProperties": false,
+          "properties": {
+            "bytes": {
+              "title": "Bytes",
+              "type": "integer"
+            },
+            "path": {
+              "title": "Path",
+              "type": "string"
+            },
+            "sha256": {
+              "title": "Sha256",
+              "type": "string"
+            },
+            "source": {
+              "enum": [
+                "diff",
+                "partial"
+              ],
+              "title": "Source",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "bytes",
+            "sha256",
+            "source"
+          ],
+          "title": "DiffExportInfo",
+          "type": "object"
+        },
         "Finding": {
           "additionalProperties": false,
           "properties": {
@@ -4290,6 +4500,17 @@
               "anyOf": [
                 {
                   "$ref": "#/$defs/ToolDeprecation"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "diff_export": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DiffExportInfo"
                 },
                 {
                   "type": "null"

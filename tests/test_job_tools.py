@@ -8,6 +8,7 @@ import json
 import os
 import subprocess
 import tempfile
+import textwrap
 import time
 from pathlib import Path
 
@@ -20,6 +21,25 @@ from amicus.jobs import delivery, lifecycle, lookup
 from amicus.jobs import store as job_store_mod
 from amicus.jobs.store import DiscardOutcome, JobStore, ResultUnreadable
 from amicus.registry import BackendRegistry
+
+# Linux's MAX_ARG_STRLEN: one argv element or environment string longer than this fails
+# the spawn with E2BIG there, while macOS limits only the total, so a test can pass on one
+# and fail on the other. Every worker spawn in this file is held to the Linux limit.
+_MAX_ARG_STRLEN = 131_072
+
+
+@pytest.fixture(autouse=True)
+def _spawn_strings_fit_linux(monkeypatch):
+    real_popen = job_store_mod.subprocess.Popen
+
+    def checked(args, *rest, **kwargs):
+        env = kwargs.get("env") or os.environ
+        strings = [*map(str, args), *(f"{k}={v}" for k, v in env.items())]
+        too_long = [s[:40] for s in strings if len(s.encode()) + 1 > _MAX_ARG_STRLEN]
+        assert not too_long, f"a spawn string exceeds Linux's limit: {too_long}"
+        return real_popen(args, *rest, **kwargs)
+
+    monkeypatch.setattr(job_store_mod.subprocess, "Popen", checked)
 
 
 def _make_app(tmp_path, fake_codex, monkeypatch, **env: str):
@@ -35,6 +55,7 @@ def _make_app(tmp_path, fake_codex, monkeypatch, **env: str):
         "FAKE_CODEX_ANSWER",
         "FAKE_CODEX_WRITE",
         "FAKE_CODEX_WRITE_CONTENT",
+        "FAKE_CODEX_WRITE_CONTENT_FILE",
         "FAKE_CODEX_EVENTS",
         "FAKE_CODEX_SLEEP",
     ):
@@ -579,6 +600,7 @@ async def test_workspace_rules_apply_to_every_job_tool(app, tmp_path):
             ("amicus_job_status", {"job_id": "a" * 32}),
             ("amicus_job_result", {"job_id": "a" * 32}),
             ("amicus_job_consume_result", {"job_id": "a" * 32}),
+            ("amicus_job_export_diff", {"job_id": "a" * 32, "path": str(tmp_path / "x")}),
             ("amicus_job_cancel", {"job_id": "a" * 32}),
             ("amicus_job_list", {}),
         ):
@@ -1481,3 +1503,490 @@ async def test_a_listing_with_an_unreadable_job_record_is_temporary(
         assert (jd / "meta.json").exists()
         jobs = (await c.call_tool("amicus_job_list", ws)).structured_content["jobs"]
         assert [j["job_id"] for j in jobs] == [job_id]
+
+
+# --- amicus_job_export_diff (#556, ADR 0054) ---------------------------------------------
+
+
+def _delivered(store, cwd, job_id):
+    jd = store._job_dir(str(cwd), job_id)
+    return json.loads((jd / "meta.json").read_text()).get("delivered_epoch")
+
+
+async def _delegate_job(c, store, repo, monkeypatch, *, write=True):
+    if write:
+        monkeypatch.setenv("FAKE_CODEX_WRITE", "b.py")
+        monkeypatch.setenv("FAKE_CODEX_WRITE_CONTENT", "export me\n")
+    else:
+        monkeypatch.delenv("FAKE_CODEX_WRITE", raising=False)
+    body = (
+        await c.call_tool(
+            "amicus_delegate_async",
+            {"backend": "codex", "task": "add b", "workspace_root": str(repo)},
+        )
+    ).structured_content
+    assert body["ok"] is True
+    await _wait_done(store, repo, body["job_id"])
+    monkeypatch.delenv("FAKE_CODEX_WRITE", raising=False)
+    return body["job_id"]
+
+
+def _as_partial_error(store, repo, job_id, code="timeout"):
+    """Turn a stored delegate success into a stopped run's error carrying `partial.diff`,
+    as tests/test_run.py builds one, keeping the record's kind and format stamp."""
+    jd = store._job_dir(str(repo), job_id)
+    success = json.loads((jd / "result.json").read_text())
+    stored = {
+        "ok": False,
+        "error": {
+            "code": code,
+            "message": "stopped",
+            "backend": "codex",
+            "temporary": False,
+            "retry_after_ms": None,
+            "repair": {"next_step": "start_new_job"},
+        },
+        "meta": success["meta"],
+        "partial": {"incomplete": True, "diff": success["diff"], "diffstat": success["diffstat"]},
+    }
+    (jd / "result.json").write_text(json.dumps(stored))
+    return success["diff"]
+
+
+def _export_args(job_id, repo, path):
+    return {"job_id": job_id, "workspace_root": str(repo), "path": str(path)}
+
+
+async def _published(c, uri):
+    contents = await c.read_resource(uri)
+    return Draft202012Validator(json.loads(contents[0].text))
+
+
+@pytest.fixture
+def scratch(tmp_path):
+    d = tmp_path / "scratch"
+    d.mkdir()
+    return d
+
+
+async def test_export_writes_the_diff_and_marks_the_job_delivered(
+    app, store, repo, scratch, monkeypatch, caplog
+):
+    caplog.set_level("DEBUG")
+    target = scratch / "out.patch"
+    async with Client(app) as c:
+        schemas = await _schemas(c)
+        job_id = await _delegate_job(c, store, repo, monkeypatch)
+        jd = store._job_dir(str(repo), job_id)
+        stored_bytes = (jd / "result.json").read_bytes()
+        stored = json.loads(stored_bytes)
+        assert stored["diff"] and _delivered(store, repo, job_id) is None
+        res = await c.call_tool("amicus_job_export_diff", _export_args(job_id, repo, target))
+        body = res.structured_content
+        meta_schema = await _published(c, "amicus://result-meta")
+    data = stored["diff"].encode("utf-8")
+    import hashlib
+
+    assert target.read_bytes() == data
+    assert body["ok"] is True and body["tool"] == "amicus_delegate"
+    assert body["diff"] is None and body["diffstat"] == stored["diffstat"]
+    assert body["meta"]["diff_export"] == {
+        "path": str(target),
+        "bytes": len(data),
+        "sha256": hashlib.sha256(data).hexdigest(),
+        "source": "diff",
+    }
+    assert body["meta"]["truncated"] == stored["meta"]["truncated"]
+    assert body["meta"].get("redacted_paths", []) == stored["meta"]["redacted_paths"]
+    schemas["amicus_job_export_diff"].validate(body)
+    meta_schema.validate(body["meta"])
+    assert _delivered(store, repo, job_id) is not None
+    assert (jd / "result.json").read_bytes() == stored_bytes
+    patch_lines = [ln for ln in stored["diff"].splitlines() if ln.startswith(("+", "-"))]
+    text = res.content[0].text
+    for line in patch_lines:
+        assert line not in json.dumps(body) and line not in text
+    for record in caplog.records:
+        message = record.getMessage()
+        assert str(target) not in message and "export me" not in message
+
+
+async def test_a_second_export_and_a_consume_still_see_the_whole_diff(
+    app, store, repo, scratch, monkeypatch
+):
+    async with Client(app) as c:
+        job_id = await _delegate_job(c, store, repo, monkeypatch)
+        await c.call_tool("amicus_job_export_diff", _export_args(job_id, repo, scratch / "a"))
+        await c.call_tool("amicus_job_export_diff", _export_args(job_id, repo, scratch / "b"))
+        consumed = (
+            await c.call_tool(
+                "amicus_job_consume_result", {"job_id": job_id, "workspace_root": str(repo)}
+            )
+        ).structured_content
+    assert (scratch / "a").read_bytes() == (scratch / "b").read_bytes()
+    assert consumed["diff"].encode("utf-8") == (scratch / "a").read_bytes()
+    assert consumed["meta"]["consume"]["discard_outcome"] == "removed"
+    assert "diff_export" not in consumed["meta"]
+    assert store.status(str(repo), job_id) is None
+
+
+@pytest.mark.parametrize("code", ["timeout", "budget_exceeded"])
+async def test_export_of_a_stopped_runs_partial_diff(app, store, repo, scratch, monkeypatch, code):
+    target = scratch / "partial.patch"
+    async with Client(app) as c:
+        job_id = await _delegate_job(c, store, repo, monkeypatch)
+        diff = _as_partial_error(store, repo, job_id, code)
+        res = await c.call_tool(
+            "amicus_job_export_diff", _export_args(job_id, repo, target), raise_on_error=False
+        )
+        error_schema = await _published(c, "amicus://error-envelope")
+    body = res.structured_content
+    assert res.is_error is True and body["ok"] is False and body["error"]["code"] == code
+    assert body["partial"]["incomplete"] is True and body["partial"]["diff"] is None
+    assert body["meta"]["diff_export"]["source"] == "partial"
+    assert target.read_bytes() == diff.encode("utf-8")
+    error_schema.validate(body)
+    assert _delivered(store, repo, job_id) is not None
+
+
+async def test_export_of_a_delegate_with_no_diff_writes_nothing(
+    app, store, repo, scratch, monkeypatch
+):
+    target = scratch / "none.patch"
+    async with Client(app) as c:
+        job_id = await _delegate_job(c, store, repo, monkeypatch, write=False)
+        body = (
+            await c.call_tool("amicus_job_export_diff", _export_args(job_id, repo, target))
+        ).structured_content
+        plain = (
+            await c.call_tool("amicus_job_result", {"job_id": job_id, "workspace_root": str(repo)})
+        ).structured_content
+    assert body["ok"] is True and body["diff"] is None
+    assert "diff_export" not in body["meta"]
+    assert not target.exists()
+    assert _delivered(store, repo, job_id) is not None
+    body["meta"].pop("request_id")
+    plain["meta"].pop("request_id")
+    assert body == plain
+
+
+async def test_export_of_a_job_that_is_not_a_delegate_is_refused(
+    app, store, repo, scratch, monkeypatch
+):
+    target = scratch / "consult.patch"
+    async with Client(app) as c:
+        job_id = await _start(c, repo)
+        await _wait_done(store, repo, job_id)
+        res = await c.call_tool(
+            "amicus_job_export_diff", _export_args(job_id, repo, target), raise_on_error=False
+        )
+    err = res.structured_content["error"]
+    assert err["code"] == "invalid_arguments" and err["details"]["field"] == "job_id"
+    assert not target.exists()
+    assert _delivered(store, repo, job_id) is None
+
+
+async def _refused_export(c, store, repo, monkeypatch, path):
+    job_id = await _delegate_job(c, store, repo, monkeypatch)
+    res = await c.call_tool(
+        "amicus_job_export_diff", _export_args(job_id, repo, path), raise_on_error=False
+    )
+    # Read before any other call: a refusal must not have marked the job delivered.
+    delivered = _delivered(store, repo, job_id)
+    after = (
+        await c.call_tool("amicus_job_result", {"job_id": job_id, "workspace_root": str(repo)})
+    ).structured_content
+    return res, delivered, after
+
+
+async def test_an_existing_path_is_refused_and_the_job_stays_undelivered(
+    app, store, repo, scratch, monkeypatch
+):
+    target = scratch / "taken.patch"
+    target.write_bytes(b"keep")
+    async with Client(app) as c:
+        res, delivered, after = await _refused_export(c, store, repo, monkeypatch, target)
+    err = res.structured_content["error"]
+    assert err["code"] == "invalid_arguments" and err["details"]["field"] == "path"
+    assert err["details"]["reason"] == "exists"
+    assert err["repair"]["tool"] == "amicus_job_export_diff"
+    assert str(target) not in json.dumps(err["repair"])
+    assert str(target) not in res.content[0].text
+    assert target.read_bytes() == b"keep"
+    assert delivered is None
+    assert after["ok"] is True and "export me" in after["diff"]
+
+
+async def test_a_symlinked_final_component_is_refused(app, store, repo, scratch, monkeypatch):
+    victim = scratch / "victim"
+    victim.write_bytes(b"keep")
+    link = scratch / "link.patch"
+    link.symlink_to(victim)
+    async with Client(app) as c:
+        res, delivered, _after = await _refused_export(c, store, repo, monkeypatch, link)
+    assert res.structured_content["error"]["details"]["reason"] == "exists"
+    assert victim.read_bytes() == b"keep" and delivered is None
+
+
+async def test_a_parent_symlinked_into_the_job_store_is_refused(
+    app, store, settings, repo, scratch, monkeypatch
+):
+    Path(settings.state_dir).mkdir(parents=True, exist_ok=True)
+    link = scratch / "into-store"
+    link.symlink_to(settings.state_dir, target_is_directory=True)
+    async with Client(app) as c:
+        res, delivered, after = await _refused_export(
+            c, store, repo, monkeypatch, link / "out.patch"
+        )
+    assert res.structured_content["error"]["details"]["reason"] == "inside_job_store"
+    assert not (Path(settings.state_dir) / "out.patch").exists()
+    assert delivered is None and "export me" in after["diff"]
+
+
+async def test_a_failed_write_is_export_failed_and_leaves_no_file(
+    app, store, repo, scratch, monkeypatch
+):
+    import errno
+
+    from amicus.jobs import export
+
+    def full(fd, data):
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+    target = scratch / "full.patch"
+    async with Client(app) as c:
+        job_id = await _delegate_job(c, store, repo, monkeypatch)
+        monkeypatch.setattr(export.os, "write", full)
+        res = await c.call_tool(
+            "amicus_job_export_diff", _export_args(job_id, repo, target), raise_on_error=False
+        )
+        monkeypatch.undo()
+        delivered = _delivered(store, repo, job_id)
+        after = (
+            await c.call_tool("amicus_job_result", {"job_id": job_id, "workspace_root": str(repo)})
+        ).structured_content
+        published = await _published_codes(c, "amicus_job_export_diff")
+    err = res.structured_content["error"]
+    assert err["code"] == "export_failed" and err["temporary"] is True
+    assert {"export_failed", "invalid_arguments", "timeout"} <= set(published)
+    assert err["repair"]["tool"] == "amicus_job_export_diff"
+    assert "was removed" in err["message"] and "removed it" in err["repair"]["alternative"]
+    assert str(target) not in res.content[0].text
+    assert not target.exists()
+    assert delivered is None and "export me" in after["diff"]
+
+
+def _without_request_ids(body):
+    body = json.loads(json.dumps(body))
+    body.get("meta", {}).pop("request_id", None)
+    if isinstance(body.get("error"), dict):
+        body["error"].pop("request_id", None)
+    return body
+
+
+async def test_lookup_failures_match_amicus_job_result_and_write_nothing(
+    app, store, repo, scratch, monkeypatch
+):
+    target = scratch / "never.patch"
+    async with Client(app) as c:
+        cases = []
+        # A missing job and a missing workspace.
+        cases.append({"job_id": "a" * 32, "workspace_root": str(repo)})
+        cases.append({"job_id": "a" * 32})
+        # A foreign record.
+        foreign = await _delegate_job(c, store, repo, monkeypatch)
+        meta_path = store._job_dir(str(repo), foreign) / "meta.json"
+        meta_path.write_text(
+            meta_path.read_text().replace('"backend": "codex"', '"backend": "Not Ours"')
+        )
+        cases.append({"job_id": foreign, "workspace_root": str(repo)})
+        # An incompatible record.
+        old = await _delegate_job(c, store, repo, monkeypatch)
+        old_meta = store._job_dir(str(repo), old) / "meta.json"
+        record = json.loads(old_meta.read_text())
+        record["extra"]["result_format"] = 1
+        old_meta.write_text(json.dumps(record))
+        cases.append({"job_id": old, "workspace_root": str(repo)})
+        # A running job.
+        monkeypatch.setenv("FAKE_CODEX_SLEEP", "30")
+        running = (
+            await c.call_tool(
+                "amicus_delegate_async",
+                {"backend": "codex", "task": "t", "workspace_root": str(repo)},
+            )
+        ).structured_content["job_id"]
+        cases.append({"job_id": running, "workspace_root": str(repo)})
+        for args in cases:
+            exported = await c.call_tool(
+                "amicus_job_export_diff", {**args, "path": str(target)}, raise_on_error=False
+            )
+            fetched = await c.call_tool("amicus_job_result", args, raise_on_error=False)
+            assert exported.structured_content["ok"] is False, args
+            got = _without_request_ids(exported.structured_content)
+            want = _without_request_ids(fetched.structured_content)
+            if args["job_id"] == running:
+                # Only the prose differs: it finishes with the export, not an inline fetch.
+                alternative = got["error"]["repair"].pop("alternative")
+                want["error"]["repair"].pop("alternative")
+                assert "amicus_job_export_diff" in alternative
+            assert got == want, args
+        await c.call_tool("amicus_job_cancel", {"job_id": running, "workspace_root": str(repo)})
+    assert not target.exists()
+    assert _delivered(store, repo, old) is None
+
+
+def _recipe_blocks():
+    ref = (
+        Path(__file__).parent.parent
+        / "skills"
+        / "collaborating-with-amicus"
+        / "references"
+        / "reviewing-a-returned-diff.md"
+    ).read_text(encoding="utf-8")
+    blocks = [b.split("```", 1)[0] for b in ref.split("```sh")[1:]]
+    return [textwrap.dedent(b) for b in blocks]
+
+
+async def test_the_review_recipe_runs_end_to_end_on_a_large_exported_diff(
+    app, store, repo, scratch, monkeypatch, tmp_path
+):
+    """#556: the skill's recipe, run as written: export a near-cap delegate diff over a dirty
+    tracked baseline, check its digest, and apply it in a scratch worktree with the hardened
+    commands. The patch is generated from this test's own literals."""
+    import hashlib
+
+    (repo / "a.py").write_text("x = 2\n")  # the dirty tracked baseline amicus replays
+    content = "".join(f"line {i:06d} of a generated file for the export\n" for i in range(4000))
+    monkeypatch.setenv("FAKE_CODEX_WRITE", "big.txt")
+    # Through a file: Linux refuses any one environment string over 128 KiB (E2BIG).
+    content_file = tmp_path / "big-content.txt"
+    content_file.write_text(content, encoding="utf-8")
+    monkeypatch.setenv("FAKE_CODEX_WRITE_CONTENT_FILE", str(content_file))
+    # A backslash in the name: `echo` would turn `\n` into a newline under some shells.
+    target = scratch / "dele\\ngate.patch"
+    async with Client(app) as c:
+        started = (
+            await c.call_tool(
+                "amicus_delegate_async",
+                {"backend": "codex", "task": "add big", "workspace_root": str(repo)},
+            )
+        ).structured_content
+        await _wait_done(store, repo, started["job_id"])
+        body = (
+            await c.call_tool(
+                "amicus_job_export_diff", _export_args(started["job_id"], repo, target)
+            )
+        ).structured_content
+    export = body["meta"]["diff_export"]
+    assert body["meta"]["truncated"] is False and export["source"] == "diff"
+    assert 180_000 < export["bytes"] <= 200_000, export
+    assert hashlib.sha256(target.read_bytes()).hexdigest() == export["sha256"]
+    [first] = _recipe_blocks()
+    env = {
+        **os.environ,
+        "SCRATCH": str(scratch / "wt"),
+        "RETURNED_DIFF": str(target),
+        "EXPECTED_SHA256": "0" * 64,
+    }
+    # Negative control: a wrong digest stops the block before the diff is applied.
+    bad = subprocess.run(
+        ["bash", "-ec", first], check=False, cwd=repo, env=env, capture_output=True
+    )
+    assert bad.returncode != 0 and b"FAILED" in bad.stdout
+    assert not (scratch / "wt" / "big.txt").exists()
+    _git(repo, "worktree", "remove", "--force", str(scratch / "wt"))
+    env["EXPECTED_SHA256"] = export["sha256"]
+    for shell in ("bash", "sh"):
+        if Path(env["SCRATCH"]).exists():
+            _git(repo, "worktree", "remove", "--force", env["SCRATCH"])
+        subprocess.run([shell, "-ec", first], cwd=repo, env=env, check=True, capture_output=True)
+    assert (scratch / "wt" / "big.txt").read_text() == content
+    assert (scratch / "wt" / "a.py").read_text() == "x = 2\n"
+    assert not (repo / "big.txt").exists()
+
+
+async def test_an_unreadable_result_reached_through_the_export_repeats_the_export(
+    app, store, repo, scratch, monkeypatch
+):
+    """Fix round 1: following amicus_job_result's repair would return the diff inline, so
+    the export's repair is the export itself, a complete call; the fetch tools keep theirs."""
+    ws = {"workspace_root": str(repo)}
+    target = scratch / "u.patch"
+    async with Client(app) as c:
+        job_id = await _delegate_job(c, store, repo, monkeypatch)
+        restore = _deny_result_read(monkeypatch, store._job_dir(str(repo), job_id))
+        exported = await c.call_tool(
+            "amicus_job_export_diff", _export_args(job_id, repo, target), raise_on_error=False
+        )
+        fetched = await c.call_tool(
+            "amicus_job_result", {"job_id": job_id, **ws}, raise_on_error=False
+        )
+        consumed = await c.call_tool(
+            "amicus_job_consume_result", {"job_id": job_id, **ws}, raise_on_error=False
+        )
+        restore()
+    repair = exported.structured_content["error"]["repair"]
+    assert repair["tool"] == "amicus_job_export_diff"
+    assert repair["arguments"] == {"job_id": job_id, **ws, "path": str(target)}
+    _assert_unreadable(
+        fetched.structured_content,
+        repair_tool="amicus_job_result",
+        job_id=job_id,
+        ws=ws,
+        detail="summary",
+    )
+    _assert_unreadable(
+        consumed.structured_content,
+        repair_tool="amicus_job_consume_result",
+        job_id=job_id,
+        ws=ws,
+        detail="summary",
+    )
+    assert not target.exists()
+    assert _delivered(store, repo, job_id) is None
+
+
+async def test_a_path_with_a_lone_surrogate_is_invalid_arguments(
+    app, store, repo, scratch, monkeypatch
+):
+    async with Client(app) as c:
+        job_id = await _delegate_job(c, store, repo, monkeypatch)
+        res = await c.call_tool(
+            "amicus_job_export_diff",
+            {"job_id": job_id, "workspace_root": str(repo), "path": str(scratch) + "/\ud800"},
+            raise_on_error=False,
+        )
+    assert _delivered(store, repo, job_id) is None
+    err = res.structured_content["error"]
+    assert err["code"] == "invalid_arguments" and err["details"]["field"] == "path"
+
+
+async def test_a_failed_export_that_could_not_remove_its_file_says_so(
+    app, store, repo, scratch, monkeypatch
+):
+    import errno
+
+    from amicus.jobs import export
+
+    def full(fd, data):
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+    def no_unlink(*args, **kwargs):
+        raise OSError(errno.EBUSY, "busy")
+
+    target = scratch / "stuck.patch"
+    async with Client(app) as c:
+        job_id = await _delegate_job(c, store, repo, monkeypatch)
+        monkeypatch.setattr(export.os, "write", full)
+        monkeypatch.setattr(export.os, "unlink", no_unlink)
+        res = await c.call_tool(
+            "amicus_job_export_diff", _export_args(job_id, repo, target), raise_on_error=False
+        )
+        monkeypatch.undo()
+    err = res.structured_content["error"]
+    assert err["code"] == "export_failed"
+    assert "may remain" in err["message"] and "was removed" not in err["message"]
+    assert "delete it or pass another path" in err["repair"]["alternative"]
+    assert "removed that file" not in err["repair"]["alternative"]
+    assert str(target) not in res.content[0].text
+    assert _delivered(store, repo, job_id) is None

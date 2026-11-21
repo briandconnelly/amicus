@@ -43,7 +43,7 @@ statement — this list is a map, not a second copy.
 | Preview a review's or delegate's scope, size, and resolved options before spending | `amicus_review_changes_dry_run` / `amicus_delegate_dry_run` (free) | [active workflows](references/active-workflows.md) |
 | Slugs, efforts before overriding `model`/`reasoning_effort` | `amicus_models` (free; `query` narrows) | — |
 | Full tool inventory, fingerprint, and error catalog | `amicus_capabilities` (free) | — |
-| Poll, fetch, list, or cancel a background job | `amicus_job_status` / `amicus_job_result` / `amicus_job_consume_result` / `amicus_job_list` / `amicus_job_cancel` (all free) | [sync vs async](references/sync-vs-async.md) |
+| Poll, fetch, export, list, or cancel a background job | `amicus_job_status`, `_result`, `_consume_result`, `_export_diff`, `_list`, `_cancel` (all free) | [sync vs async](references/sync-vs-async.md) |
 | An optional parameter, an idempotency key, a returned error, or a host's denial of an amicus call | the tool already selected; a denial is reported, never worked around | [options and errors](references/options-and-errors.md) |
 | The amicus MCP server is unreachable | limited fallback | [server-down fallback](references/server-down-fallback.md) |
 | None of these, or a call would not change the decision | no call — proceed without amicus | — |
@@ -182,7 +182,7 @@ read in this session need not be read again.
   whose route is `pi`, before choosing among routes when more than one is left, and
   before a call that needs the backend to read files itself or that sets `backend_options`.**
 - **Read [reviewing a returned diff](references/reviewing-a-returned-diff.md) → Rules before
-  acting on or reporting a delegate's result.**
+  fetching, acting on or reporting a delegate's result.**
 - **Read a composed workflow's own reference → Rules before its first paid call.**
 - **Read [server-down fallback](references/server-down-fallback.md) → Rules before any call
   that goes around the amicus server.**

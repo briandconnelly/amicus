@@ -119,6 +119,25 @@ class ConsumeDisposition(BaseModel):
     follow_up: ConsumeFollowUp | None = None
 
 
+_DIFF_EXPORT_DESC = (
+    "Set only by amicus_job_export_diff, on the envelope it returns: the file it wrote the "
+    "diff to, whose `diff` (or `partial.diff`) the envelope then carries as null. Never "
+    "stored with the result."
+)
+
+
+class DiffExportInfo(BaseModel):
+    """The file amicus_job_export_diff wrote (#556, ADR 0054): its path, its length in
+    bytes and the hex SHA-256 of those bytes, and whether they came from a delegate's
+    `diff` or from a stopped run's `partial.diff`."""
+
+    model_config = ConfigDict(extra="forbid")
+    path: str
+    bytes: int
+    sha256: str
+    source: Literal["diff", "partial"]
+
+
 class ToolDeprecation(BaseModel):
     """The deprecation marker ([9.deprecation-marker]): present only on a tool or a backend
     inside its deprecation window, beside a tool's stability tier, which it never replaces.
@@ -194,6 +213,12 @@ class Meta(BaseModel):
     # delivered dict instead (#44).
     consume: ConsumeDisposition | None = Field(
         default=None, exclude=True, description=_CONSUME_DESC
+    )
+    # Delivery-only, like `consume`: excluded from every dump, so a stored result.json keeps
+    # its shape and RESULT_FORMAT does not move; jobs.delivery.attach_diff_export sets it on
+    # the delivered dict instead (#556).
+    diff_export: DiffExportInfo | None = Field(
+        default=None, exclude=True, description=_DIFF_EXPORT_DESC
     )
     request_id: str = Field(default_factory=lambda: uuid4().hex)
     fingerprint: str = FINGERPRINT

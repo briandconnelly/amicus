@@ -115,7 +115,8 @@ the backend's free pre-spend checks and returns the error the paid call would.
 A self-contained task makes scope review tractable — an under-specified task is the usual cause of
 a diff that edits unrelated files. Treat that as a reason to specify tightly, not as a guarantee
 about what the run did: containment differs per backend, and
-[reviewing a returned diff](reviewing-a-returned-diff.md) has the table.
+[reviewing a returned diff](reviewing-a-returned-diff.md) has the table. Get the diff with
+`amicus_job_export_diff`, which writes it to a new file, before any `amicus_job_result`.
 
 ## Complementary review lenses
 

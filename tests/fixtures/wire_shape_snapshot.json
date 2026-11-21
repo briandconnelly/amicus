@@ -827,6 +827,106 @@
       }
     }
   },
+  "exported": {
+    "diff": {
+      "assumptions": [],
+      "diff": null,
+      "diffstat": "1 file changed, 1 insertion(+)",
+      "findings": [],
+      "findings_diagnostics": null,
+      "meta": {
+        "backend": "codex",
+        "backend_details": {
+          "isolation": "inherit"
+        },
+        "command_exit_code": 0,
+        "compat_warnings": [],
+        "cwd": "/repo",
+        "diff_export": {
+          "bytes": 32,
+          "path": "/scratch/delegate.patch",
+          "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+          "source": "diff"
+        },
+        "elapsed_ms": 1,
+        "fingerprint": "<fingerprint>",
+        "instructions_append": {
+          "bytes": 5,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "job_id": "00000000000000000000000000000000",
+        "model": "a-model",
+        "reasoning_effort": "high",
+        "redacted_paths": [],
+        "request_id": "00000000000000000000000000000000",
+        "roots_source": "client",
+        "security_warnings": [],
+        "server_version": "0.0.0",
+        "session_id": "sess-1",
+        "timeout_seconds": 1,
+        "truncated": false,
+        "usage": {
+          "cache_creation_input_tokens": null,
+          "cached_input_tokens": 3,
+          "cost_usd": null,
+          "input_tokens": 1,
+          "output_tokens": 2,
+          "total_tokens": 6
+        },
+        "workspace_source": "param"
+      },
+      "next_steps": [],
+      "ok": true,
+      "questions": [],
+      "raw_response": {
+        "model": "a-model",
+        "session_id": "sess-1",
+        "text": null
+      },
+      "summary": "s",
+      "tool": "amicus_delegate"
+    },
+    "partial": {
+      "error": {
+        "backend": "codex",
+        "code": "timeout",
+        "message": "the run passed its deadline",
+        "repair": {
+          "alternative": "The run passed its deadline; the same synchronous call will likely time out again, and any next attempt is a NEW paid run, not a recovery of this one (the backend may already have charged this run). To retry, start the matching _async twin (amicus_consult_async / amicus_review_changes_async / amicus_adversarial_review_async / amicus_delegate_async), which runs to AMICUS_JOB_MAX_SECONDS (default 1800s), not timeout_seconds, and whose idempotency_key dedupes retries of that launch; poll amicus_job_status while status is running, and on any terminal status fetch amicus_job_result. Its arguments are your original call's, which this repair does not echo. If this repair names no tool, the job deadline is no longer than this one: narrow the task, or have the operator raise AMICUS_JOB_MAX_SECONDS.",
+          "next_step": "start_new_job"
+        },
+        "request_id": "00000000000000000000000000000000",
+        "retry_after_ms": null,
+        "temporary": false
+      },
+      "meta": {
+        "backend": "codex",
+        "compat_warnings": [],
+        "cwd": "/repo",
+        "diff_export": {
+          "bytes": 32,
+          "path": "/scratch/delegate.patch",
+          "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+          "source": "partial"
+        },
+        "elapsed_ms": 1,
+        "fingerprint": "<fingerprint>",
+        "job_id": "00000000000000000000000000000000",
+        "redacted_paths": [],
+        "request_id": "00000000000000000000000000000000",
+        "security_warnings": [],
+        "server_version": "0.0.0",
+        "timeout_seconds": 1,
+        "truncated": false
+      },
+      "ok": false,
+      "partial": {
+        "diff": null,
+        "diffstat": "1 file changed, 1 insertion(+)",
+        "incomplete": true
+      }
+    }
+  },
   "handles": {
     "job_list": {
       "has_more": true,

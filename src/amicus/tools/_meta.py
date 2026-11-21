@@ -28,7 +28,7 @@ TOOL_STABILITY: dict[str, ToolStability] = {}
 # the worst case until its plugin declares otherwise.
 _UNKNOWN_EFFECTS = AnnotationEffects(paid_calls_destructive=True, job_reads_read_only=True)
 
-AnnotationKind = Literal["active", "free", "job_read", "job_consume", "job_cancel"]
+AnnotationKind = Literal["active", "free", "job_read", "job_consume", "job_export", "job_cancel"]
 
 
 def tool_stability(name: str) -> ToolStability:
@@ -115,6 +115,10 @@ def annotations_for(kind: AnnotationKind, settings: Settings) -> dict[str, bool]
         return ann.job_read(effects)
     if kind == "job_consume":
         return ann.job_mutate(idempotent=False)
+    if kind == "job_export":
+        # Additive only: a new file per call, never an overwrite, and no record change but
+        # the delivery stamp amicus_job_result sets too (#556).
+        return ann.free_write()
     return ann.job_mutate(idempotent=True)
 
 

@@ -53,7 +53,7 @@ async def test_published_input_schemas_carry_no_null_default():
     app = manifest.app_for_profile("all")
     async with Client(app) as c:
         tools = await c.list_tools()
-    assert len(tools) == 18
+    assert len(tools) == 19
     assert sum(_null_defaults(t.input_schema) for t in tools) == 0
     # The server-held record (middleware not run) agrees with the wire.
     records = await surface.surface_records(app)

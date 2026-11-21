@@ -1,4 +1,4 @@
-"""The 18-tool surface, the free discovery tools, and job tools (schema-only)."""
+"""The 19-tool surface, the free discovery tools, and job tools (schema-only)."""
 
 from __future__ import annotations
 
@@ -40,9 +40,9 @@ async def _tools(app):
         return await c.list_tools()
 
 
-async def test_exactly_eighteen_tools_in_the_fixed_order():
+async def test_exactly_nineteen_tools_in_the_fixed_order():
     listed = [t.name for t in await _tools(_app())]
-    assert len(listed) == 18
+    assert len(listed) == 19
     assert listed == list(tools.TOOL_ORDER)
 
 
@@ -62,11 +62,17 @@ async def test_free_and_job_tool_markers_and_annotations():
     # Consume deletes a retained result and cancel discards in-flight work, so
     # neither is additive (#213).
     assert consume.destructive_hint is True and cancel.destructive_hint is True
+    # The export creates one new file and never overwrites, so it is an additive write,
+    # and amicus_job_result, which it shares a read with, stays read-only (#556).
+    export = by_name["amicus_job_export_diff"].annotations
+    assert export.read_only_hint is False and export.destructive_hint is False
+    assert export.idempotent_hint is False and export.open_world_hint is False
+    assert by_name["amicus_job_result"].annotations.read_only_hint is True
 
 
 async def _lifecycle_stability_tiers(app) -> dict[str, str]:
     """Every stability value the discovery records carry in `_meta`, keyed by where it
-    appears: 18 tools, 4 static resources, 2 templates. One collector covers all three
+    appears: 19 tools, 4 static resources, 2 templates. One collector covers all three
     surfaces, so none of them can drift on its own. These blocks are plain dicts with no
     model behind them, so nothing rejects an illegal tier at runtime -- the declared type
     of `SERVER_STABILITY` and this collector are what hold them."""
@@ -88,22 +94,22 @@ async def test_every_published_stability_tier_is_in_the_closed_set():
     """[9.stability-tiers] closes the set so an agent can filter on the tier directly;
     the server published `alpha`, outside it and outside its own literal, until #43."""
     tiers = await _lifecycle_stability_tiers(_app())
-    assert len(tiers) == 24, sorted(tiers)
+    assert len(tiers) == 25, sorted(tiers)
     async with Client(_app()) as c:
         caps = (await c.call_tool("amicus_capabilities", {"detail": "full"})).structured_content
     tiers["capabilities:stability"] = caps["stability"]
     for entry in caps["tool_details"]:
         if entry["stability"] is not None:
             tiers[f"capabilities:tool_details:{entry['name']}"] = entry["stability"]
-    # 43 = 24 lifecycle records + capabilities.stability + 18 tool_details rows: every row
+    # 45 = 25 lifecycle records + capabilities.stability + 19 tool_details rows: every row
     # now carries its effective tier rather than a null override (#250).
-    assert len(tiers) == 43, sorted(tiers)
+    assert len(tiers) == 45, sorted(tiers)
     assert {v for v in tiers.values() if v not in set(get_args(results.ToolStability))} == set()
 
 
 async def test_an_illegal_server_tier_would_reach_every_lifecycle_record(monkeypatch):
     """Mutation control for the collector above: one bad server-wide tier has to surface on
-    all 24 records, because every record now inherits it; a deprecated tool would too, since
+    all 25 records, because every record now inherits it; a deprecated tool would too, since
     deprecation never replaces a tier (#98), though none exists since the alias was removed
     (#204). That all-inherit invariant is what this pins, not the historical state: `alpha`
     reached 15 of the 24 records there were then
@@ -113,7 +119,7 @@ async def test_an_illegal_server_tier_would_reach_every_lifecycle_record(monkeyp
     stay behind here."""
     monkeypatch.setattr(_meta, "SERVER_STABILITY", "alpha")
     tiers = await _lifecycle_stability_tiers(_app())
-    assert len(tiers) == 24 and set(tiers.values()) == {"alpha"}
+    assert len(tiers) == 25 and set(tiers.values()) == {"alpha"}
 
 
 async def test_capabilities_refuses_to_publish_a_tier_outside_the_closed_set(monkeypatch):
@@ -670,10 +676,11 @@ def test_empty_response_is_listed_exactly_where_pi_can_run_the_tool():
     free = [
         r
         for n, r in TOOL_DETAILS.items()
-        if r["cost"] != "active" and n not in discovery.JOB_READ_TOOLS
+        if r["cost"] != "active" and n not in (*discovery.JOB_READ_TOOLS, "amicus_job_export_diff")
     ]
     assert all("empty_response" not in r["error_codes"] for r in free)
-    for name in discovery.JOB_READ_TOOLS:
+    # The export delivers a delegate's stored envelope, and pi runs delegates (#556).
+    for name in (*discovery.JOB_READ_TOOLS, "amicus_job_export_diff"):
         assert "empty_response" in TOOL_DETAILS[name]["error_codes"], name
 
 
@@ -740,6 +747,8 @@ def test_invalid_model_is_listed_by_tool_role():
         if "pi" in discovery.TOOL_DETAILS[name]["backends"]
     }
     expected |= set(discovery.JOB_READ_TOOLS)
+    # The export delivers a delegate's stored errors, and pi runs delegates (#556).
+    expected.add("amicus_job_export_diff")
     actual = {n for n, r in discovery.TOOL_DETAILS.items() if "invalid_model" in r["error_codes"]}
     assert actual == expected
     assert "amicus_adversarial_review" not in actual and "amicus_models" not in actual

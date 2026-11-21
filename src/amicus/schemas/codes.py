@@ -70,6 +70,9 @@ LOCAL_CODES = frozenset(
         "model_denied",
         # ... or is malformed, so every paid tool and dry run fails closed.
         "model_policy_invalid",
+        # amicus_job_export_diff created the export file and could not finish it, so it
+        # removed the file; the record is kept undelivered (#556, ADR 0054).
+        "export_failed",
     }
 )
 
@@ -90,6 +93,7 @@ ErrorCode = Literal[
     "cli_contract_changed",
     "context_too_large",
     "empty_response",
+    "export_failed",
     "extra_args_rejected",
     "feature_unsupported",
     "git_unavailable",

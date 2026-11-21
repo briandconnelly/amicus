@@ -1,4 +1,4 @@
-"""The five amicus_job_* tools: status, result, consume_result, cancel, list. Every
+"""The six amicus_job_* tools: status, result, consume_result, export_diff, cancel, list. Every
 stored result is delivered through jobs.delivery.finished_job_envelope, the chokepoint
 the sync path shares; workspace and roots follow ADR 0003; a record without amicus's
 backend tag is foreign and reported not-found (ADR 0008)."""
@@ -17,16 +17,20 @@ from amicus.errors import error_envelope
 from amicus.jobs import lifecycle, lookup
 from amicus.jobs.delivery import (
     attach_consume_disposition,
+    attach_diff_export,
     consumable_state,
+    exportable_diff,
     finished_job_envelope,
     unreadable_result_envelope,
 )
+from amicus.jobs.export import ExportFailed, ExportRefused, write_diff_file
 from amicus.jobs.polling import job_status_arguments
 from amicus.jobs.store import MAX_POLL_AFTER_MS, MetaUnreadable, ResultUnreadable
 from amicus.schemas.envelope import InvalidArgument
 from amicus.schemas.params import (
     MAX_STATUS_WAIT_SECONDS,
     DetailParam,
+    DiffPathParam,
     JobCursorParam,
     JobIdParam,
     JobLimitParam,
@@ -63,6 +67,28 @@ _RETENTION = (
 _JOB_ID_RE = re.compile(r"[0-9a-f]{32}")
 # How often a status wait re-reads the record; a read is a local file stat, not a spend.
 _WAIT_POLL_SECONDS = 0.25
+
+
+_EXPORT_RUNNING_ALTERNATIVE = (
+    "Poll amicus_job_status while status is running, honoring poll_after_ms, or pass a "
+    "positive wait_seconds, which is itself the wait. On any terminal status, repeat this "
+    "amicus_job_export_diff call with the same job_id, workspace_root and path; fetching "
+    "the result with amicus_job_result instead returns the whole diff inline."
+)
+
+
+_EXPORT_FAILED_REMOVED = (
+    "amicus could not finish the export file (for example the disk filled) and removed it. "
+    "The job's record is kept and not marked delivered. Free the space or pick another "
+    "directory, then retry amicus_job_export_diff with the same job_id, to the same path or "
+    "another."
+)
+_EXPORT_FAILED_KEPT = (
+    "amicus could not finish the export file and could not remove it, so a partial file may "
+    "remain at the path you passed: delete it or pass another path, then retry "
+    "amicus_job_export_diff with the same job_id. The job's record is kept and not marked "
+    "delivered."
+)
 
 
 def _cursor_for(row: dict[str, Any]) -> str:
@@ -147,12 +173,23 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
         )
         return lookup.status_model(row, lookup.workspace_of(cwd, source), task_for(job_id), meta)
 
-    async def read_result(
-        ctx: Any, workspace_root: str | None, job_id: str, detail: str, *, consume: bool
-    ) -> dict[str, Any]:
+    async def deliver(
+        ctx: Any,
+        workspace_root: str | None,
+        job_id: str,
+        detail: str,
+        *,
+        consume: bool,
+        retry: tuple[str, dict[str, Any]] | None = None,
+    ) -> tuple[dict[str, Any], dict[str, Any] | None, str | None, bool, Any]:
+        """The resolution, lookup and `finished_job_envelope` path every result reader
+        shares: (envelope, record, cwd, delivered, meta). A workspace, read or lookup
+        failure comes back as the envelope with no record. Nothing is marked delivered.
+        `retry` is the (tool, arguments) an unreadable result's repair repeats; omitted,
+        it is the fetch or consume this call made."""
         cwd, source, roots_source, err = await resolve(ctx, workspace_root)
         if err is not None:
-            return err
+            return err, None, None, False, None
         assert cwd is not None
         try:
             rec, payload = await asyncio.to_thread(store().result_payload, cwd, job_id)
@@ -161,20 +198,26 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
             # be read (#280). The repair names the call made, which is free either way, with
             # the detail asked for: followed at the default, a full-detail consume would
             # deliver the summary and then delete the record. A consume deleted nothing.
-            return unreadable_result_envelope(
+            tool, arguments = retry or (
+                "amicus_job_consume_result" if consume else "amicus_job_result",
+                {**job_status_arguments(job_id, workspace_root), "detail": detail},
+            )
+            unreadable = unreadable_result_envelope(
                 lookup.job_meta(cwd, source, roots_source),
-                tool="amicus_job_consume_result" if consume else "amicus_job_result",
+                tool=tool,
                 next_step="fetch_job_result",
-                arguments={**job_status_arguments(job_id, workspace_root), "detail": detail},
+                arguments=arguments,
                 job_id=job_id,
                 errno=exc.errno,
                 record=isinstance(exc, MetaUnreadable),
             )
+            return unreadable, None, cwd, False, None
         backend = lookup.backend_of(rec) if rec is not None else None
         if rec is None or backend is None:
-            return lookup.job_not_found(
+            missing = lookup.job_not_found(
                 job_id, lookup.job_meta(cwd, source, roots_source), workspace_root
             )
+            return missing, None, cwd, False, None
         kind = lookup.kind_of(rec)
         meta = lookup.job_meta(cwd, source, roots_source, backend=backend, kind=kind)
         meta.task_id = task_for(job_id)
@@ -183,6 +226,17 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
         )
         if delivered and isinstance(envelope.get("meta"), dict) and meta.task_id is not None:
             envelope["meta"]["task_id"] = meta.task_id
+        return envelope, rec, cwd, delivered, meta
+
+    async def read_result(
+        ctx: Any, workspace_root: str | None, job_id: str, detail: str, *, consume: bool
+    ) -> dict[str, Any]:
+        envelope, rec, cwd, delivered, _meta = await deliver(
+            ctx, workspace_root, job_id, detail, consume=consume
+        )
+        if rec is None:
+            return envelope
+        assert cwd is not None
         if delivered:
             # Before any discard, so a consume that cannot delete leaves the record
             # evictable rather than holding a cap slot until its TTL (#244).
@@ -272,6 +326,108 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
     ) -> dict[str, Any]:
         """Fetch and delete a background job's result."""
         return await read_result(ctx, workspace_root, job_id, detail, consume=True)
+
+    async def export_diff(
+        ctx: Any, workspace_root: str | None, job_id: str, path: str
+    ) -> dict[str, Any]:
+        # The same read amicus_job_result makes at its default detail, so every workspace,
+        # lookup, corrupt or incompatible outcome is that tool's (#556). Two repairs differ,
+        # because following that tool's would return the diff inline: an unreadable result
+        # repeats this export, and a running job's prose finishes with this export.
+        # The path is the caller's own value, not a prompt input, and a repair's arguments
+        # must be a complete call, so the retry carries it.
+        retry_args = {**job_status_arguments(job_id, workspace_root), "path": path}
+        envelope, rec, cwd, delivered, meta = await deliver(
+            ctx,
+            workspace_root,
+            job_id,
+            "summary",
+            consume=False,
+            retry=("amicus_job_export_diff", retry_args),
+        )
+        error = envelope.get("error") if envelope.get("ok") is False else None
+        if rec is not None and isinstance(error, dict) and error.get("code") == "job_running":
+            repair = error.get("repair")
+            if isinstance(repair, dict):
+                repair["alternative"] = _EXPORT_RUNNING_ALTERNATIVE
+        if rec is None or not delivered:
+            return envelope
+        assert cwd is not None
+        assert meta is not None
+        if lookup.kind_of(rec) != "delegate":
+            reason = "names a job that is not a delegate; only a delegate's diff is exported"
+            return error_envelope(
+                "invalid_arguments",
+                f"amicus_job_export_diff: 1 invalid argument(s): job_id — {reason}",
+                meta,
+                failing_tool="amicus_job_export_diff",
+                repair_alternative=(
+                    "Pass the job_id of an amicus_delegate or amicus_delegate_async job; "
+                    "read any other job with amicus_job_result."
+                ),
+                invalid_arguments=[InvalidArgument(field="job_id", reason=reason)],
+            )
+        found = exportable_diff(envelope)
+        if found is not None:
+            diff, where = found
+            try:
+                written = await asyncio.to_thread(
+                    write_diff_file, path, diff, job_store_root=str(store().root)
+                )
+            except ExportRefused as exc:
+                # Neither the message nor the repair echoes the path (AGENTS.md rule 18).
+                return error_envelope(
+                    "invalid_arguments",
+                    f"amicus_job_export_diff: 1 invalid argument(s): path — {exc.reason}",
+                    meta,
+                    failing_tool="amicus_job_export_diff",
+                    repair_alternative=(
+                        "Pass an absolute path to a file that does not exist yet, in an "
+                        "existing directory you can write that is outside amicus's job "
+                        "store; nothing was written and the job is unchanged."
+                    ),
+                    invalid_arguments=[InvalidArgument(field="path", reason=exc.reason)],
+                )
+            except ExportFailed as exc:
+                return error_envelope(
+                    "export_failed",
+                    f"amicus_job_export_diff: {exc}; the job's record is kept undelivered",
+                    meta,
+                    retry_after_ms=1000,
+                    repair_alternative=(
+                        _EXPORT_FAILED_REMOVED if exc.removed else _EXPORT_FAILED_KEPT
+                    ),
+                )
+            attach_diff_export(envelope, written, where)
+        # Only now, once the file is whole: a refused or failed export leaves the job
+        # undelivered, so it still holds its cap slot and is never evicted unread.
+        await lifecycle.mark_delivered(store(), cwd, job_id)
+        return envelope
+
+    @app.tool(
+        name="amicus_job_export_diff",
+        annotations=annotations_for("job_export", settings),
+        output_schema=JOB_RESULT_SCHEMA,
+        title="Write a delegate job's diff to a new file (free)",
+        meta=lifecycle_meta("amicus_job_export_diff"),
+        description=(
+            f"{FREE_MARKER} Write a finished delegate job's diff (or partial.diff) to one new "
+            "file at `path` on the server's filesystem, never overwriting; returns "
+            "amicus_job_result's envelope with that diff null. amicus applies nothing; the "
+            "diff is a proposal to review. meta.diff_export gives its bytes and SHA-256; "
+            "meta.truncated and meta.redacted_paths say if it is whole. The file is yours to "
+            "delete, outside the job retention."
+        ),
+    )
+    @guard("amicus_job_export_diff")
+    async def amicus_job_export_diff(
+        job_id: JobIdParam,
+        path: DiffPathParam,
+        ctx: Context | None = None,
+        workspace_root: WorkspaceRootParam = None,
+    ) -> dict[str, Any]:
+        """Write a delegate job's diff to a new file."""
+        return await export_diff(ctx, workspace_root, job_id, path)
 
     @app.tool(
         name="amicus_job_cancel",
@@ -408,6 +564,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
         "amicus_job_status",
         "amicus_job_result",
         "amicus_job_consume_result",
+        "amicus_job_export_diff",
         "amicus_job_cancel",
         "amicus_job_list",
     )

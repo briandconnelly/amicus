@@ -478,6 +478,18 @@ tool description, which says what `query` does, that `truncated` speaks of the s
 omitted_by_limit of the limit, and that a short result is no evidence a model is unavailable,
 and `truncated`'s kept description, which says the same for a query. Measured on the wire.
 MEASURED and BUDGET both move up by the 1817 bytes, so the budget keeps no headroom.
+
+The schema-81 raise (+2325 bytes on every profile: all 119592 -> 121917) is #556, the new
+amicus_job_export_diff (ADR 0054). Its record is 2271 bytes: an outputSchema of 722 bytes,
+the same opaque JOB_RESULT_SCHEMA amicus_job_result publishes; an inputSchema of 800 bytes
+for job_id, workspace_root and `path`, whose one-line summary says it must be absolute, a
+new file and never overwritten, and points at amicus://params for the refusal reasons; and a
+426-character description carrying the facts the plan requires (one new file on the server's
+filesystem, nothing applied, the diff a proposal, the digest, whether it is whole, the file
+outside retention). A first draft of that description cost 178 bytes more. The other 54
+bytes are amicus_delegate_async's description naming the export beside amicus_job_result.
+Measured on the wire. MEASURED and BUDGET both move up by the 2325 bytes, so the budget
+keeps no headroom.
 """
 
 from __future__ import annotations
@@ -488,10 +500,10 @@ from tests.conftest import spawned_server_env
 from amicus import manifest
 
 MEASURED: dict[str, int] = {
-    "all": 119592,
-    "codex": 119600,
-    "codex-pi": 119592,
-    "claude": 119592,
+    "all": 121917,
+    "codex": 121925,
+    "codex-pi": 121917,
+    "claude": 121917,
 }
 # The budget is a literal, not MEASURED rounded up to the next kilobyte as it was until
 # 2026-09-14. The rounding left up to 1 KB of growth per bucket that no PR had to own, and
@@ -501,10 +513,10 @@ MEASURED: dict[str, int] = {
 # Any growth now fails until a PR raises BUDGET and says why; a shrink passes and shows as
 # drift against MEASURED. Raising one means re-measuring and moving both.
 BUDGET: dict[str, int] = {
-    "all": 119592,
-    "codex": 119600,
-    "codex-pi": 119592,
-    "claude": 119592,
+    "all": 121917,
+    "codex": 121925,
+    "codex-pi": 121917,
+    "claude": 121917,
 }
 
 

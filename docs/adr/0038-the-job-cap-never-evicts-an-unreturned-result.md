@@ -32,6 +32,7 @@ A record carries `delivered_epoch`, `null` until amicus validates its stored res
 A status read, a list, a keyed wait that timed out, and a stored result that failed validation never stamp it.
 A sync response lost in transport after the stamp is therefore evictable, as it was before; the prose says "returned", never "received".
 A record without the key predates this decision and is evicted as before, so an upgrade cannot fill a workspace with protected records until their TTL runs out.
+Note (2026-11-21): `amicus_job_export_diff` also stamps `delivered_epoch`, but only once the file it writes is whole; a refused or failed export leaves the record undelivered ([ADR 0054](0054-a-delegates-diff-can-be-exported-to-a-path-the-caller-names.md)).
 
 **Servers of different releases can share a state root.**
 The store never reads a record's result format, because the release that wrote a result can still deliver it from a server sharing the root, whether it is older or newer than the one enforcing the cap.

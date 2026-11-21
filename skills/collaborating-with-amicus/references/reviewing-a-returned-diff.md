@@ -9,6 +9,10 @@ untracked files are never copied) and return the resulting `diff`. Delegation is
 
 - **Never apply a returned diff to the user's working tree before working through the four checks
   below.**
+- **Export or fetch every delegate job's result, exporting first** with `amicus_job_export_diff`,
+  as check 3 describes; an unfetched result holds a slot of the per-workspace job cap.
+- **Never ask a backend to write its patch to a side file.** The export is the way to get the
+  diff onto disk.
 - **Answer in the response contract**, with every fixed key present, in order.
 - **Report a check you could not perform as `not run`, with a reason.** Never drop a key.
 - **Read the run's containment facts for the backend that produced the diff** before concluding
@@ -79,15 +83,46 @@ bold after its number; the response contract below is written in those keys.
    baseline, report this check as `not run` and the verdict as `cannot-assess`. Then run the
    checks the change actually touches.
 
+   **Getting the diff into `RETURNED_DIFF`.** Start the delegate with `amicus_delegate_async`,
+   poll `amicus_job_status` to a terminal status, then call `amicus_job_export_diff` with the
+   same `job_id` and `workspace_root` and a `path` in an existing export directory of your own
+   (for example `$EXPORT_DIR/delegate.patch`), **before any
+   `amicus_job_result`**: a fetch returns the whole diff into your context, and a diff near the
+   200,000-byte cap can overflow a host's tool-output limit. After a sync `amicus_delegate`
+   whose result already arrived, export by its `meta.job_id` while the record exists. The export
+   writes one new file, never overwrites one, and counts as fetching the result; it returns the
+   envelope with `diff` null and `meta.diff_export` naming the file, its `bytes` and its
+   `sha256`. Never ask the backend to write its patch to a side file instead. `RETURNED_DIFF`
+   is that `path`. A stopped run's export (`timeout`, `budget_exceeded`) returns that run's
+   error envelope although the file was written: check `meta.diff_export` before following the
+   error's repair. `meta.diff_export.source` `partial` is always an incomplete change, whatever
+   `meta.truncated` and `meta.redacted_paths` say; an export whose `meta.truncated` is true or
+   whose `meta.redacted_paths` is non-empty is not the whole change either. None of these can
+   support an `accept` verdict on the whole change. The file is yours to delete when the review
+   is done; amicus's job retention does not cover it.
+
+   A delegate that changed nothing returns `diff: null`, writes no file and sets no
+   `meta.diff_export`: there is nothing to verify or apply, so report `checks-run` as `not run`
+   with that reason and skip the commands below.
+
+   Otherwise build the worktree at `SCRATCH`, a path that does not exist yet and is not inside
+   the export directory, with `EXPECTED_SHA256` set to `meta.diff_export.sha256`; the `shasum`
+   line stops the recipe before the last command applies a file whose digest differs:
+
    ```sh
    git -c core.hooksPath=/dev/null -c core.fsmonitor=false worktree add --detach "$SCRATCH" HEAD
    git -c core.hooksPath=/dev/null -c core.fsmonitor=false diff --no-ext-diff --no-textconv --binary HEAD \
      | git -C "$SCRATCH" -c core.hooksPath=/dev/null -c core.fsmonitor=false apply --index
+   printf '%s  %s\n' "$EXPECTED_SHA256" "$RETURNED_DIFF" | shasum -a 256 -c -
    git -C "$SCRATCH" -c core.hooksPath=/dev/null -c core.fsmonitor=false apply "$RETURNED_DIFF"
    ```
 
-   Run it from the user's checkout, with `SCRATCH` a new path outside it and `RETURNED_DIFF` a
-   file holding the result's `diff`. The second command replays the uncommitted tracked changes;
+   Run the commands in order, stopping at the first that fails. A `shasum` failure means the file
+   is not what amicus wrote: do not apply it, and report this check as `not run`.
+
+   Run the first block from the user's checkout, with `SCRATCH` a new path outside it, distinct
+   from the export directory because `git worktree add` refuses a non-empty directory, and
+   `RETURNED_DIFF` the file `amicus_job_export_diff` wrote (above). The second command replays the uncommitted tracked changes;
    skip it when there are none, or when amicus reported it could not replay them. A plain
    `git worktree add` runs the repository's `post-checkout` hook, and any git command that reads
    the index can start a configured fsmonitor program, so every command here points

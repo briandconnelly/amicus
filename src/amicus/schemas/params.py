@@ -310,6 +310,37 @@ PARAMETER_CONTRACTS: dict[str, ParamContract] = {
             "timeout envelope says how to fetch it."
         ),
     ),
+    "path": ParamContract(
+        name="path",
+        summary=(
+            "Absolute path of a NEW file on the server's filesystem to write the diff to, in "
+            "an existing directory outside the job store; never overwritten. Contract: "
+            f"{PARAMS_RESOURCE_URI}."
+        ),
+        full=(
+            "amicus_job_export_diff creates this one file, mode 0o600, holding the stored "
+            "diff's UTF-8 bytes exactly, and refuses it before writing anything as "
+            "invalid_arguments on `path`, with error.details.reason a fixed token: "
+            "not_absolute; not_a_file_name (an empty, `.` or `..` final component, a "
+            "trailing slash, or a name too long for the filesystem); exists (anything, a "
+            "directory or a symlink included, is already there); "
+            "parent_missing (no directory is created); inside_job_store (the resolved "
+            "directory is the job store or under it, a symlinked parent included); "
+            "not_writable (also a directory swapped for a symlink after resolution). The path "
+            "is not bound to the client's file roots, so a scratch "
+            "directory outside the workspace is accepted. A file the call could not finish "
+            "fails as export_failed, whose message says whether it was removed or a partial "
+            "file may remain. For a stopped run (timeout, budget_exceeded) the call writes "
+            "partial.diff and returns that run's error: check meta.diff_export before "
+            "following the error's repair, since the file was written. A meta.diff_export "
+            'source "partial" is always an incomplete change, whatever meta.truncated and '
+            "meta.redacted_paths say. A call cancelled while writing may still leave a file "
+            "and leaves the job undelivered: delete that file and export again to a new path. "
+            "Once the call "
+            "returns the file is the caller's to delete: it is outside the job retention "
+            "(AMICUS_JOB_TTL, the per-workspace cap, amicus_job_consume_result)."
+        ),
+    ),
     "detail": ParamContract(
         name="detail",
         summary=(
@@ -554,6 +585,14 @@ JobIdParam = Annotated[
         description="Job id from an _async call or meta.job_id. Control characters rejected.",
         pattern=CONTROL_CHAR_FREE_PATTERN,
         max_length=64,
+    ),
+]
+DiffPathParam = Annotated[
+    str,
+    Field(
+        description=PARAMETER_CONTRACTS["path"].summary,
+        pattern=CONTROL_CHAR_FREE_PATTERN,
+        max_length=4096,
     ),
 ]
 WaitSecondsParam = Annotated[
