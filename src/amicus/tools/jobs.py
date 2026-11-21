@@ -418,10 +418,10 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
         description=(
             f"{FREE_MARKER} Write a finished delegate job's diff (or partial.diff) to one new "
             "file at `path` on the server's filesystem, never overwriting; returns "
-            "amicus_job_result's envelope with that diff null. amicus applies nothing; the "
-            "diff is a proposal to review. meta.diff_export gives its bytes and SHA-256; "
-            "meta.truncated and meta.redacted_paths say if it is whole. The file is yours to "
-            "delete, outside the job retention."
+            "amicus_job_result's envelope with that diff null. amicus applies nothing; "
+            "review the diff. meta.diff_export gives bytes, SHA-256, source "
+            '("partial" is incomplete); check meta.truncated, meta.redacted_paths too. The '
+            "file is yours to delete, outside the job retention."
         ),
     )
     @guard("amicus_job_export_diff")

@@ -1995,3 +1995,12 @@ async def test_a_failed_export_says_what_it_left_and_stays_undelivered(
     elif left == "empty_file":
         assert target.read_bytes() == b""
     assert delivered is None and "export me" in after["diff"]
+
+
+async def test_the_export_description_does_not_call_a_partial_diff_whole(app):
+    async with Client(app) as c:
+        tools = {t.name: t for t in await c.list_tools()}
+    description = tools["amicus_job_export_diff"].description or ""
+    assert "say if it is whole" not in description
+    assert "partial" in description and "incomplete" in description
+    assert "meta.truncated" in description and "meta.redacted_paths" in description
