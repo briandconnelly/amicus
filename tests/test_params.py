@@ -247,3 +247,15 @@ def test_the_base_descriptions_promise_no_default_the_code_does_not_resolve(tmp_
         [field] = [m for m in annotated.__metadata__ if hasattr(m, "description")]
         assert "upstream" not in field.description, field.description
         assert "required" in field.description, field.description
+
+
+def test_the_path_contract_says_how_to_read_a_partial_export():
+    """Fix round 3 on #565: a stopped run's export returns an error envelope although the
+    file was written, and `partial` is never the whole change."""
+    full = " ".join(p.PARAMETER_CONTRACTS["path"].full.split())
+    assert "check meta.diff_export before following" in full
+    assert 'source "partial" is always an incomplete change' in full
+    assert "whatever meta.truncated and meta.redacted_paths say" in full
+    assert "a partial file may remain" in full
+    assert "cancelled" in full and "export again to a new path" in full
+    assert "too long" in full

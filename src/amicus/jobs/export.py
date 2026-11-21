@@ -35,7 +35,13 @@ _REFUSAL_TEXT: dict[str, str] = {
     "inside_job_store": "the path lies in or under the job store",
     "not_writable": "the path's parent directory is not writable by the server",
 }
-_NOFOLLOW_DIR = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
+# A directory is opened for search only where the platform can (O_PATH on Linux, O_SEARCH on
+# macOS), so a search-only ancestor such as a 0711 /home does not refuse a writable
+# destination; elsewhere read access is needed. fstat, and openat, lstat and unlinkat
+# relative to such a handle, all work on both.
+_SEARCH = getattr(os, "O_PATH", 0) or getattr(os, "O_SEARCH", 0) or os.O_RDONLY
+_DIR = _SEARCH | os.O_DIRECTORY | getattr(os, "O_CLOEXEC", 0)
+_NOFOLLOW_DIR = _DIR | os.O_NOFOLLOW
 
 
 class DiffExport(NamedTuple):
@@ -55,14 +61,21 @@ class ExportRefused(Exception):
 
 
 class ExportFailed(Exception):
-    """The file could not be completed; anything this call created was removed."""
+    """The file could not be completed. ``removed`` says whether the file this call created
+    is gone (or none was created); when it is False a partial file may remain at the path."""
 
-    def __init__(self, errno_: int | None = None) -> None:
+    def __init__(self, errno_: int | None = None, *, removed: bool = True) -> None:
+        what = (
+            "was removed"
+            if removed
+            else "could not be removed, so a partial file may remain at the path"
+        )
         super().__init__(
-            "the export file could not be completed and was removed"
+            f"the export file could not be completed and {what}"
             + (f" (errno {errno_})" if errno_ is not None else "")
         )
         self.errno = errno_
+        self.removed = removed
 
 
 def _inside(path: str, root: str) -> bool:
@@ -87,7 +100,7 @@ def _store_identity(root: str) -> tuple[int, int] | None:
 def _open_parent(resolved: str, store: tuple[int, int] | None) -> int:
     """An fd for ``resolved``, opened component by component without following a link, and
     refused when any directory on the way is the job store root."""
-    fd = os.open("/", os.O_RDONLY | os.O_DIRECTORY | getattr(os, "O_CLOEXEC", 0))
+    fd = os.open("/", _DIR)
     try:
         for part in Path(resolved).parts[1:]:
             if store is not None and _identity(os.fstat(fd)) == store:
@@ -149,6 +162,8 @@ def _create(parent_fd: int, name: str, path: str, data: bytes) -> DiffExport:
     except FileExistsError:
         raise ExportRefused("exists") from None
     except OSError as exc:
+        if exc.errno == errno.ENAMETOOLONG:
+            raise ExportRefused("not_a_file_name") from None
         if exc.errno in (errno.ELOOP, errno.EISDIR):
             raise ExportRefused("exists") from None
         if exc.errno in (errno.EACCES, errno.EPERM, errno.EROFS):
@@ -169,16 +184,31 @@ def _create(parent_fd: int, name: str, path: str, data: bytes) -> DiffExport:
             os.fsync(fd)
         finally:
             os.close(fd)
+        # The caller's path must still name this file: an unlink, a renamed parent or a
+        # retargeted parent link during the write would leave the export somewhere else.
+        if _identity(os.lstat(path)) != created:
+            raise OSError(errno.ESTALE, "the path no longer names the export")
     except OSError as exc:
-        _remove_if_ours(parent_fd, name, created)
-        raise ExportFailed(exc.errno) from None
+        removed = _remove_if_ours(parent_fd, name, created)
+        raise ExportFailed(exc.errno, removed=removed) from None
     return DiffExport(path=path, bytes=len(data), sha256=hashlib.sha256(data).hexdigest())
 
 
-def _remove_if_ours(parent_fd: int, name: str, created: tuple[int, int] | None) -> None:
-    """Unlink ``name`` only while it is still the file this call created."""
+def _remove_if_ours(parent_fd: int, name: str, created: tuple[int, int] | None) -> bool:
+    """Unlink ``name`` only while it is still the file this call created. True when the
+    file this call created is no longer under ``name``: removed here, or already gone."""
     if created is None:
-        return
+        return False
+    try:
+        current = _identity(os.lstat(name, dir_fd=parent_fd))
+    except FileNotFoundError:
+        return True
+    except OSError:
+        return False
+    if current != created:
+        # Something else is under the name; this call's file may sit elsewhere.
+        return False
     with contextlib.suppress(OSError):
-        if _identity(os.lstat(name, dir_fd=parent_fd)) == created:
-            os.unlink(name, dir_fd=parent_fd)
+        os.unlink(name, dir_fd=parent_fd)
+        return True
+    return False

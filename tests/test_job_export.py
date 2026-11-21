@@ -293,3 +293,91 @@ def test_a_lone_surrogate_in_the_file_name_is_not_a_file_name(
 
 def test_a_lone_surrogate_in_the_parent_is_parent_missing(scratch: Path, store_root: Path) -> None:
     assert _refused(str(scratch) + "/\ud800/out.patch", store_root) == "parent_missing"
+
+
+# --- fix round 3 -------------------------------------------------------------------------
+
+
+@pytest.mark.skipif(hasattr(os, "geteuid") and os.geteuid() == 0, reason="root ignores modes")
+@pytest.mark.parametrize("mode", [0o311, 0o111])
+def test_a_search_only_ancestor_does_not_block_the_export(
+    scratch: Path, store_root: Path, mode: int
+) -> None:
+    ancestor = scratch / "searchonly"
+    (ancestor / "inner").mkdir(parents=True)
+    ancestor.chmod(mode)
+    try:
+        target = ancestor / "inner" / "out.patch"
+        write_diff_file(str(target), DIFF, job_store_root=str(store_root))
+        assert target.read_bytes() == DIFF.encode()
+    finally:
+        ancestor.chmod(0o700)
+
+
+def test_a_file_unlinked_during_the_write_is_export_failed(
+    scratch: Path, store_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = scratch / "out.patch"
+    real_write = os.write
+
+    def unlink_then_write(fd: int, data: bytes) -> int:
+        if target.exists():
+            target.unlink()
+        return real_write(fd, data)
+
+    monkeypatch.setattr(export.os, "write", unlink_then_write)
+    with pytest.raises(ExportFailed):
+        write_diff_file(str(target), DIFF, job_store_root=str(store_root))
+    monkeypatch.undo()
+    assert not target.exists()
+
+
+def test_a_parent_renamed_during_the_write_is_export_failed(
+    scratch: Path, store_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    parent = scratch / "p"
+    parent.mkdir()
+    real_write = os.write
+
+    def rename_then_write(fd: int, data: bytes) -> int:
+        if parent.exists():
+            parent.rename(scratch / "q")
+        return real_write(fd, data)
+
+    monkeypatch.setattr(export.os, "write", rename_then_write)
+    with pytest.raises(ExportFailed) as info:
+        write_diff_file(str(parent / "out.patch"), DIFF, job_store_root=str(store_root))
+    monkeypatch.undo()
+    assert info.value.removed is True
+    assert not (scratch / "q" / "out.patch").exists()
+
+
+def test_an_overlong_file_name_is_not_a_file_name(scratch: Path, store_root: Path) -> None:
+    name = "n" * 256
+    try:
+        (scratch / name).touch()
+    except OSError:
+        pass
+    else:
+        pytest.skip("this filesystem accepts a 256-byte name")
+    assert _refused(str(scratch / name), store_root) == "not_a_file_name"
+    assert _refused(str(scratch / name / "out.patch"), store_root) == "parent_missing"
+
+
+def test_a_failed_write_says_whether_it_removed_the_file(
+    scratch: Path, store_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def full(fd: int, data: bytes) -> int:
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+    monkeypatch.setattr(export.os, "write", full)
+    with pytest.raises(ExportFailed) as removed:
+        write_diff_file(str(scratch / "a.patch"), DIFF, job_store_root=str(store_root))
+    assert removed.value.removed is True and "removed" in str(removed.value)
+    monkeypatch.setattr(export.os, "unlink", lambda *a, **k: (_ for _ in ()).throw(OSError()))
+    with pytest.raises(ExportFailed) as kept:
+        write_diff_file(str(scratch / "b.patch"), DIFF, job_store_root=str(store_root))
+    monkeypatch.undo()
+    assert kept.value.removed is False
+    assert "may remain" in str(kept.value) and "was removed" not in str(kept.value)
+    assert str(scratch) not in str(kept.value)

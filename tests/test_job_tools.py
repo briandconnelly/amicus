@@ -1750,6 +1750,7 @@ async def test_a_failed_write_is_export_failed_and_leaves_no_file(
     assert err["code"] == "export_failed" and err["temporary"] is True
     assert {"export_failed", "invalid_arguments", "timeout"} <= set(published)
     assert err["repair"]["tool"] == "amicus_job_export_diff"
+    assert "was removed" in err["message"] and "removed it" in err["repair"]["alternative"]
     assert str(target) not in res.content[0].text
     assert not target.exists()
     assert delivered is None and "export me" in after["diff"]
@@ -1838,7 +1839,8 @@ async def test_the_review_recipe_runs_end_to_end_on_a_large_exported_diff(
     content = "".join(f"line {i:06d} of a generated file for the export\n" for i in range(4000))
     monkeypatch.setenv("FAKE_CODEX_WRITE", "big.txt")
     monkeypatch.setenv("FAKE_CODEX_WRITE_CONTENT", content)
-    target = scratch / "delegate.patch"
+    # A backslash in the name: `echo` would turn `\n` into a newline under some shells.
+    target = scratch / "dele\\ngate.patch"
     async with Client(app) as c:
         started = (
             await c.call_tool(
@@ -1871,7 +1873,10 @@ async def test_the_review_recipe_runs_end_to_end_on_a_large_exported_diff(
     assert not (scratch / "wt" / "big.txt").exists()
     _git(repo, "worktree", "remove", "--force", str(scratch / "wt"))
     env["EXPECTED_SHA256"] = export["sha256"]
-    subprocess.run(["bash", "-ec", first], cwd=repo, env=env, check=True, capture_output=True)
+    for shell in ("bash", "sh"):
+        if Path(env["SCRATCH"]).exists():
+            _git(repo, "worktree", "remove", "--force", env["SCRATCH"])
+        subprocess.run([shell, "-ec", first], cwd=repo, env=env, check=True, capture_output=True)
     assert (scratch / "wt" / "big.txt").read_text() == content
     assert (scratch / "wt" / "a.py").read_text() == "x = 2\n"
     assert not (repo / "big.txt").exists()
@@ -1931,3 +1936,34 @@ async def test_a_path_with_a_lone_surrogate_is_invalid_arguments(
     assert _delivered(store, repo, job_id) is None
     err = res.structured_content["error"]
     assert err["code"] == "invalid_arguments" and err["details"]["field"] == "path"
+
+
+async def test_a_failed_export_that_could_not_remove_its_file_says_so(
+    app, store, repo, scratch, monkeypatch
+):
+    import errno
+
+    from amicus.jobs import export
+
+    def full(fd, data):
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+    def no_unlink(*args, **kwargs):
+        raise OSError(errno.EBUSY, "busy")
+
+    target = scratch / "stuck.patch"
+    async with Client(app) as c:
+        job_id = await _delegate_job(c, store, repo, monkeypatch)
+        monkeypatch.setattr(export.os, "write", full)
+        monkeypatch.setattr(export.os, "unlink", no_unlink)
+        res = await c.call_tool(
+            "amicus_job_export_diff", _export_args(job_id, repo, target), raise_on_error=False
+        )
+        monkeypatch.undo()
+    err = res.structured_content["error"]
+    assert err["code"] == "export_failed"
+    assert "may remain" in err["message"] and "was removed" not in err["message"]
+    assert "delete it or pass another path" in err["repair"]["alternative"]
+    assert "removed that file" not in err["repair"]["alternative"]
+    assert str(target) not in res.content[0].text
+    assert _delivered(store, repo, job_id) is None
