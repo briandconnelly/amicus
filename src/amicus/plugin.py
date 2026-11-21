@@ -50,6 +50,32 @@ class StatusReport:
 
 
 @dataclass(frozen=True)
+class PricingTier:
+    """The rates that replace the base ones for a whole request once its input exceeds
+    `input_tokens_above`; the highest threshold a request exceeds is the one that applies.
+    pi counts cache reads and cache writes in that input (`calculateCost` in pi-ai 1.6.0)."""
+
+    input_tokens_above: int
+    input: float
+    output: float
+    cache_read: float
+    cache_write: float
+
+
+@dataclass(frozen=True)
+class ModelPricing:
+    """What the backend's own catalog says a model costs, in USD per million tokens. A
+    snapshot of that catalog, not a quote, and never a statement that a model is free: a
+    reader leaves `ModelEntry.pricing` None where its source cannot tell free from unpriced."""
+
+    input: float
+    output: float
+    cache_read: float
+    cache_write: float
+    tiers: tuple[PricingTier, ...] = ()
+
+
+@dataclass(frozen=True)
 class ModelEntry:
     slug: str
     display_name: str | None = None
@@ -59,6 +85,7 @@ class ModelEntry:
     # the reader could not tell. A reader says in its own module how exact its source is.
     context_tokens: int | None = None
     max_output_tokens: int | None = None
+    pricing: ModelPricing | None = None
 
 
 @dataclass(frozen=True)

@@ -65,15 +65,28 @@ What the listing establishes, and what it does not:
 | Which exact `provider/id` pi can call, and its effort vocabulary | the row's `slug` and `supported_reasoning_efforts` |
 | Roughly how much the model accepts and can return | the row's `context_tokens` and `max_output_tokens` |
 | Where the prompt goes | the `provider/` prefix, which may be a router rather than the model's vendor, unless pi's `models.json` overrides that provider's `baseUrl` |
-| Price, rate limits, retention terms, how good the model is at the task | the provider's own catalog; amicus carries none of it |
+| What pi's catalog says the model costs | the row's `pricing`, in USD per million tokens |
+| Rate limits, retention terms, how good the model is at the task | the provider's own catalog; amicus carries none of it |
 
-- **Token limits are approximate on `pi`.** pi prints them rounded, so a value in the
+- **Token limits may be approximate on `pi`.** They are pi's exact figures when its catalog
+  answered amicus's second probe, and a row does not say whether it did. Otherwise they are
+  read from a display pi prints rounded, so a value in the
   thousands is within about 50 tokens of pi's own figure and one in the millions within about
   50,000. What a call sends is more than the text supplied: amicus's framing, the gathered
   diff, files pi reads for itself, and the answer all count against the same limits.
   `amicus_review_changes_dry_run` reports a review's `prompt_bytes` for free, in bytes rather
   than tokens. `null` is unknown, neither zero nor unlimited, and other backends report `null`
   today.
+- **A row's `pricing` is a snapshot of pi's cached catalog, not a quote.** `input`, `output`,
+  `cache_read` and `cache_write` are USD per million tokens. Each entry of `tiers` replaces
+  them for the whole request once its input, counting cached tokens read and written as well
+  as uncached ones, exceeds that entry's `input_tokens_above`, the highest such entry
+  applying. `null` is unknown, never free: pi reports an unpriced model
+  and a free one alike, and other backends report `null`. What a call was billed is
+  `meta.usage.cost_usd`, where the provider reported it. pi asks for the model's whole
+  `max_output_tokens` on every call, so a prepaid provider refuses a call unless the balance
+  covers that many tokens at the output rate that applies to the request: `pricing.output`,
+  or a tier's `output` when the input exceeds its threshold.
 - **An effort a row lists is advertised, not guaranteed.** A thinking model's row lists pi's
   whole vocabulary; where the model lacks the level passed, pi runs another and the result
   says so on `meta.security_warnings`. An omitted `reasoning_effort` inherits

@@ -67,6 +67,64 @@ def test_run_sync_capture_success():
     assert "ok" in run.stdout
 
 
+def test_run_sync_capture_bounded_keeps_output_under_the_cap():
+    run = runtime.run_sync_capture(
+        _py("import sys; print(sys.stdin.read().upper()); sys.stderr.write('e')"),
+        timeout_seconds=10,
+        stdin_text="abc",
+        max_output_bytes=1024,
+    )
+    assert (run.exit_code, run.stdout, run.stderr) == (0, "ABC\n", "e")
+    assert not (run.output_truncated or run.stdout_truncated or run.capture_failed)
+
+
+def test_run_sync_capture_bounded_reports_one_line_cut_at_the_cap():
+    # One line longer than the cap is cut, which evicts nothing: only stdout_truncated says so.
+    run = runtime.run_sync_capture(
+        _py("print('x' * 5000)"), timeout_seconds=10, max_output_bytes=1024
+    )
+    assert run.exit_code == 0
+    assert run.stdout_truncated is True
+    assert len(run.stdout.encode()) <= 1024
+
+
+def test_run_sync_capture_bounded_reports_a_flood():
+    run = runtime.run_sync_capture(
+        _py("print('\\n'.join('y' * 50 for _ in range(1000)))"),
+        timeout_seconds=10,
+        max_output_bytes=1024,
+    )
+    assert run.exit_code == 0
+    assert run.output_truncated is True and run.stdout_truncated is True
+
+
+def test_run_sync_capture_bounded_timeout_and_missing_binary():
+    slow = runtime.run_sync_capture(
+        _py("import time; time.sleep(30)"), timeout_seconds=1, max_output_bytes=1024
+    )
+    assert slow.timed_out is True and slow.stdout == ""
+    missing = runtime.run_sync_capture(
+        ["definitely-not-a-real-binary-xyz"], timeout_seconds=5, max_output_bytes=1024
+    )
+    assert missing.binary_missing
+
+
+def test_run_sync_capture_bounded_kills_the_child_when_the_drain_raises(monkeypatch):
+    spawned: list[subprocess.Popen] = []
+
+    def boom(proc, *args, **kwargs):
+        spawned.append(proc)
+        raise RuntimeError("drain failed")
+
+    monkeypatch.setattr(runtime, "_wait_streaming", boom)
+    with pytest.raises(RuntimeError, match="drain failed"):
+        runtime.run_sync_capture(
+            _py("import time; time.sleep(30)"), timeout_seconds=30, max_output_bytes=1024
+        )
+    [proc] = spawned
+    assert proc.returncode is not None and proc.returncode != 0  # killed and reaped
+
+
 def test_run_sync_capture_missing_binary():
     run = runtime.run_sync_capture(["definitely-not-a-real-binary-xyz"], timeout_seconds=5)
     assert run.binary_missing

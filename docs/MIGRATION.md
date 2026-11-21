@@ -197,6 +197,12 @@ A `null` there means no loaded plugin declares one.
 The `amicus://backends/{backend}` resource is always the full entry.
 `amicus_capabilities(detail="contracts")` is removed: pass `include_tool_details=false` for the same rowless payload, and `detail` now selects only how much each `tool_details` row carries (`summary` is `name`, `cost`, `stability`, `backends`; `full` adds the rest, including `error_codes`).
 
+## Upgrading from 0.15.0
+
+The discovery surface moves to `amicus/0.1/schema-78`, so a fingerprint-aware client re-reads the catalog once.
+`amicus_models` gains `pricing` on each model, an object on a `pi` row whose price pi's catalog states and `null` everywhere else, so a client that validates that result against a closed schema must admit it.
+A `pi` row's `context_tokens` and `max_output_tokens` can now be pi's exact figures where they were rounded ones, so a client that compared them with a stored value will see them change.
+
 ## Upgrading from 0.14.0
 
 **Breaking: the deprecated `kimi` backend has been removed (#423).**

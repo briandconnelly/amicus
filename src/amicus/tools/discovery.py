@@ -39,6 +39,8 @@ from amicus.schemas.results import (
     ModelCatalogResult,
     ModelInfo,
     ModelPolicyInfo,
+    ModelPricingInfo,
+    ModelPricingTier,
     TaskSupport,
     ToolCapability,
     UnavailableEntry,
@@ -66,7 +68,7 @@ if TYPE_CHECKING:  # pragma: no cover
 
     from amicus.appstate import AppState
     from amicus.config import Settings
-    from amicus.plugin import BackendPlugin
+    from amicus.plugin import BackendPlugin, ModelPricing
     from amicus.registry import BackendRegistry
 
 # What a tool_details row carries on detail=summary; results.TOOL_DETAIL_FULL_FIELDS is
@@ -328,7 +330,7 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
         "use_when": "Before overriding model or reasoning_effort.",
         "returns": (
             "advisory model slugs with effort sets, token limits where the backend "
-            "advertises them, and the catalog source."
+            "advertises them, pi's catalog prices, and the catalog source."
         ),
         "error_codes": ["invalid_arguments", "backend_unavailable"],
     },
@@ -623,6 +625,27 @@ def _configured_default_model(plugin: BackendPlugin | None) -> str | None:
     return default if isinstance(default, str) and default.strip() else None
 
 
+def _pricing_info(pricing: ModelPricing | None) -> ModelPricingInfo | None:
+    if pricing is None:
+        return None
+    return ModelPricingInfo(
+        input=pricing.input,
+        output=pricing.output,
+        cache_read=pricing.cache_read,
+        cache_write=pricing.cache_write,
+        tiers=[
+            ModelPricingTier(
+                input_tokens_above=tier.input_tokens_above,
+                input=tier.input,
+                output=tier.output,
+                cache_read=tier.cache_read,
+                cache_write=tier.cache_write,
+            )
+            for tier in pricing.tiers
+        ],
+    )
+
+
 def models_payload(registry: BackendRegistry, backend: str, settings: Settings) -> dict[str, Any]:
     policy = settings.model_policy
     state = (
@@ -650,6 +673,7 @@ def models_payload(registry: BackendRegistry, backend: str, settings: Settings) 
                 else None,
                 context_tokens=m.context_tokens,
                 max_output_tokens=m.max_output_tokens,
+                pricing=_pricing_info(m.pricing),
             )
             for m in allowed
         ],

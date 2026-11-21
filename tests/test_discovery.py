@@ -10,11 +10,11 @@ from typing import get_args
 
 import pytest
 from fastmcp import Client
-from jsonschema import Draft202012Validator
+from jsonschema import Draft202012Validator, ValidationError
 from tests.support import fakeplugin
 
 from amicus import config, server, tools
-from amicus.plugin import ModelEntry, ModelListing, StatusReport
+from amicus.plugin import ModelEntry, ModelListing, ModelPricing, PricingTier, StatusReport
 from amicus.registry import BackendRegistry, UnavailableBackend
 from amicus.schemas import field_policy, results
 from amicus.schemas.codes import ERROR_CODES
@@ -396,6 +396,51 @@ async def test_models_carry_token_limits_on_the_tool_and_the_resource():
         assert json.dumps(desc) in advertised
 
 
+async def test_models_carry_pi_pricing_on_the_tool_and_the_resource():
+    priced = ModelPricing(0.5, 16.0, 0.1, 0.0, tiers=(PricingTier(200_000, 1.0, 32.0, 0.2, 0.0),))
+
+    class _Priced:
+        def read(self):
+            rows = (ModelEntry(slug="p/priced", pricing=priced), ModelEntry(slug="p/unknown"))
+            return ModelListing(models=rows, source="live")
+
+    reg = BackendRegistry({"pi": fakeplugin.make_plugin("pi", models=_Priced())}, {})
+    async with Client(_app(env={"AMICUS_BACKENDS": "pi"}, registry=reg)) as c:
+        res = await c.call_tool("amicus_models", {"backend": "pi"})
+        [content] = await c.read_resource("amicus://models/pi")
+        tool = next(t for t in await c.list_tools() if t.name == "amicus_models")
+    Draft202012Validator(tool.output_schema).validate(res.structured_content)
+    rows = res.structured_content["models"]
+    assert [row["pricing"] for row in rows] == [
+        {
+            "input": 0.5,
+            "output": 16.0,
+            "cache_read": 0.1,
+            "cache_write": 0.0,
+            "tiers": [
+                {
+                    "input_tokens_above": 200_000,
+                    "input": 1.0,
+                    "output": 32.0,
+                    "cache_read": 0.2,
+                    "cache_write": 0.0,
+                }
+            ],
+        },
+        None,
+    ]
+    assert json.loads(content.text)["models"] == rows
+    # The schema is closed, and it says where the caller reads the field what a number and
+    # a null mean: a snapshot rather than a quote, and unknown rather than free.
+    with pytest.raises(ValidationError):
+        Draft202012Validator(tool.output_schema).validate(
+            {**res.structured_content, "models": [{**rows[0], "pricing": {"input": 1}}]}
+        )
+    desc = results._PRICING_DESC
+    assert "USD per million tokens" in desc and "snapshot" in desc and "never free" in desc
+    assert json.dumps(desc) in json.dumps(tool.output_schema)
+
+
 async def test_models_for_available_and_unavailable_backends():
     async with Client(_app(registry=_mixed_registry())) as c:
         codex = await c.call_tool("amicus_models", {"backend": "codex"})
@@ -410,6 +455,7 @@ async def test_models_for_available_and_unavailable_backends():
             "supported_reasoning_efforts": None,
             "context_tokens": None,
             "max_output_tokens": None,
+            "pricing": None,
         }
     ]
     assert codex.structured_content["source"] == "static"

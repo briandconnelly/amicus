@@ -632,8 +632,16 @@ def run_sync_capture(
     cwd: str | None = None,
     env: dict[str, str] | None = None,
     stdin_text: str | None = None,
+    max_output_bytes: int | None = None,
 ) -> CommandRun:
     """Blocking variant for cheap, local probes (version/help/auth/git).
+
+    `max_output_bytes`, when given, bounds the capture WHILE the child runs: stdout is
+    kept up to that many bytes and stderr up to the fixed reserve, as in `run_async`, and
+    a capture that dropped or cut anything says so in the CommandRun's loss fields. The
+    child then runs in its own session, because a timeout kills its process group.
+    Without it the whole output is buffered, which suits only a probe whose output is
+    known to be small.
 
     Returns a CommandRun with binary_missing/timed_out set rather than raising, so
     callers can branch on the same shape as run_async. The two phases are spawned and
@@ -669,6 +677,7 @@ def run_sync_capture(
             # re-encoded, which for a bridge is the JSON response.
             errors="replace",
             env=env,
+            start_new_session=max_output_bytes is not None,
         )
     except OSError:
         # Every way exec can fail, matching run_async: the binary is absent, is a
@@ -677,6 +686,27 @@ def run_sync_capture(
         # claim.
         logger.debug("spawn failed: %s", cmd[0])
         return CommandRun("", BINARY_NOT_FOUND, 127, elapsed_ms(), False)
+
+    if max_output_bytes is not None:
+        with proc:
+            try:
+                drained = _wait_streaming(proc, stdin_text, None, timeout_seconds, max_output_bytes)
+            except BaseException:
+                _kill_group(proc)
+                raise
+        if drained.timed_out:
+            return CommandRun("", TIMED_OUT, -9, elapsed_ms(), True)
+        return CommandRun(
+            drained.stdout,
+            drained.stderr,
+            proc.returncode,
+            elapsed_ms(),
+            False,
+            output_truncated=drained.truncated,
+            capture_failed=drained.capture_failed,
+            stdout_truncated=drained.stdout_truncated,
+            stdout_capture_failed=drained.stdout_capture_failed,
+        )
 
     # `with proc` mirrors subprocess.run's `with Popen(...)`: on every exit — return,
     # timeout, or a propagating error — it closes the three pipe objects and waits, so

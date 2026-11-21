@@ -69,6 +69,12 @@ EFFORTS: tuple[str, ...] = ("off", "minimal", "low", "medium", "high", "xhigh", 
 VERSION_ARGS = ("--version",)
 HELP_ARGS = ("--help", *SUPPRESSION_FLAGS)
 LIST_MODELS_ARGS = ("--list-models",)  # callers append the id and SUPPRESSION_FLAGS
+# The catalog's prices and exact limits. pi's RPC mode answers this one request with its full
+# model definitions and exits at stdin EOF (docs/pi-help/1.6.0/FINDINGS.md). The request is a
+# fixed literal, never a prompt input, and no prompt follows it, so no model is called.
+RPC_MODELS_ARGS = ("--mode", "rpc", "--no-session")  # callers append SUPPRESSION_FLAGS
+RPC_MODELS_COMMAND = "get_available_models"
+RPC_MODELS_REQUEST = '{"type":"get_available_models"}\n'
 AUTH_CHECK_ARGS = ("auth", "check", "--json", "--no-refresh")  # callers add --model <model>
 
 # Advisory: a mismatch warns on amicus_backends, never blocks.

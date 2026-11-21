@@ -91,7 +91,9 @@ different directory for amicus's free probes than for a paid run.
 pi asks the provider for the model's whole output limit on every call, which `amicus_models`
 lists as `max_output_tokens`, and a prepaid provider such as OpenRouter refuses the call
 (HTTP 402) unless your balance covers that limit at the model's output price, however little the
-call would spend. amicus reports that refusal as not retryable. Either add credit, or cap the
+call would spend. `amicus_models` lists pi's catalog price as the row's `pricing.output`, in USD
+per million tokens, where the catalog has one; a request whose input, cached tokens
+included, exceeds a `pricing.tiers` threshold is charged that tier's `output` rate instead. amicus reports that refusal as not retryable. Either add credit, or cap the
 model's output in pi's `models.json` (in `$PI_CODING_AGENT_DIR` when that is set, otherwise
 `~/.pi/agent/`), for example
 `{"providers":{"openrouter":{"modelOverrides":{"moonshotai/kimi-k3":{"maxTokens":32000}}}}}`.

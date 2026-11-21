@@ -621,10 +621,11 @@ class BackendsResult(BaseModel):
     server_version: str | None = server_version_field()
 
 
-# Kept, because the caveat is the contract: pi's figures are parsed from a rounded display
+# Kept, because the caveat is the contract: pi's figures are exact only when its second
+# catalog probe answered and are otherwise parsed from a rounded display
 # (amicus.backends.pi.models), and an integer with no such note reads as exact.
 _CONTEXT_TOKENS_DESC = (
-    "Advertised context window in tokens; pi's is rounded, so leave headroom. null: unknown."
+    "Advertised context window in tokens; pi's may be rounded, so leave headroom. null: unknown."
 )
 _MAX_OUTPUT_TOKENS_DESC = (
     "Advertised output limit in tokens; rounded and null as context_tokens. pi requests this "
@@ -635,7 +636,33 @@ _EFFORTS_DESC = (
     "Advisory; pi lists its own vocabulary, not the model's levels, and may run another. "
     "null: unknown."
 )
-publish.KEPT_DESCRIPTIONS.update((_CONTEXT_TOKENS_DESC, _MAX_OUTPUT_TOKENS_DESC, _EFFORTS_DESC))
+# Kept for the same reason: a bare number reads as a quote, and a null as free.
+_PRICING_DESC = (
+    "pi only: USD per million tokens from pi's cached catalog, a snapshot and not a quote. A "
+    "tier's rates replace the base ones for the whole request once its input, cache reads and "
+    "writes included, exceeds input_tokens_above (highest match). null: unknown, never free."
+)
+publish.KEPT_DESCRIPTIONS.update(
+    (_CONTEXT_TOKENS_DESC, _MAX_OUTPUT_TOKENS_DESC, _EFFORTS_DESC, _PRICING_DESC)
+)
+
+
+class ModelPricingTier(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    input_tokens_above: int
+    input: float
+    output: float
+    cache_read: float
+    cache_write: float
+
+
+class ModelPricingInfo(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    input: float
+    output: float
+    cache_read: float
+    cache_write: float
+    tiers: list[ModelPricingTier]
 
 
 class ModelInfo(BaseModel):
@@ -646,6 +673,7 @@ class ModelInfo(BaseModel):
     supported_reasoning_efforts: list[str] | None = Field(default=None, description=_EFFORTS_DESC)
     context_tokens: int | None = Field(default=None, description=_CONTEXT_TOKENS_DESC)
     max_output_tokens: int | None = Field(default=None, description=_MAX_OUTPUT_TOKENS_DESC)
+    pricing: ModelPricingInfo | None = Field(default=None, description=_PRICING_DESC)
 
 
 _CATALOG_TRUNCATED_DESC = (
