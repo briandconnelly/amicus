@@ -143,6 +143,22 @@ per-change, as its own lead says.
   map it could not open as empty and wrote that back with only the new entry, so every other
   task lost the entry that recovers its job by task id. The record now fails, is logged as
   before, and leaves the file as it was; a missing file is still an empty map.
+- Two servers sharing a state root, such as two sessions in the same workspace, no longer
+  disagree about a job one of them is stopping. In the moment after one server stopped a
+  job's worker for overrunning its deadline or for a cancel, and before it recorded the
+  outcome, the other could read the job as `failed` and, at a full per-workspace cap, evict
+  its record. The stopping server now records a termination claim on the job and holds a
+  per-job lock until the outcome is stamped, so the other server reads the job as `running`
+  meanwhile, never signals it a second time and never evicts it. If the stopping server dies
+  first, the next read finalizes the job by its claim: `timeout` or `cancelled`, or `done` if
+  the result was written. A cancel that meets a job another server is already stopping waits
+  up to the terminate grace plus one second, then reports the status the job reads as. This
+  holds only among servers of this release or later sharing a state root: after upgrading,
+  restart any session still running an older server.
+- A start that failed after its worker was spawned but before the job was recorded, such as
+  when starting the thread that feeds the worker its prompt failed, no longer leaves that
+  paid worker running with no job record. The worker is now stopped, as it already was when
+  writing the record failed.
 
 ## [0.15.0] - 2026-11-16
 
