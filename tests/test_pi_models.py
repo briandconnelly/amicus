@@ -497,6 +497,7 @@ def test_the_fake_binary_listing_carries_its_price(fake_pi, tmp_path):
         context_tokens=1_048_576,
         max_output_tokens=943_718,
         pricing=ModelPricing(0.5, 16.0, 0.1, 0.0),
+        advertised_reasoning_efforts=("off", "minimal", "low", "medium", "high"),
     )
 
 
@@ -526,3 +527,123 @@ def test_a_reply_larger_than_the_cap_is_discarded_whole(fake_pi, tmp_path, monke
     monkeypatch.setattr(models, "RPC_MAX_BYTES", 256)
     [entry] = _fake_plugin(fake_pi, tmp_path).models.read(force=True).models
     assert (entry.context_tokens, entry.pricing) == (1_000_000, None)
+
+
+# --- the reasoning levels pi's catalog advertises (#559) -------------------------------------
+
+
+def _adv(reasoning, **row):
+    return models.advertised_efforts(reasoning, row)
+
+
+def test_advertised_efforts_follow_pis_rule():
+    full = ("off", "minimal", "low", "medium", "high")
+    assert _adv(True) == full  # no map reads as an empty one
+    assert _adv(True, thinkingLevelMap={}) == full
+    assert _adv(
+        True, thinkingLevelMap={"minimal": None, "medium": None, "xhigh": None, "max": "m"}
+    ) == ("off", "low", "high", "max")
+    assert _adv(True, thinkingLevelMap={"off": None, "xhigh": "x"}) == (
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+    )
+    assert _adv(
+        True, thinkingLevelMap={"minimal": None, "low": None, "medium": None, "high": None}
+    ) == ("off",)
+    assert _adv(True, thinkingLevelMap={k: None for k in contract.EFFORTS}) == ()
+    assert _adv(True, thinkingLevelMap={"turbo": "t"}) == full  # an unfamiliar key is ignored
+    assert _adv(True, thinkingLevelMap={"max": 3}) == (*full, "max")  # any non-null value maps
+
+
+@pytest.mark.parametrize("bad", [None, [], "high", 3])
+def test_a_map_that_is_not_an_object_is_unknown(bad):
+    assert _adv(True, thinkingLevelMap=bad) is None
+
+
+@pytest.mark.parametrize("reasoning", [False, None, "yes", 1])
+def test_only_a_literal_true_reasoning_flag_advertises_levels(reasoning):
+    assert _adv(reasoning, thinkingLevelMap={}) is None
+
+
+ADV_TABLE = HEADER + "p  think  1K  1K  yes  no\np  plain  2K  2K  no  no\n"
+OFF_ONLY = {"minimal": None, "low": None, "medium": None, "high": None}
+
+
+def _listed(rows):
+    """The table above, enriched from a serialized RPC reply carrying `rows`."""
+    table = models.parse_table(ADV_TABLE)
+    assert table is not None
+    details = models.parse_rpc_models(_reply(rows))
+    assert details is not None
+    return {m.slug: m for m in models.enrich(table, details).models}
+
+
+def _assert_kept(entry, context, max_out, pricing):
+    assert (entry.context_tokens, entry.max_output_tokens, entry.pricing) == (
+        context,
+        max_out,
+        pricing,
+    )
+
+
+def test_a_thinking_no_row_advertises_off_from_the_table_alone():
+    table = models.parse_table(ADV_TABLE)
+    assert table is not None
+    think, plain = table.models
+    assert plain.advertised_reasoning_efforts == ("off",)
+    assert think.advertised_reasoning_efforts is None
+    listed = _listed([_model("p", "plain", reasoning=True, thinkingLevelMap={"max": "m"})])
+    assert listed["p/plain"].advertised_reasoning_efforts == ("off",)
+    assert listed["p/plain"].supported_reasoning_efforts == ("off",)
+    _assert_kept(listed["p/plain"], 1024, 512, PRICE)
+
+
+def test_a_thinking_yes_row_takes_the_rpc_rows_levels():
+    listed = _listed([_model("p", "think", reasoning=True, thinkingLevelMap={"xhigh": "x"})])
+    entry = listed["p/think"]
+    assert entry.advertised_reasoning_efforts == (
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+    )
+    assert entry.supported_reasoning_efforts == contract.EFFORTS
+    _assert_kept(entry, 1024, 512, PRICE)
+
+
+def test_a_thinking_yes_row_whose_rpc_row_does_not_reason_stays_unknown():
+    entry = _listed([_model("p", "think", reasoning=False)])["p/think"]
+    assert entry.advertised_reasoning_efforts is None
+    assert entry.supported_reasoning_efforts == contract.EFFORTS
+    _assert_kept(entry, 1024, 512, PRICE)
+    off = _listed([_model("p", "think", reasoning=True, thinkingLevelMap=OFF_ONLY)])["p/think"]
+    assert off.advertised_reasoning_efforts == ("off",)
+    _assert_kept(off, 1024, 512, PRICE)
+
+
+def test_a_null_map_is_unknown_and_an_all_null_map_is_empty():
+    null = _listed([_model("p", "think", reasoning=True, thinkingLevelMap=None)])["p/think"]
+    assert null.advertised_reasoning_efforts is None
+    every = {k: None for k in contract.EFFORTS}
+    empty = _listed([_model("p", "think", reasoning=True, thinkingLevelMap=every)])["p/think"]
+    assert empty.advertised_reasoning_efforts == ()
+    _assert_kept(empty, 1024, 512, PRICE)
+
+
+@pytest.mark.parametrize(
+    "rows",
+    [
+        [],  # the reply does not describe the row
+        [_model("p", "think", reasoning=True), _model("p", "think", reasoning=True)],
+    ],
+)
+def test_a_thinking_yes_row_the_reply_does_not_describe_once_stays_unknown(rows):
+    entry = _listed(rows)["p/think"]
+    assert entry.advertised_reasoning_efforts is None
+    assert entry.supported_reasoning_efforts == contract.EFFORTS
+    _assert_kept(entry, 1_000, 1_000, None)

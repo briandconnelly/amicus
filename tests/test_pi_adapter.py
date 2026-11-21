@@ -642,6 +642,7 @@ def test_a_model_past_a_truncated_listing_is_checked_by_its_own_lookup(monkeypat
     assert real.lookup("late/plain") == ModelEntry(
         slug="late/plain",
         supported_reasoning_efforts=("off",),
+        advertised_reasoning_efforts=("off",),
         context_tokens=1_000,
         max_output_tokens=1_000,
     )

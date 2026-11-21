@@ -86,6 +86,10 @@ class ModelEntry:
     context_tokens: int | None = None
     max_output_tokens: int | None = None
     pricing: ModelPricing | None = None
+    # The levels the backend's own catalog says the model maps, advisory only: never what a
+    # request is checked against (that is `supported_reasoning_efforts`). None is unknown and
+    # () is none.
+    advertised_reasoning_efforts: tuple[str, ...] | None = None
 
 
 @dataclass(frozen=True)
