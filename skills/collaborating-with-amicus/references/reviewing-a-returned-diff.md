@@ -79,6 +79,21 @@ bold after its number; the response contract below is written in those keys.
    baseline, report this check as `not run` and the verdict as `cannot-assess`. Then run the
    checks the change actually touches.
 
+   **Getting the diff into `RETURNED_DIFF`.** Start the delegate with `amicus_delegate_async`,
+   poll `amicus_job_status` to a terminal status, then call `amicus_job_export_diff` with the
+   same `job_id` and `workspace_root` and a `path` under your scratch directory, **before any
+   `amicus_job_result`**: a fetch returns the whole diff into your context, and a diff near the
+   200,000-byte cap can overflow a host's tool-output limit. After a sync `amicus_delegate`
+   whose result already arrived, export by its `meta.job_id` while the record exists. The export
+   writes one new file, never overwrites one, and counts as fetching the result; it returns the
+   envelope with `diff` null and `meta.diff_export` naming the file, its `bytes` and its
+   `sha256`. Never ask the backend to write its patch to a side file instead. `RETURNED_DIFF`
+   is that `path`. An export whose `meta.truncated` is true, whose `meta.redacted_paths` is
+   non-empty, or whose `meta.diff_export.source` is `partial` (a stopped run's incomplete diff)
+   is not the whole change, so it cannot support an `accept` verdict on the whole change. The
+   file is yours to delete when the review is done; amicus's job retention does not cover it.
+   Then build the worktree, checking the file's digest before the last command applies it:
+
    ```sh
    git -c core.hooksPath=/dev/null -c core.fsmonitor=false worktree add --detach "$SCRATCH" HEAD
    git -c core.hooksPath=/dev/null -c core.fsmonitor=false diff --no-ext-diff --no-textconv --binary HEAD \
@@ -86,8 +101,17 @@ bold after its number; the response contract below is written in those keys.
    git -C "$SCRATCH" -c core.hooksPath=/dev/null -c core.fsmonitor=false apply "$RETURNED_DIFF"
    ```
 
-   Run it from the user's checkout, with `SCRATCH` a new path outside it and `RETURNED_DIFF` the
-   file `amicus_job_export_diff` wrote (below). The second command replays the uncommitted tracked changes;
+   Before that last `git apply`, check the exported file:
+
+   ```sh
+   shasum -a 256 "$RETURNED_DIFF"   # must equal meta.diff_export.sha256
+   ```
+
+   A mismatch means the file is not what amicus wrote: do not apply it, and report this check as
+   `not run`.
+
+   Run the first block from the user's checkout, with `SCRATCH` a new path outside it and `RETURNED_DIFF` the
+   file `amicus_job_export_diff` wrote (above). The second command replays the uncommitted tracked changes;
    skip it when there are none, or when amicus reported it could not replay them. A plain
    `git worktree add` runs the repository's `post-checkout` hook, and any git command that reads
    the index can start a configured fsmonitor program, so every command here points
@@ -103,27 +127,6 @@ bold after its number; the response contract below is written in those keys.
    `core.fsmonitor` program, an uncommitted tracked change and `diff.external` set. The hook
    ran under a plain `worktree add` and the fsmonitor program ran under `git apply` without
    the overrides; neither ran under these commands.
-
-   **Getting the diff into `RETURNED_DIFF`.** Start the delegate with `amicus_delegate_async`,
-   poll `amicus_job_status` to a terminal status, then call `amicus_job_export_diff` with the
-   same `job_id` and `workspace_root` and a `path` under your scratch directory, **before any
-   `amicus_job_result`**: a fetch returns the whole diff into your context, and a diff near the
-   200,000-byte cap can overflow a host's tool-output limit. After a sync `amicus_delegate`
-   whose result already arrived, export by its `meta.job_id` while the record exists. The export
-   writes one new file, never overwrites one, and counts as fetching the result; it returns the
-   envelope with `diff` null and `meta.diff_export` naming the file, its `bytes` and its
-   `sha256`. Never ask the backend to write its patch to a side file instead. `RETURNED_DIFF`
-   is that `path`; check it before applying it:
-
-   ```sh
-   shasum -a 256 "$RETURNED_DIFF"   # must equal meta.diff_export.sha256
-   ```
-
-   A mismatch means the file is not what amicus wrote: report this check as `not run`. An
-   export whose `meta.truncated` is true, whose `meta.redacted_paths` is non-empty, or whose
-   `meta.diff_export.source` is `partial` (a stopped run's incomplete diff) is not the whole
-   change, so it cannot support an `accept` verdict on the whole change. The file is yours to
-   delete when the review is done; amicus's job retention does not cover it.
 4. `consistency` — **Is the diff internally consistent?** Read the hunk headers against the hunk
    bodies. `diffstat` is barred as the integrity check by a rule above, and this is why:
    `diffstat` is computed from the raw diff *before* redaction and truncation are applied to the

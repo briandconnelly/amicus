@@ -17,18 +17,27 @@ ADR 0035 and rule 18 kept a delegate's diff only on the job record, so writing i
 ## Decision
 
 **A new free tool writes the stored diff to one new file at a path the caller names.**
-`amicus_job_export_diff(job_id, path, workspace_root)` reads the job exactly as `amicus_job_result` does at its default detail, so a workspace, lookup, running, corrupt or incompatible outcome is that tool's own.
+`amicus_job_export_diff(job_id, path, workspace_root)` reads the job exactly as `amicus_job_result` does at its default detail, so a workspace, lookup, corrupt or incompatible outcome is that tool's own.
+Two repairs differ, because following `amicus_job_result`'s would return the whole diff inline.
+An unreadable result's repair repeats this export, with `job_id`, `workspace_root` and `path` as its arguments: a repair's arguments are a complete call, and `path` is the caller's own value, not a prompt input.
+A running job's repair still polls `amicus_job_status`, and its prose finishes with this export rather than a fetch.
 For a delegate it writes the success's `diff`, or a stopped run's `partial.diff` on a stored `timeout` or `budget_exceeded`, and returns the same envelope with that diff null and `meta.diff_export` naming the file, its byte count, its SHA-256 and its `source` (`diff` or `partial`).
 `diffstat`, `meta.truncated` and `meta.redacted_paths` are returned as stored, so a caller can tell whether the file is the whole change.
 A delegate with no diff is returned unchanged and nothing is written; a job of any other kind is `invalid_arguments` on `job_id`.
 
 **The file's properties are fixed.**
 `path` must be absolute and name nothing that exists yet, a symlink included, in a directory that exists.
-The directory is resolved and opened, and the file is created relative to that open directory with `O_CREAT | O_EXCL | O_NOFOLLOW` and mode `0o600`, so it is never an overwrite and never follows a link.
-A directory that is the job store or lies under it is refused, also when it is reached through a symlinked parent.
+The directory is resolved with `realpath`, so a symlinked system temporary directory such as macOS's `/tmp` works, and the resolved path is then opened one component at a time from `/` with `O_DIRECTORY | O_NOFOLLOW`.
+A component that has become a symlink since resolution is refused as `not_writable` rather than followed.
+A directory that is the job store or lies under it is refused, also when it is reached through a symlinked parent or `..`: the resolved path is compared as a string, and every directory opened on the way is compared by device and inode with the job store root.
+The file is created relative to the opened directory with `O_CREAT | O_EXCL | O_NOFOLLOW` and mode `0o600`, so it is never an overwrite and never follows a link.
+This holds the directory the file lands in to the one checked; it does not stop a same-user process that renames the job store, or a directory above it, between the identity comparison and the create, which the server cannot prevent and which needs that user's own privileges.
 The file holds the stored diff's UTF-8 bytes exactly.
-A refused path is `invalid_arguments` on `path` with `details.reason` one of `not_absolute`, `exists`, `parent_missing`, `inside_job_store` or `not_writable`, and nothing is created.
+A refused path is `invalid_arguments` on `path` with `details.reason` one of `not_absolute`, `not_a_file_name` (an empty, `.` or `..` final component, or a trailing slash), `exists` (a directory included), `parent_missing`, `inside_job_store` or `not_writable`, and nothing is created.
 A file the call created and could not finish, a full disk for example, is removed by that same call, which fails as `export_failed`, temporary, with a repair naming this tool.
+The removal checks first that the name still refers to the file this call created, by device and inode, and leaves alone anything swapped in under it.
+A diff that cannot be encoded as UTF-8 is also `export_failed`, and nothing is created.
+A `path` carrying a lone surrogate is `invalid_arguments` on `path` before the job is read.
 
 **A successful export counts as delivery; a failed one does not.**
 The job is stamped delivered, as `amicus_job_result` stamps it, only after the file is whole.
