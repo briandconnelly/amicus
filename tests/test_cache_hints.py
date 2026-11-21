@@ -224,7 +224,7 @@ async def test_no_catalog_record_carries_the_framework_meta_key():
             *(await client.list_resources_mcp()).resources,
             *(await client.list_resource_templates_mcp()).resource_templates,
         ]
-    assert len(records) == 24
+    assert len(records) == 25
     for record in records:
         meta = record.model_dump(mode="json", by_alias=True).get("_meta") or {}
         assert "fastmcp" not in meta, record

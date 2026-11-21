@@ -59,6 +59,7 @@ def test_error_codes_cover_the_universal_taxonomy_and_generalized_backend_codes(
                 "job_cap_reached",
                 "model_denied",
                 "model_policy_invalid",
+                "export_failed",
             }
         )
         == codes.LOCAL_CODES

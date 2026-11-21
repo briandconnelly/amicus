@@ -399,6 +399,28 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
             "workspace_outside_roots",
         ],
     },
+    "amicus_job_export_diff": {
+        "cost": "free",
+        "backends": list(VERB_BACKENDS["delegate"]),
+        "use_when": (
+            "Put a finished delegate job's diff in a new file to review and apply, instead "
+            "of fetching it into context."
+        ),
+        "returns": "the delegate's envelope or stored error with its diff null and "
+        "meta.diff_export naming the file, its bytes and SHA-256; a delegate with no diff "
+        "is returned unchanged and nothing is written.",
+        "error_codes": [
+            "job_not_found",
+            "job_running",
+            "job_failed",
+            "job_cancelled",
+            "job_timeout",
+            "job_result_incompatible",
+            "invalid_workspace_root",
+            "workspace_outside_roots",
+            "export_failed",
+        ],
+    },
     "amicus_job_cancel": {
         "cost": "free",
         "backends": list(BACKEND_IDS),
@@ -437,6 +459,9 @@ for _row in TOOL_DETAILS.values():
 for _name in JOB_READ_TOOLS:
     for _paid in PAID_ROWS:
         _add_codes(TOOL_DETAILS[_name], TOOL_DETAILS[_paid]["error_codes"])
+# amicus_job_export_diff delivers only a delegate's stored envelope, error included (#556).
+for _paid in ("amicus_delegate", "amicus_delegate_async"):
+    _add_codes(TOOL_DETAILS["amicus_job_export_diff"], TOOL_DETAILS[_paid]["error_codes"])
 
 # The catalog codes on no tool row, each with why (#440, D2). A code is on a row, or here,
 # never both and never neither; tests/test_discovery.py holds the partition.
@@ -492,6 +517,7 @@ _JOB_PARAMS: dict[str, tuple[list[str], list[str]]] = {
     "amicus_job_status": (["job_id"], ["workspace_root", "wait_seconds"]),
     "amicus_job_result": (["job_id"], ["workspace_root", "detail"]),
     "amicus_job_consume_result": (["job_id"], ["workspace_root", "detail"]),
+    "amicus_job_export_diff": (["job_id", "path"], ["workspace_root"]),
     "amicus_job_cancel": (["job_id"], ["workspace_root"]),
     "amicus_job_list": ([], ["workspace_root", "limit", "cursor", "status", "backend", "task_id"]),
 }
@@ -860,7 +886,9 @@ async def capabilities_payload(
             "response (a job record, committed spend), so paid tools are readOnlyHint false "
             "even when the run writes nothing, and job reads stay readOnlyHint true under the "
             "observable-scope reading, although amicus_job_result records each result it "
-            "returns, which makes that result evictable by the cap. amicus_job_consume_result "
+            "returns, which makes that result evictable by the cap. amicus_job_export_diff is "
+            "readOnlyHint false and destructiveHint false: it creates one new file the caller "
+            "names, never overwriting one. amicus_job_consume_result "
             "and amicus_job_cancel are destructiveHint true in every profile: consume deletes "
             "a retained result and cancel kills the worker and removes its worktree, so "
             "neither update is additive. Per-backend effects are published on amicus_backends."

@@ -5,7 +5,7 @@ Ported from codex-in-claude `_finished_job_envelope` and friends."""
 from __future__ import annotations
 
 import unicodedata
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ValidationError
 
@@ -14,7 +14,13 @@ from amicus.errors import complete_lookup, error_envelope, serialize_error
 from amicus.jobs.polling import job_status_arguments, poll_hint_ms
 from amicus.orchestration.finalize import sanitize_finding, sanitize_prose_value
 from amicus.schemas.codes import BACKEND_IDS
-from amicus.schemas.envelope import ConsumeDisposition, ErrorResult, Repair, slim_meta
+from amicus.schemas.envelope import (
+    ConsumeDisposition,
+    DiffExportInfo,
+    ErrorResult,
+    Repair,
+    slim_meta,
+)
 from amicus.schemas.fingerprint import FINGERPRINT, RESULT_FORMAT
 from amicus.schemas.results import (
     AdversarialReviewResult,
@@ -25,6 +31,7 @@ from amicus.schemas.results import (
 from amicus.sdk.core import redaction
 
 if TYPE_CHECKING:  # pragma: no cover
+    from amicus.jobs.export import DiffExport
     from amicus.plugin import BackendPlugin
     from amicus.schemas.envelope import Meta
 
@@ -274,6 +281,37 @@ def attach_consume_disposition(
     return envelope
 
 
+ExportSource = Literal["diff", "partial"]
+
+
+def exportable_diff(envelope: dict[str, Any]) -> tuple[str, ExportSource] | None:
+    """The diff a delivered delegate envelope carries, and where: a success's `diff`, or a
+    stopped run's `partial.diff` on its error (#556). None when it carries no diff."""
+    if envelope.get("ok") is True:
+        diff = envelope.get("diff")
+        return (diff, "diff") if isinstance(diff, str) and diff else None
+    partial = envelope.get("partial")
+    diff = partial.get("diff") if isinstance(partial, dict) else None
+    return (diff, "partial") if isinstance(diff, str) and diff else None
+
+
+def attach_diff_export(
+    envelope: dict[str, Any], export: DiffExport, source: ExportSource
+) -> dict[str, Any]:
+    """Null the exported diff on a delivered envelope and set `meta.diff_export` to the file
+    that now holds it (#556, ADR 0054). Delivery-only, like `consume`: `Meta` excludes the
+    field from every dump, so it is never stored. `diffstat`, `meta.truncated` and
+    `meta.redacted_paths` are kept as stored. Mutates."""
+    if source == "diff":
+        envelope["diff"] = None
+    else:
+        envelope["partial"]["diff"] = None
+    envelope["meta"]["diff_export"] = DiffExportInfo(
+        path=export.path, bytes=export.bytes, sha256=export.sha256, source=source
+    ).model_dump(mode="json")
+    return envelope
+
+
 def attach_backend_deprecation(envelope: dict[str, Any]) -> dict[str, Any]:
     """Set `meta.deprecation` on a delivered envelope, success or error, from its
     `meta.backend` (#423), and drop any value that is not this server's own. Delivery-only,
@@ -357,6 +395,7 @@ def _finished_job_envelope(
                 # Strict validation returns the stored dict itself, so a `consume` it
                 # carries would reach a plain read; only a consume may report one (#44).
                 validated["meta"].pop("consume", None)
+                validated["meta"].pop("diff_export", None)
                 validated["meta"]["job_id"] = job_id
                 validated["meta"]["fingerprint"] = FINGERPRINT
                 validated = _sanitize_stored_presentation(validated)

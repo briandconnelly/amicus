@@ -13,7 +13,12 @@ from typing import Any
 from amicus import backends
 from amicus.errors import make_error, serialize_error
 from amicus.jobs import lifecycle, lookup
-from amicus.jobs.delivery import attach_consume_disposition, finished_job_envelope
+from amicus.jobs.delivery import (
+    attach_consume_disposition,
+    attach_diff_export,
+    finished_job_envelope,
+)
+from amicus.jobs.export import DiffExport
 from amicus.jobs.store import DiscardOutcome
 from amicus.orchestration.workspace import workspace_warning_for
 from amicus.request import RunSpec
@@ -22,6 +27,7 @@ from amicus.schemas.envelope import (
     ErrorResult,
     InstructionsFingerprint,
     Meta,
+    PartialWork,
     ToolDeprecation,
     Usage,
     dump_success,
@@ -290,6 +296,45 @@ def _consumed() -> dict[str, Any]:
     }
 
 
+_EXPORT_DIFF = "diff --git a/b.py b/b.py\n+x = 1\n"
+_EXPORT_SENTINEL = DiffExport(path="/scratch/delegate.patch", bytes=32, sha256="0" * 64)
+
+
+def _exported() -> dict[str, Any]:
+    """What amicus_job_export_diff returns (#556): a delegate success and a stopped run's
+    `partial`, each delivered by the chokepoint and then given `meta.diff_export` by the
+    helper the tool itself calls, with the exported diff nulled."""
+    done = {"status": "done", "extra": {"result_format": RESULT_FORMAT}}
+    success = dump_success(
+        DelegateResult(
+            summary="s",
+            diff=_EXPORT_DIFF,
+            diffstat="1 file changed, 1 insertion(+)",
+            raw_response=_raw(),
+            meta=_populated(),
+        )
+    )
+    partial = serialize_error(
+        ErrorResult(
+            error=make_error("timeout", "the run passed its deadline", backend="codex"),
+            meta=_meta(),
+            partial=PartialWork(diff=_EXPORT_DIFF, diffstat="1 file changed, 1 insertion(+)"),
+        )
+    )
+    return {
+        "diff": attach_diff_export(
+            _lifecycle_envelope(done, json.loads(json.dumps(success)), "delegate"),
+            _EXPORT_SENTINEL,
+            "diff",
+        ),
+        "partial": attach_diff_export(
+            _lifecycle_envelope(done, json.loads(json.dumps(partial)), "delegate"),
+            _EXPORT_SENTINEL,
+            "partial",
+        ),
+    }
+
+
 _STARTED_AT = "1970-01-01T00:00:00+00:00"
 _EXPIRES_AT = "1970-01-02T00:00:00+00:00"
 
@@ -441,6 +486,7 @@ def _build_snapshot() -> dict[str, Any]:
         },
         "lifecycle": _lifecycle_envelopes(),
         "consumed": _consumed(),
+        "exported": _exported(),
         "handles": _handles(),
     }
 

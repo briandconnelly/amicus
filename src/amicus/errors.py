@@ -111,6 +111,16 @@ _LOCAL_RULES: dict[str, RepairRule] = {
         "after AMICUS_JOB_TTL; one this release wrote but cannot read back (internal_error "
         "here) is kept by a consume too, and only expires.",
     ),
+    "export_failed": RepairRule(
+        "retry_after_delay",
+        "amicus_job_export_diff",
+        True,
+        "amicus created the export file and could not finish writing it (for example the "
+        "disk filled), so it removed that file. The job's record is kept and not marked "
+        "delivered. Free the space or pick another directory, then retry "
+        "amicus_job_export_diff with the same job_id; amicus_job_result still returns the "
+        "diff.",
+    ),
     "model_denied": RepairRule(
         "use_allowed_value",
         "amicus_models",

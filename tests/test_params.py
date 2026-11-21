@@ -127,6 +127,7 @@ def test_parameter_contracts_have_summary_and_full_and_point_at_the_resource():
         "timeout_seconds",
         "detail",
         "query",
+        "path",
     }
     for c in p.PARAMETER_CONTRACTS.values():
         assert c.summary and c.full
@@ -155,6 +156,7 @@ SELECTION_TIME_FACTS: dict[str, tuple[str, ...]] = {
     "timeout_seconds": ("10-600", "Keyed"),
     "detail": ("raw_response", "Delivery only"),
     "query": ("filter", "omit for the plain listing"),
+    "path": ("Absolute", "NEW file", "never overwritten"),
 }
 
 

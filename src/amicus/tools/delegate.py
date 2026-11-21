@@ -41,7 +41,8 @@ _DESC = (
 )
 _ASYNC_DESC = (
     f"{_resolve.PAID_MARKER} Async twin of amicus_delegate: returns a job handle; poll "
-    "amicus_job_status while status is running, then read amicus_job_result. Same egress "
+    "amicus_job_status while status is running, then read it with amicus_job_export_diff "
+    "(the diff to a new file) or amicus_job_result. Same egress "
     f"and feature gate. Starting a job commits to spend. {_resolve.RECORD_RETENTION} "
     "Deadline: AMICUS_JOB_MAX_SECONDS (default 1800s); the backend stops a short reserve "
     "before it and the timeout error carries its incomplete diff as `partial`. Keep slow "
