@@ -131,7 +131,15 @@ uv run python -c "import os; from amicus.backends import pi; rows = pi.plugin(di
 ```
 
 Yes is a line such as `368 rows, 349 priced`, with both numbers above zero.
-Rows with none priced means pi's `get_available_models` reply changed or could not be read: `amicus_models` still lists the models, without prices, so decide whether to fix that before releasing rather than discover it afterwards.
+Rows with none priced has two causes, and the line does not say which: pi's `get_available_models` reply changed or could not be read, or the reply is sound and no listed model has a price, which is what a catalog of only unpriced `models.json` models looks like, since amicus publishes four zero rates as no price.
+Tell them apart by asking pi directly, from an empty directory, which also spends nothing.
+
+```sh
+echo '{"type":"get_available_models"}' | pi --mode rpc --no-session --no-context-files --no-skills --no-extensions --no-mcp --no-prompt-templates --no-themes --no-approve --offline | cut -c1-90
+```
+
+A reply that begins `{"type":"response","command":"get_available_models","success":true,"data":{"models":[{` is sound, so the catalog is unpriced and nothing is wrong.
+Anything else, or no output, means the reply changed or failed: `amicus_models` still lists the models, without prices, so decide whether to fix that before releasing rather than discover it afterwards.
 
 When a CLI's version has no capture of its own, commit one with the change that adds support for it, so the next release has something to compare against.
 

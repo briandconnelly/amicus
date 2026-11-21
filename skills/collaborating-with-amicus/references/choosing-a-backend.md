@@ -84,7 +84,8 @@ What the listing establishes, and what it does not:
   and a free one alike, and other backends report `null`. What a call was billed is
   `meta.usage.cost_usd`, where the provider reported it. pi asks for the model's whole
   `max_output_tokens` on every call, so a prepaid provider refuses a call unless the balance
-  covers that many tokens at `pricing.output`.
+  covers that many tokens at the output rate that applies to the request: `pricing.output`,
+  or a tier's `output` when the input exceeds its threshold.
 - **An effort a row lists is advertised, not guaranteed.** A thinking model's row lists pi's
   whole vocabulary; where the model lacks the level passed, pi runs another and the result
   says so on `meta.security_warnings`. An omitted `reasoning_effort` inherits
