@@ -394,14 +394,21 @@ def test_cancel_during_overrun_termination_finalizes_timeout(tmp_path, monkeypat
     monkeypatch.setattr(job_store, "_terminate_pid_tree", fake_terminate)
     first: list[dict | None] = []
     t = threading.Thread(target=lambda: first.append(store.status(cwd, job_id)))
+    out: list[dict | None] = []
+    c = threading.Thread(target=lambda: out.append(store.cancel(cwd, job_id)), daemon=True)
     try:
         t.start()
         assert entered.wait(_WAIT)
-        cancelled = _bounded(lambda: store.cancel(cwd, job_id))
+        # The cancel waits, with every lock released, for the claimant to finish.
+        c.start()
+        time.sleep(0.2)
     finally:
         release.set()
         t.join(_WAIT)
+        c.join(_WAIT)
         job_store._kill_pid_tree(real_pid)
+    assert not c.is_alive()
+    cancelled = out[0]
     assert cancelled["status"] == "timeout"
     assert first[0]["status"] == "timeout"
     assert not job_store._TERMINATING
@@ -619,10 +626,11 @@ def test_overrun_meta_unreadable_until_later_stays_pending(tmp_path, monkeypatch
     assert not job_store._OVERRAN
 
 
-def test_cancel_racing_an_overrun_marks_an_unreadable_meta_signalled(tmp_path, monkeypatch):
-    # cancel's phase 2 meets a job another thread is terminating as an overrun, and its
-    # finalize read of meta.json fails: the cancel did signal the worker, so it says so.
-    store = _store(tmp_path)
+def test_cancel_racing_an_overrun_signals_nothing_and_says_so(tmp_path, monkeypatch):
+    # cancel meets a job another thread is terminating as an overrun, which holds its
+    # claimant lock: the cancel signals nothing, and when its re-read of meta.json fails
+    # after the wait, it says the worker was not signalled.
+    store = _store(tmp_path, terminate_grace_seconds=0.2)
     cwd = str(tmp_path)
     job_id, pid = _overrun_job(store, cwd)
     jd = store._job_dir(cwd, job_id)
@@ -631,15 +639,19 @@ def test_cancel_racing_an_overrun_marks_an_unreadable_meta_signalled(tmp_path, m
     deny = pytest.MonkeyPatch()
 
     def fake_terminate(pid, grace_seconds, **kwargs):
-        if not paused:  # the overrun termination stays paused, no timeout
-            paused.append(pid)
-            entered.set()
-            release.wait()
-            return
-        job_store._kill_pid_tree(pid)  # the cancel's own termination
-        _deny_meta_read(deny, jd)
+        paused.append(pid)
+        entered.set()
+        release.wait()
+
+    real_held = job_store._worker_lock_held
+
+    def held(path):
+        if path == jd / "terminate.lock":  # the cancel's wait: meta.json now fails
+            _deny_meta_read(deny, jd)
+        return real_held(path)
 
     monkeypatch.setattr(job_store, "_terminate_pid_tree", fake_terminate)
+    monkeypatch.setattr(job_store, "_worker_lock_held", held)
     t = threading.Thread(target=lambda: store.status(cwd, job_id), daemon=True)
     try:
         t.start()
@@ -651,7 +663,8 @@ def test_cancel_racing_an_overrun_marks_an_unreadable_meta_signalled(tmp_path, m
         release.set()
         t.join(_WAIT)
         job_store._kill_pid_tree(pid)
-    assert info.value.signalled is True
+    assert info.value.signalled is False
+    assert paused == [pid]
 
 
 def _failing_meta_write(monkeypatch, store: JobStore) -> None:
@@ -1140,3 +1153,179 @@ def test_a_malformed_claim_is_ignored(tmp_path, claim):
     cwd = str(tmp_path / "w")
     job_id, _, _ = _claimed_job(store, cwd, claim)
     assert store.status(cwd, job_id)["status"] == "failed"
+
+
+def _live_locked_job(store: JobStore, cwd: str) -> tuple[str, int]:
+    """A running job, within its deadline, whose worker holds its own ``worker.lock``."""
+    job_id, _ = store.start(_factory(_LOCKED_WORKER), cwd, kind="k")
+    jd = store._job_dir(cwd, job_id)
+    deadline = time.monotonic() + _WAIT
+    while job_store._worker_lock_held(jd / "worker.lock") is not True:
+        assert time.monotonic() < deadline, "the worker never took its lock"
+        time.sleep(0.02)
+    return job_id, store._read_meta(jd)["pid"]
+
+
+# Holds a job's claimant lock in its own process: takes the flock, prints "held", then
+# after ``pause`` seconds kills the worker (when given one) and exits, which releases it.
+_CLAIMANT = """
+import fcntl, os, signal, sys, time
+fd = os.open(sys.argv[1], os.O_CREAT | os.O_RDWR, 0o600)
+fcntl.flock(fd, fcntl.LOCK_EX)
+print("held", flush=True)
+time.sleep(float(sys.argv[2]))
+if int(sys.argv[3]):
+    os.kill(int(sys.argv[3]), signal.SIGKILL)
+"""
+
+
+def _hold_claim(store: JobStore, cwd: str, job_id: str, pause: float, kill_pid: int = 0):
+    """Write a ``timeout`` claim on the record and hold its claimant lock in a helper
+    process, as a peer terminating the job would."""
+    jd = store._job_dir(cwd, job_id)
+    meta = store._read_meta(jd)
+    meta["terminating"] = {"reason": "timeout", "epoch": time.time()}
+    store._write_meta(jd, meta)
+    helper = subprocess.Popen(
+        [sys.executable, "-c", _CLAIMANT, str(jd / "terminate.lock"), str(pause), str(kill_pid)],
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    assert helper.stdout is not None
+    assert helper.stdout.readline().strip() == "held"
+    return helper
+
+
+def test_a_peer_process_reads_a_cancelling_job_as_running(tmp_path, monkeypatch):
+    store = _store(tmp_path, terminate_grace_seconds=0.5)
+    cwd = str(tmp_path / "w")
+    job_id, pid = _live_locked_job(store, cwd)
+    seen: dict = {}
+    parked = _park_claimant(monkeypatch, lambda: seen.update(_peer(store, cwd, job_id, ["status"])))
+    try:
+        result = store.cancel(cwd, job_id)
+    finally:
+        job_store._kill_pid_tree(pid)
+    assert parked.is_set()
+    assert seen["status"] == "running"
+    assert result["status"] == "cancelled"
+
+
+def test_a_cancel_claim_survives_the_deadline(tmp_path, monkeypatch):
+    store = _store(tmp_path, terminate_grace_seconds=0.5)
+    cwd = str(tmp_path / "w")
+    job_id, pid = _live_locked_job(store, cwd)
+    jd = store._job_dir(cwd, job_id)
+    seen: dict = {}
+
+    def deadline_passes_then_peer_reads() -> None:
+        meta = store._read_meta(jd)
+        meta["deadline_epoch"] = time.time() - 1
+        store._write_meta(jd, meta)
+        seen.update(_peer(store, cwd, job_id, ["status"]))
+
+    parked = _park_claimant(monkeypatch, deadline_passes_then_peer_reads, peer_first=True)
+    try:
+        store.cancel(cwd, job_id)
+    finally:
+        job_store._kill_pid_tree(pid)
+    assert parked.is_set()
+    assert seen["status"] == "running"
+    assert seen["terminate_calls"] == 0
+    assert store.status(cwd, job_id)["status"] == "cancelled"
+
+
+def test_a_cancel_of_a_job_a_peer_is_terminating_sends_no_signal(tmp_path, monkeypatch):
+    root = tmp_path / "wtroot"
+    root.mkdir()
+    store = _store(tmp_path, cleanup_root=root, cleanup_prefix="wt-", terminate_grace_seconds=5.0)
+    cwd = str(tmp_path / "w")
+    job_id, _ = store.start(_factory(_SLEEP), cwd, kind="k")
+    pid = store._read_meta(store._job_dir(cwd, job_id))["pid"]
+    declared_worktree = _declare(store, cwd, job_id, root)
+    calls: list[int] = []
+    monkeypatch.setattr(job_store, "_terminate_pid_tree", lambda pid, *a, **k: calls.append(pid))
+    cleanup_calls: list[str] = []
+    real_cleanup = JobStore._cleanup_external_paths
+
+    def record_cleanup(self, manifest):
+        cleanup_calls.extend(manifest)
+        return real_cleanup(self, manifest)
+
+    monkeypatch.setattr(JobStore, "_cleanup_external_paths", record_cleanup)
+    # The peer stops the worker after a pause and exits without stamping the record.
+    helper = _hold_claim(store, cwd, job_id, pause=0.5, kill_pid=pid)
+    try:
+        result = _bounded(lambda: store.cancel(cwd, job_id))
+    finally:
+        helper.kill()
+        helper.wait()
+        job_store._kill_pid_tree(pid)
+    terminate_calls = len(calls)
+    assert terminate_calls == 0
+    assert result["status"] == "timeout"
+    assert cleanup_calls == [str(declared_worktree)]
+
+
+def test_a_cancel_gives_up_waiting_for_a_claimant_that_never_finishes(tmp_path, monkeypatch):
+    store = _store(tmp_path, terminate_grace_seconds=0.2)
+    cwd = str(tmp_path / "w")
+    job_id, pid = _live_locked_job(store, cwd)
+    calls: list[int] = []
+    monkeypatch.setattr(job_store, "_terminate_pid_tree", lambda pid, *a, **k: calls.append(pid))
+    helper = _hold_claim(store, cwd, job_id, pause=60)
+    try:
+        began = time.monotonic()
+        result = _bounded(lambda: store.cancel(cwd, job_id))
+        elapsed = time.monotonic() - began
+    finally:
+        helper.kill()
+        helper.wait()
+        job_store._kill_pid_tree(pid)
+    assert calls == []
+    assert result["status"] == "running"
+    assert elapsed < 5
+
+
+# Regression guard: passes before the change.
+def test_a_cancel_during_a_local_overrun_whose_claim_was_not_written_is_timeout(
+    tmp_path, monkeypatch
+):
+    store = _store(tmp_path)
+    cwd = str(tmp_path / "w")
+    job_id, pid = _overrun_job(store, cwd)
+    real_write = JobStore._write_meta
+
+    def write(jd, meta):
+        if "terminating" in meta and meta.get("terminal_status") is None:
+            raise OSError(errno.ENOSPC, "no space left")
+        real_write(jd, meta)
+
+    monkeypatch.setattr(JobStore, "_write_meta", staticmethod(write))
+    entered, release = threading.Event(), threading.Event()
+    paused: list[int] = []
+
+    def fake_terminate(pid, grace_seconds, **kwargs):
+        if not paused:
+            paused.append(pid)
+            entered.set()
+            release.wait()
+        job_store._kill_pid_tree(pid)
+
+    monkeypatch.setattr(job_store, "_terminate_pid_tree", fake_terminate)
+    t = threading.Thread(target=lambda: store.status(cwd, job_id))
+    out: list[dict | None] = []
+    c = threading.Thread(target=lambda: out.append(store.cancel(cwd, job_id)), daemon=True)
+    try:
+        t.start()
+        assert entered.wait(_WAIT)
+        c.start()
+        time.sleep(0.2)
+    finally:
+        release.set()
+        t.join(_WAIT)
+        c.join(_WAIT)
+        job_store._kill_pid_tree(pid)
+    assert not c.is_alive()
+    result = out[0]
+    assert result["status"] == "timeout"

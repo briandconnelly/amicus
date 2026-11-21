@@ -1575,83 +1575,104 @@ class JobStore:
         return self._locked(cwd, body)
 
     def cancel(self, cwd: str, job_id: str) -> dict | None:
+        """Cancel a running job as its termination claimant (see the module docstring).
+
+        Under the locks, a running job is claimed with reason ``cancelled``; the claimant
+        terminates it with every lock released and then finalizes it. When another
+        holder has the claimant lock (a peer process, or a thread here terminating it as
+        an overrun), nothing is signalled: this waits, with every lock released, at most
+        the terminate grace plus a second for that lock to come free, then returns the
+        job as a fresh locked read gives it."""
         if not _is_job_id(job_id):
             return None  # before the lock: a malformed id touches nothing
+        jd = self._job_dir(cwd, job_id)
 
-        def first() -> dict | tuple[Path, dict] | None:
+        def read() -> tuple[Path, dict, str] | None:
             try:
-                live = self._read_live_job(cwd, job_id)
+                return self._read_live_job(cwd, job_id)
             except MetaUnreadable as exc:
                 # A pending overrun's worker was signalled by its termination, though
                 # its record cannot be read now; anything else was never signalled.
-                exc.signalled = self._job_dir(cwd, job_id) in _OVERRAN
+                exc.signalled = jd in _OVERRAN
                 raise
+
+        def first() -> dict | tuple[dict, int | None] | None:
+            live = read()
             if live is None:
                 return None
-            jd, meta, state = live
+            _, meta, state = live
             if state in _TERMINAL:
                 return self._status_dict(jd, meta, state)
-            return jd, meta
+            if jd in _TERMINATING:
+                return meta, None  # a thread here is terminating it as an overrun
+            return meta, self._try_claim(jd, meta, "cancelled")
 
         # An overrun job is terminated and finalized (timeout, or done) here, so it
         # reads terminal and is returned as such, as it was before #531.
         found = self._locked(cwd, first)
         if not isinstance(found, tuple):
             return found
-        jd, meta = found
-        pid = _meta_pid(meta)
-        # Terminate with the lock released: the graceful-shutdown grace wait must
-        # not block status/list/result calls for every workspace. Liveness stays
-        # lock-aware throughout, so a worker that exits mid-grace (and a PID then
-        # reused) is never signaled.
-        _terminate_pid_tree(
-            pid,
-            self.terminate_grace_seconds,
-            is_alive=lambda m=meta: self._job_running(jd, m),
-        )
-        with _LOCK, self._record_lock(cwd):
-            if jd in _TERMINATING or jd in _OVERRAN:
-                # Terminated, or being terminated, as an overrun: finalize it as that,
-                # never as cancelled, as the cancel would have found it before #531.
+        meta, claim_fd = found
+        if claim_fd is None:
+            # Another claimant is stopping it: signal nothing, and wait for it with
+            # every lock released, never for longer than its grace allows.
+            give_up = time.monotonic() + self.terminate_grace_seconds + 1.0
+            while time.monotonic() < give_up and (
+                _worker_lock_held(jd / _TERMINATE_LOCK_NAME) is True or jd in _TERMINATING
+            ):
+                time.sleep(0.05)
+            live = self._locked(cwd, read)
+            return None if live is None else self._status_dict(*live)
+        try:
+            # Terminate with the lock released: the graceful-shutdown grace wait must
+            # not block status/list/result calls for every workspace. Liveness stays
+            # lock-aware throughout, so a worker that exits mid-grace (and a PID then
+            # reused) is never signaled.
+            _terminate_pid_tree(
+                _meta_pid(meta),
+                self.terminate_grace_seconds,
+                is_alive=lambda m=meta: self._job_running(jd, m),
+            )
+            with _LOCK, self._record_lock(cwd):
+                # Terminated as an overrun by this process: finalize it as that, never
+                # as cancelled, as the cancel would have found it before #531.
+                default: Literal["timeout", "cancelled"] = (
+                    "timeout" if jd in _TERMINATING or jd in _OVERRAN else "cancelled"
+                )
+                # Re-validate: during the unlocked grace window the record may have
+                # been consumed/evicted, finalized by another path, or the worker may
+                # have finished on its own. Re-read fresh state and never clobber it.
                 try:
-                    done = self._finalize_overrun(jd)
+                    meta = self._read_meta(jd)
                 except MetaUnreadable as exc:
-                    exc.signalled = True  # this cancel signalled the worker first
+                    exc.signalled = True  # the worker was signalled before this read failed
                     raise
-                return None if done is None else self._status_dict(jd, *done)
-            # Re-validate: during the unlocked grace window the record may have been
-            # consumed/evicted, finalized by another path, or the worker may have
-            # finished on its own. Re-read fresh state and never clobber it.
-            try:
-                meta = self._read_meta(jd)
-            except MetaUnreadable as exc:
-                exc.signalled = True  # the worker was signalled before this read failed
-                raise
-            if meta is None:
-                return None  # consumed or expired while we waited
-            terminal = meta.get("terminal_status")
-            # A stamped record is authoritative and its file is never read. An unstamped
-            # one whose result cannot be read back propagates ResultUnreadable (#280): the
-            # worker was signalled, but finalizing it as cancelled would mask a result
-            # that is there, so nothing is written and the next read finalizes it.
-            env = self._read_envelope(jd) if terminal is None else None
-            if terminal is None and env is not None:
-                # The worker completed during the window — preserve its result
-                # rather than masking it as cancelled, stamping its outcome if the
-                # done-transition here is the record's first (setdefault: a prior
-                # _status_of finalization may already have recorded it).
-                meta["completed_epoch"] = meta.get("completed_epoch") or time.time()
-                meta.setdefault("result_ok", self._envelope_ok(env))
-                meta["terminal_status"] = terminal = "done"
-                self._write_meta(jd, meta)
-            if terminal is not None:
-                return self._status_dict(jd, meta, terminal)
-            # Re-read the manifest now: the worker may have declared its worktree
-            # only after cancellation began (e.g. it was still creating it), so a
-            # snapshot taken before termination could miss the path and leak it.
-            manifest = self._read_cleanup_manifest(jd)
-            self._finalize_cleanup(jd, meta, "cancelled", manifest)
-            return self._status_dict(jd, meta, "cancelled")
+                if meta is None:
+                    _OVERRAN.discard(jd)
+                    return None  # consumed or expired while we waited
+                # A stamped record is authoritative and its file is never read. An
+                # unstamped one whose result cannot be read back propagates
+                # ResultUnreadable (#280): nothing is written, the claim is released
+                # below, and the next read finalizes it.
+                env = self._read_envelope(jd) if not meta.get("terminal_status") else None
+                if env is not None:
+                    # The worker completed during the window: preserve its result rather
+                    # than masking it, stamping its outcome if this done-transition is
+                    # the record's first (setdefault: a prior _status_of finalization
+                    # may already have recorded it).
+                    meta["completed_epoch"] = meta.get("completed_epoch") or time.time()
+                    meta.setdefault("result_ok", self._envelope_ok(env))
+                    meta["terminal_status"] = "done"
+                    meta.pop("terminating", None)
+                    self._write_meta(jd, meta)
+                    _OVERRAN.discard(jd)
+                    return self._status_dict(jd, meta, "done")
+                # Otherwise its stamp, or the claim's reason with the declared paths
+                # cleaned up (the manifest re-read now, so a worktree declared after
+                # cancellation began is not leaked).
+                return self._status_dict(jd, meta, self._finish_terminated(jd, meta, default))
+        finally:
+            _release_claim(claim_fd)
 
     def list_jobs(self, cwd: str) -> list[dict]:
         return self._locked(cwd, lambda: self._list_jobs_locked(cwd))
