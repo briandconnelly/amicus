@@ -23,11 +23,11 @@ ADR 0047 lets pi clamp an effort the model does not map, and warns when the repo
 `PiModels.lookup` and `PiBackend.validate_request` are unchanged and never read the RPC reply.
 
 **The reading rule is pi's own.**
-It mirrors `getSupportedThinkingLevels` in pi 1.6.0's `pi-ai/dist/models.js`, read on the maintainer's machine:
-an explicit `null` marks a level unsupported;
-a level the map omits is supported from `off` through `high` and unsupported for `xhigh` and `max`;
-any other mapped value marks the level supported;
-and a row with no map at all reads as an empty map.
+It mirrors `getSupportedThinkingLevels` in pi 1.6.0's `pi-ai/dist/models.js`, read on the maintainer's machine.
+An explicit `null` marks a level unsupported.
+A level the map omits is supported from `off` through `high` and unsupported for `xhigh` and `max`.
+Any other mapped value marks the level supported.
+A row with no map at all reads as an empty map.
 A `thinkingLevelMap` that is present and not an object, `null` included, gives `null`, which is unknown.
 
 **The table stays the authority on whether a model thinks.**
