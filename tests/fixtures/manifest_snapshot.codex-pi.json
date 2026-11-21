@@ -823,7 +823,7 @@
         "required_params": [
           "backend"
         ],
-        "returns": "advisory model slugs with effort sets, token limits where the backend advertises them, and the catalog source.",
+        "returns": "advisory model slugs with effort sets, token limits where the backend advertises them, pi's catalog prices, and the catalog source.",
         "stability": "experimental",
         "use_when": "Before overriding model or reasoning_effort."
       },
@@ -1680,7 +1680,7 @@
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-77",
+                "default": "amicus/0.1/schema-78",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -4437,7 +4437,7 @@
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-77",
+            "default": "amicus/0.1/schema-78",
             "title": "Fingerprint",
             "type": "string"
           },
@@ -9709,7 +9709,7 @@
                           "type": "null"
                         }
                       ],
-                      "description": "Advertised context window in tokens; pi's is rounded, so leave headroom. null: unknown."
+                      "description": "Advertised context window in tokens; pi's may be rounded, so leave headroom. null: unknown."
                     },
                     "default_reasoning_effort": {
                       "anyOf": [
@@ -9741,6 +9741,70 @@
                         }
                       ],
                       "description": "Advertised output limit in tokens; rounded and null as context_tokens. pi requests this whole limit on every call, so a prepaid provider may refuse a call unless the balance covers it at the output price."
+                    },
+                    "pricing": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "cache_read": {
+                              "type": "number"
+                            },
+                            "cache_write": {
+                              "type": "number"
+                            },
+                            "input": {
+                              "type": "number"
+                            },
+                            "output": {
+                              "type": "number"
+                            },
+                            "tiers": {
+                              "items": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "cache_read": {
+                                    "type": "number"
+                                  },
+                                  "cache_write": {
+                                    "type": "number"
+                                  },
+                                  "input": {
+                                    "type": "number"
+                                  },
+                                  "input_tokens_above": {
+                                    "type": "integer"
+                                  },
+                                  "output": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "cache_read",
+                                  "cache_write",
+                                  "input",
+                                  "input_tokens_above",
+                                  "output"
+                                ],
+                                "type": "object"
+                              },
+                              "type": "array"
+                            }
+                          },
+                          "required": [
+                            "cache_read",
+                            "cache_write",
+                            "input",
+                            "output",
+                            "tiers"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "pi only: USD per million tokens from pi's cached catalog, a snapshot and not a quote. A tier's rates replace the base ones for the whole request once its input exceeds input_tokens_above (highest match). null: unknown, never free."
                     },
                     "slug": {
                       "type": "string"
