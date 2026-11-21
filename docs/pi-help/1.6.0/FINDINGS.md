@@ -24,6 +24,7 @@ No model call was made for the captures; the live suite below did spend quota.
 `tests/test_pi_live.py`, run as `AMICUS_REQUIRE_LIVE=1 AMICUS_PI_MODEL=openrouter/moonshotai/kimi-k3 uv run pytest -m integration --no-cov tests/test_pi_live.py`, passed its four paid tests on pi 1.6.0, including `test_delegate_stops_at_the_budget_cap_live`.
 `test_backends_reports_pi_ready_live` failed in that run only because it requires the installed minor to be the newest in `SUPPORTED_VERSIONS`, which was still `(1, 5)`; it was re-run after the bump recorded beside this file.
 This is a compatibility check, not rule-20 release evidence.
+No `models.json` was present for this run, so no per-model override applied; the same holds for 1.5.2's captures.
 
 ## A precondition the first run hit
 
