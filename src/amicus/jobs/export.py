@@ -4,9 +4,14 @@ The parent is resolved, then opened one component at a time from `/` without fol
 symlink, and each opened directory is compared by identity with the job store root, so a
 component swapped after resolution is refused rather than followed. The file is created
 relative to that opened directory, never overwrites anything, and is never placed in or under
-the job store. A file this call created and
-could not finish is removed by this call. Nothing here logs, and no exception message
-carries the diff or the path (AGENTS.md rule 18)."""
+the job store. Nothing here logs, and no exception message carries the diff or the path
+(AGENTS.md rule 18).
+
+This module never unlinks, removes or renames anything. A name can be swapped between any
+check and an unlink by name, so cleanup by name could delete a file this call did not
+create. Instead, a file this call created and could not finish is emptied through the
+descriptor the call still holds, which can only reach the inode it created, and is left
+wherever its name now is; ``ExportFailed.left`` says what remains."""
 
 from __future__ import annotations
 
@@ -37,7 +42,7 @@ _REFUSAL_TEXT: dict[str, str] = {
 }
 # A directory is opened for search only where the platform can (O_PATH on Linux, O_SEARCH on
 # macOS), so a search-only ancestor such as a 0711 /home does not refuse a writable
-# destination; elsewhere read access is needed. fstat, and openat, lstat and unlinkat
+# destination; elsewhere read access is needed. fstat, and openat and lstat
 # relative to such a handle, all work on both.
 _SEARCH = getattr(os, "O_PATH", 0) or getattr(os, "O_SEARCH", 0) or os.O_RDONLY
 _DIR = _SEARCH | os.O_DIRECTORY | getattr(os, "O_CLOEXEC", 0)
@@ -60,22 +65,24 @@ class ExportRefused(Exception):
         self.reason = reason
 
 
-class ExportFailed(Exception):
-    """The file could not be completed. ``removed`` says whether the file this call created
-    is gone (or none was created); when it is False a partial file may remain at the path."""
+ExportLeft = Literal["nothing", "empty_file", "partial_file"]
 
-    def __init__(self, errno_: int | None = None, *, removed: bool = True) -> None:
-        what = (
-            "was removed"
-            if removed
-            else "could not be removed, so a partial file may remain at the path"
-        )
-        super().__init__(
-            f"the export file could not be completed and {what}"
-            + (f" (errno {errno_})" if errno_ is not None else "")
-        )
+_FAILED_TEXT: dict[str, str] = {
+    "nothing": "the export file could not be created",
+    "empty_file": "the export file could not be completed and was left empty",
+    "partial_file": "the export file could not be completed or emptied",
+}
+
+
+class ExportFailed(Exception):
+    """The file could not be completed. ``left`` says what this call left behind: no file
+    (``nothing``), an empty file wherever its name now is (``empty_file``), or a file it
+    could not empty (``partial_file``)."""
+
+    def __init__(self, errno_: int | None = None, *, left: ExportLeft = "nothing") -> None:
+        super().__init__(_FAILED_TEXT[left] + (f" (errno {errno_})" if errno_ is not None else ""))
         self.errno = errno_
-        self.removed = removed
+        self.left: ExportLeft = left
 
 
 def _inside(path: str, root: str) -> bool:
@@ -169,46 +176,48 @@ def _create(parent_fd: int, name: str, path: str, data: bytes) -> DiffExport:
         if exc.errno in (errno.EACCES, errno.EPERM, errno.EROFS):
             raise ExportRefused("not_writable") from None
         raise ExportFailed(exc.errno) from None
-    created: tuple[int, int] | None = None
     try:
+        created = _identity(os.fstat(fd))
+        # The umask may have narrowed the mode, never widened it; pin it exactly.
+        os.fchmod(fd, 0o600)
+        view = memoryview(data)
+        while view:
+            written = os.write(fd, view)
+            if written <= 0:
+                raise OSError(errno.EIO, "short write")
+            view = view[written:]
+        os.fsync(fd)
+        # The caller's path must still name this file: an unlink, a rename or a retargeted
+        # parent link during the write would leave the export somewhere else. The
+        # descriptor stays open through this check so a mismatch can still empty the file.
         try:
-            created = _identity(os.fstat(fd))
-            # The umask may have narrowed the mode, never widened it; pin it exactly.
-            os.fchmod(fd, 0o600)
-            view = memoryview(data)
-            while view:
-                written = os.write(fd, view)
-                if written <= 0:
-                    raise OSError(errno.EIO, "short write")
-                view = view[written:]
-            os.fsync(fd)
-        finally:
-            os.close(fd)
-        # The caller's path must still name this file: an unlink, a renamed parent or a
-        # retargeted parent link during the write would leave the export somewhere else.
-        if _identity(os.lstat(path)) != created:
+            same = _identity(os.lstat(path)) == created
+        except OSError:
+            same = False
+        if not same:
             raise OSError(errno.ESTALE, "the path no longer names the export")
     except OSError as exc:
-        removed = _remove_if_ours(parent_fd, name, created)
-        raise ExportFailed(exc.errno, removed=removed) from None
+        left = _empty(fd)
+        with contextlib.suppress(OSError):
+            os.close(fd)
+        raise ExportFailed(exc.errno, left=left) from None
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.close(fd)
+        raise
+    try:
+        os.close(fd)
+    except OSError as exc:
+        # Too late to empty it: the complete export stays at the path.
+        raise ExportFailed(exc.errno, left="partial_file") from None
     return DiffExport(path=path, bytes=len(data), sha256=hashlib.sha256(data).hexdigest())
 
 
-def _remove_if_ours(parent_fd: int, name: str, created: tuple[int, int] | None) -> bool:
-    """Unlink ``name`` only while it is still the file this call created. True when the
-    file this call created is no longer under ``name``: removed here, or already gone."""
-    if created is None:
-        return False
+def _empty(fd: int) -> ExportLeft:
+    """Empty the file this call created through its own descriptor, never by name."""
     try:
-        current = _identity(os.lstat(name, dir_fd=parent_fd))
-    except FileNotFoundError:
-        return True
+        os.ftruncate(fd, 0)
+        os.fsync(fd)
     except OSError:
-        return False
-    if current != created:
-        # Something else is under the name; this call's file may sit elsewhere.
-        return False
-    with contextlib.suppress(OSError):
-        os.unlink(name, dir_fd=parent_fd)
-        return True
-    return False
+        return "partial_file"
+    return "empty_file"

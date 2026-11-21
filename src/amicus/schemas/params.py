@@ -329,8 +329,9 @@ PARAMETER_CONTRACTS: dict[str, ParamContract] = {
             "not_writable (also a directory swapped for a symlink after resolution). The path "
             "is not bound to the client's file roots, so a scratch "
             "directory outside the workspace is accepted. A file the call could not finish "
-            "fails as export_failed, whose message says whether it was removed or a partial "
-            "file may remain. For a stopped run (timeout, budget_exceeded) the call writes "
+            "fails as export_failed and is emptied, never deleted; the message says whether "
+            "no file, an empty file or a partial file remains. For a stopped run (timeout, "
+            "budget_exceeded) the call writes "
             "partial.diff and returns that run's error: check meta.diff_export before "
             "following the error's repair, since the file was written. A meta.diff_export "
             'source "partial" is always an incomplete change, whatever meta.truncated and '

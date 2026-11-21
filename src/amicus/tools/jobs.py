@@ -77,18 +77,25 @@ _EXPORT_RUNNING_ALTERNATIVE = (
 )
 
 
-_EXPORT_FAILED_REMOVED = (
-    "amicus could not finish the export file (for example the disk filled) and removed it. "
-    "The job's record is kept and not marked delivered. Free the space or pick another "
-    "directory, then retry amicus_job_export_diff with the same job_id, to the same path or "
-    "another."
-)
-_EXPORT_FAILED_KEPT = (
-    "amicus could not finish the export file and could not remove it, so a partial file may "
-    "remain at the path you passed: delete it or pass another path, then retry "
-    "amicus_job_export_diff with the same job_id. The job's record is kept and not marked "
-    "delivered."
-)
+_EXPORT_FAILED_REPAIR: dict[str, str] = {
+    "nothing": (
+        "amicus could not create the export file and created no file. The job's record is "
+        "kept and not marked delivered. Fix the cause or pick another directory, then retry "
+        "amicus_job_export_diff with the same job_id, to the same path or another."
+    ),
+    "empty_file": (
+        "amicus could not finish the export file (for example the disk filled) and emptied "
+        "it; amicus never deletes it, and a retry to the same path is refused as exists. "
+        "Free the space, delete that empty file or pass another path, then retry "
+        "amicus_job_export_diff with the same job_id. The job's record is kept and not "
+        "marked delivered."
+    ),
+    "partial_file": (
+        "amicus could not finish the export file and could not empty it, so a partial file "
+        "may remain: delete it or pass another path, then retry amicus_job_export_diff with "
+        "the same job_id. The job's record is kept and not marked delivered."
+    ),
+}
 
 
 def _cursor_for(row: dict[str, Any]) -> str:
@@ -394,9 +401,7 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
                     f"amicus_job_export_diff: {exc}; the job's record is kept undelivered",
                     meta,
                     retry_after_ms=1000,
-                    repair_alternative=(
-                        _EXPORT_FAILED_REMOVED if exc.removed else _EXPORT_FAILED_KEPT
-                    ),
+                    repair_alternative=_EXPORT_FAILED_REPAIR[exc.left],
                 )
             attach_diff_export(envelope, written, where)
         # Only now, once the file is whole: a refused or failed export leaves the job

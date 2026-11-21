@@ -1743,39 +1743,6 @@ async def test_a_parent_symlinked_into_the_job_store_is_refused(
     assert delivered is None and "export me" in after["diff"]
 
 
-async def test_a_failed_write_is_export_failed_and_leaves_no_file(
-    app, store, repo, scratch, monkeypatch
-):
-    import errno
-
-    from amicus.jobs import export
-
-    def full(fd, data):
-        raise OSError(errno.ENOSPC, "No space left on device")
-
-    target = scratch / "full.patch"
-    async with Client(app) as c:
-        job_id = await _delegate_job(c, store, repo, monkeypatch)
-        monkeypatch.setattr(export.os, "write", full)
-        res = await c.call_tool(
-            "amicus_job_export_diff", _export_args(job_id, repo, target), raise_on_error=False
-        )
-        monkeypatch.undo()
-        delivered = _delivered(store, repo, job_id)
-        after = (
-            await c.call_tool("amicus_job_result", {"job_id": job_id, "workspace_root": str(repo)})
-        ).structured_content
-        published = await _published_codes(c, "amicus_job_export_diff")
-    err = res.structured_content["error"]
-    assert err["code"] == "export_failed" and err["temporary"] is True
-    assert {"export_failed", "invalid_arguments", "timeout"} <= set(published)
-    assert err["repair"]["tool"] == "amicus_job_export_diff"
-    assert "was removed" in err["message"] and "removed it" in err["repair"]["alternative"]
-    assert str(target) not in res.content[0].text
-    assert not target.exists()
-    assert delivered is None and "export me" in after["diff"]
-
-
 def _without_request_ids(body):
     body = json.loads(json.dumps(body))
     body.get("meta", {}).pop("request_id", None)
@@ -1961,32 +1928,70 @@ async def test_a_path_with_a_lone_surrogate_is_invalid_arguments(
     assert err["code"] == "invalid_arguments" and err["details"]["field"] == "path"
 
 
-async def test_a_failed_export_that_could_not_remove_its_file_says_so(
-    app, store, repo, scratch, monkeypatch
-):
+def _inject_export_failure(monkeypatch, left):
     import errno
+    import os
 
     from amicus.jobs import export
+
+    real_open = os.open
+
+    def create_fails(path, flags, *args, **kwargs):
+        if path == "failed.patch" and flags & os.O_CREAT:
+            raise OSError(errno.EIO, "I/O error")
+        return real_open(path, flags, *args, **kwargs)
 
     def full(fd, data):
         raise OSError(errno.ENOSPC, "No space left on device")
 
-    def no_unlink(*args, **kwargs):
-        raise OSError(errno.EBUSY, "busy")
+    def no_truncate(fd, length):
+        raise OSError(errno.EIO, "I/O error")
 
-    target = scratch / "stuck.patch"
+    if left == "nothing":
+        monkeypatch.setattr(export.os, "open", create_fails)
+    else:
+        monkeypatch.setattr(export.os, "write", full)
+    if left == "partial_file":
+        monkeypatch.setattr(export.os, "ftruncate", no_truncate)
+
+
+_EXPECTED_EXPORT_REPAIR = {
+    "nothing": "created no file",
+    "empty_file": "delete that empty file or pass another path",
+    "partial_file": "a partial file may remain",
+}
+
+
+@pytest.mark.parametrize("left", ["nothing", "empty_file", "partial_file"])
+async def test_a_failed_export_says_what_it_left_and_stays_undelivered(
+    app, store, repo, scratch, monkeypatch, left
+):
+    from amicus.tools.jobs import _EXPORT_FAILED_REPAIR
+
+    target = scratch / "failed.patch"
     async with Client(app) as c:
         job_id = await _delegate_job(c, store, repo, monkeypatch)
-        monkeypatch.setattr(export.os, "write", full)
-        monkeypatch.setattr(export.os, "unlink", no_unlink)
+        _inject_export_failure(monkeypatch, left)
         res = await c.call_tool(
             "amicus_job_export_diff", _export_args(job_id, repo, target), raise_on_error=False
         )
         monkeypatch.undo()
+        delivered = _delivered(store, repo, job_id)
+        after = (
+            await c.call_tool("amicus_job_result", {"job_id": job_id, "workspace_root": str(repo)})
+        ).structured_content
+        published = await _published_codes(c, "amicus_job_export_diff")
     err = res.structured_content["error"]
-    assert err["code"] == "export_failed"
-    assert "may remain" in err["message"] and "was removed" not in err["message"]
-    assert "delete it or pass another path" in err["repair"]["alternative"]
-    assert "removed that file" not in err["repair"]["alternative"]
+    assert err["code"] == "export_failed" and err["temporary"] is True
+    assert {"export_failed", "invalid_arguments", "timeout"} <= set(published)
+    assert err["repair"]["tool"] == "amicus_job_export_diff"
+    assert err["repair"]["alternative"] == _EXPORT_FAILED_REPAIR[left]
+    assert _EXPECTED_EXPORT_REPAIR[left] in err["repair"]["alternative"]
+    assert len(set(_EXPORT_FAILED_REPAIR.values())) == 3
     assert str(target) not in res.content[0].text
-    assert _delivered(store, repo, job_id) is None
+    assert "export me" not in res.content[0].text
+    if left == "nothing":
+        assert not target.exists()
+    elif left == "empty_file":
+        assert target.read_bytes() == b""
+    assert delivered is None and "export me" in after["diff"]
