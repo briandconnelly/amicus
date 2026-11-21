@@ -573,7 +573,7 @@ def test_the_routing_rule_binds_before_the_verb_is_chosen():
         "proceed only when the user chooses it",
         "An exact `provider/id` named with no harness is pi's model syntax, so it selects `pi`.",
         "is passed only when `amicus_models` for that harness lists that exact id",
-        "or does not list the `provider/id` named with it",
+        "or, where it is not `pi`, does not list the `provider/id` named with it",
         "and `pi` is offered only where it lists that same id",
         "**Route only to a harness that supports the verb.**",
         "never from provider configuration.** A missing or truncated listing does not prove a",

@@ -103,10 +103,10 @@ This is the one statement of the routing procedure;
   `pi` with an exact model `amicus_models(backend="pi")` lists, and name that route before the
   call.** That is routing, not substitution, so it needs no confirmation.
 - **Never substitute for a named harness silently.** When the harness the user named is not
-  ready, lacks the verb, or does not list the `provider/id` named with it, say so, offer the
-  alternative route (`pi` plus an exact listed model) naming its provider (the `provider/id`
-  prefix, which may be a router) and its containment (pi has no OS sandbox, and a pi delegate
-  no network block), and proceed only when the user chooses it.
+  ready, lacks the verb, or, where it is not `pi`, does not list the `provider/id` named with
+  it, say so, offer the alternative route (`pi` plus an exact listed model) naming its provider
+  (the `provider/id` prefix, which may be a router) and its containment (pi has no OS sandbox,
+  and a pi delegate no network block), and proceed only when the user chooses it.
 - **Route only to a harness that supports the verb.** When none does — an adversarial review
   with `claude` not ready — report that no eligible route exists; changing the verb is a
   separate choice for the user.

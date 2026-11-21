@@ -39,9 +39,9 @@ per-change, as its own lead says.
   on every call, so a prepaid provider may refuse a call the balance does not cover at the
   output price (#542). The fingerprint moves to `amicus/0.1/schema-75`.
 - The skill now states which selector wins when a harness and a `provider/id` are named together
-  (#525): the named harness, with the `provider/id` passed as its `model` only when that
-  harness's `amicus_models` listing shows that exact id; otherwise the rule against silent
-  substitution applies.
+  (#525): the named harness. Beside a harness other than `pi`, the `provider/id` is passed as
+  its `model` only when that harness's `amicus_models` listing shows that exact id; otherwise
+  the rule against silent substitution applies. `pi` named with a `provider/id` is unchanged.
 
 ### Fixed
 
