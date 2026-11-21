@@ -46,7 +46,8 @@ per-change, as its own lead says.
   `details.reason`; a file the call could not finish is removed and the call fails with the new
   code `export_failed`. A successful export counts as fetching the result, and a refused or
   failed one leaves the job unfetched. `RESULT_FORMAT` does not move. The skill's diff-review
-  recipe now exports the diff first and checks its digest (ADR 0054).
+  recipe now exports the diff first and checks its digest (ADR 0054). The discovery surface
+  moves to `amicus/0.1/schema-81`.
 - **Surface.** `amicus_models` lists what pi's catalog says each model costs (#554). A `pi` row
   gains `pricing`: `input`, `output`, `cache_read` and `cache_write` in USD per million tokens,
   and `tiers`, the rates that replace them for a whole request whose input, cache reads and
