@@ -72,7 +72,7 @@ LIST_MODELS_ARGS = ("--list-models",)  # callers append the id and SUPPRESSION_F
 AUTH_CHECK_ARGS = ("auth", "check", "--json", "--no-refresh")  # callers add --model <model>
 
 # Advisory: a mismatch warns on amicus_backends, never blocks.
-SUPPORTED_VERSIONS = frozenset({(1, 5)})
+SUPPORTED_VERSIONS = frozenset({(1, 5), (1, 6)})
 
 # Posture labels (NOT pi flags).
 SANDBOX_READ_ONLY = "read-only"
