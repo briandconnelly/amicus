@@ -214,6 +214,7 @@ def classify_failure(
                 alternative="Pass one of the model ids amicus_models lists for pi.",
             ),
         )
+    reservation = contract.is_output_reservation_refused(*texts)
     raw = (error_message or "").strip() or run.stderr.strip()
     if run.exit_code == 0 and stop_reason:
         prefix = f"pi stopped with reason {stop_reason!r}"
@@ -230,4 +231,35 @@ def classify_failure(
         if sanitize is not None
         else redaction.sanitize_echo_prose(stripped_ansi)
     )
-    return ClassifiedFailure(code="nonzero_exit", detail=f"{prefix}: {sanitized[:300]}")
+    detail = f"{prefix}: {sanitized[:300]}"
+    if reservation:
+        return _output_reservation_failure(detail, contract.output_reservation_figures(*texts))
+    return ClassifiedFailure(code="nonzero_exit", detail=detail)
+
+
+OUTPUT_RESERVATION_REPAIR = (
+    "The provider refused the request before running it: pi asks for the model's whole "
+    "output limit, and the account balance does not cover that worst case. Retrying the "
+    "same call cannot succeed. Either add credit, or cap the model's output in pi's "
+    "~/.pi/agent/models.json, e.g. "
+    '{"providers":{"openrouter":{"modelOverrides":{"<model id>":{"maxTokens":32000}}}}}, '
+    "or pick a model with a smaller max-out from amicus_models."
+)
+
+
+def _output_reservation_failure(detail: str, figures: tuple[int, int] | None) -> ClassifiedFailure:
+    """#542: nonzero_exit, but never temporary, with the remedy named. Not a new code, so
+    the published error catalog is unchanged."""
+    details: dict[str, str] = {"field": "model"}
+    if figures is not None:
+        requested, affordable = figures
+        details["reason"] = (
+            f"requested up to {requested} output tokens; the balance covers {affordable}"
+        )
+    return ClassifiedFailure(
+        code="nonzero_exit",
+        detail=detail,
+        retryable=False,
+        details=details,
+        repair=RepairHint(next_step="correct_config", alternative=OUTPUT_RESERVATION_REPAIR),
+    )

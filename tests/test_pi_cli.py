@@ -163,6 +163,42 @@ def test_invalid_model():
     assert f.repair is not None and f.repair.tool == "amicus_models"
 
 
+_RESERVATION_402 = (
+    '402: {"message":"This request requires more credits, or fewer max_tokens. You requested '
+    "up to 942104 tokens, but can only afford 454814. To increase, visit "
+    'https://openrouter.ai/settings/credits and add more credits","code":402}'
+)
+
+
+def test_an_output_reservation_402_is_not_retryable_and_names_both_remedies():
+    """#542: pi reserves the model's whole output limit, and OpenRouter refuses a request
+    whose worst case exceeds the balance; an identical retry can never succeed."""
+    f = _classify(_run(exit_code=0), stop_reason="error", error_message=_RESERVATION_402)
+    assert f.code == "nonzero_exit" and f.retryable is False
+    assert "942104" in f.detail and "454814" in f.detail
+    assert f.details == {
+        "field": "model",
+        "reason": "requested up to 942104 output tokens; the balance covers 454814",
+    }
+    assert f.repair is not None and f.repair.next_step == "correct_config"
+    assert "models.json" in (f.repair.alternative or "")
+    assert "maxTokens" in (f.repair.alternative or "")
+
+
+def test_an_output_reservation_402_without_figures_still_classifies():
+    f = _classify(
+        _run(exit_code=0),
+        stop_reason="error",
+        error_message="402: This request requires more credits, or fewer max_tokens.",
+    )
+    assert f.retryable is False and f.details == {"field": "model"}
+
+
+def test_another_402_stays_generic():
+    f = _classify(_run(exit_code=0), stop_reason="error", error_message="402 Payment Required")
+    assert f.code == "nonzero_exit" and f.retryable is None and f.repair is None
+
+
 def test_generic_detail_is_sanitized_before_the_cut():
     secret = "sk-" + "c" * 32
     f = _classify(_run(stderr=f"boom token={secret}", exit_code=3))
@@ -192,6 +228,7 @@ def _echo_stream(user_text: str) -> str:
         "SENTINEL: we got 429 Too Many Requests, rate limit hit",
         'SENTINEL: pi said Model "a/b" not found',
         "SENTINEL: error: unknown option --x",
+        "SENTINEL: This request requires more credits, or fewer max_tokens.",
     ],
 )
 def test_the_echoed_stream_is_never_read(prompt):
@@ -199,7 +236,7 @@ def test_the_echoed_stream_is_never_read(prompt):
     classification nor reach the detail (rule 18)."""
     f = _classify(_run(stdout=_echo_stream(prompt), exit_code=1))
     assert f.code == "nonzero_exit" and "SENTINEL" not in f.detail
-    assert f.detail.startswith("pi exited 1: ")
+    assert f.detail.startswith("pi exited 1: ") and f.retryable is None
 
 
 def test_drift_on_stderr_is_still_contract_drift():
@@ -210,3 +247,18 @@ def test_drift_on_stderr_is_still_contract_drift():
 def test_auth_on_stderr_is_still_auth_required():
     run = _run(stdout=_echo_stream("SENTINEL"), stderr="401 Unauthorized")
     assert _classify(run).code == "pi_auth_required"
+
+
+def test_an_output_reservation_402_renders_as_a_non_temporary_envelope():
+    """The wire, not just the classifier: `retryable=False` must reach `temporary`."""
+    from tests.support import fakeplugin
+
+    from amicus import errors
+    from amicus.schemas.envelope import Meta
+
+    failure = _classify(_run(exit_code=0), stop_reason="error", error_message=_RESERVATION_402)
+    err = errors.render_failure(fakeplugin.make_plugin("pi"), failure, Meta())["error"]
+    assert err["code"] == "nonzero_exit" and err["temporary"] is False
+    assert err["repair"]["next_step"] == "correct_config"
+    assert "maxTokens" in err["repair"]["alternative"]
+    assert err["details"]["field"] == "model"

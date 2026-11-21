@@ -136,6 +136,13 @@ _RATE_LIMIT_PATTERNS = (
     re.compile(r"\bquota (exceeded|exhausted)\b", re.I),
 )
 RATE_LIMIT_DEFAULT_BACKOFF_MS = 60_000
+# OpenRouter's 402 when a request's worst-case cost exceeds the balance (#542). pi sends the
+# model's whole output limit as max_tokens, so this fires on any call below that worst case,
+# however little it would spend. Anchored on OpenRouter's wording, not on a bare 402.
+_OUTPUT_RESERVATION_PATTERN = re.compile(r"requires more credits, or fewer max_tokens", re.I)
+_OUTPUT_RESERVATION_FIGURES = re.compile(
+    r"requested up to (\d+) tokens, but can only afford (\d+)", re.I
+)
 _RETRY_AFTER_PATTERNS = (
     re.compile(r"retry[- _]?after[\"']?\s*[:=]\s*[\"']?(\d+(?:\.\d+)?)\s*(ms|s|seconds?)?", re.I),
     re.compile(r"try again in\s+(\d+(?:\.\d+)?)\s*(ms|s|seconds?|minutes?)", re.I),
@@ -147,6 +154,16 @@ def _any(patterns: tuple[re.Pattern[str], ...], texts: tuple[str | None, ...]) -
     if not blob:
         return False
     return any(p.search(blob) for p in patterns)
+
+
+def is_output_reservation_refused(*texts: str | None) -> bool:
+    return _any((_OUTPUT_RESERVATION_PATTERN,), texts)
+
+
+def output_reservation_figures(*texts: str | None) -> tuple[int, int] | None:
+    """(requested, affordable) output tokens from OpenRouter's 402, when it states them."""
+    match = _OUTPUT_RESERVATION_FIGURES.search("\n".join(t for t in texts if t))
+    return (int(match.group(1)), int(match.group(2))) if match else None
 
 
 def is_auth_failure(*texts: str | None) -> bool:
