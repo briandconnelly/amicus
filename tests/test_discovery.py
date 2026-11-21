@@ -441,6 +441,32 @@ async def test_models_carry_pi_pricing_on_the_tool_and_the_resource():
     assert json.dumps(desc) in json.dumps(tool.output_schema)
 
 
+async def test_models_carry_pis_advertised_efforts_on_the_tool_and_the_resource():
+    class _Advertised:
+        def read(self):
+            rows = (
+                ModelEntry(slug="p/some", advertised_reasoning_efforts=("off", "low")),
+                ModelEntry(slug="p/none", advertised_reasoning_efforts=()),
+                ModelEntry(slug="p/unknown"),
+            )
+            return ModelListing(models=rows, source="live")
+
+    reg = BackendRegistry({"pi": fakeplugin.make_plugin("pi", models=_Advertised())}, {})
+    async with Client(_app(env={"AMICUS_BACKENDS": "pi"}, registry=reg)) as c:
+        res = await c.call_tool("amicus_models", {"backend": "pi"})
+        [content] = await c.read_resource("amicus://models/pi")
+        tool = next(t for t in await c.list_tools() if t.name == "amicus_models")
+    Draft202012Validator(tool.output_schema).validate(res.structured_content)
+    rows = res.structured_content["models"]
+    # An empty set is known and stays [], never null.
+    assert [row["advertised_reasoning_efforts"] for row in rows] == [["off", "low"], [], None]
+    assert json.loads(content.text)["models"] == rows
+    desc = results._ADVERTISED_EFFORTS_DESC
+    assert "pi only" in desc and "snapshot" in desc and "warn" in desc
+    assert "null: unknown" in desc and "[]: none" in desc
+    assert json.dumps(desc) in json.dumps(tool.output_schema)
+
+
 async def test_models_for_available_and_unavailable_backends():
     async with Client(_app(registry=_mixed_registry())) as c:
         codex = await c.call_tool("amicus_models", {"backend": "codex"})
@@ -456,6 +482,7 @@ async def test_models_for_available_and_unavailable_backends():
             "context_tokens": None,
             "max_output_tokens": None,
             "pricing": None,
+            "advertised_reasoning_efforts": None,
         }
     ]
     assert codex.structured_content["source"] == "static"

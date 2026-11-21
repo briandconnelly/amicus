@@ -329,7 +329,8 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
         "backends": list(BACKEND_IDS),
         "use_when": "Before overriding model or reasoning_effort.",
         "returns": (
-            "advisory model slugs with effort sets, token limits where the backend "
+            "advisory model slugs with accepted effort sets, pi's advertised levels, token "
+            "limits where the backend "
             "advertises them, pi's catalog prices, and the catalog source."
         ),
         "error_codes": ["invalid_arguments", "backend_unavailable"],
@@ -674,6 +675,9 @@ def models_payload(registry: BackendRegistry, backend: str, settings: Settings) 
                 context_tokens=m.context_tokens,
                 max_output_tokens=m.max_output_tokens,
                 pricing=_pricing_info(m.pricing),
+                advertised_reasoning_efforts=list(m.advertised_reasoning_efforts)
+                if m.advertised_reasoning_efforts is not None
+                else None,
             )
             for m in allowed
         ],
@@ -891,7 +895,8 @@ def register(
         meta=lifecycle_meta("amicus_models"),
         description=(
             f"{FREE_MARKER} Advisory model slugs for `backend` (pass as `model`) with each "
-            "model's advisory reasoning efforts; the backend validates the real values. "
+            "model's accepted reasoning efforts and, for pi, the levels its catalog "
+            "advertises; the backend validates the real values. "
             "pi lists exact provider/id rows of providers it holds credentials for. "
             "Not fingerprint-stable; same payload as amicus://models/{backend}."
         ),
