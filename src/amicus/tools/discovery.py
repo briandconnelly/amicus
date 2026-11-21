@@ -624,13 +624,18 @@ def _configured_default_model(plugin: BackendPlugin | None) -> str | None:
 
 
 def models_payload(registry: BackendRegistry, backend: str, settings: Settings) -> dict[str, Any]:
+    policy = settings.model_policy
+    state = (
+        "invalid"
+        if policy_blocked(settings)
+        else ("active" if policy.patterns_for(backend) else "inactive")
+    )
     plugin = registry.get(backend)
     if plugin is None:
         return ModelCatalogResult(
-            backend=backend, available=False, models=[], source="none"
+            backend=backend, available=False, models=[], source="none", model_policy=state
         ).model_dump(mode="json")
     listing = plugin.models.read()
-    policy = settings.model_policy
     allowed = [m for m in listing.models if policy.denied_by(backend, m.slug) is None]
     return ModelCatalogResult(
         backend=backend,
@@ -655,9 +660,7 @@ def models_payload(registry: BackendRegistry, backend: str, settings: Settings) 
         if listing.truncated
         else None,
         hidden_by_policy=len(listing.models) - len(allowed),
-        model_policy="invalid"
-        if policy_blocked(settings)
-        else ("active" if policy.patterns_for(backend) else "inactive"),
+        model_policy=state,
     ).model_dump(mode="json")
 
 

@@ -82,7 +82,9 @@ class HelpProbe:
             run = runtime.run_sync_capture(
                 argv, timeout_seconds=self.probe_timeout_seconds, cwd=cwd
             )
-        if run.binary_missing:
+        if run.binary_missing or run.timed_out:
+            # A timeout carries a marker, not help text: parsed, it would read as a CLI that
+            # advertises no flags at all (amicus #547).
             return ""
         return f"{run.stdout}\n{run.stderr}"
 

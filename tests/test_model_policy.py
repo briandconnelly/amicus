@@ -66,15 +66,21 @@ def test_settings_report_a_malformed_list_as_a_non_fatal_config_error():
     assert not s.fatal_errors
 
 
-def _registry(model_default=None, flag_support=None):
-    overrides = {"options": (OptionSpec("model", "model", frozenset({"consult"}), model_default),)}
-    if flag_support is not None:
+_WITH_MODEL = FlagSupport(frozenset({"--model"}), help_parsed=True)
 
-        class _Probe:
-            def flag_support(self):
-                return flag_support
 
-        overrides["help_probe"] = _Probe()
+def _registry(model_default=None, flag_support=_WITH_MODEL):
+    """A deterministic help probe: the fake plugin's default runs the host's `true --help`,
+    which GNU coreutils answers with help text that lacks --model."""
+
+    class _Probe:
+        def flag_support(self):
+            return flag_support
+
+    overrides = {
+        "options": (OptionSpec("model", "model", frozenset({"consult"}), model_default),),
+        "help_probe": _Probe(),
+    }
     return BackendRegistry({"codex": fakeplugin.make_plugin("codex", **overrides)}, {})
 
 
@@ -191,6 +197,8 @@ def test_models_omit_denied_rows_and_the_resource_matches_the_tool(truncated):
     assert out["truncated"] is truncated
     if truncated:
         assert "these 1 are not denied" in out["truncation_hint"]
+    unloaded = discovery.models_payload(BackendRegistry({}, {}), "pi", _settings("pi:x"))
+    assert unloaded["available"] is False and unloaded["model_policy"] == "active"
     plain = discovery.models_payload(reg, "codex", _settings(None))
     assert plain["hidden_by_policy"] == 0 and len(plain["models"]) == 2
 
@@ -198,3 +206,9 @@ def test_models_omit_denied_rows_and_the_resource_matches_the_tool(truncated):
 def test_dataclass_replace_keeps_policy():
     s = replace(_settings("codex:x"), host_name="h")
     assert s.model_policy.patterns_for("codex") == ("x",)
+
+
+async def test_an_unparsed_help_probe_does_not_refuse_an_allowed_model(tmp_path):
+    reg = _registry(flag_support=FlagSupport(frozenset(), help_parsed=False))
+    prep = await _prep(tmp_path, _settings("codex:x"), registry=reg, model="ok")
+    assert isinstance(prep, _prepare.Prepared) and prep.spec.require_model_flag is True

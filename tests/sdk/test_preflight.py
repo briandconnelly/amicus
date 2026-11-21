@@ -146,3 +146,15 @@ def test_probe_cwd_is_resolved_on_every_probe_and_absent_by_default(monkeypatch)
     p.flag_support(force=True)
     _probe().flag_support()
     assert seen == [{"cwd": "/neutral/a"}, {"cwd": "/neutral/b"}, {}]
+
+
+def test_a_timed_out_probe_fails_open_rather_than_reading_its_marker_as_help(monkeypatch):
+    """A timeout's stderr is a marker, not help: parsed, it would read as a CLI with no flags
+    and refuse every policy-checked model as model_flag_unsupported (amicus #547)."""
+
+    def fake(cmd, timeout_seconds):
+        return runtime.CommandRun("", runtime.TIMED_OUT, -9, 10_000, True)
+
+    monkeypatch.setattr(runtime, "run_sync_capture", fake)
+    fs = _probe().flag_support()
+    assert not fs.help_parsed and preflight.is_supported("--model", fs)
