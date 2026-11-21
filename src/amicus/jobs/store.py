@@ -94,6 +94,9 @@ _RECORD_LOCK_NAME = ".records.lock"
 # the store's locks released, for as long as it does (see the module docstring).
 _TERMINATE_LOCK_NAME = "terminate.lock"
 _CLAIM_REASONS = ("timeout", "cancelled")
+# Stands in for the claimant lock's descriptor when a claimant could not take the lock
+# for a reason other than contention; ``_release_claim`` ignores it.
+_NO_CLAIM_FD = -1
 
 _T = TypeVar("_T")
 
@@ -388,8 +391,8 @@ def _worker_lock_held(lock_path: Path) -> bool | None:
 
 def _release_claim(fd: int | None) -> None:
     """Release a claimant lock ``_try_claim`` took: unlock it and close its descriptor.
-    ``None`` (no lock held) is a no-op."""
-    if fd is None:
+    ``None`` and ``_NO_CLAIM_FD`` (no lock held) are no-ops."""
+    if fd is None or fd == _NO_CLAIM_FD:
         return
     try:
         import fcntl  # noqa: PLC0415 - platform-guarded lazy import (POSIX only)
@@ -709,34 +712,34 @@ class JobStore:
     def _try_claim(
         self, jd: Path, meta: dict, reason: Literal["timeout", "cancelled"]
     ) -> int | None:
-        """Become the job's claimant, under ``_LOCK`` and its record lock: write the
-        claim unless a well-formed one is there (best effort: an ``OSError`` leaves the
-        lock alone to carry it), then try the claimant lock without waiting. Returns the
-        descriptor holding it, or ``None`` when another holder has it or the lock file
-        cannot be opened. Where ``flock`` is unavailable or fails other than by
-        contention, the descriptor is returned unlocked, as an indeterminate lock reads
-        free to every reader."""
+        """Become the job's claimant, under ``_LOCK`` and its record lock: try the
+        claimant lock without waiting, then write the claim unless a well-formed one is
+        there (best effort: an ``OSError`` leaves the lock alone to carry it). Returns
+        ``None`` only when another holder has the lock, in which case nothing is written.
+        Otherwise returns the descriptor holding it, or ``_NO_CLAIM_FD`` when the lock
+        could not be taken for any other reason (the file cannot be opened, ``flock`` is
+        unavailable or fails): the caller is then the claimant without a lock, as an
+        indeterminate lock reads free to every reader, and still terminates the job."""
+        fd = _NO_CLAIM_FD
+        with contextlib.suppress(OSError):
+            fd = os.open(jd / _TERMINATE_LOCK_NAME, os.O_CREAT | os.O_RDWR, 0o600)
+        if fd != _NO_CLAIM_FD:
+            try:
+                import fcntl  # noqa: PLC0415 - platform-guarded lazy import (POSIX only)
+
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                os.close(fd)
+                return None
+            except (ImportError, OSError):  # pragma: no cover - non-POSIX, or e.g. ENOLCK
+                os.close(fd)
+                fd = _NO_CLAIM_FD
         if self._claim_of(meta) is None:
             meta["terminating"] = {"reason": reason, "epoch": time.time()}
             try:
                 self._write_meta(jd, meta)
             except OSError:
                 meta.pop("terminating", None)
-        try:
-            fd = os.open(jd / _TERMINATE_LOCK_NAME, os.O_CREAT | os.O_RDWR, 0o600)
-        except OSError:
-            return None
-        try:
-            import fcntl  # noqa: PLC0415 - platform-guarded lazy import (POSIX only)
-        except ImportError:  # pragma: no cover - non-POSIX
-            return fd
-        try:
-            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            os.close(fd)
-            return None
-        except OSError:  # pragma: no cover - e.g. ENOLCK on a network filesystem
-            return fd
         return fd
 
     def _locked(self, cwd: str, body: Callable[[], _T]) -> _T:
@@ -1218,10 +1221,11 @@ class JobStore:
                 "cancelled" if claim[0] == "cancelled" else "timeout"
             )
             self._raise_overrun(jd, meta, reason)
-            return "running"  # another reader took the claimant lock first
+            return "running"  # fell through: another holder has the claimant lock
         if self._job_running(jd, meta):
             if time.time() > meta.get("deadline_epoch", float("inf")):
                 self._raise_overrun(jd, meta, "timeout")
+                return "running"  # fell through: another holder has the claimant lock
             return "running"
         env = self._read_envelope(jd)
         if env is not None:

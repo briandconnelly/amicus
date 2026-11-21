@@ -1057,18 +1057,6 @@ def test_the_claimant_lock_is_released_after_finalization_and_after_an_error(tmp
         job_store._kill_pid_tree(pid)
 
 
-# Regression guards: these pass before the change.
-@pytest.mark.parametrize(
-    "claim",
-    ["yes", {"reason": "paused", "epoch": 1}, {"reason": "timeout", "epoch": "x"}],
-)
-def test_a_malformed_claim_is_ignored(tmp_path, claim):
-    store = _store(tmp_path)
-    cwd = str(tmp_path / "w")
-    job_id, _, _ = _claimed_job(store, cwd, claim)
-    assert store.status(cwd, job_id)["status"] == "failed"
-
-
 def test_an_unwritable_claim_still_terminates_and_times_out(tmp_path, monkeypatch):
     store = _store(tmp_path)
     cwd = str(tmp_path / "w")
@@ -1092,3 +1080,63 @@ def test_an_unwritable_claim_still_terminates_and_times_out(tmp_path, monkeypatc
         assert claim_write_attempted
     finally:
         job_store._kill_pid_tree(pid)
+
+
+def test_an_unopenable_claimant_lock_still_terminates_and_times_out(tmp_path, monkeypatch):
+    store = _store(tmp_path)
+    cwd = str(tmp_path / "w")
+    job_id, pid = _overrun_job(store, cwd)
+    real_open = os.open
+    denied: list[str] = []
+
+    def deny(path, *args, **kwargs):
+        if str(path).endswith("terminate.lock"):
+            denied.append(str(path))
+            raise OSError(errno.EACCES, "permission denied")
+        return real_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(job_store.os, "open", deny)
+    calls: list[int] = []
+
+    def fake_terminate(pid, grace_seconds, **kwargs):
+        calls.append(pid)
+        job_store._kill_pid_tree(pid)
+
+    monkeypatch.setattr(job_store, "_terminate_pid_tree", fake_terminate)
+    try:
+        assert store.status(cwd, job_id)["status"] == "timeout"
+        assert denied
+        assert calls == [pid]
+    finally:
+        job_store._kill_pid_tree(pid)
+
+
+def test_a_contended_claim_writes_nothing(tmp_path):
+    store = _store(tmp_path)
+    cwd = str(tmp_path / "w")
+    job_id, pid = _overrun_job(store, cwd)
+    jd = store._job_dir(cwd, job_id)
+    holder = os.open(jd / "terminate.lock", os.O_CREAT | os.O_RDWR, 0o600)
+    fcntl.flock(holder, fcntl.LOCK_EX)  # another claimant holds it, its claim unwritten
+    try:
+        meta = store._read_meta(jd)
+        assert store._try_claim(jd, meta, "timeout") is None
+        assert "terminating" not in meta
+        assert "terminating" not in store._read_meta(jd)
+        assert store.status(cwd, job_id)["status"] == "running"
+        assert "terminating" not in store._read_meta(jd)
+    finally:
+        os.close(holder)
+        job_store._kill_pid_tree(pid)
+
+
+# Regression guards: these pass before the change.
+@pytest.mark.parametrize(
+    "claim",
+    ["yes", {"reason": "paused", "epoch": 1}, {"reason": "timeout", "epoch": "x"}],
+)
+def test_a_malformed_claim_is_ignored(tmp_path, claim):
+    store = _store(tmp_path)
+    cwd = str(tmp_path / "w")
+    job_id, _, _ = _claimed_job(store, cwd, claim)
+    assert store.status(cwd, job_id)["status"] == "failed"
