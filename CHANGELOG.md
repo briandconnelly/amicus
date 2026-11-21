@@ -35,6 +35,21 @@ per-change, as its own lead says.
 
 ### Changed
 
+- codex-cli 0.171 is a supported version, so `amicus_backends` no longer warns on it; 0.170 was
+  never checked and stays outside the set. 0.171.0 was checked against 0.169.0: `--help` and
+  `login --help` are identical, and `exec --help` and `exec review --help` only add `--remote`
+  and `--remote-auth-token-env`, which amicus does not send; every stderr grammar amicus parses,
+  the pins and disables under `--strict-config` and the logged-out `login status` line are
+  identical. In `features list`, `incremental_tools_legacy` now defaults on, but upstream reads it
+  only for Amazon Bedrock providers, and `tui_workspace` and `tui_extensions_statusline` are read
+  only under `tui/`. The model-facing tool catalog of every known model offers the same tools on
+  both binaries, with only the definitions of `exec`, `exec_command` and `spawn_agent` changed,
+  and both disable controls pass on both. The served model catalog is identical, and upstream's
+  `SandboxWorkspaceWrite` config struct is unchanged. Because the notes rework sandbox
+  permission profiles, the workspace-write network and writable-roots pins were re-probed with
+  paid runs: both still hold under a user config and a profile that open them, against a passing
+  unpinned control.
+
 - `docs/claude-help/2.1.330/` records the `--help` of Claude Code 2.1.330, which every 2.x
   release already satisfied: the flags are unchanged and only descriptions are reworded, and the
   2.1.326 to 2.1.330 notes change no flag amicus sends; `claude -p` writing to a full disk now
