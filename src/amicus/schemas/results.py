@@ -692,37 +692,30 @@ class ModelInfo(BaseModel):
 
 
 _CATALOG_TRUNCATED_DESC = (
-    "True when `models` stops at amicus's bound on a larger catalog: an absent slug may still "
+    "True when `models` stops at amicus's bound on a larger catalog (with a query: when the "
+    "catalog scan was cut; `limit` is selection.omitted_by_limit): an absent slug may still "
     "be valid."
 )
 publish.KEPT_DESCRIPTIONS.add(_CATALOG_TRUNCATED_DESC)
 
 
 _SELECTION_DESC = (
-    "Null without a query. With one: after model policy, each of `examined` rows is tested by "
-    "prefix, then context, then input price, then output price, and counted once, at the "
-    "first test that excludes it; the counts are disjoint and, with the rows returned, sum "
-    "to `examined`."
+    "Null without a query. Disjoint counts over `examined` (rows after policy): each row is "
+    "tested by prefix, context, input price, output price and counted at the first that "
+    "excludes it; unknown never passes a bound. See amicus://params `query`."
 )
-_SELECTION_UNKNOWN_DESC = (
-    "Rows excluded because the value a bound compares is unknown (null): unknown never "
-    "passes a bound."
-)
-_PRICE_BASIS_DESC = (
-    "max_across_tiers when a price bound or price sort ran: the highest rate across the base "
-    "rate and every tier."
-)
-publish.KEPT_DESCRIPTIONS.update({_SELECTION_DESC, _SELECTION_UNKNOWN_DESC, _PRICE_BASIS_DESC})
+publish.KEPT_DESCRIPTIONS.add(_SELECTION_DESC)
 
 
 class ModelSelection(BaseModel):
     model_config = ConfigDict(extra="forbid")
     examined: int
     excluded_by_filter: int
-    excluded_unknown_context: int = Field(description=_SELECTION_UNKNOWN_DESC)
-    excluded_unknown_pricing: int = Field(description=_SELECTION_UNKNOWN_DESC)
+    excluded_unknown_context: int
+    excluded_unknown_pricing: int
     omitted_by_limit: int
-    price_basis: Literal["max_across_tiers"] | None = Field(description=_PRICE_BASIS_DESC)
+    # Set when a price bound or price sort ran: the highest rate across base and tiers.
+    price_basis: Literal["max_across_tiers"] | None
 
 
 class ModelCatalogResult(BaseModel):

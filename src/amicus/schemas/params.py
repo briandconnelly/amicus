@@ -327,8 +327,8 @@ PARAMETER_CONTRACTS: dict[str, ParamContract] = {
     "query": ParamContract(
         name="query",
         summary=(
-            "amicus_models only: filter, sort and limit the listing; omit for the plain "
-            f"listing. Semantics: {PARAMS_RESOURCE_URI}."
+            "Filter, sort and limit the listing; omit for the plain listing. Semantics: "
+            f"{PARAMS_RESOURCE_URI}."
         ),
         full=(
             "A closed object; every member is optional. slug_prefix keeps rows whose slug "
@@ -610,10 +610,10 @@ IncludeSchemasParam = Annotated[
 ]
 
 
+# The `amicus_models` query (#560, ADR 0053). Its semantics are the `query` contract at
+# amicus://params, and `amicus.tools.model_query.select` applies it. A comment, not a
+# docstring: a docstring would ride the published inputSchema.
 class ModelQuery(BaseModel):
-    """The `amicus_models` query (#560, ADR 0053). Its semantics are the `query` contract at
-    amicus://params; `amicus.tools.model_query.select` applies it."""
-
     model_config = ConfigDict(extra="forbid", strict=True, allow_inf_nan=False)
     slug_prefix: str | None = Field(
         default=None, min_length=1, max_length=256, pattern=CONTROL_CHAR_FREE_PATTERN
