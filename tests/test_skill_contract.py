@@ -730,6 +730,9 @@ def test_candidate_models_are_never_trialled_outside_amicus():
     assert "**Never trial a candidate `pi` model outside amicus**" in rules
     assert "**Never put the user's text into a provider's catalog or search tool.**" in rules
     assert "as read in this session, never from memory**" in rules
+    # amicus_models carries pi's catalog price since #554, so the rule must name the row as
+    # a source: read as "the provider's catalog only", it would send a host past a price it has.
+    assert "price from its row's `pricing` or from its provider's catalog" in rules
     assert "say which facts you could not establish rather than supplying them" in rules
     assert "never read a `null` as evidence that it does.**" in rules
 
