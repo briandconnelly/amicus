@@ -92,7 +92,8 @@ LOGIN_HINT = (
 # --- Disclosures -------------------------------------------------------------------------
 EGRESS = (
     "The prompt and, for reviews, the secret-redacted diff go to the provider the model's "
-    "prefix names, through pi. Pi can read files outside the workspace, up to everything the "
+    "prefix names, or to the endpoint pi's `models.json` sets for that provider, through pi. "
+    "Pi can read files outside the workspace, up to everything the "
     "OS user can read."
 )
 CARRIERS = (
