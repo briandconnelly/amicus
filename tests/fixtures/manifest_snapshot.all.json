@@ -2587,7 +2587,7 @@
           "arguments": {
             "backend": "claude"
           },
-          "next_step": "correct_arguments",
+          "next_step": "use_allowed_value",
           "tool": "amicus_models"
         },
         "temporary": false
@@ -3013,7 +3013,7 @@
           "arguments": {
             "backend": "codex"
           },
-          "next_step": "correct_arguments",
+          "next_step": "use_allowed_value",
           "tool": "amicus_models"
         },
         "temporary": false
@@ -3436,7 +3436,7 @@
       "model_denied": {
         "repair": {
           "arguments": null,
-          "next_step": "correct_arguments",
+          "next_step": "use_allowed_value",
           "tool": null
         },
         "temporary": false
@@ -3860,7 +3860,7 @@
           "arguments": {
             "backend": "pi"
           },
-          "next_step": "correct_arguments",
+          "next_step": "use_allowed_value",
           "tool": "amicus_models"
         },
         "temporary": false

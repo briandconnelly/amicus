@@ -1,10 +1,10 @@
 {
   "fingerprint": "amicus/0.1/schema-77",
   "manifest_hash": {
-    "all": "c9d2ec54f193f6b7b8c2201e1fab585bc9e1465d3756d362b2840af6feb8373c",
-    "claude": "faf441d5d5553a5ad00b9667c04ff29f6209062a0897d48bcbd8be838731dfed",
-    "codex": "c18ee4142e79d50d85d2a18ef91bfeb9cbc8903457e65de80c86c56ca82d1e10",
-    "codex-pi": "94fcafd6da1ab6c75b0e039a3cb6ba3618ee57ed2929e8cf54c1df558a71d9eb"
+    "all": "7020278342a620d1d4214b7ec53ac63960898b26c73cf9d7f170967fe51b32e8",
+    "claude": "56526ec52b7f63f659e863ce54f8c9025beb7079ca261cbb5030f0ef9a59ee7d",
+    "codex": "ed32ba88be9179cdb3e2ea5f6584bd69b79cfd3efb60100e34856a483bb9bf2c",
+    "codex-pi": "25f21bffbd78840194a43686ece6a7ffee5383fb971e41bc997eba44722f9335"
   },
   "surface_digest": {
     "all": "67cd2d2f3ea5f67e84c895cd4c88b1fe867f7b1ed22fd12bc45e8636379ecd5b",
