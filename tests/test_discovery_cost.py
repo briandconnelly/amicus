@@ -452,6 +452,18 @@ threshold counts cache reads and writes, as pi's does: without them a caller com
 uncached input alone picks the wrong tier. A first draft cost 27 bytes more, a clause in the
 tool description that the schema already carries. Measured on the wire. MEASURED and BUDGET
 both move up by the 535 bytes, so the budget keeps no headroom.
+
+The schema-79 raise (+386 bytes on every profile: all 117389 -> 117775) is #559, the reasoning
+levels pi's catalog advertises on amicus_models. Most of it is that tool's outputSchema:
+ModelInfo gains `advertised_reasoning_efforts`, a nullable string list with a kept description
+saying it is pi only, a snapshot, never checked against the provider, that pi can still run
+another level and warns, and that null is unknown while [] is none; without it a list reads as
+a guarantee, and [] and null read alike. `supported_reasoning_efforts`'s description now says
+pi's list is the vocabulary amicus accepts pre-spend, and the amicus_models description names
+both sets. The reasoning_effort summary, carried on ten tools, says "per-model sets" in a byte
+fewer than "advisory values", so it no longer describes one advisory set; a first draft that
+named both sets there cost 160 bytes more. Measured on the wire. MEASURED and BUDGET both move
+up by the 386 bytes, so the budget keeps no headroom.
 """
 
 from __future__ import annotations
@@ -462,10 +474,10 @@ from tests.conftest import spawned_server_env
 from amicus import manifest
 
 MEASURED: dict[str, int] = {
-    "all": 117389,
-    "codex": 117397,
-    "codex-pi": 117389,
-    "claude": 117389,
+    "all": 117775,
+    "codex": 117783,
+    "codex-pi": 117775,
+    "claude": 117775,
 }
 # The budget is a literal, not MEASURED rounded up to the next kilobyte as it was until
 # 2026-09-14. The rounding left up to 1 KB of growth per bucket that no PR had to own, and
@@ -475,10 +487,10 @@ MEASURED: dict[str, int] = {
 # Any growth now fails until a PR raises BUDGET and says why; a shrink passes and shows as
 # drift against MEASURED. Raising one means re-measuring and moving both.
 BUDGET: dict[str, int] = {
-    "all": 117389,
-    "codex": 117397,
-    "codex-pi": 117389,
-    "claude": 117389,
+    "all": 117775,
+    "codex": 117783,
+    "codex-pi": 117775,
+    "claude": 117775,
 }
 
 
