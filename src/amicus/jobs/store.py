@@ -1059,42 +1059,49 @@ class JobStore:
         cmd = cmd_factory(jd)
         started = time.time()
         log_path = jd / "stderr.log"
+        ef = log_path.open("w")
         try:
-            with log_path.open("w") as ef:
-                proc = subprocess.Popen(
-                    cmd,
-                    cwd=str(jd),
-                    stdin=subprocess.DEVNULL if stdin_text is None else subprocess.PIPE,
-                    stdout=ef,
-                    stderr=ef,
-                    start_new_session=True,
-                    text=stdin_text is not None,
-                    encoding="utf-8" if stdin_text is not None else None,
-                )
-            if stdin_text is not None:
-                threading.Thread(target=_write_stdin, args=(proc, stdin_text), daemon=True).start()
+            proc = subprocess.Popen(
+                cmd,
+                cwd=str(jd),
+                stdin=subprocess.DEVNULL if stdin_text is None else subprocess.PIPE,
+                stdout=ef,
+                stderr=ef,
+                start_new_session=True,
+                text=stdin_text is not None,
+                encoding="utf-8" if stdin_text is not None else None,
+            )
         except OSError:
+            with contextlib.suppress(OSError):
+                ef.close()
             shutil.rmtree(jd, ignore_errors=True)
             raise
-        meta = {
-            "job_id": job_id,
-            "kind": kind,
-            "pid": proc.pid,
-            "owner": _PROCESS_OWNER,
-            "started_epoch": started,
-            "started_at": datetime.now(UTC).isoformat(),
-            "deadline_epoch": started + self.max_seconds,
-            "completed_epoch": None,
-            "terminal_status": None,
-            # Present-and-null marks a record whose delivery is tracked; one without
-            # the key predates tracking, and the cap evicts it as it always did.
-            "delivered_epoch": None,
-            "extra": extra or {},
-        }
+        # From here a paid worker exists: every failure until its record is written
+        # (closing the log, starting the stdin thread, writing meta.json) rolls it back.
         try:
+            ef.close()
+            if stdin_text is not None:
+                threading.Thread(target=_write_stdin, args=(proc, stdin_text), daemon=True).start()
+            meta = {
+                "job_id": job_id,
+                "kind": kind,
+                "pid": proc.pid,
+                "owner": _PROCESS_OWNER,
+                "started_epoch": started,
+                "started_at": datetime.now(UTC).isoformat(),
+                "deadline_epoch": started + self.max_seconds,
+                "completed_epoch": None,
+                "terminal_status": None,
+                # Present-and-null marks a record whose delivery is tracked; one without
+                # the key predates tracking, and the cap evicts it as it always did.
+                "delivered_epoch": None,
+                "extra": extra or {},
+            }
             self._write_meta(jd, meta)
         except BaseException:
-            # Persistence failed after a successful spawn (disk full, fs error). A paid
+            with contextlib.suppress(OSError):
+                ef.close()
+            # Recording failed after a successful spawn (disk full, fs error). A paid
             # worker is already running detached; reap its process group so no orphaned
             # worker survives — mirrors the `except OSError` around Popen above.
             # The wait for it runs with every lock released (#536): the outermost section

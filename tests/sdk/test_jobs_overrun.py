@@ -1329,3 +1329,142 @@ def test_a_cancel_during_a_local_overrun_whose_claim_was_not_written_is_timeout(
     assert not c.is_alive()
     result = out[0]
     assert result["status"] == "timeout"
+
+
+def _capture_spawn(monkeypatch) -> list:
+    """Record every worker ``start`` spawns, with the job dir it ran in."""
+    spawned: list = []
+    real = subprocess.Popen
+
+    def popen(*args, **kwargs):
+        proc = real(*args, **kwargs)
+        spawned.append((proc, Path(kwargs["cwd"])))
+        return proc
+
+    monkeypatch.setattr(job_store.subprocess, "Popen", popen)
+    return spawned
+
+
+def _reap(spawned: list) -> None:
+    for proc, _ in spawned:
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait(_WAIT)
+
+
+class _FailingClose:
+    """The stderr log file, whose close raises EIO after closing the real file."""
+
+    def __init__(self, f) -> None:
+        self._f = f
+
+    def fileno(self) -> int:
+        return self._f.fileno()
+
+    def close(self) -> None:
+        self._f.close()
+        raise OSError(errno.EIO, "close failed")
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self.close()
+
+
+def _failing_log_close(monkeypatch) -> None:
+    real_open = Path.open
+
+    def opener(self, *args, **kwargs):
+        f = real_open(self, *args, **kwargs)
+        return _FailingClose(f) if self.name == "stderr.log" else f
+
+    monkeypatch.setattr(Path, "open", opener)
+
+
+def _start_and_capture(store, cwd, **kw) -> BaseException | None:
+    try:
+        store.start(_factory(_SLEEP), cwd, kind="k", **kw)
+    except BaseException as exc:
+        return exc
+    return None
+
+
+def test_a_failure_closing_the_log_after_spawn_is_rolled_back(tmp_path, monkeypatch):
+    store = _store(tmp_path, terminate_grace_seconds=0.5)
+    cwd = str(tmp_path / "a")
+    spawned = _capture_spawn(monkeypatch)
+    _failing_log_close(monkeypatch)
+    try:
+        raised = _start_and_capture(store, cwd)
+        monkeypatch.undo()
+        assert isinstance(raised, OSError) and raised.errno == errno.EIO
+        ((proc, jd),) = spawned
+        assert proc.wait(timeout=_WAIT) is not None
+        assert not jd.exists()
+    finally:
+        _reap(spawned)
+
+
+def test_a_failure_starting_the_stdin_thread_is_rolled_back(tmp_path, monkeypatch):
+    store = _store(tmp_path, terminate_grace_seconds=0.5)
+    cwd = str(tmp_path / "a")
+    spawned = _capture_spawn(monkeypatch)
+
+    class _Thread(threading.Thread):
+        def start(self) -> None:
+            raise RuntimeError("can't start new thread")
+
+    fake = type(sys)("threading")
+    fake.Thread = _Thread  # type: ignore[attr-defined]
+    monkeypatch.setattr(job_store, "threading", fake)
+    try:
+        raised = _start_and_capture(store, cwd, stdin_text="hi")
+        monkeypatch.undo()
+        assert isinstance(raised, RuntimeError)
+        ((proc, jd),) = spawned
+        assert proc.wait(timeout=_WAIT) is not None
+        assert not jd.exists()
+    finally:
+        _reap(spawned)
+
+
+def test_a_post_spawn_failure_is_rolled_back_with_the_locks_released(tmp_path, monkeypatch):
+    store = _store(tmp_path)
+    cwd = str(tmp_path / "a")
+    spawned = _capture_spawn(monkeypatch)
+    _failing_log_close(monkeypatch)
+    seen: dict[str, object] = {}
+
+    def fake_terminate(pid, grace_seconds, **kwargs):
+        seen["locks_free"] = _locks_free(store, cwd)
+        job_store._kill_pid_tree(pid)
+
+    monkeypatch.setattr(job_store, "_terminate_pid_tree", fake_terminate)
+    try:
+        raised = _bounded(lambda: _start_and_capture(store, cwd))
+        monkeypatch.undo()
+        assert isinstance(raised, OSError)
+        assert seen["locks_free"] is True
+    finally:
+        _reap(spawned)
+
+
+def test_a_spawn_failure_removes_the_job_dir_and_queues_nothing(tmp_path, monkeypatch):
+    store = _store(tmp_path)
+    cwd = str(tmp_path / "a")
+    terminate_calls = 0
+
+    def fake_terminate(pid, grace_seconds, **kwargs):
+        nonlocal terminate_calls
+        terminate_calls += 1
+
+    def popen(*args, **kwargs):
+        raise OSError(errno.ENOENT, "no such worker")
+
+    monkeypatch.setattr(job_store, "_terminate_pid_tree", fake_terminate)
+    monkeypatch.setattr(job_store.subprocess, "Popen", popen)
+    with pytest.raises(OSError, match="no such worker"):
+        store.start(_factory(_SLEEP), cwd, kind="k")
+    assert store._job_dirs(store._ws_dir(cwd)) == []
+    assert terminate_calls == 0
