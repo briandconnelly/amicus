@@ -112,7 +112,7 @@ _LOCAL_RULES: dict[str, RepairRule] = {
         "here) is kept by a consume too, and only expires.",
     ),
     "model_denied": RepairRule(
-        "correct_arguments",
+        "use_allowed_value",
         "amicus_models",
         False,
         "The operator's AMICUS_DENY_MODELS refuses this model selector, or a call with no "

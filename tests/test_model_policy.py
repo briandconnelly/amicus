@@ -107,10 +107,9 @@ async def test_an_explicit_denied_model_is_refused_with_a_models_repair(tmp_path
     out = await _prep(tmp_path, _settings("codex:gpt-5*"), model="GPT-5.4")
     err = out["error"]
     assert err["code"] == "model_denied" and err["details"]["field"] == "model"
-    assert (
-        err["repair"]["tool"] == "amicus_consult"
-        and "amicus_models" in err["repair"]["alternative"]
-    )
+    assert err["repair"]["next_step"] == "use_allowed_value"
+    assert err["repair"]["tool"] == "amicus_models"
+    assert err["repair"]["arguments"] == {"backend": "codex"}
     assert err["temporary"] is False
 
 
