@@ -394,14 +394,12 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
         title="Write a delegate job's diff to a new file (free)",
         meta=lifecycle_meta("amicus_job_export_diff"),
         description=(
-            f"{FREE_MARKER} For a finished delegate job: write its diff (or a stopped run's "
-            "partial.diff) to one new file at `path` on the server's filesystem, never "
-            "overwriting, and return what amicus_job_result returns with that diff null. "
-            "amicus applies nothing; the diff is a proposal to review. meta.diff_export "
-            "gives the file's path, byte count and SHA-256; meta.truncated and "
-            "meta.redacted_paths say whether it is whole. The file is the caller's to "
-            "delete and is outside the job retention. A refused path is invalid_arguments "
-            "and writes nothing; the job counts as returned only once the file is written."
+            f"{FREE_MARKER} Write a finished delegate job's diff (or partial.diff) to one new "
+            "file at `path` on the server's filesystem, never overwriting; returns "
+            "amicus_job_result's envelope with that diff null. amicus applies nothing; the "
+            "diff is a proposal to review. meta.diff_export gives its bytes and SHA-256; "
+            "meta.truncated and meta.redacted_paths say if it is whole. The file is yours to "
+            "delete, outside the job retention."
         ),
     )
     @guard("amicus_job_export_diff")
