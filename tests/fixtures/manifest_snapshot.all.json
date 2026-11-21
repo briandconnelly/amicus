@@ -55,6 +55,8 @@
       "job_result_incompatible",
       "job_running",
       "job_timeout",
+      "model_denied",
+      "model_policy_invalid",
       "nonzero_exit",
       "not_a_git_repo",
       "resource_not_found",
@@ -199,6 +201,8 @@
           "api_key_missing",
           "job_cap_reached",
           "internal_error",
+          "model_denied",
+          "model_policy_invalid",
           "invalid_model",
           "empty_response",
           "answer_unavailable",
@@ -261,6 +265,8 @@
           "api_key_missing",
           "job_cap_reached",
           "internal_error",
+          "model_denied",
+          "model_policy_invalid",
           "invalid_model",
           "empty_response",
           "answer_unavailable",
@@ -317,6 +323,8 @@
           "api_key_missing",
           "job_cap_reached",
           "internal_error",
+          "model_denied",
+          "model_policy_invalid",
           "invalid_model",
           "empty_response",
           "answer_unavailable",
@@ -391,6 +399,8 @@
           "api_key_missing",
           "job_cap_reached",
           "internal_error",
+          "model_denied",
+          "model_policy_invalid",
           "invalid_model",
           "empty_response",
           "answer_unavailable",
@@ -459,6 +469,8 @@
           "api_key_missing",
           "job_cap_reached",
           "internal_error",
+          "model_denied",
+          "model_policy_invalid",
           "invalid_model",
           "empty_response",
           "answer_unavailable",
@@ -521,6 +533,8 @@
           "api_key_missing",
           "job_cap_reached",
           "internal_error",
+          "model_denied",
+          "model_policy_invalid",
           "invalid_model",
           "empty_response",
           "answer_unavailable",
@@ -576,6 +590,8 @@
           "api_key_missing",
           "job_cap_reached",
           "internal_error",
+          "model_denied",
+          "model_policy_invalid",
           "answer_unavailable",
           "invalid_scope",
           "invalid_base",
@@ -644,6 +660,8 @@
           "api_key_missing",
           "job_cap_reached",
           "internal_error",
+          "model_denied",
+          "model_policy_invalid",
           "answer_unavailable",
           "invalid_scope",
           "invalid_base",
@@ -706,6 +724,8 @@
           "invalid_model",
           "backend_auth_required",
           "user_config_rejected",
+          "model_denied",
+          "model_policy_invalid",
           "api_key_missing",
           "internal_error"
         ],
@@ -747,6 +767,8 @@
           "invalid_model",
           "backend_auth_required",
           "user_config_rejected",
+          "model_denied",
+          "model_policy_invalid",
           "internal_error"
         ],
         "key_optional_params": [
@@ -893,6 +915,8 @@
           "api_key_invalid",
           "api_key_missing",
           "job_cap_reached",
+          "model_denied",
+          "model_policy_invalid",
           "invalid_model",
           "empty_response",
           "answer_unavailable",
@@ -958,6 +982,8 @@
           "api_key_invalid",
           "api_key_missing",
           "job_cap_reached",
+          "model_denied",
+          "model_policy_invalid",
           "invalid_model",
           "empty_response",
           "answer_unavailable",
@@ -1359,6 +1385,8 @@
                   "job_result_incompatible",
                   "job_running",
                   "job_timeout",
+                  "model_denied",
+                  "model_policy_invalid",
                   "nonzero_exit",
                   "not_a_git_repo",
                   "resource_not_found",
@@ -1653,7 +1681,7 @@
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-76",
+                "default": "amicus/0.1/schema-77",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -2554,6 +2582,26 @@
         },
         "temporary": false
       },
+      "model_denied": {
+        "repair": {
+          "arguments": {
+            "backend": "claude"
+          },
+          "next_step": "correct_arguments",
+          "tool": "amicus_models"
+        },
+        "temporary": false
+      },
+      "model_policy_invalid": {
+        "repair": {
+          "arguments": {
+            "backend": "claude"
+          },
+          "next_step": "correct_config",
+          "tool": "amicus_backends"
+        },
+        "temporary": false
+      },
       "nonzero_exit": {
         "repair": {
           "arguments": null,
@@ -2960,6 +3008,26 @@
         },
         "temporary": false
       },
+      "model_denied": {
+        "repair": {
+          "arguments": {
+            "backend": "codex"
+          },
+          "next_step": "correct_arguments",
+          "tool": "amicus_models"
+        },
+        "temporary": false
+      },
+      "model_policy_invalid": {
+        "repair": {
+          "arguments": {
+            "backend": "codex"
+          },
+          "next_step": "correct_config",
+          "tool": "amicus_backends"
+        },
+        "temporary": false
+      },
       "nonzero_exit": {
         "repair": {
           "arguments": null,
@@ -3362,6 +3430,22 @@
           "arguments": null,
           "next_step": "start_new_job",
           "tool": null
+        },
+        "temporary": false
+      },
+      "model_denied": {
+        "repair": {
+          "arguments": null,
+          "next_step": "correct_arguments",
+          "tool": null
+        },
+        "temporary": false
+      },
+      "model_policy_invalid": {
+        "repair": {
+          "arguments": {},
+          "next_step": "correct_config",
+          "tool": "amicus_backends"
         },
         "temporary": false
       },
@@ -3771,6 +3855,26 @@
         },
         "temporary": false
       },
+      "model_denied": {
+        "repair": {
+          "arguments": {
+            "backend": "pi"
+          },
+          "next_step": "correct_arguments",
+          "tool": "amicus_models"
+        },
+        "temporary": false
+      },
+      "model_policy_invalid": {
+        "repair": {
+          "arguments": {
+            "backend": "pi"
+          },
+          "next_step": "correct_config",
+          "tool": "amicus_backends"
+        },
+        "temporary": false
+      },
       "nonzero_exit": {
         "repair": {
           "arguments": null,
@@ -3930,7 +4034,7 @@
       "description": "The full ErrorResult schema; tool outputSchemas carry only an opaque error branch.",
       "mimeType": "application/schema+json",
       "name": "amicus-error-envelope",
-      "size": 17428,
+      "size": 17468,
       "title": "amicus error envelope schema",
       "uri": "amicus://error-envelope"
     },
@@ -4334,7 +4438,7 @@
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-76",
+            "default": "amicus/0.1/schema-77",
             "title": "Fingerprint",
             "type": "string"
           },
@@ -5975,6 +6079,40 @@
                         }
                       ],
                       "description": "Omitted on detail=summary (see omitted_fields); null when no loaded plugin declares one."
+                    },
+                    "model_policy": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "default_denied": {
+                          "anyOf": [
+                            {
+                              "type": "boolean"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "deny_patterns": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "state": {
+                          "enum": [
+                            "active",
+                            "inactive",
+                            "invalid"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "deny_patterns",
+                        "state"
+                      ],
+                      "type": "object"
                     },
                     "options": {
                       "items": {
@@ -9546,6 +9684,17 @@
                 ]
               },
               "fingerprint": {
+                "type": "string"
+              },
+              "hidden_by_policy": {
+                "type": "integer"
+              },
+              "model_policy": {
+                "enum": [
+                  "active",
+                  "inactive",
+                  "invalid"
+                ],
                 "type": "string"
               },
               "models": {
