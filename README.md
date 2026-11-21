@@ -95,13 +95,14 @@ call would spend. amicus reports that refusal as not retryable. Either add credi
 model's output in pi's `models.json` (in `$PI_CODING_AGENT_DIR` when that is set, otherwise
 `~/.pi/agent/`), for example
 `{"providers":{"openrouter":{"modelOverrides":{"moonshotai/kimi-k3":{"maxTokens":32000}}}}}`.
-amicus also reports a provider's bodiless 404 as not retryable: check that the provider in the
-model id's prefix serves that model (`amicus_models` lists pi's), and that no `baseUrl` in pi's
-`models.json` points pi at the wrong endpoint.
-A provider client's "Region is missing" is not retryable either: for Amazon Bedrock, set
-`AWS_REGION` in the environment the amicus server starts with and restart the server; for
-another provider, set the region its configuration asks for, or pass a model from a provider
-that needs none.
+amicus reports a provider's bodiless 404 as not temporary, because retrying the same call
+unchanged is unlikely to help: check that the provider in the model id's prefix serves that
+model (`amicus_models` lists pi's), and that no `baseUrl` in pi's `models.json` points pi at the
+wrong endpoint.
+A provider client's "Region is missing" is reported as not temporary for the same reason: for
+Amazon Bedrock, set `AWS_REGION` in the environment the amicus server starts with and restart
+the server; for another provider, set the region its configuration asks for, or pass a model
+from a provider that needs none.
 A `pi` delegate runs shell commands with no sandbox, and a command it starts (a hung or
 backgrounded process) can outlive the run, because amicus cannot yet find and stop it.
 

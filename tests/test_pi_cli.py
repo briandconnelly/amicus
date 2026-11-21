@@ -226,7 +226,7 @@ _REGION_MISSING = "Region is missing"
 def test_a_bodiless_provider_404_is_not_retryable_and_names_the_remedies():
     f = _classify(_run(exit_code=0), stop_reason="error", error_message=_BODILESS_404)
     assert f.code == "nonzero_exit" and f.retryable is False
-    assert f.details == {"field": "model"}
+    assert f.details == {"reason": "the provider answered 404 with no body"}
     assert f.repair is not None and f.repair.next_step == "correct_config"
     assert "amicus_models" in (f.repair.alternative or "")
     assert "models.json" in (f.repair.alternative or "")
@@ -238,6 +238,25 @@ def test_a_missing_provider_region_is_not_retryable_and_names_the_setting():
     assert f.details == {"reason": "the provider client has no region configured"}
     assert f.repair is not None and f.repair.next_step == "correct_config"
     assert "AWS_REGION" in (f.repair.alternative or "")
+
+
+@pytest.mark.parametrize("text", [f"Error: {_BODILESS_404}", f"Error: {_REGION_MISSING}."])
+def test_a_provider_config_signature_with_an_error_prefix_still_classifies(text):
+    f = _classify(_run(stderr=text, exit_code=1))
+    assert f.code == "nonzero_exit" and f.retryable is False
+    assert f.repair is not None and f.repair.next_step == "correct_config"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "503 upstream unavailable: cached error was 404 status code (no body)",
+        "validation failed: Region is missing from the response payload",
+    ],
+)
+def test_a_provider_config_signature_inside_other_text_stays_generic(text):
+    f = _classify(_run(stderr=text, exit_code=1))
+    assert f.code == "nonzero_exit" and f.retryable is None and f.repair is None
 
 
 def test_a_404_with_a_body_stays_generic():
@@ -263,14 +282,14 @@ def test_provider_config_text_on_stdout_is_never_read(text):
 @pytest.mark.parametrize("text", [_BODILESS_404, _REGION_MISSING])
 def test_a_provider_config_detail_is_still_sanitized(text):
     secret = "sk-" + "c" * 32
-    f = _classify(_run(stderr=f"{text} token={secret}", exit_code=1))
+    f = _classify(_run(stderr=f"{text}\ntoken={secret}", exit_code=1))
     assert f.retryable is False and secret not in f.detail and "pi exited 1" in f.detail
 
 
 @pytest.mark.parametrize(
     ("text", "key", "value"),
     [
-        (_BODILESS_404, "field", "model"),
+        (_BODILESS_404, "reason", "the provider answered 404 with no body"),
         (_REGION_MISSING, "reason", "the provider client has no region configured"),
     ],
 )

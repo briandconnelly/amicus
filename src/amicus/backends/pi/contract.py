@@ -144,10 +144,13 @@ _OUTPUT_RESERVATION_PATTERN = re.compile(r"requires more credits, or fewer max_t
 _OUTPUT_RESERVATION_FIGURES = re.compile(
     r"requested up to (\d+) tokens, but can only afford (\d+)", re.I
 )
-# Wording observed in pi's error output and quoted in #520.
-_BODILESS_404_PATTERN = re.compile(r"\b404 status code \(no body\)", re.I)
-# Wording observed in pi's error output and quoted in #520.
-_REGION_MISSING_PATTERN = re.compile(r"\bRegion is missing\b")
+# Wording observed in pi's error output and quoted in #520. Each is anchored to a whole line
+# that is the diagnostic itself (an optional "Error: " prefix and trailing period allowed), so
+# the same words quoted inside another error do not match.
+_BODILESS_404_PATTERN = re.compile(
+    r"^\s*(?:Error:\s*)?404 status code \(no body\)\.?\s*$", re.I | re.M
+)
+_REGION_MISSING_PATTERN = re.compile(r"^\s*(?:Error:\s*)?Region is missing\.?\s*$", re.M)
 _RETRY_AFTER_PATTERNS = (
     re.compile(r"retry[- _]?after[\"']?\s*[:=]\s*[\"']?(\d+(?:\.\d+)?)\s*(ms|s|seconds?)?", re.I),
     re.compile(r"try again in\s+(\d+(?:\.\d+)?)\s*(ms|s|seconds?|minutes?)", re.I),

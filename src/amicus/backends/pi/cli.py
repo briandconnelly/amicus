@@ -224,7 +224,7 @@ def classify_failure(
     if contract.is_bodiless_404(*texts):
         return _provider_config_failure(
             _generic_detail(run, error_message, sanitize, stop_reason),
-            details={"field": "model"},
+            details={"reason": "the provider answered 404 with no body"},
             repair=BODILESS_404_REPAIR,
         )
     if contract.is_region_missing(*texts):
@@ -289,24 +289,27 @@ def _output_reservation_failure(detail: str, figures: tuple[int, int] | None) ->
 
 
 BODILESS_404_REPAIR = (
-    "The provider answered 404 with no body, and the same call will get the same answer. "
-    "Check that the model id is one the provider in its prefix serves (amicus_models lists "
-    "pi's), and that pi calls the right endpoint for it: a baseUrl in pi's models.json, in "
-    "$PI_CODING_AGENT_DIR when that is set and ~/.pi/agent otherwise, replaces the default."
+    "The provider answered 404 with no body. That usually means the request went to a "
+    "model id or an endpoint the provider does not serve, so retrying the same paid call "
+    "unchanged is unlikely to help. Check that the model id is one the provider in its "
+    "prefix serves (amicus_models lists pi's), and that pi calls the right endpoint for it: "
+    "a baseUrl in pi's models.json, in $PI_CODING_AGENT_DIR when that is set and ~/.pi/agent "
+    "otherwise, replaces the default."
 )
 REGION_MISSING_REPAIR = (
-    "pi's provider client reported that no region is configured, and the same call will "
-    "fail the same way. For Amazon Bedrock, set AWS_REGION in the environment the amicus "
-    "server starts with and restart the server; for another provider, set the region its "
-    "configuration asks for, or pass a model from a provider that needs none."
+    "pi's provider client reported that no region is configured, so retrying the same call "
+    "unchanged is unlikely to help. For Amazon Bedrock, set AWS_REGION in the environment "
+    "the amicus server starts with and restart the server; for another provider, set the "
+    "region its configuration asks for, or pass a model from a provider that needs none."
 )
 
 
 def _provider_config_failure(
     detail: str, *, details: dict[str, str], repair: str
 ) -> ClassifiedFailure:
-    """#520: a provider-configuration failure the same call cannot outlast. nonzero_exit,
-    never temporary, with the remedy named; no new code, so the error catalog is unchanged."""
+    """#520: a provider-configuration failure that retrying unchanged is unlikely to fix.
+    nonzero_exit, not temporary, with what to check named; no new code, so the error catalog
+    is unchanged."""
     return ClassifiedFailure(
         code="nonzero_exit",
         detail=detail,
