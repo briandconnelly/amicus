@@ -96,8 +96,8 @@ This is the one statement of the routing procedure;
   whatever the capitalization, and a model named alongside it is passed as that harness's
   `model`. A `provider/id` named beside a harness other than `pi` is passed only when
   `amicus_models` for that harness lists that exact id; otherwise the rule against silent
-  substitution, below, applies. An exact `provider/id` named with no harness is pi's model
-  syntax, so it selects `pi`.
+  substitution, below, applies, and `pi` is offered only where it lists that same id. An exact
+  `provider/id` named with no harness is pi's model syntax, so it selects `pi`.
 - **Send a model-only request to its native harness — `codex` for an OpenAI model, `claude` for
   an Anthropic model — when that harness is ready and supports the verb; otherwise route it to
   `pi` with an exact model `amicus_models(backend="pi")` lists, and name that route before the

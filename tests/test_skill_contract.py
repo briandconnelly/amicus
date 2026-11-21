@@ -574,6 +574,7 @@ def test_the_routing_rule_binds_before_the_verb_is_chosen():
         "An exact `provider/id` named with no harness is pi's model syntax, so it selects `pi`.",
         "is passed only when `amicus_models` for that harness lists that exact id",
         "or does not list the `provider/id` named with it",
+        "and `pi` is offered only where it lists that same id",
         "**Route only to a harness that supports the verb.**",
         "never from provider configuration.** A missing or truncated listing does not prove a",
         "**Ask the user once, before spending, only when the routes that still match after free",
@@ -593,12 +594,43 @@ def test_the_routing_rule_binds_before_the_verb_is_chosen():
         '"get GPT\'s opinion"',
         '"use Opus"',
         '"have Claude adversarially review this"',
-        "`codex`, as the named harness, with that `model`",
-        "does not confirm the pair",
-        '"ask pi to use `<provider>/<id>`"',
     )
     for example in examples:
         assert example in procedure, example
+    # #525: each harness-plus-provider/id route is pinned to its own row, so a row cannot keep
+    # its request text and lose its outcome.
+    section = _BACKENDS_REF.partition("\n## Worked routes\n")[2].split("\n## ", 1)[0]
+    rows = [_flat(line) for line in section.splitlines() if line.startswith("|")]
+    row_pins = (
+        (
+            '"use `<provider>/<id>`" (an exact `provider/id`)',
+            ('`pi` with that `model`, once `amicus_models(backend="pi")` lists it',),
+            ("as a named harness",),
+        ),
+        ('"ask pi to use `<provider>/<id>`"', ("`pi`, the named harness, with that `model`",), ()),
+        (
+            '`amicus_models(backend="codex")` lists that exact id',
+            ("`codex`, as the named harness, with that `model`",),
+            (),
+        ),
+        (
+            "and that listing does not show the id",
+            (
+                "does not confirm the pair",
+                'where `amicus_models(backend="pi")` lists that exact id',
+                "proceed only on the user's choice",
+                "report that no confirmed route exists",
+            ),
+            (),
+        ),
+    )
+    for request, required, forbidden in row_pins:
+        matches = [row for row in rows if request in row.split(" | ", 1)[0]]
+        assert len(matches) == 1, (request, len(matches))
+        for text in required:
+            assert text in matches[0], (request, text)
+        for text in forbidden:
+            assert text not in matches[0], (request, text)
 
 
 def test_pi_eligibility_is_model_aware():
