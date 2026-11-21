@@ -1142,20 +1142,21 @@ async def test_a_price_bound_excludes_every_unpriced_row_as_unknown(backend):
 
 
 @pytest.mark.parametrize(
-    ("query", "member"),
+    ("query", "member", "sentinel"),
     [
-        ({"limit": 0}, "limit"),
-        ({"sort": "slug"}, "sort"),
-        ({"max_input_price": "1"}, "max_input_price"),
+        ({"limit": 0, "sort_by": "zz-sentinel-a"}, "limit", "zz-sentinel-a"),
+        ({"sort": "zz-sentinel-b"}, "sort", "zz-sentinel-b"),
+        ({"max_input_price": "7.123"}, "max_input_price", "7.123"),
+        ({"slug_prefix": "", "zz_sentinel_key": 1}, "slug_prefix", "zz_sentinel_key"),
     ],
 )
-async def test_a_malformed_query_is_invalid_arguments(query, member):
+async def test_a_malformed_query_is_invalid_arguments(query, member, sentinel):
     res, _, _ = await _models_call("pi", _pi_scan(n=3), {"query": query})
     err = res.structured_content["error"]
     assert err["code"] == "invalid_arguments"
-    assert member in err["details"]["field"]
+    assert any(member in a["field"] for a in err["invalid_arguments"])
     assert err["repair"]["tool"] == "amicus_models"
-    assert 'slug"' not in json.dumps(err["repair"]) and '"1"' not in json.dumps(err["repair"])
+    assert sentinel not in json.dumps(err["repair"])
 
 
 async def test_the_published_query_schema_is_closed():
