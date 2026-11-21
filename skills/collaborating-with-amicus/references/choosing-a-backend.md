@@ -46,7 +46,7 @@ Worked examples, each after `amicus_backends(detail="full")`:
 | "collaborate with codex" while `codex` is not ready | say so and offer `pi` with a listed OpenAI `provider/id`, proceeding only on the user's choice |
 | "use Opus" | `claude` when it is ready and supports the verb, deciding `access` up front, because a `claude` consult defaults to `toolless` and cannot read the repository; otherwise `pi` with a listed Anthropic `provider/id`, named before the call. A delegate is not on `claude`, so it goes to `pi` the same way |
 | "have Claude adversarially review this" while `claude` is not ready | no eligible route: only `claude` has `adversarial_review`, so say so rather than switching harness or verb |
-| "use `<provider>/<id>`" (an exact `provider/id`) | `pi`, as a named harness, with that `model`, once `amicus_models(backend="pi")` lists it; its egress is the provider the prefix names, which may be a router rather than the model's vendor |
+| "use `<provider>/<id>`" (an exact `provider/id`) | `pi`, as a named harness, with that `model`, once `amicus_models(backend="pi")` lists it; its egress is the provider the prefix names, which may be a router rather than the model's vendor, or the endpoint pi's `models.json` sets for it |
 | "use Kimi K3" | `pi` with a listed `provider/id` for that model, named before the call |
 
 ## Choosing among pi's listed models
@@ -61,7 +61,7 @@ What the listing establishes, and what it does not:
 | --- | --- |
 | Which exact `provider/id` pi can call, and its effort vocabulary | the row's `slug` and `supported_reasoning_efforts` |
 | Roughly how much the model accepts and can return | the row's `context_tokens` and `max_output_tokens` |
-| Where the prompt goes | the `provider/` prefix, which may be a router rather than the model's vendor |
+| Where the prompt goes | the `provider/` prefix, which may be a router rather than the model's vendor, unless pi's `models.json` overrides that provider's `baseUrl` |
 | Price, rate limits, retention terms, how good the model is at the task | the provider's own catalog; amicus carries none of it |
 
 - **Token limits are approximate on `pi`.** pi prints them rounded, so a value in the

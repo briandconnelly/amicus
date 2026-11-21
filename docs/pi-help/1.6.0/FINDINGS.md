@@ -36,3 +36,4 @@ A live run on kimi-k3 therefore needs a balance above that worst case, whatever 
 - The zero-spend probe on issue #423 was not repeated on 1.6.0, so the flags' effects are inferred from the unchanged help and the passing live suite.
 - No `find` comparison of `~/.pi` was taken for this capture.
 - The budget-cap test holds only the `message_end` path; the retry and compaction gates rest on the source reading above.
+- Whether `models.json` existed during these captures and the live suite was not recorded at the time, so it is unknown.

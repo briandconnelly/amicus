@@ -149,7 +149,8 @@ does today.
 - **Enabling a backend that can write** makes the tool surface carry that backend's approval
   annotations — see [`docs/MIGRATION.md`](docs/MIGRATION.md).
 - **Your prompts go to whichever provider you selected**, through that provider's own CLI. Each
-  backend discloses how it carries your text — visible on `amicus_backends`.
+  backend discloses how it carries your text — visible on `amicus_backends`. On `pi`, a
+  `baseUrl` override in pi's own `models.json` can send it to a different endpoint.
 - **A paid call's whole answer stays on disk** in the job record under `AMICUS_STATE_DIR`,
   whatever `detail` delivered it and after only best-effort secret redaction, until it expires
   (`AMICUS_JOB_TTL`, default 24h; an expired record is removed on a later job call, not by a
