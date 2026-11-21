@@ -86,7 +86,10 @@ which case you are in.
    a positive `wait_seconds` and call again at once.
 4. **Once `status` is terminal** — `done`, `failed`, `cancelled`, or `timeout` — stop polling and
    branch:
-   - `done` with `result_available: true` → fetch it.
+   - `done` with `result_available: true` → fetch it. For a delegate, fetch it by exporting its
+     diff with `amicus_job_export_diff` first, as
+     [reviewing a returned diff](reviewing-a-returned-diff.md) describes: the export counts as the
+     fetch and keeps the diff out of your context.
    - any other terminal status → there is no result to wait for. `amicus_job_result` returns the
      terminal error (`job_cancelled`, `job_failed`, …); read `error.code` and `error.repair`.
 5. Branch on the *fetched envelope's* own `ok`. A `done` job can hold a stored error

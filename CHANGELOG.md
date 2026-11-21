@@ -37,6 +37,16 @@ per-change, as its own lead says.
   report `null`. It is advisory and never refuses a call: `supported_reasoning_efforts` is
   unchanged and stays, for pi, the vocabulary amicus accepts pre-spend, and pi can still run
   another level, which the result warns about. ADR 0052 records the decision.
+- **Surface.** `amicus_job_export_diff` writes a delegate job's diff to a new file at a path the
+  caller names, so a large diff no longer has to pass through the host's context (#556). It
+  writes the stored `diff`, or a stopped run's `partial.diff`, as a new file with mode `0o600`,
+  never overwriting anything and never inside the job store, and returns what
+  `amicus_job_result` returns with that diff null and `meta.diff_export` giving the file's path,
+  byte count, SHA-256 and `source`. A refused path is `invalid_arguments` on `path` with a fixed
+  `details.reason`; a file the call could not finish is removed and the call fails with the new
+  code `export_failed`. A successful export counts as fetching the result, and a refused or
+  failed one leaves the job unfetched. `RESULT_FORMAT` does not move. The skill's diff-review
+  recipe now exports the diff first and checks its digest (ADR 0054).
 - **Surface.** `amicus_models` lists what pi's catalog says each model costs (#554). A `pi` row
   gains `pricing`: `input`, `output`, `cache_read` and `cache_write` in USD per million tokens,
   and `tiers`, the rates that replace them for a whole request whose input, cache reads and

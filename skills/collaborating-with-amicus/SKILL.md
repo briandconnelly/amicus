@@ -43,7 +43,7 @@ statement — this list is a map, not a second copy.
 | Preview a review's or delegate's scope, size, and resolved options before spending | `amicus_review_changes_dry_run` / `amicus_delegate_dry_run` (free) | [active workflows](references/active-workflows.md) |
 | Slugs, efforts before overriding `model`/`reasoning_effort` | `amicus_models` (free; `query` narrows) | — |
 | Full tool inventory, fingerprint, and error catalog | `amicus_capabilities` (free) | — |
-| Poll, fetch, list, or cancel a background job | `amicus_job_status` / `amicus_job_result` / `amicus_job_consume_result` / `amicus_job_list` / `amicus_job_cancel` (all free) | [sync vs async](references/sync-vs-async.md) |
+| Poll, fetch, export, list, or cancel a background job | `amicus_job_status`, `_result`, `_consume_result`, `_export_diff`, `_list`, `_cancel` (all free) | [sync vs async](references/sync-vs-async.md) |
 | An optional parameter, an idempotency key, a returned error, or a host's denial of an amicus call | the tool already selected; a denial is reported, never worked around | [options and errors](references/options-and-errors.md) |
 | The amicus MCP server is unreachable | limited fallback | [server-down fallback](references/server-down-fallback.md) |
 | None of these, or a call would not change the decision | no call — proceed without amicus | — |
@@ -193,6 +193,7 @@ read in this session need not be read again.
   `$XDG_CACHE_HOME/amicus/jobs` or `~/.cache/amicus/jobs`) or loop on it in a shell: its files
   skip the delivery checks and their layout is not a contract. Observe a job through
   `amicus_job_status`, or reattach to a keyed sync run by repeating the same keyed call.
+- **Export or fetch every delegate job's result**, exporting first (`amicus_job_export_diff`).
 
 ### Delegated diffs
 
@@ -200,6 +201,7 @@ read in this session need not be read again.
   [reviewing a returned diff](references/reviewing-a-returned-diff.md), and answer in that file's
   response contract.
 - **Never state or imply that amicus applied anything to the working tree.** It does not.
+- **Never ask a backend to write its patch to a side file.**
 
 ### Data exposure
 
@@ -239,9 +241,8 @@ omitted `model` uses `AMICUS_PI_MODEL`, and a call with neither is refused pre-s
 this deployment enables, not which to prefer. `AMICUS_DENY_MODELS` lets the operator deny
 models per backend; where a backend's `model_policy.state` is `active`, a call must name an
 allowed model, and a refusal is `model_denied` (see
-[choosing a backend](references/choosing-a-backend.md)). An unkeyed sync call past `timeout_seconds` is
-terminated and its work is lost; a keyed sync call or an `_async` call keeps the result. Every
-paid call is a job (`meta.job_id`).
+[choosing a backend](references/choosing-a-backend.md)). Every paid call, sync included, is a job
+(`meta.job_id`).
 
 ### Data exposure
 

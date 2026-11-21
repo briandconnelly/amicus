@@ -8,6 +8,7 @@ import json
 import os
 import subprocess
 import tempfile
+import textwrap
 import time
 from pathlib import Path
 
@@ -1806,3 +1807,60 @@ async def test_lookup_failures_match_amicus_job_result_and_write_nothing(
         await c.call_tool("amicus_job_cancel", {"job_id": running, "workspace_root": str(repo)})
     assert not target.exists()
     assert _delivered(store, repo, old) is None
+
+
+def _recipe_blocks():
+    ref = (
+        Path(__file__).parent.parent
+        / "skills"
+        / "collaborating-with-amicus"
+        / "references"
+        / "reviewing-a-returned-diff.md"
+    ).read_text(encoding="utf-8")
+    blocks = [b.split("```", 1)[0] for b in ref.split("```sh")[1:]]
+    return [textwrap.dedent(b) for b in blocks]
+
+
+async def test_the_review_recipe_runs_end_to_end_on_a_large_exported_diff(
+    app, store, repo, scratch, monkeypatch
+):
+    """#556: the skill's recipe, run as written: export a near-cap delegate diff over a dirty
+    tracked baseline, check its digest, and apply it in a scratch worktree with the hardened
+    commands. The patch is generated from this test's own literals."""
+    import hashlib
+    import shutil
+
+    (repo / "a.py").write_text("x = 2\n")  # the dirty tracked baseline amicus replays
+    content = "".join(f"line {i:06d} of a generated file for the export\n" for i in range(4000))
+    monkeypatch.setenv("FAKE_CODEX_WRITE", "big.txt")
+    monkeypatch.setenv("FAKE_CODEX_WRITE_CONTENT", content)
+    target = scratch / "delegate.patch"
+    async with Client(app) as c:
+        started = (
+            await c.call_tool(
+                "amicus_delegate_async",
+                {"backend": "codex", "task": "add big", "workspace_root": str(repo)},
+            )
+        ).structured_content
+        await _wait_done(store, repo, started["job_id"])
+        body = (
+            await c.call_tool(
+                "amicus_job_export_diff", _export_args(started["job_id"], repo, target)
+            )
+        ).structured_content
+    export = body["meta"]["diff_export"]
+    assert body["meta"]["truncated"] is False and export["source"] == "diff"
+    assert 180_000 < export["bytes"] <= 200_000, export
+    assert hashlib.sha256(target.read_bytes()).hexdigest() == export["sha256"]
+    first, *rest = _recipe_blocks()
+    env = {**os.environ, "SCRATCH": str(scratch / "wt"), "RETURNED_DIFF": str(target)}
+    if shutil.which("shasum"):
+        [checksum] = [b for b in rest if "shasum" in b]
+        out = subprocess.run(
+            ["bash", "-c", checksum], cwd=repo, env=env, check=True, capture_output=True, text=True
+        ).stdout
+        assert out.split()[0] == export["sha256"]
+    subprocess.run(["bash", "-ec", first], cwd=repo, env=env, check=True, capture_output=True)
+    assert (scratch / "wt" / "big.txt").read_text() == content
+    assert (scratch / "wt" / "a.py").read_text() == "x = 2\n"
+    assert not (repo / "big.txt").exists()

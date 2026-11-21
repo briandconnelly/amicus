@@ -129,7 +129,7 @@ its quota.
 | Verbs — paid | `amicus_consult`, `amicus_review_changes`, `amicus_delegate`, `amicus_adversarial_review` |
 | Previews — free | `amicus_review_changes_dry_run` (review), `amicus_delegate_dry_run` |
 | Background twins — paid | the four verbs again, each with an `_async` suffix |
-| Jobs — free | `amicus_job_status`, `amicus_job_result`, `amicus_job_consume_result`, `amicus_job_list`, `amicus_job_cancel` |
+| Jobs — free | `amicus_job_status`, `amicus_job_result`, `amicus_job_consume_result`, `amicus_job_export_diff`, `amicus_job_list`, `amicus_job_cancel` |
 
 Not every backend does everything:
 
@@ -169,6 +169,11 @@ does today.
   recorded since delivery tracking (#244), whichever release recorded it. When only running jobs
   and such results remain, a new paid call is refused with `job_cap_reached` instead ([ADR 0038](docs/adr/0038-the-job-cap-never-evicts-an-unreturned-result.md)). It can
   quote what you sent. Your inputs themselves are never written there ([ADR 0035](docs/adr/0035-a-backend-answer-is-kept-on-the-job-record.md)).
+- **A delegate's diff is written to one other place only when you ask**:
+  `amicus_job_export_diff` writes it to a new file at the absolute path you name, mode `0o600`,
+  never overwriting anything and never inside the job store, and returns its byte count and
+  SHA-256 in `meta.diff_export`. That file is yours to delete; the job retention above does not
+  cover it ([ADR 0054](docs/adr/0054-a-delegates-diff-can-be-exported-to-a-path-the-caller-names.md)).
 - Codex, Pi and Claude run with their session persistence disabled.
 
 ## Configuration
