@@ -41,7 +41,7 @@ statement — this list is a map, not a second copy.
 | You draft, a backend critiques, you revise | declared review–revise | [review–revise](references/review-revise.md) |
 | Two or more finalized candidates, nothing cheaper tells them apart, and a backend that wrote none of them compares them | blind comparison | [blind comparison](references/blind-comparison.md) |
 | Preview a review's or delegate's scope, size, and resolved options before spending | `amicus_review_changes_dry_run` / `amicus_delegate_dry_run` (free) | [active workflows](references/active-workflows.md) |
-| Model slugs and reasoning-effort sets before overriding `model` or `reasoning_effort` | `amicus_models` (free) | — |
+| Model slugs and efforts before overriding `model` or `reasoning_effort` | `amicus_models` (free) | — |
 | Full tool inventory, fingerprint, and error catalog | `amicus_capabilities` (free) | — |
 | Poll, fetch, list, or cancel a background job | `amicus_job_status` / `amicus_job_result` / `amicus_job_consume_result` / `amicus_job_list` / `amicus_job_cancel` (all free) | [sync vs async](references/sync-vs-async.md) |
 | An optional parameter, an idempotency key, a returned error, or a host's denial of an amicus call | the tool already selected; a denial is reported, never worked around | [options and errors](references/options-and-errors.md) |
@@ -59,8 +59,8 @@ a rule here does.
 ### Discovery
 
 - **Call `amicus_backends(detail="full")` before the first paid call of a session.** Its
-  per-backend report, including the disclosures the default `summary` leaves out, is what makes
-  the remaining discovery rules checkable.
+  per-backend report, with the disclosures the default `summary` omits, makes the remaining
+  discovery rules checkable.
 - **Pass only a backend reported `enabled: true` and `status.installed: true` that is ready for
   the model the call will run: `status.authenticated: true`, or, for `pi`, an exact `model` the
   same call passes that `amicus_models(backend="pi")` lists, or, past a `truncated` listing's
@@ -87,11 +87,11 @@ This is the one statement of the routing procedure;
 [choosing a backend](references/choosing-a-backend.md) has worked examples of it.
 
 - **Resolve the harness and the model before choosing the verb, and name both, and the provider
-  the call sends to, before the first paid call.** The kind of work the request asks for is an
-  input to that resolution: a harness that lacks its verb is not a route. What waits until the
+  the call sends to, before the first paid call.** The kind of work asked for is an input to
+  that resolution: a harness that lacks its verb is not a route. What waits until the
   route is resolved is selecting the tool and reading its references. Where the call takes a
   harness's default model and no surface reports which model that is, name it as that harness's
-  default rather than guessing a slug.
+  default rather than guess a slug.
 - **Let a named harness win.** `codex`, `claude` or Claude Code, and `pi` select that harness,
   whatever the capitalization, and a model named alongside it is passed as that harness's
   `model`. A `provider/id` named beside a harness other than `pi` is passed only when
@@ -112,9 +112,10 @@ This is the one statement of the routing procedure;
   separate choice for the user.
 - **Learn what `pi` can reach from `amicus_models(backend="pi")`, never from provider
   configuration.** A missing or truncated listing does not prove a model unreachable: say you
-  cannot vouch for it rather than calling it unavailable. Provider configuration does not
+  cannot vouch for it, not that it is unavailable. Provider configuration does not
   establish which model a harness runs either; never inspect a user's to find out.
-- **Take `reasoning_effort` from the chosen row's `supported_reasoning_efforts`.**
+- **Take `reasoning_effort` from the row's `advertised_reasoning_efforts` (`[]`: pass none),
+  or, if `null`, from `supported_reasoning_efforts`.**
 - **Ask the user once, before spending, only when the routes that still match after free
   discovery differ in spend, exposure, containment or verb.** This limits questions about
   which route to take. Consent for a call the user did not ask for is a separate question,
