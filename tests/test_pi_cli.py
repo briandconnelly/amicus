@@ -194,6 +194,26 @@ def test_an_output_reservation_402_without_figures_still_classifies():
     assert f.retryable is False and f.details == {"field": "model"}
 
 
+@pytest.mark.parametrize("affordable", ["429", "401", "1429"])
+def test_an_output_reservation_402_beats_the_generic_signatures(affordable):
+    """Copilot review of #543: the figures can hold a rate-limit or auth status."""
+    message = _RESERVATION_402.replace("454814", affordable)
+    f = _classify(_run(exit_code=0), stop_reason="error", error_message=message)
+    assert f.code == "nonzero_exit" and f.retryable is False and f.retry_after_ms is None
+    assert f.details is not None and f.details["reason"].endswith(f"covers {affordable}")
+
+
+def test_an_output_reservation_402_detail_is_still_sanitized():
+    secret = "sk-" + "c" * 32
+    f = _classify(_run(stderr=f"{_RESERVATION_402} token={secret}", exit_code=1))
+    assert f.retryable is False and secret not in f.detail and "pi exited 1" in f.detail
+
+
+def test_the_reservation_repair_names_the_agent_dir_override():
+    f = _classify(_run(exit_code=0), stop_reason="error", error_message=_RESERVATION_402)
+    assert f.repair is not None and "$PI_CODING_AGENT_DIR" in (f.repair.alternative or "")
+
+
 def test_another_402_stays_generic():
     f = _classify(_run(exit_code=0), stop_reason="error", error_message="402 Payment Required")
     assert f.code == "nonzero_exit" and f.retryable is None and f.repair is None

@@ -33,7 +33,8 @@ per-change, as its own lead says.
   call, so retrying cannot succeed. The error is still `nonzero_exit`, now with
   `temporary: false`, `details.field: "model"`, the requested and affordable token counts in
   `details.reason`, and a `correct_config` repair that names both remedies: add credit, or cap
-  the model's `maxTokens` in pi's `~/.pi/agent/models.json`. The README's pi section says the same.
+  the model's `maxTokens` in pi's `models.json` (in `$PI_CODING_AGENT_DIR` when set, otherwise
+  `~/.pi/agent/`). The README's pi section says the same.
 - Stopping a job that ran past its deadline no longer stalls every other job call the server
   is handling (#531). The first job read to find it overrun waited up to the terminate grace
   (5 s by default) for the worker to exit while holding the server's job lock, so status,
