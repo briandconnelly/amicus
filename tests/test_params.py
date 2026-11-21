@@ -126,6 +126,7 @@ def test_parameter_contracts_have_summary_and_full_and_point_at_the_resource():
         "workspace_root",
         "timeout_seconds",
         "detail",
+        "query",
     }
     for c in p.PARAMETER_CONTRACTS.values():
         assert c.summary and c.full
@@ -153,6 +154,7 @@ SELECTION_TIME_FACTS: dict[str, tuple[str, ...]] = {
     "backend_options": ("key or value", "pre-spend"),
     "timeout_seconds": ("10-600", "Keyed"),
     "detail": ("raw_response", "Delivery only"),
+    "query": ("filter", "omit for the plain listing"),
 }
 
 
@@ -162,6 +164,22 @@ def test_parameter_summary_is_one_line_and_keeps_its_selection_time_facts(name):
     assert len(summary.encode("utf-8")) <= SUMMARY_CEILING_BYTES, (name, len(summary))
     for fact in SELECTION_TIME_FACTS[name]:
         assert fact.lower() in summary.lower(), (name, fact)
+
+
+def test_the_query_contract_states_the_rules_a_caller_relies_on():
+    """#560, ADR 0053: the schema carries one line, so amicus://params carries the rest."""
+    full = p.PARAMETER_CONTRACTS["query"].full
+    for fact in (
+        "never passes a bound",
+        "highest rate across",
+        "max_across_tiers",
+        "first test that excludes it",
+        "same on every backend",
+        "omitted_by_limit",
+        "not evidence that a model is unavailable",
+        "Model policy runs first",
+    ):
+        assert fact in full, fact
 
 
 def test_selection_time_facts_cover_every_contract():

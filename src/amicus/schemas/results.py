@@ -698,6 +698,33 @@ _CATALOG_TRUNCATED_DESC = (
 publish.KEPT_DESCRIPTIONS.add(_CATALOG_TRUNCATED_DESC)
 
 
+_SELECTION_DESC = (
+    "Null without a query. With one: after model policy, each of `examined` rows is tested by "
+    "prefix, then context, then input price, then output price, and counted once, at the "
+    "first test that excludes it; the counts are disjoint and, with the rows returned, sum "
+    "to `examined`."
+)
+_SELECTION_UNKNOWN_DESC = (
+    "Rows excluded because the value a bound compares is unknown (null): unknown never "
+    "passes a bound."
+)
+_PRICE_BASIS_DESC = (
+    "max_across_tiers when a price bound or price sort ran: the highest rate across the base "
+    "rate and every tier."
+)
+publish.KEPT_DESCRIPTIONS.update({_SELECTION_DESC, _SELECTION_UNKNOWN_DESC, _PRICE_BASIS_DESC})
+
+
+class ModelSelection(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    examined: int
+    excluded_by_filter: int
+    excluded_unknown_context: int = Field(description=_SELECTION_UNKNOWN_DESC)
+    excluded_unknown_pricing: int = Field(description=_SELECTION_UNKNOWN_DESC)
+    omitted_by_limit: int
+    price_basis: Literal["max_across_tiers"] | None = Field(description=_PRICE_BASIS_DESC)
+
+
 class ModelCatalogResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
     ok: Literal[True] = True
@@ -723,6 +750,7 @@ class ModelCatalogResult(BaseModel):
             "the operator fixes it (see amicus_backends)."
         ),
     )
+    selection: ModelSelection | None = Field(default=None, description=_SELECTION_DESC)
     fingerprint: str = FINGERPRINT
     server_version: str | None = server_version_field()
 
