@@ -12,6 +12,7 @@ import errno
 import fcntl
 import json
 import os
+import subprocess
 import sys
 import threading
 import time
@@ -836,3 +837,258 @@ def test_an_interrupted_rollback_does_not_skip_the_rest(tmp_path):
         store._terminate_overruns(attempt)
     assert ran == ["interrupted", "next"]
     assert marker not in job_store._TERMINATING
+
+
+# A second server process sharing the state root: builds a store on the same root with
+# the same options, makes the calls named in its argument, and prints one JSON line. Its
+# own ``_terminate_pid_tree`` only records calls, so it never signals anything.
+_PEER = """
+import json, sys
+from pathlib import Path
+from amicus.jobs import store as job_store
+from amicus.jobs.store import JobCapReached, JobStore
+args = json.loads(sys.argv[1])
+opts = args["opts"]
+if opts.get("cleanup_root"):
+    opts["cleanup_root"] = Path(opts["cleanup_root"])
+store = JobStore(root=Path(args["root"]), **opts)
+calls = []
+job_store._terminate_pid_tree = lambda *a, **k: calls.append(1)
+out = {}
+if "status" in args["do"]:
+    out["status"] = store.status(args["cwd"], args["job_id"])["status"]
+if "start" in args["do"]:
+    try:
+        store.start(lambda jd: [sys.executable, "-c", "pass"], args["cwd"], kind="k")
+        out["start"] = "started"
+    except JobCapReached:
+        out["start"] = "cap"
+out["terminate_calls"] = len(calls)
+print(json.dumps(out))
+"""
+
+# A worker that holds its own ``worker.lock`` (so an unowned reader can tell it is
+# alive) and ignores SIGTERM, so only a SIGKILL stops it.
+_LOCKED_WORKER = (
+    "import fcntl, os, signal, time; signal.signal(signal.SIGTERM, signal.SIG_IGN); "
+    "fd = os.open('worker.lock', os.O_CREAT | os.O_RDWR, 0o600); "
+    "fcntl.flock(fd, fcntl.LOCK_EX); time.sleep(30)"
+)
+
+
+def _peer(store: JobStore, cwd: str, job_id: str, do: list[str]) -> dict:
+    opts = {
+        "ttl_seconds": store.ttl_seconds,
+        "max_seconds": store.max_seconds,
+        "max_count": store.max_count,
+        "cleanup_root": str(store.cleanup_root) if store.cleanup_root else None,
+        "cleanup_prefix": store.cleanup_prefix,
+        "terminate_grace_seconds": store.terminate_grace_seconds,
+    }
+    arg = {"root": str(store.root), "opts": opts, "cwd": cwd, "job_id": job_id, "do": do}
+    done = subprocess.run(
+        [sys.executable, "-c", _PEER, json.dumps(arg)],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=60,
+    )
+    return json.loads(done.stdout.strip().splitlines()[-1])
+
+
+def _locked_overrun_job(store: JobStore, cwd: str) -> tuple[str, int]:
+    job_id, _ = store.start(_factory(_LOCKED_WORKER), cwd, kind="k")
+    jd = store._job_dir(cwd, job_id)
+    deadline = time.monotonic() + _WAIT
+    while job_store._worker_lock_held(jd / "worker.lock") is not True:
+        assert time.monotonic() < deadline, "the worker never took its lock"
+        time.sleep(0.02)
+    meta = store._read_meta(jd)
+    meta["deadline_epoch"] = time.time() - 1
+    store._write_meta(jd, meta)
+    return job_id, meta["pid"]
+
+
+def _park_claimant(monkeypatch, peer, *, peer_first: bool = False) -> threading.Event:
+    """Patch this process's ``_terminate_pid_tree`` so the claimant runs the real one
+    (which reaps the worker) and then the peer, before returning; ``peer_first`` runs the
+    peer while the worker is still alive instead."""
+    real = job_store._terminate_pid_tree
+    parked = threading.Event()
+
+    def parked_terminate(pid, grace_seconds, **kwargs):
+        if peer_first:
+            peer()
+        real(pid, grace_seconds, **kwargs)
+        assert not job_store._pid_alive(pid)
+        if not peer_first:
+            peer()
+        parked.set()
+
+    monkeypatch.setattr(job_store, "_terminate_pid_tree", parked_terminate)
+    return parked
+
+
+def test_a_peer_process_reads_a_terminating_overrun_as_running(tmp_path, monkeypatch):
+    store = _store(tmp_path, terminate_grace_seconds=0.5)
+    cwd = str(tmp_path / "w")
+    job_id, _ = _locked_overrun_job(store, cwd)
+    jd = store._job_dir(cwd, job_id)
+    seen: dict = {}
+    parked = _park_claimant(monkeypatch, lambda: seen.update(_peer(store, cwd, job_id, ["status"])))
+    assert store.status(cwd, job_id)["status"] == "timeout"
+    assert parked.is_set()
+    assert seen["status"] == "running"
+    assert store.status(cwd, job_id)["status"] == "timeout"
+    assert "terminating" not in store._read_meta(jd)
+
+
+def test_a_peer_at_the_cap_does_not_evict_a_terminating_overrun(tmp_path, monkeypatch):
+    root = tmp_path / "wtroot"
+    root.mkdir()
+    store = _store(tmp_path, max_count=1, cleanup_root=root, cleanup_prefix="wt-")
+    store.terminate_grace_seconds = 0.5
+    cwd = str(tmp_path / "w")
+    job_id, _ = _locked_overrun_job(store, cwd)
+    declared_worktree = _declare(store, cwd, job_id, root)
+    seen: dict = {}
+    parked = _park_claimant(monkeypatch, lambda: seen.update(_peer(store, cwd, job_id, ["start"])))
+    assert store.status(cwd, job_id)["status"] == "timeout"
+    assert parked.is_set()
+    assert seen["start"] == "cap"  # JobCapReached in the peer
+    assert store.status(cwd, job_id)["status"] == "timeout"
+    assert not declared_worktree.exists()
+
+
+def test_a_peer_does_not_signal_a_job_another_process_is_terminating(tmp_path, monkeypatch):
+    store = _store(tmp_path, terminate_grace_seconds=0.5)
+    cwd = str(tmp_path / "w")
+    job_id, _ = _locked_overrun_job(store, cwd)
+    seen: dict = {}
+    parked = _park_claimant(
+        monkeypatch,
+        lambda: seen.update(_peer(store, cwd, job_id, ["status"])),
+        peer_first=True,
+    )
+    assert store.status(cwd, job_id)["status"] == "timeout"
+    assert parked.is_set()
+    assert seen["terminate_calls"] == 0
+
+
+def _claimed_job(store: JobStore, cwd: str, claim, *, kill: bool = True, owner=None):
+    """A job whose claimant died: its record carries ``claim``, ``terminate.lock`` exists
+    and is free."""
+    job_id, _ = store.start(_factory(_SLEEP), cwd, kind="k")
+    jd = store._job_dir(cwd, job_id)
+    meta = store._read_meta(jd)
+    pid = meta["pid"]
+    if kill:
+        job_store._kill_pid_tree(pid)
+    if owner is not None:
+        meta["owner"] = owner
+    meta["terminating"] = claim
+    store._write_meta(jd, meta)
+    (jd / "terminate.lock").touch()
+    return job_id, jd, pid
+
+
+def test_a_dead_claimants_job_is_finalized_by_the_next_reader(tmp_path):
+    store = _store(tmp_path)
+    cwd = str(tmp_path / "w")
+    claim = {"reason": "timeout", "epoch": time.time()}
+    job_id, jd, _ = _claimed_job(store, cwd, claim, owner="another-process")
+    assert store.status(cwd, job_id)["status"] == "timeout"
+    assert "terminating" not in store._read_meta(jd)
+
+
+def test_a_dead_claimants_live_worker_is_taken_over(tmp_path, monkeypatch):
+    store = _store(tmp_path)
+    cwd = str(tmp_path / "w")
+    claim = {"reason": "timeout", "epoch": time.time()}
+    job_id, _, pid = _claimed_job(store, cwd, claim, kill=False)
+    calls: list[int] = []
+
+    def fake_terminate(pid, grace_seconds, **kwargs):
+        calls.append(pid)
+        job_store._kill_pid_tree(pid)
+
+    monkeypatch.setattr(job_store, "_terminate_pid_tree", fake_terminate)
+    try:
+        assert store.status(cwd, job_id)["status"] == "timeout"
+        terminate_calls = len(calls)
+        assert terminate_calls == 1
+    finally:
+        job_store._kill_pid_tree(pid)
+
+
+def test_a_claimed_job_whose_result_reads_is_done_and_unclaimed(tmp_path):
+    store = _store(tmp_path)
+    cwd = str(tmp_path / "w")
+    claim = {"reason": "cancelled", "epoch": time.time()}
+    job_id, jd, _ = _claimed_job(store, cwd, claim)
+    (jd / "result.json").write_text('{"ok": true}')
+    assert store.status(cwd, job_id)["status"] == "done"
+    assert "terminating" not in store._read_meta(jd)
+
+
+def test_the_claimant_lock_is_released_after_finalization_and_after_an_error(tmp_path, monkeypatch):
+    store = _store(tmp_path)
+    cwd = str(tmp_path / "w")
+    job_id, _ = _overrun_job(store, cwd)
+    jd = store._job_dir(cwd, job_id)
+    monkeypatch.setattr(
+        job_store, "_terminate_pid_tree", lambda pid, *a, **k: job_store._kill_pid_tree(pid)
+    )
+    assert store.status(cwd, job_id)["status"] == "timeout"
+    assert job_store._worker_lock_held(jd / "terminate.lock") is False
+
+    job_id, pid = _overrun_job(store, cwd)
+    jd = store._job_dir(cwd, job_id)
+
+    def boom(pid, grace_seconds, **kwargs):
+        raise RuntimeError("signal failed")
+
+    monkeypatch.setattr(job_store, "_terminate_pid_tree", boom)
+    try:
+        with pytest.raises(RuntimeError):
+            store.status(cwd, job_id)
+        assert job_store._worker_lock_held(jd / "terminate.lock") is False
+    finally:
+        job_store._kill_pid_tree(pid)
+
+
+# Regression guards: these pass before the change.
+@pytest.mark.parametrize(
+    "claim",
+    ["yes", {"reason": "paused", "epoch": 1}, {"reason": "timeout", "epoch": "x"}],
+)
+def test_a_malformed_claim_is_ignored(tmp_path, claim):
+    store = _store(tmp_path)
+    cwd = str(tmp_path / "w")
+    job_id, _, _ = _claimed_job(store, cwd, claim)
+    assert store.status(cwd, job_id)["status"] == "failed"
+
+
+def test_an_unwritable_claim_still_terminates_and_times_out(tmp_path, monkeypatch):
+    store = _store(tmp_path)
+    cwd = str(tmp_path / "w")
+    job_id, pid = _overrun_job(store, cwd)
+    real_write = JobStore._write_meta
+    claim_write_attempted = False
+
+    def write(jd, meta):
+        nonlocal claim_write_attempted
+        if "terminating" in meta and meta.get("terminal_status") is None:
+            claim_write_attempted = True
+            raise OSError(errno.ENOSPC, "no space left")
+        real_write(jd, meta)
+
+    monkeypatch.setattr(JobStore, "_write_meta", staticmethod(write))
+    monkeypatch.setattr(
+        job_store, "_terminate_pid_tree", lambda pid, *a, **k: job_store._kill_pid_tree(pid)
+    )
+    try:
+        assert store.status(cwd, job_id)["status"] == "timeout"
+        assert claim_write_attempted
+    finally:
+        job_store._kill_pid_tree(pid)
