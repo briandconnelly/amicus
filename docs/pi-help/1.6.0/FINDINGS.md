@@ -11,7 +11,7 @@ No model call was made for the captures; the live suite below did spend quota.
   Every flag the amicus contract sends is still advertised with the same text, and the `--thinking` vocabulary is unchanged.
 - `list-models-shape.txt`: the first four lines of `pi --list-models kimi-k3` with the suppression flags.
   The columns are unchanged; trailing whitespace was stripped.
-- `formatTokenCount` in `dist/cli/list-models.js` of `@earendil-works/pi-coding-agent` is byte-identical to 1.5.2's, so `amicus.backends.pi.models.tokens` still reverses it exactly.
+- `formatTokenCount` in `dist/cli/list-models.js` of `@earendil-works/pi-coding-agent` is byte-identical to 1.5.2's, so `amicus.backends.pi.models.tokens` still decodes the same rounded display format, within the rounding error that 1.5.2's findings state; the catalog does not expose exact limits.
 - `pi auth check --json --no-refresh --model openrouter/moonshotai/kimi-k3` printed `{"status":"ready","provider":"openrouter","authType":"oauth"}` and exited 0, the shape amicus reads.
 
 - The events the spend cap gates on (#454) were re-read in the installed 1.6.0 release on 2026-11-20.
@@ -28,7 +28,7 @@ This is a compatibility check, not rule-20 release evidence.
 ## A precondition the first run hit
 
 The first run failed every paid test with an OpenRouter 402, and pi 1.5.2 failed the same call the same way, so it is not a 1.6.0 change.
-pi requests the model's whole output limit as `max_tokens` (943 718 for kimi-k3), and OpenRouter refuses a request whose worst-case cost exceeds the account balance, here about $15 at $16 per million output tokens.
+pi requests the model's whole output limit as `max_tokens` (943 718 for kimi-k3, per OpenRouter's model listing; `--list-models` shows it rounded as `943.7K`), and OpenRouter refuses a request whose worst-case cost exceeds the account balance, here about $15 at $16 per million output tokens.
 A live run on kimi-k3 therefore needs a balance above that worst case, whatever the run actually spends.
 
 ## What was not tested
