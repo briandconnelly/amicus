@@ -41,7 +41,7 @@ statement — this list is a map, not a second copy.
 | You draft, a backend critiques, you revise | declared review–revise | [review–revise](references/review-revise.md) |
 | Two or more finalized candidates, nothing cheaper tells them apart, and a backend that wrote none of them compares them | blind comparison | [blind comparison](references/blind-comparison.md) |
 | Preview a review's or delegate's scope, size, and resolved options before spending | `amicus_review_changes_dry_run` / `amicus_delegate_dry_run` (free) | [active workflows](references/active-workflows.md) |
-| Model slugs and efforts before overriding `model` or `reasoning_effort` | `amicus_models` (free) | — |
+| Slugs, efforts, prices for `model` or `reasoning_effort` | `amicus_models` (free; `query` filters) | — |
 | Full tool inventory, fingerprint, and error catalog | `amicus_capabilities` (free) | — |
 | Poll, fetch, list, or cancel a background job | `amicus_job_status` / `amicus_job_result` / `amicus_job_consume_result` / `amicus_job_list` / `amicus_job_cancel` (all free) | [sync vs async](references/sync-vs-async.md) |
 | An optional parameter, an idempotency key, a returned error, or a host's denial of an amicus call | the tool already selected; a denial is reported, never worked around | [options and errors](references/options-and-errors.md) |
