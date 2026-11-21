@@ -35,6 +35,11 @@ per-change, as its own lead says.
 
 ### Changed
 
+- `docs/claude-help/2.1.330/` records the `--help` of Claude Code 2.1.330, which every 2.x
+  release already satisfied: the flags are unchanged and only descriptions are reworded, and the
+  2.1.326 to 2.1.330 notes change no flag amicus sends; `claude -p` writing to a full disk now
+  exits 1 instead of 0. No paid call was made.
+
 - `amicus_models`'s `max_output_tokens` description now says that pi requests that whole limit
   on every call, so a prepaid provider may refuse a call the balance does not cover at the
   output price (#542). The fingerprint moves to `amicus/0.1/schema-75`.
