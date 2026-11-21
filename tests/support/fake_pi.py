@@ -9,6 +9,12 @@ Probes, matched on the exact argv amicus sends:
 - `--list-models [term] <suppression flags>` prints FAKE_PI_MODELS (default: the header and
   one `openrouter moonshotai/kimi-k3` row), keeping only rows whose joined `provider/model`
   contains the term, and pi's `No models matching` line when none does.
+- `--mode rpc --no-session <suppression flags>` answers each `get_available_models` request
+  line on stdin with one reply line, and any other line with pi's parse failure. The reply is
+  FAKE_PI_RPC_REPLY verbatim when set (so a test can send anything, or nothing with ""), else
+  a success reply whose `models` is FAKE_PI_RPC_MODELS (a JSON array; default: the one
+  `openrouter` `moonshotai/kimi-k3` model with a price). It exits FAKE_PI_RPC_EXIT (default 0),
+  and like pi 1.6.0 prints nothing when stdin holds no request.
 - `auth check --json --no-refresh --model <m>` prints FAKE_PI_AUTH, the raw JSON line
   (default `{"status":"ready","provider":"openrouter","authType":"api_key"}`), and exits 0
   for ready, 1 for not_ready and 2 otherwise.
@@ -43,6 +49,20 @@ SUPPRESSION_FLAGS = [
 _HEADER = "provider    model                     context  max-out  thinking  images"
 _ROW = "openrouter  moonshotai/kimi-k3        1.0M     943.7K   yes       yes"
 _DEFAULT_MODELS = f"{_HEADER}\n{_ROW}\n"
+_DEFAULT_RPC_MODELS = [
+    {
+        "id": "moonshotai/kimi-k3",
+        "name": "Kimi K3",
+        "api": "openai-completions",
+        "provider": "openrouter",
+        "baseUrl": "https://openrouter.ai/api/v1",
+        "reasoning": True,
+        "input": ["text", "image"],
+        "contextWindow": 1048576,
+        "maxTokens": 943718,
+        "cost": {"input": 0.5, "output": 16, "cacheRead": 0.1, "cacheWrite": 0},
+    }
+]
 _DEFAULT_AUTH = '{"status":"ready","provider":"openrouter","authType":"api_key"}'
 _DEFAULT_ANSWER = json.dumps(
     {
@@ -78,6 +98,34 @@ def _list_models(term: str | None) -> int:
     return 0
 
 
+def _rpc_models() -> int:
+    reply = os.environ.get("FAKE_PI_RPC_REPLY")
+    if reply is None:
+        raw = os.environ.get("FAKE_PI_RPC_MODELS")
+        models = json.loads(raw) if raw is not None else _DEFAULT_RPC_MODELS
+        reply = json.dumps(
+            {
+                "type": "response",
+                "command": "get_available_models",
+                "success": True,
+                "data": {"models": models},
+            }
+        )
+    for line in sys.stdin.read().splitlines():
+        if not line.strip():
+            continue
+        try:
+            request = json.loads(line)
+        except json.JSONDecodeError:
+            request = None
+        if isinstance(request, dict) and request.get("type") == "get_available_models":
+            if reply:
+                print(reply)
+        else:
+            print('{"type":"response","command":"parse","success":false,"error":"bad"}')
+    return int(os.environ.get("FAKE_PI_RPC_EXIT", "0"))
+
+
 def _auth_check(argv: list[str]) -> int:
     if argv[:4] != ["auth", "check", "--json", "--no-refresh"] or argv[4:5] != ["--model"]:
         print("error: unknown option", file=sys.stderr)
@@ -106,6 +154,8 @@ def _probe(argv: list[str]) -> int | None:
         return int(os.environ.get("FAKE_PI_HELP_EXIT", "0"))
     if stripped is not None and stripped[:1] == ["--list-models"] and len(stripped) <= 2:
         return _list_models(stripped[1] if len(stripped) == 2 else None)
+    if stripped == ["--mode", "rpc", "--no-session"]:
+        return _rpc_models()
     if "-p" not in argv:
         print("error: unknown command", file=sys.stderr)
         return 2

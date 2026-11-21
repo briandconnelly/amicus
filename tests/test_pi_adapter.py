@@ -631,6 +631,7 @@ def test_a_model_past_a_truncated_listing_is_checked_by_its_own_lookup(monkeypat
         return "\n".join([header, *rows]) + "\n"
 
     monkeypatch.setattr(pi_models, "_probe", probe)
+    monkeypatch.setattr(pi_models, "_probe_details", lambda _binary, _cwd: None)
     monkeypatch.setattr(pi_models, "probe_cwd", lambda _cfg: "/probe-cwd")
     backend = pf.make_backend()
     real = pi_models.PiModels(backend._config, backend._binary)

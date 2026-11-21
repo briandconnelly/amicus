@@ -663,6 +663,38 @@ def test_the_pi_model_section_names_only_fields_the_listing_carries():
     assert "`null` is unknown, neither zero nor unlimited" in _flat(_pi_model_section())
 
 
+def test_the_pi_model_section_names_the_pricing_fields_the_listing_carries():
+    # The same guard for the price: every field the section tells a host to read exists on
+    # the published models, and the two readings a bare number invites are ruled out in words.
+    from amicus.schemas.results import ModelInfo, ModelPricingInfo, ModelPricingTier
+
+    section = _flat(_pi_model_section())
+    [sources] = [
+        row for row in _pi_model_section().splitlines() if row.startswith("| What pi's catalog")
+    ]
+    assert set(re.findall(r"`([a-z_]+)`", sources)) == {"pricing"} <= set(ModelInfo.model_fields)
+    [bullet] = re.findall(r"\*\*A row's `pricing` is a snapshot.*?(?=- \*\*)", section)
+    named = set(re.findall(r"`([a-z_.]+)`", bullet))
+    assert named == {
+        "pricing",
+        "input",
+        "output",
+        "cache_read",
+        "cache_write",
+        "tiers",
+        "input_tokens_above",
+        "null",
+        "meta.usage.cost_usd",
+        "max_output_tokens",
+        "pricing.output",
+    }
+    assert {"input", "output", "cache_read", "cache_write", "tiers"} == set(
+        ModelPricingInfo.model_fields
+    )
+    assert "input_tokens_above" in ModelPricingTier.model_fields
+    assert "not a quote" in bullet and "`null` is unknown, never free" in bullet
+
+
 def test_the_pi_model_section_states_the_parsers_own_error_bounds():
     # pi prints one decimal of K or M, so half of a tenth of the unit is the most the parsed
     # figure can be off by. The skill quotes both bounds; they are derived, not remembered.

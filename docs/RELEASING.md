@@ -124,6 +124,15 @@ A flag counts only where `--help` declares it as an option, never where another 
 A deprecated backend that is behind `latest` on a version the contract supports is not a failure: the script prints a `frozen:` line for it instead, because no newer release of it will be validated; ahead of `latest`, a prerelease, or a version outside the contract still fails for it.
 A version `FAIL` says which way the installed version is off and how to install the version `latest` names: behind means upgrade to it, and ahead means a build from another dist-tag, so pin back to it or wait for `latest` to advance.
 
+That script cannot see whether pi still answers the request amicus reads model prices from, because `--help` does not describe it (ADR 0051), so check that by hand; it spends nothing.
+
+```sh
+uv run python -c "import os; from amicus.backends import pi; rows = pi.plugin(dict(os.environ)).models.read(force=True).models; print(len(rows), 'rows,', sum(r.pricing is not None for r in rows), 'priced')"
+```
+
+Yes is a line such as `368 rows, 349 priced`, with both numbers above zero.
+Rows with none priced means pi's `get_available_models` reply changed or could not be read: `amicus_models` still lists the models, without prices, so decide whether to fix that before releasing rather than discover it afterwards.
+
 When a CLI's version has no capture of its own, commit one with the change that adds support for it, so the next release has something to compare against.
 
 ```sh

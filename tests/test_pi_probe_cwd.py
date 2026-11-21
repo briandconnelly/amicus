@@ -40,12 +40,18 @@ def test_every_free_probe_runs_from_the_state_dir_not_the_server_cwd(
     plugin = pi_pkg.plugin(environ)
 
     plugin.status.probe()  # --version, auth check, --help
-    plugin.models.read(force=True)  # --list-models
+    plugin.models.read(force=True)  # --list-models, then the RPC listing (--mode)
     plugin.models.lookup(MODEL)  # --list-models <model>
     assert plugin.backend.auth_probe() is True  # auth check through the adapter's seam
 
     records = _records(log)
-    assert {kind for kind, _ in records} == {"--version", "auth", "--help", "--list-models"}
+    assert {kind for kind, _ in records} == {
+        "--version",
+        "auth",
+        "--help",
+        "--list-models",
+        "--mode",
+    }
     expected = os.path.realpath(state / pi_config.PROBE_CWD_DIRNAME)
     assert {os.path.realpath(cwd) for _, cwd in records} == {expected}
     assert (ws / ".pi" / "commands").is_dir() and not (ws / ".pi" / "prompts").exists()
@@ -198,7 +204,13 @@ def test_a_symlinked_probe_dir_never_lets_a_probe_migrate_the_workspace(
     plugin.models.lookup(MODEL)
 
     records = _records(log)
-    assert {kind for kind, _ in records} == {"--version", "auth", "--help", "--list-models"}
+    assert {kind for kind, _ in records} == {
+        "--version",
+        "auth",
+        "--help",
+        "--list-models",
+        "--mode",
+    }
     assert os.path.realpath(ws) not in {os.path.realpath(cwd) for _, cwd in records}
     assert (ws / ".pi" / "commands").is_dir() and not (ws / ".pi" / "prompts").exists()
 

@@ -15,6 +15,7 @@ No model call was made for the captures; the live suite below did spend quota.
   `formatTokenCount` in the installed 1.5.2 release (`dist/cli/list-models.js` of `@earendil-works/pi-coding-agent`, read 2026-11-15) prints a count below 1000 as is, and otherwise divides by 1000 for `K` or by 1 000 000 for `M` and keeps one decimal unless the quotient is whole.
   So `131.1K` stands for a count within 50 of 131 100, and `1.0M` for one within 50 000 of 1 000 000; `amicus.backends.pi.models.tokens` reverses exactly that and reads any other shape as unknown.
   `pi --list-models` has no JSON form on this release, so the exact counts are not available without a model call.
+  That last clause was wrong: `pi --mode rpc` answers `get_available_models` with the exact counts and no model call on this release too, as `../1.6.0/FINDINGS.md` records for issue #554.
 - `pi auth --help` on 1.5.2 lists `pi auth login <provider>` and `pi auth logout <provider>`, which 1.5.0 lacked.
   amicus's login hint still names `/login` and the API-key variable, which work on both releases.
 
