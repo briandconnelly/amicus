@@ -831,3 +831,30 @@ def test_a_consult_that_wraps_an_object_in_prose_keeps_the_whole_answer():
     assert structured is None
     out = fz.consult_result(ExecResult(answer=answer, structured=structured), Meta())
     assert out["ok"] is True and out["summary"] == answer
+
+
+_CAVEAT = "Review coverage was partial (truncated). "
+
+
+@pytest.mark.parametrize("verb", ["review", "adversarial"])
+def test_a_concerns_verdict_over_partial_coverage_stands_with_a_caveat(verb):
+    build = fz.review_result if verb == "review" else fz.adversarial_result
+    payload = _structured(verdict="concerns")
+    out = build(
+        ExecResult(answer=json.dumps(payload)), Meta(), _TRUNCATED, fakeplugin.make_plugin()
+    )
+    assert out["verdict"] == "concerns"
+    assert out["summary"].startswith(_CAVEAT)
+
+
+def test_a_lost_container_and_partial_coverage_keep_a_fail_and_its_caveat():
+    payload = _structured(verdict="fail", confidence="high", findings={"one": "two"})
+    out = fz.review_result(
+        ExecResult(answer=json.dumps(payload)), Meta(), _TRUNCATED, fakeplugin.make_plugin()
+    )
+    assert "invalid_container" in out["findings_diagnostics"]["reasons"]
+    assert (out["verdict"], out["confidence"]) == ("fail", "high")
+    assert out["summary"] == (
+        "Review coverage was partial (truncated). "
+        "This verdict applies to the reviewed scope. Looks fine"
+    )

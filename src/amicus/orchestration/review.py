@@ -132,9 +132,21 @@ def build_coverage(scope: str | None, diff: DiffResult | None, *, focused: bool)
 def apply_coverage(
     verdict: str, confidence: str, summary: str, coverage: Coverage
 ) -> tuple[str, str, str]:
-    """A model `pass` over partly reviewed code is delivered as unknown/low with a caveat;
-    a concrete fail/concerns stands."""
+    """Fold partial coverage into the verdict and the summary (issue #555).
+
+    A model `pass` over partly reviewed code is delivered as unknown/low with a caveat. A
+    concrete `concerns` or `fail` keeps its verdict and confidence, because a finding stands
+    on its own, and its summary is prefixed with the reasons, so a reader who never looks at
+    `coverage` still learns the verdict covers only the reviewed scope. A model `unknown`
+    and any verdict over complete coverage pass through unchanged."""
     reasons = coverage.omission_reasons
+    if reasons and verdict in ("concerns", "fail"):
+        return (
+            verdict,
+            confidence,
+            f"Review coverage was partial ({', '.join(reasons)}). "
+            f"This verdict applies to the reviewed scope. {summary}",
+        )
     if reasons and verdict == "pass":
         return (
             "unknown",

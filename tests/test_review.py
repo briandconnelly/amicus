@@ -10,6 +10,7 @@ from tests.support import fakeplugin
 from amicus.orchestration import review
 from amicus.orchestration.gitdiff import DiffResult, DiffSummary, InvalidUntrackedError
 from amicus.request import RunSpec, meta_for
+from amicus.schemas.results import Coverage
 
 
 def _spec(cwd, **kw):
@@ -193,7 +194,63 @@ def test_build_coverage_and_the_fold_that_reads_it():
         )
         and s.endswith("fine")
     )
-    assert review.apply_coverage("fail", "high", "bad", commit) == ("fail", "high", "bad")
+    v, c, s = review.apply_coverage("fail", "high", "bad", commit)
+    assert (v, c) == ("fail", "high") and s == (
+        "Review coverage was partial (truncated, redacted). "
+        "This verdict applies to the reviewed scope. bad"
+    )
+
+
+REASONS = ["untracked_omitted", "tree_changed_during_gather", "truncated", "redacted", "focused"]
+
+
+def _coverage_with(*reasons):
+    """A `Coverage` built through its validator: the two working-tree reasons need the
+    untracked counts, and `untracked_omitted` needs an omitted file."""
+    working_tree = {"untracked_omitted", "tree_changed_during_gather"} & set(reasons)
+    counts = {}
+    if working_tree:
+        omitted = 1 if "untracked_omitted" in reasons else 0
+        counts = dict(
+            untracked_files_detected=1,
+            untracked_files_included=1 - omitted,
+            untracked_files_omitted=omitted,
+        )
+    return Coverage(
+        status="partial" if reasons else "complete", omission_reasons=list(reasons), **counts
+    )
+
+
+@pytest.mark.parametrize("verdict", ["concerns", "fail"])
+@pytest.mark.parametrize("reason", REASONS)
+def test_a_negative_verdict_over_partial_coverage_keeps_its_verdict_and_says_so(verdict, reason):
+    coverage = _coverage_with(reason)
+    assert coverage.omission_reasons == [reason]
+    assert review.apply_coverage(verdict, "high", "bad", coverage) == (
+        verdict,
+        "high",
+        f"Review coverage was partial ({reason}). This verdict applies to the reviewed scope. bad",
+    )
+
+
+def test_the_caveat_joins_reasons_in_their_fixed_order():
+    coverage = _coverage_with("truncated", "redacted")
+    assert review.apply_coverage("fail", "low", "bad", coverage)[2].startswith(
+        "Review coverage was partial (truncated, redacted). "
+    )
+
+
+@pytest.mark.parametrize("verdict", ["pass", "concerns", "fail", "unknown"])
+def test_complete_coverage_changes_nothing(verdict):
+    assert review.apply_coverage(verdict, "high", "s", _coverage_with()) == (verdict, "high", "s")
+
+
+def test_a_model_unknown_over_partial_coverage_is_left_alone():
+    assert review.apply_coverage("unknown", "low", "s", _coverage_with("truncated")) == (
+        "unknown",
+        "low",
+        "s",
+    )
 
 
 def test_build_coverage_breaks_redaction_down_only_from_what_the_split_fields_saw():

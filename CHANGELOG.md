@@ -44,6 +44,10 @@ per-change, as its own lead says.
 
 ### Changed
 
+- A `concerns` or `fail` review verdict over partial coverage keeps its verdict and confidence
+  and now says so in its `summary`, which begins `Review coverage was partial (<reasons>). This
+  verdict applies to the reviewed scope.` (#555). Before, nothing but `coverage` showed that such
+  a verdict covered only part of the change. A `pass` is folded as before.
 - codex-cli 0.171 is a supported version, so `amicus_backends` no longer warns on it; 0.170 was
   never checked and stays outside the set. 0.171.0 was checked against 0.169.0: `--help` and
   `login --help` are identical, and `exec --help` and `exec review --help` only add `--remote`
