@@ -92,23 +92,19 @@ bold after its number; the response contract below is written in those keys.
    non-empty, or whose `meta.diff_export.source` is `partial` (a stopped run's incomplete diff)
    is not the whole change, so it cannot support an `accept` verdict on the whole change. The
    file is yours to delete when the review is done; amicus's job retention does not cover it.
-   Then build the worktree, checking the file's digest before the last command applies it:
+   Then build the worktree, with `EXPECTED_SHA256` set to `meta.diff_export.sha256`; the
+   `shasum` line stops the recipe before the last command applies a file whose digest differs:
 
    ```sh
    git -c core.hooksPath=/dev/null -c core.fsmonitor=false worktree add --detach "$SCRATCH" HEAD
    git -c core.hooksPath=/dev/null -c core.fsmonitor=false diff --no-ext-diff --no-textconv --binary HEAD \
      | git -C "$SCRATCH" -c core.hooksPath=/dev/null -c core.fsmonitor=false apply --index
+   echo "$EXPECTED_SHA256  $RETURNED_DIFF" | shasum -a 256 -c -
    git -C "$SCRATCH" -c core.hooksPath=/dev/null -c core.fsmonitor=false apply "$RETURNED_DIFF"
    ```
 
-   Before that last `git apply`, check the exported file:
-
-   ```sh
-   shasum -a 256 "$RETURNED_DIFF"   # must equal meta.diff_export.sha256
-   ```
-
-   A mismatch means the file is not what amicus wrote: do not apply it, and report this check as
-   `not run`.
+   Run the commands in order, stopping at the first that fails. A `shasum` failure means the file
+   is not what amicus wrote: do not apply it, and report this check as `not run`.
 
    Run the first block from the user's checkout, with `SCRATCH` a new path outside it and `RETURNED_DIFF` the
    file `amicus_job_export_diff` wrote (above). The second command replays the uncommitted tracked changes;

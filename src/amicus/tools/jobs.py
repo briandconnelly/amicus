@@ -320,16 +320,6 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
         # lookup, corrupt or incompatible outcome is that tool's (#556). Two repairs differ,
         # because following that tool's would return the diff inline: an unreadable result
         # repeats this export, and a running job's prose finishes with this export.
-        if any(0xD800 <= ord(c) <= 0xDFFF for c in path):
-            reason = "contains a surrogate code point"
-            resolved, source, roots_source, err = await resolve(ctx, workspace_root)
-            return err or error_envelope(
-                "invalid_arguments",
-                f"amicus_job_export_diff: 1 invalid argument(s): path — {reason}",
-                lookup.job_meta(resolved, source, roots_source),
-                failing_tool="amicus_job_export_diff",
-                invalid_arguments=[InvalidArgument(field="path", reason=reason)],
-            )
         # The path is the caller's own value, not a prompt input, and a repair's arguments
         # must be a complete call, so the retry carries it.
         retry_args = {**job_status_arguments(job_id, workspace_root), "path": path}

@@ -283,3 +283,13 @@ def test_cleanup_never_unlinks_a_file_swapped_in_under_the_name(
         write_diff_file(str(target), DIFF, job_store_root=str(store_root))
     monkeypatch.undo()
     assert target.read_bytes() == b"someone else's"
+
+
+def test_a_lone_surrogate_in_the_file_name_is_not_a_file_name(
+    scratch: Path, store_root: Path
+) -> None:
+    assert _refused(str(scratch) + "/\ud800.patch", store_root) == "not_a_file_name"
+
+
+def test_a_lone_surrogate_in_the_parent_is_parent_missing(scratch: Path, store_root: Path) -> None:
+    assert _refused(str(scratch) + "/\ud800/out.patch", store_root) == "parent_missing"

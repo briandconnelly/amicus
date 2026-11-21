@@ -1833,7 +1833,6 @@ async def test_the_review_recipe_runs_end_to_end_on_a_large_exported_diff(
     tracked baseline, check its digest, and apply it in a scratch worktree with the hardened
     commands. The patch is generated from this test's own literals."""
     import hashlib
-    import shutil
 
     (repo / "a.py").write_text("x = 2\n")  # the dirty tracked baseline amicus replays
     content = "".join(f"line {i:06d} of a generated file for the export\n" for i in range(4000))
@@ -1857,14 +1856,21 @@ async def test_the_review_recipe_runs_end_to_end_on_a_large_exported_diff(
     assert body["meta"]["truncated"] is False and export["source"] == "diff"
     assert 180_000 < export["bytes"] <= 200_000, export
     assert hashlib.sha256(target.read_bytes()).hexdigest() == export["sha256"]
-    first, *rest = _recipe_blocks()
-    env = {**os.environ, "SCRATCH": str(scratch / "wt"), "RETURNED_DIFF": str(target)}
-    if shutil.which("shasum"):
-        [checksum] = [b for b in rest if "shasum" in b]
-        out = subprocess.run(
-            ["bash", "-c", checksum], cwd=repo, env=env, check=True, capture_output=True, text=True
-        ).stdout
-        assert out.split()[0] == export["sha256"]
+    [first] = _recipe_blocks()
+    env = {
+        **os.environ,
+        "SCRATCH": str(scratch / "wt"),
+        "RETURNED_DIFF": str(target),
+        "EXPECTED_SHA256": "0" * 64,
+    }
+    # Negative control: a wrong digest stops the block before the diff is applied.
+    bad = subprocess.run(
+        ["bash", "-ec", first], check=False, cwd=repo, env=env, capture_output=True
+    )
+    assert bad.returncode != 0 and b"FAILED" in bad.stdout
+    assert not (scratch / "wt" / "big.txt").exists()
+    _git(repo, "worktree", "remove", "--force", str(scratch / "wt"))
+    env["EXPECTED_SHA256"] = export["sha256"]
     subprocess.run(["bash", "-ec", first], cwd=repo, env=env, check=True, capture_output=True)
     assert (scratch / "wt" / "big.txt").read_text() == content
     assert (scratch / "wt" / "a.py").read_text() == "x = 2\n"

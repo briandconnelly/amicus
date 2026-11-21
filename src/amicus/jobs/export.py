@@ -69,6 +69,10 @@ def _inside(path: str, root: str) -> bool:
     return path == root or path.startswith(root.rstrip(os.sep) + os.sep)
 
 
+def _has_surrogate(text: str) -> bool:
+    return any(0xD800 <= ord(c) <= 0xDFFF for c in text)
+
+
 def _identity(st: os.stat_result) -> tuple[int, int]:
     return (st.st_dev, st.st_ino)
 
@@ -118,8 +122,11 @@ def write_diff_file(path: str, diff: str, *, job_store_root: str) -> DiffExport:
     if not Path(path).is_absolute():
         raise ExportRefused("not_absolute")
     parent, name = os.path.split(path)
-    if name in ("", ".", ".."):
+    if name in ("", ".", "..") or _has_surrogate(name):
         raise ExportRefused("not_a_file_name")
+    if _has_surrogate(parent):
+        # No directory on the server's filesystem can be named by a lone surrogate.
+        raise ExportRefused("parent_missing")
     try:
         data = diff.encode("utf-8")
     except UnicodeEncodeError:

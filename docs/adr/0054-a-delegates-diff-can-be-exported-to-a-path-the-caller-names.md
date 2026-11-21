@@ -37,7 +37,7 @@ A refused path is `invalid_arguments` on `path` with `details.reason` one of `no
 A file the call created and could not finish, a full disk for example, is removed by that same call, which fails as `export_failed`, temporary, with a repair naming this tool.
 The removal checks first that the name still refers to the file this call created, by device and inode, and leaves alone anything swapped in under it.
 A diff that cannot be encoded as UTF-8 is also `export_failed`, and nothing is created.
-A `path` carrying a lone surrogate is `invalid_arguments` on `path` before the job is read.
+A `path` carrying a lone surrogate is refused at the call boundary as `invalid_arguments` on `path`, and the writer itself refuses one as `not_a_file_name` in the final component and `parent_missing` elsewhere.
 
 **A successful export counts as delivery; a failed one does not.**
 The job is stamped delivered, as `amicus_job_result` stamps it, only after the file is whole.
