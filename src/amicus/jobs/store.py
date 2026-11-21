@@ -1059,7 +1059,11 @@ class JobStore:
         cmd = cmd_factory(jd)
         started = time.time()
         log_path = jd / "stderr.log"
-        ef = log_path.open("w")
+        try:
+            ef = log_path.open("w")
+        except OSError:
+            shutil.rmtree(jd, ignore_errors=True)
+            raise
         try:
             proc = subprocess.Popen(
                 cmd,

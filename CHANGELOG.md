@@ -156,9 +156,9 @@ per-change, as its own lead says.
   holds only among servers of this release or later sharing a state root: after upgrading,
   restart any session still running an older server.
 - A start that failed after its worker was spawned but before the job was recorded, such as
-  when starting the thread that feeds the worker its prompt failed, no longer leaves that
-  paid worker running with no job record. The worker is now stopped, as it already was when
-  writing the record failed.
+  when closing the worker's log file or starting the thread that feeds it its prompt failed,
+  no longer leaves that paid worker running with no job record. The worker is now stopped,
+  as it already was when writing the record failed.
 
 ## [0.15.0] - 2026-11-16
 

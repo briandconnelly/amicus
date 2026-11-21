@@ -1415,9 +1415,7 @@ def test_a_failure_starting_the_stdin_thread_is_rolled_back(tmp_path, monkeypatc
         def start(self) -> None:
             raise RuntimeError("can't start new thread")
 
-    fake = type(sys)("threading")
-    fake.Thread = _Thread  # type: ignore[attr-defined]
-    monkeypatch.setattr(job_store, "threading", fake)
+    monkeypatch.setattr(job_store.threading, "Thread", _Thread)
     try:
         raised = _start_and_capture(store, cwd, stdin_text="hi")
         monkeypatch.undo()
@@ -1466,5 +1464,30 @@ def test_a_spawn_failure_removes_the_job_dir_and_queues_nothing(tmp_path, monkey
     monkeypatch.setattr(job_store.subprocess, "Popen", popen)
     with pytest.raises(OSError, match="no such worker"):
         store.start(_factory(_SLEEP), cwd, kind="k")
+    assert store._job_dirs(store._ws_dir(cwd)) == []
+    assert terminate_calls == 0
+
+
+def test_a_failure_opening_the_log_removes_the_job_dir_and_queues_nothing(tmp_path, monkeypatch):
+    store = _store(tmp_path)
+    cwd = str(tmp_path / "a")
+    terminate_calls = 0
+
+    def fake_terminate(pid, grace_seconds, **kwargs):
+        nonlocal terminate_calls
+        terminate_calls += 1
+
+    real_open = Path.open
+
+    def opener(self, *args, **kwargs):
+        if self.name == "stderr.log":
+            raise OSError(errno.EMFILE, "too many open files")
+        return real_open(self, *args, **kwargs)
+
+    monkeypatch.setattr(job_store, "_terminate_pid_tree", fake_terminate)
+    monkeypatch.setattr(Path, "open", opener)
+    with pytest.raises(OSError, match="too many open files"):
+        store.start(_factory(_SLEEP), cwd, kind="k", write_spec={"a": 1})
+    monkeypatch.undo()
     assert store._job_dirs(store._ws_dir(cwd)) == []
     assert terminate_calls == 0
