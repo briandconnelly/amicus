@@ -36,6 +36,8 @@ When the binary cannot be resolved, validation skips both probes, so the run rep
 
 **Reasoning effort is advisory.**
 Pi clamps an effort the model does not support, so only the token vocabulary and `off` for a model whose catalog row says `thinking: no` are refused, and a run whose reported `thinkingLevel` differs from the request carries a warning naming both.
+For a `thinking: no` row, `off` is the one accepted value.
+The levels pi's catalog advertises per model are published and never refused ([ADR 0052](0052-pi-advertised-levels-inform-and-never-refuse.md)).
 
 **`pi` has no `isolation` option.**
 Kimi's `isolation` decides whether the user's skills load.

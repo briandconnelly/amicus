@@ -22,6 +22,13 @@ per-change, as its own lead says.
 
 ### Added
 
+- **Surface.** `amicus_models` lists the reasoning levels pi's catalog says each model maps
+  (#559). A row gains `advertised_reasoning_efforts`, read from pi's RPC catalog by pi's own
+  rule: `["off"]` for a model the table says does not think, the mapped levels for one that
+  does, `[]` when it maps none and `null` when amicus cannot tell; `codex` and `claude` rows
+  report `null`. It is advisory and never refuses a call: `supported_reasoning_efforts` is
+  unchanged and stays, for pi, the vocabulary amicus accepts pre-spend, and pi can still run
+  another level, which the result warns about. ADR 0052 records the decision.
 - **Surface.** `amicus_models` lists what pi's catalog says each model costs (#554). A `pi` row
   gains `pricing`: `input`, `output`, `cache_read` and `cache_write` in USD per million tokens,
   and `tiers`, the rates that replace them for a whole request whose input, cache reads and
