@@ -219,6 +219,74 @@ def test_another_402_stays_generic():
     assert f.code == "nonzero_exit" and f.retryable is None and f.repair is None
 
 
+_BODILESS_404 = "404 status code (no body)"
+_REGION_MISSING = "Region is missing"
+
+
+def test_a_bodiless_provider_404_is_not_retryable_and_names_the_remedies():
+    f = _classify(_run(exit_code=0), stop_reason="error", error_message=_BODILESS_404)
+    assert f.code == "nonzero_exit" and f.retryable is False
+    assert f.details == {"field": "model"}
+    assert f.repair is not None and f.repair.next_step == "correct_config"
+    assert "amicus_models" in (f.repair.alternative or "")
+    assert "models.json" in (f.repair.alternative or "")
+
+
+def test_a_missing_provider_region_is_not_retryable_and_names_the_setting():
+    f = _classify(_run(stderr=_REGION_MISSING, exit_code=1))
+    assert f.code == "nonzero_exit" and f.retryable is False
+    assert f.details == {"reason": "the provider client has no region configured"}
+    assert f.repair is not None and f.repair.next_step == "correct_config"
+    assert "AWS_REGION" in (f.repair.alternative or "")
+
+
+def test_a_404_with_a_body_stays_generic():
+    f = _classify(_run(stderr="404 Not Found: no such route", exit_code=1))
+    assert f.code == "nonzero_exit" and f.retryable is None and f.repair is None
+
+
+@pytest.mark.parametrize(
+    ("extra", "code"),
+    [("429 Too Many Requests", "pi_rate_limited"), ("401 Unauthorized", "pi_auth_required")],
+)
+def test_an_existing_signature_beats_the_bodiless_404(extra, code):
+    assert _classify(_run(stderr=f"{extra}\n{_BODILESS_404}", exit_code=1)).code == code
+
+
+@pytest.mark.parametrize("text", [_BODILESS_404, _REGION_MISSING])
+def test_provider_config_text_on_stdout_is_never_read(text):
+    f = _classify(_run(stdout=_echo_stream(text), stderr="boom", exit_code=1))
+    assert f.code == "nonzero_exit" and f.retryable is None and f.repair is None
+    assert text not in f.detail
+
+
+@pytest.mark.parametrize("text", [_BODILESS_404, _REGION_MISSING])
+def test_a_provider_config_detail_is_still_sanitized(text):
+    secret = "sk-" + "c" * 32
+    f = _classify(_run(stderr=f"{text} token={secret}", exit_code=1))
+    assert f.retryable is False and secret not in f.detail and "pi exited 1" in f.detail
+
+
+@pytest.mark.parametrize(
+    ("text", "key", "value"),
+    [
+        (_BODILESS_404, "field", "model"),
+        (_REGION_MISSING, "reason", "the provider client has no region configured"),
+    ],
+)
+def test_a_provider_config_failure_renders_as_a_non_temporary_envelope(text, key, value):
+    from tests.support import fakeplugin
+
+    from amicus import errors
+    from amicus.schemas.envelope import Meta
+
+    failure = _classify(_run(exit_code=0), stop_reason="error", error_message=text)
+    err = errors.render_failure(fakeplugin.make_plugin("pi"), failure, Meta())["error"]
+    assert err["code"] == "nonzero_exit" and err["temporary"] is False
+    assert err["repair"]["next_step"] == "correct_config"
+    assert err["details"][key] == value
+
+
 def test_generic_detail_is_sanitized_before_the_cut():
     secret = "sk-" + "c" * 32
     f = _classify(_run(stderr=f"boom token={secret}", exit_code=3))

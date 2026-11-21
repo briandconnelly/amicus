@@ -144,6 +144,10 @@ _OUTPUT_RESERVATION_PATTERN = re.compile(r"requires more credits, or fewer max_t
 _OUTPUT_RESERVATION_FIGURES = re.compile(
     r"requested up to (\d+) tokens, but can only afford (\d+)", re.I
 )
+# Wording observed in pi's error output and quoted in #520.
+_BODILESS_404_PATTERN = re.compile(r"\b404 status code \(no body\)", re.I)
+# Wording observed in pi's error output and quoted in #520.
+_REGION_MISSING_PATTERN = re.compile(r"\bRegion is missing\b")
 _RETRY_AFTER_PATTERNS = (
     re.compile(r"retry[- _]?after[\"']?\s*[:=]\s*[\"']?(\d+(?:\.\d+)?)\s*(ms|s|seconds?)?", re.I),
     re.compile(r"try again in\s+(\d+(?:\.\d+)?)\s*(ms|s|seconds?|minutes?)", re.I),
@@ -177,6 +181,14 @@ def is_contract_drift(*texts: str | None) -> bool:
 
 def is_invalid_model(*texts: str | None) -> bool:
     return _any(_INVALID_MODEL_PATTERNS, texts)
+
+
+def is_bodiless_404(*texts: str | None) -> bool:
+    return _any((_BODILESS_404_PATTERN,), texts)
+
+
+def is_region_missing(*texts: str | None) -> bool:
+    return _any((_REGION_MISSING_PATTERN,), texts)
 
 
 def is_rate_limited(*texts: str | None) -> bool:

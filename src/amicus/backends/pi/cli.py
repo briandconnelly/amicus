@@ -164,16 +164,16 @@ def classify_failure(
 ) -> ClassifiedFailure:
     """Map a non-success run into the shared taxonomy, in the SDK's order: binary missing,
     timeout, OpenRouter's output-reservation 402 (#542), drift, auth, rate limit, invalid model,
-    nonzero_exit. pi can fail with exit 0 and
-    an error in its event stream, so `error_message` (already extracted) is read alongside
-    stderr. stdout is never read: under `--mode json` it is the event stream, which echoes
-    the system prompt, the user's prompt and the answer, so a prompt mentioning "401" would
-    be misclassified and any copy of it would put prompt input in the detail (rule 18). pi
-    writes its own CLI errors to stderr. The generic detail is `error_message`, else stderr,
-    else a fixed literal. `sanitize` runs BEFORE the 300-char cut, so a secret or worktree
-    path straddling the cut cannot leak a prefix. A zero-exit failure is worded as its
-    `stop_reason` (one of normalize.FAILED_STOP_REASONS), since "pi exited 0" beside a
-    failure reads as a contradiction."""
+    the provider-config failures (a bodiless 404 and a missing region, #520), nonzero_exit.
+    pi can fail with exit 0 and an error in its event stream, so `error_message` (already
+    extracted) is read alongside stderr. stdout is never read: under `--mode json` it is the
+    event stream, which echoes the system prompt, the user's prompt and the answer, so a
+    prompt mentioning "401" would be misclassified and any copy of it would put prompt input
+    in the detail (rule 18). pi writes its own CLI errors to stderr. The generic detail is
+    `error_message`, else stderr, else a fixed literal. `sanitize` runs BEFORE the 300-char
+    cut, so a secret or worktree path straddling the cut cannot leak a prefix. A zero-exit
+    failure is worded as its `stop_reason` (one of normalize.FAILED_STOP_REASONS), since
+    "pi exited 0" beside a failure reads as a contradiction."""
     if run.binary_missing:
         return ClassifiedFailure(
             code="pi_not_found",
@@ -220,6 +220,18 @@ def classify_failure(
                 tool="amicus_models",
                 alternative="Pass one of the model ids amicus_models lists for pi.",
             ),
+        )
+    if contract.is_bodiless_404(*texts):
+        return _provider_config_failure(
+            _generic_detail(run, error_message, sanitize, stop_reason),
+            details={"field": "model"},
+            repair=BODILESS_404_REPAIR,
+        )
+    if contract.is_region_missing(*texts):
+        return _provider_config_failure(
+            _generic_detail(run, error_message, sanitize, stop_reason),
+            details={"reason": "the provider client has no region configured"},
+            repair=REGION_MISSING_REPAIR,
         )
     return ClassifiedFailure(
         code="nonzero_exit", detail=_generic_detail(run, error_message, sanitize, stop_reason)
@@ -273,4 +285,32 @@ def _output_reservation_failure(detail: str, figures: tuple[int, int] | None) ->
         retryable=False,
         details=details,
         repair=RepairHint(next_step="correct_config", alternative=OUTPUT_RESERVATION_REPAIR),
+    )
+
+
+BODILESS_404_REPAIR = (
+    "The provider answered 404 with no body, and the same call will get the same answer. "
+    "Check that the model id is one the provider in its prefix serves (amicus_models lists "
+    "pi's), and that pi calls the right endpoint for it: a baseUrl in pi's models.json, in "
+    "$PI_CODING_AGENT_DIR when that is set and ~/.pi/agent otherwise, replaces the default."
+)
+REGION_MISSING_REPAIR = (
+    "pi's provider client reported that no region is configured, and the same call will "
+    "fail the same way. For Amazon Bedrock, set AWS_REGION in the environment the amicus "
+    "server starts with and restart the server; for another provider, set the region its "
+    "configuration asks for, or pass a model from a provider that needs none."
+)
+
+
+def _provider_config_failure(
+    detail: str, *, details: dict[str, str], repair: str
+) -> ClassifiedFailure:
+    """#520: a provider-configuration failure the same call cannot outlast. nonzero_exit,
+    never temporary, with the remedy named; no new code, so the error catalog is unchanged."""
+    return ClassifiedFailure(
+        code="nonzero_exit",
+        detail=detail,
+        retryable=False,
+        details=details,
+        repair=RepairHint(next_step="correct_config", alternative=repair),
     )
