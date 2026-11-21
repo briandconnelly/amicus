@@ -571,7 +571,9 @@ def test_the_routing_rule_binds_before_the_verb_is_chosen():
         "**Send a model-only request to its native harness",
         "**Never substitute for a named harness silently.**",
         "proceed only when the user chooses it",
-        "An exact `provider/id` is pi's model syntax, so it selects `pi`.",
+        "An exact `provider/id` named with no harness is pi's model syntax, so it selects `pi`.",
+        "is passed only when `amicus_models` for that harness lists that exact id",
+        "or does not list the `provider/id` named with it",
         "**Route only to a harness that supports the verb.**",
         "never from provider configuration.** A missing or truncated listing does not prove a",
         "**Ask the user once, before spending, only when the routes that still match after free",
@@ -591,6 +593,9 @@ def test_the_routing_rule_binds_before_the_verb_is_chosen():
         '"get GPT\'s opinion"',
         '"use Opus"',
         '"have Claude adversarially review this"',
+        "`codex`, as the named harness, with that `model`",
+        "does not confirm the pair",
+        '"ask pi to use `<provider>/<id>`"',
     )
     for example in examples:
         assert example in procedure, example
@@ -918,7 +923,8 @@ def test_the_workspace_rule_is_checkable_and_claims_no_read_boundary():
 
 # #487: the body was 24.9 KB and a plain consult read about 67 KB before its first call. These
 # are regrowth guards, not targets: raise one only with a reason recorded beside it.
-_BODY_CEILING = 18_500
+# #525: raised from 18_500 for the harness-plus-provider/id rule.
+_BODY_CEILING = 18_800
 _PLAIN_CONSULT_CEILING = 48_000
 
 

@@ -46,7 +46,10 @@ Worked examples, each after `amicus_backends(detail="full")`:
 | "collaborate with codex" while `codex` is not ready | say so and offer `pi` with a listed OpenAI `provider/id`, proceeding only on the user's choice |
 | "use Opus" | `claude` when it is ready and supports the verb, deciding `access` up front, because a `claude` consult defaults to `toolless` and cannot read the repository; otherwise `pi` with a listed Anthropic `provider/id`, named before the call. A delegate is not on `claude`, so it goes to `pi` the same way |
 | "have Claude adversarially review this" while `claude` is not ready | no eligible route: only `claude` has `adversarial_review`, so say so rather than switching harness or verb |
-| "use `<provider>/<id>`" (an exact `provider/id`) | `pi`, as a named harness, with that `model`, once `amicus_models(backend="pi")` lists it; its egress is the provider the prefix names, which may be a router rather than the model's vendor, or the endpoint pi's `models.json` sets for it |
+| "use `<provider>/<id>`" (an exact `provider/id`) | `pi` with that `model`, once `amicus_models(backend="pi")` lists it; its egress is the provider the prefix names, which may be a router rather than the model's vendor, or the endpoint pi's `models.json` sets for it |
+| "ask pi to use `<provider>/<id>`" | `pi`, the named harness, with that `model`: the two selectors agree |
+| "ask codex to use `<provider>/<id>`", `codex` is ready and supports the verb, and `amicus_models(backend="codex")` lists that exact id | `codex`, as the named harness, with that `model` |
+| "ask codex to use `<provider>/<id>`", and that listing does not show the id | no call yet: say the `codex` listing does not confirm the pair; where `amicus_models(backend="pi")` lists that exact id and `pi` supports the verb, offer `pi` with it, naming its provider and containment, and proceed only on the user's choice; where it does not, report that no confirmed route exists |
 | "use Kimi K3" | `pi` with a listed `provider/id` for that model, named before the call |
 
 ## Choosing among pi's listed models

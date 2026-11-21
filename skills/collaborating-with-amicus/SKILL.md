@@ -92,18 +92,21 @@ This is the one statement of the routing procedure;
   route is resolved is selecting the tool and reading its references. Where the call takes a
   harness's default model and no surface reports which model that is, name it as that harness's
   default rather than guessing a slug.
-- **Let a named harness win.** `codex`, `claude` or Claude Code, and `pi` select that harness, whatever the capitalization, and a model named
-  alongside it is passed as that harness's `model`. An exact `provider/id` is pi's model syntax,
-  so it selects `pi`.
+- **Let a named harness win.** `codex`, `claude` or Claude Code, and `pi` select that harness,
+  whatever the capitalization, and a model named alongside it is passed as that harness's
+  `model`. A `provider/id` named beside a harness other than `pi` is passed only when
+  `amicus_models` for that harness lists that exact id; otherwise the rule against silent
+  substitution, below, applies. An exact `provider/id` named with no harness is pi's model
+  syntax, so it selects `pi`.
 - **Send a model-only request to its native harness — `codex` for an OpenAI model, `claude` for
   an Anthropic model — when that harness is ready and supports the verb; otherwise route it to
   `pi` with an exact model `amicus_models(backend="pi")` lists, and name that route before the
   call.** That is routing, not substitution, so it needs no confirmation.
 - **Never substitute for a named harness silently.** When the harness the user named is not
-  ready or lacks the verb, say so, offer the alternative route (`pi` plus an exact listed model)
-  naming its provider (the `provider/id` prefix, which may be a router) and its containment
-  (pi has no OS sandbox, and a pi delegate no network block), and proceed only when the user
-  chooses it.
+  ready, lacks the verb, or does not list the `provider/id` named with it, say so, offer the
+  alternative route (`pi` plus an exact listed model) naming its provider (the `provider/id`
+  prefix, which may be a router) and its containment (pi has no OS sandbox, and a pi delegate
+  no network block), and proceed only when the user chooses it.
 - **Route only to a harness that supports the verb.** When none does — an adversarial review
   with `claude` not ready — report that no eligible route exists; changing the verb is a
   separate choice for the user.
