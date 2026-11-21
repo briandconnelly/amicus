@@ -52,7 +52,8 @@ class StatusReport:
 @dataclass(frozen=True)
 class PricingTier:
     """The rates that replace the base ones for a whole request once its input exceeds
-    `input_tokens_above`; the highest threshold a request exceeds is the one that applies."""
+    `input_tokens_above`; the highest threshold a request exceeds is the one that applies.
+    pi counts cache reads and cache writes in that input (`calculateCost` in pi-ai 1.6.0)."""
 
     input_tokens_above: int
     input: float

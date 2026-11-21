@@ -38,6 +38,7 @@ The reply is captured under a byte cap while pi runs, through `run_sync_capture`
 Null therefore means unknown and never free, and the field's description says so where a caller reads it.
 The description also says the figures are a snapshot of pi's cached catalog and not a quote: amicus probes with `--offline`, the reply carries no timestamp, and the amount billed is `meta.usage.cost_usd` where the provider reports it.
 Tiers are published in full, since a base rate alone understates a long request.
+A tier applies once the request's input exceeds its threshold, and pi counts cache reads and cache writes in that input (`calculateCost` in `pi-ai` 1.6.0), so the description says so: a caller comparing only the uncached count would pick the wrong tier.
 
 **Only named fields are read.**
 The reply also carries each model's endpoint URL and, for some providers, fixed request headers and a credential-source label.
@@ -52,5 +53,5 @@ Narrowing it would change which calls are refused, so it is left for a decision 
 `amicus_models` on `pi` runs two probes where it ran one, each bounded by `PROBE_TIMEOUT_SECONDS`, on a cache miss.
 `context_tokens` and `max_output_tokens` are exact when the second probe answered and rounded when it did not, and a row does not say which, so their descriptions keep the advice to leave headroom.
 The request sent on stdin is a fixed literal in `contract.py` and no prompt input can reach it, so rule 18 gains no carrier.
-The reply's shape is not covered by the `--help` comparison that guards the flags amicus sends, so a pi release that changed it would lose prices silently rather than fail; `docs/RELEASING.md` checks it by hand before a release.
+The reply's shape is not covered by the `--help` comparison that guards the flags amicus sends, so a pi release that changed it would lose prices silently rather than fail; `scripts/check_pi_pricing.py`, which `docs/RELEASING.md` runs before a release, gives pi a scratch model with a known price and checks that amicus reads it back.
 The prices rank nothing: pi's catalog has no quality signal and no account balance, so choosing among models still needs a source outside amicus.

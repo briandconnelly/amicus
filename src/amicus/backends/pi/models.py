@@ -181,7 +181,10 @@ def _reply_models(stdout: str) -> list | None:
     """The `models` array of the one successful reply to the request, else None: no reply
     (pi exits 0 in silence when stdin held no request), a failed one, or more than one."""
     replies = []
-    for line in stdout.splitlines():
+    # pi frames its replies with LF alone. str.splitlines also breaks at U+2028, U+2029 and
+    # other separators, which JSON carries unescaped inside a string (a model's name, say),
+    # and one such character would cut the reply in two and cost every row its price.
+    for line in stdout.split("\n"):
         try:
             blob = json.loads(line)
         except (ValueError, RecursionError):

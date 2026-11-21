@@ -24,8 +24,8 @@ per-change, as its own lead says.
 
 - **Surface.** `amicus_models` lists what pi's catalog says each model costs (#554). A `pi` row
   gains `pricing`: `input`, `output`, `cache_read` and `cache_write` in USD per million tokens,
-  and `tiers`, the rates that replace them for a whole request whose input exceeds a tier's
-  `input_tokens_above`. It is a snapshot of pi's cached catalog and not a quote, and it is
+  and `tiers`, the rates that replace them for a whole request whose input, cache reads and
+  writes included, exceeds a tier's `input_tokens_above`. It is a snapshot of pi's cached catalog and not a quote, and it is
   `null` where pi states no price, which never means free; `codex` and `claude` rows report
   `null`. A pi row's `context_tokens` and `max_output_tokens` are now pi's exact figures
   rather than rounded ones whenever the same probe answers. Both come from a second free probe,

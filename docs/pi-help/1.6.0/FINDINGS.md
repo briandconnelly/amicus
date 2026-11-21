@@ -29,6 +29,7 @@ Apart from the first run, which read the maintainer's own configuration, every r
 - `echo '{"type":"get_available_models"}' | pi --mode rpc --no-session` with the suppression flags printed exactly one stdout line, `{"type":"response","command":"get_available_models","success":true,"data":{"models":[...]}}`, and exited 0 at stdin EOF in about 0.2 seconds with empty stderr.
   The command and the model object are documented in `docs/rpc-commands.md` of `@earendil-works/pi-coding-agent`, which states that costs are in US dollars per million tokens.
 - Every row carried `id`, `provider`, `contextWindow` and `maxTokens` as exact integers, and `cost` with `input`, `output`, `cacheRead` and `cacheWrite`; some carried `cost.tiers`, at most two on a row, each with `inputTokensAbove` and the same four rates.
+  `calculateCost` in `dist/models.js` of `@earendil-works/pi-ai` selects a tier by `usage.input + usage.cacheRead + usage.cacheWrite`, taking the highest `inputTokensAbove` that sum exceeds, so cached tokens count toward the threshold.
   Over 1 332 rows the table's `context` and `max-out` cells agreed with those integers under `formatTokenCount`, with no mismatch.
 - The slug set, `provider` joined to `id` with `/`, was identical to the table's in every configuration compared: no credentials, one, two and 36 providers credentialed by fake keys, a `models.json` adding a custom provider, a `models.json` with `modelOverrides`, and three malformed `models.json` files.
   A provider without credentials was hidden by both.
@@ -37,6 +38,7 @@ Apart from the first run, which read the maintainer's own configuration, every r
   amicus therefore keeps the table as the authority on which rows exist and in what order, and reads the reply only for the fields the table lacks.
 - With 36 providers credentialed the reply was one line of 752 807 bytes for 1 332 rows, the largest model object 952 bytes, and no slug appeared twice.
 - With no credentialed provider the reply was `success: true` with `models: []`, where the table prints `No models available` and no header.
+- The reply is framed by a line feed alone, and `JSON.stringify` leaves U+2028 and U+2029 unescaped inside a string, so a reader must split on `\n` and not on every Unicode line separator.
 - With empty stdin, `/dev/null` or a closed stdin, pi exited 0 and printed nothing, so the absence of a reply is a failure to read rather than an empty catalog.
   Unparseable input was answered with `{"type":"response","command":"parse","success":false,...}`.
 - A `models.json` model with no `cost` was reported with all four rates `0`, exactly as a free model is, so a zero price cannot be read as free.

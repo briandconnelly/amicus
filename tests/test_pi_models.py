@@ -267,6 +267,19 @@ def test_lines_that_are_not_the_reply_are_ignored():
     assert models.parse_rpc_models(stdout) == {"p/m": models.ModelDetail(1024, 512, PRICE)}
 
 
+@pytest.mark.parametrize("separator", ["\u2028", "\u2029", "\x85"])
+def test_a_line_separator_inside_a_string_does_not_cut_the_reply(separator):
+    # pi frames with LF alone and JSON leaves these three unescaped in a string (the C0
+    # separators splitlines also breaks at are always escaped), so one model's name must not
+    # cost every row its price. The control: splitlines does cut this reply.
+    rows = [_model(name=f"before{separator}after"), _model("p", "other")]
+    reply = {"type": "response", "command": "get_available_models", "success": True}
+    stdout = json.dumps({**reply, "data": {"models": rows}}, ensure_ascii=False) + "\n"
+    assert separator in stdout and len(stdout.splitlines()) > 1
+    detail = models.ModelDetail(1024, 512, PRICE)
+    assert models.parse_rpc_models(stdout) == {"p/m": detail, "p/other": detail}
+
+
 def test_a_slash_in_the_provider_joins_as_the_table_does():
     details = models.parse_rpc_models(_reply([_model("gateway/team", "v/m")]))
     assert details is not None and list(details) == ["gateway/team/v/m"]

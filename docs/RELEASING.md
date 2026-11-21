@@ -124,22 +124,15 @@ A flag counts only where `--help` declares it as an option, never where another 
 A deprecated backend that is behind `latest` on a version the contract supports is not a failure: the script prints a `frozen:` line for it instead, because no newer release of it will be validated; ahead of `latest`, a prerelease, or a version outside the contract still fails for it.
 A version `FAIL` says which way the installed version is off and how to install the version `latest` names: behind means upgrade to it, and ahead means a build from another dist-tag, so pin back to it or wait for `latest` to advance.
 
-That script cannot see whether pi still answers the request amicus reads model prices from, because `--help` does not describe it (ADR 0051), so check that by hand; it spends nothing.
+That script cannot see whether pi still answers the request amicus reads model prices from, because `--help` does not describe it (ADR 0051), so run the check that can; it spends nothing.
 
 ```sh
-uv run python -c "import os; from amicus.backends import pi; rows = pi.plugin(dict(os.environ)).models.read(force=True).models; print(len(rows), 'rows,', sum(r.pricing is not None for r in rows), 'priced')"
+uv run python scripts/check_pi_pricing.py
 ```
 
-Yes is a line such as `368 rows, 349 priced`, with both numbers above zero.
-Rows with none priced has two causes, and the line does not say which: pi's `get_available_models` reply changed or could not be read, or the reply is sound and no listed model has a price, which is what a catalog of only unpriced `models.json` models looks like, since amicus publishes four zero rates as no price.
-Tell them apart by asking pi directly, from an empty directory, which also spends nothing.
-
-```sh
-echo '{"type":"get_available_models"}' | pi --mode rpc --no-session --no-context-files --no-skills --no-extensions --no-mcp --no-prompt-templates --no-themes --no-approve --offline | cut -c1-90
-```
-
-A reply that begins `{"type":"response","command":"get_available_models","success":true,"data":{"models":[{` is sound, so the catalog is unpriced and nothing is wrong.
-Anything else, or no output, means the reply changed or failed: `amicus_models` still lists the models, without prices, so decide whether to fix that before releasing rather than discover it afterwards.
+Yes is exit status 0 and one `OK` line.
+The script gives pi a scratch agent directory holding one model with a known price and one with none, reads the catalog through amicus, and compares the result with what it wrote, so it does not depend on which models your own catalog prices.
+A `FAIL` line names what differed: a price that came back empty means amicus can no longer read pi's `get_available_models` reply, and `amicus_models` would then list models without prices, so fix that before releasing rather than discover it afterwards.
 
 When a CLI's version has no capture of its own, commit one with the change that adds support for it, so the next release has something to compare against.
 

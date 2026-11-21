@@ -79,8 +79,9 @@ What the listing establishes, and what it does not:
   today.
 - **A row's `pricing` is a snapshot of pi's cached catalog, not a quote.** `input`, `output`,
   `cache_read` and `cache_write` are USD per million tokens. Each entry of `tiers` replaces
-  them for the whole request once its input exceeds that entry's `input_tokens_above`, the
-  highest such entry applying. `null` is unknown, never free: pi reports an unpriced model
+  them for the whole request once its input, counting cached tokens read and written as well
+  as uncached ones, exceeds that entry's `input_tokens_above`, the highest such entry
+  applying. `null` is unknown, never free: pi reports an unpriced model
   and a free one alike, and other backends report `null`. What a call was billed is
   `meta.usage.cost_usd`, where the provider reported it. pi asks for the model's whole
   `max_output_tokens` on every call, so a prepaid provider refuses a call unless the balance

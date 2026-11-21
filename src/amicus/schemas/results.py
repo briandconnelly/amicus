@@ -639,8 +639,8 @@ _EFFORTS_DESC = (
 # Kept for the same reason: a bare number reads as a quote, and a null as free.
 _PRICING_DESC = (
     "pi only: USD per million tokens from pi's cached catalog, a snapshot and not a quote. A "
-    "tier's rates replace the base ones for the whole request once its input exceeds "
-    "input_tokens_above (highest match). null: unknown, never free."
+    "tier's rates replace the base ones for the whole request once its input, cache reads and "
+    "writes included, exceeds input_tokens_above (highest match). null: unknown, never free."
 )
 publish.KEPT_DESCRIPTIONS.update(
     (_CONTEXT_TOKENS_DESC, _MAX_OUTPUT_TOKENS_DESC, _EFFORTS_DESC, _PRICING_DESC)
