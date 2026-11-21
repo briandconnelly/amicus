@@ -1027,3 +1027,151 @@ async def test_an_unsupported_detail_or_isolation_is_invalid_arguments(tmp_path)
         )
     assert detail.structured_content["error"]["code"] == "invalid_arguments"
     assert isolation.structured_content["error"]["code"] == "invalid_arguments"
+
+
+# --- the query (#560, ADR 0053) ---------------------------------------------------------------
+
+
+class _Listing:
+    def __init__(self, listing):
+        self.listing = listing
+
+    def read(self):
+        return self.listing
+
+
+def _pi_scan(n=1030, truncated=False):
+    rows = tuple(
+        ModelEntry(
+            slug=f"p/m{i:04d}",
+            context_tokens=100_000,
+            pricing=ModelPricing(1.0, 2.0, 0.0, 0.0),
+            advertised_reasoning_efforts=("off",),
+        )
+        for i in range(n)
+    )
+    return ModelListing(models=rows, source="live", truncated=truncated, display_limit=1024)
+
+
+async def _models_call(backend, listing, args, env=None):
+    reg = BackendRegistry({backend: fakeplugin.make_plugin(backend, models=_Listing(listing))}, {})
+    async with Client(_app(env=env, registry=reg)) as c:
+        res = await c.call_tool("amicus_models", {"backend": backend, **args}, raise_on_error=False)
+        [content] = await c.read_resource(f"amicus://models/{backend}")
+        tool = next(t for t in await c.list_tools() if t.name == "amicus_models")
+    Draft202012Validator(tool.output_schema).validate(res.structured_content)
+    return res, json.loads(content.text), tool
+
+
+@pytest.mark.parametrize("args", [{}, {"query": None}])
+async def test_without_a_query_the_tool_and_the_resource_are_equal(args):
+    res, resource, _ = await _models_call("pi", _pi_scan(), args)
+    tool = res.structured_content
+    assert tool == resource
+    assert tool["selection"] is None
+    assert len(tool["models"]) == 1024 and tool["truncated"] is True
+    assert "these 1024 models" in tool["truncation_hint"]
+
+
+async def test_without_a_query_a_listing_within_its_display_limit_is_whole():
+    res, resource, _ = await _models_call("pi", _pi_scan(n=3), {})
+    assert res.structured_content == resource
+    assert res.structured_content["truncated"] is False
+    assert res.structured_content["truncation_hint"] is None
+
+
+async def test_an_unloaded_backend_keeps_its_two_outcomes_with_a_query():
+    async with Client(_app(registry=_mixed_registry())) as c:
+        res = await c.call_tool(
+            "amicus_models", {"backend": "pi", "query": {"limit": 1}}, raise_on_error=False
+        )
+        [content] = await c.read_resource("amicus://models/pi")
+    assert res.structured_content["error"]["code"] == "backend_unavailable"
+    body = json.loads(content.text)
+    assert body["available"] is False and body["selection"] is None
+
+
+async def test_a_query_finds_a_row_past_the_display_cut():
+    res, _, _ = await _models_call("pi", _pi_scan(), {"query": {"slug_prefix": "p/m1025"}})
+    out = res.structured_content
+    assert [m["slug"] for m in out["models"]] == ["p/m1025"]
+    assert out["truncated"] is False and out["truncation_hint"] is None
+    assert out["selection"]["examined"] == 1030
+    assert out["selection"]["excluded_by_filter"] == 1029
+    row = out["models"][0]
+    assert row["advertised_reasoning_efforts"] == ["off"] and row["pricing"]["input"] == 1.0
+
+
+@pytest.mark.parametrize("prefix", ["p/m0", "nothing/"])
+async def test_a_query_over_a_cut_scan_says_rows_past_it_were_never_compared(prefix):
+    res, _, _ = await _models_call(
+        "pi", _pi_scan(truncated=True), {"query": {"slug_prefix": prefix}}
+    )
+    out = res.structured_content
+    assert out["truncated"] is True
+    assert "never compared" in out["truncation_hint"]
+
+
+async def test_a_query_examines_only_rows_policy_allows():
+    env = {"AMICUS_DENY_MODELS": "pi:p/m0001,pi:p/m0002"}
+    res, _, _ = await _models_call("pi", _pi_scan(n=5), {"query": {"slug_prefix": "p/m000"}}, env)
+    out = res.structured_content
+    assert out["hidden_by_policy"] == 2
+    assert out["selection"]["examined"] == 3
+    assert [m["slug"] for m in out["models"]] == ["p/m0000", "p/m0003", "p/m0004"]
+
+
+def _unpriced(n):
+    rows = tuple(ModelEntry(slug=f"x-{i}", context_tokens=200_000) for i in range(n))
+    return ModelListing(models=rows, source="static")
+
+
+@pytest.mark.parametrize("backend", ["codex", "claude"])
+async def test_a_price_bound_excludes_every_unpriced_row_as_unknown(backend):
+    res, _, _ = await _models_call(backend, _unpriced(4), {"query": {"max_input_price": 1}})
+    out = res.structured_content
+    assert out["models"] == []
+    assert out["selection"]["excluded_unknown_pricing"] == 4
+    assert out["selection"]["price_basis"] == "max_across_tiers"
+    res, _, _ = await _models_call(
+        backend, _unpriced(4), {"query": {"slug_prefix": "x-", "limit": 2}}
+    )
+    out = res.structured_content
+    assert [m["slug"] for m in out["models"]] == ["x-0", "x-1"]
+    assert out["selection"]["omitted_by_limit"] == 2
+
+
+@pytest.mark.parametrize(
+    ("query", "member", "sentinel"),
+    [
+        ({"limit": 0, "sort_by": "zz-sentinel-a"}, "limit", "zz-sentinel-a"),
+        ({"sort": "zz-sentinel-b"}, "sort", "zz-sentinel-b"),
+        ({"max_input_price": "7.123"}, "max_input_price", "7.123"),
+        ({"slug_prefix": "", "zz_sentinel_key": 1}, "slug_prefix", "zz_sentinel_key"),
+    ],
+)
+async def test_a_malformed_query_is_invalid_arguments(query, member, sentinel):
+    res, _, _ = await _models_call("pi", _pi_scan(n=3), {"query": query})
+    err = res.structured_content["error"]
+    assert err["code"] == "invalid_arguments"
+    assert any(member in a["field"] for a in err["invalid_arguments"])
+    assert err["repair"]["tool"] == "amicus_models"
+    assert sentinel not in json.dumps(err["repair"])
+
+
+async def test_the_published_query_schema_is_closed():
+    tool = next(t for t in await _tools(_app()) if t.name == "amicus_models")
+    schema = tool.input_schema
+    assert set(schema["properties"]) == {"backend", "query"}
+    assert schema["required"] == ["backend"]
+    [query] = [b for b in schema["properties"]["query"]["anyOf"] if b.get("type") == "object"]
+    assert query["additionalProperties"] is False
+    assert set(query["properties"]) == {
+        "slug_prefix",
+        "max_input_price",
+        "max_output_price",
+        "min_context_tokens",
+        "sort_by",
+        "limit",
+    }
+    assert "description" not in query  # its semantics live at amicus://params

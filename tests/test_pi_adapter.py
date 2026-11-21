@@ -637,8 +637,11 @@ def test_a_model_past_a_truncated_listing_is_checked_by_its_own_lookup(monkeypat
     real = pi_models.PiModels(backend._config, backend._binary)
     backend._models = real
     listing = real.read()
-    assert listing.truncated is True
-    assert "late/plain" not in {e.slug for e in listing.models}
+    # #560: the scan holds the late row, but the plain listing shows only the first
+    # display_limit rows, so amicus_models without a query still stops before it.
+    assert listing.display_limit == pi_models.MAX_ENTRIES
+    shown = backend.list_models()
+    assert len(shown) == pi_models.MAX_ENTRIES and "late/plain" not in shown
     assert real.lookup("late/plain") == ModelEntry(
         slug="late/plain",
         supported_reasoning_efforts=("off",),

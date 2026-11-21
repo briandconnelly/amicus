@@ -22,6 +22,14 @@ per-change, as its own lead says.
 
 ### Added
 
+- **Surface.** `amicus_models` takes an optional `query` that filters, sorts and limits the
+  listing (#560): `slug_prefix`, `max_input_price`, `max_output_price`, `min_context_tokens`,
+  `sort_by` and `limit`. An unknown price or context never passes a bound, a price compares
+  the highest rate across tiers, and the result's new `selection` counts what each test
+  excluded. Without a query the listing is unchanged apart from `selection: null`, and
+  `amicus://models/{backend}` stays unfiltered. A query on pi examines up to 4,096 catalog rows
+  rather than the 1,024 the plain listing shows. ADR 0053 records the decision. The discovery
+  surface moves to `amicus/0.1/schema-80`.
 - **Surface.** `amicus_models` lists the reasoning levels pi's catalog says each model maps
   (#559). A row gains `advertised_reasoning_efforts`, read from pi's RPC catalog by pi's own
   rule: `["off"]` for a model the table says does not think, the mapped levels for one that

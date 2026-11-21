@@ -23,6 +23,7 @@ And pi reports a model that has no catalog price as costing zero, exactly as it 
 `PiModels.read` reads the table as before and then asks the RPC listing, and uses the reply only to give a row it already has its exact limits and its price, matched by slug.
 A row the reply does not describe, or describes twice, keeps the table's figures and no price.
 So the listing's rows, their order and the cut at `MAX_ENTRIES` cannot change with the second source, and a difference between the two sources can cost a row its price and nothing else.
+[ADR 0053](0053-amicus-models-takes-one-query-object.md) scans past that cut for an `amicus_models` query and keeps the plain listing's cut where it is.
 
 **The pre-spend check does not use the reply.**
 `PiModels.lookup` remains the targeted table search of ADR 0047.

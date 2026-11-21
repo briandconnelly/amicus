@@ -471,7 +471,8 @@ class PiBackend:
 
     # --- discovery --------------------------------------------------------------------------
     def list_models(self) -> tuple[str, ...]:
-        return tuple(m.slug for m in self._models.read().models)
+        listing = self._models.read()
+        return tuple(m.slug for m in listing.models[: listing.display_limit])
 
     def auth_probe(self) -> bool | None:
         binary = self._binary.resolve()

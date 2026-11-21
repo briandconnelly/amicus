@@ -41,7 +41,8 @@ BACKEND_TEMPLATE_DESC = (
     "backend id is resource_not_found."
 )
 MODELS_TEMPLATE_DESC = (
-    "One backend's amicus_models payload. Unlike the tool, a known but unavailable backend "
+    "One backend's unfiltered amicus_models payload, the tool's without `query`. Unlike the "
+    "tool, a known but unavailable backend "
     "returns the informational available=false payload rather than a backend_unavailable "
     "error; only an unknown backend id is resource_not_found."
 )

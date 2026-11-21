@@ -64,3 +64,4 @@ The paid call validates again, so a passing preview is a forecast, not a reserva
 A missing binary is still reported only by the paid call and by `amicus_backends`, because the run checks the binary after validation.
 The same previews also run kimi's effort check against its listing, as [ADR 0009](0009-m3-kimi-port-decisions.md) decides it.
 Issue #443 corrected `amicus_models`'s truncation hint for pi: the lookup in the second step asks about the exact model, so a model past the 1,024-row listing that `amicus_models` shows is still checked, effort included, and the hint says so without promising the model is accepted.
+[ADR 0053](0053-amicus-models-takes-one-query-object.md) lets an `amicus_models` query examine up to 4,096 rows, and leaves the plain listing at 1,024.

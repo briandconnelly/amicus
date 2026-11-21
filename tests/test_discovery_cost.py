@@ -464,6 +464,20 @@ both sets. The reasoning_effort summary, carried on ten tools, says "per-model s
 fewer than "advisory values", so it no longer describes one advisory set; a first draft that
 named both sets there cost 160 bytes more. Measured on the wire. MEASURED and BUDGET both move
 up by the 386 bytes, so the budget keeps no headroom.
+
+The schema-80 raise (+1817 bytes on every profile: all 117775 -> 119592) is #560, the
+optional `query` on amicus_models (ADR 0053). It is all that tool's record. The input schema
+gains `query`, a closed nullable object of six members with their bounds and a one-line
+summary pointing at amicus://params, where the full contract lives: about 720 bytes, as one
+object rather than six flat arguments that would each carry a description. The outputSchema
+gains `selection`, a closed nullable object of six counts and `price_basis`, with one kept
+description saying the counts are disjoint, in what order a row is tested, and that unknown
+never passes a bound: about 770 bytes. A first draft, with kept descriptions on two members
+as well and a longer tool description, cost 461 bytes more. The rest is the
+tool description, which says what `query` does, that `truncated` speaks of the scan and
+omitted_by_limit of the limit, and that a short result is no evidence a model is unavailable,
+and `truncated`'s kept description, which says the same for a query. Measured on the wire.
+MEASURED and BUDGET both move up by the 1817 bytes, so the budget keeps no headroom.
 """
 
 from __future__ import annotations
@@ -474,10 +488,10 @@ from tests.conftest import spawned_server_env
 from amicus import manifest
 
 MEASURED: dict[str, int] = {
-    "all": 117775,
-    "codex": 117783,
-    "codex-pi": 117775,
-    "claude": 117775,
+    "all": 119592,
+    "codex": 119600,
+    "codex-pi": 119592,
+    "claude": 119592,
 }
 # The budget is a literal, not MEASURED rounded up to the next kilobyte as it was until
 # 2026-09-14. The rounding left up to 1 KB of growth per bucket that no PR had to own, and
@@ -487,10 +501,10 @@ MEASURED: dict[str, int] = {
 # Any growth now fails until a PR raises BUDGET and says why; a shrink passes and shows as
 # drift against MEASURED. Raising one means re-measuring and moving both.
 BUDGET: dict[str, int] = {
-    "all": 117775,
-    "codex": 117783,
-    "codex-pi": 117775,
-    "claude": 117775,
+    "all": 119592,
+    "codex": 119600,
+    "codex-pi": 119592,
+    "claude": 119592,
 }
 
 

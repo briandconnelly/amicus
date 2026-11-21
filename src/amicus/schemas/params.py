@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Annotated, Any, Literal
 
-from pydantic import Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from amicus.schemas.codes import AdversarialBackendId, BackendId, DelegateBackendId
 from amicus.schemas.options import BackendOptions
@@ -324,6 +324,33 @@ PARAMETER_CONTRACTS: dict[str, ParamContract] = {
             "amicus_job_consume_result removes it."
         ),
     ),
+    "query": ParamContract(
+        name="query",
+        summary=(
+            "Filter, sort and limit the listing; omit for the plain listing. Semantics: "
+            f"{PARAMS_RESOURCE_URI}."
+        ),
+        full=(
+            "A closed object; every member is optional. slug_prefix keeps rows whose slug "
+            "starts with it, case-sensitively. max_input_price and max_output_price are "
+            "inclusive bounds in USD per million tokens, compared with the highest rate "
+            "across a row's base rate and every tier (price_basis: max_across_tiers). "
+            "min_context_tokens is an inclusive bound on the published context_tokens, which "
+            "on pi without catalog enrichment is the table's rounded figure. sort_by is slug "
+            "(default), input_price or output_price; a price sort orders by that rate then "
+            "slug, with unknown prices last. limit (1-1024, default 50) cuts after sorting. "
+            "Model policy runs first; each remaining row is tested by prefix, then context, "
+            "then input price, then output price, and counted once in `selection`, at the "
+            "first test that excludes it. An unknown value (null pricing, null "
+            "context_tokens) never passes a bound and is counted as excluded_unknown_pricing "
+            "or excluded_unknown_context, never as free or as large. The arguments mean the "
+            "same on every backend: where no row carries a price, a price bound excludes "
+            "every row as unknown. With a query, `truncated` is true only when the catalog "
+            "scan itself was cut, and rows dropped by limit are counted as omitted_by_limit. "
+            "A short or empty result is not evidence that a model is unavailable. Nothing "
+            "ranks a model by quality."
+        ),
+    ),
 }
 
 
@@ -580,4 +607,24 @@ IncludeSchemasParam = Annotated[
             "capabilities-result, parameter-contracts. A resource-blind fallback."
         )
     ),
+]
+
+
+# The `amicus_models` query (#560, ADR 0053). Its semantics are the `query` contract at
+# amicus://params, and `amicus.tools.model_query.select` applies it. A comment, not a
+# docstring: a docstring would ride the published inputSchema.
+class ModelQuery(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, allow_inf_nan=False)
+    slug_prefix: str | None = Field(
+        default=None, min_length=1, max_length=256, pattern=CONTROL_CHAR_FREE_PATTERN
+    )
+    max_input_price: float | None = Field(default=None, ge=0)
+    max_output_price: float | None = Field(default=None, ge=0)
+    min_context_tokens: int | None = Field(default=None, ge=1)
+    sort_by: Literal["slug", "input_price", "output_price"] = "slug"
+    limit: int = Field(default=50, ge=1, le=1024)
+
+
+ModelQueryParam = Annotated[
+    ModelQuery | None, Field(description=PARAMETER_CONTRACTS["query"].summary)
 ]

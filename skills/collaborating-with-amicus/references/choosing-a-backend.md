@@ -99,6 +99,15 @@ What the listing establishes, and what it does not:
   `AMICUS_PI_REASONING_EFFORT`, else pi's own default, which no amicus surface reports. An
   explicit one avoids that unreported default. It selects a level; it caps neither tokens nor
   cost.
+- **Narrow the listing with `query` rather than reading it whole.** For "a model under a
+  price with at least this much context", call
+  `amicus_models(backend="pi", query={"slug_prefix": "openrouter/", "max_output_price": 2,
+  "min_context_tokens": 128000, "sort_by": "output_price", "limit": 10})`. A price bound
+  compares the highest rate across the base rate and every tier, an unknown price or context
+  never passes a bound, and `selection` counts what each test excluded. The result is a
+  catalog filter and ranks nothing by quality. A filtered or limited result never shows a
+  model unavailable: a model can be unpriced, cut by `limit` (`omitted_by_limit`), or past the
+  scan (`truncated`), and pi still checks an exact `provider/id` before spending.
 - **A catalog describes; it does not rank.** A provider's listing gives advertised
   specifications and prices, which can separate candidates against what the task needs (a
   narrow mechanical review needs less than an architectural question). It does not establish

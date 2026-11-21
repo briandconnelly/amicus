@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import functools
 from typing import TYPE_CHECKING, Any
 
 from amicus import SERVER_NAME, __version__, surface
@@ -18,6 +19,8 @@ from amicus.schemas.params import (
     CapabilitiesDetailParam,
     IncludeSchemasParam,
     IncludeToolDetailsParam,
+    ModelQuery,
+    ModelQueryParam,
     OptionalBackendParam,
     expected_params,
     expected_required,
@@ -60,6 +63,7 @@ from amicus.tools._meta import (
     tool_stability,
 )
 from amicus.tools._resolve import FREE_MARKER
+from amicus.tools.model_query import select
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Sequence
@@ -327,11 +331,15 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
     "amicus_models": {
         "cost": "free",
         "backends": list(BACKEND_IDS),
-        "use_when": "Before overriding model or reasoning_effort.",
+        "use_when": (
+            "Before overriding model or reasoning_effort; with `query`, to narrow a large "
+            "catalog by slug prefix, price or context."
+        ),
         "returns": (
             "advisory model slugs with accepted effort sets, pi's advertised levels, token "
             "limits where the backend "
-            "advertises them, pi's catalog prices, and the catalog source."
+            "advertises them, pi's catalog prices, the catalog source, and with a query "
+            "the selection's exclusion counts."
         ),
         "error_codes": ["invalid_arguments", "backend_unavailable"],
     },
@@ -479,7 +487,7 @@ _JOB_PARAMS: dict[str, tuple[list[str], list[str]]] = {
     "amicus_review_changes_dry_run": _REVIEW_PREVIEW_PARAMS,
     "amicus_delegate_dry_run": (["backend", "task"], ["workspace_root", "backend_options"]),
     "amicus_backends": ([], ["backend", "detail"]),
-    "amicus_models": (["backend"], []),
+    "amicus_models": (["backend"], ["query"]),
     "amicus_capabilities": ([], ["detail", "include_schemas", "include_tool_details"]),
     "amicus_job_status": (["job_id"], ["workspace_root", "wait_seconds"]),
     "amicus_job_result": (["job_id"], ["workspace_root", "detail"]),
@@ -647,7 +655,16 @@ def _pricing_info(pricing: ModelPricing | None) -> ModelPricingInfo | None:
     )
 
 
-def models_payload(registry: BackendRegistry, backend: str, settings: Settings) -> dict[str, Any]:
+def models_payload(
+    registry: BackendRegistry,
+    backend: str,
+    settings: Settings,
+    *,
+    query: ModelQuery | None = None,
+) -> dict[str, Any]:
+    """The `amicus_models` payload. Without a query it is the plain listing, the first
+    `display_limit` rows, which amicus://models/{backend} also serves. With one, model policy
+    runs over the whole scan and `select` over what it allows (ADR 0053)."""
     policy = settings.model_policy
     state = (
         "invalid"
@@ -660,7 +677,19 @@ def models_payload(registry: BackendRegistry, backend: str, settings: Settings) 
             backend=backend, available=False, models=[], source="none", model_policy=state
         ).model_dump(mode="json")
     listing = plugin.models.read()
-    allowed = [m for m in listing.models if policy.denied_by(backend, m.slug) is None]
+    selection = None
+    if query is None:
+        rows = listing.models[: listing.display_limit]
+        truncated = listing.truncated or len(rows) < len(listing.models)
+        allowed = [m for m in rows if policy.denied_by(backend, m.slug) is None]
+        shown = allowed
+        hint = _truncation_hint(backend, len(rows), len(allowed)) if truncated else None
+    else:
+        rows = listing.models
+        truncated = listing.truncated
+        allowed = [m for m in rows if policy.denied_by(backend, m.slug) is None]
+        shown, selection = select(allowed, query)
+        hint = _truncation_hint(backend, len(rows), queried=True) if truncated else None
     return ModelCatalogResult(
         backend=backend,
         available=True,
@@ -679,16 +708,15 @@ def models_payload(registry: BackendRegistry, backend: str, settings: Settings) 
                 if m.advertised_reasoning_efforts is not None
                 else None,
             )
-            for m in allowed
+            for m in shown
         ],
         source=listing.source,
         fetched_at=listing.fetched_at,
-        truncated=listing.truncated,
-        truncation_hint=_truncation_hint(backend, len(listing.models), len(allowed))
-        if listing.truncated
-        else None,
-        hidden_by_policy=len(listing.models) - len(allowed),
+        truncated=truncated,
+        truncation_hint=hint,
+        hidden_by_policy=len(rows) - len(allowed),
         model_policy=state,
+        selection=selection,
     ).model_dump(mode="json")
 
 
@@ -700,15 +728,25 @@ def models_payload(registry: BackendRegistry, backend: str, settings: Settings) 
 _PAST_THE_CUT_CHECKED = frozenset({"pi"})
 
 
-def _truncation_hint(backend: str, count: int, shown: int | None = None) -> str:
-    head = (
-        f"the catalog was cut at amicus's entry bound and these {count} models come from its start"
-        if shown is None or shown == count
-        else (
-            f"the catalog was cut at amicus's entry bound after {count} models from its start, "
-            f"of which these {shown} are not denied by AMICUS_DENY_MODELS"
+def _truncation_hint(
+    backend: str, count: int, shown: int | None = None, *, queried: bool = False
+) -> str:
+    if queried:
+        head = (
+            f"the catalog scan was cut at amicus's entry bound after {count} models from its "
+            "start, and the query compared only those: rows past the scan were never "
+            "compared, so a short or empty result says nothing about them"
         )
-    )
+    else:
+        head = (
+            f"the catalog was cut at amicus's entry bound and these {count} models come from "
+            "its start"
+            if shown is None or shown == count
+            else (
+                f"the catalog was cut at amicus's entry bound after {count} models from its "
+                f"start, of which these {shown} are not denied by AMICUS_DENY_MODELS"
+            )
+        )
     if backend in _PAST_THE_CUT_CHECKED:
         return (
             f"{head}; only this listing was cut: pass an exact provider/id past it as `model` "
@@ -898,11 +936,14 @@ def register(
             "model's accepted reasoning efforts and, for pi, the levels its catalog "
             "advertises; the backend validates the real values. "
             "pi lists exact provider/id rows of providers it holds credentials for. "
-            "Not fingerprint-stable; same payload as amicus://models/{backend}."
+            "`query` filters, sorts and limits; unknown never passes a bound and `selection` "
+            "counts exclusions; `truncated` is the scan's, omitted_by_limit the limit's; "
+            "a short result is no evidence a model is unavailable. Not fingerprint-stable; "
+            "without `query`, the payload of amicus://models/{backend}."
         ),
     )
     @guard("amicus_models")
-    async def amicus_models(backend: BackendParam) -> dict[str, Any]:
+    async def amicus_models(backend: BackendParam, query: ModelQueryParam = None) -> dict[str, Any]:
         """List a backend's models. Reports `backend_unavailable`, like every paid tool,
         when the backend has no loaded plugin (see `resolve_paid_call`'s same shape)."""
         plugin = registry.get(backend)
@@ -915,7 +956,9 @@ def register(
                 base_meta(backend=backend),
                 backend=backend,
             )
-        return await asyncio.to_thread(models_payload, registry, backend, settings)
+        return await asyncio.to_thread(
+            functools.partial(models_payload, registry, backend, settings, query=query)
+        )
 
     @app.tool(
         name="amicus_capabilities",

@@ -100,6 +100,9 @@ class ModelListing:
     # True when the source held more entries than the reader's bound and `models` stops at
     # it (#414): a model past the cut exists, so absence from `models` proves nothing.
     truncated: bool = False
+    # The number of leading rows a plain listing shows; None means all of them. A reader may
+    # hold more rows than it shows so that a query can examine past the display cut (#560).
+    display_limit: int | None = None
 
 
 @runtime_checkable

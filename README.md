@@ -125,7 +125,7 @@ its quota.
 
 | Group | Tools |
 | --- | --- |
-| Discovery — free | `amicus_backends`, `amicus_capabilities`, `amicus_models` |
+| Discovery — free | `amicus_backends`, `amicus_capabilities`, `amicus_models` (an optional `query` filters it by slug prefix, price and context) |
 | Verbs — paid | `amicus_consult`, `amicus_review_changes`, `amicus_delegate`, `amicus_adversarial_review` |
 | Previews — free | `amicus_review_changes_dry_run` (review), `amicus_delegate_dry_run` |
 | Background twins — paid | the four verbs again, each with an `_async` suffix |
