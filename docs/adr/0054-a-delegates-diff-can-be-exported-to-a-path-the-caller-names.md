@@ -27,15 +27,17 @@ A delegate with no diff is returned unchanged and nothing is written; a job of a
 
 **The file's properties are fixed.**
 `path` must be absolute and name nothing that exists yet, a symlink included, in a directory that exists.
-The directory is resolved with `realpath`, so a symlinked system temporary directory such as macOS's `/tmp` works, and the resolved path is then opened one component at a time from `/` with `O_DIRECTORY | O_NOFOLLOW`.
+The directory is resolved with `realpath`, so a symlinked system temporary directory such as macOS's `/tmp` works, and the resolved path is then opened one component at a time from `/` with `O_DIRECTORY | O_NOFOLLOW`, for search only where the platform allows it (`O_PATH` on Linux, `O_SEARCH` on macOS), so a search-only ancestor such as a `0711` home directory does not refuse a writable destination.
 A component that has become a symlink since resolution is refused as `not_writable` rather than followed.
 A directory that is the job store or lies under it is refused, also when it is reached through a symlinked parent or `..`: the resolved path is compared as a string, and every directory opened on the way is compared by device and inode with the job store root.
 The file is created relative to the opened directory with `O_CREAT | O_EXCL | O_NOFOLLOW` and mode `0o600`, so it is never an overwrite and never follows a link.
+Before returning, the call checks that the caller's path still names the file it created, by device and inode; an unlink, a renamed parent or a retargeted parent link during the write fails the call as `export_failed`, so the job is not marked delivered.
 This holds the directory the file lands in to the one checked; it does not stop a same-user process that renames the job store, or a directory above it, between the identity comparison and the create, which the server cannot prevent and which needs that user's own privileges.
 The file holds the stored diff's UTF-8 bytes exactly.
-A refused path is `invalid_arguments` on `path` with `details.reason` one of `not_absolute`, `not_a_file_name` (an empty, `.` or `..` final component, or a trailing slash), `exists` (a directory included), `parent_missing`, `inside_job_store` or `not_writable`, and nothing is created.
+A refused path is `invalid_arguments` on `path` with `details.reason` one of `not_absolute`, `not_a_file_name` (an empty, `.` or `..` final component, a trailing slash, or a name too long for the filesystem), `exists` (a directory included), `parent_missing`, `inside_job_store` or `not_writable`, and nothing is created.
 A file the call created and could not finish, a full disk for example, is removed by that same call, which fails as `export_failed`, temporary, with a repair naming this tool.
 The removal checks first that the name still refers to the file this call created, by device and inode, and leaves alone anything swapped in under it.
+When the file could not be removed, the message and the repair say a partial file may remain at the path, without naming it, and tell the caller to delete it or pass another path.
 A diff that cannot be encoded as UTF-8 is also `export_failed`, and nothing is created.
 A `path` carrying a lone surrogate is refused at the call boundary as `invalid_arguments` on `path`, and the writer itself refuses one as `not_a_file_name` in the final component and `parent_missing` elsewhere.
 
@@ -58,6 +60,15 @@ It is `readOnlyHint: false`, `destructiveHint: false` and `idempotentHint: false
 
 **The skill's recipe exports first.**
 A delegate's result is retrieved by exporting it before any `amicus_job_result`, because a fetch returns the whole diff into the host's context; the recipe checks the file's digest against `meta.diff_export.sha256` before applying it.
+
+**A stopped run's export is an error envelope with a file behind it.**
+For a stored `timeout` or `budget_exceeded`, the call writes `partial.diff` and returns that run's error with `isError` set and the run's own repair, so a caller checks `meta.diff_export` before following that repair.
+`source: "partial"` is always an incomplete change, whatever `meta.truncated` and `meta.redacted_paths` say.
+
+**Residuals.**
+Comparing identities with the job store root cannot detect a bind mount or other alias of a directory inside the store; nothing short of resolving mounts can, and such an alias is one an operator creates deliberately.
+The identity-checked cleanup leaves a window between its `lstat` and its `unlink` that no portable call closes, and using it needs a same-user process.
+A client that cancels the request while the worker thread is writing gets no response, and the thread may still finish the file; the delivery stamp follows the write in the cancelled coroutine, so the job is not marked delivered, its record stays, and the recovery is to delete the orphan file and export again to a new path.
 
 ## Alternatives
 
