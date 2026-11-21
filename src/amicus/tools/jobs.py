@@ -69,6 +69,14 @@ _JOB_ID_RE = re.compile(r"[0-9a-f]{32}")
 _WAIT_POLL_SECONDS = 0.25
 
 
+_EXPORT_RUNNING_ALTERNATIVE = (
+    "Poll amicus_job_status while status is running, honoring poll_after_ms, or pass a "
+    "positive wait_seconds, which is itself the wait. On any terminal status, repeat this "
+    "amicus_job_export_diff call with the same job_id, workspace_root and path; fetching "
+    "the result with amicus_job_result instead returns the whole diff inline."
+)
+
+
 def _cursor_for(row: dict[str, Any]) -> str:
     return f"{row['started_epoch']!r}:{row['job_id']}"
 
@@ -152,11 +160,19 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
         return lookup.status_model(row, lookup.workspace_of(cwd, source), task_for(job_id), meta)
 
     async def deliver(
-        ctx: Any, workspace_root: str | None, job_id: str, detail: str, *, consume: bool
+        ctx: Any,
+        workspace_root: str | None,
+        job_id: str,
+        detail: str,
+        *,
+        consume: bool,
+        retry: tuple[str, dict[str, Any]] | None = None,
     ) -> tuple[dict[str, Any], dict[str, Any] | None, str | None, bool, Any]:
         """The resolution, lookup and `finished_job_envelope` path every result reader
         shares: (envelope, record, cwd, delivered, meta). A workspace, read or lookup
-        failure comes back as the envelope with no record. Nothing is marked delivered."""
+        failure comes back as the envelope with no record. Nothing is marked delivered.
+        `retry` is the (tool, arguments) an unreadable result's repair repeats; omitted,
+        it is the fetch or consume this call made."""
         cwd, source, roots_source, err = await resolve(ctx, workspace_root)
         if err is not None:
             return err, None, None, False, None
@@ -168,11 +184,15 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
             # be read (#280). The repair names the call made, which is free either way, with
             # the detail asked for: followed at the default, a full-detail consume would
             # deliver the summary and then delete the record. A consume deleted nothing.
+            tool, arguments = retry or (
+                "amicus_job_consume_result" if consume else "amicus_job_result",
+                {**job_status_arguments(job_id, workspace_root), "detail": detail},
+            )
             unreadable = unreadable_result_envelope(
                 lookup.job_meta(cwd, source, roots_source),
-                tool="amicus_job_consume_result" if consume else "amicus_job_result",
+                tool=tool,
                 next_step="fetch_job_result",
-                arguments={**job_status_arguments(job_id, workspace_root), "detail": detail},
+                arguments=arguments,
                 job_id=job_id,
                 errno=exc.errno,
                 record=isinstance(exc, MetaUnreadable),
@@ -297,10 +317,35 @@ def register(app: FastMCP, settings: Settings, registry: BackendRegistry) -> tup
         ctx: Any, workspace_root: str | None, job_id: str, path: str
     ) -> dict[str, Any]:
         # The same read amicus_job_result makes at its default detail, so every workspace,
-        # lookup, running, corrupt or incompatible outcome is exactly that tool's (#556).
+        # lookup, corrupt or incompatible outcome is that tool's (#556). Two repairs differ,
+        # because following that tool's would return the diff inline: an unreadable result
+        # repeats this export, and a running job's prose finishes with this export.
+        if any(0xD800 <= ord(c) <= 0xDFFF for c in path):
+            reason = "contains a surrogate code point"
+            resolved, source, roots_source, err = await resolve(ctx, workspace_root)
+            return err or error_envelope(
+                "invalid_arguments",
+                f"amicus_job_export_diff: 1 invalid argument(s): path — {reason}",
+                lookup.job_meta(resolved, source, roots_source),
+                failing_tool="amicus_job_export_diff",
+                invalid_arguments=[InvalidArgument(field="path", reason=reason)],
+            )
+        # The path is the caller's own value, not a prompt input, and a repair's arguments
+        # must be a complete call, so the retry carries it.
+        retry_args = {**job_status_arguments(job_id, workspace_root), "path": path}
         envelope, rec, cwd, delivered, meta = await deliver(
-            ctx, workspace_root, job_id, "summary", consume=False
+            ctx,
+            workspace_root,
+            job_id,
+            "summary",
+            consume=False,
+            retry=("amicus_job_export_diff", retry_args),
         )
+        error = envelope.get("error") if envelope.get("ok") is False else None
+        if rec is not None and isinstance(error, dict) and error.get("code") == "job_running":
+            repair = error.get("repair")
+            if isinstance(repair, dict):
+                repair["alternative"] = _EXPORT_RUNNING_ALTERNATIVE
         if rec is None or not delivered:
             return envelope
         assert cwd is not None

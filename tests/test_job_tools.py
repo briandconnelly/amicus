@@ -1801,9 +1801,14 @@ async def test_lookup_failures_match_amicus_job_result_and_write_nothing(
             )
             fetched = await c.call_tool("amicus_job_result", args, raise_on_error=False)
             assert exported.structured_content["ok"] is False, args
-            assert _without_request_ids(exported.structured_content) == _without_request_ids(
-                fetched.structured_content
-            ), args
+            got = _without_request_ids(exported.structured_content)
+            want = _without_request_ids(fetched.structured_content)
+            if args["job_id"] == running:
+                # Only the prose differs: it finishes with the export, not an inline fetch.
+                alternative = got["error"]["repair"].pop("alternative")
+                want["error"]["repair"].pop("alternative")
+                assert "amicus_job_export_diff" in alternative
+            assert got == want, args
         await c.call_tool("amicus_job_cancel", {"job_id": running, "workspace_root": str(repo)})
     assert not target.exists()
     assert _delivered(store, repo, old) is None
@@ -1864,3 +1869,59 @@ async def test_the_review_recipe_runs_end_to_end_on_a_large_exported_diff(
     assert (scratch / "wt" / "big.txt").read_text() == content
     assert (scratch / "wt" / "a.py").read_text() == "x = 2\n"
     assert not (repo / "big.txt").exists()
+
+
+async def test_an_unreadable_result_reached_through_the_export_repeats_the_export(
+    app, store, repo, scratch, monkeypatch
+):
+    """Fix round 1: following amicus_job_result's repair would return the diff inline, so
+    the export's repair is the export itself, a complete call; the fetch tools keep theirs."""
+    ws = {"workspace_root": str(repo)}
+    target = scratch / "u.patch"
+    async with Client(app) as c:
+        job_id = await _delegate_job(c, store, repo, monkeypatch)
+        restore = _deny_result_read(monkeypatch, store._job_dir(str(repo), job_id))
+        exported = await c.call_tool(
+            "amicus_job_export_diff", _export_args(job_id, repo, target), raise_on_error=False
+        )
+        fetched = await c.call_tool(
+            "amicus_job_result", {"job_id": job_id, **ws}, raise_on_error=False
+        )
+        consumed = await c.call_tool(
+            "amicus_job_consume_result", {"job_id": job_id, **ws}, raise_on_error=False
+        )
+        restore()
+    repair = exported.structured_content["error"]["repair"]
+    assert repair["tool"] == "amicus_job_export_diff"
+    assert repair["arguments"] == {"job_id": job_id, **ws, "path": str(target)}
+    _assert_unreadable(
+        fetched.structured_content,
+        repair_tool="amicus_job_result",
+        job_id=job_id,
+        ws=ws,
+        detail="summary",
+    )
+    _assert_unreadable(
+        consumed.structured_content,
+        repair_tool="amicus_job_consume_result",
+        job_id=job_id,
+        ws=ws,
+        detail="summary",
+    )
+    assert not target.exists()
+    assert _delivered(store, repo, job_id) is None
+
+
+async def test_a_path_with_a_lone_surrogate_is_invalid_arguments(
+    app, store, repo, scratch, monkeypatch
+):
+    async with Client(app) as c:
+        job_id = await _delegate_job(c, store, repo, monkeypatch)
+        res = await c.call_tool(
+            "amicus_job_export_diff",
+            {"job_id": job_id, "workspace_root": str(repo), "path": str(scratch) + "/\ud800"},
+            raise_on_error=False,
+        )
+    assert _delivered(store, repo, job_id) is None
+    err = res.structured_content["error"]
+    assert err["code"] == "invalid_arguments" and err["details"]["field"] == "path"

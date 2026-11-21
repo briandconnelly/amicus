@@ -192,3 +192,94 @@ def test_refusal_messages_carry_no_path(scratch: Path, store_root: Path) -> None
     with pytest.raises(ExportRefused) as info:
         write_diff_file(str(target), DIFF, job_store_root=str(store_root))
     assert str(scratch) not in str(info.value)
+
+
+# --- fix round 1 -------------------------------------------------------------------------
+
+
+def test_a_parent_swapped_for_a_symlink_after_resolution_is_refused(
+    scratch: Path, store_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The resolution saw a plain path; by the open, a component is a link into the store.
+    link = scratch / "swapped"
+    link.symlink_to(store_root, target_is_directory=True)
+    monkeypatch.setattr(export.os.path, "realpath", str)
+    assert _refused(str(link / "out.patch"), store_root) == "not_writable"
+    monkeypatch.undo()
+    assert list(store_root.iterdir()) == []
+
+
+def test_the_store_reached_through_dot_dot_is_refused_by_identity(
+    scratch: Path, store_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Unresolved, the string is not under the store; the opened directory's identity is.
+    monkeypatch.setattr(export.os.path, "realpath", str)
+    path = str(scratch / ".." / store_root.name / "out.patch")
+    assert _refused(path, store_root) == "inside_job_store"
+    monkeypatch.undo()
+    assert list(store_root.iterdir()) == []
+
+
+def test_the_store_reached_through_aliases_is_refused(
+    tmp_path: Path, scratch: Path, store_root: Path
+) -> None:
+    ancestor = scratch / "anc"
+    ancestor.symlink_to(tmp_path, target_is_directory=True)
+    assert _refused(str(ancestor / "state" / "out.patch"), store_root) == "inside_job_store"
+    (store_root / "jobs").mkdir()
+    dotted = str(store_root / "jobs" / ".." / "jobs" / "out.patch")
+    assert _refused(dotted, store_root) == "inside_job_store"
+
+
+def test_the_system_temp_dir_behind_a_symlink_is_accepted(store_root: Path) -> None:
+    # On macOS /tmp and $TMPDIR resolve through /private; resolution happens first.
+    import tempfile
+    import uuid
+
+    for base in {tempfile.gettempdir(), "/tmp"}:
+        if not Path(base).is_dir():
+            continue
+        target = Path(base) / f"amicus-export-{uuid.uuid4().hex}.patch"
+        try:
+            write_diff_file(str(target), DIFF, job_store_root=str(store_root))
+            assert target.read_bytes() == DIFF.encode()
+        finally:
+            target.unlink(missing_ok=True)
+
+
+@pytest.mark.parametrize("suffix", ["", "/", "/.", "/.."])
+def test_a_path_without_a_file_name_is_refused(
+    scratch: Path, store_root: Path, suffix: str
+) -> None:
+    path = str(scratch / "dir") + suffix if suffix else str(scratch) + "/"
+    (scratch / "dir").mkdir(exist_ok=True)
+    assert _refused(path, store_root) == "not_a_file_name"
+
+
+def test_an_existing_directory_is_exists(scratch: Path, store_root: Path) -> None:
+    (scratch / "d").mkdir()
+    assert _refused(str(scratch / "d"), store_root) == "exists"
+
+
+def test_an_unencodable_diff_fails_and_leaves_nothing(scratch: Path, store_root: Path) -> None:
+    target = scratch / "bad.patch"
+    with pytest.raises(ExportFailed):
+        write_diff_file(str(target), "+\ud800\n", job_store_root=str(store_root))
+    assert not target.exists()
+
+
+def test_cleanup_never_unlinks_a_file_swapped_in_under_the_name(
+    scratch: Path, store_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = scratch / "out.patch"
+
+    def swap_then_fail(fd: int, data: bytes) -> int:
+        target.unlink()
+        target.write_bytes(b"someone else's")
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+    monkeypatch.setattr(export.os, "write", swap_then_fail)
+    with pytest.raises(ExportFailed):
+        write_diff_file(str(target), DIFF, job_store_root=str(store_root))
+    monkeypatch.undo()
+    assert target.read_bytes() == b"someone else's"
