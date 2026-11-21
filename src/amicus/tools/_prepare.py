@@ -24,6 +24,7 @@ from amicus.schemas.params import (
     MIN_TIMEOUT_SECONDS,
     reasoning_effort_shape_error,
 )
+from amicus.sdk.conventions import preflight
 from amicus.sdk.core import redaction
 from amicus.tools import _resolve
 
@@ -34,6 +35,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from amicus.schemas.options import BackendOptions
 
 DEADLINE_ADVISORY_PROMPT_BYTES = 100_000
+MODEL_FLAG = "--model"
 _HIGH_EFFORTS = frozenset({"high", "xhigh"})
 
 
@@ -86,6 +88,65 @@ def _placeholder_error(
             "These env vars are literal ${...}; your MCP host is not expanding env "
             "substitutions. Use an env_vars passthrough list, or set literal values."
         ),
+    )
+
+
+def model_flag_dropped(plugin: BackendPlugin) -> bool:
+    """True when the backend help-gates --model and the installed CLI does not offer it, so
+    the adapter would drop a selector silently. Runs the cached help probe (blocking)."""
+    if MODEL_FLAG not in plugin.contract.help_gated_flags:
+        return False
+    return not preflight.is_supported(MODEL_FLAG, plugin.help_probe.flag_support())
+
+
+async def _model_policy_error(
+    settings: Settings, plugin: BackendPlugin, model: str | None, meta: Meta, tool_name: str
+) -> dict[str, Any] | None:
+    """AMICUS_DENY_MODELS, enforced pre-spend on the selector amicus would send (#547)."""
+    if settings.model_policy_error is not None:
+        return error_envelope(
+            "model_policy_invalid",
+            f"{settings.model_policy_error}; no paid call or dry run runs until it is fixed.",
+            meta,
+            plugin=plugin,
+            failing_tool=tool_name,
+        )
+    backend = plugin.backend_id
+    if not settings.model_policy.patterns_for(backend):
+        return None
+    if model is None or not model.strip():
+        reason = (
+            f"AMICUS_DENY_MODELS has rules for {backend} and this call names no model, so the "
+            "CLI's own default cannot be checked; pass `model`, or have the operator set the "
+            "backend's AMICUS_*_MODEL default."
+        )
+    elif (pattern := settings.model_policy.denied_by(backend, model)) is not None:
+        reason = f"the model is denied for {backend} by AMICUS_DENY_MODELS pattern {pattern!r}."
+    elif await asyncio.to_thread(model_flag_dropped, plugin):
+        return error_envelope(
+            "model_denied",
+            f"AMICUS_DENY_MODELS has rules for {backend} and the installed CLI does not "
+            "advertise --model, so the checked model could not be sent. No model call was made.",
+            meta,
+            plugin=plugin,
+            failing_tool=tool_name,
+            details=ErrorDetail(field="model", reason="model_flag_unsupported"),
+            repair_next_step="install_backend",
+            repair_tool="amicus_backends",
+            repair_alternative=(
+                "No model on this backend can pass while its CLI lacks --model: update the "
+                "backend CLI, or pick another backend that supports this verb."
+            ),
+        )
+    else:
+        return None
+    return error_envelope(
+        "model_denied",
+        redaction.sanitize_echo_prose(f"{reason} No model call was made."),
+        meta,
+        plugin=plugin,
+        failing_tool=tool_name,
+        details=ErrorDetail(field="model"),
     )
 
 
@@ -175,6 +236,9 @@ async def prepare_run(
     placeholder = _placeholder_error(settings, plugin, meta)
     if placeholder is not None:
         return placeholder
+    denied = await _model_policy_error(settings, plugin, model_v, meta, tool_name)
+    if denied is not None:
+        return denied
     if resolution.error_code is not None:
         detail = resolution.error_detail
         if resolution.error_code == "workspace_outside_roots" and workspace_root is not None:
@@ -354,5 +418,6 @@ async def prepare_run(
         focus=focus,
         target=target,
         evidence=evidence,
+        require_model_flag=bool(settings.model_policy.patterns_for(backend)),
     )
     return Prepared(spec=spec, meta=meta_for(spec), plugin=plugin, wait_seconds=wait)

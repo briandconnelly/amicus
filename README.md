@@ -166,7 +166,10 @@ does today.
 `AMICUS_BACKENDS` is the one most people set. Beyond it, each backend takes an optional model,
 reasoning effort, and binary path (`AMICUS_CODEX_MODEL`, `AMICUS_PI_REASONING_EFFORT`,
 `AMICUS_CLAUDE_BIN`, and so on), and there are limits for timeouts, job retention and payload
-sizes. Every variable, what it does and its default is in [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md), rendered from the declarations in the code.
+sizes. `AMICUS_DENY_MODELS` blocks models per backend with `backend:glob` entries, such as
+`claude:*opus-5-0*,pi:openrouter/deepseek/*`. It checks the model name amicus sends, not the
+model a CLI or router resolves that name to, and a backend with rules refuses a call that names
+no model. Every variable, what it does and its default is in [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md), rendered from the declarations in the code.
 
 Logging goes to stderr, and `AMICUS_LOG_FILE` mirrors amicus's own records to a file. To reduce
 the risk of prompt text leaking through dependency logs, `fastmcp` and `mcp` records are limited

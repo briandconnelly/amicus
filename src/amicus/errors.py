@@ -111,6 +111,22 @@ _LOCAL_RULES: dict[str, RepairRule] = {
         "after AMICUS_JOB_TTL; one this release wrote but cannot read back (internal_error "
         "here) is kept by a consume too, and only expires.",
     ),
+    "model_denied": RepairRule(
+        "correct_arguments",
+        "amicus_models",
+        False,
+        "The operator's AMICUS_DENY_MODELS refuses this model selector, or a call with no "
+        "model, on this backend. Pass an allowed `model`: amicus_models(backend) omits denied "
+        "rows. No model call was made.",
+    ),
+    "model_policy_invalid": RepairRule(
+        "correct_config",
+        "amicus_backends",
+        False,
+        "The server's AMICUS_DENY_MODELS is malformed (the message names the entry); every "
+        "paid tool and dry run refuses until the operator fixes it and restarts the server. "
+        "No model call was made.",
+    ),
     "feature_unsupported": RepairRule(
         "use_allowed_value",
         "amicus_backends",
@@ -178,6 +194,8 @@ _TOOL_OVERRIDES: dict[str, str] = {
     "job_running": "amicus_job_status",
     "invalid_reasoning_effort": "amicus_models",
     "invalid_model": "amicus_models",
+    "model_denied": "amicus_models",
+    "model_policy_invalid": "amicus_backends",
 }
 
 

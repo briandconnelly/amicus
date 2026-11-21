@@ -508,3 +508,12 @@ def test_retired_and_invalid_value_attribution():
         == "cli_contract_changed"
     )
     assert "yes" not in _classify(CommandRun("", invalid, 1, 1, False)).detail
+
+
+def test_a_policy_checked_model_is_never_dropped_by_the_help_gate():
+    """#547: with deny rules active the worker must send the checked selector even when its
+    own help probe says --model is absent, so the CLI fails rather than runs its default."""
+    cmd, dropped = _build(model="gpt-5.4", flag_support=_NO_MODEL, require_model_flag=True)
+    assert cmd[cmd.index(contract.MODEL_FLAG) + 1] == "gpt-5.4" and dropped == []
+    cmd, _ = _build(flag_support=_NO_MODEL, require_model_flag=True)
+    assert contract.MODEL_FLAG not in cmd

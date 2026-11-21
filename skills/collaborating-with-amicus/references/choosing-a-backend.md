@@ -116,6 +116,13 @@ report has been read.
 `AMICUS_BACKENDS` decides which backends exist in this deployment; it does not decide which to
 prefer.
 
+`model_policy` on each `amicus_backends` entry reports the operator's `AMICUS_DENY_MODELS`.
+When its `state` is `active`, a call that names no model is refused, as is any model matching
+`deny_patterns`, so pass an explicit model that `amicus_models` lists; `default_denied: true`
+means the configured default itself is refused. `amicus_models` omits denied rows and counts
+them in `hidden_by_policy`. The policy checks the selector amicus sends, not the model a CLI
+or router resolves it to.
+
 ## What `features` contains
 
 `features` is not the list of verbs a backend answers. It names the gated verbs the backend

@@ -14,6 +14,10 @@ failure, not a tool returning `ok: false`. A tool that answers is not a server t
 - **Never use the direct CLI route when only the supplied prompt may be disclosed.** It reaches
   the filesystem; the prompt is not the limit of what it sends.
 - **Point `WORKSPACE` only at a directory the user has approved for disclosure.**
+- **Never treat a `model_denied` or `model_policy_invalid` refusal as the server being down.**
+  The operator's `AMICUS_DENY_MODELS` refused it, and a direct CLI call would bypass that policy.
+- **Never take the direct CLI route when you cannot confirm that the operator has no model
+  denylist** (`model_policy` on `amicus_backends`); restore the server instead.
 - **Never retry either route while the transport condition is unchanged.**
 - **Read [reading results](reading-results.md) → Rules before acting on a fallback's answer.**
   It has no envelope, so the field rules have nothing to read; the rules on unverified claims,

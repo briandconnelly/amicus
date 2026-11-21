@@ -116,7 +116,10 @@ def access_flags(access: str) -> list[str]:
     raise ValueError(f"unsupported access: {access}")
 
 
-def _gate_optional(tokens: list[str], fs: FlagSupport) -> tuple[list[str], list[str]]:
+def _gate_optional(
+    tokens: list[str], fs: FlagSupport, keep: frozenset[str] = frozenset()
+) -> tuple[list[str], list[str]]:
+    """Drop help-gated flags the CLI does not advertise, except those in `keep`."""
     kept: list[str] = []
     dropped: list[str] = []
     i = 0
@@ -124,7 +127,7 @@ def _gate_optional(tokens: list[str], fs: FlagSupport) -> tuple[list[str], list[
         token = tokens[i]
         takes_value = contract.HELP_GATED_FLAGS.get(token)
         if takes_value is not None:
-            if not preflight.is_supported(token, fs):
+            if token not in keep and not preflight.is_supported(token, fs):
                 dropped.append(token)
                 i += 2 if takes_value else 1
                 continue
@@ -149,6 +152,7 @@ def build_command(
     effort: str | None,
     model: str | None,
     flag_support: FlagSupport,
+    require_model_flag: bool = False,
 ) -> tuple[list[str], list[str]]:
     """The `claude -p --output-format json` invocation. Returns (argv, dropped_help_gated_flags).
     The prompt is NOT here: the runner streams it over stdin."""
@@ -161,7 +165,8 @@ def build_command(
         tokens += [contract.EFFORT_FLAG, effort]
     if model:
         tokens += [contract.MODEL_FLAG, model]
-    return _gate_optional(tokens, flag_support)
+    keep = frozenset({contract.MODEL_FLAG}) if require_model_flag and model else frozenset()
+    return _gate_optional(tokens, flag_support, keep)
 
 
 def scrub_env(env: Mapping[str, str], config_mode: str | None) -> dict[str, str]:

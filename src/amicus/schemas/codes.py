@@ -66,6 +66,10 @@ LOCAL_CODES = frozenset(
         "api_key_invalid",
         # ... config_mode=bare was requested without ANTHROPIC_API_KEY; refused pre-spend.
         "api_key_missing",
+        # The operator's AMICUS_DENY_MODELS refused the model selector pre-spend (#547) ...
+        "model_denied",
+        # ... or is malformed, so every paid tool and dry run fails closed.
+        "model_policy_invalid",
     }
 )
 
@@ -110,6 +114,8 @@ ErrorCode = Literal[
     "job_result_incompatible",
     "job_running",
     "job_timeout",
+    "model_denied",
+    "model_policy_invalid",
     "nonzero_exit",
     "not_a_git_repo",
     "resource_not_found",
