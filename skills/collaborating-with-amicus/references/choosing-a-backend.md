@@ -28,8 +28,9 @@ exposure; they are not restated here. These are this file's own:
 - **Never trial a candidate `pi` model outside amicus**, through a provider's inference API
   or any other tool that runs a model.
 - **Never put the user's text into a provider's catalog or search tool.**
-- **Take a candidate's price and terms from its provider's catalog as read in this session,
-  never from memory**, and say which facts you could not establish rather than supplying them.
+- **Take a candidate's price from its row's `pricing` or from its provider's catalog, and its
+  other terms from that catalog, each as read in this session, never from memory**, and say
+  which facts you could not establish rather than supplying them.
 - **Read `context_tokens` and `max_output_tokens` as a screen with headroom, never as proof a
   call fits, and never read a `null` as evidence that it does.**
 
