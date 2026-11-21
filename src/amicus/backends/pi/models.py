@@ -23,7 +23,14 @@ when the second probe fails. `lookup`, the pre-spend gate, never uses it.
 A price is published only where it says something. pi reports a model with no catalog price
 as costing 0, exactly as it reports a free one, so a `cost` whose four rates are all 0 and
 that has no tiers is None (unknown), never a zero price. One malformed number makes that
-row's price None and leaves the row."""
+row's price None and leaves the row.
+
+The reply also says which reasoning levels a model maps, published as
+`advertised_reasoning_efforts` and never checked pre-spend (ADR 0052). `advertised_efforts`
+mirrors `getSupportedThinkingLevels` in pi 1.6.0's `pi-ai/dist/models.js`. The table stays the
+authority on whether a model thinks: a `thinking: no` row advertises only `off`, and a
+`thinking: yes` row takes the reply's levels only when its RPC row's `reasoning` is literally
+true, and is None (unknown) otherwise."""
 
 from __future__ import annotations
 
@@ -40,6 +47,8 @@ from amicus.plugin import ModelEntry, ModelListing, ModelPricing, PricingTier
 from amicus.sdk.core import runtime
 
 if TYPE_CHECKING:  # pragma: no cover
+    from collections.abc import Mapping
+
     from amicus.backends.pi.binary import PiBinary
     from amicus.backends.pi.config import PiConfig
 
@@ -98,11 +107,12 @@ def parse_table(stdout: str) -> ModelListing | None:
         slug = f"{cols[0]}/{cols[1]}"
         if is_batch_only(slug):
             continue
-        efforts = contract.EFFORTS if cols[4] == "yes" else ("off",)
+        thinks = cols[4] == "yes"
         entries.append(
             ModelEntry(
                 slug=slug,
-                supported_reasoning_efforts=efforts,
+                supported_reasoning_efforts=contract.EFFORTS if thinks else ("off",),
+                advertised_reasoning_efforts=None if thinks else ("off",),
                 context_tokens=tokens(cols[2]),
                 max_output_tokens=tokens(cols[3]),
             )
@@ -116,6 +126,36 @@ class ModelDetail(NamedTuple):
     context_tokens: int | None
     max_output_tokens: int | None
     pricing: ModelPricing | None
+    advertised_reasoning_efforts: tuple[str, ...] | None = None
+
+
+_ABSENT = object()
+# The levels pi supports without a mapping; `xhigh` and `max` need one.
+_UNMAPPED_SUPPORTED = frozenset({"off", "minimal", "low", "medium", "high"})
+
+
+def advertised_efforts(reasoning: object, row: Mapping[str, object]) -> tuple[str, ...] | None:
+    """The levels one RPC row says its model maps, in `contract.EFFORTS` order, or None when
+    `reasoning` is not literally true or the row's `thinkingLevelMap` is present and not an
+    object. An explicit null marks a level unsupported; an omitted one is supported from `off`
+    through `high` and not for `xhigh` or `max`; any other value marks it supported. No map at
+    all reads as an empty one."""
+    if reasoning is not True:
+        return None
+    level_map = row.get("thinkingLevelMap", _ABSENT)
+    if level_map is _ABSENT:
+        level_map = {}
+    if not isinstance(level_map, dict):
+        return None
+    advertised = []
+    for level in contract.EFFORTS:
+        mapped = level_map.get(level, _ABSENT)
+        if mapped is None:
+            continue
+        if mapped is _ABSENT and level not in _UNMAPPED_SUPPORTED:
+            continue
+        advertised.append(level)
+    return tuple(advertised)
 
 
 def _rate(value: object) -> float | None:
@@ -206,8 +246,9 @@ def parse_rpc_models(stdout: str) -> dict[str, ModelDetail] | None:
     """Each model's detail by slug, from the reply to `contract.RPC_MODELS_REQUEST`, or None
     when stdout is not that reply. An empty array is a reply (pi has no credentialed
     provider), so it is {} and not None. A row without a provider and an id is skipped, and
-    a slug two rows share describes neither. Only the fields named here are read: the reply
-    also carries each model's endpoint URL, which goes no further."""
+    a slug two rows share describes neither. Only the fields named here, `reasoning` and
+    `thinkingLevelMap` among them, are read: the reply also carries each model's endpoint URL,
+    which goes no further."""
     rows = _reply_models(stdout)
     if rows is None:
         return None
@@ -228,13 +269,15 @@ def parse_rpc_models(stdout: str) -> dict[str, ModelDetail] | None:
             _count(row.get("contextWindow")),
             _count(row.get("maxTokens")),
             parse_pricing(row.get("cost")),
+            advertised_efforts(row.get("reasoning"), row),
         )
     return details
 
 
 def enrich(listing: ModelListing, details: dict[str, ModelDetail]) -> ModelListing:
-    """`listing` with each row the reply describes given its exact limits and its price.
-    Rows, order and truncation are the table's."""
+    """`listing` with each row the reply describes given its exact limits and its price,
+    and, on a row the table says thinks, the levels the reply advertises. Rows, order,
+    truncation and `supported_reasoning_efforts` are the table's."""
 
     def one(entry: ModelEntry) -> ModelEntry:
         detail = details.get(entry.slug)
@@ -251,6 +294,11 @@ def enrich(listing: ModelListing, details: dict[str, ModelDetail]) -> ModelListi
                 else entry.max_output_tokens
             ),
             pricing=detail.pricing,
+            advertised_reasoning_efforts=(
+                detail.advertised_reasoning_efforts
+                if entry.supported_reasoning_efforts == contract.EFFORTS
+                else entry.advertised_reasoning_efforts
+            ),
         )
 
     return dataclasses.replace(listing, models=tuple(one(entry) for entry in listing.models))

@@ -642,6 +642,7 @@ def test_a_model_past_a_truncated_listing_is_checked_by_its_own_lookup(monkeypat
     assert real.lookup("late/plain") == ModelEntry(
         slug="late/plain",
         supported_reasoning_efforts=("off",),
+        advertised_reasoning_efforts=("off",),
         context_tokens=1_000,
         max_output_tokens=1_000,
     )
@@ -649,3 +650,56 @@ def test_a_model_past_a_truncated_listing_is_checked_by_its_own_lookup(monkeypat
     refused = backend.validate_request(_req(model="late/plain", reasoning_effort="high"))
     assert refused is not None and refused.code == "invalid_reasoning_effort"
     assert refused.details == {"field": "reasoning_effort", "allowed_values": ["off"]}
+
+
+def test_validation_never_reads_the_advertised_levels(monkeypatch):
+    """#559: the levels pi's catalog advertises inform amicus_models and never refuse a call.
+    A real PiModels runs over a spy on the spawn seam: `read` shows the spy sees the RPC
+    request, so its absence during `validate_request` means something."""
+    import json
+
+    from amicus.backends.pi import models as pi_models
+    from amicus.backends.pi.binary import PiBinary
+    from amicus.backends.pi.config import load_config
+    from amicus.sdk.conventions.preflight import HelpProbe
+
+    off_low = {"minimal": None, "medium": None, "high": None}
+    row = {"provider": "openrouter", "id": "moonshotai/kimi-k3", "reasoning": True}
+    reply = {
+        "type": "response",
+        "command": contract.RPC_MODELS_COMMAND,
+        "success": True,
+        "data": {"models": [{**row, "thinkingLevelMap": off_low}]},
+    }
+    seen: list[str] = []
+
+    def spy(cmd, timeout_seconds, **kwargs):
+        if cmd[1:3] == ["auth", "check"]:
+            seen.append("auth")
+            return CommandRun('{"status":"ready"}', "", 0, 1, False)
+        if "--mode" in cmd:
+            seen.append("rpc")
+            return CommandRun(json.dumps(reply) + "\n", "", 0, 1, False)
+        assert cmd[1] == "--list-models", cmd
+        seen.append("table")
+        return CommandRun(_TABLE, "", 0, 1, False)
+
+    monkeypatch.setattr(runtime, "run_sync_capture", spy)
+    monkeypatch.setattr(pi_models, "probe_cwd", lambda _cfg: "/probe-cwd")
+    cfg = load_config({"AMICUS_PI_BIN": "/PI"})
+    binary = PiBinary(cfg)
+    binary.resolve = lambda: "/PI"  # type: ignore[method-assign]
+    real = pi_models.PiModels(cfg, binary)
+    backend = adapter.PiBackend(
+        cfg,
+        binary,
+        HelpProbe(help_argv=("/PI", *contract.HELP_ARGS), probe_cwd=lambda: "/probe-cwd"),
+        real,
+    )
+    listing = real.read()
+    entry = next(e for e in listing.models if e.slug == pf.MODEL)
+    assert entry.advertised_reasoning_efforts == ("off", "low")
+    assert seen == ["table", "rpc"]  # the positive control: the spy sees an RPC request
+    seen.clear()
+    assert backend.validate_request(_req(reasoning_effort="medium")) is None
+    assert seen.count("table") == 1 and "rpc" not in seen

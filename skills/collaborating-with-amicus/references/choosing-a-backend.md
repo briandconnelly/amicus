@@ -63,7 +63,7 @@ What the listing establishes, and what it does not:
 
 | Question | Source |
 | --- | --- |
-| Which exact `provider/id` pi can call, and its effort vocabulary | the row's `slug` and `supported_reasoning_efforts` |
+| Which exact `provider/id` pi can call, the efforts amicus accepts for it, and the levels pi's catalog says it maps | the row's `slug`, `supported_reasoning_efforts` and `advertised_reasoning_efforts` |
 | Roughly how much the model accepts and can return | the row's `context_tokens` and `max_output_tokens` |
 | Where the prompt goes | the `provider/` prefix, which may be a router rather than the model's vendor, unless pi's `models.json` overrides that provider's `baseUrl` |
 | What pi's catalog says the model costs | the row's `pricing`, in USD per million tokens |
@@ -88,9 +88,14 @@ What the listing establishes, and what it does not:
   `max_output_tokens` on every call, so a prepaid provider refuses a call unless the balance
   covers that many tokens at the output rate that applies to the request: `pricing.output`,
   or a tier's `output` when the input exceeds its threshold.
-- **An effort a row lists is advertised, not guaranteed.** A thinking model's row lists pi's
-  whole vocabulary; where the model lacks the level passed, pi runs another and the result
-  says so on `meta.security_warnings`. An omitted `reasoning_effort` inherits
+- **An effort a row lists is advertised, not guaranteed.** A thinking model's
+  `supported_reasoning_efforts` is pi's whole vocabulary, the set amicus accepts pre-spend.
+  `advertised_reasoning_efforts` narrows it to the levels pi's catalog says the model maps,
+  read by pi's own rule and never checked pre-spend: `[]` means the model maps none, so pass no
+  `reasoning_effort`, and `null` means unknown, so fall back to `supported_reasoning_efforts`.
+  It is a snapshot of pi's catalog, not a provider's answer. Where the model lacks the level
+  passed, pi runs another, searching upward from it and then downward, and the result says so
+  on `meta.security_warnings`. An omitted `reasoning_effort` inherits
   `AMICUS_PI_REASONING_EFFORT`, else pi's own default, which no amicus surface reports. An
   explicit one avoids that unreported default. It selects a level; it caps neither tokens nor
   cost.

@@ -633,8 +633,14 @@ _MAX_OUTPUT_TOKENS_DESC = (
     "covers it at the output price."
 )
 _EFFORTS_DESC = (
-    "Advisory; pi lists its own vocabulary, not the model's levels, and may run another. "
+    "Advisory; for pi, the vocabulary amicus accepts pre-spend, not the model's levels. "
     "null: unknown."
+)
+# Kept: without it a list reads as a guarantee, and [] and null read alike.
+_ADVERTISED_EFFORTS_DESC = (
+    "pi only: the levels pi's catalog says the model maps. pi can run another level for one "
+    "it does not map, and the result warns when a different level is reported. A snapshot, "
+    "not checked against the provider. null: unknown; []: none."
 )
 # Kept for the same reason: a bare number reads as a quote, and a null as free.
 _PRICING_DESC = (
@@ -643,7 +649,13 @@ _PRICING_DESC = (
     "writes included, exceeds input_tokens_above (highest match). null: unknown, never free."
 )
 publish.KEPT_DESCRIPTIONS.update(
-    (_CONTEXT_TOKENS_DESC, _MAX_OUTPUT_TOKENS_DESC, _EFFORTS_DESC, _PRICING_DESC)
+    (
+        _CONTEXT_TOKENS_DESC,
+        _MAX_OUTPUT_TOKENS_DESC,
+        _EFFORTS_DESC,
+        _ADVERTISED_EFFORTS_DESC,
+        _PRICING_DESC,
+    )
 )
 
 
@@ -674,6 +686,9 @@ class ModelInfo(BaseModel):
     context_tokens: int | None = Field(default=None, description=_CONTEXT_TOKENS_DESC)
     max_output_tokens: int | None = Field(default=None, description=_MAX_OUTPUT_TOKENS_DESC)
     pricing: ModelPricingInfo | None = Field(default=None, description=_PRICING_DESC)
+    advertised_reasoning_efforts: list[str] | None = Field(
+        default=None, description=_ADVERTISED_EFFORTS_DESC
+    )
 
 
 _CATALOG_TRUNCATED_DESC = (

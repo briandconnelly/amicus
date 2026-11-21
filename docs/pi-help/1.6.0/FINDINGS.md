@@ -54,6 +54,14 @@ Apart from the first run, which read the maintainer's own configuration, every r
 Not tested: a provider that discovers or refreshes its models at run time, an OAuth-credentialed provider, the listing with network allowed and no `--offline`, and whether the table's order changes with the locale.
 The reply is built from `getAvailableSnapshot()` and the table from `await getAvailable()`, so the first two are where the two sets could differ.
 
+## Advertised reasoning levels (issue #559)
+
+`getSupportedThinkingLevels` in `node_modules/@earendil-works/pi-ai/dist/models.js` of the 1.6.0 install, lines 702-713, returns `off` alone for a model whose `reasoning` is falsy.
+Otherwise it keeps each of `off`, `minimal`, `low`, `medium`, `high`, `xhigh` and `max` unless the model's `thinkingLevelMap` maps it to `null`, and keeps `xhigh` and `max` only when the map names them.
+`clampThinkingLevel`, lines 714-732, keeps a supported level, searches upward from the requested level for a supported one, then downward, and falls back to the first supported level or `off`.
+amicus's `advertised_efforts` follows the first function, and ADR 0052 records where it is stricter: only a literal `true` for `reasoning`, and a map that is present and not an object is unknown.
+This was read from the source only; no live call tested which level a provider actually ran.
+
 ## The live suite
 
 `tests/test_pi_live.py`, run as `AMICUS_REQUIRE_LIVE=1 AMICUS_PI_MODEL=openrouter/moonshotai/kimi-k3 uv run pytest -m integration --no-cov tests/test_pi_live.py`, passed its four paid tests on pi 1.6.0, including `test_delegate_stops_at_the_budget_cap_live`.

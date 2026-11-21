@@ -246,12 +246,14 @@ PARAMETER_CONTRACTS: dict[str, ParamContract] = {
         name="reasoning_effort",
         summary=(
             "Per-call reasoning effort, an open per-model string (commonly "
-            "minimal|low|medium|high|xhigh; amicus_models lists advisory values); omit for "
+            "minimal|low|medium|high|xhigh; amicus_models lists per-model sets); omit for "
             f"the backend default. Bounds: {PARAMS_RESOURCE_URI}."
         ),
         full=(
             "Omitted, the backend resolves its own default. The value is validated by the "
-            "backend, and amicus_models's per-model set is advisory. A backend-rejected "
+            "backend; amicus_models's supported_reasoning_efforts is advisory (for pi, the "
+            "vocabulary checked pre-spend) and pi's advertised_reasoning_efforts is never "
+            "checked. A backend-rejected "
             "value fails as invalid_reasoning_effort (repair steers to amicus_models). "
             "Backends whose CLI does not reject a bad effort (claude, pi) are "
             "validated pre-spend: claude against a fixed list "

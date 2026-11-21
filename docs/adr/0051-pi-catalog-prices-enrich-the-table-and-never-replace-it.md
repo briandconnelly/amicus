@@ -43,10 +43,12 @@ A tier applies once the request's input exceeds its threshold, and pi counts cac
 **Only named fields are read.**
 The reply also carries each model's endpoint URL and, for some providers, fixed request headers and a credential-source label.
 amicus reads the provider, the id, the two limits and `cost`, and writes the reply to no log.
+[ADR 0052](0052-pi-advertised-levels-inform-and-never-refuse.md) adds `reasoning` and `thinkingLevelMap` to that list.
 
 **Reasoning efforts are not narrowed.**
 The reply's `thinkingLevelMap` says which levels a model maps, but ADR 0047 lets pi clamp an effort and reports the level that ran, and the pre-spend check enforces the listed set.
 Narrowing it would change which calls are refused, so it is left for a decision of its own.
+Superseded by [ADR 0052](0052-pi-advertised-levels-inform-and-never-refuse.md), which publishes the levels in a separate field and leaves the refused set as it is.
 
 ## Consequences
 
