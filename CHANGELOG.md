@@ -48,6 +48,13 @@ per-change, as its own lead says.
   `details.reason`, and a `correct_config` repair that names both remedies: add credit, or cap
   the model's `maxTokens` in pi's `models.json` (in `$PI_CODING_AGENT_DIR` when set, otherwise
   `~/.pi/agent/`). The README's pi section says the same.
+- A pi call that fails with a provider's bodiless 404 (`404 status code (no body)`) or with
+  `Region is missing` is no longer reported as temporary (#520), because retrying the same call
+  unchanged is unlikely to help. The error is still `nonzero_exit`, now with
+  `temporary: false`, a `details.reason`, and a `correct_config` repair naming what to check:
+  for the 404, the model id against `amicus_models` and any `baseUrl` in pi's `models.json`;
+  for the region, `AWS_REGION` for Amazon Bedrock, or the region another provider's
+  configuration asks for, then restart the server. The README's pi section says the same.
 - Stopping a job that ran past its deadline no longer stalls every other job call the server
   is handling (#531). The first job read to find it overrun waited up to the terminate grace
   (5 s by default) for the worker to exit while holding the server's job lock, so status,
