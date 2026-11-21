@@ -38,6 +38,7 @@ from amicus.schemas.results import (
     EffectsInfo,
     ModelCatalogResult,
     ModelInfo,
+    ModelPolicyInfo,
     TaskSupport,
     ToolCapability,
     UnavailableEntry,
@@ -74,6 +75,8 @@ _SUMMARY_FIELDS = ("name", "cost", "stability", "deprecation", "backends")
 
 # Per-tool inventory facts tools/list does not carry. required/key params are derived
 # from the matrix for the paid tools so this table cannot disagree with the schemas.
+# The operator's AMICUS_DENY_MODELS, checked in prepare_run before any job or backend (#547).
+_MODEL_POLICY_CODES = ["model_denied", "model_policy_invalid"]
 _COMMON_PAID_CODES = [
     "backend_unavailable",
     "feature_unsupported",
@@ -97,6 +100,7 @@ _COMMON_PAID_CODES = [
     "api_key_missing",
     "job_cap_reached",
     "internal_error",
+    *_MODEL_POLICY_CODES,
 ]
 # Pi's inspector reports a zero-exit run with no answer as empty_response on every
 # verb it runs, so only a tool that can select pi lists it; adversarial review is
@@ -283,6 +287,7 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
             "invalid_reasoning_effort",
             *_REVIEW_CODES[:6],
             *_PREVIEW_VALIDATION_CODES,
+            *_MODEL_POLICY_CODES,
             "api_key_missing",  # claude's bare mode without a key; claude does not delegate
         ],
     },
@@ -304,6 +309,7 @@ TOOL_DETAILS: dict[str, dict[str, Any]] = {
             "git_unavailable",
             "worktree_error",
             *_PREVIEW_VALIDATION_CODES,
+            *_MODEL_POLICY_CODES,
         ],
     },
     "amicus_backends": {
@@ -564,6 +570,7 @@ def backends_payload(
                 readonly_honesty=contract.readonly_honesty_statement if contract else None,
                 implicit_context=contract.implicit_context_disclosure if contract else None,
                 deprecation=backend_deprecation(backend_id),
+                model_policy=_model_policy_for(settings, backend_id, plugin),
             )
         )
     unavailable = [
@@ -584,13 +591,52 @@ def backends_payload(
     ).model_dump(mode="json", exclude={"backends": {"__all__": set(omitted)}})
 
 
-def models_payload(registry: BackendRegistry, backend: str) -> dict[str, Any]:
+def _model_policy_for(
+    settings: Settings, backend_id: str, plugin: BackendPlugin | None
+) -> ModelPolicyInfo:
+    if policy_blocked(settings):
+        return ModelPolicyInfo(state="invalid", deny_patterns=[])
+    patterns = settings.model_policy.patterns_for(backend_id)
+    if not patterns:
+        return ModelPolicyInfo(state="inactive", deny_patterns=[])
+    default = _configured_default_model(plugin)
+    return ModelPolicyInfo(
+        state="active",
+        deny_patterns=list(patterns),
+        default_denied=None
+        if default is None
+        else settings.model_policy.denied_by(backend_id, default) is not None,
+    )
+
+
+def policy_blocked(settings: Settings) -> bool:
+    """True when AMICUS_DENY_MODELS is malformed or an unexpanded placeholder: either way
+    every paid tool and dry run refuses (model_policy_invalid or unexpanded_env_placeholder)."""
+    return settings.model_policy_error is not None or "AMICUS_DENY_MODELS" in settings.placeholders
+
+
+def _configured_default_model(plugin: BackendPlugin | None) -> str | None:
+    """The backend's AMICUS_*_MODEL default as prepare_run would resolve it, or None."""
+    if plugin is None:
+        return None
+    default = next((o.default for o in plugin.options if o.name == "model"), None)
+    return default if isinstance(default, str) and default.strip() else None
+
+
+def models_payload(registry: BackendRegistry, backend: str, settings: Settings) -> dict[str, Any]:
+    policy = settings.model_policy
+    state = (
+        "invalid"
+        if policy_blocked(settings)
+        else ("active" if policy.patterns_for(backend) else "inactive")
+    )
     plugin = registry.get(backend)
     if plugin is None:
         return ModelCatalogResult(
-            backend=backend, available=False, models=[], source="none"
+            backend=backend, available=False, models=[], source="none", model_policy=state
         ).model_dump(mode="json")
     listing = plugin.models.read()
+    allowed = [m for m in listing.models if policy.denied_by(backend, m.slug) is None]
     return ModelCatalogResult(
         backend=backend,
         available=True,
@@ -605,14 +651,16 @@ def models_payload(registry: BackendRegistry, backend: str) -> dict[str, Any]:
                 context_tokens=m.context_tokens,
                 max_output_tokens=m.max_output_tokens,
             )
-            for m in listing.models
+            for m in allowed
         ],
         source=listing.source,
         fetched_at=listing.fetched_at,
         truncated=listing.truncated,
-        truncation_hint=_truncation_hint(backend, len(listing.models))
+        truncation_hint=_truncation_hint(backend, len(listing.models), len(allowed))
         if listing.truncated
         else None,
+        hidden_by_policy=len(listing.models) - len(allowed),
+        model_policy=state,
     ).model_dump(mode="json")
 
 
@@ -624,9 +672,14 @@ def models_payload(registry: BackendRegistry, backend: str) -> dict[str, Any]:
 _PAST_THE_CUT_CHECKED = frozenset({"pi"})
 
 
-def _truncation_hint(backend: str, count: int) -> str:
+def _truncation_hint(backend: str, count: int, shown: int | None = None) -> str:
     head = (
         f"the catalog was cut at amicus's entry bound and these {count} models come from its start"
+        if shown is None or shown == count
+        else (
+            f"the catalog was cut at amicus's entry bound after {count} models from its start, "
+            f"of which these {shown} are not denied by AMICUS_DENY_MODELS"
+        )
     )
     if backend in _PAST_THE_CUT_CHECKED:
         return (
@@ -833,7 +886,7 @@ def register(
                 base_meta(backend=backend),
                 backend=backend,
             )
-        return await asyncio.to_thread(models_payload, registry, backend)
+        return await asyncio.to_thread(models_payload, registry, backend, settings)
 
     @app.tool(
         name="amicus_capabilities",

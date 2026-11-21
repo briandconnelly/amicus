@@ -365,6 +365,7 @@ def build_request(
         isolation=spec.options.get("isolation"),
         sanitize_aliases=aliases,
         instructions_append=spec.instructions_append,
+        require_model_flag=spec.require_model_flag,
     )
 
 

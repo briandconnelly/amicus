@@ -43,6 +43,7 @@ IDENTITY_EXCLUDE: frozenset[str] = frozenset(
         "job_max_seconds",
         "keyed",
         "deadline_epoch",
+        "require_model_flag",
     }
 )
 
@@ -86,6 +87,10 @@ class RunSpec:
     # so the worker can still capture the worktree's partial diff (#508). Not a prompt input,
     # nor part of a keyed identity; a record written before it existed loads as None.
     deadline_epoch: float | None = None
+    # True when AMICUS_DENY_MODELS has rules for this backend: the checked model selector
+    # must reach the CLI, never be dropped by a help gate (#547). Not a prompt input, nor
+    # part of a keyed identity; a record written before it existed loads as False.
+    require_model_flag: bool = False
     # --- inputs: never persisted, never on argv ---
     question: str | None = None
     task: str | None = None

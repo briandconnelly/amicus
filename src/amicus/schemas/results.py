@@ -559,6 +559,29 @@ _BACKEND_DEPRECATION_DESC = (
 publish.KEPT_DESCRIPTIONS.add(_BACKEND_DEPRECATION_DESC)
 
 
+class ModelPolicyInfo(BaseModel):
+    """The operator's AMICUS_DENY_MODELS as it applies to one backend (#547)."""
+
+    model_config = ConfigDict(extra="forbid")
+    state: Literal["inactive", "active", "invalid"] = Field(
+        description=(
+            "inactive: no rule names this backend; active: deny_patterns apply and a call "
+            "with no model selector is refused; invalid: AMICUS_DENY_MODELS is malformed and "
+            "every paid tool and dry run refuses (model_policy_invalid)."
+        )
+    )
+    deny_patterns: list[str] = Field(
+        description="Case-folded fnmatch globs matched against the whole model selector."
+    )
+    default_denied: bool | None = Field(
+        default=None,
+        description=(
+            "True when the backend's configured AMICUS_*_MODEL default is itself denied; "
+            "null when the policy is not active or no default is configured."
+        ),
+    )
+
+
 class BackendEntry(BaseModel):
     model_config = ConfigDict(extra="forbid")
     id: BackendRef
@@ -574,6 +597,9 @@ class BackendEntry(BaseModel):
     readonly_honesty: str | None = Field(default=None, description=_DISCLOSURE_DESC)
     implicit_context: str | None = Field(default=None, description=_DISCLOSURE_DESC)
     deprecation: ToolDeprecation | None = Field(default=None, description=_BACKEND_DEPRECATION_DESC)
+    model_policy: ModelPolicyInfo = Field(
+        default_factory=lambda: ModelPolicyInfo(state="inactive", deny_patterns=[])
+    )
 
 
 class UnavailableEntry(BaseModel):
@@ -639,6 +665,21 @@ class ModelCatalogResult(BaseModel):
     fetched_at: str | None = None
     truncated: bool = Field(default=False, description=_CATALOG_TRUNCATED_DESC)
     truncation_hint: str | None = None
+    hidden_by_policy: int = Field(
+        default=0,
+        description=(
+            "Rows omitted because AMICUS_DENY_MODELS denies them. The listing is not the "
+            "enforcement point: a paid call checks its selector pre-spend. On a truncated "
+            "catalog it counts only the fetched slice."
+        ),
+    )
+    model_policy: Literal["inactive", "active", "invalid"] = Field(
+        default="inactive",
+        description=(
+            "AMICUS_DENY_MODELS for this backend; invalid means every paid call refuses until "
+            "the operator fixes it (see amicus_backends)."
+        ),
+    )
     fingerprint: str = FINGERPRINT
     server_version: str | None = server_version_field()
 

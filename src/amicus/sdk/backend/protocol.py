@@ -64,6 +64,10 @@ class RunRequest:
     extra_args: tuple[str, ...] = ()
     sanitize_aliases: tuple[str, ...] = ()
     instructions_append: str | None = None
+    # True when the operator's model policy approved ``model`` and it must reach the CLI:
+    # a backend that help-gates its model flag sends it anyway rather than dropping it,
+    # so an incompatible CLI fails loudly instead of running its own default (amicus #547).
+    require_model_flag: bool = False
 
 
 @dataclass(frozen=True)

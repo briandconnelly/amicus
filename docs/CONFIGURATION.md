@@ -100,6 +100,13 @@ Unset by default.
 `1` to allow falling back to the server cwd (disclosed).
 Default: `0`.
 
+### `AMICUS_DENY_MODELS`
+
+Comma-separated `backend:glob` model denylist (backend codex, claude, pi or `*`; case-insensitive; `*` crosses `/`).
+It checks the model selector amicus sends, not the model a CLI runs; a backend with rules refuses a call with no selector.
+Malformed, every paid tool and dry run refuses.
+Unset by default.
+
 ## Codex
 
 ### `AMICUS_CODEX_BIN`

@@ -31,6 +31,10 @@ failed amicus response, a failed resource read or a host's denial, and before pa
   `repair.arguments` when they are present rather than composing a retry yourself.
 - **With no `error.repair`, fix what `error.details` names before retrying.**
 - **Use `invalid_arguments[].allowed_values` to pick a corrected value** rather than guessing one.
+- **On `model_denied`, never retry the same `model`, and never drop `model` to reach the
+  harness default.** Pick a model `amicus_models(backend)` still lists, or, when
+  `details.reason` is `model_flag_unsupported`, another backend; tell the user the operator's
+  policy refused the call. On `model_policy_invalid`, report it: only the operator can fix it.
 - **Reuse the same `idempotency_key` when retrying the same logical request** after an
   ambiguous failure, with identical arguments, on the same tool.
 - **Never reuse a key across a different tool or backend** — that is a different operation.

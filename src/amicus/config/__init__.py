@@ -7,7 +7,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from amicus.config import model_policy
 from amicus.config.envspec import EnvConflictError, EnvNamespace, EnvVar, is_env_placeholder
+from amicus.config.model_policy import ModelPolicy
 from amicus.schemas.codes import BACKEND_IDS
 from amicus.schemas.params import MAX_TIMEOUT_SECONDS, MIN_TIMEOUT_SECONDS
 
@@ -129,6 +131,13 @@ GLOBAL_ENV = EnvNamespace(
             "`1` to allow falling back to the server cwd (disclosed).",
             "0",
         ),
+        EnvVar(
+            "AMICUS_DENY_MODELS",
+            "Comma-separated `backend:glob` model denylist (backend codex, claude, pi or `*`; "
+            "case-insensitive; `*` crosses `/`). It checks the model selector amicus sends, "
+            "not the model a CLI runs; a backend with rules refuses a call with no selector. "
+            "Malformed, every paid tool and dry run refuses.",
+        ),
     ),
 )
 
@@ -151,6 +160,9 @@ class Settings:
     tasks_backend_url: str
     host_name: str | None
     allow_cwd_workspace: bool
+    model_policy: ModelPolicy
+    # Set when AMICUS_DENY_MODELS is malformed: paid tools and dry runs fail closed on it.
+    model_policy_error: str | None
     env_warnings: tuple[str, ...]
     config_errors: tuple[str, ...]
     placeholders: tuple[str, ...]
@@ -244,6 +256,10 @@ def settings(environ: Mapping[str, str] | None = None) -> Settings:
         base = Path(env.get("XDG_CACHE_HOME") or "")
         cache = base if base.is_absolute() else Path.home() / ".cache"
         state_dir = cache / "amicus" / "jobs"
+    parsed_policy = model_policy.parse(get("AMICUS_DENY_MODELS"))
+    policy_error = parsed_policy if isinstance(parsed_policy, str) else None
+    if policy_error is not None:
+        errors.append(policy_error)
     level = (get("AMICUS_LOG_LEVEL") or DEFAULT_LOG_LEVEL).strip().upper()
     return Settings(
         enabled_backends=_profile(get("AMICUS_BACKENDS"), errors, fatal),
@@ -313,6 +329,8 @@ def settings(environ: Mapping[str, str] | None = None) -> Settings:
         tasks_backend_url=get("AMICUS_TASKS_BACKEND_URL") or "memory://",
         host_name=get("AMICUS_HOST_NAME") or None,
         allow_cwd_workspace=(get("AMICUS_ALLOW_CWD_WORKSPACE") or "0").strip().lower() in _TRUE,
+        model_policy=parsed_policy if isinstance(parsed_policy, ModelPolicy) else ModelPolicy(),
+        model_policy_error=policy_error,
         env_warnings=tuple(warnings),
         config_errors=tuple(errors),
         fatal_errors=tuple(fatal),

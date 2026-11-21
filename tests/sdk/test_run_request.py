@@ -60,8 +60,10 @@ def test_field_is_frozen_like_the_rest_of_the_request():
 def test_field_is_last_and_keyword_reachable():
     # Appended after the existing fields so positional construction (which the bridges
     # do not use, but a defaulted-field addition must not reorder) is unchanged.
+    # require_model_flag (#547) was appended after it on the same terms.
     names = [f.name for f in dataclasses.fields(RunRequest)]
-    assert names[-1] == "instructions_append"
+    assert names[-2:] == ["instructions_append", "require_model_flag"]
+    names = names[:-1]
     assert names[:-1] == [
         "kind",
         "prompt",

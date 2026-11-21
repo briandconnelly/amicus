@@ -150,6 +150,7 @@ class CodexBackend:
                 skip_git_repo_check=request.kind == "consult",
                 extra_args=self._config.extra_args.tokens,
                 flag_support=self._help_probe.flag_support(),
+                require_model_flag=request.require_model_flag,
             )
             yield PreparedRun(
                 argv=tuple(cmd),

@@ -304,3 +304,9 @@ def test_envelope_result_text_is_sanitized_before_it_is_echoed():
     env = json.loads(_envelope("the model declined: " + "y" * 190 + f" key={SECRET}"))
     failure = cli.classify_envelope(env, stderr="", config_mode="inherit", sanitize=None)
     assert SECRET not in failure.detail and "sk-cccc" not in failure.detail
+
+
+def test_a_policy_checked_model_is_never_dropped_by_the_help_gate():
+    """#547: see the codex twin; the claude builder keeps --model under the policy."""
+    cmd, dropped = _build(model="sonnet", flag_support=NO_MODEL, require_model_flag=True)
+    assert cmd[cmd.index(contract.MODEL_FLAG) + 1] == "sonnet" and dropped == []

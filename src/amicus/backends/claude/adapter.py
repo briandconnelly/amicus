@@ -197,6 +197,7 @@ class ClaudeBackend:
             effort=self._effort(request),
             model=self._model(request),
             flag_support=self._help_probe.flag_support(),
+            require_model_flag=request.require_model_flag,
         )
         yield PreparedRun(
             argv=tuple(cmd),

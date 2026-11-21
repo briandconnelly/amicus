@@ -23,14 +23,17 @@ if TYPE_CHECKING:  # pragma: no cover
 _CONFIG_OVERRIDE_FLAGS = ("-c", "--config")
 
 
-def _gate_optional(tokens: list[str], fs: FlagSupport) -> tuple[list[str], list[str]]:
+def _gate_optional(
+    tokens: list[str], fs: FlagSupport, keep: frozenset[str] = frozenset()
+) -> tuple[list[str], list[str]]:
+    """Drop help-gated flags the CLI does not advertise, except those in `keep`."""
     kept: list[str] = []
     dropped: list[str] = []
     i = 0
     while i < len(tokens):
         token = tokens[i]
         takes_value = contract.HELP_GATED_FLAGS.get(token)
-        if takes_value is not None and not preflight.is_supported(token, fs):
+        if takes_value is not None and token not in keep and not preflight.is_supported(token, fs):
             dropped.append(token)
             i += 2 if takes_value else 1
             continue
@@ -53,6 +56,7 @@ def build_exec_command(
     skip_git_repo_check: bool = False,
     extra_args: tuple[str, ...] = (),
     flag_support: FlagSupport,
+    require_model_flag: bool = False,
 ) -> tuple[list[str], list[str]]:
     """The `codex exec` invocation; the prompt rides stdin (trailing `-`). Returns
     (argv, dropped_help_gated_flags). Plugin-owned tokens precede operator extra args;
@@ -94,7 +98,8 @@ def build_exec_command(
     )
     if plugin_config_override or operator_config_override:
         tokens += [contract.STRICT_CONFIG_FLAG]
-    cmd, dropped = _gate_optional(tokens, flag_support)
+    keep = frozenset({contract.MODEL_FLAG}) if require_model_flag and model else frozenset()
+    cmd, dropped = _gate_optional(tokens, flag_support, keep)
     cmd += list(extra_args)
     cmd += [contract.STDIN_PROMPT]
     return cmd, dropped

@@ -20,6 +20,19 @@ per-change, as its own lead says.
 
 ## [Unreleased]
 
+### Added
+
+- **Surface.** `AMICUS_DENY_MODELS` lets an operator deny models per backend with
+  comma-separated `backend:glob` entries (`codex`, `claude`, `pi` or `*`; case-insensitive;
+  `*` crosses `/`) (#547). Every paid tool, its `_async` twin and both dry runs refuse a matching
+  selector before any job or backend starts, with the new code `model_denied`. They also refuse a
+  call with no model on a backend that has rules, since the CLI's own default cannot be checked,
+  and a codex or claude call whose CLI does not advertise `--model`. A malformed list fails
+  closed with `model_policy_invalid`. `amicus_backends` reports each backend's `model_policy`,
+  and `amicus_models` and `amicus://models/{backend}` omit denied rows and count them in
+  `hidden_by_policy`. The check covers the selector amicus sends; aliases, native routing and pi
+  custom endpoints can still resolve it to another model.
+
 ### Changed
 
 - `amicus_models`'s `max_output_tokens` description now says that pi requests that whole limit

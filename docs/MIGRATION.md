@@ -32,6 +32,7 @@ Its value is never read, not even to recognise an unexpanded `${...}` placeholde
 | `AMICUS_TASKS_BACKEND_URL` | — | `memory://` |
 | `AMICUS_HOST_NAME` | — | — |
 | `AMICUS_ALLOW_CWD_WORKSPACE` | — | `0` |
+| `AMICUS_DENY_MODELS` | — | — |
 | `AMICUS_CODEX_BIN` | `CODEX_IN_CLAUDE_CODEX_BIN` | — |
 | `AMICUS_CODEX_EXTRA_ARGS` | `CODEX_IN_CLAUDE_EXTRA_ARGS` | — |
 | `AMICUS_CODEX_MODEL` | `CODEX_IN_CLAUDE_MODEL` | — |
@@ -53,7 +54,7 @@ Its value is never read, not even to recognise an unexpanded `${...}` placeholde
 
 `AMICUS_CLAUDE_BIN` has no sibling equivalent, because `claude-in-codex` offered no CLI-path override to rename.
 `AMICUS_CODEX_BIN` had one — `CODEX_IN_CLAUDE_CODEX_BIN`, as the table above shows — because `codex-in-claude` did.
-`AMICUS_STATE_DIR`, `AMICUS_TASKS`, `AMICUS_TASKS_BACKEND_URL`, `AMICUS_HOST_NAME`, `AMICUS_ALLOW_CWD_WORKSPACE`, `AMICUS_BACKENDS`, and `AMICUS_CLAUDE_BIN` are new in amicus and have no sibling equivalent.
+`AMICUS_STATE_DIR`, `AMICUS_TASKS`, `AMICUS_TASKS_BACKEND_URL`, `AMICUS_HOST_NAME`, `AMICUS_ALLOW_CWD_WORKSPACE`, `AMICUS_DENY_MODELS`, `AMICUS_BACKENDS`, and `AMICUS_CLAUDE_BIN` are new in amicus and have no sibling equivalent.
 The `AMICUS_PI_*` names are new too: the pi backend has no sibling, so none of them ever had a former name.
 
 ## Tool-name mapping

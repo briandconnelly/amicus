@@ -57,6 +57,8 @@ def test_error_codes_cover_the_universal_taxonomy_and_generalized_backend_codes(
                 "api_key_invalid",
                 "api_key_missing",
                 "job_cap_reached",
+                "model_denied",
+                "model_policy_invalid",
             }
         )
         == codes.LOCAL_CODES

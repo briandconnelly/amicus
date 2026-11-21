@@ -3037,6 +3037,8 @@
                 "job_result_incompatible",
                 "job_running",
                 "job_timeout",
+                "model_denied",
+                "model_policy_invalid",
                 "nonzero_exit",
                 "not_a_git_repo",
                 "resource_not_found",

@@ -203,6 +203,6 @@ def register_resources(
         """See MODELS_TEMPLATE_DESC."""
         if backend not in BACKEND_IDS and registry.get(backend) is None:
             raise _resource_not_found(f"amicus://models/{backend}")
-        return discovery.models_payload(registry, backend)
+        return discovery.models_payload(registry, backend, settings)
 
     app.completion(complete_backend)

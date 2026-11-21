@@ -232,7 +232,10 @@ Anthropic model run through `pi` can delegate and still has no `adversarial_revi
 its model from the call or the server: a `model` passed as an exact `provider/id` wins, an
 omitted `model` uses `AMICUS_PI_MODEL`, and a call with neither is refused pre-spend as
 `invalid_arguments`; amicus never falls back to pi's own default. `AMICUS_BACKENDS` says which backends
-this deployment enables, not which to prefer. An unkeyed sync call past `timeout_seconds` is
+this deployment enables, not which to prefer. `AMICUS_DENY_MODELS` lets the operator deny
+models per backend; where a backend's `model_policy.state` is `active`, a call must name an
+allowed model, and a refusal is `model_denied` (see
+[choosing a backend](references/choosing-a-backend.md)). An unkeyed sync call past `timeout_seconds` is
 terminated and its work is lost; a keyed sync call or an `_async` call keeps the result. Every
 paid call is a job (`meta.job_id`).
 
