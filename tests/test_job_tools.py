@@ -22,6 +22,25 @@ from amicus.jobs import store as job_store_mod
 from amicus.jobs.store import DiscardOutcome, JobStore, ResultUnreadable
 from amicus.registry import BackendRegistry
 
+# Linux's MAX_ARG_STRLEN: one argv element or environment string longer than this fails
+# the spawn with E2BIG there, while macOS limits only the total, so a test can pass on one
+# and fail on the other. Every worker spawn in this file is held to the Linux limit.
+_MAX_ARG_STRLEN = 131_072
+
+
+@pytest.fixture(autouse=True)
+def _spawn_strings_fit_linux(monkeypatch):
+    real_popen = job_store_mod.subprocess.Popen
+
+    def checked(args, *rest, **kwargs):
+        env = kwargs.get("env") or os.environ
+        strings = [*map(str, args), *(f"{k}={v}" for k, v in env.items())]
+        too_long = [s[:40] for s in strings if len(s.encode()) + 1 > _MAX_ARG_STRLEN]
+        assert not too_long, f"a spawn string exceeds Linux's limit: {too_long}"
+        return real_popen(args, *rest, **kwargs)
+
+    monkeypatch.setattr(job_store_mod.subprocess, "Popen", checked)
+
 
 def _make_app(tmp_path, fake_codex, monkeypatch, **env: str):
     for key, value in env.items():
@@ -36,6 +55,7 @@ def _make_app(tmp_path, fake_codex, monkeypatch, **env: str):
         "FAKE_CODEX_ANSWER",
         "FAKE_CODEX_WRITE",
         "FAKE_CODEX_WRITE_CONTENT",
+        "FAKE_CODEX_WRITE_CONTENT_FILE",
         "FAKE_CODEX_EVENTS",
         "FAKE_CODEX_SLEEP",
     ):
@@ -1828,7 +1848,7 @@ def _recipe_blocks():
 
 
 async def test_the_review_recipe_runs_end_to_end_on_a_large_exported_diff(
-    app, store, repo, scratch, monkeypatch
+    app, store, repo, scratch, monkeypatch, tmp_path
 ):
     """#556: the skill's recipe, run as written: export a near-cap delegate diff over a dirty
     tracked baseline, check its digest, and apply it in a scratch worktree with the hardened
@@ -1838,7 +1858,10 @@ async def test_the_review_recipe_runs_end_to_end_on_a_large_exported_diff(
     (repo / "a.py").write_text("x = 2\n")  # the dirty tracked baseline amicus replays
     content = "".join(f"line {i:06d} of a generated file for the export\n" for i in range(4000))
     monkeypatch.setenv("FAKE_CODEX_WRITE", "big.txt")
-    monkeypatch.setenv("FAKE_CODEX_WRITE_CONTENT", content)
+    # Through a file: Linux refuses any one environment string over 128 KiB (E2BIG).
+    content_file = tmp_path / "big-content.txt"
+    content_file.write_text(content, encoding="utf-8")
+    monkeypatch.setenv("FAKE_CODEX_WRITE_CONTENT_FILE", str(content_file))
     # A backslash in the name: `echo` would turn `\n` into a newline under some shells.
     target = scratch / "dele\\ngate.patch"
     async with Client(app) as c:

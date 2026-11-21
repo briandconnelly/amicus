@@ -93,7 +93,13 @@ def main() -> int:
         path = Path(cwd) / target
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("w", encoding="utf-8") as fh:
-            fh.write(os.environ.get("FAKE_CODEX_WRITE_CONTENT", "changed\n"))
+            content_file = os.environ.get("FAKE_CODEX_WRITE_CONTENT_FILE")
+            content = (
+                Path(content_file).read_text(encoding="utf-8")
+                if content_file
+                else os.environ.get("FAKE_CODEX_WRITE_CONTENT", "changed\n")
+            )
+            fh.write(content)
     if "--output-last-message" in argv:
         _write_answer(Path(argv[argv.index("--output-last-message") + 1]))
     sys.stdout.write(os.environ.get("FAKE_CODEX_EVENTS", _DEFAULT_EVENTS))
