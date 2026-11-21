@@ -193,7 +193,6 @@ read in this session need not be read again.
   `$XDG_CACHE_HOME/amicus/jobs` or `~/.cache/amicus/jobs`) or loop on it in a shell: its files
   skip the delivery checks and their layout is not a contract. Observe a job through
   `amicus_job_status`, or reattach to a keyed sync run by repeating the same keyed call.
-- **Export or fetch every delegate job's result**, exporting first (`amicus_job_export_diff`).
 
 ### Delegated diffs
 
@@ -201,7 +200,6 @@ read in this session need not be read again.
   [reviewing a returned diff](references/reviewing-a-returned-diff.md), and answer in that file's
   response contract.
 - **Never state or imply that amicus applied anything to the working tree.** It does not.
-- **Never ask a backend to write its patch to a side file.**
 
 ### Data exposure
 
@@ -241,8 +239,9 @@ omitted `model` uses `AMICUS_PI_MODEL`, and a call with neither is refused pre-s
 this deployment enables, not which to prefer. `AMICUS_DENY_MODELS` lets the operator deny
 models per backend; where a backend's `model_policy.state` is `active`, a call must name an
 allowed model, and a refusal is `model_denied` (see
-[choosing a backend](references/choosing-a-backend.md)). Every paid call, sync included, is a job
-(`meta.job_id`).
+[choosing a backend](references/choosing-a-backend.md)). An unkeyed sync call past `timeout_seconds` is
+terminated and its work is lost; a keyed sync call or an `_async` call keeps the result. Every
+paid call is a job (`meta.job_id`).
 
 ### Data exposure
 

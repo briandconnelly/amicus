@@ -9,6 +9,10 @@ untracked files are never copied) and return the resulting `diff`. Delegation is
 
 - **Never apply a returned diff to the user's working tree before working through the four checks
   below.**
+- **Export or fetch every delegate job's result, exporting first** with `amicus_job_export_diff`,
+  as check 3 describes; an unfetched result holds a slot of the per-workspace job cap.
+- **Never ask a backend to write its patch to a side file.** The export is the way to get the
+  diff onto disk.
 - **Answer in the response contract**, with every fixed key present, in order.
 - **Report a check you could not perform as `not run`, with a reason.** Never drop a key.
 - **Read the run's containment facts for the backend that produced the diff** before concluding
