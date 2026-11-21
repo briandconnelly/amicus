@@ -67,7 +67,7 @@ class ExportRefused(Exception):
 
 ExportLeft = Literal["nothing", "empty_file", "partial_file"]
 
-_FAILED_TEXT: dict[str, str] = {
+_FAILED_TEXT: dict[ExportLeft, str] = {
     "nothing": "the export file could not be created",
     "empty_file": "the export file could not be completed and was left empty",
     "partial_file": "the export file could not be completed or emptied",
@@ -77,7 +77,8 @@ _FAILED_TEXT: dict[str, str] = {
 class ExportFailed(Exception):
     """The file could not be completed. ``left`` says what this call left behind: no file
     (``nothing``), an empty file wherever its name now is (``empty_file``), or a file it
-    could not empty (``partial_file``)."""
+    could not empty (``partial_file``). ``partial_file`` also covers a file whose final
+    close failed, which may therefore be complete."""
 
     def __init__(self, errno_: int | None = None, *, left: ExportLeft = "nothing") -> None:
         super().__init__(_FAILED_TEXT[left] + (f" (errno {errno_})" if errno_ is not None else ""))
@@ -202,6 +203,8 @@ def _create(parent_fd: int, name: str, path: str, data: bytes) -> DiffExport:
             os.close(fd)
         raise ExportFailed(exc.errno, left=left) from None
     except BaseException:
+        with contextlib.suppress(BaseException):
+            _empty(fd)
         with contextlib.suppress(OSError):
             os.close(fd)
         raise

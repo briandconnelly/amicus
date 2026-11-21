@@ -449,3 +449,40 @@ def test_no_failure_message_carries_the_path(
     assert exc.left == left
     assert str(scratch) not in str(exc) and "out.diff" not in str(exc)
     assert DIFF not in str(exc)
+
+
+def test_an_interrupted_write_empties_the_export(
+    scratch: Path, store_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real_write = os.write
+    calls = {"n": 0}
+
+    def interrupted(fd: int, data: bytes) -> int:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return real_write(fd, bytes(data[:5]))
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(export.os, "write", interrupted)
+    with pytest.raises(KeyboardInterrupt):
+        write_diff_file(str(scratch / "out.diff"), DIFF, job_store_root=str(store_root))
+    monkeypatch.undo()
+    assert (scratch / "out.diff").read_bytes() == b""
+
+
+def test_a_file_unlinked_during_the_write_is_stale_and_emptied(
+    scratch: Path, store_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = scratch / "out.diff"
+    real_write = os.write
+
+    def unlink_then_write(fd: int, data: bytes) -> int:
+        if target.exists():
+            target.unlink()
+        return real_write(fd, data)
+
+    monkeypatch.setattr(export.os, "write", unlink_then_write)
+    exc = _fail(target, store_root)
+    monkeypatch.undo()
+    assert exc.errno == errno.ESTALE and exc.left == "empty_file"
+    assert not target.exists()

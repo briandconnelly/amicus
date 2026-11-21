@@ -23,7 +23,7 @@ from amicus.jobs.delivery import (
     finished_job_envelope,
     unreadable_result_envelope,
 )
-from amicus.jobs.export import ExportFailed, ExportRefused, write_diff_file
+from amicus.jobs.export import ExportFailed, ExportLeft, ExportRefused, write_diff_file
 from amicus.jobs.polling import job_status_arguments
 from amicus.jobs.store import MAX_POLL_AFTER_MS, MetaUnreadable, ResultUnreadable
 from amicus.schemas.envelope import InvalidArgument
@@ -77,7 +77,7 @@ _EXPORT_RUNNING_ALTERNATIVE = (
 )
 
 
-_EXPORT_FAILED_REPAIR: dict[str, str] = {
+_EXPORT_FAILED_REPAIR: dict[ExportLeft, str] = {
     "nothing": (
         "amicus could not create the export file and created no file. The job's record is "
         "kept and not marked delivered. Fix the cause or pick another directory, then retry "
