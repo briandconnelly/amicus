@@ -1491,3 +1491,38 @@ def test_a_failure_opening_the_log_removes_the_job_dir_and_queues_nothing(tmp_pa
     monkeypatch.undo()
     assert store._job_dirs(store._ws_dir(cwd)) == []
     assert terminate_calls == 0
+
+
+def test_a_peer_honours_the_claimant_lock_when_the_claim_could_not_be_written(
+    tmp_path, monkeypatch
+):
+    root = tmp_path / "wtroot"
+    root.mkdir()
+    store = _store(tmp_path, max_count=1, cleanup_root=root, cleanup_prefix="wt-")
+    store.terminate_grace_seconds = 0.5
+    cwd = str(tmp_path / "w")
+    job_id, pid = _locked_overrun_job(store, cwd)
+    jd = store._job_dir(cwd, job_id)
+    declared_worktree = _declare(store, cwd, job_id, root)
+    real_write = JobStore._write_meta
+
+    def write(jd, meta):
+        if "terminating" in meta and meta.get("terminal_status") is None:
+            raise OSError(errno.ENOSPC, "no space left")
+        real_write(jd, meta)
+
+    monkeypatch.setattr(JobStore, "_write_meta", staticmethod(write))
+    seen: dict = {}
+    parked = _park_claimant(
+        monkeypatch, lambda: seen.update(_peer(store, cwd, job_id, ["status", "start"]))
+    )
+    try:
+        assert store.status(cwd, job_id)["status"] == "timeout"
+    finally:
+        job_store._kill_pid_tree(pid)
+    assert parked.is_set()
+    assert seen["status"] == "running"
+    assert seen["start"] == "cap"  # JobCapReached in the peer: the record was kept
+    assert jd.is_dir()
+    assert store.status(cwd, job_id)["status"] == "timeout"
+    assert not declared_worktree.exists()

@@ -42,7 +42,8 @@ well-formed claim is already there (the first claim wins and is never replaced),
 takes an exclusive ``flock`` on ``<job_dir>/terminate.lock``, the claimant lock, which
 it holds through signalling and finalization and releases once the record is stamped or
 it gives up on an error; a claimant that dies releases it with its descriptors. Every
-reader, in any process, reads a claimed job whose claimant lock is held as ``running``:
+reader, in any process, reads a job whose claimant lock is held as ``running``, claim
+written or not:
 never ``failed``, never evicted, never signalled. A claim whose lock is free belongs to
 a claimant that is gone, so the reader finalizes the job if its worker is stopped, or
 becomes its claimant if not. The claimant lock is only ever tried, never waited for,
@@ -1201,8 +1202,9 @@ class JobStore:
         ``running``; one it has terminated but not yet stamped (``_OVERRAN``) is
         finalized here the overrun way, by whichever read first can read it.
 
-        A job with a well-formed termination claim (see the module docstring) reads
-        ``running`` while its claimant lock is held, in any process; with the lock free,
+        A job whose claimant lock is held, in any process, reads ``running``, whether or
+        not its claimant could write a claim. A job with a well-formed termination claim
+        (see the module docstring) and the lock free,
         it is finalized here (``_finish_terminated``) if its worker is stopped, else this
         reader becomes its claimant and raises ``_Overrun``. A running job past its
         deadline raises ``_Overrun`` only once this reader holds the claimant lock, and
@@ -1221,10 +1223,12 @@ class JobStore:
             return terminal
         if jd in _TERMINATING:
             return "running"  # a thread is terminating it and will finalize it
+        if _worker_lock_held(jd / _TERMINATE_LOCK_NAME) is True:
+            # Its claimant, in some process, will finalize it, whether or not it could
+            # write its claim (the lock alone carries one it could not write).
+            return "running"
         claim = self._claim_of(meta)
         if claim is not None:
-            if _worker_lock_held(jd / _TERMINATE_LOCK_NAME) is True:
-                return "running"  # its claimant, in some process, will finalize it
             # Its claimant is gone (an indeterminate lock reads free).
             if not self._job_running(jd, meta):
                 return self._finish_terminated(jd, meta, default="timeout")
