@@ -156,6 +156,35 @@ def test_preflight_holds_in_the_release_worktree_and_prints_the_command(layout, 
     assert run.ran_compat()
     assert run.ran("uv", "lock", "--check")
     assert [c[:3] for c in run.calls if c[0] == "gh"] == [["gh", "pr", "view"]]
+    # The rest of the release, with this PR and commit filled in, printed after the command.
+    after = out.out.split(command, 1)[1]
+    for block in release.next_steps(layout.worktree, NEXT, PR, layout.head):
+        assert " &&\\\n  ".join(block) in after, block
+    assert f"post-merge --release-sha {layout.head} --version {NEXT}" in after
+
+
+def test_next_steps_check_everything_before_the_push_and_chain_it(tmp_path):
+    """Copilot on #571: lines pasted one by one still push after a failed check, and the
+    first draft skipped step 3's freshness, tag-state, rehearsal and gate checks."""
+    sha = "abc123"
+    pre, post = release.next_steps(tmp_path, "1.2.3", 42, sha)
+    record = tmp_path / release.EVIDENCE_PATH
+    order = [
+        f'"commit": "{sha}"',
+        "AMICUS_RELEASE_CHECK=1 uv run pytest tests/test_release_evidence.py",
+        f"git tag -a v1.2.3 --cleanup=verbatim -F {record} {sha}",
+        f"check_release_state.py --tag v1.2.3 --commit {sha}",
+        f'UV_CACHE_DIR="$(mktemp -d)" uvx --from git+https://github.com/briandconnelly/amicus.git@{sha}',
+        "uv run lint-imports && uv run pytest",
+        "gh pr merge 42 --merge",
+        f"post-merge --release-sha {sha} --version 1.2.3",
+        "git push origin v1.2.3",
+    ]
+    assert len(pre) == len(order)
+    for line, expected in zip(pre, order, strict=True):
+        assert expected in line, (expected, line)
+    assert "1.2.3" in pre[4] and "serverInfo" in pre[4], pre[4]
+    assert post == ["uv run python scripts/release.py post-publish --version 1.2.3"]
 
 
 def test_the_evidence_path_is_the_one_the_evidence_script_writes():

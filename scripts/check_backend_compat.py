@@ -41,6 +41,10 @@ Subcommands (a first argument naming one selects it; anything else is the check 
             [--debug-models]
     watch [--json] [--file-issues [--dry-run]] [--repo OWNER/NAME] [--docs-root docs]
           [--pyproject pyproject.toml]
+    print-updates
+
+`print-updates` prints, and never runs, the commands that install npm's `latest` of every
+backend CLI, Claude Code's with its autoupdater held; a failed lookup exits 1.
 
 `watch` (#378) reads only npm and PyPI metadata, so it needs no installed CLI: pi's
 latest minors against the shipped sets, claude's latest against the newest docs/claude-help
@@ -127,6 +131,7 @@ NPM_DIST_TAG = "latest"
 PIN_COMMANDS: dict[str, str] = {
     "codex": "npm install -g @openai/codex@{version}",
     "claude": "claude install {version}",
+    "pi": "npm install -g @earendil-works/pi-coding-agent@{version}",
 }
 _SEMVER = re.compile(r"(\d+)\.(\d+)\.(\d+)")
 # The same core with whatever semver prerelease or build suffix is attached to it. A product
@@ -1590,7 +1595,48 @@ def watch_main(argv: list[str]) -> int:
     return 1 if failed else 0
 
 
-SUBCOMMANDS: dict[str, Callable[[list[str]], int]] = {"compare": compare_main, "watch": watch_main}
+def update_commands(
+    latest: Callable[[str], str | None] = latest_upstream,
+) -> tuple[list[str], list[str]]:
+    """The commands that install npm's `latest` of every backend, and the lookups that failed.
+
+    Printed, never run. Claude Code's install is held with DISABLE_AUTOUPDATER=1 because a
+    running session can otherwise move it again before the evidence run (#323).
+    """
+    lines: list[str] = []
+    failed: list[str] = []
+    for backend in BACKENDS:
+        version = latest(backend)
+        if version is None:
+            failed.append(f"{backend}: the latest release could not be read from npm")
+            continue
+        command = PIN_COMMANDS[backend].format(version=version)
+        if backend == "claude":
+            command = f"DISABLE_AUTOUPDATER=1 {command}"
+        lines.append(command)
+    return lines, failed
+
+
+def print_updates_main(argv: list[str]) -> int:
+    """`print-updates`: the commands that bring every backend CLI to npm's `latest`."""
+    argparse.ArgumentParser(
+        prog="check_backend_compat.py print-updates",
+        description=print_updates_main.__doc__,
+    ).parse_args(argv)
+    lines, failed = update_commands(latest_upstream)
+    print("# close every Claude Code session first, or restart it with DISABLE_AUTOUPDATER=1")
+    for line in lines:
+        print(line)
+    for problem in failed:
+        print(f"FAIL {problem}", file=sys.stderr)
+    return 1 if failed else 0
+
+
+SUBCOMMANDS: dict[str, Callable[[list[str]], int]] = {
+    "compare": compare_main,
+    "watch": watch_main,
+    "print-updates": print_updates_main,
+}
 
 
 def main(argv: list[str] | None = None) -> int:
