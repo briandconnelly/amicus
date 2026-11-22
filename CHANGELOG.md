@@ -23,8 +23,8 @@ per-change, as its own lead says.
 ### Changed
 
 - Release tooling asks for less by hand. `scripts/release.py preflight` now also prints the
-  tag, merge, post-merge, push and post-publish commands with the PR number and release
-  commit filled in. `scripts/check_backend_compat.py print-updates` prints the commands that
+  rest of the release with the PR number and release commit filled in, every pre-push check
+  included and chained with `&&` so the first failure stops the push. `scripts/check_backend_compat.py print-updates` prints the commands that
   install npm's `latest` of every backend CLI, and a pi CLI off `latest` is now told the exact
   install command. `tests/test_migration_doc.py` fails a change that moves the fingerprint
   without naming it in MIGRATION.md's newest upgrade section, so that section is written with

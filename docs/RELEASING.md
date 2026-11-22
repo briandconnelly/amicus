@@ -220,7 +220,8 @@ The tag therefore deliberately points at a commit that is in `main`'s history bu
    - `uv run python scripts/check_backend_compat.py` must pass, as in the precondition above, because a CLI that is behind, ahead, unauthenticated or outside the contract would make the evidence describe the wrong thing.
 
    On success it prints the release commit and the exact evidence command, and it never runs that command.
-   It then prints the tag, merge, post-merge, push and post-publish commands of steps 3 to 6 with this PR's number and this release commit filled in, to copy once the evidence passes; it runs none of them either.
+   It then prints the rest of steps 3 to 6 with this PR's number and this release commit filled in, to copy once the evidence passes: the record and freshness checks, the local tag, the release-state check, the install rehearsal, the gate, the merge, `post-merge` and the push, joined with `&&` so the first failure stops everything after it, then `post-publish` for after the pypi approval.
+   It runs none of them either.
    Record the release commit's SHA, and note it well: it is the commit that gets tagged, and it will not be `main`'s head after the next step.
    If the PR C branch gains any commit after this point — an "Update branch" click, or a review pushing a change — this step must be redone from the new tip: the evidence would otherwise cover a commit that is no longer what step 4 actually merges.
    Redoing it after the local tag below exists starts with `git tag -d vX.Y.Z`, because the evidence script refuses to run while that tag exists; delete it only if it was never pushed.

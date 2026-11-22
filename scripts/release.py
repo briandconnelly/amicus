@@ -641,28 +641,52 @@ def cmd_preflight(ctx: Context, args: argparse.Namespace) -> int:
     print("never runs it. The command:")
     print(f"  {evidence_command(ctx.repo_root, version)}")
     print()
-    print("Then, if every suite passed, the rest of the release with this commit filled in:")
-    for line in next_steps(ctx.repo_root, version, args.pr, head or ""):
-        print(f"  {line}")
+    print("Then, if every suite passed, the rest of the release with this commit filled in.")
+    print("Run it the same day as the evidence (its freshness window is 24 hours); each block")
+    print("stops at its first failure, and the second waits for your pypi approval:")
+    for block in next_steps(ctx.repo_root, version, args.pr, head or ""):
+        print()
+        print("  " + " &&\\\n  ".join(block))
     return 0
 
 
-def next_steps(repo_root: Path, version: str, pr: int, release_sha: str) -> list[str]:
-    """RELEASING steps 3 (tag) through the post-tag checks, as commands to copy.
+def next_steps(repo_root: Path, version: str, pr: int, release_sha: str) -> list[list[str]]:
+    """RELEASING steps 3 (after the evidence) through the post-tag checks, as commands to copy.
 
-    Printed, never run: tagging, merging and pushing are the maintainer's alone.
+    Each inner list is one block, printed joined with `&&` so a failing check stops everything
+    after it; the blocks break only where the maintainer must act between them. Printed, never
+    run: tagging, merging and pushing are the maintainer's alone.
     """
     tag = f"v{version}"
     record = shlex.quote(str(repo_root / EVIDENCE_PATH))
+    handshake = shlex.quote(
+        '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":'
+        '"2025-06-18","capabilities":{},"clientInfo":{"name":"rehearsal","version":"0"}}}'
+    )
+    expect = shlex.quote(
+        "import json,sys; info=json.loads(sys.stdin.readline())['result']['serverInfo']; "
+        f"assert (info['name'], info['version']) == ('amicus', '{version}'), info; "
+        "print('rehearsal answered', info)"
+    )
+    pkg = f"git+https://github.com/briandconnelly/amicus.git@{release_sha}"
     return [
-        f"git tag -a {tag} --cleanup=verbatim -F {record} {release_sha}",
-        f"gh pr merge {pr} --merge",
-        "git fetch origin",
-        f"uv run python scripts/release.py post-merge --release-sha {release_sha} "
-        f"--version {version}",
-        f"git push origin {tag}",
-        "# approve the pypi environment on the publish run, then:",
-        f"uv run python scripts/release.py post-publish --version {version}",
+        [
+            f'grep -q \'"commit": "{release_sha}"\' {record}',
+            "AMICUS_RELEASE_CHECK=1 uv run pytest tests/test_release_evidence.py -v --no-cov",
+            f"git tag -a {tag} --cleanup=verbatim -F {record} {release_sha}",
+            f"uv run python scripts/check_release_state.py --tag {tag} --commit {release_sha}",
+            f"printf '%s\\n' {handshake} | UV_CACHE_DIR=\"$(mktemp -d)\" "
+            f"uvx --from {pkg} amicus-mcp | python3 -c {expect}",
+            "uv run ruff check . && uv run ruff format --check . && uv run ty check "
+            "&& uv run lint-imports && uv run pytest",
+            f"gh pr merge {pr} --merge",
+            f"uv run python scripts/release.py post-merge --release-sha {release_sha} "
+            f"--version {version}",
+            f"git push origin {tag}",
+        ],
+        [
+            f"uv run python scripts/release.py post-publish --version {version}",
+        ],
     ]
 
 
