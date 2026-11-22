@@ -43,11 +43,11 @@ per-change, as its own lead says.
   never overwriting anything and never inside the job store, and returns what
   `amicus_job_result` returns with that diff null and `meta.diff_export` giving the file's path,
   byte count, SHA-256 and `source`. A refused path is `invalid_arguments` on `path` with a fixed
-  `details.reason`; a file the call could not finish is removed and the call fails with the new
-  code `export_failed`. A successful export counts as fetching the result, and a refused or
+  `details.reason`; a file the call could not finish is emptied and left, never unlinked, and
+  the call fails with the new code `export_failed`, which says what remains. A successful export counts as fetching the result, and a refused or
   failed one leaves the job unfetched. `RESULT_FORMAT` does not move. The skill's diff-review
   recipe now exports the diff first and checks its digest (ADR 0054). The discovery surface
-  moves to `amicus/0.1/schema-81`.
+  moves to `amicus/0.1/schema-82`.
 - **Surface.** `amicus_models` lists what pi's catalog says each model costs (#554). A `pi` row
   gains `pricing`: `input`, `output`, `cache_read` and `cache_write` in USD per million tokens,
   and `tiers`, the rates that replace them for a whole request whose input, cache reads and
@@ -63,7 +63,8 @@ per-change, as its own lead says.
   selector before any job or backend starts, with the new code `model_denied`. They also refuse a
   call with no model on a backend that has rules, since the CLI's own default cannot be checked,
   and a codex or claude call whose CLI does not advertise `--model`. A malformed list fails
-  closed with `model_policy_invalid`. `amicus_backends` reports each backend's `model_policy`,
+  closed with `model_policy_invalid`, and a whole-value `${...}` placeholder is refused as
+  `unexpanded_env_placeholder`. `amicus_backends` reports each backend's `model_policy`,
   and `amicus_models` and `amicus://models/{backend}` omit denied rows and count them in
   `hidden_by_policy`. The check covers the selector amicus sends; aliases, native routing and pi
   custom endpoints can still resolve it to another model.
@@ -104,6 +105,11 @@ per-change, as its own lead says.
 
 ### Fixed
 
+- A failed `amicus_job_export_diff` no longer unlinks its file by name, which could have removed
+  a file swapped in under that name. It empties the file through the descriptor it created and
+  leaves it, and `export_failed` says whether nothing, an empty file or a partial file remains.
+- `amicus_capabilities` now lists `model` and `reasoning_effort` among the optional parameters
+  of `amicus_review_changes_dry_run` and `amicus_delegate_dry_run`.
 - A pi call that OpenRouter refuses with HTTP 402 because the balance does not cover the model's
   whole output limit is no longer reported as temporary (#542). pi asks for that limit on every
   call, so retrying cannot succeed. The error is still `nonzero_exit`, now with

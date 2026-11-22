@@ -104,7 +104,7 @@ Default: `0`.
 
 Comma-separated `backend:glob` model denylist (backend codex, claude, pi or `*`; case-insensitive; `*` crosses `/`).
 It checks the model selector amicus sends, not the model a CLI runs; a backend with rules refuses a call with no selector.
-Malformed, every paid tool and dry run refuses.
+Malformed, every paid tool and dry run refuses with model_policy_invalid; a value that is an unexpanded ${...} placeholder is refused as unexpanded_env_placeholder, like any other variable.
 Unset by default.
 
 ## Codex

@@ -126,28 +126,6 @@ def test_scratch_directory_outside_any_repository_is_accepted(
     assert target.read_bytes() == DIFF.encode("utf-8")
 
 
-def test_failed_write_removes_the_file(
-    scratch: Path, store_root: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    real_write = os.write
-    calls = {"n": 0}
-
-    def failing(fd: int, data: bytes) -> int:
-        calls["n"] += 1
-        if calls["n"] == 1:
-            return real_write(fd, bytes(data[:5]))
-        raise OSError(errno.ENOSPC, "No space left on device")
-
-    monkeypatch.setattr(export.os, "write", failing)
-    target = scratch / "out.patch"
-    with pytest.raises(ExportFailed) as info:
-        write_diff_file(str(target), DIFF, job_store_root=str(store_root))
-    monkeypatch.undo()
-    assert not target.exists()
-    assert str(target) not in str(info.value)
-    assert DIFF not in str(info.value)
-
-
 def test_short_writes_complete(
     scratch: Path, store_root: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -268,23 +246,6 @@ def test_an_unencodable_diff_fails_and_leaves_nothing(scratch: Path, store_root:
     assert not target.exists()
 
 
-def test_cleanup_never_unlinks_a_file_swapped_in_under_the_name(
-    scratch: Path, store_root: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    target = scratch / "out.patch"
-
-    def swap_then_fail(fd: int, data: bytes) -> int:
-        target.unlink()
-        target.write_bytes(b"someone else's")
-        raise OSError(errno.ENOSPC, "No space left on device")
-
-    monkeypatch.setattr(export.os, "write", swap_then_fail)
-    with pytest.raises(ExportFailed):
-        write_diff_file(str(target), DIFF, job_store_root=str(store_root))
-    monkeypatch.undo()
-    assert target.read_bytes() == b"someone else's"
-
-
 def test_a_lone_surrogate_in_the_file_name_is_not_a_file_name(
     scratch: Path, store_root: Path
 ) -> None:
@@ -314,44 +275,6 @@ def test_a_search_only_ancestor_does_not_block_the_export(
         ancestor.chmod(0o700)
 
 
-def test_a_file_unlinked_during_the_write_is_export_failed(
-    scratch: Path, store_root: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    target = scratch / "out.patch"
-    real_write = os.write
-
-    def unlink_then_write(fd: int, data: bytes) -> int:
-        if target.exists():
-            target.unlink()
-        return real_write(fd, data)
-
-    monkeypatch.setattr(export.os, "write", unlink_then_write)
-    with pytest.raises(ExportFailed):
-        write_diff_file(str(target), DIFF, job_store_root=str(store_root))
-    monkeypatch.undo()
-    assert not target.exists()
-
-
-def test_a_parent_renamed_during_the_write_is_export_failed(
-    scratch: Path, store_root: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    parent = scratch / "p"
-    parent.mkdir()
-    real_write = os.write
-
-    def rename_then_write(fd: int, data: bytes) -> int:
-        if parent.exists():
-            parent.rename(scratch / "q")
-        return real_write(fd, data)
-
-    monkeypatch.setattr(export.os, "write", rename_then_write)
-    with pytest.raises(ExportFailed) as info:
-        write_diff_file(str(parent / "out.patch"), DIFF, job_store_root=str(store_root))
-    monkeypatch.undo()
-    assert info.value.removed is True
-    assert not (scratch / "q" / "out.patch").exists()
-
-
 def test_an_overlong_file_name_is_not_a_file_name(scratch: Path, store_root: Path) -> None:
     name = "n" * 256
     try:
@@ -364,20 +287,202 @@ def test_an_overlong_file_name_is_not_a_file_name(scratch: Path, store_root: Pat
     assert _refused(str(scratch / name / "out.patch"), store_root) == "parent_missing"
 
 
-def test_a_failed_write_says_whether_it_removed_the_file(
+# --- a failed export is emptied through its descriptor, never unlinked --------------------
+
+
+def _fail(target: Path, store_root: Path) -> ExportFailed:
+    with pytest.raises(ExportFailed) as info:
+        write_diff_file(str(target), DIFF, job_store_root=str(store_root))
+    return info.value
+
+
+def test_a_failed_write_leaves_an_empty_file(
+    scratch: Path, store_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real_write = os.write
+    calls = {"n": 0}
+
+    def failing(fd: int, data: bytes) -> int:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return real_write(fd, bytes(data[:5]))
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+    monkeypatch.setattr(export.os, "write", failing)
+    exc = _fail(scratch / "out.diff", store_root)
+    monkeypatch.undo()
+    assert calls["n"] == 2
+    assert exc.left == "empty_file" and exc.errno == errno.ENOSPC
+    assert (scratch / "out.diff").read_bytes() == b""
+    assert DIFF not in str(exc)
+
+
+def test_a_failed_export_never_unlinks_or_removes_anything(
+    scratch: Path, store_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    removals: list[tuple[object, ...]] = []
+    for fn in ("unlink", "remove", "rmdir"):
+        monkeypatch.setattr(export.os, fn, lambda *a, **k: removals.append(a))
+
+    def full(fd: int, data: bytes) -> int:
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+    monkeypatch.setattr(export.os, "write", full)
+    _fail(scratch / "out.diff", store_root)
+    monkeypatch.undo()
+    assert removals == []
+
+
+def test_a_file_swapped_in_under_the_name_is_untouched(
+    scratch: Path, store_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = scratch / "out.diff"
+
+    def swap_then_fail(fd: int, data: bytes) -> int:
+        target.rename(scratch / "moved.diff")
+        (scratch / "theirs.tmp").write_bytes(b"theirs")
+        (scratch / "theirs.tmp").rename(target)
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+    monkeypatch.setattr(export.os, "write", swap_then_fail)
+    exc = _fail(target, store_root)
+    monkeypatch.undo()
+    assert target.read_bytes() == b"theirs"
+    assert (scratch / "moved.diff").read_bytes() == b""
+    assert exc.left == "empty_file"
+
+
+def test_a_path_that_stops_naming_the_export_empties_it(
+    scratch: Path, store_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = scratch / "out.diff"
+    real_fsync = os.fsync
+    moved = {"done": False}
+
+    def fsync_then_move(fd: int) -> None:
+        real_fsync(fd)
+        if not moved["done"]:
+            moved["done"] = True
+            target.rename(scratch / "moved.diff")
+
+    monkeypatch.setattr(export.os, "fsync", fsync_then_move)
+    exc = _fail(target, store_root)
+    monkeypatch.undo()
+    assert exc.errno == errno.ESTALE and exc.left == "empty_file"
+    assert (scratch / "moved.diff").read_bytes() == b""
+    assert not target.exists()
+
+
+def test_a_parent_renamed_during_the_write_empties_the_export(
+    scratch: Path, store_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    parent = scratch / "p"
+    parent.mkdir()
+    real_write = os.write
+
+    def rename_then_write(fd: int, data: bytes) -> int:
+        if parent.exists():
+            parent.rename(scratch / "q")
+        return real_write(fd, data)
+
+    monkeypatch.setattr(export.os, "write", rename_then_write)
+    exc = _fail(parent / "out.diff", store_root)
+    monkeypatch.undo()
+    assert exc.left == "empty_file"
+    assert (scratch / "q" / "out.diff").read_bytes() == b""
+
+
+def test_a_file_that_cannot_be_emptied_is_partial(
     scratch: Path, store_root: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     def full(fd: int, data: bytes) -> int:
         raise OSError(errno.ENOSPC, "No space left on device")
 
+    def no_truncate(fd: int, length: int) -> None:
+        raise OSError(errno.EIO, "I/O error")
+
     monkeypatch.setattr(export.os, "write", full)
-    with pytest.raises(ExportFailed) as removed:
-        write_diff_file(str(scratch / "a.patch"), DIFF, job_store_root=str(store_root))
-    assert removed.value.removed is True and "removed" in str(removed.value)
-    monkeypatch.setattr(export.os, "unlink", lambda *a, **k: (_ for _ in ()).throw(OSError()))
-    with pytest.raises(ExportFailed) as kept:
-        write_diff_file(str(scratch / "b.patch"), DIFF, job_store_root=str(store_root))
+    monkeypatch.setattr(export.os, "ftruncate", no_truncate)
+    exc = _fail(scratch / "out.diff", store_root)
     monkeypatch.undo()
-    assert kept.value.removed is False
-    assert "may remain" in str(kept.value) and "was removed" not in str(kept.value)
-    assert str(scratch) not in str(kept.value)
+    assert exc.left == "partial_file" and exc.errno == errno.ENOSPC
+
+
+def _open_create_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    real_open = os.open
+
+    def open_(path, flags, *args, **kwargs):
+        if path == "out.diff" and flags & os.O_CREAT:
+            raise OSError(errno.EIO, "I/O error")
+        return real_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(export.os, "open", open_)
+
+
+def test_a_create_failure_that_is_not_a_refusal_leaves_nothing(
+    scratch: Path, store_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _open_create_fails(monkeypatch)
+    exc = _fail(scratch / "out.diff", store_root)
+    monkeypatch.undo()
+    assert exc.left == "nothing" and exc.errno == errno.EIO
+    assert list(scratch.iterdir()) == []
+
+
+@pytest.mark.parametrize("left", ["nothing", "empty_file", "partial_file"])
+def test_no_failure_message_carries_the_path(
+    scratch: Path, store_root: Path, monkeypatch: pytest.MonkeyPatch, left: str
+) -> None:
+    def full(fd: int, data: bytes) -> int:
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+    if left == "nothing":
+        _open_create_fails(monkeypatch)
+    else:
+        monkeypatch.setattr(export.os, "write", full)
+    if left == "partial_file":
+        monkeypatch.setattr(
+            export.os, "ftruncate", lambda *a: (_ for _ in ()).throw(OSError(errno.EIO, "x"))
+        )
+    exc = _fail(scratch / "out.diff", store_root)
+    monkeypatch.undo()
+    assert exc.left == left
+    assert str(scratch) not in str(exc) and "out.diff" not in str(exc)
+    assert DIFF not in str(exc)
+
+
+def test_an_interrupted_write_empties_the_export(
+    scratch: Path, store_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real_write = os.write
+    calls = {"n": 0}
+
+    def interrupted(fd: int, data: bytes) -> int:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return real_write(fd, bytes(data[:5]))
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(export.os, "write", interrupted)
+    with pytest.raises(KeyboardInterrupt):
+        write_diff_file(str(scratch / "out.diff"), DIFF, job_store_root=str(store_root))
+    monkeypatch.undo()
+    assert (scratch / "out.diff").read_bytes() == b""
+
+
+def test_a_file_unlinked_during_the_write_is_stale_and_emptied(
+    scratch: Path, store_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = scratch / "out.diff"
+    real_write = os.write
+
+    def unlink_then_write(fd: int, data: bytes) -> int:
+        if target.exists():
+            target.unlink()
+        return real_write(fd, data)
+
+    monkeypatch.setattr(export.os, "write", unlink_then_write)
+    exc = _fail(target, store_root)
+    monkeypatch.undo()
+    assert exc.errno == errno.ESTALE and exc.left == "empty_file"
+    assert not target.exists()
