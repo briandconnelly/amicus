@@ -149,6 +149,28 @@ per-change, as its own lead says.
   map it could not open as empty and wrote that back with only the new entry, so every other
   task lost the entry that recovers its job by task id. The record now fails, is logged as
   before, and leaves the file as it was; a missing file is still an empty map.
+- Two servers sharing a state root, such as two sessions in the same workspace, no longer
+  disagree about a job one of them is stopping. In the moment after one server stopped a
+  job's worker for overrunning its deadline or for a cancel, and before it recorded the
+  outcome, the other could read the job as `failed` and, at a full per-workspace cap, evict
+  its record. The stopping server now records a termination claim on the job and holds a
+  per-job lock until the outcome is stamped, so the other server reads the job as `running`
+  meanwhile, never signals it a second time and never evicts it. If the stopping server dies
+  first, the next read finalizes the job by its claim once its worker is known to be stopped:
+  `timeout` or `cancelled`, or `done` if the result was written. A worker that cannot be shown
+  stopped or running leaves the job `running`, untouched, until its deadline plus the
+  terminate grace, and it then reads as it would without a claim. A cancel that meets a job another server is already stopping signals
+  nothing while that server holds the lock and waits up to the terminate grace plus one
+  second, then reports the status the job reads as; if that server went away leaving the
+  worker running, the cancel takes over and stops it, which can take one further terminate
+  grace. A sync call whose wait ran out while another server was still stopping its job now
+  says so instead of reporting the job cancelled. This
+  holds only among servers of this release or later sharing a state root: after upgrading,
+  restart any session still running an older server.
+- A start that failed after its worker was spawned but before the job was recorded, such as
+  when closing the worker's log file or starting the thread that feeds it its prompt failed,
+  no longer leaves that paid worker running with no job record. The worker is now stopped,
+  as it already was when writing the record failed.
 
 ## [0.15.0] - 2026-11-16
 

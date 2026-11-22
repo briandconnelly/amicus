@@ -34,6 +34,31 @@ lock). A PID is trusted without the lock only for jobs this instance itself star
 as not-running rather than signaled, so cancel/timeout never touch an unrelated
 process. The lock needs a local filesystem to be reliable and uses POSIX ``fcntl``;
 platforms without it degrade to the owned-child check (and never signal unowned PIDs).
+
+Termination claims: a process about to stop a worker with the store's locks released
+first becomes that job's claimant, under ``_LOCK`` and the record lock. It writes
+``meta["terminating"] = {"reason": "timeout" | "cancelled", "epoch": ...}`` unless a
+well-formed claim is already there (the first claim wins and is never replaced), and
+takes an exclusive ``flock`` on ``<job_dir>/terminate.lock``, the claimant lock, which
+it holds through signalling and finalization and releases once the record is stamped or
+it gives up on an error; a claimant that dies releases it with its descriptors. Every
+reader, in any process, reads a job whose claimant lock is held as ``running``, claim
+written or not: never ``failed``, never evicted, never signalled. A claim whose lock is
+free belongs to a claimant that is gone, so the reader finalizes the job by its claim once
+its worker is positively stopped (our own child reaped, or an unowned worker's PID dead),
+and becomes its claimant while the worker is safe to signal. A worker that is neither (an
+unowned live PID holding no ``worker.lock``) leaves the job ``running``, untouched, until
+its deadline plus the terminate grace, after which it reads as an unclaimed record would,
+unstamped. The claimant lock is only ever tried, never waited for, while ``_LOCK`` or the
+record lock is held, so it adds no rule to the lock order.
+Writing the claim is best effort; on failure the claimant proceeds with the lock alone.
+A ``cancel`` that meets a job whose claimant lock another holder has signals nothing while
+it is held and waits at most the terminate grace plus one second; if that claimant then
+goes away leaving the worker running, the cancel takes over as claimant and stops it, which
+can take one further terminate grace.
+The guarantee holds only among servers of the release that introduced it or later: an
+older server sharing the root ignores the claim and its lock and can still read a job
+being terminated as ``failed``.
 """
 
 from __future__ import annotations
@@ -56,7 +81,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import TypeVar
+from typing import Literal, TypeVar
 from uuid import uuid4
 
 from amicus.jobs import idempotency
@@ -72,6 +97,14 @@ _IDEM_DIRNAME = ".idem"
 # so ``_job_dirs`` never takes it for a job; never deleted, so every process locks the
 # same inode.
 _RECORD_LOCK_NAME = ".records.lock"
+
+# Per-job claimant lock (in a job dir): held by the one process terminating that job with
+# the store's locks released, for as long as it does (see the module docstring).
+_TERMINATE_LOCK_NAME = "terminate.lock"
+_CLAIM_REASONS = ("timeout", "cancelled")
+# Stands in for the claimant lock's descriptor when a claimant could not take the lock
+# for a reason other than contention; ``_release_claim`` ignores it.
+_NO_CLAIM_FD = -1
 
 _T = TypeVar("_T")
 
@@ -118,12 +151,16 @@ class _Overrun(Exception):
     after marking it in ``_TERMINATING``. The outermost locked section catches it,
     terminates the worker with the locks released, re-takes them to finalize the job
     from a fresh read, and runs its body again (#531). The job dir's parent is the
-    workspace dir whose record lock that finalization takes."""
+    workspace dir whose record lock that finalization takes. ``claim_fd`` holds the
+    job's claimant lock, which the section releases once it is done with the job, or is
+    ``_NO_CLAIM_FD`` when the claimant could not take that lock (``_release_claim``
+    ignores it)."""
 
-    def __init__(self, jd: Path, meta: dict) -> None:
+    def __init__(self, jd: Path, meta: dict, claim_fd: int | None) -> None:
         super().__init__(jd.name)
         self.jd = jd
         self.meta = meta
+        self.claim_fd = claim_fd
 
 
 class ResultUnreadable(Exception):
@@ -362,6 +399,21 @@ def _worker_lock_held(lock_path: Path) -> bool | None:
         os.close(fd)
 
 
+def _release_claim(fd: int | None) -> None:
+    """Release a claimant lock ``_try_claim`` took: unlock it and close its descriptor.
+    ``None`` and ``_NO_CLAIM_FD`` (no lock held) are no-ops."""
+    if fd is None or fd == _NO_CLAIM_FD:
+        return
+    try:
+        import fcntl  # noqa: PLC0415 - platform-guarded lazy import (POSIX only)
+
+        with contextlib.suppress(OSError):
+            fcntl.flock(fd, fcntl.LOCK_UN)
+    finally:
+        with contextlib.suppress(OSError):
+            os.close(fd)
+
+
 def _signal_proc(pid: int, sig: int) -> None:
     """Send ``sig`` to the job's process group, but only when ``pid`` is its own group
     leader — our workers are session leaders (``start_new_session=True``, so
@@ -554,6 +606,7 @@ class JobStore:
         if getattr(_SECTION, "published", None) is not None:
             return attempt()
         published: set[Path] = set()
+        claims: list[int] = []
         rollbacks: list[Callable[[], None]] = []
         _SECTION.published = published
         _SECTION.rollbacks = rollbacks
@@ -563,6 +616,8 @@ class JobStore:
                     return attempt()
                 except _Overrun as overrun:
                     jd, meta = overrun.jd, overrun.meta
+                    if overrun.claim_fd is not None:
+                        claims.append(overrun.claim_fd)
                     _terminate_pid_tree(
                         _meta_pid(meta),
                         self.terminate_grace_seconds,
@@ -578,9 +633,16 @@ class JobStore:
                         # retention bound), as before #531. Nothing is stamped.
                         with contextlib.suppress(ResultUnreadable):
                             self._finalize_overrun(jd)
+                    if overrun.claim_fd is not None:
+                        claims.remove(overrun.claim_fd)
+                        _release_claim(overrun.claim_fd)
         finally:
             _SECTION.published = None
             _SECTION.rollbacks = None
+            # A termination or finalization that raised gives up its claim, so a later
+            # reader, in any process, can take the job over.
+            for fd in claims:
+                _release_claim(fd)
             # A start that spawned a worker it could not record (#536): every lock is
             # released by now, and any idempotency reservation already dropped.
             # Each is bound to the store that queued it, so its grace and cleanup root
@@ -608,32 +670,87 @@ class JobStore:
     def _finalize_overrun(self, jd: Path) -> tuple[dict, str] | None:
         """Finalize a pending overrun job (``_OVERRAN``) under ``_LOCK`` and its record
         lock, from a fresh read: ``None`` if the record is gone, else its state as
-        ``_finish_overrun`` gives it. Raises ``MetaUnreadable`` or ``ResultUnreadable``
+        ``_finish_terminated`` gives it. Raises ``MetaUnreadable`` or ``ResultUnreadable``
         if meta.json or result.json cannot be read, with nothing written and the job
         left pending."""
         meta = self._read_meta(jd)
         if meta is None:
             _OVERRAN.discard(jd)
             return None
-        return meta, self._finish_overrun(jd, meta)
+        return meta, self._finish_terminated(jd, meta, default="timeout")
 
-    def _finish_overrun(self, jd: Path, meta: dict) -> str:
-        """The overrun outcome of a stopped job, from ``meta`` as just read: its stamp if
-        it has one, else ``done`` if the worker wrote its result in time (result-first),
-        else ``timeout`` with its declared paths cleaned up (the manifest re-read now).
-        Drops the job from ``_OVERRAN`` once stamped; an unreadable result raises
-        ``ResultUnreadable`` and leaves it pending."""
+    def _finish_terminated(
+        self, jd: Path, meta: dict, default: Literal["timeout", "cancelled"]
+    ) -> str:
+        """The outcome of a stopped job that was claimed or terminated here, from
+        ``meta`` as just read: its stamp if it has one, else ``done`` if the worker wrote
+        its result in time (result-first), else the claim's reason (``default`` without a
+        claim) with its declared paths cleaned up (the manifest re-read now). The write
+        that stamps the record removes its claim. Drops the job from ``_OVERRAN`` once
+        stamped; an unreadable result raises ``ResultUnreadable``, stamps nothing and
+        keeps the claim."""
         terminal = meta.get("terminal_status")
         if not terminal:
             env = self._read_envelope(jd)
+            claim = self._claim_of(meta)
+            meta.pop("terminating", None)
             if env is not None:
                 self._mark_done(jd, meta, env)
                 terminal = "done"
             else:
-                self._finalize_cleanup(jd, meta, "timeout", self._read_cleanup_manifest(jd))
-                terminal = "timeout"
+                terminal = claim[0] if claim is not None else default
+                self._finalize_cleanup(jd, meta, terminal, self._read_cleanup_manifest(jd))
         _OVERRAN.discard(jd)
         return terminal
+
+    @staticmethod
+    def _claim_of(meta: dict) -> tuple[str, float] | None:
+        """The record's termination claim as ``(reason, epoch)``, or ``None`` when it has
+        none or a malformed one (a reason other than the two, or a non-finite epoch)."""
+        claim = meta.get("terminating")
+        if not isinstance(claim, dict):
+            return None
+        reason, epoch = claim.get("reason"), claim.get("epoch")
+        if reason not in _CLAIM_REASONS:
+            return None
+        if not isinstance(epoch, (int, float)) or isinstance(epoch, bool):
+            return None
+        if not math.isfinite(epoch):
+            return None
+        return reason, float(epoch)
+
+    def _try_claim(
+        self, jd: Path, meta: dict, reason: Literal["timeout", "cancelled"]
+    ) -> int | None:
+        """Become the job's claimant, under ``_LOCK`` and its record lock: try the
+        claimant lock without waiting, then write the claim unless a well-formed one is
+        there (best effort: an ``OSError`` leaves the lock alone to carry it). Returns
+        ``None`` only when another holder has the lock, in which case nothing is written.
+        Otherwise returns the descriptor holding it, or ``_NO_CLAIM_FD`` when the lock
+        could not be taken for any other reason (the file cannot be opened, ``flock`` is
+        unavailable or fails): the caller is then the claimant without a lock, as an
+        indeterminate lock reads free to every reader, and still terminates the job."""
+        fd = _NO_CLAIM_FD
+        with contextlib.suppress(OSError):
+            fd = os.open(jd / _TERMINATE_LOCK_NAME, os.O_CREAT | os.O_RDWR, 0o600)
+        if fd != _NO_CLAIM_FD:
+            try:
+                import fcntl  # noqa: PLC0415 - platform-guarded lazy import (POSIX only)
+
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                os.close(fd)
+                return None
+            except (ImportError, OSError):  # pragma: no cover - non-POSIX, or e.g. ENOLCK
+                os.close(fd)
+                fd = _NO_CLAIM_FD
+        if self._claim_of(meta) is None:
+            meta["terminating"] = {"reason": reason, "epoch": time.time()}
+            try:
+                self._write_meta(jd, meta)
+            except OSError:
+                meta.pop("terminating", None)
+        return fd
 
     def _locked(self, cwd: str, body: Callable[[], _T]) -> _T:
         """Run ``body`` under ``_LOCK`` and the workspace's record lock, terminating
@@ -953,43 +1070,56 @@ class JobStore:
         started = time.time()
         log_path = jd / "stderr.log"
         try:
-            with log_path.open("w") as ef:
-                proc = subprocess.Popen(
-                    cmd,
-                    cwd=str(jd),
-                    stdin=subprocess.DEVNULL if stdin_text is None else subprocess.PIPE,
-                    stdout=ef,
-                    stderr=ef,
-                    start_new_session=True,
-                    text=stdin_text is not None,
-                    encoding="utf-8" if stdin_text is not None else None,
-                )
-            if stdin_text is not None:
-                threading.Thread(target=_write_stdin, args=(proc, stdin_text), daemon=True).start()
+            ef = log_path.open("w")
         except OSError:
             shutil.rmtree(jd, ignore_errors=True)
             raise
-        meta = {
-            "job_id": job_id,
-            "kind": kind,
-            "pid": proc.pid,
-            "owner": _PROCESS_OWNER,
-            "started_epoch": started,
-            "started_at": datetime.now(UTC).isoformat(),
-            "deadline_epoch": started + self.max_seconds,
-            "completed_epoch": None,
-            "terminal_status": None,
-            # Present-and-null marks a record whose delivery is tracked; one without
-            # the key predates tracking, and the cap evicts it as it always did.
-            "delivered_epoch": None,
-            "extra": extra or {},
-        }
         try:
+            proc = subprocess.Popen(
+                cmd,
+                cwd=str(jd),
+                stdin=subprocess.DEVNULL if stdin_text is None else subprocess.PIPE,
+                stdout=ef,
+                stderr=ef,
+                start_new_session=True,
+                text=stdin_text is not None,
+                encoding="utf-8" if stdin_text is not None else None,
+            )
+        except BaseException:
+            # Nothing was spawned (an OSError, or e.g. a ValueError for a bad argument):
+            # drop the log and the dir, then re-raise.
+            with contextlib.suppress(OSError):
+                ef.close()
+            shutil.rmtree(jd, ignore_errors=True)
+            raise
+        # From here a paid worker exists: every failure until its record is written
+        # (closing the log, starting the stdin thread, writing meta.json) rolls it back.
+        try:
+            ef.close()
+            if stdin_text is not None:
+                threading.Thread(target=_write_stdin, args=(proc, stdin_text), daemon=True).start()
+            meta = {
+                "job_id": job_id,
+                "kind": kind,
+                "pid": proc.pid,
+                "owner": _PROCESS_OWNER,
+                "started_epoch": started,
+                "started_at": datetime.now(UTC).isoformat(),
+                "deadline_epoch": started + self.max_seconds,
+                "completed_epoch": None,
+                "terminal_status": None,
+                # Present-and-null marks a record whose delivery is tracked; one without
+                # the key predates tracking, and the cap evicts it as it always did.
+                "delivered_epoch": None,
+                "extra": extra or {},
+            }
             self._write_meta(jd, meta)
         except BaseException:
-            # Persistence failed after a successful spawn (disk full, fs error). A paid
+            with contextlib.suppress(OSError):
+                ef.close()
+            # Recording failed after a successful spawn (disk full, fs error). A paid
             # worker is already running detached; reap its process group so no orphaned
-            # worker survives — mirrors the `except OSError` around Popen above.
+            # worker survives — mirrors the `except BaseException` around Popen above.
             # The wait for it runs with every lock released (#536): the outermost section
             # (`_terminate_overruns`) runs the rollback after it unwinds. jd has no
             # meta.json, so no other section counts, reaps or deletes it meanwhile; one
@@ -1072,6 +1202,25 @@ class JobStore:
             return not _is_running(pid)
         return _worker_lock_held(jd / "worker.lock") is False and not _pid_alive(pid)
 
+    def _worker_stopped(self, meta: dict) -> bool:
+        """Whether a claimed job's worker is positively known to be stopped, so it may be
+        finalized by its claim: for our own job, ``_is_running`` (which reaps) says it is
+        not running; for an unowned one, its PID is dead. A pid ``_meta_pid`` rejects
+        proves nothing.
+
+        Weaker than ``_worker_gone``, which also needs an unowned job's ``worker.lock`` to
+        exist and be free: a worker that died before creating its lock never satisfies
+        that, and a claimed job, whose claimant has already signalled it, must still be
+        finalized then. A dead PID suffices here because a claim's worker was being
+        stopped, and a free or absent lock with a live PID is left to ``_status_of``'s
+        bounded wait rather than read as stopped."""
+        pid = _meta_pid(meta)
+        if pid is None:
+            return False
+        if self._owned(meta):
+            return not _is_running(pid)
+        return not _pid_alive(pid)
+
     def _status_of(self, jd: Path, meta: dict) -> str:
         """Compute the live status, finalizing a job that overran once it is stopped.
 
@@ -1083,6 +1232,18 @@ class JobStore:
         ``running``; one it has terminated but not yet stamped (``_OVERRAN``) is
         finalized here the overrun way, by whichever read first can read it.
 
+        A job whose claimant lock is held, in any process, reads ``running``, whether or
+        not its claimant could write a claim. A job with a well-formed termination claim
+        (see the module docstring) and the lock free is finalized here
+        (``_finish_terminated``) once its worker is positively stopped
+        (``_worker_stopped``); while it is safe to signal (``_job_running``) this reader
+        becomes its claimant and raises ``_Overrun``; otherwise it reads ``running``,
+        with nothing stamped, signalled or evicted, until its deadline plus the terminate
+        grace has passed, and then as an unclaimed stopped record would (``done`` or an
+        unstamped ``failed``, no cleanup). A running job past its
+        deadline raises ``_Overrun`` only once this reader holds the claimant lock, and
+        reads ``running`` when another holder has it.
+
         Raises ``ResultUnreadable`` when a stopped worker's result.json exists but cannot
         be read (#280): the job is then neither finalized nor reported, since reading it
         as absent would stamp ``timeout`` or report ``failed`` for a result that is still
@@ -1090,21 +1251,38 @@ class JobStore:
         if jd in _OVERRAN:
             # This process terminated it as an overrun: finalize it that way whatever the
             # worker now reads as, never terminating it again or deriving failed.
-            return self._finish_overrun(jd, meta)
+            return self._finish_terminated(jd, meta, default="timeout")
         terminal = meta.get("terminal_status")
         if terminal:
             return terminal
         if jd in _TERMINATING:
             return "running"  # a thread is terminating it and will finalize it
-        if self._job_running(jd, meta):
+        if _worker_lock_held(jd / _TERMINATE_LOCK_NAME) is True:
+            # Its claimant, in some process, will finalize it, whether or not it could
+            # write its claim (the lock alone carries one it could not write).
+            return "running"
+        claim = self._claim_of(meta)
+        if claim is not None:
+            # Its claimant is gone (an indeterminate lock reads free).
+            if self._worker_stopped(meta):
+                return self._finish_terminated(jd, meta, default="timeout")
+            if self._job_running(jd, meta):
+                reason: Literal["timeout", "cancelled"] = (
+                    "cancelled" if claim[0] == "cancelled" else "timeout"
+                )
+                self._raise_overrun(jd, meta, reason)
+                return "running"  # fell through: another holder has the claimant lock
+            # Neither proven stopped nor safe to signal: an unowned worker whose PID is
+            # alive but holds no lock, still starting or a reused PID. Stamp, signal and
+            # evict nothing until its deadline plus the grace has passed, then derive
+            # its state as an unclaimed record's (below), so a reused PID cannot wedge it.
+            bound = meta.get("deadline_epoch", float("inf")) + self.terminate_grace_seconds
+            if time.time() <= bound:
+                return "running"
+        elif self._job_running(jd, meta):
             if time.time() > meta.get("deadline_epoch", float("inf")):
-                # Published and owned in one step, so the section that must clear the
-                # marker always knows of it.
-                _TERMINATING.add(jd)
-                owned = getattr(_SECTION, "published", None)
-                if owned is not None:
-                    owned.add(jd)
-                raise _Overrun(jd, meta)
+                self._raise_overrun(jd, meta, "timeout")
+                return "running"  # fell through: another holder has the claimant lock
             return "running"
         env = self._read_envelope(jd)
         if env is not None:
@@ -1119,6 +1297,20 @@ class JobStore:
         # guard leaves result_ok unstamped -> null. Safe degradation, not a false outcome;
         # a cancel() during that window repairs it via setdefault.
         return "failed"
+
+    def _raise_overrun(self, jd: Path, meta: dict, reason: Literal["timeout", "cancelled"]) -> None:
+        """Become the claimant of a job to terminate and raise ``_Overrun`` with its
+        lock; return only when another holder has the lock."""
+        fd = self._try_claim(jd, meta, reason)
+        if fd is None:
+            return
+        # Published and owned in one step, so the section that must clear the marker
+        # always knows of it.
+        _TERMINATING.add(jd)
+        owned = getattr(_SECTION, "published", None)
+        if owned is not None:
+            owned.add(jd)
+        raise _Overrun(jd, meta, fd)
 
     @staticmethod
     def _elapsed_ms(meta: dict) -> int:
@@ -1440,83 +1632,108 @@ class JobStore:
         return self._locked(cwd, body)
 
     def cancel(self, cwd: str, job_id: str) -> dict | None:
+        """Cancel a running job as its termination claimant (see the module docstring).
+
+        Under the locks, a running job is claimed with reason ``cancelled``; the claimant
+        terminates it with every lock released and then finalizes it. When another
+        holder has the claimant lock (a peer process, or a thread here terminating it as
+        an overrun), this cancel signals nothing while that holder keeps it: it waits,
+        with every lock released, at most the terminate grace plus one second for the lock
+        to come free, then returns the job as a fresh locked read gives it, ``running``
+        if the holder still has it. If that holder went away leaving the worker running,
+        that read finds the claim's lock free and the worker live, so this cancel takes
+        over as claimant and stops it (by the claim's reason), which can take one further
+        terminate grace."""
         if not _is_job_id(job_id):
             return None  # before the lock: a malformed id touches nothing
+        jd = self._job_dir(cwd, job_id)
 
-        def first() -> dict | tuple[Path, dict] | None:
+        def read() -> tuple[Path, dict, str] | None:
             try:
-                live = self._read_live_job(cwd, job_id)
+                return self._read_live_job(cwd, job_id)
             except MetaUnreadable as exc:
                 # A pending overrun's worker was signalled by its termination, though
                 # its record cannot be read now; anything else was never signalled.
-                exc.signalled = self._job_dir(cwd, job_id) in _OVERRAN
+                exc.signalled = jd in _OVERRAN
                 raise
+
+        def first() -> dict | tuple[dict, int | None] | None:
+            live = read()
             if live is None:
                 return None
-            jd, meta, state = live
+            _, meta, state = live
             if state in _TERMINAL:
                 return self._status_dict(jd, meta, state)
-            return jd, meta
+            if jd in _TERMINATING:
+                return meta, None  # a thread here is terminating it as an overrun
+            return meta, self._try_claim(jd, meta, "cancelled")
 
         # An overrun job is terminated and finalized (timeout, or done) here, so it
         # reads terminal and is returned as such, as it was before #531.
         found = self._locked(cwd, first)
         if not isinstance(found, tuple):
             return found
-        jd, meta = found
-        pid = _meta_pid(meta)
-        # Terminate with the lock released: the graceful-shutdown grace wait must
-        # not block status/list/result calls for every workspace. Liveness stays
-        # lock-aware throughout, so a worker that exits mid-grace (and a PID then
-        # reused) is never signaled.
-        _terminate_pid_tree(
-            pid,
-            self.terminate_grace_seconds,
-            is_alive=lambda m=meta: self._job_running(jd, m),
-        )
-        with _LOCK, self._record_lock(cwd):
-            if jd in _TERMINATING or jd in _OVERRAN:
-                # Terminated, or being terminated, as an overrun: finalize it as that,
-                # never as cancelled, as the cancel would have found it before #531.
+        meta, claim_fd = found
+        if claim_fd is None:
+            # Another claimant is stopping it: signal nothing, and wait for it with
+            # every lock released, never for longer than its grace allows.
+            give_up = time.monotonic() + self.terminate_grace_seconds + 1.0
+            while time.monotonic() < give_up and (
+                _worker_lock_held(jd / _TERMINATE_LOCK_NAME) is True or jd in _TERMINATING
+            ):
+                time.sleep(0.05)
+            live = self._locked(cwd, read)
+            return None if live is None else self._status_dict(*live)
+        try:
+            # Terminate with the lock released: the graceful-shutdown grace wait must
+            # not block status/list/result calls for every workspace. Liveness stays
+            # lock-aware throughout, so a worker that exits mid-grace (and a PID then
+            # reused) is never signaled.
+            _terminate_pid_tree(
+                _meta_pid(meta),
+                self.terminate_grace_seconds,
+                is_alive=lambda m=meta: self._job_running(jd, m),
+            )
+            with _LOCK, self._record_lock(cwd):
+                # Terminated as an overrun by this process: finalize it as that, never
+                # as cancelled, as the cancel would have found it before #531.
+                default: Literal["timeout", "cancelled"] = (
+                    "timeout" if jd in _TERMINATING or jd in _OVERRAN else "cancelled"
+                )
+                # Re-validate: during the unlocked grace window the record may have
+                # been consumed/evicted, finalized by another path, or the worker may
+                # have finished on its own. Re-read fresh state and never clobber it.
                 try:
-                    done = self._finalize_overrun(jd)
+                    meta = self._read_meta(jd)
                 except MetaUnreadable as exc:
-                    exc.signalled = True  # this cancel signalled the worker first
+                    exc.signalled = True  # the worker was signalled before this read failed
                     raise
-                return None if done is None else self._status_dict(jd, *done)
-            # Re-validate: during the unlocked grace window the record may have been
-            # consumed/evicted, finalized by another path, or the worker may have
-            # finished on its own. Re-read fresh state and never clobber it.
-            try:
-                meta = self._read_meta(jd)
-            except MetaUnreadable as exc:
-                exc.signalled = True  # the worker was signalled before this read failed
-                raise
-            if meta is None:
-                return None  # consumed or expired while we waited
-            terminal = meta.get("terminal_status")
-            # A stamped record is authoritative and its file is never read. An unstamped
-            # one whose result cannot be read back propagates ResultUnreadable (#280): the
-            # worker was signalled, but finalizing it as cancelled would mask a result
-            # that is there, so nothing is written and the next read finalizes it.
-            env = self._read_envelope(jd) if terminal is None else None
-            if terminal is None and env is not None:
-                # The worker completed during the window — preserve its result
-                # rather than masking it as cancelled, stamping its outcome if the
-                # done-transition here is the record's first (setdefault: a prior
-                # _status_of finalization may already have recorded it).
-                meta["completed_epoch"] = meta.get("completed_epoch") or time.time()
-                meta.setdefault("result_ok", self._envelope_ok(env))
-                meta["terminal_status"] = terminal = "done"
-                self._write_meta(jd, meta)
-            if terminal is not None:
-                return self._status_dict(jd, meta, terminal)
-            # Re-read the manifest now: the worker may have declared its worktree
-            # only after cancellation began (e.g. it was still creating it), so a
-            # snapshot taken before termination could miss the path and leak it.
-            manifest = self._read_cleanup_manifest(jd)
-            self._finalize_cleanup(jd, meta, "cancelled", manifest)
-            return self._status_dict(jd, meta, "cancelled")
+                if meta is None:
+                    _OVERRAN.discard(jd)
+                    return None  # consumed or expired while we waited
+                # A stamped record is authoritative and its file is never read. An
+                # unstamped one whose result cannot be read back propagates
+                # ResultUnreadable (#280): nothing is written, the claim is released
+                # below, and the next read finalizes it.
+                env = self._read_envelope(jd) if not meta.get("terminal_status") else None
+                if env is not None:
+                    # The worker completed during the window: preserve its result rather
+                    # than masking it, stamping its outcome if this done-transition is
+                    # the record's first (setdefault: a prior _status_of finalization
+                    # may already have recorded it).
+                    meta["completed_epoch"] = meta.get("completed_epoch") or time.time()
+                    meta.setdefault("result_ok", self._envelope_ok(env))
+                    meta["terminal_status"] = "done"
+                    meta.pop("terminating", None)
+                    self._write_meta(jd, meta)
+                    _OVERRAN.discard(jd)
+                    return self._status_dict(jd, meta, "done")
+                # Otherwise its stamp, or the claim's reason with the declared paths
+                # cleaned up (the manifest re-read now, so a worktree declared after
+                # cancellation began is not leaked).
+                return self._status_dict(jd, meta, self._finish_terminated(jd, meta, default))
+        finally:
+            _release_claim(claim_fd)
 
     def list_jobs(self, cwd: str) -> list[dict]:
         return self._locked(cwd, lambda: self._list_jobs_locked(cwd))
