@@ -111,7 +111,8 @@ per-change, as its own lead says.
 - The `export_failed` repair no longer claims the emptied file is still at the path, nor that a
   retry to the same path is refused: something else may have moved or removed it during the
   call, so the repair says to delete what is at the path only if it is an empty file and to
-  leave anything non-empty there, since it is not the export.
+  leave anything non-empty there, since it is not the export. The discovery surface moves to
+  `amicus/0.1/schema-83`.
 - `amicus_capabilities` now lists `model` and `reasoning_effort` among the optional parameters
   of `amicus_review_changes_dry_run` and `amicus_delegate_dry_run`.
 - A pi call that OpenRouter refuses with HTTP 402 because the balance does not cover the model's
