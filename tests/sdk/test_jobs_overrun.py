@@ -1585,3 +1585,29 @@ def test_a_dead_claimants_job_with_no_worker_lock_is_finalized_by_its_claim(tmp_
     assert not job_store._pid_alive(pid)
     assert store.status(cwd, job_id)["status"] == "timeout"
     assert store._read_meta(jd)["terminal_status"] == "timeout"
+
+
+def test_a_waiting_cancel_takes_over_when_the_claimant_leaves_the_worker_running(
+    tmp_path, monkeypatch
+):
+    store = _store(tmp_path, terminate_grace_seconds=2.0)
+    cwd = str(tmp_path / "w")
+    job_id, pid = _live_locked_job(store, cwd)
+    calls: list[int] = []
+
+    def fake_terminate(pid, grace_seconds, **kwargs):
+        calls.append(pid)
+        job_store._kill_pid_tree(pid)
+
+    monkeypatch.setattr(job_store, "_terminate_pid_tree", fake_terminate)
+    # The other claimant holds the lock briefly, then exits without stopping the worker.
+    helper = _hold_claim(store, cwd, job_id, pause=0.3)
+    try:
+        result = _bounded(lambda: store.cancel(cwd, job_id))
+    finally:
+        helper.kill()
+        helper.wait()
+        job_store._kill_pid_tree(pid)
+    assert calls == [pid]
+    assert result["status"] in ("cancelled", "timeout")  # the claim's reason is timeout
+    assert not job_store._pid_alive(pid)

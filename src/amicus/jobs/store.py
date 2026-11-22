@@ -52,6 +52,10 @@ its deadline plus the terminate grace, after which it reads as an unclaimed reco
 unstamped. The claimant lock is only ever tried, never waited for, while ``_LOCK`` or the
 record lock is held, so it adds no rule to the lock order.
 Writing the claim is best effort; on failure the claimant proceeds with the lock alone.
+A ``cancel`` that meets a job whose claimant lock another holder has signals nothing while
+it is held and waits at most the terminate grace plus one second; if that claimant then
+goes away leaving the worker running, the cancel takes over as claimant and stops it, which
+can take one further terminate grace.
 The guarantee holds only among servers of the release that introduced it or later: an
 older server sharing the root ignores the claim and its lock and can still read a job
 being terminated as ``failed``.
@@ -1629,9 +1633,13 @@ class JobStore:
         Under the locks, a running job is claimed with reason ``cancelled``; the claimant
         terminates it with every lock released and then finalizes it. When another
         holder has the claimant lock (a peer process, or a thread here terminating it as
-        an overrun), nothing is signalled: this waits, with every lock released, at most
-        the terminate grace plus a second for that lock to come free, then returns the
-        job as a fresh locked read gives it."""
+        an overrun), this cancel signals nothing while that holder keeps it: it waits,
+        with every lock released, at most the terminate grace plus one second for the lock
+        to come free, then returns the job as a fresh locked read gives it, ``running``
+        if the holder still has it. If that holder went away leaving the worker running,
+        that read finds the claim's lock free and the worker live, so this cancel takes
+        over as claimant and stops it (by the claim's reason), which can take one further
+        terminate grace."""
         if not _is_job_id(job_id):
             return None  # before the lock: a malformed id touches nothing
         jd = self._job_dir(cwd, job_id)
