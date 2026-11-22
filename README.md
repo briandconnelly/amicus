@@ -44,7 +44,7 @@ The plugins launch the server from a published release tag, pinned in
   "mcpServers": {
     "amicus": {
       "command": "uvx",
-      "args": ["--from", "git+https://github.com/briandconnelly/amicus.git@v0.15.0", "amicus-mcp"]
+      "args": ["--from", "git+https://github.com/briandconnelly/amicus.git@v0.16.0", "amicus-mcp"]
     }
   }
 }
@@ -198,9 +198,9 @@ the new ones.
 
 ## Status and known limits
 
-The `kimi` backend has been removed in favour of `pi` (#423). Use `backend="pi"` with an
-exact listed `provider/id`; `AMICUS_KIMI_*` settings are ignored. See
-[`docs/MIGRATION.md`](docs/MIGRATION.md#upgrading-from-0140) for upgrade instructions and
+amicus 0.16.0 adds model pricing, reasoning levels and a filtering `query` to `amicus_models`,
+an operator model deny-list (`AMICUS_DENY_MODELS`), and `amicus_job_export_diff`. See
+[`docs/MIGRATION.md`](docs/MIGRATION.md#upgrading-from-0150) for upgrade notes and
 [`CHANGELOG.md`](CHANGELOG.md) for every user-visible change.
 
 Two known limits: a third-party backend distribution can load through the `amicus.backends`

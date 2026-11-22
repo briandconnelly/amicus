@@ -199,9 +199,12 @@ The `amicus://backends/{backend}` resource is always the full entry.
 
 ## Upgrading from 0.15.0
 
-The discovery surface moves to `amicus/0.1/schema-78`, so a fingerprint-aware client re-reads the catalog once.
-`amicus_models` gains `pricing` on each model, an object on a `pi` row whose price pi's catalog states and `null` everywhere else, so a client that validates that result against a closed schema must admit it.
+Nothing in this release breaks a 0.15.0 caller, and `RESULT_FORMAT` does not move, so a result a 0.15.0 server stored stays readable.
+The discovery surface moves to `amicus/0.1/schema-83`, so a fingerprint-aware client re-reads the catalog once.
+Each `amicus_models` row gains `pricing` and `advertised_reasoning_efforts`, and the result gains `selection` and `hidden_by_policy`, so a client that validates that result against a closed schema must admit them.
 A `pi` row's `context_tokens` and `max_output_tokens` can now be pi's exact figures where they were rounded ones, so a client that compared them with a stored value will see them change.
+The new error codes `model_denied`, `model_policy_invalid` and `export_failed` can reach a client that branches on `error.code`; the first two only where an operator sets `AMICUS_DENY_MODELS`.
+An operator who sets `AMICUS_DENY_MODELS` should know that a paid call naming no model is refused on a backend with rules, so pass `model` or set that backend's `AMICUS_*_MODEL`.
 
 ## Upgrading from 0.14.0
 
