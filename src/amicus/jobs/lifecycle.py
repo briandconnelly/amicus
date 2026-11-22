@@ -494,10 +494,18 @@ async def await_job_result(
             if time.monotonic() > deadline:
                 if keyed:
                     return _keyed_timeout(rec, cwd, job_id, timeout, meta, plugin)
-                await asyncio.to_thread(store.cancel, cwd, job_id)
+                stopped = await asyncio.to_thread(store.cancel, cwd, job_id)
+                # Cancel returns a job still running when another server sharing the state
+                # is stopping it: claim no confirmed stop then.
+                outcome = (
+                    "the job is still being stopped by another server sharing the state; "
+                    "amicus_job_status reports its outcome."
+                    if stopped is not None and stopped.get("status") == "running"
+                    else "job cancelled."
+                )
                 return error_envelope(
                     "timeout",
-                    f"the run exceeded {timeout}s and the grace window; job cancelled.",
+                    f"the run exceeded {timeout}s and the grace window; {outcome}",
                     meta,
                     plugin=plugin,
                     # The twin runs to the job deadline; it is worth naming only when that

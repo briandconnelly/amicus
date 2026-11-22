@@ -320,6 +320,34 @@ async def test_grace_exhausted_cancels_and_times_out(tmp_path, monkeypatch):
     assert out["error"]["repair"]["tool"] == "amicus_" + spec.kind + "_async"
 
 
+@pytest.mark.parametrize("returned", ["running", "cancelled", None])
+async def test_grace_exhausted_says_cancelled_only_when_cancel_did_not_return_running(
+    tmp_path, monkeypatch, returned
+):
+    store = lifecycle.job_store(_settings(tmp_path))
+    monkeypatch.setattr(lifecycle, "SYNC_AWAIT_GRACE_S", 0.05)
+    monkeypatch.setattr(lifecycle, "SYNC_POLL_INTERVAL_S", 0.01)
+    monkeypatch.setattr(lifecycle, "worker_cmd", _sleeping_worker_cmd())
+    real_cancel = store.cancel
+
+    def cancel(cwd, job_id):
+        rec = real_cancel(cwd, job_id)  # really stop the worker, then report as given
+        return None if returned is None else {**rec, "status": returned}
+
+    monkeypatch.setattr(store, "cancel", cancel)
+    spec = _spec(str(tmp_path), timeout_seconds=1)
+    out = await lifecycle.run_sync(
+        store, spec, meta_for(spec), fakeplugin.make_plugin(), timeout=1, detail="summary", ctx=None
+    )
+    assert out["error"]["code"] == "timeout"
+    message = out["error"]["message"]
+    if returned == "running":
+        assert "job cancelled" not in message
+        assert "amicus_job_status" in message
+    else:
+        assert "job cancelled" in message
+
+
 async def test_grace_exhausted_names_no_twin_when_the_job_deadline_is_no_longer(
     tmp_path, monkeypatch
 ):
