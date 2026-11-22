@@ -115,10 +115,10 @@ _LOCAL_RULES: dict[str, RepairRule] = {
         "retry_after_delay",
         "amicus_job_export_diff",
         True,
-        "amicus could not finish the export file; the error message says whether it removed "
-        "it or a partial file may remain at the path. The job's record is kept and not "
-        "marked delivered. Fix the cause or pick another path, then retry "
-        "amicus_job_export_diff with the same job_id.",
+        "amicus could not finish the export file; the error message says whether it created "
+        "none, left it empty or a partial file may remain. amicus never deletes it, so delete "
+        "a file left behind or pick another path, then retry amicus_job_export_diff with the "
+        "same job_id. The job's record is kept and not marked delivered.",
     ),
     "model_denied": RepairRule(
         "use_allowed_value",

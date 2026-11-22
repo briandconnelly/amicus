@@ -1,6 +1,6 @@
 # ADR 0054: a delegate's diff can be exported to a path the caller names
 
-**Status:** Accepted (2026-11-21)
+**Status:** Accepted (2026-11-21); amended 2026-11-21 for a failed export's file
 
 Adds one tool, `amicus_job_export_diff`, and narrows the "no other file" clause of [ADR 0035](0035-a-backend-answer-is-kept-on-the-job-record.md) by exactly one file.
 AGENTS.md rule 18 was amended first, in a governance PR of its own (#561), to admit it.
@@ -35,6 +35,7 @@ Before returning, the call checks that the caller's path still names the file it
 This holds the directory the file lands in to the one checked; it does not stop a same-user process that renames the job store, or a directory above it, between the identity comparison and the create, which the server cannot prevent and which needs that user's own privileges.
 The file holds the stored diff's UTF-8 bytes exactly.
 A refused path is `invalid_arguments` on `path` with `details.reason` one of `not_absolute`, `not_a_file_name` (an empty, `.` or `..` final component, a trailing slash, or a name too long for the filesystem), `exists` (a directory included), `parent_missing`, `inside_job_store` or `not_writable`, and nothing is created.
+As first accepted, and no longer current (see the 2026-11-21 amendment below), the next three sentences held.
 A file the call created and could not finish, a full disk for example, is removed by that same call, which fails as `export_failed`, temporary, with a repair naming this tool.
 The removal checks first that the name still refers to the file this call created, by device and inode, and leaves alone anything swapped in under it.
 When the file could not be removed, the message and the repair say a partial file may remain at the path, without naming it, and tell the caller to delete it or pass another path.
@@ -94,3 +95,10 @@ It remains the alternative the maintainer may still choose, as a server setting 
 The tool surface gains one tool and one error code, `export_failed`, and `Meta` gains the delivery-only `diff_export`.
 The diff can exist in a second place the caller chose, for as long as the caller keeps it, which is the one exception rule 18 now names.
 A host without the skill learns of the export from the delegate's `_async` description, the server instructions and the tool's own description.
+
+## Amendment (2026-11-21): a failed export's file is emptied, never unlinked
+
+The three sentences above that remove a file the call could not finish no longer describe the tool.
+A file the call created and could not finish is now emptied through the descriptor that created it and left where its name is, never unlinked, because an unlink by name could remove a file swapped in under that name.
+`export_failed` still fails the call as temporary with a repair naming this tool, and its repair says what remains, one fixed text for each case: no file was created, the file was emptied and left (so a retry to the same path is refused as `exists` until the caller deletes it or passes another path), or it could not be emptied and a partial file may remain.
+The message and the repair still do not name the path.

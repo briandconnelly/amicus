@@ -1184,3 +1184,9 @@ async def test_the_published_query_schema_is_closed():
         "limit",
     }
     assert "description" not in query  # its semantics live at amicus://params
+
+
+@pytest.mark.parametrize("tool", ["amicus_review_changes_dry_run", "amicus_delegate_dry_run"])
+def test_a_dry_run_row_lists_the_selectors_model_policy_checks(tool):
+    _required, optional = discovery._JOB_PARAMS[tool]
+    assert {"model", "reasoning_effort"} <= set(optional)

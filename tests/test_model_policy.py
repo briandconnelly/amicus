@@ -211,3 +211,9 @@ async def test_an_unparsed_help_probe_does_not_refuse_an_allowed_model(tmp_path)
     reg = _registry(flag_support=FlagSupport(frozenset(), help_parsed=False))
     prep = await _prep(tmp_path, _settings("codex:x"), registry=reg, model="ok")
     assert isinstance(prep, _prepare.Prepared) and prep.spec.require_model_flag is True
+
+
+def test_the_denylist_description_names_both_refusals():
+    text = config.GLOBAL_ENV.var("AMICUS_DENY_MODELS").description
+    assert "model_policy_invalid" in text
+    assert "unexpanded_env_placeholder" in text

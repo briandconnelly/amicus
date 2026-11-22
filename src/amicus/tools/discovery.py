@@ -506,11 +506,23 @@ def unaccounted_codes(catalog: Sequence[str]) -> list[str]:
 
 _REVIEW_PREVIEW_PARAMS: tuple[list[str], list[str]] = (
     ["backend"],
-    ["scope", "base", "commit", "paths", "workspace_root", "backend_options"],
+    [
+        "scope",
+        "base",
+        "commit",
+        "paths",
+        "model",
+        "reasoning_effort",
+        "workspace_root",
+        "backend_options",
+    ],
 )
 _JOB_PARAMS: dict[str, tuple[list[str], list[str]]] = {
     "amicus_review_changes_dry_run": _REVIEW_PREVIEW_PARAMS,
-    "amicus_delegate_dry_run": (["backend", "task"], ["workspace_root", "backend_options"]),
+    "amicus_delegate_dry_run": (
+        ["backend", "task"],
+        ["model", "reasoning_effort", "workspace_root", "backend_options"],
+    ),
     "amicus_backends": ([], ["backend", "detail"]),
     "amicus_models": (["backend"], ["query"]),
     "amicus_capabilities": ([], ["detail", "include_schemas", "include_tool_details"]),
