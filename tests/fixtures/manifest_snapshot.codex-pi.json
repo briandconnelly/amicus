@@ -1797,7 +1797,7 @@
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-82",
+                "default": "amicus/0.1/schema-83",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -4640,7 +4640,7 @@
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-82",
+            "default": "amicus/0.1/schema-83",
             "title": "Fingerprint",
             "type": "string"
           },
