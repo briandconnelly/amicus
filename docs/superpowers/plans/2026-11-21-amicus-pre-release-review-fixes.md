@@ -93,7 +93,7 @@ On any failure after the file is created it empties the file through the descrip
 The descriptor therefore stays open until after the check that `lstat(path)` still names the created inode, and a mismatch there empties the file too, wherever it now lives, so no diff bytes outlive a failed call.
 `_remove_if_ours` is deleted.
 `ExportFailed` reports what the call left behind: `"nothing"` (the file was never created), `"empty_file"` (created, then emptied, and still wherever its name is), or `"partial_file"` (it could not be emptied).
-A retry to the same path after `"empty_file"` is refused as `exists`, so the repair text says to delete the empty file or pass another path.
+After `"empty_file"` the path may still hold the emptied file, someone else's file or nothing, because the export can be moved or removed during the call, so the repair text says to delete what is at the path only if it is an empty file, otherwise to pass another path.
 
 ### D4 to D7: texts (findings 4 to 7)
 
@@ -479,7 +479,7 @@ def test_no_failure_message_carries_the_path(scratch, store_root, monkeypatch):
     # for each value of left: str(scratch) not in str(exc.value)
 ```
 
-In `tests/test_job_tools.py`, change the export-failure tests to assert one fixed repair text for each of the three `left` values, that the job stays undelivered for all three, and that the `empty_file` text says a retry to the same path needs the empty file deleted first.
+In `tests/test_job_tools.py`, change the export-failure tests to assert one fixed repair text for each of the three `left` values, that the job stays undelivered for all three, and that the `empty_file` text makes deleting what is at the path conditional on it being an empty file.
 
 - [ ] **Step 2: Run them**
 

@@ -44,7 +44,7 @@ per-change, as its own lead says.
   `amicus_job_result` returns with that diff null and `meta.diff_export` giving the file's path,
   byte count, SHA-256 and `source`. A refused path is `invalid_arguments` on `path` with a fixed
   `details.reason`; a file the call could not finish is emptied and left, never unlinked, and
-  the call fails with the new code `export_failed`, which says what remains. A successful export counts as fetching the result, and a refused or
+  the call fails with the new code `export_failed`, which says what the call left. A successful export counts as fetching the result, and a refused or
   failed one leaves the job unfetched. `RESULT_FORMAT` does not move. The skill's diff-review
   recipe now exports the diff first and checks its digest (ADR 0054). The discovery surface
   moves to `amicus/0.1/schema-82`.
@@ -108,6 +108,10 @@ per-change, as its own lead says.
 - A failed `amicus_job_export_diff` no longer unlinks its file by name, which could have removed
   a file swapped in under that name. It empties the file through the descriptor it created and
   leaves it, and `export_failed` says whether nothing, an empty file or a partial file remains.
+- The `export_failed` repair no longer claims the emptied file is still at the path, nor that a
+  retry to the same path is refused: something else may have moved or removed it during the
+  call, so the repair says to delete what is at the path only if it is an empty file and to
+  leave anything non-empty there, since it is not the export.
 - `amicus_capabilities` now lists `model` and `reasoning_effort` among the optional parameters
   of `amicus_review_changes_dry_run` and `amicus_delegate_dry_run`.
 - A pi call that OpenRouter refuses with HTTP 402 because the balance does not cover the model's

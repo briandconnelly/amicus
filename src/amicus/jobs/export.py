@@ -69,15 +69,16 @@ ExportLeft = Literal["nothing", "empty_file", "partial_file"]
 
 _FAILED_TEXT: dict[ExportLeft, str] = {
     "nothing": "the export file could not be created",
-    "empty_file": "the export file could not be completed and was left empty",
+    "empty_file": "the export file could not be completed and was emptied",
     "partial_file": "the export file could not be completed or emptied",
 }
 
 
 class ExportFailed(Exception):
     """The file could not be completed. ``left`` says what this call left behind: no file
-    (``nothing``), an empty file wherever its name now is (``empty_file``), or a file it
-    could not empty (``partial_file``). ``partial_file`` also covers a file whose final
+    (``nothing``), the file it created, emptied, wherever its name now is (``empty_file``:
+    the path may since hold another file or none), or a file it could not empty
+    (``partial_file``). ``partial_file`` also covers a file whose final
     close failed, which may therefore be complete."""
 
     def __init__(self, errno_: int | None = None, *, left: ExportLeft = "nothing") -> None:

@@ -100,5 +100,5 @@ A host without the skill learns of the export from the delegate's `_async` descr
 
 The three sentences above that remove a file the call could not finish no longer describe the tool.
 A file the call created and could not finish is now emptied through the descriptor that created it and left where its name is, never unlinked, because an unlink by name could remove a file swapped in under that name.
-`export_failed` still fails the call as temporary with a repair naming this tool, and its repair says what remains, one fixed text for each case: no file was created, the file was emptied and left (so a retry to the same path is refused as `exists` until the caller deletes it or passes another path), or it could not be emptied and a partial file may remain.
+`export_failed` still fails the call as temporary with a repair naming this tool, and its repair says what remains, one fixed text for each case: no file was created, the file it created was emptied and left (it may still be at the path or may have been moved or removed during the call, so the repair says to delete what is at the path only if it is empty, to leave anything non-empty there as not the export, and that the same path works once nothing is there), or it could not be emptied and a partial file may remain.
 The message and the repair still do not name the path.
