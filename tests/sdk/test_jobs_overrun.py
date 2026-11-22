@@ -1526,3 +1526,62 @@ def test_a_peer_honours_the_claimant_lock_when_the_claim_could_not_be_written(
     assert jd.is_dir()
     assert store.status(cwd, job_id)["status"] == "timeout"
     assert not declared_worktree.exists()
+
+
+def _unowned_claimed_live_job(tmp_path, *, past_bound: bool):
+    """A claimed job whose claimant is gone, read by a process that does not own it: its
+    worker is a live sleeping child holding no ``worker.lock``, so nothing proves it
+    stopped or running. ``past_bound`` puts the deadline plus the grace behind us."""
+    root = tmp_path / "wtroot"
+    root.mkdir()
+    store = _store(tmp_path, cleanup_root=root, cleanup_prefix="wt-", terminate_grace_seconds=0.5)
+    cwd = str(tmp_path / "w")
+    claim = {"reason": "timeout", "epoch": time.time()}
+    job_id, jd, pid = _claimed_job(store, cwd, claim, kill=False, owner="another-process")
+    declared_worktree = _declare(store, cwd, job_id, root)
+    meta = store._read_meta(jd)
+    meta["deadline_epoch"] = time.time() - (5 if past_bound else -60)
+    store._write_meta(jd, meta)
+    return store, cwd, job_id, jd, pid, declared_worktree
+
+
+def test_a_claimed_job_with_an_unproven_worker_stays_running(tmp_path, monkeypatch):
+    calls: list[int] = []
+    monkeypatch.setattr(job_store, "_terminate_pid_tree", lambda pid, *a, **k: calls.append(pid))
+    store, cwd, job_id, jd, pid, wt = _unowned_claimed_live_job(tmp_path, past_bound=False)
+    try:
+        assert job_store._pid_alive(pid)
+        assert store.status(cwd, job_id)["status"] == "running"
+        assert store._read_meta(jd).get("terminal_status") is None
+        assert wt.exists()
+        assert calls == []
+    finally:
+        job_store._kill_pid_tree(pid)
+
+
+def test_a_claimed_job_with_an_unproven_worker_past_its_bound_reads_failed_unstamped(
+    tmp_path, monkeypatch
+):
+    calls: list[int] = []
+    monkeypatch.setattr(job_store, "_terminate_pid_tree", lambda pid, *a, **k: calls.append(pid))
+    store, cwd, job_id, jd, pid, wt = _unowned_claimed_live_job(tmp_path, past_bound=True)
+    try:
+        assert store.status(cwd, job_id)["status"] == "failed"
+        assert store._read_meta(jd).get("terminal_status") is None
+        assert wt.exists()
+        (jd / "result.json").write_text('{"ok": true}')
+        assert store.status(cwd, job_id)["status"] == "done"
+        assert calls == []
+    finally:
+        job_store._kill_pid_tree(pid)
+
+
+def test_a_dead_claimants_job_with_no_worker_lock_is_finalized_by_its_claim(tmp_path):
+    store = _store(tmp_path)
+    cwd = str(tmp_path / "w")
+    claim = {"reason": "timeout", "epoch": time.time()}
+    job_id, jd, pid = _claimed_job(store, cwd, claim, owner="another-process")
+    assert not (jd / "worker.lock").exists()
+    assert not job_store._pid_alive(pid)
+    assert store.status(cwd, job_id)["status"] == "timeout"
+    assert store._read_meta(jd)["terminal_status"] == "timeout"

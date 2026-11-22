@@ -150,8 +150,10 @@ per-change, as its own lead says.
   its record. The stopping server now records a termination claim on the job and holds a
   per-job lock until the outcome is stamped, so the other server reads the job as `running`
   meanwhile, never signals it a second time and never evicts it. If the stopping server dies
-  first, the next read finalizes the job by its claim: `timeout` or `cancelled`, or `done` if
-  the result was written. A cancel that meets a job another server is already stopping waits
+  first, the next read finalizes the job by its claim once its worker is known to be stopped:
+  `timeout` or `cancelled`, or `done` if the result was written. A worker that cannot be shown
+  stopped or running leaves the job `running`, untouched, until its deadline plus the
+  terminate grace, and it then reads as it would without a claim. A cancel that meets a job another server is already stopping waits
   up to the terminate grace plus one second, then reports the status the job reads as. This
   holds only among servers of this release or later sharing a state root: after upgrading,
   restart any session still running an older server.

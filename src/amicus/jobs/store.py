@@ -43,11 +43,14 @@ takes an exclusive ``flock`` on ``<job_dir>/terminate.lock``, the claimant lock,
 it holds through signalling and finalization and releases once the record is stamped or
 it gives up on an error; a claimant that dies releases it with its descriptors. Every
 reader, in any process, reads a job whose claimant lock is held as ``running``, claim
-written or not:
-never ``failed``, never evicted, never signalled. A claim whose lock is free belongs to
-a claimant that is gone, so the reader finalizes the job if its worker is stopped, or
-becomes its claimant if not. The claimant lock is only ever tried, never waited for,
-while ``_LOCK`` or the record lock is held, so it adds no rule to the lock order.
+written or not: never ``failed``, never evicted, never signalled. A claim whose lock is
+free belongs to a claimant that is gone, so the reader finalizes the job by its claim once
+its worker is positively stopped (our own child reaped, or an unowned worker's PID dead),
+and becomes its claimant while the worker is safe to signal. A worker that is neither (an
+unowned live PID holding no ``worker.lock``) leaves the job ``running``, untouched, until
+its deadline plus the terminate grace, after which it reads as an unclaimed record would,
+unstamped. The claimant lock is only ever tried, never waited for, while ``_LOCK`` or the
+record lock is held, so it adds no rule to the lock order.
 Writing the claim is best effort; on failure the claimant proceeds with the lock alone.
 The guarantee holds only among servers of the release that introduced it or later: an
 older server sharing the root ignores the claim and its lock and can still read a job
@@ -1191,6 +1194,25 @@ class JobStore:
             return not _is_running(pid)
         return _worker_lock_held(jd / "worker.lock") is False and not _pid_alive(pid)
 
+    def _worker_stopped(self, meta: dict) -> bool:
+        """Whether a claimed job's worker is positively known to be stopped, so it may be
+        finalized by its claim: for our own job, ``_is_running`` (which reaps) says it is
+        not running; for an unowned one, its PID is dead. A pid ``_meta_pid`` rejects
+        proves nothing.
+
+        Weaker than ``_worker_gone``, which also needs an unowned job's ``worker.lock`` to
+        exist and be free: a worker that died before creating its lock never satisfies
+        that, and a claimed job, whose claimant has already signalled it, must still be
+        finalized then. A dead PID suffices here because a claim's worker was being
+        stopped, and a free or absent lock with a live PID is left to ``_status_of``'s
+        bounded wait rather than read as stopped."""
+        pid = _meta_pid(meta)
+        if pid is None:
+            return False
+        if self._owned(meta):
+            return not _is_running(pid)
+        return not _pid_alive(pid)
+
     def _status_of(self, jd: Path, meta: dict) -> str:
         """Compute the live status, finalizing a job that overran once it is stopped.
 
@@ -1204,9 +1226,13 @@ class JobStore:
 
         A job whose claimant lock is held, in any process, reads ``running``, whether or
         not its claimant could write a claim. A job with a well-formed termination claim
-        (see the module docstring) and the lock free,
-        it is finalized here (``_finish_terminated``) if its worker is stopped, else this
-        reader becomes its claimant and raises ``_Overrun``. A running job past its
+        (see the module docstring) and the lock free is finalized here
+        (``_finish_terminated``) once its worker is positively stopped
+        (``_worker_stopped``); while it is safe to signal (``_job_running``) this reader
+        becomes its claimant and raises ``_Overrun``; otherwise it reads ``running``,
+        with nothing stamped, signalled or evicted, until its deadline plus the terminate
+        grace has passed, and then as an unclaimed stopped record would (``done`` or an
+        unstamped ``failed``, no cleanup). A running job past its
         deadline raises ``_Overrun`` only once this reader holds the claimant lock, and
         reads ``running`` when another holder has it.
 
@@ -1230,14 +1256,22 @@ class JobStore:
         claim = self._claim_of(meta)
         if claim is not None:
             # Its claimant is gone (an indeterminate lock reads free).
-            if not self._job_running(jd, meta):
+            if self._worker_stopped(meta):
                 return self._finish_terminated(jd, meta, default="timeout")
-            reason: Literal["timeout", "cancelled"] = (
-                "cancelled" if claim[0] == "cancelled" else "timeout"
-            )
-            self._raise_overrun(jd, meta, reason)
-            return "running"  # fell through: another holder has the claimant lock
-        if self._job_running(jd, meta):
+            if self._job_running(jd, meta):
+                reason: Literal["timeout", "cancelled"] = (
+                    "cancelled" if claim[0] == "cancelled" else "timeout"
+                )
+                self._raise_overrun(jd, meta, reason)
+                return "running"  # fell through: another holder has the claimant lock
+            # Neither proven stopped nor safe to signal: an unowned worker whose PID is
+            # alive but holds no lock, still starting or a reused PID. Stamp, signal and
+            # evict nothing until its deadline plus the grace has passed, then derive
+            # its state as an unclaimed record's (below), so a reused PID cannot wedge it.
+            bound = meta.get("deadline_epoch", float("inf")) + self.terminate_grace_seconds
+            if time.time() <= bound:
+                return "running"
+        elif self._job_running(jd, meta):
             if time.time() > meta.get("deadline_epoch", float("inf")):
                 self._raise_overrun(jd, meta, "timeout")
                 return "running"  # fell through: another holder has the claimant lock
