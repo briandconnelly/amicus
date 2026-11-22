@@ -1957,8 +1957,8 @@ def _inject_export_failure(monkeypatch, left):
 
 _EXPECTED_EXPORT_REPAIR = {
     "nothing": "created no file",
-    "empty_file": "delete that empty file or pass another path",
-    "partial_file": "a partial file may remain",
+    "empty_file": "only if it is an empty file",
+    "partial_file": "only if it is this call's partial file",
 }
 
 
@@ -1988,6 +1988,11 @@ async def test_a_failed_export_says_what_it_left_and_stays_undelivered(
     assert err["repair"]["alternative"] == _EXPORT_FAILED_REPAIR[left]
     assert _EXPECTED_EXPORT_REPAIR[left] in err["repair"]["alternative"]
     assert len(set(_EXPORT_FAILED_REPAIR.values())) == 3
+    if left == "empty_file":
+        text = err["repair"]["alternative"]
+        assert "moved or removed" in text and "not this export" in text
+        assert "a retry to the same path is refused as exists" not in text
+        assert "once nothing is there" in text
     assert str(target) not in res.content[0].text
     assert "export me" not in res.content[0].text
     if left == "nothing":

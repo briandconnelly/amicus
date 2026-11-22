@@ -256,6 +256,7 @@ def test_the_path_contract_says_how_to_read_a_partial_export():
     assert "check meta.diff_export before following" in full
     assert 'source "partial" is always an incomplete change' in full
     assert "whatever meta.truncated and meta.redacted_paths say" in full
-    assert "is emptied, never deleted" in full and "a partial file remains" in full
+    assert "is emptied, never deleted" in full and "a partial file remains" not in full
+    assert "says whether it created no file" in full
     assert "cancelled" in full and "export again to a new path" in full
     assert "too long" in full

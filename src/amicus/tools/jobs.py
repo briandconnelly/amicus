@@ -84,16 +84,19 @@ _EXPORT_FAILED_REPAIR: dict[ExportLeft, str] = {
         "amicus_job_export_diff with the same job_id, to the same path or another."
     ),
     "empty_file": (
-        "amicus could not finish the export file (for example the disk filled) and emptied "
-        "it; amicus never deletes it, and a retry to the same path is refused as exists. "
-        "Free the space, delete that empty file or pass another path, then retry "
-        "amicus_job_export_diff with the same job_id. The job's record is kept and not "
-        "marked delivered."
+        "amicus could not finish the export (for example the disk filled) and emptied the "
+        "file it created, which it never deletes; that file may still be at the path, or "
+        "something else may have moved or removed it during the call. Delete what is at the "
+        "path only if it is an empty file; anything non-empty there is not this export, so "
+        "leave it and pass another path. The same path works once nothing is there (a path "
+        "holding anything is refused as exists). Then retry amicus_job_export_diff with the "
+        "same job_id. The job's record is kept and not marked delivered."
     ),
     "partial_file": (
         "amicus could not finish the export file and could not empty it, so a partial file "
-        "may remain: delete it or pass another path, then retry amicus_job_export_diff with "
-        "the same job_id. The job's record is kept and not marked delivered."
+        "may remain. Delete what is at the path only if it is this call's partial file, else "
+        "pass another path, then retry amicus_job_export_diff with the same job_id. The "
+        "job's record is kept and not marked delivered."
     ),
 }
 

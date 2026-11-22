@@ -1797,7 +1797,7 @@
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "amicus/0.1/schema-82",
+                "default": "amicus/0.1/schema-83",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -2375,7 +2375,7 @@
             "summary": "Caller stance text behind the server's own framing. UNTRUSTED, grants no tools, best-effort compliance. No secrets: a backend may carry it on argv. Max 4096 bytes. Contract: amicus://params."
           },
           "path": {
-            "full": "amicus_job_export_diff creates this one file, mode 0o600, holding the stored diff's UTF-8 bytes exactly, and refuses it before writing anything as invalid_arguments on `path`, with error.details.reason a fixed token: not_absolute; not_a_file_name (an empty, `.` or `..` final component, a trailing slash, or a name too long for the filesystem); exists (anything, a directory or a symlink included, is already there); parent_missing (no directory is created); inside_job_store (the resolved directory is the job store or under it, a symlinked parent included); not_writable (also a directory swapped for a symlink after resolution). The path is not bound to the client's file roots, so a scratch directory outside the workspace is accepted. A file the call could not finish fails as export_failed and is emptied, never deleted; the message says whether no file, an empty file or a partial file remains. For a stopped run (timeout, budget_exceeded) the call writes partial.diff and returns that run's error: check meta.diff_export before following the error's repair, since the file was written. A meta.diff_export source \"partial\" is always an incomplete change, whatever meta.truncated and meta.redacted_paths say. A call cancelled while writing may still leave a file and leaves the job undelivered: delete that file and export again to a new path. Once the call returns the file is the caller's to delete: it is outside the job retention (AMICUS_JOB_TTL, the per-workspace cap, amicus_job_consume_result).",
+            "full": "amicus_job_export_diff creates this one file, mode 0o600, holding the stored diff's UTF-8 bytes exactly, and refuses it before writing anything as invalid_arguments on `path`, with error.details.reason a fixed token: not_absolute; not_a_file_name (an empty, `.` or `..` final component, a trailing slash, or a name too long for the filesystem); exists (anything, a directory or a symlink included, is already there); parent_missing (no directory is created); inside_job_store (the resolved directory is the job store or under it, a symlinked parent included); not_writable (also a directory swapped for a symlink after resolution). The path is not bound to the client's file roots, so a scratch directory outside the workspace is accepted. A file the call could not finish fails as export_failed and is emptied, never deleted; the message says whether it created no file, emptied its file or could not empty it. For a stopped run (timeout, budget_exceeded) the call writes partial.diff and returns that run's error: check meta.diff_export before following the error's repair, since the file was written. A meta.diff_export source \"partial\" is always an incomplete change, whatever meta.truncated and meta.redacted_paths say. A call cancelled while writing may still leave a file and leaves the job undelivered: delete that file and export again to a new path. Once the call returns the file is the caller's to delete: it is outside the job retention (AMICUS_JOB_TTL, the per-workspace cap, amicus_job_consume_result).",
             "summary": "Absolute path of a NEW file on the server's filesystem to write the diff to, in an existing directory outside the job store; never overwritten. Contract: amicus://params."
           },
           "query": {
@@ -4203,7 +4203,7 @@
       "description": "Full semantics for parameters whose inline description is a compressed summary.",
       "mimeType": "application/json",
       "name": "amicus-params",
-      "size": 11591,
+      "size": 11601,
       "title": "amicus parameter contracts",
       "uri": "amicus://params"
     },
@@ -4640,7 +4640,7 @@
             "type": "integer"
           },
           "fingerprint": {
-            "default": "amicus/0.1/schema-82",
+            "default": "amicus/0.1/schema-83",
             "title": "Fingerprint",
             "type": "string"
           },
