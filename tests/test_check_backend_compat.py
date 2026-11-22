@@ -327,7 +327,29 @@ def test_a_cli_ahead_of_latest_is_told_to_pin_back_not_to_upgrade():
     assert "npm install -g @openai/codex@0.162.0" in codex, codex
     (pi,) = _off_latest("pi", "2.2.0", "2.1.1")
     assert "ahead of" in pi and "pin back" in pi, pi
-    assert "installing 2.1.1 however" in pi and "`install" not in pi
+    assert "npm install -g @earendil-works/pi-coding-agent@2.1.1" in pi, pi
+
+
+def test_print_updates_names_every_backend_at_latest_and_holds_claude(capsys, monkeypatch):
+    latest = {"codex": "0.171.0", "claude": "2.1.330", "pi": "1.6.0"}
+    monkeypatch.setattr(compat, "latest_upstream", latest.get)
+    lines, failed = compat.update_commands(latest.get)
+    assert failed == []
+    assert lines == [
+        "npm install -g @openai/codex@0.171.0",
+        "DISABLE_AUTOUPDATER=1 claude install 2.1.330",
+        "npm install -g @earendil-works/pi-coding-agent@1.6.0",
+    ]
+    assert set(compat.PIN_COMMANDS) == set(compat.BACKENDS)
+
+
+def test_print_updates_fails_on_a_lookup_it_could_not_make(capsys, monkeypatch):
+    monkeypatch.setattr(compat, "latest_upstream", {"codex": "0.171.0", "claude": "2.1.330"}.get)
+    assert compat.main(["print-updates"]) == 1
+    out = capsys.readouterr()
+    assert "npm install -g @openai/codex@0.171.0" in out.out
+    assert "pi-coding-agent" not in out.out
+    assert "FAIL pi:" in out.err
 
 
 def test_a_cli_behind_latest_is_told_to_upgrade():

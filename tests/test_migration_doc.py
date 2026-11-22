@@ -305,3 +305,49 @@ def test_a_duplicated_row_is_rejected_rather_than_silently_overwriting():
     # not the synthetic table's shape.
     assert _table_rows(f"{header}{row}\n")[name] is not None
     assert name in _table_defaults(f"{header}{row}\n")
+
+
+# --- the newest upgrade section keeps up with the fingerprint --------------------------
+
+_UPGRADE_HEADING = re.compile(r"^## Upgrading from (\S+)$", re.MULTILINE)
+
+
+def _newest_upgrade_section(text: str) -> tuple[str, str]:
+    """The first `## Upgrading from X` section: its X, and its body up to the next `## `."""
+    match = _UPGRADE_HEADING.search(text)
+    assert match is not None, "MIGRATION.md has no `## Upgrading from X` section"
+    rest = text[match.end() :]
+    following = re.search(r"^## ", rest, re.MULTILINE)
+    return match.group(1), rest[: following.start() if following else len(rest)]
+
+
+def _fingerprint_problem(text: str, fingerprint: str, declared: str) -> str | None:
+    version, body = _newest_upgrade_section(text)
+    if f"`{fingerprint}`" in body:
+        return None
+    return (
+        f"MIGRATION.md's newest upgrade section (`## Upgrading from {version}`) does not name "
+        f"the current fingerprint `{fingerprint}`. A change that moves the discovery surface "
+        f"updates the upgrade notes in the same PR: add or extend `## Upgrading from "
+        f"{declared}` saying what a client must do, so the release PR has nothing to rebuild."
+    )
+
+
+def test_the_newest_upgrade_section_names_the_current_fingerprint():
+    """0.16.0's release PR found its upgrade section five fingerprint bumps stale."""
+    import amicus
+    from amicus.schemas.fingerprint import FINGERPRINT
+
+    problem = _fingerprint_problem(DOC.read_text(), FINGERPRINT, amicus.__version__)
+    assert problem is None, problem
+
+
+def test_a_stale_upgrade_section_is_caught():
+    """Known positive: a section naming an older fingerprint fails, and the newer one passes."""
+    doc = (
+        "## Upgrading from 1.1.0\n\nThe surface moves to `amicus/0.1/schema-9`.\n\n"
+        "## Upgrading from 1.0.0\n\nThe surface moves to `amicus/0.1/schema-10`.\n"
+    )
+    problem = _fingerprint_problem(doc, "amicus/0.1/schema-10", "1.2.0")
+    assert problem is not None and "Upgrading from 1.2.0" in problem, problem
+    assert _fingerprint_problem(doc, "amicus/0.1/schema-9", "1.2.0") is None

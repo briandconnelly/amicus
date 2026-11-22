@@ -640,7 +640,30 @@ def cmd_preflight(ctx: Context, args: argparse.Namespace) -> int:
     print("and needs the maintainer's authorization in the session that runs it. This script")
     print("never runs it. The command:")
     print(f"  {evidence_command(ctx.repo_root, version)}")
+    print()
+    print("Then, if every suite passed, the rest of the release with this commit filled in:")
+    for line in next_steps(ctx.repo_root, version, args.pr, head or ""):
+        print(f"  {line}")
     return 0
+
+
+def next_steps(repo_root: Path, version: str, pr: int, release_sha: str) -> list[str]:
+    """RELEASING steps 3 (tag) through the post-tag checks, as commands to copy.
+
+    Printed, never run: tagging, merging and pushing are the maintainer's alone.
+    """
+    tag = f"v{version}"
+    record = shlex.quote(str(repo_root / EVIDENCE_PATH))
+    return [
+        f"git tag -a {tag} --cleanup=verbatim -F {record} {release_sha}",
+        f"gh pr merge {pr} --merge",
+        "git fetch origin",
+        f"uv run python scripts/release.py post-merge --release-sha {release_sha} "
+        f"--version {version}",
+        f"git push origin {tag}",
+        "# approve the pypi environment on the publish run, then:",
+        f"uv run python scripts/release.py post-publish --version {version}",
+    ]
 
 
 # --- post-merge: before the tag is pushed -----------------------------------------------

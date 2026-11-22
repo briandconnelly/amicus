@@ -156,6 +156,20 @@ def test_preflight_holds_in_the_release_worktree_and_prints_the_command(layout, 
     assert run.ran_compat()
     assert run.ran("uv", "lock", "--check")
     assert [c[:3] for c in run.calls if c[0] == "gh"] == [["gh", "pr", "view"]]
+    # The rest of the release, with this PR and commit filled in, printed after the command.
+    after = out.out.split(command, 1)[1]
+    for step in release.next_steps(layout.worktree, NEXT, PR, layout.head):
+        assert step in after, step
+    assert f"post-merge --release-sha {layout.head} --version {NEXT}" in after
+
+
+def test_next_steps_tag_the_release_commit_with_this_worktrees_record(tmp_path):
+    steps = release.next_steps(tmp_path, "1.2.3", 42, "abc123")
+    record = tmp_path / release.EVIDENCE_PATH
+    assert steps[0] == f"git tag -a v1.2.3 --cleanup=verbatim -F {record} abc123"
+    assert "gh pr merge 42 --merge" in steps
+    assert steps.index("gh pr merge 42 --merge") < steps.index("git push origin v1.2.3")
+    assert steps[-1] == "uv run python scripts/release.py post-publish --version 1.2.3"
 
 
 def test_the_evidence_path_is_the_one_the_evidence_script_writes():

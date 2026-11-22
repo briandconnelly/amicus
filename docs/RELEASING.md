@@ -100,6 +100,8 @@ A release vouches for the `codex`, `claude` and `pi` that are installed when its
 Do this last among the preconditions, immediately before the evidence run in the release sequence, because a check done a week earlier describes CLIs that have since moved.
 
 First bring each CLI to its latest release on the machine that will record the evidence.
+`uv run python scripts/check_backend_compat.py print-updates` prints the three install commands for npm's current `latest`, Claude Code's with `DISABLE_AUTOUPDATER=1`, and runs none of them.
+The paragraphs below say what those commands do and why.
 `codex` is an npm package, so `npm view @openai/codex version` names its latest and `npm install -g @openai/codex@<version>` installs it.
 `claude` is Claude Code, whose native installer does not follow npm: `npm view @anthropic-ai/claude-code version` still names its latest, and `claude install <version>` installs it, as below.
 `pi` is an npm package, so `npm view @earendil-works/pi-coding-agent version` names its latest and `npm install -g @earendil-works/pi-coding-agent@<version>` installs it.
@@ -193,7 +195,8 @@ The tag therefore deliberately points at a commit that is in `main`'s history bu
 
    Then do by hand what the script leaves to you, and commit the result as PR C.
    Write the release section's lead paragraph and review its entries.
-   Update README's "Status and known limits" prose naming the current release, and add the release's upgrade section to `docs/MIGRATION.md`; the script reminds you of both and edits neither.
+   Update README's "Status and known limits" prose naming the current release, and review the release's upgrade section in `docs/MIGRATION.md`; the script reminds you of both and edits neither.
+   That section, `## Upgrading from <previous version>`, is written during the cycle rather than here: `tests/test_migration_doc.py` fails any PR that moves the fingerprint without naming the new one in the newest upgrade section, so by release time it should only need reading.
    Change no version literal unless the version itself is changing.
 
 3. Run every command from here through step 6 in the PR C worktree, never in the main checkout.
@@ -217,6 +220,7 @@ The tag therefore deliberately points at a commit that is in `main`'s history bu
    - `uv run python scripts/check_backend_compat.py` must pass, as in the precondition above, because a CLI that is behind, ahead, unauthenticated or outside the contract would make the evidence describe the wrong thing.
 
    On success it prints the release commit and the exact evidence command, and it never runs that command.
+   It then prints the tag, merge, post-merge, push and post-publish commands of steps 3 to 6 with this PR's number and this release commit filled in, to copy once the evidence passes; it runs none of them either.
    Record the release commit's SHA, and note it well: it is the commit that gets tagged, and it will not be `main`'s head after the next step.
    If the PR C branch gains any commit after this point — an "Update branch" click, or a review pushing a change — this step must be redone from the new tip: the evidence would otherwise cover a commit that is no longer what step 4 actually merges.
    Redoing it after the local tag below exists starts with `git tag -d vX.Y.Z`, because the evidence script refuses to run while that tag exists; delete it only if it was never pushed.
