@@ -1611,3 +1611,16 @@ def test_a_waiting_cancel_takes_over_when_the_claimant_leaves_the_worker_running
     assert calls == [pid]
     assert result["status"] in ("cancelled", "timeout")  # the claim's reason is timeout
     assert not job_store._pid_alive(pid)
+
+
+def test_a_non_oserror_spawn_failure_removes_the_job_dir(tmp_path, monkeypatch):
+    store = _store(tmp_path)
+    cwd = str(tmp_path / "a")
+
+    def popen(*args, **kwargs):
+        raise ValueError("bad argument")
+
+    monkeypatch.setattr(job_store.subprocess, "Popen", popen)
+    with pytest.raises(ValueError, match="bad argument"):
+        store.start(_factory(_SLEEP), cwd, kind="k")
+    assert store._job_dirs(store._ws_dir(cwd)) == []

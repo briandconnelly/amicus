@@ -152,7 +152,9 @@ class _Overrun(Exception):
     terminates the worker with the locks released, re-takes them to finalize the job
     from a fresh read, and runs its body again (#531). The job dir's parent is the
     workspace dir whose record lock that finalization takes. ``claim_fd`` holds the
-    job's claimant lock, which the section releases once it is done with the job."""
+    job's claimant lock, which the section releases once it is done with the job, or is
+    ``_NO_CLAIM_FD`` when the claimant could not take that lock (``_release_claim``
+    ignores it)."""
 
     def __init__(self, jd: Path, meta: dict, claim_fd: int | None) -> None:
         super().__init__(jd.name)
@@ -1083,7 +1085,9 @@ class JobStore:
                 text=stdin_text is not None,
                 encoding="utf-8" if stdin_text is not None else None,
             )
-        except OSError:
+        except BaseException:
+            # Nothing was spawned (an OSError, or e.g. a ValueError for a bad argument):
+            # drop the log and the dir, then re-raise.
             with contextlib.suppress(OSError):
                 ef.close()
             shutil.rmtree(jd, ignore_errors=True)
@@ -1115,7 +1119,7 @@ class JobStore:
                 ef.close()
             # Recording failed after a successful spawn (disk full, fs error). A paid
             # worker is already running detached; reap its process group so no orphaned
-            # worker survives — mirrors the `except OSError` around Popen above.
+            # worker survives — mirrors the `except BaseException` around Popen above.
             # The wait for it runs with every lock released (#536): the outermost section
             # (`_terminate_overruns`) runs the rollback after it unwinds. jd has no
             # meta.json, so no other section counts, reaps or deletes it meanwhile; one
