@@ -114,7 +114,7 @@ What the listing establishes, and what it does not:
   how well a model does the task, and it can leave several candidates tied. Whether a paid
   call may settle a tie is the first rule above.
 - **Rank by quality from a source that reads metadata, never one that runs inference.** For
-  an `openrouter/` model, OpenRouter's published agent skills (`OpenRouterTeam/skills`) include
+  an `openrouter/` model, OpenRouter's published agent skills ([`OpenRouterTeam/skills`](https://github.com/OpenRouterTeam/skills)) include
   `openrouter-benchmarks`, which ranks models from third-party benchmark scores, and
   `openrouter-models`, which adds provider latency, uptime and supported parameters; both read
   catalog data and send no prompt. A ranking proposes candidates only: keep one only where
