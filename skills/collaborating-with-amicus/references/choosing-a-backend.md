@@ -113,6 +113,22 @@ What the listing establishes, and what it does not:
   narrow mechanical review needs less than an architectural question). It does not establish
   how well a model does the task, and it can leave several candidates tied. Whether a paid
   call may settle a tie is the first rule above.
+- **Rank by quality from a source that reads metadata, never one that runs inference.** For
+  an `openrouter/` model, OpenRouter's published agent skills ([`OpenRouterTeam/skills`](https://github.com/OpenRouterTeam/skills)) include
+  `openrouter-benchmarks`, which ranks models from third-party benchmark scores, and
+  `openrouter-models`, which adds provider latency, uptime and supported parameters; both read
+  catalog data and send no prompt. A ranking proposes candidates only: keep one only where
+  `amicus_models(backend="pi")` lists its id as `openrouter/<id>`, and quote prices from this
+  session's output, never from memory. Prefer a candidate that supports tool calls, since pi
+  gives the model read tools, and write tools on a delegate.
+- **What a call cost is `meta.usage.cost_usd` first.** `null` there is unknown, not zero. For
+  totals, OpenRouter's `openrouter-analytics` skill reports usage and spend from a management
+  key, which a regular key cannot use; a total covers whatever the chosen filters select, which
+  includes other traffic on the same account or key, so attribute it to amicus calls only where
+  a filter isolates them. For one generation's cost, latency or routing, use the metadata route
+  of OpenRouter's `openrouter-generations` skill, never its content route: that returns the
+  stored prompt, which for an amicus call is the prompt amicus sent, and printing it puts a
+  prompt input into the host's transcript.
 - **Trialling a candidate is not a free comparison.** A call to a provider's own inference
   API or tool spends outside the cap declared for the decision, and sends text to a
   destination no `amicus_backends` disclosure covers.
