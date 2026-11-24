@@ -41,10 +41,23 @@ Subcommands (a first argument naming one selects it; anything else is the check 
             [--debug-models]
     watch [--json] [--file-issues [--dry-run]] [--repo OWNER/NAME] [--docs-root docs]
           [--pyproject pyproject.toml]
-    print-updates
+    print-updates [--json]
+    release-brief [--since vX.Y.Z] [--docs-root docs] [--json]
 
 `print-updates` prints, and never runs, the commands that install npm's `latest` of every
-backend CLI, Claude Code's with its autoupdater held; a failed lookup exits 1.
+backend CLI, Claude Code's with its autoupdater held; a failed lookup exits 1. `--json` prints
+each as an argv and the variables its environment adds, which `release.py session` runs.
+
+`release-brief` drafts the backend half of the release PR's description (docs/RELEASING.md
+step 2) and spends nothing. It reads the CLI versions the previous release's evidence record
+names (origin's newest `vX.Y.Z` tag unless `--since` names one; the message is read from the
+local tag, else fetched into FETCH_HEAD, never as a new local tag), npm's `latest` and its list
+of published versions, and the committed captures. It prints, as Markdown: each backend's
+previous and latest version, the stable releases published between them, whether the shipped
+contract supports `latest`, the long flags `--help` gained or lost between committed captures,
+the FINDINGS.md committed since, and the rule-18 carrier re-check drafted with its codex
+verdict left `_to write_`, because that verdict takes a reader. It exits 1 when a lookup failed
+or when a backend's `latest` is outside the shipped contract, which blocks the evidence run.
 
 `watch` (#378) reads only npm and PyPI metadata, so it needs no installed CLI: pi's
 latest minors against the shipped sets, claude's latest against the newest docs/claude-help
@@ -89,7 +102,9 @@ import argparse
 import concurrent.futures
 import contextlib
 import difflib
+import functools
 import http.client
+import importlib.util
 import json
 import os
 import re
@@ -1595,47 +1610,484 @@ def watch_main(argv: list[str]) -> int:
     return 1 if failed else 0
 
 
-def update_commands(
-    latest: Callable[[str], str | None] = latest_upstream,
-) -> tuple[list[str], list[str]]:
-    """The commands that install npm's `latest` of every backend, and the lookups that failed.
+@dataclass
+class Update:
+    """One backend's install of npm's `latest`: the argv to run and what to add to its env."""
 
-    Printed, never run. Claude Code's install is held with DISABLE_AUTOUPDATER=1 because a
-    running session can otherwise move it again before the evidence run (#323).
+    backend: str
+    version: str
+    argv: list[str]
+    env: dict[str, str] = field(default_factory=dict)
+
+
+def update_plan(
+    latest: Callable[[str], str | None] = latest_upstream,
+) -> tuple[list[Update], list[str]]:
+    """The installs that bring every backend to npm's `latest`, and the lookups that failed.
+
+    Claude Code's install is held with DISABLE_AUTOUPDATER=1 because a running session can
+    otherwise move it again before the evidence run (#323).
     """
-    lines: list[str] = []
+    plan: list[Update] = []
     failed: list[str] = []
     for backend in BACKENDS:
         version = latest(backend)
         if version is None:
             failed.append(f"{backend}: the latest release could not be read from npm")
             continue
-        command = PIN_COMMANDS[backend].format(version=version)
-        if backend == "claude":
-            command = f"DISABLE_AUTOUPDATER=1 {command}"
-        lines.append(command)
-    return lines, failed
+        env = {"DISABLE_AUTOUPDATER": "1"} if backend == "claude" else {}
+        argv = PIN_COMMANDS[backend].format(version=version).split()
+        plan.append(Update(backend, version, argv, env))
+    return plan, failed
+
+
+def _shell_line(update: Update) -> str:
+    return " ".join([*(f"{k}={v}" for k, v in update.env.items()), *update.argv])
+
+
+def update_commands(
+    latest: Callable[[str], str | None] = latest_upstream,
+) -> tuple[list[str], list[str]]:
+    """`update_plan` as shell lines to copy. Printed, never run."""
+    plan, failed = update_plan(latest)
+    return [_shell_line(update) for update in plan], failed
 
 
 def print_updates_main(argv: list[str]) -> int:
     """`print-updates`: the commands that bring every backend CLI to npm's `latest`."""
-    argparse.ArgumentParser(
+    parser = argparse.ArgumentParser(
         prog="check_backend_compat.py print-updates",
         description=print_updates_main.__doc__,
-    ).parse_args(argv)
-    lines, failed = update_commands(latest_upstream)
-    print("# close every Claude Code session first, or restart it with DISABLE_AUTOUPDATER=1")
-    for line in lines:
-        print(line)
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="print each install as an argv and the variables its environment adds, for a "
+        "script that runs them (`release.py session`)",
+    )
+    args = parser.parse_args(argv)
+    plan, failed = update_plan(latest_upstream)
+    if args.json:
+        print(json.dumps({"updates": [asdict(u) for u in plan], "failed": failed}, indent=2))
+    else:
+        print("# close every Claude Code session first, or restart it with DISABLE_AUTOUPDATER=1")
+        for update in plan:
+            print(_shell_line(update))
     for problem in failed:
         print(f"FAIL {problem}", file=sys.stderr)
     return 1 if failed else 0
+
+
+# --- release-brief ----------------------------------------------------------------------
+
+_RELEASE_TAG = re.compile(r"v\d+\.\d+\.\d+")
+# AGENTS.md rule 18: the one native carrier exempt for every release. claude and pi hold no
+# exemption, so the re-check has no carrier of theirs to look for (docs/RELEASING.md).
+EXEMPT_CARRIERS: dict[str, str] = {"codex": "`-c developer_instructions` on argv"}
+TO_WRITE = "_to write_"
+# Past this many, "Published since" names the first and last rather than every release.
+PUBLISHED_SHOWN = 4
+
+
+@dataclass
+class BriefRow:
+    """One backend: what the previous release's evidence recorded against npm's `latest`."""
+
+    backend: str
+    previous: str | None = None  # the CLI version the previous tag's evidence record names
+    latest: str | None = None  # npm's `latest` dist-tag, None when it could not be read
+    published: list[str] | None = None  # stable releases after `previous`, up to `latest`
+    supported: bool = False  # the SHIPPED contract names `latest`
+    deprecated: bool = False  # frozen at its supported set, so behind `latest` is no failure
+    capture: str | None = None  # the committed capture of `latest`, if any
+    baseline: str | None = None  # the newest capture at or before `previous`
+    flags_added: list[str] = field(default_factory=list)
+    flags_removed: list[str] = field(default_factory=list)
+    findings: list[str] = field(default_factory=list)  # FINDINGS.md since `previous`
+
+    @property
+    def blocks(self) -> bool:
+        """Preflight fails on this backend's `latest` until a support PR merges."""
+        return self.latest is not None and not self.supported and not self.deprecated
+
+
+@dataclass
+class Brief:
+    tag: str | None
+    recorded_at: str | None
+    rows: list[BriefRow]
+    problems: list[str]
+
+
+def run_git(args: list[str]) -> tuple[int, str]:
+    """`git ARGS` in the current directory: its exit status and stdout, 1 when it cannot run."""
+    try:
+        done = subprocess.run(
+            ["git", *args], capture_output=True, text=True, timeout=120, check=False
+        )
+    except (OSError, subprocess.TimeoutExpired, ValueError):
+        return 1, ""
+    return done.returncode, done.stdout
+
+
+def published_versions(backend: str) -> list[str] | None:
+    """Every version npm lists for the backend's package, or None when it cannot be read."""
+    package = NPM_PACKAGES.get(backend)
+    if package is None:
+        return None
+    try:
+        done = subprocess.run(
+            ["npm", "view", package, "versions", "--json"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+        listed = json.loads(done.stdout) if done.returncode == 0 else None
+    except (OSError, subprocess.TimeoutExpired, ValueError):
+        # ValueError covers undecodable output and JSON that does not parse.
+        return None
+    if isinstance(listed, str):  # npm prints a bare string for a package with one version
+        listed = [listed]
+    if not isinstance(listed, list) or not all(isinstance(v, str) for v in listed):
+        return None
+    return listed
+
+
+@functools.cache
+def _release_state():
+    """`check_release_state` by path, for the one parser of a tag's evidence record."""
+    path = Path(__file__).resolve().parent / "check_release_state.py"
+    spec = importlib.util.spec_from_file_location("check_release_state", path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def remote_release_tags(git: Callable[[list[str]], tuple[int, str]]) -> dict[str, str] | None:
+    """origin's `vX.Y.Z` tags and the object each names, or None when origin cannot be read."""
+    code, out = git(["ls-remote", "--tags", "origin", "refs/tags/v*"])
+    if code != 0:
+        return None
+    tags: dict[str, str] = {}
+    for line in out.splitlines():
+        sha, _, ref = line.partition("\t")
+        name = ref.removeprefix("refs/tags/")
+        if _RELEASE_TAG.fullmatch(name):  # skips the peeled `^{}` lines
+            tags[name] = sha
+    return tags
+
+
+def tag_message(
+    tag: str, remote_sha: str | None, git: Callable[[list[str]], tuple[int, str]]
+) -> str | None:
+    """The annotated tag's message. With origin's tag object id, that object and no other is
+    read: from the local object store, else fetched from origin into FETCH_HEAD only, so no
+    local tag is created and a stale local tag of the same name is never read in its place.
+    Without one (origin could not be listed), the local tag. None when nothing works or the
+    tag is lightweight."""
+    if remote_sha is None:
+        code, out = git(["cat-file", "tag", f"refs/tags/{tag}"])
+    else:
+        code, out = git(["cat-file", "tag", remote_sha])
+        if code != 0:
+            shallow_code, shallow = git(["rev-parse", "--is-shallow-repository"])
+            depth = ["--depth=1"] if shallow_code == 0 and shallow.strip() == "true" else []
+            fetch = ["fetch", "--quiet", "--no-tags", *depth, "origin", f"refs/tags/{tag}"]
+            fetched, _ = git(fetch)
+            if fetched == 0:
+                code, out = git(["cat-file", "tag", remote_sha])
+    if code != 0:
+        return None
+    return out.partition("\n\n")[2]
+
+
+def recorded_versions(message: str) -> tuple[dict[str, str], str | None, list[str]]:
+    """Each backend's CLI version from a tag's evidence record, its `recorded_at`, problems."""
+    record, problems = _release_state().evidence_from_tag_message(message)
+    if record is None:
+        return {}, None, problems
+    versions: dict[str, str] = {}
+    backends = record.get("backends")
+    for backend, entry in (backends if isinstance(backends, dict) else {}).items():
+        found = release(entry.get("cli_version") if isinstance(entry, dict) else None)
+        if found:
+            versions[backend] = found[0]
+    recorded_at = record.get("recorded_at")
+    return versions, recorded_at if isinstance(recorded_at, str) else None, []
+
+
+def _captures(docs_root: Path, backend: str) -> list[tuple[tuple[int, int, int], Path]]:
+    """Every committed capture of `backend`, oldest version first."""
+    root = docs_root / f"{backend}-help"
+    if not root.is_dir():
+        return []
+    found = []
+    for folder in root.iterdir():
+        version = semver(folder.name)
+        if version and folder.is_dir() and (folder / f"{backend}-help.txt").is_file():
+            found.append((version, folder))
+    return sorted(found)
+
+
+def _stable(version: str) -> bool:
+    found = release(version)
+    return found is not None and found == (version, "")
+
+
+def brief_row(
+    backend: str,
+    docs_root: Path,
+    previous: str | None,
+    latest: str | None,
+    versions: Callable[[str], list[str] | None],
+) -> BriefRow:
+    row = BriefRow(backend, previous, latest)
+    row.deprecated = in_tree.backend_deprecation(backend) is not None
+    if latest is None:
+        return row
+    row.supported = builtin_supported(backend, latest)
+    low, high = semver(previous), semver(latest)
+    if low is not None and high is not None:
+        listed = versions(backend)
+        if listed is not None:
+            newer = {v for v in listed if _stable(v) and low < (semver(v) or low) <= high}
+            row.published = sorted(newer, key=lambda v: semver(v) or (0, 0, 0))
+    captures = _captures(docs_root, backend)
+    exact = next((folder for _, folder in captures if folder.name == latest), None)
+    base = [folder for version, folder in captures if low is not None and version <= low]
+    row.capture = exact.as_posix() if exact else None
+    row.baseline = base[-1].name if base else None
+    if exact and base:
+        help_name = f"{backend}-help.txt"
+        before = declared_flags((base[-1] / help_name).read_text(encoding="utf-8"))
+        after = declared_flags((exact / help_name).read_text(encoding="utf-8"))
+        row.flags_added = sorted(after - before)
+        row.flags_removed = sorted(before - after)
+    if low is not None and high is not None:
+        row.findings = _findings(docs_root, backend, low, high)
+    return row
+
+
+def _findings(
+    docs_root: Path, backend: str, low: tuple[int, int, int], high: tuple[int, int, int]
+) -> list[str]:
+    """Every FINDINGS.md for a version after `low`, up to `high`, oldest first. Found apart
+    from the help captures: a version folder can hold findings and no `--help` capture."""
+    root = docs_root / f"{backend}-help"
+    if not root.is_dir():
+        return []
+    found = []
+    for folder in root.iterdir():
+        version = semver(folder.name)
+        if version and low < version <= high and (folder / "FINDINGS.md").is_file():
+            found.append((version, (folder / "FINDINGS.md").as_posix()))
+    return [path for _, path in sorted(found)]
+
+
+def release_brief(
+    docs_root: Path,
+    *,
+    since: str | None = None,
+    git: Callable[[list[str]], tuple[int, str]] = run_git,
+    latest: Callable[[str], str | None] = latest_upstream,
+    versions: Callable[[str], list[str] | None] = published_versions,
+) -> Brief:
+    """What changed in every backend CLI since the previous release's evidence. Spends nothing:
+    it reads origin's tags, one tag's message, npm's metadata and the committed captures."""
+    problems: list[str] = []
+    tags = remote_release_tags(git)
+    if tags is None:
+        problems.append("could not list origin's tags (`git ls-remote --tags origin`)")
+    tag = since
+    if tag is None and tags:
+        tag = max(tags, key=lambda name: semver(name) or (0, 0, 0))
+    elif tag is None and tags is not None:
+        problems.append("origin has no vX.Y.Z tag, so there is no previous release to compare")
+    previous: dict[str, str] = {}
+    recorded_at = None
+    record_read = False  # a record was parsed, so each backend missing from it is a problem
+    if tag is not None and tags is not None and tag not in tags:
+        # origin answered and has no such tag: a local one of that name is no release.
+        problems.append(f"{tag} is not a tag on origin, so it names no published release")
+        tag = None
+    if tag is not None:
+        message = tag_message(tag, (tags or {}).get(tag), git)
+        if message is None:
+            problems.append(f"could not read the annotated tag {tag} locally or from origin")
+        else:
+            previous, recorded_at, unparsed = recorded_versions(message)
+            problems += [f"{tag}: {problem}" for problem in unparsed]
+            record_read = not unparsed
+    rows = []
+    for backend in BACKENDS:
+        row = brief_row(backend, docs_root, previous.get(backend), latest(backend), versions)
+        rows.append(row)
+        if record_read and row.previous is None:
+            problems.append(f"{backend}: {tag}'s evidence record names no version for it")
+        if row.latest is None:
+            problems.append(f"{backend}: the latest release could not be read from npm")
+        elif row.previous is not None and row.published is None:
+            problems.append(f"{backend}: npm's list of published versions could not be read")
+        if row.blocks:
+            problems.append(
+                f"{backend}: npm's latest {row.latest} is outside the shipped contract's "
+                "supported versions, so preflight fails until support for it merges in its own "
+                "PR, and so does the evidence run"
+            )
+    return Brief(tag, recorded_at, rows, problems)
+
+
+def _published_cell(published: list[str] | None) -> str:
+    if published is None:
+        return "unknown"
+    if not published:
+        return "none"
+    if len(published) <= PUBLISHED_SHOWN:
+        return ", ".join(published)
+    return f"{len(published)} ({published[0]} to {published[-1]})"
+
+
+def _contract_cell(row: BriefRow) -> str:
+    if row.latest is None:
+        return "unknown"
+    if row.blocks:
+        return "**not supported: blocks the evidence run**"
+    if row.deprecated and not row.supported:
+        return "deprecated, frozen at its supported set"
+    return "supported"
+
+
+def _flag_line(row: BriefRow) -> str:
+    head = f"{row.backend}:"
+    if row.latest is None:
+        return f"{head} not compared, because npm's latest is unknown."
+    if row.capture is None:
+        return (
+            f"{head} not compared; no capture of {row.latest} is committed yet "
+            "(`check_backend_compat.py --write` saves one with the change that supports it)."
+        )
+    if row.baseline is None:
+        return f"{head} not compared; no capture at or before {row.previous or 'the previous'}."
+    if row.baseline == row.latest:
+        return f"{head} still {row.latest}, so nothing to compare."
+    if not row.flags_added and not row.flags_removed:
+        return f"{head} same flags from {row.baseline} to {row.latest}."
+    changes = []
+    if row.flags_added:
+        changes.append("added " + ", ".join(f"`{f}`" for f in row.flags_added))
+    if row.flags_removed:
+        changes.append("removed " + ", ".join(f"`{f}`" for f in row.flags_removed))
+    return f"{head} from {row.baseline} to {row.latest}, {'; '.join(changes)}."
+
+
+def _carrier_line(row: BriefRow, tag: str) -> str:
+    if row.latest is None:
+        return f"{row.backend}: npm's latest could not be read, so the version to check is unknown."
+    carrier = EXEMPT_CARRIERS.get(row.backend)
+    if carrier is None:
+        return (
+            f"{row.backend} {row.latest}: holds no carrier exemption under rule 18 (its prompt "
+            "rides stdin), so there is no carrier to re-check."
+        )
+    since = _published_cell(row.published) if row.published else f"the releases since {tag}"
+    return (
+        f"{row.backend} {row.latest}: the exempt carrier is {carrier}. Read `{row.backend} "
+        f"--help` on {row.latest} and the release notes for {since} for any other channel for "
+        f"developer instructions. Verdict: {TO_WRITE}."
+    )
+
+
+def _join(items: list[str]) -> str:
+    return items[0] if len(items) == 1 else ", ".join(items[:-1]) + " and " + items[-1]
+
+
+def describe_brief(brief: Brief) -> list[str]:
+    """The brief as Markdown for the release PR's description."""
+    tag = brief.tag or "the previous release"
+    source = f"{tag}'s evidence record"
+    if brief.recorded_at:
+        source += f" ({brief.recorded_at})"
+    lines = [
+        f"### Backend CLIs since {tag}",
+        "",
+        f"Drafted by `check_backend_compat.py release-brief` from {source} and npm's "
+        f"`{NPM_DIST_TAG}` dist-tag. It installed and ran nothing.",
+        "",
+        f"| Backend | {tag} evidence | npm `{NPM_DIST_TAG}` | Published since | "
+        f"Shipped contract | Capture of `{NPM_DIST_TAG}` |",
+        "| --- | --- | --- | --- | --- | --- |",
+    ]
+    for row in brief.rows:
+        capture = f"`{row.capture}`" if row.capture else "none yet"
+        lines.append(
+            f"| {row.backend} | {row.previous or 'unknown'} | {row.latest or 'unknown'} | "
+            f"{_published_cell(row.published)} | {_contract_cell(row)} | {capture} |"
+        )
+    lines += ["", "Long flags `--help` declares, between committed captures:", ""]
+    lines += [f"- {_flag_line(row)}" for row in brief.rows]
+    findings = [f"`{path}`" for row in brief.rows for path in row.findings]
+    lines += ["", f"Findings committed since {tag}: {', '.join(findings) or 'none'}."]
+    lines += ["", "### Rule-18 carrier re-check (draft)", ""]
+    named = [f"{row.backend} {row.latest}" for row in brief.rows if row.latest]
+    if named:
+        lines += [
+            f"The evidence will be recorded on {_join(named)}, unless npm's `{NPM_DIST_TAG}` "
+            "moves before the run.",
+            "",
+        ]
+    lines += [f"- {_carrier_line(row, tag)}" for row in brief.rows]
+    return lines
+
+
+def _release_tag(text: str) -> str:
+    if not _RELEASE_TAG.fullmatch(text):
+        raise argparse.ArgumentTypeError(f"{text!r} is not a release tag of the form vX.Y.Z")
+    return text
+
+
+def release_brief_main(argv: list[str]) -> int:
+    """`release-brief`: the backend half of the release PR's description, drafted."""
+    parser = argparse.ArgumentParser(
+        prog="check_backend_compat.py release-brief",
+        description="Draft the release PR's backend section from the previous tag's evidence "
+        "record and npm (docs/RELEASING.md step 2). Spends nothing.",
+    )
+    parser.add_argument(
+        "--since", type=_release_tag, help="the previous release's tag (default: origin's newest)"
+    )
+    parser.add_argument("--docs-root", type=Path, default=Path("docs"))
+    parser.add_argument("--json", action="store_true")
+    args = parser.parse_args(argv)
+    brief = release_brief(
+        args.docs_root,
+        since=args.since,
+        git=run_git,
+        latest=latest_upstream,
+        versions=published_versions,
+    )
+    if args.json:
+        payload = {
+            "tag": brief.tag,
+            "recorded_at": brief.recorded_at,
+            "backends": [{**asdict(row), "blocks": row.blocks} for row in brief.rows],
+            "problems": brief.problems,
+        }
+        print(json.dumps(payload, indent=2))
+    else:
+        print("\n".join(describe_brief(brief)))
+    for problem in brief.problems:
+        print(f"FAIL {problem}", file=sys.stderr)
+    return 1 if brief.problems else 0
 
 
 SUBCOMMANDS: dict[str, Callable[[list[str]], int]] = {
     "compare": compare_main,
     "watch": watch_main,
     "print-updates": print_updates_main,
+    "release-brief": release_brief_main,
 }
 
 

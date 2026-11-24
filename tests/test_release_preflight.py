@@ -92,6 +92,7 @@ class FakeRun:
             "headRefName": f"chore/release-{NEXT}",
             "state": state,
             "baseRefName": base,
+            "isCrossRepository": False,
         }
         self.gh_returncode = gh_returncode
         self.compat = compat
@@ -314,3 +315,14 @@ def test_a_failing_backend_compat_check_is_refused(layout, capsys):
 def test_a_backend_compat_check_that_cannot_run_is_refused(layout, capsys):
     run = FakeRun(layout.head, compat=OSError("no python"))
     _assert_refused(layout, capsys, run, "no python")
+
+
+@pytest.mark.parametrize("cross", [True, None])
+def test_a_fork_pr_gets_none_of_its_checkouts_scripts_run(layout, capsys, cross):
+    run = FakeRun(layout.head)
+    if cross is None:
+        del run.pr["isCrossRepository"]
+    else:
+        run.pr["isCrossRepository"] = cross
+    _assert_refused(layout, capsys, run, "never comes from a fork")
+    assert not run.ran_compat()
