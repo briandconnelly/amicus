@@ -19,6 +19,9 @@ import fastmcp
 import pytest
 from fastmcp import Client
 from fastmcp.client.transports import StdioTransport
+from mcp import MCPError
+from mcp.client.subscriptions import listen as sdk_listen
+from mcp.types import METHOD_NOT_FOUND
 from mcp_types.methods import CACHEABLE_METHODS
 from tests.conftest import NEVER_SPAWN_CODEX, spawned_server_env
 
@@ -194,6 +197,17 @@ def test_building_the_app_leaves_fastmcp_listen_setting_as_it_found_it(before, m
     app = server.create_app(config.settings({}), BackendRegistry({}, {}))
     assert "subscriptions/listen" not in app._mcp_server._request_handlers
     assert getattr(fastmcp.settings, server._LISTEN_SETTING) is before
+
+
+async def test_subscriptions_listen_is_method_not_found_on_the_wire():
+    """#576: the handler-map assertions above read FastMCP internals; this one reads what a
+    2026-07-28 client receives. Without the guard FastMCP 4.2.5 acknowledges the stream.
+    It calls the SDK helper because `Client.listen` only exists from FastMCP 4.2.5."""
+    async with Client(_stdio()) as client:
+        with pytest.raises(MCPError) as raised:
+            async with sdk_listen(client.session, tools_list_changed=True):
+                pass
+    assert raised.value.error.code == METHOD_NOT_FOUND
 
 
 def test_the_listen_guard_does_nothing_on_a_fastmcp_without_the_setting(monkeypatch):

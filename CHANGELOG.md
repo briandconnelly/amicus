@@ -36,8 +36,7 @@ per-change, as its own lead says.
   default; there amicus told modern-era clients `resources.subscribe: true` and opened listen
   streams it would never send a notification on. amicus now switches FastMCP's listen streams
   off while it builds its server, so `subscriptions/listen` is refused with method-not-found
-  and both capability blocks stay as ADR 0018 sets them on every FastMCP the pin allows. The
-  fingerprint does not move.
+  and both capability blocks stay as ADR 0018 sets them on every FastMCP the pin allows.
 
 ## [0.16.0] - 2026-11-22
 

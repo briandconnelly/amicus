@@ -178,9 +178,13 @@ def _listen_streams_off() -> Generator[None]:
     FastMCP 4.2.5 serves `subscriptions/listen` by default and advertises `listChanged` and
     `resources.subscribe` from it. amicus emits no change notification, so serving the
     method would promise notifications that cannot arrive (ADR 0018). FastMCP reads the
-    setting once, when the low-level server is built, so it is turned off for that moment and
-    restored, leaving any other FastMCP server in the process as configured. A FastMCP older
-    than 4.2.5 has no such setting and serves no listen stream, so there is nothing to do.
+    setting once, in `LowLevelServer.__init__` (`fastmcp/server/low_level.py`, 4.2.5), so it
+    is turned off for that moment and restored; if FastMCP ever reads it later, the restore
+    undoes this, and `test_subscriptions_listen_is_method_not_found_on_the_wire` fails. The
+    setting is process-global, so a FastMCP server another thread builds during this window
+    also gets listen off; amicus builds one server per process, so that cannot happen here.
+    A FastMCP older than 4.2.5 has no such setting and serves no listen stream, so there is
+    nothing to do.
     """
     if _LISTEN_SETTING not in type(fastmcp.settings).model_fields:
         yield
