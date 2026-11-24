@@ -14,6 +14,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -215,8 +216,15 @@ def test_session_runs_step_3_in_order_and_spends_only_after_the_typed_phrase(rep
         f"- pi `models.json` for the pi gate's `{MODEL}`: absent at `~/.pi/agent/models.json`"
         in out.out
     )
-    for block in release.next_steps(repo.worktree.resolve(), NEXT, PR, repo.head):
-        assert " &&\\\n  ".join(block) in out.out
+    # Each block moves into the worktree first: its checks read the record there, and the shell
+    # that ran the session is still in the checkout it started from.
+    worktree = repo.worktree.resolve()
+    enter = f"cd {shlex.quote(str(worktree))}"
+    for block in release.next_steps(worktree, NEXT, PR, repo.head):
+        assert "  " + " &&\\\n  ".join([enter, *block]) in out.out
+    assert out.out.count(f"  {enter} &&\\\n") == len(
+        release.next_steps(worktree, NEXT, PR, repo.head)
+    )
     assert "never tags,\nmerges or pushes" in out.out
 
 
@@ -450,6 +458,36 @@ def test_the_note_reads_pi_coding_agent_dir_and_names_it_symbolically(tmp_path):
     assert note == [
         f"pi `models.json` for the pi gate's `{MODEL}`: present at "
         "`$PI_CODING_AGENT_DIR/models.json`, with no entry for provider `openrouter`."
+    ]
+
+
+@pytest.mark.parametrize("value", ["~", "~/agent"])
+def test_the_note_expands_a_leading_tilde_as_pi_does(tmp_path, value):
+    home = tmp_path / "home"
+    agent = home / "agent" if value != "~" else home
+    agent.mkdir(parents=True)
+    (agent / "models.json").write_text('{"providers": {}}', encoding="utf-8")
+    note = release.models_json_note(
+        {release.PI_MODEL_ENV: MODEL, "PI_CODING_AGENT_DIR": value}, home
+    )
+    assert note == [
+        f"pi `models.json` for the pi gate's `{MODEL}`: present at "
+        "`$PI_CODING_AGENT_DIR/models.json`, with no entry for provider `openrouter`."
+    ]
+
+
+@pytest.mark.parametrize("value", ["agent", "./agent", "~other/agent"])
+def test_the_note_cannot_tell_for_a_relative_pi_coding_agent_dir(tmp_path, monkeypatch, value):
+    # A models.json at the relative path from here must not be read: amicus refuses the value.
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "agent").mkdir()
+    (tmp_path / "agent" / "models.json").write_text('{"providers": {}}', encoding="utf-8")
+    note = release.models_json_note(
+        {release.PI_MODEL_ENV: MODEL, "PI_CODING_AGENT_DIR": value}, tmp_path / "home"
+    )
+    assert note == [
+        f"pi `models.json` for the pi gate's `{MODEL}`: unknown, because "
+        "`$PI_CODING_AGENT_DIR` is not absolute."
     ]
 
 

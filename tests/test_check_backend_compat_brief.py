@@ -157,6 +157,24 @@ def test_brief_reads_the_previous_tag_and_compares_every_backend(docs):
     ]
 
 
+def test_findings_are_found_in_version_folders_without_a_help_capture(docs):
+    # A folder can hold FINDINGS.md and no `--help` capture, as docs/claude-help/2.1.274 does.
+    root = docs / "codex-help"
+    for version in ("0.0.1", "98.0.0", "98.1.0", "100.0.0"):
+        (root / version).mkdir()
+        (root / version / "FINDINGS.md").write_text("# findings\n")
+    (root / "98.2.0").mkdir()  # no findings
+    (root / "notes").mkdir()
+    (root / "notes" / "FINDINGS.md").write_text("# not a version\n")
+    codex = _brief(docs).rows[0]
+    assert codex.capture is None  # still no capture of latest
+    # After the previous version, up to latest, oldest first: not before it, not past it.
+    assert codex.findings == [
+        (root / "98.0.0" / "FINDINGS.md").as_posix(),
+        (root / "98.1.0" / "FINDINGS.md").as_posix(),
+    ]
+
+
 def test_the_markdown_draft_leaves_only_the_codex_verdict_to_a_reader(docs):
     text = "\n".join(compat.describe_brief(_brief(docs)))
     assert f"### Backend CLIs since {TAG}" in text

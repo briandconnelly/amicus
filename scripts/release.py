@@ -902,10 +902,20 @@ def models_json_note(environ: Mapping[str, str], home: Path) -> list[str]:
     """
     model = environ.get(PI_MODEL_ENV, "")
     provider, _, model_id = model.partition("/")
-    agent_dir = environ.get("PI_CODING_AGENT_DIR")
-    path = Path(agent_dir) / "models.json" if agent_dir else home / ".pi" / "agent" / "models.json"
-    where = "$PI_CODING_AGENT_DIR/models.json" if agent_dir else "~/.pi/agent/models.json"
     head = f"pi `models.json` for the pi gate's `{model}`:"
+    agent_dir = environ.get("PI_CODING_AGENT_DIR")
+    if not agent_dir:  # empty is unset, to pi as to amicus
+        path, where = home / ".pi" / "agent" / "models.json", "~/.pi/agent/models.json"
+    else:
+        # pi expands a leading `~` or `~/` against the home directory, as
+        # `amicus.backends.pi.config.agent_dir_error` describes; amicus refuses anything else
+        # that is not absolute, so the gate could not have run with it.
+        base = home if agent_dir == "~" else Path(agent_dir)
+        if agent_dir.startswith("~/"):
+            base = home / agent_dir[2:]
+        if not base.is_absolute():
+            return [f"{head} unknown, because `$PI_CODING_AGENT_DIR` is not absolute."]
+        path, where = base / "models.json", "$PI_CODING_AGENT_DIR/models.json"
     if not path.exists():
         return [f"{head} absent at `{where}`, so no override applied."]
     try:
@@ -1075,10 +1085,12 @@ def cmd_session(ctx: Context, args: argparse.Namespace) -> int:
     print("\n== 7. The rest of the release ==")
     print("Run it today (the record's freshness window is 24 hours). Each block stops at its")
     print("first failure, and the second waits for your pypi approval. This script never tags,")
-    print("merges or pushes; those are yours:")
+    print("merges or pushes; those are yours. Each block starts by moving into the worktree,")
+    print("because its checks read the record there, not in the checkout you started from:")
+    enter = f"cd {shlex.quote(str(cwd))}"
     for block in next_steps(cwd, version, pr, head):
         print()
-        print("  " + " &&\\\n  ".join(block))
+        print("  " + " &&\\\n  ".join([enter, *block]))
     return 0
 
 

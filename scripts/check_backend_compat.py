@@ -1860,12 +1860,24 @@ def brief_row(
         row.flags_added = sorted(after - before)
         row.flags_removed = sorted(before - after)
     if low is not None and high is not None:
-        row.findings = [
-            (folder / "FINDINGS.md").as_posix()
-            for version, folder in captures
-            if low < version <= high and (folder / "FINDINGS.md").is_file()
-        ]
+        row.findings = _findings(docs_root, backend, low, high)
     return row
+
+
+def _findings(
+    docs_root: Path, backend: str, low: tuple[int, int, int], high: tuple[int, int, int]
+) -> list[str]:
+    """Every FINDINGS.md for a version after `low`, up to `high`, oldest first. Found apart
+    from the help captures: a version folder can hold findings and no `--help` capture."""
+    root = docs_root / f"{backend}-help"
+    if not root.is_dir():
+        return []
+    found = []
+    for folder in root.iterdir():
+        version = semver(folder.name)
+        if version and low < version <= high and (folder / "FINDINGS.md").is_file():
+            found.append((version, (folder / "FINDINGS.md").as_posix()))
+    return [path for _, path in sorted(found)]
 
 
 def release_brief(
