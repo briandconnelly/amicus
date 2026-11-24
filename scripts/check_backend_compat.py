@@ -1908,6 +1908,7 @@ def release_brief(
         problems.append("origin has no vX.Y.Z tag, so there is no previous release to compare")
     previous: dict[str, str] = {}
     recorded_at = None
+    record_read = False  # a record was parsed, so each backend missing from it is a problem
     if tag is not None and tags is not None and tag not in tags:
         # origin answered and has no such tag: a local one of that name is no release.
         problems.append(f"{tag} is not a tag on origin, so it names no published release")
@@ -1919,11 +1920,12 @@ def release_brief(
         else:
             previous, recorded_at, unparsed = recorded_versions(message)
             problems += [f"{tag}: {problem}" for problem in unparsed]
+            record_read = not unparsed
     rows = []
     for backend in BACKENDS:
         row = brief_row(backend, docs_root, previous.get(backend), latest(backend), versions)
         rows.append(row)
-        if tag is not None and previous and row.previous is None:
+        if record_read and row.previous is None:
             problems.append(f"{backend}: {tag}'s evidence record names no version for it")
         if row.latest is None:
             problems.append(f"{backend}: the latest release could not be read from npm")

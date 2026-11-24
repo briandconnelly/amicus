@@ -297,6 +297,19 @@ def test_a_tag_that_cannot_be_read_anywhere_is_a_problem_not_a_guess(docs):
     assert all(row.published is None for row in brief.rows)
 
 
+@pytest.mark.parametrize(
+    "record",
+    [
+        json.dumps({**json.loads(RECORD), "backends": {}}),
+        _record(codex="codex-cli dev", claude="unknown", pi="?"),
+    ],
+)
+def test_a_record_with_no_readable_version_names_every_backend_missing(docs, record):
+    brief = _brief(docs, _git(message=record))
+    for backend in ("codex", "claude", "pi"):
+        assert f"{backend}: {TAG}'s evidence record names no version for it" in brief.problems
+
+
 def test_a_message_that_is_not_the_record_is_reported(docs):
     brief = _brief(docs, _git(message="release 1.2.2\n"))
     assert any(
