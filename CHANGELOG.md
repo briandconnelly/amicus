@@ -28,7 +28,15 @@ per-change, as its own lead says.
   install npm's `latest` of every backend CLI, and a pi CLI off `latest` is now told the exact
   install command. `tests/test_migration_doc.py` fails a change that moves the fingerprint
   without naming it in MIGRATION.md's newest upgrade section, so that section is written with
-  the change rather than rebuilt in the release PR.
+  the change rather than rebuilt in the release PR. `scripts/check_backend_compat.py
+  release-brief` drafts the release PR's backend section from the previous tag's evidence record
+  and npm: each CLI's version then and now, the releases between, whether the shipped contract
+  supports the new one, the flags its `--help` gained or lost, and the rule-18 carrier re-check
+  with only codex's verdict left to write. `scripts/release.py session` runs RELEASING step 3 as
+  one command at a terminal: it makes the release worktree, installs the backend CLIs on a yes,
+  runs the checks that spend nothing, prints the note on pi's `models.json` with no credential,
+  header value or command in it, and runs the live-gate evidence only once the maintainer
+  types `spend X.Y.Z`.
 
 ### Fixed
 

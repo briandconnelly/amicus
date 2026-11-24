@@ -32,6 +32,20 @@ exists on `origin` or locally, that `check_release_state.check_tree_pre_tag` hol
 runs it: that spends live quota, which only the maintainer authorizes (AGENTS.md rules 5
 and 20).
 
+`session --pr N --version X.Y.Z [--worktree PATH]` is RELEASING step 3 as one command, for
+the maintainer at a terminal. It refuses unless stdin and stdout are a terminal, `CI` is unset
+and `AMICUS_PI_MODEL` is set. It creates the release worktree beside this checkout, detached
+at PR N's head as GitHub reports it, or reuses a clean one and moves it to that head. It shows
+the installs `check_backend_compat.py print-updates --json` names and runs them on a yes, asks
+whether the rule-18 carrier re-check is in the PR, then runs `policy`, `preflight` and
+`check_pi_pricing.py` in the worktree, stopping at the first failure. It prints the note
+RELEASING asks for about pi's `models.json`, with values only for keys that cannot carry a
+secret. Only then, and only once the maintainer types `spend X.Y.Z`, does it run the evidence
+script, which spends live quota on every backend: typing that phrase is the authorization in
+the session that AGENTS.md rule 20 and RELEASING step 3 require, and a passing preflight is
+not. On success it prints the notes for the PR and the rest of the release, as `preflight`
+does. It never tags, merges or pushes.
+
 `post-merge --release-sha SHA --version X.Y.Z` runs in the same worktree after the release PR
 merges (RELEASING step 5). It fetches `main` from `origin` first and fails if it cannot, then
 checks that `origin/main`'s tip is either an ordinary merge commit whose second parent is SHA
@@ -77,18 +91,21 @@ whoever's token ran it. Only the maintainer's own token can make it pass.
 Usage:
     uv run python scripts/release.py prepare X.Y.Z [--check]
     uv run python scripts/release.py preflight --pr N --version X.Y.Z
+    uv run python scripts/release.py session --pr N --version X.Y.Z [--worktree PATH]
     uv run python scripts/release.py post-merge --release-sha SHA --version X.Y.Z
     uv run python scripts/release.py post-publish --version X.Y.Z [--timeout SECONDS]
     uv run python scripts/release.py pointer --version X.Y.Z [--timeout SECONDS]
     uv run python scripts/release.py policy
 
 Exits 0 on success, 1 on a refusal or a failed check, printing each problem.
-Pure stdlib, like `check_release_state.py`; it runs `git`, `gh`, `uv` and `uvx`.
+Pure stdlib, like `check_release_state.py`; it runs `git`, `gh`, `uv` and `uvx`, and
+`session` also runs the installs `print-updates` names.
 """
 
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import datetime as dt
 import difflib
 import fnmatch
@@ -102,13 +119,14 @@ import subprocess
 import sys
 import tempfile
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Mapping
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -174,6 +192,13 @@ class Context:
     http_get: Callable[[str], bytes] = _http_get
     # The repository users install from: the marketplace pointer's `url` and the install's.
     canonical_url: str = release_state.MARKETPLACE_URL
+    # `session` only: it asks before it installs or spends, so it needs a person at a terminal.
+    ask: Callable[[str], str] = input
+    interactive: Callable[[], bool] = field(
+        default=lambda: sys.stdin.isatty() and sys.stdout.isatty()
+    )
+    environ: Mapping[str, str] = field(default_factory=lambda: os.environ)
+    home: Callable[[], Path] = Path.home
 
     def git_out(self, *args: str) -> subprocess.CompletedProcess[str]:
         return self.git(
@@ -444,7 +469,10 @@ def cmd_prepare(ctx: Context, args: argparse.Namespace) -> int:
     print("Still yours to do before committing (docs/RELEASING.md step 2):")
     print("  - review README.md's prose naming the current release (`Status and known limits`)")
     print("  - write the release section's lead, and docs/MIGRATION.md's upgrade section")
-    print("  - the rule-18 carrier re-check and everything from RELEASING step 3 on")
+    print("  - paste `uv run python scripts/check_backend_compat.py release-brief` into the PR:")
+    print("    it drafts the backend versions and the rule-18 carrier re-check, whose codex")
+    print("    verdict is yours to write")
+    print("  - then everything from RELEASING step 3 on: `release.py session` runs it in one go")
     return 0
 
 
@@ -688,6 +716,370 @@ def next_steps(repo_root: Path, version: str, pr: int, release_sha: str) -> list
             f"uv run python scripts/release.py post-publish --version {version}",
         ],
     ]
+
+
+# --- session: RELEASING step 3 as one command, asking before it installs or spends -------
+
+PI_MODEL_ENV = "AMICUS_PI_MODEL"
+UPDATES_COMMAND = (
+    "uv",
+    "run",
+    "python",
+    "scripts/check_backend_compat.py",
+    "print-updates",
+    "--json",
+)
+PI_PRICING_COMMAND = ("uv", "run", "python", "scripts/check_pi_pricing.py")
+# Values recorded from pi's models.json: what shapes the gate and cannot carry a secret.
+# Every other key is named with its value left out, and a value that starts with `!`
+# (a shell command) or `$` (an environment variable) is never printed (RELEASING step 3).
+MODELS_JSON_VALUES = frozenset({"api", "reasoning", "input", "contextWindow", "maxTokens"})
+
+
+def default_worktree(repo_root: Path, version: str) -> Path:
+    """A sibling of the checkout, named as RELEASING names it: `amicus-wt-release-X-Y-Z`."""
+    return repo_root.parent / f"amicus-wt-release-{version.replace('.', '-')}"
+
+
+def _common_dir(ctx: Context) -> Path | None:
+    proc = ctx.git_out("rev-parse", "--path-format=absolute", "--git-common-dir")
+    return Path(proc.stdout.strip()).resolve() if proc.returncode == 0 else None
+
+
+def _fetch_pr_head(ctx: Context, pr: int, head: str) -> list[str]:
+    """Fetch PR N's head into FETCH_HEAD, never into a branch, and require GitHub's SHA."""
+    proc = ctx.git_out("fetch", "--quiet", "--no-tags", "origin", f"refs/pull/{pr}/head")
+    if proc.returncode != 0:
+        return [f"could not fetch PR #{pr}'s head from origin: {_stderr_line(proc)}"]
+    fetched = _rev(ctx, "FETCH_HEAD")
+    if fetched != head:
+        return [
+            f"origin's refs/pull/{pr}/head is {fetched}, but GitHub reports PR #{pr}'s head as "
+            f"{head}; rerun once they agree"
+        ]
+    return []
+
+
+def _release_worktree(ctx: Context, path: Path, pr: int, head: str) -> tuple[Context, list[str]]:
+    """The release PR's worktree at `path`, detached at PR N's head.
+
+    A missing path is created with `git worktree add --detach`: detached, because the PR's
+    branch is usually checked out in the main checkout, and git refuses a second checkout
+    of a branch. An existing path must be a clean linked worktree of this repository; one
+    left at an earlier head of the PR is moved to the current one, since a review's push
+    means the evidence has to cover the new tip (RELEASING step 3).
+    """
+    worktree = dataclasses.replace(ctx, repo_root=path)
+    if not path.exists():
+        problems = _fetch_pr_head(ctx, pr, head)
+        if problems:
+            return worktree, problems
+        proc = ctx.git_out("worktree", "add", "--quiet", "--detach", str(path), head)
+        if proc.returncode != 0:
+            return worktree, [f"could not create the worktree {path}: {_stderr_line(proc)}"]
+        print(f"created the release worktree {path}, detached at PR #{pr}'s head {head}")
+        return worktree, []
+    if _common_dir(worktree) is None or _common_dir(worktree) != _common_dir(ctx):
+        return worktree, [f"{path} exists and is not a worktree of {ctx.repo_root}"]
+    problems = _linked_worktree_problems(worktree) + _clean_tree_problems(worktree)
+    if problems:
+        return worktree, [f"{path}: {problem}" for problem in problems]
+    current = _rev(worktree, "HEAD")
+    if current == head:
+        print(f"using the release worktree {path}, at PR #{pr}'s head {head}")
+        return worktree, []
+    problems = _fetch_pr_head(ctx, pr, head)
+    if problems:
+        return worktree, problems
+    proc = worktree.git_out("checkout", "--quiet", "--detach", head)
+    if proc.returncode != 0:
+        return worktree, [f"could not move {path} to {head}: {_stderr_line(proc)}"]
+    print(f"moved the clean worktree {path} from {current} to PR #{pr}'s head {head}")
+    return worktree, []
+
+
+def _yes(ctx: Context, question: str) -> bool:
+    try:
+        return ctx.ask(question).strip().lower() in ("y", "yes")
+    except EOFError:
+        return False
+
+
+def _shown(cmd: list[str] | tuple[str, ...], env: Mapping[str, str] | None = None) -> str:
+    return shlex.join([*(f"{k}={v}" for k, v in (env or {}).items()), *cmd])
+
+
+def _run_step(ctx: Context, cwd: Path, cmd: list[str], extra_env: Mapping[str, str]) -> list[str]:
+    """Run one command in `cwd` with its output on the terminal; a non-zero exit fails."""
+    print(f"$ {_shown(cmd, extra_env)}", flush=True)
+    try:
+        proc = ctx.run(cmd, cwd=cwd, env={**ctx.environ, **extra_env}, check=False)
+    except OSError as exc:
+        return [f"could not run `{_shown(cmd)}`: {exc}"]
+    if proc.returncode != 0:
+        return [f"`{_shown(cmd)}` failed (exit status {proc.returncode}); its report is above"]
+    return []
+
+
+def _update_plan(ctx: Context, cwd: Path) -> tuple[list[dict], list[str]]:
+    """`print-updates --json` from the worktree's own script, checked for shape."""
+    cmd = list(UPDATES_COMMAND)
+    try:
+        proc = ctx.run(
+            cmd, cwd=cwd, env=dict(ctx.environ), capture_output=True, text=True, check=False
+        )
+        payload = json.loads(proc.stdout)
+        updates, failed = payload["updates"], payload["failed"]
+        for update in updates:
+            argv, env = update["argv"], update["env"]
+            if not (
+                isinstance(update["backend"], str)
+                and isinstance(update["version"], str)
+                and isinstance(argv, list)
+                and argv
+                and all(isinstance(part, str) for part in argv)
+                and isinstance(env, dict)
+                and all(isinstance(k, str) and isinstance(v, str) for k, v in env.items())
+            ):
+                raise TypeError(f"malformed update {update!r}")
+    except OSError as exc:
+        return [], [f"could not run `{_shown(cmd)}`: {exc}"]
+    except (ValueError, KeyError, TypeError) as exc:
+        return [], [f"could not read `{_shown(cmd)}`'s output: {exc}"]
+    return updates, [str(problem) for problem in failed]
+
+
+def _origin_only(url: str) -> str | None:
+    """`scheme://host[:port]`, so no path, query or userinfo, which can hold a key, is kept."""
+    if url[:1] in ("!", "$"):
+        return None
+    try:
+        parts = urllib.parse.urlsplit(url)
+        port = f":{parts.port}" if parts.port else ""
+    except ValueError:
+        return None
+    if not parts.scheme or not parts.hostname:
+        return None
+    rest = "" if parts.path in ("", "/") and not parts.query else " (path not recorded)"
+    return f"`{parts.scheme}://{parts.hostname}{port}`{rest}"
+
+
+def _recordable(key: str, value: object) -> str | None:
+    """The value to note for one models.json key, or None to name the key alone."""
+    if key == "baseUrl" and isinstance(value, str):
+        return _origin_only(value)
+    if key not in MODELS_JSON_VALUES:
+        return None
+    if isinstance(value, bool | int | float):
+        return f"`{json.dumps(value)}`"
+    if isinstance(value, str) and value[:1] not in ("", "!", "$"):
+        return f"`{value}`"
+    if isinstance(value, list) and all(
+        isinstance(item, str) and item[:1] not in ("!", "$") for item in value
+    ):
+        return f"`{json.dumps(value)}`"
+    return None
+
+
+def _described(fields: dict) -> str:
+    if not fields:
+        return "no keys"
+    parts = []
+    for key in sorted(fields):
+        value = _recordable(key, fields[key])
+        parts.append(f"`{key}` (value not recorded)" if value is None else f"`{key}` {value}")
+    return ", ".join(parts)
+
+
+def models_json_note(environ: Mapping[str, str], home: Path) -> list[str]:
+    """What RELEASING step 3 asks the release PR to say about pi's models.json, as Markdown.
+
+    Whether the file is present where pi reads it (`$PI_CODING_AGENT_DIR`, else
+    `~/.pi/agent`), and which keys apply to AMICUS_PI_MODEL's provider and model: values only
+    for the keys in MODELS_JSON_VALUES and a baseUrl's origin, every other key by name alone,
+    so no credential, header value or `!command` is ever printed. The path is shown in that
+    symbolic form, never as the absolute path, which names the account.
+    """
+    model = environ.get(PI_MODEL_ENV, "")
+    provider, _, model_id = model.partition("/")
+    agent_dir = environ.get("PI_CODING_AGENT_DIR")
+    path = Path(agent_dir) / "models.json" if agent_dir else home / ".pi" / "agent" / "models.json"
+    where = "$PI_CODING_AGENT_DIR/models.json" if agent_dir else "~/.pi/agent/models.json"
+    head = f"pi `models.json` for the pi gate's `{model}`:"
+    if not path.exists():
+        return [f"{head} absent at `{where}`, so no override applied."]
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return [f"{head} present at `{where}` but not JSON, so which keys applied is unknown."]
+    providers = data.get("providers") if isinstance(data, dict) else None
+    entry = providers.get(provider) if isinstance(providers, dict) else None
+    if not isinstance(entry, dict):
+        return [f"{head} present at `{where}`, with no entry for provider `{provider}`."]
+    own = {k: v for k, v in entry.items() if k not in ("models", "modelOverrides")}
+    models = entry.get("models")
+    listed = models if isinstance(models, list) else []
+    match = next((m for m in listed if isinstance(m, dict) and m.get("id") == model_id), None)
+    overrides = entry.get("modelOverrides")
+    override = overrides.get(model_id) if isinstance(overrides, dict) else None
+    model_keys = {k: v for k, v in match.items() if k != "id"} if match else None
+    return [
+        f"{head} present at `{where}`.",
+        f"  - provider `{provider}`: {_described(own)}",
+        f"  - `models` entry `{model_id}`: "
+        f"{'none' if model_keys is None else _described(model_keys)}",
+        f"  - `modelOverrides` entry `{model_id}`: "
+        f"{_described(override) if isinstance(override, dict) else 'none'}",
+    ]
+
+
+def _record_note(worktree: Path) -> list[str]:
+    """The evidence record's commit, time and CLI versions, for the release PR."""
+    try:
+        record = json.loads((worktree / EVIDENCE_PATH).read_text(encoding="utf-8"))
+        backends = record["backends"]
+        versions = ", ".join(f"{b} `{backends[b]['cli_version']}`" for b in backends)
+        return [
+            f"Live-gate evidence recorded {record['recorded_at']} for `{record['commit']}` on "
+            f"{versions}."
+        ]
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        return [f"(could not read {EVIDENCE_PATH}: {exc}; copy the versions from it by hand)"]
+
+
+def _stop(problems: list[str], *, spent: bool = False) -> int:
+    print("session stopped:", file=sys.stderr)
+    for problem in problems:
+        print(f"  - {problem}", file=sys.stderr)
+    if not spent:
+        print("Nothing was spent.", file=sys.stderr)
+    return 1
+
+
+def _session_refusals(ctx: Context, version: str) -> list[str]:
+    """What stops a session before it touches anything."""
+    problems = _version_problems(version)
+    if not ctx.interactive():
+        problems.append(
+            "session asks before it installs or spends, so it runs only with stdin and stdout "
+            "at a terminal; use `preflight` and the commands it prints instead"
+        )
+    if ctx.environ.get("CI"):
+        problems.append("CI is set; the evidence run spends live quota and never runs in CI")
+    if not ctx.environ.get(PI_MODEL_ENV):
+        problems.append(
+            f"{PI_MODEL_ENV} is not set; the pi gate needs an exact provider/id whose provider "
+            "is ready, or it fails rather than skips"
+        )
+    return problems
+
+
+def _session_updates(ctx: Context, cwd: Path) -> tuple[list[dict], list[str]]:
+    """Step 1: show the installs of npm's `latest` and run them on a yes."""
+    print("\n== 1. Backend CLIs at npm's latest ==")
+    updates, problems = _update_plan(ctx, cwd)
+    if problems:
+        return updates, problems
+    for update in updates:
+        print(f"  {_shown(update['argv'], update['env'])}")
+    print("Close every other Claude Code session first, or restart it with DISABLE_AUTOUPDATER=1,")
+    print("so nothing moves Claude Code between these installs and the evidence run.")
+    if not _yes(ctx, "Run these installs now? [y/N] "):
+        print("Skipped. The preflight below fails if a CLI is not at npm's latest.")
+        return updates, []
+    for update in updates:
+        problems = _run_step(ctx, cwd, update["argv"], update["env"])
+        if problems:
+            return updates, problems
+    return updates, []
+
+
+def _session_checks(ctx: Context, cwd: Path, pr: int, version: str) -> list[str]:
+    """Step 3: the policy read-back, the preflight and pi's pricing check, which spend nothing."""
+    print("\n== 3. Checks that spend nothing ==")
+    script = ["uv", "run", "python", "scripts/release.py"]
+    for cmd in (
+        [*script, "policy"],
+        [*script, "preflight", "--pr", str(pr), "--version", version],
+        list(PI_PRICING_COMMAND),
+    ):
+        problems = _run_step(ctx, cwd, cmd, {})
+        if problems:
+            return problems
+    return []
+
+
+def _session_evidence(ctx: Context, cwd: Path, version: str, head: str) -> list[str] | None:
+    """Step 5: the evidence run, only on a typed confirmation. None when it was declined."""
+    print("\n== 5. The live-gate evidence ==")
+    print(f"It runs the live suites on codex, claude and pi at {head} and spends real quota")
+    print("on all three. A failed suite means a new run, and new spending, once it is fixed.")
+    phrase = f"spend {version}"
+    try:
+        answer = ctx.ask(f"Type `{phrase}` to run it now; anything else stops here: ")
+    except EOFError:
+        answer = ""
+    if answer.strip() != phrase:
+        return None
+    cmd = ["uv", "run", "python", EVIDENCE_SCRIPT, "--version", version]
+    return _run_step(ctx, cwd, cmd, {"AMICUS_REQUIRE_LIVE": "1"})
+
+
+def cmd_session(ctx: Context, args: argparse.Namespace) -> int:
+    version: str = args.version
+    pr: int = args.pr
+    problems = _session_refusals(ctx, version)
+    if problems:
+        return _stop(problems)
+    pr_info, problems = _pull_request(ctx, pr)
+    if pr_info is None or problems:
+        return _stop(problems)
+    head: str = pr_info["headRefOid"]
+    path = Path(args.worktree or default_worktree(ctx.repo_root, version)).expanduser()
+    worktree, problems = _release_worktree(ctx, path.resolve(), pr, head)
+    if problems:
+        return _stop(problems)
+    cwd = worktree.repo_root
+
+    updates, problems = _session_updates(ctx, cwd)
+    if problems:
+        return _stop(problems)
+
+    print("\n== 2. Rule-18 carrier re-check ==")
+    named = ", ".join(f"{u['backend']} {u['version']}" for u in updates)
+    print(f"The evidence will vouch for {named}.")
+    print("`uv run python scripts/check_backend_compat.py release-brief` drafts the re-check.")
+    if not _yes(ctx, f"Is the re-check for these versions in PR #{pr}'s description? [y/N] "):
+        return _stop(["write the carrier re-check into the release PR first (RELEASING step 3)"])
+
+    problems = _session_checks(ctx, cwd, pr, version)
+    if problems:
+        return _stop(problems)
+
+    print("\n== 4. pi's models.json ==")
+    models_note = models_json_note(ctx.environ, ctx.home())
+    print("\n".join(models_note))
+
+    problems = _session_evidence(ctx, cwd, version, head)
+    if problems is None:
+        return _stop(["you did not confirm the evidence run"])
+    if problems:
+        print(f"Do not tag {version}: the evidence did not pass.", file=sys.stderr)
+        return _stop(problems, spent=True)
+
+    print(f"\n== 6. For PR #{pr}'s description ==")
+    for line in [*_record_note(cwd), models_note[0]]:
+        print(f"- {line}")
+    print("\n".join(models_note[1:]))
+
+    print("\n== 7. The rest of the release ==")
+    print("Run it today (the record's freshness window is 24 hours). Each block stops at its")
+    print("first failure, and the second waits for your pypi approval. This script never tags,")
+    print("merges or pushes; those are yours:")
+    for block in next_steps(cwd, version, pr, head):
+        print()
+        print("  " + " &&\\\n  ".join(block))
+    return 0
 
 
 # --- post-merge: before the tag is pushed -----------------------------------------------
@@ -1537,6 +1929,22 @@ def build_parser() -> argparse.ArgumentParser:
     preflight.add_argument("--pr", type=int, required=True, help="the release PR's number")
     preflight.add_argument("--version", required=True, help="the version being released, X.Y.Z")
     preflight.set_defaults(handler=cmd_preflight)
+
+    session = commands.add_parser(
+        "session",
+        help="run RELEASING step 3 in one go, asking before it installs or spends",
+        description="Make or reuse the release worktree, update the backend CLIs, run the "
+        "checks that spend nothing, note pi's models.json, and run the evidence only after "
+        "a typed confirmation. Never tags, merges or pushes.",
+    )
+    session.add_argument("--pr", type=int, required=True, help="the release PR's number")
+    session.add_argument("--version", required=True, help="the version being released, X.Y.Z")
+    session.add_argument(
+        "--worktree",
+        type=Path,
+        help="the release worktree (default: amicus-wt-release-X-Y-Z beside this checkout)",
+    )
+    session.set_defaults(handler=cmd_session)
 
     post_merge = commands.add_parser(
         "post-merge",

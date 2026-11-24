@@ -101,6 +101,7 @@ Do this last among the preconditions, immediately before the evidence run in the
 
 First bring each CLI to its latest release on the machine that will record the evidence.
 `uv run python scripts/check_backend_compat.py print-updates` prints the three install commands for npm's current `latest`, Claude Code's with `DISABLE_AUTOUPDATER=1`, and runs none of them.
+`uv run python scripts/release.py session`, in step 3 below, shows the same commands and runs them on your yes.
 The paragraphs below say what those commands do and why.
 `codex` is an npm package, so `npm view @openai/codex version` names its latest and `npm install -g @openai/codex@<version>` installs it.
 `claude` is Claude Code, whose native installer does not follow npm: `npm view @anthropic-ai/claude-code version` still names its latest, and `claude install <version>` installs it, as below.
@@ -151,6 +152,7 @@ Rule 18 exempts a backend's native prompt carrier only where no documented or ob
 For each of the three versions the script printed, read that CLI's `--help` and its release notes since the previous amicus release for a codex channel for developer instructions other than `-c` on argv.
 If one has appeared, the exemption no longer holds for that carrier, and using the new mechanism is a change to make before this release rather than after it.
 If none has, say so in the release PR, naming the three versions, so the next reader can see the looking was done and on what.
+`uv run python scripts/check_backend_compat.py release-brief` drafts that paragraph for the release PR with the versions npm's `latest` names, and leaves only codex's verdict to write.
 pi holds no exemption, because its prompt rides stdin and `--no-session` wrote no session file on 1.5.0, so the re-check has no pi carrier to look for.
 What the pi capture did and did not test is `docs/pi-help/1.5.0/FINDINGS.md`.
 A new `docs/pi-help/<version>/FINDINGS.md` states whether `models.json` was present when its captures and live suite ran and, if so, which override keys and values applied to the model it used, recording only override keys and values and never a credential, a header value or a `!command` value.
@@ -194,6 +196,16 @@ The tag therefore deliberately points at a commit that is in `main`'s history bu
      It warns when `uv lock` changes anything in `uv.lock` beyond amicus's own version line, which a different `uv` release can do: uv 0.13 rewrote the revision-3 lock as revision 5 when 0.11.1 was prepared, and that release PR kept only the version line.
 
    Then do by hand what the script leaves to you, and commit the result as PR C.
+   Paste what this prints into PR C's description; it spends nothing:
+
+   ```sh
+   uv run python scripts/check_backend_compat.py release-brief
+   ```
+
+   It reads the CLI versions in the previous release's evidence record, from the newest `vX.Y.Z` tag on `origin` unless `--since` names one, and compares each with npm's `latest`.
+   It lists the stable releases published in between, whether the shipped contract supports `latest`, the long flags `--help` gained or lost between the committed captures, and any `FINDINGS.md` committed since.
+   It drafts the rule-18 carrier re-check described under the backend-CLI precondition, with the versions the evidence will be recorded on and codex's verdict left `_to write_`, because that verdict takes a reader.
+   It exits 1 when a lookup failed, or when a backend's `latest` is outside the shipped contract, which the preflight in step 3 refuses: the release then waits for the PR that supports that version.
    Write the release section's lead paragraph and review its entries.
    Update README's "Status and known limits" prose naming the current release, and review the release's upgrade section in `docs/MIGRATION.md`; the script reminds you of both and edits neither.
    That section, `## Upgrading from <previous version>`, is written during the cycle rather than here: `tests/test_migration_doc.py` fails any PR that moves the fingerprint without naming the new one in the newest upgrade section, so by release time it should only need reading.
@@ -202,6 +214,15 @@ The tag therefore deliberately points at a commit that is in `main`'s history bu
 3. Run every command from here through step 6 in the PR C worktree, never in the main checkout.
    Every command below is relative to the directory it runs in.
    The evidence was recorded in the main checkout for 0.3.0, 0.6.0 and 0.7.0; each time a later check caught it, but only after the quota on all three backends was spent (#241).
+   `uv run python scripts/release.py session --pr <N> --version X.Y.Z` runs this whole step in order, started from the main checkout at a terminal, and asks before it installs or spends anything.
+   It refuses without a terminal on stdin and stdout, when `CI` is set, and when `AMICUS_PI_MODEL` is not exported.
+   It creates the worktree beside the main checkout as `amicus-wt-release-X-Y-Z`, detached at PR C's head as GitHub reports it, or reuses a clean worktree there and moves it to that head; `--worktree` names another path.
+   In that worktree it shows the installs `print-updates` names and runs them on your yes, asks whether the carrier re-check is in PR C, then runs `release.py policy`, the preflight below and `scripts/check_pi_pricing.py`, stopping at the first failure.
+   It prints the `models.json` note described below, with values only for keys that cannot carry a secret.
+   Only then does it ask you to type `spend X.Y.Z`, and typing that is your authorization for the evidence run in this session; any other answer stops it with nothing spent.
+   After a passing run it prints the record's CLI versions and the `models.json` note for PR C, and the rest of the release as the preflight prints it.
+   It never tags, merges or pushes.
+   The rest of this step is what it runs, for doing the step by hand.
    First do what no script can: bring the backend CLIs to npm's `latest` with Claude Code's autoupdater held, as the backend-CLI precondition above describes, and do the rule-18 carrier re-check, because the evidence vouches for exactly the CLI versions installed at this moment.
    Then move to the worktree and run the preflight, with PR C's number:
 
