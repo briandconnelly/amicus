@@ -57,6 +57,7 @@ POLICY = ["uv", "run", "python", "scripts/release.py", "policy"]
 PREFLIGHT = ["uv", "run", "python", "scripts/release.py", "preflight", "--pr", str(PR)]
 PREFLIGHT += ["--version", NEXT]
 PRICING = list(release.PI_PRICING_COMMAND)
+GH_FIELDS = "headRefOid,headRefName,state,baseRefName,isCrossRepository"
 
 
 class Repo:
@@ -101,8 +102,13 @@ class FakeRun:
             "headRefName": BRANCH,
             "state": "OPEN",
             "baseRefName": "main",
+            "isCrossRepository": False,
         }
         self.updates: object = {"updates": UPDATES, "failed": []}
+        # What the second `print-updates`, just before the spend prompt, reports; the first
+        # plan's when None.
+        self.replan: object = None
+        self.plans = 0
         self.returncodes = returncodes
 
     def _done(self, cmd, name: str, stdout: str = "") -> subprocess.CompletedProcess:
@@ -114,7 +120,9 @@ class FakeRun:
         if cmd[:3] == ["gh", "pr", "view"]:
             return self._done(cmd, "gh", json.dumps(self.pr))
         if cmd == list(release.UPDATES_COMMAND):
-            return self._done(cmd, "updates", json.dumps(self.updates))
+            self.plans += 1
+            plan = self.replan if self.plans > 1 and self.replan is not None else self.updates
+            return self._done(cmd, "updates", json.dumps(plan))
         if cmd in [u["argv"] for u in UPDATES]:
             return self._done(cmd, cmd[0] if cmd[0] == "claude" else "npm")
         if cmd == POLICY:
@@ -189,12 +197,13 @@ def test_session_runs_step_3_in_order_and_spends_only_after_the_typed_phrase(rep
     assert _git(repo.worktree, "rev-parse", "HEAD") == repo.head
     assert _git(repo.worktree, "branch", "--show-current") == ""
     assert run.commands() == [
-        ["gh", "pr", "view", str(PR), "--json", "headRefOid,headRefName,state,baseRefName"],
+        ["gh", "pr", "view", str(PR), "--json", GH_FIELDS],
         list(release.UPDATES_COMMAND),
         *[u["argv"] for u in UPDATES],
         POLICY,
         PREFLIGHT,
         PRICING,
+        list(release.UPDATES_COMMAND),
         EVIDENCE,
     ]
     for cmd, kwargs in run.calls[1:]:
@@ -342,6 +351,50 @@ def test_a_path_that_is_not_a_worktree_of_this_repository_is_refused(repo, capsy
     assert f"{repo.worktree.resolve()} exists and is not a worktree of" in capsys.readouterr().err
 
 
+def test_a_subdirectory_of_a_worktree_is_refused_and_the_worktree_stays_put(repo, capsys):
+    _git(repo.main, "worktree", "add", "-q", "--detach", str(repo.worktree), repo.first)
+    nested = repo.worktree / "sub"
+    nested.mkdir()
+    run = FakeRun(repo.head)
+    assert _session(repo, run, Answers(), extra=("--worktree", str(nested))) == 1
+    assert "is not the top of a worktree" in capsys.readouterr().err
+    assert _git(repo.worktree, "rev-parse", "HEAD") == repo.first
+    assert release.UPDATES_COMMAND not in [tuple(c) for c in run.commands()]
+
+
+def test_a_pr_from_a_fork_is_refused_before_anything_runs_from_it(repo, capsys):
+    run = FakeRun(repo.head)
+    run.pr["isCrossRepository"] = True
+    assert _session(repo, run, Answers()) == 1
+    assert "never comes from a fork" in capsys.readouterr().err
+    assert not repo.worktree.exists()
+    assert len(run.commands()) == 1
+
+
+def test_a_pr_that_does_not_say_where_its_head_lives_is_refused(repo, capsys):
+    run = FakeRun(repo.head)
+    del run.pr["isCrossRepository"]
+    assert _session(repo, run, Answers()) == 1
+    assert "never comes from a fork" in capsys.readouterr().err
+
+
+def test_npm_latest_moving_after_the_re_check_stops_before_the_spend_prompt(repo, capsys):
+    run = FakeRun(repo.head)
+    run.replan = {"updates": [*UPDATES[:2], {**UPDATES[2], "version": "1.6.1"}], "failed": []}
+    ask = Answers("y", "y")
+    assert _session(repo, run, ask) == 1
+    err = capsys.readouterr().err
+    assert "npm's latest moved from" in err
+    assert "pi 1.6.1" in err
+    assert EVIDENCE not in run.commands()
+    assert len(ask.questions) == 2
+
+
+def test_the_session_plans_an_install_for_every_backend_compat_checks():
+    compat = _load("check_backend_compat")
+    assert release.SESSION_BACKENDS == compat.BACKENDS
+
+
 def test_the_main_checkout_is_never_the_release_worktree(repo, capsys):
     run = FakeRun(repo.head)
     assert _session(repo, run, Answers(), extra=("--worktree", str(repo.main))) == 1
@@ -376,6 +429,13 @@ def test_a_failed_evidence_run_says_not_to_tag(repo, capsys):
     assert "Nothing was spent." not in err
 
 
+def test_an_update_plan_from_a_failed_run_stops_the_session(repo, capsys):
+    run = FakeRun(repo.head, updates=1)
+    assert _session(repo, run, Answers()) == 1
+    assert "failed (exit status 1)" in capsys.readouterr().err
+    assert POLICY not in run.commands()
+
+
 @pytest.mark.parametrize(
     ("payload", "reason"),
     [
@@ -383,6 +443,9 @@ def test_a_failed_evidence_run_says_not_to_tag(repo, capsys):
         ({"updates": [{"backend": "pi"}]}, "could not read"),
         ({"updates": [{**UPDATES[0], "argv": "npm i"}], "failed": []}, "malformed update"),
         ("not json", "could not read"),
+        ({"updates": UPDATES[:2], "failed": []}, "not one each for"),
+        ({"updates": [*UPDATES, UPDATES[0]], "failed": []}, "not one each for"),
+        ({"updates": UPDATES, "failed": "none"}, "malformed failures"),
     ],
 )
 def test_an_update_plan_that_is_not_usable_stops_the_session(repo, capsys, payload, reason):
@@ -525,3 +588,27 @@ def test_a_base_url_keeps_only_its_origin(url, shown):
 def test_an_unreadable_record_still_lets_the_pr_note_print(tmp_path):
     (line,) = release._record_note(tmp_path)
     assert line.startswith(f"(could not read {release.EVIDENCE_PATH}")
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [
+        ("api", "/Users/someone/secret-path"),
+        ("api", "sk-live-ABC123"),
+        ("input", ["text", "/etc/passwd"]),
+        ("input", ["sk-live-ABC123"]),
+        ("api", "sk-live-example123"),
+        ("api", "sk_live_example"),
+        ("input", ["audio-secret"]),
+        ("reasoning", "true"),
+        ("contextWindow", "131072"),
+        ("contextWindow", True),
+        ("maxTokens", -1),
+    ],
+)
+def test_a_recorded_key_with_a_value_of_the_wrong_shape_is_named_not_printed(tmp_path, key, value):
+    data = {"providers": {"openrouter": {"models": [{"id": "moonshotai/kimi-k3", key: value}]}}}
+    note = _note(tmp_path, data)
+    assert f"`{key}` (value not recorded)" in note
+    shown = value if isinstance(value, str) else json.dumps(value)
+    assert shown not in note.replace(f"`{key}` (value not recorded)", "")

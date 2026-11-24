@@ -57,7 +57,7 @@ RECORD = _record(codex=f"codex-cli {CODEX_OLD}", claude=f"{CLAUDE_OLD} (Claude C
 class FakeGit:
     """Answers the git commands it is given; anything else fails the test."""
 
-    def __init__(self, answers: dict[tuple[str, ...], tuple[int, str]]):
+    def __init__(self, answers: dict):
         self.answers = answers
         self.calls: list[list[str]] = []
 
@@ -65,7 +65,10 @@ class FakeGit:
         self.calls.append(list(args))
         if tuple(args) not in self.answers:
             raise AssertionError(f"unexpected git {args!r}")
-        return self.answers[tuple(args)]
+        answer = self.answers[tuple(args)]
+        # A list answers successive calls in turn, as an object store does before and after
+        # a fetch.
+        return answer.pop(0) if isinstance(answer, list) else answer
 
 
 LS_REMOTE = ("ls-remote", "--tags", "origin", "refs/tags/v*")
@@ -83,6 +86,7 @@ def _git(*, message: str = RECORD, extra: dict | None = None) -> FakeGit:
     answers = {
         LS_REMOTE: (0, listing),
         ("cat-file", "tag", f"refs/tags/{TAG}"): (0, _cat_file(message)),
+        ("cat-file", "tag", TAG_SHA): (0, _cat_file(message)),
     }
     answers.update(extra or {})
     return FakeGit(answers)
@@ -228,10 +232,9 @@ def test_release_brief_json_carries_every_row_and_whether_it_blocks(docs, monkey
 def test_a_tag_that_is_not_local_is_fetched_into_fetch_head_never_as_a_local_tag(docs):
     git = _git(
         extra={
-            ("cat-file", "tag", f"refs/tags/{TAG}"): (128, ""),
             ("rev-parse", "--is-shallow-repository"): (0, "true\n"),
             ("fetch", "--quiet", "--no-tags", "--depth=1", "origin", f"refs/tags/{TAG}"): (0, ""),
-            ("cat-file", "tag", TAG_SHA): (0, _cat_file(RECORD)),
+            ("cat-file", "tag", TAG_SHA): [(128, ""), (0, _cat_file(RECORD))],
         }
     )
     brief = _brief(docs, git)
@@ -243,13 +246,33 @@ def test_a_tag_that_is_not_local_is_fetched_into_fetch_head_never_as_a_local_tag
 def test_a_complete_clone_fetches_the_tag_without_making_itself_shallow(docs):
     git = _git(
         extra={
-            ("cat-file", "tag", f"refs/tags/{TAG}"): (128, ""),
             ("rev-parse", "--is-shallow-repository"): (0, "false\n"),
             ("fetch", "--quiet", "--no-tags", "origin", f"refs/tags/{TAG}"): (0, ""),
-            ("cat-file", "tag", TAG_SHA): (0, _cat_file(RECORD)),
+            ("cat-file", "tag", TAG_SHA): [(128, ""), (0, _cat_file(RECORD))],
         }
     )
     assert _brief(docs, git).rows[0].previous == CODEX_OLD
+
+
+def test_a_stale_local_tag_is_never_read_in_place_of_origins(docs):
+    stale = RECORD.replace(CODEX_OLD, "1.0.0")
+    git = _git(
+        message=stale,
+        extra={
+            ("rev-parse", "--is-shallow-repository"): (0, "false\n"),
+            ("fetch", "--quiet", "--no-tags", "origin", f"refs/tags/{TAG}"): (0, ""),
+            ("cat-file", "tag", TAG_SHA): [(128, ""), (0, _cat_file(RECORD))],
+        },
+    )
+    brief = _brief(docs, git)
+    assert brief.rows[0].previous == CODEX_OLD
+    assert ["cat-file", "tag", f"refs/tags/{TAG}"] not in git.calls
+
+
+def test_since_naming_a_tag_origin_does_not_have_is_a_problem_not_a_local_read(docs):
+    brief = _brief(docs, _git(), since="v1.0.9")
+    assert "v1.0.9 is not a tag on origin, so it names no published release" in brief.problems
+    assert [row.previous for row in brief.rows] == [None, None, None]
 
 
 def test_since_names_the_tag_and_a_local_one_is_read_when_origin_cannot_be(docs):
@@ -263,7 +286,7 @@ def test_since_names_the_tag_and_a_local_one_is_read_when_origin_cannot_be(docs)
 def test_a_tag_that_cannot_be_read_anywhere_is_a_problem_not_a_guess(docs):
     git = _git(
         extra={
-            ("cat-file", "tag", f"refs/tags/{TAG}"): (128, ""),
+            ("cat-file", "tag", TAG_SHA): (128, ""),
             ("rev-parse", "--is-shallow-repository"): (0, "false\n"),
             ("fetch", "--quiet", "--no-tags", "origin", f"refs/tags/{TAG}"): (128, ""),
         }

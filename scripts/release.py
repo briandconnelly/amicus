@@ -555,7 +555,14 @@ def _clean_tree_problems(ctx: Context) -> list[str]:
 
 
 def _pull_request(ctx: Context, number: int) -> tuple[dict | None, list[str]]:
-    cmd = ["gh", "pr", "view", str(number), "--json", "headRefOid,headRefName,state,baseRefName"]
+    cmd = [
+        "gh",
+        "pr",
+        "view",
+        str(number),
+        "--json",
+        "headRefOid,headRefName,state,baseRefName,isCrossRepository",
+    ]
     try:
         proc = ctx.run(cmd, cwd=ctx.repo_root, capture_output=True, text=True, check=False)
     except OSError as exc:
@@ -577,6 +584,12 @@ def _pull_request(ctx: Context, number: int) -> tuple[dict | None, list[str]]:
         )
     if pr.get("baseRefName") != "main":
         problems.append(f"PR #{number} targets {pr.get('baseRefName')!r}, not main")
+    if pr.get("isCrossRepository") is not False:
+        # A fork's head is code nobody with write access pushed; session runs scripts from it.
+        problems.append(
+            f"PR #{number}'s head is not a branch of this repository; a release PR never comes "
+            "from a fork"
+        )
     return pr, problems
 
 
@@ -651,8 +664,13 @@ def cmd_preflight(ctx: Context, args: argparse.Namespace) -> int:
         problems += release_state.check_tree_pre_tag(
             version, repo_root=ctx.repo_root, run=ctx.run, git=ctx.git
         )
-    print("running scripts/check_backend_compat.py (spends nothing):", flush=True)
-    problems += _script_problems(ctx, "scripts/check_backend_compat.py")
+    if pr is None or pr_problems:
+        # A PR that cannot be read, or that comes from a fork, gets none of its checkout's
+        # scripts run on its behalf.
+        print("skipping scripts/check_backend_compat.py until the PR checks pass", flush=True)
+    else:
+        print("running scripts/check_backend_compat.py (spends nothing):", flush=True)
+        problems += _script_problems(ctx, "scripts/check_backend_compat.py")
 
     if problems:
         print(f"preflight for {version} does NOT hold; do not record evidence:", file=sys.stderr)
@@ -721,6 +739,9 @@ def next_steps(repo_root: Path, version: str, pr: int, release_sha: str) -> list
 # --- session: RELEASING step 3 as one command, asking before it installs or spends -------
 
 PI_MODEL_ENV = "AMICUS_PI_MODEL"
+# The backends `print-updates` plans an install for: check_backend_compat.BACKENDS, which this
+# stdlib script cannot import; tests/test_release_session.py holds the two equal.
+SESSION_BACKENDS = ("codex", "claude", "pi")
 UPDATES_COMMAND = (
     "uv",
     "run",
@@ -781,6 +802,11 @@ def _release_worktree(ctx: Context, path: Path, pr: int, head: str) -> tuple[Con
         return worktree, []
     if _common_dir(worktree) is None or _common_dir(worktree) != _common_dir(ctx):
         return worktree, [f"{path} exists and is not a worktree of {ctx.repo_root}"]
+    toplevel = worktree.git_out("rev-parse", "--show-toplevel")
+    if toplevel.returncode != 0 or Path(toplevel.stdout.strip()).resolve() != path.resolve():
+        # A subdirectory passes the checks above, which git answers for the enclosing
+        # worktree, and moving it would move that worktree.
+        return worktree, [f"{path} is not the top of a worktree; name the worktree itself"]
     problems = _linked_worktree_problems(worktree) + _clean_tree_problems(worktree)
     if problems:
         return worktree, [f"{path}: {problem}" for problem in problems]
@@ -842,11 +868,23 @@ def _update_plan(ctx: Context, cwd: Path) -> tuple[list[dict], list[str]]:
                 and all(isinstance(k, str) and isinstance(v, str) for k, v in env.items())
             ):
                 raise TypeError(f"malformed update {update!r}")
+        if not isinstance(failed, list):
+            raise TypeError(f"malformed failures {failed!r}")
     except OSError as exc:
         return [], [f"could not run `{_shown(cmd)}`: {exc}"]
     except (ValueError, KeyError, TypeError) as exc:
         return [], [f"could not read `{_shown(cmd)}`'s output: {exc}"]
-    return updates, [str(problem) for problem in failed]
+    if failed:
+        return updates, [str(problem) for problem in failed]
+    if proc.returncode != 0:
+        return [], [f"`{_shown(cmd)}` failed (exit status {proc.returncode}): {_stderr_line(proc)}"]
+    planned = [update["backend"] for update in updates]
+    if sorted(planned) != sorted(SESSION_BACKENDS):
+        return [], [
+            f"`{_shown(cmd)}` planned installs for {planned}, not one each for "
+            f"{list(SESSION_BACKENDS)}"
+        ]
+    return updates, []
 
 
 def _origin_only(url: str) -> str | None:
@@ -864,18 +902,31 @@ def _origin_only(url: str) -> str | None:
     return f"`{parts.scheme}://{parts.hostname}{port}`{rest}"
 
 
+# pi's API families are lowercase words joined by hyphens (`openai-completions`); a value with
+# a digit, an underscore or a capital is not one, and is the shape a key or token has.
+_MODELS_JSON_API = re.compile(r"[a-z]{2,24}(?:-[a-z]{2,24}){0,4}")
+# The input modalities pi accepts for a model.
+_MODELS_JSON_INPUTS = frozenset({"text", "image"})
+
+
 def _recordable(key: str, value: object) -> str | None:
-    """The value to note for one models.json key, or None to name the key alone."""
+    """The value to note for one models.json key, or None to name the key alone.
+
+    Each recorded key's value is checked for the shape pi documents, so a path, a pasted key
+    or a command under one of those keys is named, never printed.
+    """
     if key == "baseUrl" and isinstance(value, str):
         return _origin_only(value)
-    if key not in MODELS_JSON_VALUES:
-        return None
-    if isinstance(value, bool | int | float):
+    if key == "reasoning" and isinstance(value, bool):
         return f"`{json.dumps(value)}`"
-    if isinstance(value, str) and value[:1] not in ("", "!", "$"):
+    if key in ("contextWindow", "maxTokens") and type(value) is int and value >= 0:
         return f"`{value}`"
-    if isinstance(value, list) and all(
-        isinstance(item, str) and item[:1] not in ("!", "$") for item in value
+    if key == "api" and isinstance(value, str) and _MODELS_JSON_API.fullmatch(value):
+        return f"`{value}`"
+    if (
+        key == "input"
+        and isinstance(value, list)
+        and all(isinstance(item, str) and item in _MODELS_JSON_INPUTS for item in value)
     ):
         return f"`{json.dumps(value)}`"
     return None
@@ -1022,8 +1073,8 @@ def _session_checks(ctx: Context, cwd: Path, pr: int, version: str) -> list[str]
 def _session_evidence(ctx: Context, cwd: Path, version: str, head: str) -> list[str] | None:
     """Step 5: the evidence run, only on a typed confirmation. None when it was declined."""
     print("\n== 5. The live-gate evidence ==")
-    print(f"It runs the live suites on codex, claude and pi at {head} and spends real quota")
-    print("on all three. A failed suite means a new run, and new spending, once it is fixed.")
+    print(f"It runs every live suite the release gate requires at {head} and spends real quota")
+    print("on each backend. A failed suite means a new run, and new spending, once it is fixed.")
     phrase = f"spend {version}"
     try:
         answer = ctx.ask(f"Type `{phrase}` to run it now; anything else stops here: ")
@@ -1033,6 +1084,14 @@ def _session_evidence(ctx: Context, cwd: Path, version: str, head: str) -> list[
         return None
     cmd = ["uv", "run", "python", EVIDENCE_SCRIPT, "--version", version]
     return _run_step(ctx, cwd, cmd, {"AMICUS_REQUIRE_LIVE": "1"})
+
+
+def _versions(updates: list[dict]) -> dict[str, str]:
+    return {update["backend"]: update["version"] for update in updates}
+
+
+def _named(updates: list[dict]) -> str:
+    return ", ".join(f"{u['backend']} {u['version']}" for u in updates)
 
 
 def cmd_session(ctx: Context, args: argparse.Namespace) -> int:
@@ -1056,8 +1115,7 @@ def cmd_session(ctx: Context, args: argparse.Namespace) -> int:
         return _stop(problems)
 
     print("\n== 2. Rule-18 carrier re-check ==")
-    named = ", ".join(f"{u['backend']} {u['version']}" for u in updates)
-    print(f"The evidence will vouch for {named}.")
+    print(f"The evidence will vouch for {_named(updates)}.")
     print("`uv run python scripts/check_backend_compat.py release-brief` drafts the re-check.")
     if not _yes(ctx, f"Is the re-check for these versions in PR #{pr}'s description? [y/N] "):
         return _stop(["write the carrier re-check into the release PR first (RELEASING step 3)"])
@@ -1065,6 +1123,21 @@ def cmd_session(ctx: Context, args: argparse.Namespace) -> int:
     problems = _session_checks(ctx, cwd, pr, version)
     if problems:
         return _stop(problems)
+
+    # npm's `latest` can move between the plan confirmed above and the preflight; the
+    # preflight checks the installs against the newer one, so the re-check would name
+    # versions the evidence does not run on.
+    replanned, problems = _update_plan(ctx, cwd)
+    if problems:
+        return _stop(problems)
+    moved = _versions(replanned) != _versions(updates)
+    if moved:
+        return _stop(
+            [
+                f"npm's latest moved from {_named(updates)} to {_named(replanned)} after you "
+                "confirmed the carrier re-check; rerun the session for the new versions"
+            ]
+        )
 
     print("\n== 4. pi's models.json ==")
     models_note = models_json_note(ctx.environ, ctx.home())

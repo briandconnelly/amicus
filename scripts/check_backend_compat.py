@@ -1783,15 +1783,22 @@ def remote_release_tags(git: Callable[[list[str]], tuple[int, str]]) -> dict[str
 def tag_message(
     tag: str, remote_sha: str | None, git: Callable[[list[str]], tuple[int, str]]
 ) -> str | None:
-    """The annotated tag's message, read locally, else fetched from origin into FETCH_HEAD
-    only, so no local tag is created. None when neither works or the tag is lightweight."""
-    code, out = git(["cat-file", "tag", f"refs/tags/{tag}"])
-    if code != 0 and remote_sha:
-        shallow_code, shallow = git(["rev-parse", "--is-shallow-repository"])
-        depth = ["--depth=1"] if shallow_code == 0 and shallow.strip() == "true" else []
-        fetched, _ = git(["fetch", "--quiet", "--no-tags", *depth, "origin", f"refs/tags/{tag}"])
-        if fetched == 0:
-            code, out = git(["cat-file", "tag", remote_sha])
+    """The annotated tag's message. With origin's tag object id, that object and no other is
+    read: from the local object store, else fetched from origin into FETCH_HEAD only, so no
+    local tag is created and a stale local tag of the same name is never read in its place.
+    Without one (origin could not be listed), the local tag. None when nothing works or the
+    tag is lightweight."""
+    if remote_sha is None:
+        code, out = git(["cat-file", "tag", f"refs/tags/{tag}"])
+    else:
+        code, out = git(["cat-file", "tag", remote_sha])
+        if code != 0:
+            shallow_code, shallow = git(["rev-parse", "--is-shallow-repository"])
+            depth = ["--depth=1"] if shallow_code == 0 and shallow.strip() == "true" else []
+            fetch = ["fetch", "--quiet", "--no-tags", *depth, "origin", f"refs/tags/{tag}"]
+            fetched, _ = git(fetch)
+            if fetched == 0:
+                code, out = git(["cat-file", "tag", remote_sha])
     if code != 0:
         return None
     return out.partition("\n\n")[2]
@@ -1901,6 +1908,10 @@ def release_brief(
         problems.append("origin has no vX.Y.Z tag, so there is no previous release to compare")
     previous: dict[str, str] = {}
     recorded_at = None
+    if tag is not None and tags is not None and tag not in tags:
+        # origin answered and has no such tag: a local one of that name is no release.
+        problems.append(f"{tag} is not a tag on origin, so it names no published release")
+        tag = None
     if tag is not None:
         message = tag_message(tag, (tags or {}).get(tag), git)
         if message is None:
