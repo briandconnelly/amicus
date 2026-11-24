@@ -6,9 +6,11 @@ import contextlib
 import os
 import signal
 import sys
+import threading
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
+import fastmcp
 from fastmcp import FastMCP
 from mcp.server.caching import CacheHint
 from mcp.types import ReadResourceResult
@@ -31,7 +33,7 @@ from amicus.tools import resources
 
 if TYPE_CHECKING:  # pragma: no cover
     import logging
-    from collections.abc import Callable
+    from collections.abc import Callable, Generator
 
     from amicus.config import Settings
 
@@ -167,6 +169,38 @@ def state_of(app: FastMCP) -> AppState:
     return state
 
 
+_LISTEN_SETTING = "enable_subscriptions_listen"
+_LISTEN_SETTING_LOCK = threading.Lock()
+
+
+@contextlib.contextmanager
+def _listen_streams_off() -> Generator[None]:
+    """Build the server with FastMCP's `subscriptions/listen` handler switched off.
+
+    FastMCP 4.2.5 serves `subscriptions/listen` by default and advertises `listChanged` and
+    `resources.subscribe` from it. amicus emits no change notification, so serving the
+    method would promise notifications that cannot arrive (ADR 0018). FastMCP reads the
+    setting once, in `LowLevelServer.__init__` (`fastmcp/server/low_level.py`, 4.2.5), so it
+    is turned off for that moment and restored; if FastMCP ever reads it later, the restore
+    undoes this, and `test_subscriptions_listen_is_method_not_found_on_the_wire` fails. The
+    setting is process-global: a lock serializes amicus's own save, build and restore, so two
+    threads calling `create_app` cannot interleave them, but a FastMCP server some other code
+    builds on another thread during this window also gets listen off.
+    A FastMCP older than 4.2.5 has no such setting and serves no listen stream, so there is
+    nothing to do.
+    """
+    if _LISTEN_SETTING not in type(fastmcp.settings).model_fields:
+        yield
+        return
+    with _LISTEN_SETTING_LOCK:
+        previous = getattr(fastmcp.settings, _LISTEN_SETTING)
+        setattr(fastmcp.settings, _LISTEN_SETTING, False)
+        try:
+            yield
+        finally:
+            setattr(fastmcp.settings, _LISTEN_SETTING, previous)
+
+
 def _filter_capabilities(original: Callable[..., Any]) -> Callable[..., Any]:
     """Null the prompts capability (no prompts are registered), drop the UI extension (no
     Apps implementation) leaving any other extension untouched, and report
@@ -286,7 +320,8 @@ def create_app(
 ) -> FastMCP:
     settings = config.settings() if settings is None else settings
     registry = BackendRegistry.load(settings.enabled_backends) if registry is None else registry
-    app = FastMCP(name=SERVER_NAME, instructions=CAPABILITY_SUMMARY, version=__version__)
+    with _listen_streams_off():
+        app = FastMCP(name=SERVER_NAME, instructions=CAPABILITY_SUMMARY, version=__version__)
     state = AppState(
         settings=settings, registry=registry, config_errors=list(settings.config_errors)
     )

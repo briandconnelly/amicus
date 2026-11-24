@@ -12,12 +12,17 @@ from __future__ import annotations
 
 import json
 import sys
+import threading
 from pathlib import Path
 from typing import Any
 
+import fastmcp
 import pytest
 from fastmcp import Client
 from fastmcp.client.transports import StdioTransport
+from mcp import MCPError
+from mcp.client.subscriptions import listen as sdk_listen
+from mcp.types import METHOD_NOT_FOUND
 from mcp_types.methods import CACHEABLE_METHODS
 from tests.conftest import NEVER_SPAWN_CODEX, spawned_server_env
 
@@ -180,6 +185,65 @@ def test_forcing_list_changed_false_is_not_hiding_a_served_subscription(env):
         "amicus now serves subscriptions/listen: revisit ADR 0018's listChanged decision "
         "instead of continuing to force the flag false"
     )
+
+
+@pytest.mark.parametrize("before", [True, False])
+def test_building_the_app_leaves_fastmcp_listen_setting_as_it_found_it(before, monkeypatch):
+    """FastMCP 4.2.5 serves `subscriptions/listen` by default; `create_app` switches that
+    off only while it builds amicus's own server, so another FastMCP server in the same
+    process keeps whatever the process configured."""
+    if server._LISTEN_SETTING not in type(fastmcp.settings).model_fields:
+        pytest.skip("this FastMCP predates enable_subscriptions_listen and serves no listen")
+    monkeypatch.setattr(fastmcp.settings, server._LISTEN_SETTING, before)
+    app = server.create_app(config.settings({}), BackendRegistry({}, {}))
+    assert "subscriptions/listen" not in app._mcp_server._request_handlers
+    assert getattr(fastmcp.settings, server._LISTEN_SETTING) is before
+
+
+async def test_subscriptions_listen_is_method_not_found_on_the_wire():
+    """#576: the handler-map assertions above read FastMCP internals; this one reads what a
+    2026-07-28 client receives. Without the guard FastMCP 4.2.5 acknowledges the stream.
+    It calls the SDK helper because `Client.listen` only exists from FastMCP 4.2.5."""
+    async with Client(_stdio()) as client:
+        with pytest.raises(MCPError) as raised:
+            async with sdk_listen(client.session, tools_list_changed=True):
+                pass
+    assert raised.value.error.code == METHOD_NOT_FOUND
+
+
+def test_overlapping_listen_guards_cannot_interleave(monkeypatch):
+    """Two threads building apps at once must not interleave save and restore: the second
+    would save the first's `False` as its previous value and the first's restore could
+    re-enable listen before the second server is built."""
+    if server._LISTEN_SETTING not in type(fastmcp.settings).model_fields:
+        pytest.skip("this FastMCP predates enable_subscriptions_listen and serves no listen")
+    monkeypatch.setattr(fastmcp.settings, server._LISTEN_SETTING, True)
+    second_entered = threading.Event()
+    seen_inside: list[bool] = []
+
+    def second() -> None:
+        with server._listen_streams_off():
+            seen_inside.append(getattr(fastmcp.settings, server._LISTEN_SETTING))
+            second_entered.set()
+
+    with server._listen_streams_off():
+        worker = threading.Thread(target=second)
+        worker.start()
+        # Positive control on the wait: the timeout is what an interleaving guard would hit.
+        assert not second_entered.wait(timeout=0.2), "a second guard entered mid-build"
+    worker.join(timeout=5)
+    assert seen_inside == [False]
+    assert getattr(fastmcp.settings, server._LISTEN_SETTING) is True
+
+
+def test_the_listen_guard_does_nothing_on_a_fastmcp_without_the_setting(monkeypatch):
+    """Before 4.2.5 FastMCP had no listen setting and served no listen stream. The floor is
+    4.1.4, so the guard must not assign a field that FastMCP's settings would reject."""
+    missing = "a_setting_this_fastmcp_does_not_have"
+    monkeypatch.setattr(server, "_LISTEN_SETTING", missing)
+    with server._listen_streams_off():
+        pass
+    assert not hasattr(fastmcp.settings, missing)
 
 
 async def test_the_manifest_pins_the_capabilities_the_shipped_transport_sends():
