@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import fastmcp
 import pytest
 from fastmcp import Client
 from fastmcp.client.transports import StdioTransport
@@ -180,6 +181,29 @@ def test_forcing_list_changed_false_is_not_hiding_a_served_subscription(env):
         "amicus now serves subscriptions/listen: revisit ADR 0018's listChanged decision "
         "instead of continuing to force the flag false"
     )
+
+
+@pytest.mark.parametrize("before", [True, False])
+def test_building_the_app_leaves_fastmcp_listen_setting_as_it_found_it(before, monkeypatch):
+    """FastMCP 4.2.5 serves `subscriptions/listen` by default; `create_app` switches that
+    off only while it builds amicus's own server, so another FastMCP server in the same
+    process keeps whatever the process configured."""
+    if server._LISTEN_SETTING not in type(fastmcp.settings).model_fields:
+        pytest.skip("this FastMCP predates enable_subscriptions_listen and serves no listen")
+    monkeypatch.setattr(fastmcp.settings, server._LISTEN_SETTING, before)
+    app = server.create_app(config.settings({}), BackendRegistry({}, {}))
+    assert "subscriptions/listen" not in app._mcp_server._request_handlers
+    assert getattr(fastmcp.settings, server._LISTEN_SETTING) is before
+
+
+def test_the_listen_guard_does_nothing_on_a_fastmcp_without_the_setting(monkeypatch):
+    """Before 4.2.5 FastMCP had no listen setting and served no listen stream. The floor is
+    4.1.4, so the guard must not assign a field that FastMCP's settings would reject."""
+    missing = "a_setting_this_fastmcp_does_not_have"
+    monkeypatch.setattr(server, "_LISTEN_SETTING", missing)
+    with server._listen_streams_off():
+        pass
+    assert not hasattr(fastmcp.settings, missing)
 
 
 async def test_the_manifest_pins_the_capabilities_the_shipped_transport_sends():

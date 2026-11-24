@@ -30,6 +30,15 @@ per-change, as its own lead says.
   without naming it in MIGRATION.md's newest upgrade section, so that section is written with
   the change rather than rebuilt in the release PR.
 
+### Fixed
+
+- A fresh install of 0.16.0 resolves FastMCP 4.2.5, which serves `subscriptions/listen` by
+  default; there amicus told modern-era clients `resources.subscribe: true` and opened listen
+  streams it would never send a notification on. amicus now switches FastMCP's listen streams
+  off while it builds its server, so `subscriptions/listen` is refused with method-not-found
+  and both capability blocks stay as ADR 0018 sets them on every FastMCP the pin allows. The
+  fingerprint does not move.
+
 ## [0.16.0] - 2026-11-22
 
 This release makes model choice something an operator can govern and a caller can search. On
