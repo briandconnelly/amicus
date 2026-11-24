@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import sys
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -208,6 +209,31 @@ async def test_subscriptions_listen_is_method_not_found_on_the_wire():
             async with sdk_listen(client.session, tools_list_changed=True):
                 pass
     assert raised.value.error.code == METHOD_NOT_FOUND
+
+
+def test_overlapping_listen_guards_cannot_interleave(monkeypatch):
+    """Two threads building apps at once must not interleave save and restore: the second
+    would save the first's `False` as its previous value and the first's restore could
+    re-enable listen before the second server is built."""
+    if server._LISTEN_SETTING not in type(fastmcp.settings).model_fields:
+        pytest.skip("this FastMCP predates enable_subscriptions_listen and serves no listen")
+    monkeypatch.setattr(fastmcp.settings, server._LISTEN_SETTING, True)
+    second_entered = threading.Event()
+    seen_inside: list[bool] = []
+
+    def second() -> None:
+        with server._listen_streams_off():
+            seen_inside.append(getattr(fastmcp.settings, server._LISTEN_SETTING))
+            second_entered.set()
+
+    with server._listen_streams_off():
+        worker = threading.Thread(target=second)
+        worker.start()
+        # Positive control on the wait: the timeout is what an interleaving guard would hit.
+        assert not second_entered.wait(timeout=0.2), "a second guard entered mid-build"
+    worker.join(timeout=5)
+    assert seen_inside == [False]
+    assert getattr(fastmcp.settings, server._LISTEN_SETTING) is True
 
 
 def test_the_listen_guard_does_nothing_on_a_fastmcp_without_the_setting(monkeypatch):

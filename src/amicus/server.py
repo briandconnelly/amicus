@@ -6,6 +6,7 @@ import contextlib
 import os
 import signal
 import sys
+import threading
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
@@ -169,6 +170,7 @@ def state_of(app: FastMCP) -> AppState:
 
 
 _LISTEN_SETTING = "enable_subscriptions_listen"
+_LISTEN_SETTING_LOCK = threading.Lock()
 
 
 @contextlib.contextmanager
@@ -181,20 +183,22 @@ def _listen_streams_off() -> Generator[None]:
     setting once, in `LowLevelServer.__init__` (`fastmcp/server/low_level.py`, 4.2.5), so it
     is turned off for that moment and restored; if FastMCP ever reads it later, the restore
     undoes this, and `test_subscriptions_listen_is_method_not_found_on_the_wire` fails. The
-    setting is process-global, so a FastMCP server another thread builds during this window
-    also gets listen off; amicus builds one server per process, so that cannot happen here.
+    setting is process-global: a lock serializes amicus's own save, build and restore, so two
+    threads calling `create_app` cannot interleave them, but a FastMCP server some other code
+    builds on another thread during this window also gets listen off.
     A FastMCP older than 4.2.5 has no such setting and serves no listen stream, so there is
     nothing to do.
     """
     if _LISTEN_SETTING not in type(fastmcp.settings).model_fields:
         yield
         return
-    previous = getattr(fastmcp.settings, _LISTEN_SETTING)
-    setattr(fastmcp.settings, _LISTEN_SETTING, False)
-    try:
-        yield
-    finally:
-        setattr(fastmcp.settings, _LISTEN_SETTING, previous)
+    with _LISTEN_SETTING_LOCK:
+        previous = getattr(fastmcp.settings, _LISTEN_SETTING)
+        setattr(fastmcp.settings, _LISTEN_SETTING, False)
+        try:
+            yield
+        finally:
+            setattr(fastmcp.settings, _LISTEN_SETTING, previous)
 
 
 def _filter_capabilities(original: Callable[..., Any]) -> Callable[..., Any]:
