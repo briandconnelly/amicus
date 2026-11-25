@@ -179,6 +179,7 @@ forbidden_modules = [
     "amicus.result_format_snapshot",
     "amicus.schemas",
     "amicus.server",
+    "amicus.skill",
     "amicus.surface",
     "amicus.tools",
     "amicus.wire_shape_snapshot",
