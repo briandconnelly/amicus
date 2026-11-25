@@ -74,8 +74,9 @@ jobs:
       - name: The tagged tree and the tag must satisfy the release predicate
         # See scripts/check_release_state.py for what a pass does and does not prove. In
         # short: the tree's release-state coherence is proven; the live-gate record carried in
-        # the tag message is a maintainer assertion, machine-checked for shape and for naming
-        # this commit, never proof the four suites ran.
+        # the tag message is a maintainer assertion, machine-checked for shape, for naming
+        # this commit and for agreeing with the tagged tree's contracts and changelog, never
+        # proof the live suites ran.
         run: |
           set -euo pipefail
           uv run --no-project --python 3.13 python scripts/check_release_state.py \
