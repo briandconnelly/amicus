@@ -449,6 +449,7 @@ def test_print_updates_json_gives_each_install_as_argv_and_its_env(capsys, monke
             "argv": ["npm", "install", "-g", "@openai/codex@0.171.0"],
             "env": {},
             "held_below": None,
+            "deprecated": False,
         },
         {
             "backend": "claude",
@@ -456,6 +457,7 @@ def test_print_updates_json_gives_each_install_as_argv_and_its_env(capsys, monke
             "argv": ["claude", "install", "2.1.330"],
             "env": {"DISABLE_AUTOUPDATER": "1"},
             "held_below": None,
+            "deprecated": False,
         },
         {
             "backend": "pi",
@@ -463,6 +465,7 @@ def test_print_updates_json_gives_each_install_as_argv_and_its_env(capsys, monke
             "argv": ["npm", "install", "-g", "@earendil-works/pi-coding-agent@1.6.0"],
             "env": {},
             "held_below": None,
+            "deprecated": False,
         },
     ]
 

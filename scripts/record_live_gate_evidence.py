@@ -17,7 +17,13 @@ hook, CI, or anything else automatic. Only a maintainer choosing to spend the li
 quota runs it, and only after deciding to in the current session.
 
 Usage:
-    AMICUS_REQUIRE_LIVE=1 uv run python scripts/record_live_gate_evidence.py --version X.Y.Z
+    AMICUS_REQUIRE_LIVE=1 uv run python scripts/record_live_gate_evidence.py --version X.Y.Z \
+        [--fix [--override-fix-changelog]]
+
+    `--fix` records a bug or security fix release (docs/RELEASING.md, "Bug-fix and security
+    releases"), and `--override-fix-changelog`, only with `--fix`, records that its changelog
+    section carries more than fixes; `release.py preflight` prints the command with both as
+    they were given to it.
 
     `--version` is required and names the release being made, as X.Y.Z. `-h`/`--help`, or a
     prefix of it such as `--he`, prints this text and exits 0, even beside other arguments;
@@ -49,6 +55,18 @@ Behavior (all-or-nothing):
       intended -- the freshness check in `validate` rejects it on the commit mismatch), and
       exits nonzero.
 
+Which CLI versions (issue #582):
+    Before any gate runs, the script asks `scripts/check_backend_compat.py print-updates
+    --json` (with `--fix` when given) which version of each backend CLI the evidence is
+    for, and reads each installed CLI's `--version`. It refuses, spending nothing, when that
+    plan cannot be read or a lookup in it failed, or when an installed CLI is not the version
+    planned: only a deprecated backend may be behind it, on a stable release. Each gate runs
+    with the environment its install was planned with, so Claude Code's autoupdater stays held
+    (#323), and a CLI whose version changed during the run fails the record. The record's
+    `release` block names the mode, whether the changelog override was used, when the plan was
+    read, and for each backend the `latest` npm named and the version `selected`; the publish
+    workflow's `verify` job checks it against the tagged tree (`check_release_state.py`).
+
 Record shape:
     The top-level record carries a `batch_id` (a fresh uuid4 hex minted once per run), and
     `main` stamps that same `batch_id` into every backend entry under `backends`. `validate`
@@ -60,7 +78,9 @@ Record shape:
     actually runs (`_TEST_FILES[backend]`); a record whose entries were hand-copied from a
     different backend's run is rejected on this check.
 
-Pure stdlib (no deps): this script must run in any environment without extra setup.
+Pure stdlib (no deps): this script must run in any environment without extra setup. The plan
+comes from `check_backend_compat.py`, which imports amicus and reads npm, so it runs as a
+subprocess under `uv run`, as the gates do.
 """
 
 from __future__ import annotations
@@ -96,7 +116,28 @@ _BINARY_ENV_VARS = {
     "pi": "AMICUS_PI_BIN",
 }
 
-_REQUIRED_TOP_LEVEL_FIELDS = ("batch_id", "recorded_at", "commit", "tree_clean", "backends")
+_REQUIRED_TOP_LEVEL_FIELDS = (
+    "batch_id",
+    "recorded_at",
+    "commit",
+    "tree_clean",
+    "backends",
+    "release",
+)
+_RELEASE_MODES = ("ordinary", "fix")
+_UPDATES_COMMAND = (
+    "uv",
+    "run",
+    "python",
+    "scripts/check_backend_compat.py",
+    "print-updates",
+    "--json",
+)
+# The first X.Y.Z in a `--version` line, not inside a longer number, and any suffix after it:
+# "codex-cli 0.172.0", "2.1.331 (Claude Code)" and pi's bare "1.6.0" all read as their release.
+_CLI_RELEASE = re.compile(
+    r"(?<![\d.])(\d+\.\d+\.\d+)((?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)(?![\d.])"
+)
 _REQUIRED_BACKEND_FIELDS = ("test_file", "exit_status", "cli_version", "batch_id")
 
 # The outcome enums a JUnit `<testcase>` can carry as a child element. Anything else is a pass.
@@ -197,6 +238,96 @@ def _bound_version(raw: str) -> str | None:
     return printable[:_VERSION_MAX_CHARS].strip() or None
 
 
+def cli_release(cli_version: object) -> tuple[str, str] | None:
+    """(X.Y.Z, suffix) from a recorded `--version` line, or None when it names no release.
+    A non-empty suffix is a prerelease or a build, never the stable release rule 20 needs."""
+    if not isinstance(cli_version, str):
+        return None
+    found = _CLI_RELEASE.search(cli_version)
+    return (found[1], found[2]) if found else None
+
+
+def _version_key(version: str) -> tuple[int, ...]:
+    return tuple(int(part) for part in version.split("."))
+
+
+def _plan_updates(fix: bool) -> tuple[dict[str, dict], list[str]]:
+    """`print-updates --json` from this checkout, as {backend: update}, and any problem with it.
+    Spends nothing: it reads npm's metadata and runs no backend."""
+    cmd = [*_UPDATES_COMMAND, *(["--fix"] if fix else [])]
+    try:
+        proc = subprocess.run(cmd, cwd=REPO_ROOT, capture_output=True, text=True, check=False)
+        payload = json.loads(proc.stdout)
+    except (OSError, ValueError) as exc:
+        return {}, [f"`{' '.join(cmd)}` did not give a plan: {exc}"]
+    return parse_plan(payload)
+
+
+def parse_plan(payload: object) -> tuple[dict[str, dict], list[str]]:
+    """The update plan `print-updates --json` printed, checked for shape: one update per
+    backend, each an X.Y.Z with string environment values, and no failed lookup."""
+    if not isinstance(payload, dict):
+        return {}, ["the update plan is not a JSON object"]
+    failed = payload.get("failed")
+    if not isinstance(failed, list) or not all(isinstance(f, str) for f in failed):
+        return {}, ["the update plan's `failed` is not a list of strings"]
+    if failed:
+        return {}, [f"the update plan could not be made: {problem}" for problem in failed]
+    updates = payload.get("updates")
+    plan: dict[str, dict] = {}
+    for update in updates if isinstance(updates, list) else []:
+        if not isinstance(update, dict) or update.get("backend") not in BACKENDS:
+            return {}, [f"the update plan has an unexpected update {update!r}"]
+        env = update.get("env", {})
+        argv = update.get("argv")
+        if (
+            not isinstance(argv, list)
+            or not all(isinstance(part, str) for part in argv)
+            or update["backend"] in plan
+            or not isinstance(update.get("version"), str)
+            or not _RELEASE_VERSION.fullmatch(update["version"])
+            or not isinstance(env, dict)
+            or not all(isinstance(k, str) and isinstance(v, str) for k, v in env.items())
+            or not isinstance(update.get("held_below"), str | None)
+            or not isinstance(update.get("deprecated", False), bool)
+        ):
+            return {}, [f"the update plan has a malformed update {update!r}"]
+        plan[update["backend"]] = update
+    if set(plan) != set(BACKENDS):
+        return {}, [f"the update plan names {sorted(plan)}, not every backend {list(BACKENDS)}"]
+    return plan, []
+
+
+def select_versions(
+    plan: dict[str, dict], installed: dict[str, str | None]
+) -> tuple[dict[str, dict[str, str]], list[str]]:
+    """For each backend, the `latest` npm named and the installed version the evidence will be
+    on, or why the installed CLI is not the one planned. A deprecated backend may stay behind
+    its planned version on a stable release (AGENTS.md rule 20); nothing else may differ."""
+    selected: dict[str, dict[str, str]] = {}
+    problems: list[str] = []
+    for backend in BACKENDS:
+        update = plan[backend]
+        planned = update["version"]
+        found = cli_release(installed.get(backend))
+        latest = update.get("held_below") or planned
+        if found == (planned, ""):
+            selected[backend] = {"latest": latest, "selected": planned}
+        elif (
+            update.get("deprecated")
+            and found is not None
+            and not found[1]
+            and _version_key(found[0]) < _version_key(planned)
+        ):
+            selected[backend] = {"latest": latest, "selected": found[0]}
+        else:
+            problems.append(
+                f"{backend}: installed {installed.get(backend)!r} is not {planned}, the version "
+                f"planned; install it with `{' '.join(update.get('argv') or [])}` first"
+            )
+    return selected, problems
+
+
 def _summarize_junit(xml_path: Path) -> dict[str, object] | None:
     """Reduce a JUnit report to node ids and counts, reading tag names and integers only.
 
@@ -230,10 +361,14 @@ def _summarize_junit(xml_path: Path) -> dict[str, object] | None:
     return {"total": total, "counts": counts, "not_passed": not_passed}
 
 
-def _run_backend_gate(backend: str, batch_id: str) -> dict[str, object]:
+def _run_backend_gate(
+    backend: str, batch_id: str, extra_env: dict[str, str] | None = None
+) -> dict[str, object]:
+    """`extra_env` is the environment the backend's install was planned with, such as Claude
+    Code's DISABLE_AUTOUPDATER=1, so nothing moves the CLI while its gate runs (#323)."""
     test_file = _TEST_FILES[backend]
     print(f"[{backend}] running {test_file} (AMICUS_REQUIRE_LIVE=1, -m integration) ...")
-    env = dict(os.environ)
+    env = {**os.environ, **(extra_env or {})}
     env["AMICUS_REQUIRE_LIVE"] = "1"
     with tempfile.TemporaryDirectory() as tmp:
         # The report is read, reduced and discarded with the temp dir; only the reduction is
@@ -301,10 +436,24 @@ def _parse_args(argv: list[str]) -> argparse.Namespace | int:
         metavar="X.Y.Z",
         help="the version being released; the checkout must declare it and must not tag it yet",
     )
+    parser.add_argument(
+        "--fix",
+        action="store_true",
+        help="a bug or security fix release: plan the CLIs with `print-updates --fix`",
+    )
+    parser.add_argument(
+        "--override-fix-changelog",
+        action="store_true",
+        help="with --fix: record that the changelog section carries more than fixes",
+    )
     try:
-        return parser.parse_args(argv)
+        args = parser.parse_args(argv)
     except SystemExit as exc:
         return exc.code if isinstance(exc.code, int) else 2
+    if args.override_fix_changelog and not args.fix:
+        print("--override-fix-changelog applies only with --fix", file=sys.stderr)
+        return 2
+    return args
 
 
 def _wrong_checkout(
@@ -341,13 +490,17 @@ def main(
     repo_root: Path = REPO_ROOT,
     git_head: Callable[[], str] = _git_head,
     git_dirty_paths: Callable[[], list[str]] = _git_dirty_paths,
-    run_gate: Callable[[str, str], dict[str, object]] = _run_backend_gate,
+    run_gate: Callable[[str, str, dict[str, str]], dict[str, object]] = _run_backend_gate,
     declared_version: Callable[[], str] = _declared_version,
     tag_exists: Callable[[str], bool] = _tag_exists,
+    plan_updates: Callable[[bool], tuple[dict[str, dict], list[str]]] = _plan_updates,
+    cli_version: Callable[[str], str | None] = _cli_version,
+    now: Callable[[], datetime] = lambda: datetime.now(UTC),
 ) -> int:
     """Run every live gate and write EVIDENCE_PATH or FAILURE_PATH under `repo_root`.
 
-    `git_head`, `git_dirty_paths`, `run_gate`, `declared_version` and `tag_exists` are
+    `git_head`, `git_dirty_paths`, `run_gate`, `declared_version`, `tag_exists`,
+    `plan_updates`, `cli_version` and `now` are
     injectable seams: tests substitute fakes here (no real git repo, no subprocess, no live
     backend) to exercise the all-or-nothing write logic, the dirty-tree and wrong-checkout
     refusals and the failure-diagnostics path hermetically. The
@@ -371,24 +524,48 @@ def main(
         print("refusing to run:", *wrong, file=sys.stderr)
         return 1
 
+    plan, problems = plan_updates(args.fix)
+    observed_at = now().isoformat()
+    selection: dict[str, dict[str, str]] = {}
+    if not problems:
+        installed = {backend: cli_version(backend) for backend in BACKENDS}
+        selection, problems = select_versions(plan, installed)
+    if problems:
+        print("refusing to run: the backend CLIs are not the ones planned:", file=sys.stderr)
+        for problem in problems:
+            print(f"  {problem}", file=sys.stderr)
+        return 1
+
     commit = git_head()
     batch_id = uuid.uuid4().hex
     backends: dict[str, dict[str, object]] = {}
     for backend in BACKENDS:
-        backends[backend] = run_gate(backend, batch_id)
+        backends[backend] = run_gate(backend, batch_id, dict(plan[backend].get("env") or {}))
 
     all_passed = all(entry["exit_status"] == 0 for entry in backends.values())
+    # A CLI that moved while its gate ran is not the version the plan named.
+    moved = [
+        name
+        for name, entry in backends.items()
+        if cli_release(entry.get("cli_version")) != (selection[name]["selected"], "")
+    ]
     tree_clean_after = not git_dirty_paths()
 
     record = {
         "batch_id": batch_id,
-        "recorded_at": datetime.now(UTC).isoformat(),
+        "recorded_at": now().isoformat(),
         "commit": commit,
         "tree_clean": tree_clean_after,
         "backends": backends,
+        "release": {
+            "mode": "fix" if args.fix else "ordinary",
+            "changelog_override": args.override_fix_changelog,
+            "observed_at": observed_at,
+            "backends": selection,
+        },
     }
 
-    if all_passed and tree_clean_after:
+    if all_passed and tree_clean_after and not moved:
         _write_json(repo_root, EVIDENCE_PATH, record)
         print(f"wrote {EVIDENCE_PATH}: every live gate passed on {commit}.")
         return 0
@@ -399,6 +576,8 @@ def main(
         print(f"one or more live gates failed: {', '.join(failed)}.", file=sys.stderr)
     if not tree_clean_after:
         print("the working tree became dirty during the run.", file=sys.stderr)
+    if moved:
+        print(f"a CLI's version changed during the run: {', '.join(moved)}.", file=sys.stderr)
     print(
         f"wrote {FAILURE_PATH} for diagnosis; {EVIDENCE_PATH} was left untouched.",
         file=sys.stderr,
@@ -471,6 +650,57 @@ def _check_backends(record: dict) -> list[str]:
     return problems
 
 
+def _check_release(record: dict) -> list[str]:
+    """The `release` block: which mode, and the version of each CLI the evidence is on. Only
+    its shape and its agreement with the record are checked here; whether a hold was allowed
+    depends on the tagged tree's contracts, which `check_release_state.py` reads."""
+    release = record.get("release")
+    if not isinstance(release, dict):
+        return [] if "release" not in record else ["record 'release' is not an object"]
+    problems: list[str] = []
+    mode = release.get("mode")
+    if mode not in _RELEASE_MODES:
+        problems.append(
+            f"record 'release.mode' must be one of {list(_RELEASE_MODES)}, got {mode!r}"
+        )
+    override = release.get("changelog_override")
+    if not isinstance(override, bool):
+        problems.append(f"record 'release.changelog_override' must be a boolean, got {override!r}")
+    elif override and mode != "fix":
+        problems.append("record 'release.changelog_override' is true outside a fix release")
+    observed = release.get("observed_at")
+    try:
+        datetime.fromisoformat(observed) if isinstance(observed, str) else None
+    except ValueError:
+        observed = None
+    if not isinstance(observed, str):
+        problems.append("record 'release.observed_at' is not an ISO 8601 timestamp")
+    chosen = release.get("backends")
+    if not isinstance(chosen, dict) or set(chosen) != set(BACKENDS):
+        return [*problems, f"record 'release.backends' must name exactly {list(BACKENDS)}"]
+    entries = record.get("backends") if isinstance(record.get("backends"), dict) else {}
+    for name in BACKENDS:
+        entry = chosen[name]
+        latest = entry.get("latest") if isinstance(entry, dict) else None
+        selected = entry.get("selected") if isinstance(entry, dict) else None
+        if not all(
+            isinstance(v, str) and _RELEASE_VERSION.fullmatch(v) for v in (latest, selected)
+        ):
+            problems.append(f"record 'release.backends.{name}' needs X.Y.Z 'latest' and 'selected'")
+            continue
+        if _version_key(selected) > _version_key(latest):  # type: ignore[arg-type]
+            problems.append(f"backend '{name}' selected {selected} is ahead of latest {latest}")
+        if not isinstance(entries.get(name), dict):
+            continue  # `_check_backends` already reports the malformed entry
+        recorded = entries[name].get("cli_version")
+        if cli_release(recorded) != (selected, ""):
+            problems.append(
+                f"backend '{name}' cli_version {recorded!r} is not the stable release "
+                f"{selected} the record says the evidence is on"
+            )
+    return problems
+
+
 def _parse_recorded_at(record: dict) -> tuple[datetime | None, list[str]]:
     """Whether `recorded_at` is a usable timestamp at all, separate from how old it is.
 
@@ -530,6 +760,7 @@ def validate_record(record: dict, *, head: str, tree_clean: bool) -> list[str]:
     problems += _check_tree_clean(record, tree_clean)
     problems += _check_batch_id(record)
     problems += _check_backends(record)
+    problems += _check_release(record)
     problems += _parse_recorded_at(record)[1]
     return problems
 

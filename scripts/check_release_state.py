@@ -39,7 +39,12 @@ question, and the difference matters more than the code:
    naming *this* commit exists and asserts three passing suites. It does NOT prove the runs
    happened: the maintainer writes that record, and `scripts/record_live_gate_evidence.py`
    says so in its own docstring. This is a machine-checked maintainer assertion, not an
-   attestation, and every document that mentions it must say so.
+   attestation, and every document that mentions it must say so. Its `release` block is
+   checked against the tagged tree as well (`check_release_selection`, issue #582): the CLI
+   versions it names must be ones the tagged contracts support, a backend below npm's
+   `latest` must be deprecated or held by a fix release whose `latest` the tagged contract
+   does not support, and a fix release without the changelog override must have a changelog
+   section of fixes only. The `latest` it records is the maintainer's observation of npm.
 
 What this script cannot check at all, and what no CI job could: rule 19's procedural clauses.
 Two PRs, an ordinary merge commit, the maintainer merging rather than an agent, the tag pushed
@@ -457,6 +462,61 @@ def check_changelog(version: str, *, repo_root: Path = REPO_ROOT) -> list[str]:
     return problems
 
 
+FIX_CATEGORIES = ("Fixed", "Security")
+_CATEGORY_RE = re.compile(r"^### +(?P<name>.+?)[ \t]*$")
+# What ends a release's section: the next release's heading, or the link definitions below.
+_SECTION_END_RE = re.compile(r"^(?:## \[|\[[^\]]+\]: )", re.MULTILINE)
+
+
+def fix_changelog_problems(version: str, *, repo_root: Path = REPO_ROOT) -> list[str]:
+    """Why `version`'s CHANGELOG.md section is not a fix release's, or [] when it is: at least
+    one entry, and every entry under `### Fixed` or `### Security` (docs/RELEASING.md,
+    "Bug-fix and security releases"). The lead paragraph before the first category is allowed.
+    A heading says nothing about whether an entry under it is a fix; that stays the
+    maintainer's reading."""
+    try:
+        text = (repo_root / "CHANGELOG.md").read_text(encoding="utf-8")
+    except OSError as exc:
+        return [
+            f"CHANGELOG.md could not be read, so whether {version} ships only fixes is "
+            f"unknown: {exc}"
+        ]
+    heading = re.search(
+        rf"^## \[{re.escape(version)}\] - \d{{4}}-\d{{2}}-\d{{2}}[ \t]*$", text, re.MULTILINE
+    )
+    if heading is None:
+        return [
+            f"CHANGELOG.md has no dated section for {version}, so whether it ships only "
+            "fixes is unknown"
+        ]
+    after = _SECTION_END_RE.search(text, heading.end() + 1)
+    body = text[heading.end() : after.start() if after else len(text)]
+    problems: list[str] = []
+    category: str | None = None
+    entries = 0
+    for line in body.splitlines():
+        found = _CATEGORY_RE.match(line)
+        if found:
+            category = found["name"]
+            if category not in FIX_CATEGORIES:
+                problems.append(
+                    f"CHANGELOG.md's {version} section has `### {category}`; a fix release has "
+                    "only `### Fixed` and `### Security`"
+                )
+        elif line.startswith("- "):
+            if category is None:
+                problems.append(
+                    f"CHANGELOG.md's {version} section has an entry under no `###` category"
+                )
+            elif category in FIX_CATEGORIES:
+                entries += 1
+    if not entries:
+        problems.append(
+            f"CHANGELOG.md's {version} section has no entry under `### Fixed` or `### Security`"
+        )
+    return problems
+
+
 def _link_label_key(label: str) -> str:
     """A reference label as CommonMark matches it: case-folded, whitespace collapsed.
 
@@ -631,6 +691,149 @@ def check_deprecations(version: str, *, repo_root: Path = REPO_ROOT) -> list[str
                 f"{removal}; remove it in an ordinary PR before releasing"
             )
     return problems
+
+
+# Where each backend's shipped contract names the CLI versions it supports, and how: codex and
+# pi by (major, minor), claude by major (`builtin_supported` in check_backend_compat.py).
+CLI_CONTRACTS: dict[str, tuple[str, str]] = {
+    "codex": ("src/amicus/backends/codex/contract.py", "SUPPORTED_VERSIONS"),
+    "claude": ("src/amicus/backends/claude/contract.py", "SUPPORTED_MAJORS"),
+    "pi": ("src/amicus/backends/pi/contract.py", "SUPPORTED_VERSIONS"),
+}
+
+
+def supported_cli_sets(
+    repo_root: Path = REPO_ROOT,
+) -> tuple[dict[str, frozenset], list[str]]:
+    """Each backend's supported CLI versions, read statically from the tree's contracts, as
+    `deprecation_windows` reads its tables: the `verify` job cannot import amicus. Each must
+    be a literal `frozenset({...})` of (major, minor) pairs, or of majors for claude; anything
+    else is a problem rather than an empty set. A test pins this read to the runtime sets."""
+    sets: dict[str, frozenset] = {}
+    problems: list[str] = []
+    for backend, (rel_path, name) in CLI_CONTRACTS.items():
+        path = repo_root / rel_path
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        except (OSError, SyntaxError) as exc:
+            problems.append(f"could not read {rel_path}: {exc}")
+            continue
+        node = next(
+            (
+                n.value
+                for n in tree.body
+                if isinstance(n, (ast.Assign, ast.AnnAssign)) and name in _assigned_names(n)
+            ),
+            None,
+        )
+        try:
+            if not (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "frozenset"
+                and len(node.args) == 1
+                and not node.keywords
+            ):
+                raise ValueError("not a literal frozenset")
+            members = ast.literal_eval(node.args[0])
+            want = 1 if name == "SUPPORTED_MAJORS" else 2
+            if not isinstance(members, set) or not members:
+                raise ValueError("not a non-empty set")
+            for member in members:
+                parts = (member,) if want == 1 else member
+                if not (
+                    isinstance(parts, tuple)
+                    and len(parts) == want
+                    and all(isinstance(x, int) and not isinstance(x, bool) for x in parts)
+                ):
+                    raise ValueError(f"unexpected member {member!r}")
+        except ValueError as exc:
+            problems.append(f"{rel_path}: `{name}` cannot be read statically ({exc})")
+            continue
+        sets[backend] = frozenset(members)
+    return sets, problems
+
+
+def cli_supported(sets: dict[str, frozenset], backend: str, version: str) -> bool:
+    """Whether the contract read by `supported_cli_sets` supports this X.Y.Z of the CLI."""
+    parts = _parts(version)
+    supported = sets.get(backend, frozenset())
+    return (parts[0] in supported) if backend == "claude" else (parts[:2] in supported)
+
+
+def check_release_selection(
+    record: dict, version: str, *, repo_root: Path = REPO_ROOT
+) -> list[str]:
+    """The evidence record's `release` block against the tagged tree (issue #582).
+
+    Every CLI version the evidence is on must be one the tagged contract supports. A backend
+    may be below the `latest` npm named only when it is deprecated in the tagged tree, or when
+    the release is a fix release and the tagged contract does not support that `latest`
+    (docs/RELEASING.md, "Bug-fix and security releases"). A fix release without the changelog
+    override must have a changelog section of fixes only. `latest` is the maintainer's
+    observation of npm, recorded with the run; this cannot re-read it, since npm moves on.
+    Shape problems are `validate_record`'s to report, so a malformed block is skipped here."""
+    release = record.get("release")
+    chosen = release.get("backends") if isinstance(release, dict) else None
+    if not isinstance(release, dict) or not isinstance(chosen, dict):
+        return []
+    sets, problems = supported_cli_sets(repo_root)
+    deprecated, deprecation_problems = deprecation_windows(
+        repo_root, rel_path=BACKEND_DEPRECATIONS_PATH, table_name=_BACKEND_DEPRECATIONS_TABLE
+    )
+    problems += deprecation_problems
+    fix = release.get("mode") == "fix"
+    for backend, entry in chosen.items():
+        selected = entry.get("selected") if isinstance(entry, dict) else None
+        latest = entry.get("latest") if isinstance(entry, dict) else None
+        if backend not in sets or not all(
+            isinstance(v, str) and VERSION_RE.fullmatch(v) for v in (selected, latest)
+        ):
+            continue
+        assert isinstance(selected, str)
+        assert isinstance(latest, str)
+        if not cli_supported(sets, backend, selected):
+            problems.append(
+                f"{backend} {selected}, which the evidence is on, is outside the tagged tree's "
+                "supported versions"
+            )
+        if selected == latest or backend in deprecated:
+            continue
+        if not fix:
+            problems.append(
+                f"{backend}'s evidence is on {selected}, below npm's latest {latest}, in a "
+                "release that is not a fix release"
+            )
+        elif cli_supported(sets, backend, latest):
+            problems.append(
+                f"{backend} is held at {selected} below npm's latest {latest}, which the tagged "
+                "tree supports; a fix release holds only a backend whose latest it does not"
+            )
+    if fix and release.get("changelog_override") is not True:
+        problems += fix_changelog_problems(version, repo_root=repo_root)
+    return problems
+
+
+def describe_release(record: dict | None) -> list[str]:
+    """The `release` block as lines for the publish summary the pypi reviewer reads."""
+    release = record.get("release") if isinstance(record, dict) else None
+    if not isinstance(release, dict) or not isinstance(release.get("backends"), dict):
+        return []
+    fix = release.get("mode") == "fix"
+    lines = [f"- mode: {'fix release' if fix else 'ordinary release'}"]
+    if release.get("changelog_override") is True:
+        lines.append(
+            "- `--override-fix-changelog`: the changelog section carries more than fixes; "
+            "the release PR says why"
+        )
+    for backend, entry in release["backends"].items():
+        if not isinstance(entry, dict):
+            continue
+        selected, latest = entry.get("selected"), entry.get("latest")
+        held = f", held below npm's latest {latest}" if selected != latest else ""
+        lines.append(f"- {backend}: evidence on {selected}{held}")
+    lines.append(f"- npm observed at {release.get('observed_at')}")
+    return lines
 
 
 LEGACY_ENV_SPEC_PATH = "src/amicus/config/envspec.py"
@@ -860,6 +1063,8 @@ def check_tag(
     object_type: str,
     peeled_commit: str,
     message: str,
+    version: str | None = None,
+    repo_root: Path = REPO_ROOT,
 ) -> list[str]:
     """The tag must be annotated, name `commit`, and carry a usable rule-20 evidence record.
 
@@ -884,6 +1089,8 @@ def check_tag(
 
     evidence = _load_evidence_module()
     problems += evidence.validate_record(record, head=commit, tree_clean=True)
+    if version is not None:
+        problems += check_release_selection(record, version, repo_root=repo_root)
     return problems
 
 
@@ -893,7 +1100,14 @@ def _git(*args: str, repo_root: Path = REPO_ROOT) -> str:
     ).stdout.strip()
 
 
-def _write_summary(path: Path, *, tag: str | None, version: str, problems: list[str]) -> None:
+def _write_summary(
+    path: Path,
+    *,
+    tag: str | None,
+    version: str,
+    problems: list[str],
+    release: list[str] | None = None,
+) -> None:
     lines = ["## Release predicate", ""]
     lines.append(f"- version: `{version}`")
     if tag:
@@ -920,8 +1134,12 @@ def _write_summary(path: Path, *, tag: str | None, version: str, problems: list[
             lines.append(
                 "**Live-gate record: PRESENT and consistent.** The annotated tag carries a "
                 "well-formed record naming this exact commit and asserting that all three live "
-                "gates passed."
+                "gates passed. The CLI versions it names are ones the tagged contract "
+                "supports, and any backend below npm's latest is deprecated or held by a fix "
+                "release whose latest the tagged contract does not support:"
             )
+            lines.append("")
+            lines += release or ["- (no release block)"]
             lines.append("")
             lines.append(
                 "> This record is the maintainer's assertion, machine-checked for shape and "
@@ -955,6 +1173,7 @@ def main(argv: list[str] | None = None, *, repo_root: Path = REPO_ROOT) -> int:
 
     problems: list[str] = []
     tag_is_well_formed = False
+    release_lines: list[str] = []
 
     if args.tag:
         parsed, tag_problems = version_for_tag(args.tag)
@@ -984,10 +1203,19 @@ def main(argv: list[str] | None = None, *, repo_root: Path = REPO_ROOT) -> int:
                 object_type=object_type,
                 peeled_commit=peeled,
                 message=message,
+                version=version,
+                repo_root=repo_root,
             )
+            release_lines = describe_release(evidence_from_tag_message(message)[0])
 
     if args.summary:
-        _write_summary(Path(args.summary), tag=args.tag, version=version, problems=problems)
+        _write_summary(
+            Path(args.summary),
+            tag=args.tag,
+            version=version,
+            problems=problems,
+            release=release_lines,
+        )
 
     if problems:
         print("the release predicate does NOT hold:", file=sys.stderr)
