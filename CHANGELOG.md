@@ -22,6 +22,18 @@ per-change, as its own lead says.
 
 ### Changed
 
+- `amicus_models`'s bundled codex fallback, used only when codex's own model cache cannot be
+  read, now lists `gpt-6.2-sol` and `gpt-6.2-astra` first and follows the priority order codex
+  serves today, which also moves `gpt-6.1-terra`, `gpt-reserve` and `gpt-6.1-sol` ahead of
+  `gpt-6-astra`. The served catalog lists them for codex 0.169.0, 0.171.0 and 0.172.0 alike, so
+  they are a server-side addition. On 0.171.0 and 0.172.0 their model-facing tool catalog is
+  identical, and the `sleep_tool` disable removes `clock.sleep` from both.
+
+- `docs/pi-help/1.6.1/` records the `--help` of pi 1.6.1, which the 1.6 contract already
+  supported: it is identical to the 1.6.0 capture, and nothing the 1.6.1 notes change is a flag,
+  setting or output field amicus uses, including the `showCacheMissNotices` setting it replaces.
+  No paid call was made.
+
 - codex-cli 0.172 is a supported version, so `amicus_backends` no longer warns on it. 0.172.0
   was checked against 0.171.0: `--help`, `exec --help`, `exec review --help` and `login --help`
   are identical, and so are every stderr grammar amicus parses, the pins and disables under
