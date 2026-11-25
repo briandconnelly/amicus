@@ -45,8 +45,9 @@ per-change, as its own lead says.
   a patch release. Every other release still supports each backend's `latest` first.
 - The release steps no longer run the AGENTS.md rule-2 gate again by hand. `scripts/release.py
   ci --sha SHA` reads the release commit's check runs from GitHub and passes only when every
-  gate job CI ran on it succeeded, and the commands `preflight` prints start with it, so a gate
-  still running or failing stops them before anything is tagged.
+  gate job CI ran on it succeeded and `main` is in its history, so the merge CI tested is the
+  release commit's own tree. The commands `preflight` prints start with it, so a gate still
+  running or failing stops them before anything is tagged.
 
 ### Fixed
 

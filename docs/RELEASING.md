@@ -178,7 +178,7 @@ uv run python scripts/release.py preflight --pr <N> --version X.Y.Z --fix
 uv run python scripts/release.py session --pr <N> --version X.Y.Z --fix
 ```
 
-`print-updates --fix` installs the version it holds a backend at, and says which `latest` it held it below.
+`print-updates --fix` prints the install command for the version it holds a backend at, and says which `latest` it held it below; run that command before the check, as with any other install `print-updates` prints.
 The check prints a `held:` line for that backend instead of a `FAIL`.
 The brief drafts the carrier re-check for the version held, which is the one the evidence runs on, and says in the paragraph for the release PR which backend is held and below what.
 `preflight --fix` and `session --fix` refuse a version that is not a patch release.
@@ -295,6 +295,8 @@ The tag therefore deliberately points at a commit that is in `main`'s history bu
 
    CI runs exactly that gate on every supported Python version and is authoritative for it, so it is not run again by hand here, where it would cover one Python.
    `ci` reads the release commit's check runs from GitHub, read-only, and passes only when every gate job finished with success.
+   It also fetches `main` and requires it to be in the release commit's history, because CI on a pull request tests the head merged with `main`, and only then is that merge the release commit's own tree.
+   If `main` has moved past the release branch, bring the branch up to date, which makes a new release commit and so needs new evidence; `post-merge` would refuse the merge anyway.
    A gate job that is still running, failed, was cancelled or never ran fails it; wait for CI, or fix the failure, and run it again.
    The block the preflight prints runs it first, so a gate that has not passed stops that block before anything is tagged.
    Confirm the new record names the release commit before going on:

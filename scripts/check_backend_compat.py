@@ -54,8 +54,9 @@ Subcommands (a first argument naming one selects it; anything else is the check 
 `print-updates` prints, and never runs, the commands that install npm's `latest` of every
 backend CLI, Claude Code's with its autoupdater held; a failed lookup exits 1. `--json` prints
 each as an argv and the variables its environment adds, which `release.py session` runs.
-`--fix` installs, for a backend whose `latest` the shipped contract does not support, the newest
-stable release npm lists that it does, and exits 1 when there is none or the list is unreadable.
+`--fix` prints, for a backend whose `latest` the shipped contract does not support, the install
+of the newest stable release npm lists that it does, and exits 1 when there is none or the list
+is unreadable.
 
 `release-brief` drafts the backend half of the release PR's description (docs/RELEASING.md
 step 2) and spends nothing. It reads the CLI versions the previous release's evidence record
@@ -1797,8 +1798,8 @@ def print_updates_main(argv: list[str]) -> int:
     parser.add_argument(
         "--fix",
         action="store_true",
-        help="a bug or security fix release: install the newest stable release the shipped "
-        "contract supports for a backend whose latest it does not",
+        help="a bug or security fix release: print the install of the newest stable release the "
+        "shipped contract supports for a backend whose latest it does not",
     )
     args = parser.parse_args(argv)
     plan, failed = update_plan(latest_upstream, fix=args.fix)

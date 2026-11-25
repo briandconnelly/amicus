@@ -52,9 +52,11 @@ installs with `print-updates --json --fix` and passes `--fix` to `preflight`.
 
 `ci --sha SHA` reads, read-only, the check runs GitHub reports for SHA and passes only when
 every job of the AGENTS.md rule-2 gate CI runs (`.github/workflows/test.yml`'s `gate` job, once
-for each Python version in its matrix, called from `ci.yml`) completed with success. It is the
-first command of the block `preflight` prints after the evidence, in place of running the gate
-again by hand: CI already ran it on the release commit, on every supported Python.
+for each Python version in its matrix, called from `ci.yml`) completed with success, and when
+origin's `main`, which it fetches, is in SHA's history: CI on a pull request tests the head
+merged with `main`, and only then is that SHA's own tree. It is the first command of the block
+`preflight` prints after the evidence, in place of running the gate again by hand: CI already
+ran it on the release commit, on every supported Python.
 
 `post-merge --release-sha SHA --version X.Y.Z` runs in the same worktree after the release PR
 merges (RELEASING step 5). It fetches `main` from `origin` first and fails if it cannot, then
@@ -2050,9 +2052,23 @@ _CALLER_RE = re.compile(
     r"^  (?P<job>[A-Za-z0-9_-]+):\n    uses: \./" + re.escape(GATE_WORKFLOW) + r"[ \t]*$",
     re.MULTILINE,
 )
-_GATE_NAME_RE = re.compile(r"^  " + GATE_JOB + r":\n    name: (?P<name>.+?)[ \t]*$", re.MULTILINE)
+# A job's key under `jobs:`; a two-space key with nothing after its colon ends the job above it.
+_JOB_KEY_RE = re.compile(r"^  (?P<job>[A-Za-z0-9_-]+):[ \t]*$", re.MULTILINE)
+_GATE_NAME_RE = re.compile(r"^    name: (?P<name>.+?)[ \t]*$", re.MULTILINE)
 _MATRIX_RE = re.compile(r"^ +python-version: \[(?P<versions>[^\]]*)\][ \t]*$", re.MULTILINE)
+# `include` can add a job the version list does not name, so a matrix with either is refused
+# rather than read short.
+_MATRIX_EDIT_RE = re.compile(r"^ +-? *(?:include|exclude):", re.MULTILINE)
 _MATRIX_SLOT = "${{ matrix.python-version }}"
+
+
+def _job_text(workflow: str, job: str) -> str:
+    """The lines of `job` in a workflow, from its key to the next job's, or "" when absent."""
+    keys = list(_JOB_KEY_RE.finditer(workflow))
+    for here, after in zip(keys, [*keys[1:], None], strict=True):
+        if here["job"] == job:
+            return workflow[here.start() : after.start() if after else len(workflow)]
+    return ""
 
 
 def gate_checks(repo_root: Path) -> list[str]:
@@ -2061,9 +2077,14 @@ def gate_checks(repo_root: Path) -> list[str]:
     names the check run of a called workflow's job. Raises ValueError when the workflows no
     longer have the shape this reads, so a change to them cannot pass unseen."""
     ci = (repo_root / CI_WORKFLOW).read_text(encoding="utf-8")
-    gate = (repo_root / GATE_WORKFLOW).read_text(encoding="utf-8")
+    gate = _job_text((repo_root / GATE_WORKFLOW).read_text(encoding="utf-8"), GATE_JOB)
+    if _MATRIX_EDIT_RE.search(gate):
+        raise ValueError(
+            f"the `{GATE_JOB}` job's matrix in {GATE_WORKFLOW} has an include or exclude, which "
+            "this does not read, so it cannot tell which gate jobs CI runs"
+        )
     callers = _CALLER_RE.findall(ci)
-    names = _GATE_NAME_RE.findall(gate)
+    names = _GATE_NAME_RE.findall(gate)[:1]
     matrices = _MATRIX_RE.findall(gate)
     if len(callers) != 1 or len(names) != 1 or len(matrices) != 1:
         raise ValueError(
@@ -2077,17 +2098,44 @@ def gate_checks(repo_root: Path) -> list[str]:
     return [f"{callers[0]} / {names[0].replace(_MATRIX_SLOT, v)}" for v in versions]
 
 
+def _tested_tree_problems(ctx: Context, sha: str) -> list[str]:
+    """Whether CI's runs on `sha` tested `sha`'s own tree. On a pull request CI checks out the
+    head merged with `main` as `main` stood at the push, not the head alone. When origin's
+    `main`, freshly fetched, is in `sha`'s history, so was every earlier `main`, and merging an
+    ancestor leaves `sha`'s tree as it is; otherwise CI may have passed on code `sha` lacks."""
+    fetch = ctx.git_out("fetch", "--no-tags", "origin", "+refs/heads/main:refs/remotes/origin/main")
+    if fetch.returncode != 0:
+        return [
+            f"`git fetch origin` failed, so whether CI tested {sha}'s own tree is unknown: "
+            f"{_stderr_line(fetch)}"
+        ]
+    tip = _rev(ctx, "refs/remotes/origin/main^{commit}")
+    if tip is None:
+        return ["could not resolve origin/main after fetching it"]
+    contained = _is_ancestor(ctx, tip, sha)
+    if contained is None:
+        return [f"could not tell whether origin/main ({tip}) is in {sha}'s history"]
+    if not contained:
+        return [
+            f"origin/main ({tip}) is not in {sha}'s history, so CI tested the release merged "
+            "with commits it lacks rather than its own tree; bring the release branch up to "
+            "date with main, which makes a new release commit and needs new evidence"
+        ]
+    return []
+
+
 def ci_problems(ctx: Context, sha: str) -> tuple[list[str], list[str]]:
-    """Whether every rule-2 gate job passed on `sha`, from GitHub's check runs. Returns the
-    jobs that passed and the problems; a job that has not run, is still running, or ended any
-    way but success is a problem. The newest run of a job decides, so a rerun that passed
-    replaces a failure."""
+    """Whether every rule-2 gate job passed on `sha`, from GitHub's check runs, on `sha`'s own
+    tree. Returns the jobs that passed and the problems; a job that has not run, is still
+    running, or ended any way but success is a problem. The newest run of a job decides, so a
+    rerun that passed replaces a failure."""
     if not _FULL_SHA_RE.fullmatch(sha):
         return [], [f"{sha!r} is not a full commit SHA"]
     try:
         expected = gate_checks(ctx.repo_root)
     except (OSError, ValueError) as exc:
         return [], [f"could not tell which jobs are the gate: {exc}"]
+    tree_problems = _tested_tree_problems(ctx, sha)
     try:
         pages = cast(
             "list[dict]",
@@ -2100,8 +2148,8 @@ def ci_problems(ctx: Context, sha: str) -> tuple[list[str], list[str]]:
         for run in sorted(runs, key=lambda run: run["id"]):
             newest[run["name"]] = run
     except (ApiError, KeyError, TypeError) as exc:
-        return [], [f"could not read the check runs on {sha}: {exc}"]
-    passed, problems = [], []
+        return [], [*tree_problems, f"could not read the check runs on {sha}: {exc}"]
+    passed, problems = [], list(tree_problems)
     for name in expected:
         run = newest.get(name)
         if run is None:
