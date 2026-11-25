@@ -32,8 +32,9 @@ per-change, as its own lead says.
   known model is identical on both binaries, and both disable controls pass on both. The served
   model catalog lists the same models for both, adding only a `daybreak_availability` field to
   `available_access_programs`, and upstream's `SandboxWorkspaceWrite` config struct is
-  unchanged. The notes move sandbox preparation into a shared macOS and Linux launcher, but the
-  workspace-write network and writable-roots pins were not re-probed with paid runs.
+  unchanged. Because the notes move sandbox preparation into a shared macOS and Linux launcher,
+  the workspace-write network and writable-roots pins were re-probed with paid runs: both still
+  hold under a user config and a profile that open them, against a passing unpinned control.
 
 - Release tooling asks for less by hand. `scripts/release.py preflight` now also prints the
   rest of the release with the PR number and release commit filled in, every pre-push check

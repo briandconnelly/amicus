@@ -24,7 +24,8 @@ model-facing tool catalog of every model in KNOWN_MODEL_SLUGS with both controls
 both binaries, the served catalog, and the spending workspace-write network and writable-roots
 pin probes; 0.172.0 the same zero-spend checks against 0.171.0, including the model-facing tool
 catalog of every model in KNOWN_MODEL_SLUGS with both controls passing on both binaries, the
-served catalog and upstream's SandboxWorkspaceWrite struct, but not the spending pin probes).
+served catalog and upstream's SandboxWorkspaceWrite struct, plus the spending workspace-write
+network and writable-roots pin probes).
 
 Every assumption amicus makes about the `codex` CLI — subcommands, flags, sandbox values,
 config keys it pins, the event/result extraction surface, and the stderr phrasings that
