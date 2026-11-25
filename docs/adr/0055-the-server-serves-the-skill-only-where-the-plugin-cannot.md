@@ -34,8 +34,12 @@ It remains the carrier for every install made through a plugin.
 
 **The server serves the same skill over `io.modelcontextprotocol/skills` only when `AMICUS_SERVE_SKILL=1`.**
 It serves `SKILL.md` and `references/` from the package, and never `tests/`.
-The plugin's `.mcp.json` does not set the variable, so a plugin install never sees the skill twice under two names.
 README's "Any other MCP client" example sets it.
+
+**A plugin's server never serves the skill, whatever its environment holds.**
+Leaving the variable unset in the plugin's `.mcp.json` is not enough: a host can hand the server an inherited environment, and `env_vars_list()` in `src/amicus/packaging.py` passes every declared `AMICUS_*` name through.
+So the plugin's `.mcp.json` launches the server with an argv flag that turns serving off and outranks the variable, and a packaging test asserts that both manifests' server entries carry it.
+The flag's name is settled in the implementing plan.
 
 **The served files are the files the plugin ships.**
 A test asserts that every served file is byte-identical to its copy under `skills/collaborating-with-amicus/`, and that the served set fits the Claude Code limits above.
