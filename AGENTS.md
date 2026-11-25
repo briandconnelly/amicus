@@ -41,7 +41,7 @@ The rules bind; the context after them explains and points elsewhere.
     Only the maintainer merges that PR, and only the maintainer pushes the tag.
     Push the matching tag before any other work follows that merge: until it exists, `main` declares a version that has no release.
 20. Never push a `v*` tag unless the live gates — `tests/test_codex_live.py`, `tests/test_claude_live.py` and `tests/test_pi_live.py`, plus `tests/test_kimi_live.py` while `kimi` is registered in `IN_TREE`, run under rule 5 — have all PASSED on that exact commit, with those passing outcomes recorded.
-    The record is `.release-evidence/live-gates.json`, written by `scripts/record_live_gate_evidence.py`, naming that commit, each suite and its outcome; a terminal transcript or a recollection is not a record.
+    The record is `.release-evidence/live-gates.json`, written by `scripts/record_live_gate_evidence.py`, naming that commit, each suite and its outcome, and, in its `release` block, the release's mode, whether the fix-release changelog override was used, when npm was read, and for each backend the npm `latest` observed and the CLI version the evidence ran on; a terminal transcript or a recollection is not a record.
     A record showing a failed suite does not satisfy this rule; it is a reason not to tag.
     Never record that evidence until `scripts/release.py ci` passes on that commit: every rule-2 gate job CI is expected to run has completed successfully on the release commit's own tree.
     Record it on each backend CLI's npm `latest`, which must be a stable release, with two exceptions: a deprecated backend may stay behind `latest` on a version its contract supports, and a fix release, as `docs/RELEASING.md` ("Bug-fix and security releases") defines it, may hold a backend whose `latest` the shipped contract does not support yet at the newest stable release npm lists below `latest` that the contract supports.
@@ -50,7 +50,7 @@ The rules bind; the context after them explains and points elsewhere.
 22. Never weaken the `verify` job in `.github/workflows/publish.yml`, and never let the `pypi` job stop depending on it.
     Never move a release check into the `pypi` job: GitHub holds every step of an environment job behind that environment's required reviewer, so a check placed there runs only after the approval it exists to inform.
 23. Never describe the rule-20 record, in any document or output, as proof that the live gates ran.
-    It is the maintainer's assertion, machine-checked for shape and for naming the tagged commit; the runs happen on the maintainer's machine and the record is written there.
+    It is the maintainer's assertion, machine-checked for shape, for naming the tagged commit and for agreeing with the tagged tree's contracts and changelog; the runs happen on the maintainer's machine and the record is written there.
 24. `.claude-plugin/marketplace.json`'s plugin entry names a release that is already published, by `ref` and a `sha` equal to that tag's peeled commit, never the one being released, and it may never name a version newer than the one the tree declares.
     A release PR under rule 19 leaves it untouched; advance it to the new tag in its own `chore(release):` PR after that tag is published and its install has been checked, and a release is not complete until that PR merges.
     That PR is not a release: it needs no rule-20 evidence, because it moves a pointer to a tag that already exists.
@@ -111,7 +111,7 @@ The executable procedure — preconditions, the evidence run, the environment ap
 Rules 20, 22 and 23 are shaped by what a CI job can and cannot establish, which is the subject of ADR 0014 and of issue #25 before it.
 The `verify` job runs `scripts/check_release_state.py` on the tagged commit, and the two halves of that script are worth different amounts.
 Its release-state coherence half **proves** what it reports: every version literal rule 19 names, the dated `CHANGELOG.md` section, and `uv.lock` are all facts of the tagged tree.
-Its live-gate half checks only that the record carried on the tag is well formed, names this commit and asserts four passing suites — never that those suites ran, which is why rule 23 forbids saying otherwise.
+Its live-gate half checks only that the record carried on the tag is well formed, names this commit, asserts a passing outcome for every suite rule 20 names, and records CLI versions and a release mode the tagged tree's contracts and changelog allow — never that those suites ran, which is why rule 23 forbids saying otherwise, nor that the `latest` it records was npm's at the time.
 Everything else rule 19 requires is a convention no CI job can prove: two PRs, an ordinary merge commit rather than a squash, the maintainer merging rather than an agent, and the tag pushed promptly after the merge.
 Those are held by the platform controls around the release — rule 21's ruleset and the `pypi` environment's required reviewer — and by whoever runs the procedure, and this repository states that plainly rather than implying the workflow checks it.
 
