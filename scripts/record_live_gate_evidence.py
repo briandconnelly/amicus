@@ -279,8 +279,11 @@ def parse_plan(payload: object) -> tuple[dict[str, dict], list[str]]:
         if not isinstance(update, dict) or update.get("backend") not in BACKENDS:
             return {}, [f"the update plan has an unexpected update {update!r}"]
         env = update.get("env", {})
+        argv = update.get("argv")
         if (
-            update["backend"] in plan
+            not isinstance(argv, list)
+            or not all(isinstance(part, str) for part in argv)
+            or update["backend"] in plan
             or not isinstance(update.get("version"), str)
             or not _RELEASE_VERSION.fullmatch(update["version"])
             or not isinstance(env, dict)
@@ -487,7 +490,7 @@ def main(
     repo_root: Path = REPO_ROOT,
     git_head: Callable[[], str] = _git_head,
     git_dirty_paths: Callable[[], list[str]] = _git_dirty_paths,
-    run_gate: Callable[[str, str], dict[str, object]] = _run_backend_gate,
+    run_gate: Callable[[str, str, dict[str, str]], dict[str, object]] = _run_backend_gate,
     declared_version: Callable[[], str] = _declared_version,
     tag_exists: Callable[[str], bool] = _tag_exists,
     plan_updates: Callable[[bool], tuple[dict[str, dict], list[str]]] = _plan_updates,

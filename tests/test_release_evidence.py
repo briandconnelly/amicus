@@ -824,3 +824,25 @@ def test_a_well_formed_plan_is_read_per_backend():
     plan, problems = evidence.parse_plan({"updates": list(_PLAN.values()), "failed": []})
     assert problems == []
     assert plan == _PLAN
+
+
+def test_the_recorder_plans_the_same_backends_print_updates_plans():
+    """`parse_plan` refuses a plan that does not name exactly BACKENDS, so a backend added to
+    one list and not the other fails here rather than refusing every release."""
+    spec = importlib.util.spec_from_file_location(
+        "check_backend_compat", _SCRIPT.parent / "check_backend_compat.py"
+    )
+    assert spec is not None and spec.loader is not None
+    compat = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(compat)
+    assert tuple(compat.BACKENDS) == evidence.BACKENDS
+    assert set(evidence._TEST_FILES) == set(evidence.BACKENDS)
+
+
+def test_a_plan_whose_argv_is_not_a_list_of_strings_is_refused():
+    bad = {**_PLAN["pi"], "argv": "npm install pi"}
+    plan, problems = evidence.parse_plan(
+        {"updates": [bad, _PLAN["codex"], _PLAN["claude"]], "failed": []}
+    )
+    assert plan == {}
+    assert any("malformed update" in p for p in problems), problems
