@@ -22,6 +22,19 @@ per-change, as its own lead says.
 
 ### Changed
 
+- codex-cli 0.172 is a supported version, so `amicus_backends` no longer warns on it. 0.172.0
+  was checked against 0.171.0: `--help`, `exec --help`, `exec review --help` and `login --help`
+  are identical, and so are every stderr grammar amicus parses, the pins and disables under
+  `--strict-config` and the logged-out `login status` line. In `features list`,
+  `code_mode_host_grpc` is now `removed` because code mode always uses gRPC, and
+  `mcp_lazy_stdio_startup` now defaults on, which delays when optional stdio MCP servers start
+  but adds no tool; neither is a feature amicus disables. The model-facing tool catalog of every
+  known model is identical on both binaries, and both disable controls pass on both. The served
+  model catalog lists the same models for both, adding only a `daybreak_availability` field to
+  `available_access_programs`, and upstream's `SandboxWorkspaceWrite` config struct is
+  unchanged. The notes move sandbox preparation into a shared macOS and Linux launcher, but the
+  workspace-write network and writable-roots pins were not re-probed with paid runs.
+
 - Release tooling asks for less by hand. `scripts/release.py preflight` now also prints the
   rest of the release with the PR number and release commit filled in, every pre-push check
   included and chained with `&&` so the first failure stops the push. `scripts/check_backend_compat.py print-updates` prints the commands that
