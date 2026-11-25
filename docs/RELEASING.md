@@ -158,6 +158,31 @@ What the pi capture did and did not test is `docs/pi-help/1.5.0/FINDINGS.md`.
 A new `docs/pi-help/<version>/FINDINGS.md` states whether `models.json` was present when its captures and live suite ran and, if so, which override keys and values applied to the model it used, recording only override keys and values and never a credential, a header value or a `!command` value.
 It says `unknown` where no presence check was made at the time of the run.
 
+### Bug-fix and security releases
+
+A release that ships only bug or security fixes need not wait for a backend's newest CLI.
+Every other release supports each backend's npm `latest` before it ships, so a `latest` the shipped contract does not support holds it until the PR that supports that version merges.
+A fix release is a patch release, `X.Y.Z` with `Z` above 0, and `--fix` marks it.
+For a backend whose `latest` the shipped contract does not support yet, a fix release records its evidence on the newest stable release npm lists below `latest` that the contract does support.
+A backend whose `latest` is supported is still brought to `latest`, as for any other release.
+Nothing else is waived: a CLI ahead of or behind the version held, a prerelease, a version outside the contract, an unauthenticated backend and a failed lookup still fail.
+When npm lists no supported stable release below `latest`, or its list cannot be read, even a fix release has no version of that backend to record evidence on, and the check fails.
+
+Pass `--fix` to every command that picks or checks the CLIs:
+
+```sh
+uv run python scripts/check_backend_compat.py print-updates --fix
+uv run python scripts/check_backend_compat.py --fix
+uv run python scripts/check_backend_compat.py release-brief --fix
+uv run python scripts/release.py preflight --pr <N> --version X.Y.Z --fix
+uv run python scripts/release.py session --pr <N> --version X.Y.Z --fix
+```
+
+`print-updates --fix` installs the version it holds a backend at, and says which `latest` it held it below.
+The check prints a `held:` line for that backend instead of a `FAIL`.
+The brief drafts the carrier re-check for the version held, which is the one the evidence runs on, and says in the paragraph for the release PR which backend is held and below what.
+`preflight --fix` and `session --fix` refuse a version that is not a patch release.
+
 ## The release sequence
 
 Rules 19 and 20 together shape this sequence, and a future maintainer should not "simplify" it back.
@@ -205,7 +230,7 @@ The tag therefore deliberately points at a commit that is in `main`'s history bu
    It reads the CLI versions in the previous release's evidence record, from the newest `vX.Y.Z` tag on `origin` unless `--since` names one, and compares each with npm's `latest`.
    It lists the stable releases published in between, whether the shipped contract supports `latest`, the long flags `--help` gained or lost between the committed captures, and any `FINDINGS.md` committed since.
    It drafts the rule-18 carrier re-check described under the backend-CLI precondition, with the versions the evidence will be recorded on and codex's verdict left `_to write_`, because that verdict takes a reader.
-   It exits 1 when a lookup failed, or when a backend's `latest` is outside the shipped contract, which the preflight in step 3 refuses: the release then waits for the PR that supports that version.
+   It exits 1 when a lookup failed, or when a backend's `latest` is outside the shipped contract, which the preflight in step 3 refuses: the release then waits for the PR that supports that version, unless it ships only bug or security fixes, as "Bug-fix and security releases" above describes.
    Write the release section's lead paragraph and review its entries.
    Update README's "Status and known limits" prose naming the current release, and review the release's upgrade section in `docs/MIGRATION.md`; the script reminds you of both and edits neither.
    That section, `## Upgrading from <previous version>`, is written during the cycle rather than here: `tests/test_migration_doc.py` fails any PR that moves the fingerprint without naming the new one in the newest upgrade section, so by release time it should only need reading.
@@ -218,6 +243,7 @@ The tag therefore deliberately points at a commit that is in `main`'s history bu
    It refuses without a terminal on stdin and stdout, when `CI` is set, and when `AMICUS_PI_MODEL` is not exported.
    It creates the worktree beside the main checkout as `amicus-wt-release-X-Y-Z`, detached at PR C's head as GitHub reports it, or reuses a clean worktree there and moves it to that head; `--worktree` names another path.
    In that worktree it shows the installs `print-updates` names and runs them on your yes, asks whether the carrier re-check is in PR C, then runs `release.py policy`, the preflight below and `scripts/check_pi_pricing.py`, stopping at the first failure.
+   With `--fix` it plans and checks the CLIs for a fix release, as "Bug-fix and security releases" above describes.
    It prints the `models.json` note described below, with values only for keys that cannot carry a secret.
    Only then does it ask you to type `spend X.Y.Z`, and typing that is your authorization for the evidence run in this session; any other answer stops it with nothing spent.
    After a passing run it prints the record's CLI versions and the `models.json` note for PR C, and the rest of the release as the preflight prints it.
@@ -239,9 +265,10 @@ The tag therefore deliberately points at a commit that is in `main`'s history bu
    - Every release-state check `prepare` ran in step 2 must still hold on this commit, all but the pinned tag's existence, which step 3 creates later: a problem found only after the evidence would mean fixing it on a new commit and spending the quota again.
    - No tag `vX.Y.Z` may exist on `origin`, and a failed lookup is a failure rather than an absent tag; nor may one exist locally, which the evidence script refuses.
    - `uv run python scripts/check_backend_compat.py` must pass, as in the precondition above, because a CLI that is behind, ahead, unauthenticated or outside the contract would make the evidence describe the wrong thing.
+     `preflight --fix` runs it with `--fix`, and first refuses a version that is not a patch release.
 
    On success it prints the release commit and the exact evidence command, and it never runs that command.
-   It then prints the rest of steps 3 to 6 with this PR's number and this release commit filled in, to copy once the evidence passes: the record and freshness checks, the local tag, the release-state check, the install rehearsal, the gate, the merge, `post-merge` and the push, joined with `&&` so the first failure stops everything after it, then `post-publish` for after the pypi approval.
+   It then prints the rest of steps 3 to 6 with this PR's number and this release commit filled in, to copy once the evidence passes: the gate's result in CI, the record and freshness checks, the local tag, the release-state check, the install rehearsal, the merge, `post-merge` and the push, joined with `&&` so the first failure stops everything after it, then `post-publish` for after the pypi approval.
    It runs none of them either.
    Record the release commit's SHA, and note it well: it is the commit that gets tagged, and it will not be `main`'s head after the next step.
    If the PR C branch gains any commit after this point — an "Update branch" click, or a review pushing a change — this step must be redone from the new tip: the evidence would otherwise cover a commit that is no longer what step 4 actually merges.
@@ -260,6 +287,16 @@ The tag therefore deliberately points at a commit that is in `main`'s history bu
    pi loads `models.json` from `$PI_CODING_AGENT_DIR` when that is set and `~/.pi/agent` otherwise, and its per-model overrides, such as a `maxTokens` cap, change what the pi gate exercises.
    Note in the release PR whether that file was present, or `unknown` if it was not checked, and, if so, which override keys and values apply to `AMICUS_PI_MODEL`'s provider and model, such as `baseUrl`, `api` or `maxTokens`; never record a credential, a header value or a `!command` value.
    That note is the maintainer's statement, like the record itself, and rule 23 applies to it.
+   Confirm that CI ran the gate defined by AGENTS.md rule 2 on the release commit, and that it passed:
+
+   ```sh
+   uv run python scripts/release.py ci --sha <release-sha>
+   ```
+
+   CI runs exactly that gate on every supported Python version and is authoritative for it, so it is not run again by hand here, where it would cover one Python.
+   `ci` reads the release commit's check runs from GitHub, read-only, and passes only when every gate job finished with success.
+   A gate job that is still running, failed, was cancelled or never ran fails it; wait for CI, or fix the failure, and run it again.
+   The block the preflight prints runs it first, so a gate that has not passed stops that block before anything is tagged.
    Confirm the new record names the release commit before going on:
 
    ```sh
@@ -292,7 +329,6 @@ The tag therefore deliberately points at a commit that is in `main`'s history bu
    Confirm the server answers `initialize` with `serverInfo.name == "amicus"` and the version being released.
    This proves git transport, a clean-machine build, the console script and the wire handshake before anything irreversible happens.
    What it does not prove is that the string `vX.Y.Z` resolves, which is the trivial remainder and is covered by the post-tag checks.
-   Run the gate defined by AGENTS.md rule 2.
    The 24-hour freshness window this evidence carries (`validate`'s `max_age_hours`) is checked only here, at step 3, and deliberately not by CI afterward: a tag is immutable, so a window applied after tagging could let queue time or a slow deployment approval turn a legitimate tag into one that can never be published.
    The window is therefore yours to honor: merge PR C, the next step, before the day is out — otherwise this step must be repeated.
 4. Merge PR C with an ordinary merge commit: `gh pr merge --merge`.

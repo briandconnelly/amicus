@@ -17,6 +17,9 @@ checked"): for every in-tree backend it reports
       installed CLI is behind it or ahead of it. A lookup that fails is reported as unknown,
       never guessed, and fails the check unless `--offline` was given. A deprecated backend is
       frozen at its supported set, so being behind is reported for it and does not fail.
+      `--fix` is for a release that ships only bug or security fixes: a backend whose `latest`
+      the shipped contract does not support yet may instead be on the newest stable release
+      npm lists that it does support, and is reported as held there.
 
 It runs `--version`, `--help` and each backend's free login probe, and nothing else: no
 prompt is sent, so no quota is spent. It cannot do the other half of the precondition, the
@@ -25,14 +28,18 @@ takes a reader; it prints the reminder instead.
 
 Usage:
     uv run python scripts/check_backend_compat.py [--docs-root docs] [--write] [--offline]
+                                                  [--fix]
 
     --write    save the live help as a new capture for any backend whose installed version
                has none, so the diff that prompted it is committed beside the support change
     --offline  do not ask npm for the latest release
     --diff     also print the text diff against the capture (noisy: see above)
+    --fix      a bug or security fix release: hold a backend whose `latest` the shipped
+               contract does not support at the newest stable release it does support
 
 Exit codes:
     0  every backend is installed, warning-free, and at the latest release that could be read
+       (with --fix, or held at the newest release the shipped contract supports below it)
     1  at least one problem, each printed with the backend it belongs to
 
 Subcommands (a first argument naming one selects it; anything else is the check above):
@@ -41,12 +48,14 @@ Subcommands (a first argument naming one selects it; anything else is the check 
             [--debug-models]
     watch [--json] [--file-issues [--dry-run]] [--repo OWNER/NAME] [--docs-root docs]
           [--pyproject pyproject.toml]
-    print-updates [--json]
-    release-brief [--since vX.Y.Z] [--docs-root docs] [--json]
+    print-updates [--json] [--fix]
+    release-brief [--since vX.Y.Z] [--docs-root docs] [--json] [--fix]
 
 `print-updates` prints, and never runs, the commands that install npm's `latest` of every
 backend CLI, Claude Code's with its autoupdater held; a failed lookup exits 1. `--json` prints
 each as an argv and the variables its environment adds, which `release.py session` runs.
+`--fix` installs, for a backend whose `latest` the shipped contract does not support, the newest
+stable release npm lists that it does, and exits 1 when there is none or the list is unreadable.
 
 `release-brief` drafts the backend half of the release PR's description (docs/RELEASING.md
 step 2) and spends nothing. It reads the CLI versions the previous release's evidence record
@@ -58,6 +67,9 @@ contract supports `latest`, the long flags `--help` gained or lost between commi
 the FINDINGS.md committed since, and the rule-18 carrier re-check drafted with its codex
 verdict left `_to write_`, because that verdict takes a reader. It exits 1 when a lookup failed
 or when a backend's `latest` is outside the shipped contract, which blocks the evidence run.
+`--fix` drafts it for a bug or security fix release: such a backend is held at the newest stable
+release the contract supports, the row describes that version, and only a backend with no such
+release blocks.
 
 `watch` (#378) reads only npm and PyPI metadata, so it needs no installed CLI: pi's
 latest minors against the shipped sets, claude's latest against the newest docs/claude-help
@@ -184,6 +196,8 @@ class Report:
     flags_removed: list[str] = field(default_factory=list)
     help_diff: list[str] = field(default_factory=list)
     latest: str | None = None
+    fix: bool = False  # a bug or security fix release (`--fix`)
+    fix_target: str | None = None  # with `fix`, the version the evidence may be recorded on
 
 
 def semver(text: str | None) -> tuple[int, int, int] | None:
@@ -262,6 +276,8 @@ def check_backend(
     latest: Callable[[str], str | None] = latest_upstream,
     help_text: str | None = None,
     offline: bool = False,
+    fix: bool = False,
+    versions: Callable[[str], list[str] | None] | None = None,
 ) -> Report:
     """`help_text` stands in for the live probe, so a test can show a dropped flag."""
     plugin = BackendRegistry.load((backend,), in_tree=in_tree.IN_TREE, entry_points=()).get(backend)
@@ -314,6 +330,9 @@ def check_backend(
         else:
             report.capture_state = "identical"
     report.latest = latest(backend)
+    report.fix = fix
+    if fix:
+        report.fix_target = fix_target(backend, report.latest, versions or published_versions)
     return report
 
 
@@ -322,9 +341,14 @@ def check_all(
     *,
     latest: Callable[[str], str | None] = latest_upstream,
     offline: bool = False,
+    fix: bool = False,
+    versions: Callable[[str], list[str] | None] | None = None,
 ) -> list[Report]:
     return [
-        check_backend(backend, docs_root, latest=latest, offline=offline) for backend in BACKENDS
+        check_backend(
+            backend, docs_root, latest=latest, offline=offline, fix=fix, versions=versions
+        )
+        for backend in BACKENDS
     ]
 
 
@@ -337,6 +361,12 @@ def problems(report: Report) -> list[str]:
             f"{report.backend}: installed {report.version} is outside the built-in contract's "
             "supported versions, whatever AMICUS_*_SUPPORTED_* says in this environment; "
             "support it in its own PR first"
+            + (
+                f", or record this fix release's evidence on {report.fix_target} with "
+                f"{_install(report.backend, report.fix_target)}"
+                if report.fix and report.fix_target and report.fix_target != report.version
+                else ""
+            )
         )
     if report.authenticated is not True:
         found.append(
@@ -359,7 +389,13 @@ def problems(report: Report) -> list[str]:
             "release evidence"
         )
     elif report.latest and release(report.version) != release(report.latest):
-        if not frozen_behind(report):
+        if frozen_behind(report) or fix_held(report):
+            pass
+        elif report.fix and report.fix_target is None:
+            found.append(no_fix_target(report.backend, report.latest))
+        elif report.fix and report.fix_target != report.latest:
+            found.append(not_fix_target(report))
+        else:
             found.append(not_latest(report))
     elif report.latest is None and report.backend in NPM_PACKAGES and not report.offline:
         # Every backend is on npm, so an unreadable latest is a lookup that failed, and a
@@ -384,18 +420,92 @@ def frozen_behind(report: Report) -> bool:
     return installed is not None and latest is not None and installed < latest
 
 
+def fix_version(backend: str, latest: str | None, listed: list[str] | None) -> str | None:
+    """The version of `backend` a bug or security fix release records its evidence on
+    (docs/RELEASING.md, "Bug-fix and security releases"): npm's `latest` when the shipped
+    contract supports it, else the newest stable release npm lists below `latest` that the
+    contract does support. None when `latest` is unknown, or it is unsupported and npm's list
+    could not be read or holds no such release. Only a `latest` the contract does not support
+    yet is waived: a release that could be on `latest` must be."""
+    top = semver(latest)
+    if latest is None or top is None:
+        return None
+    if builtin_supported(backend, latest):
+        return latest
+    eligible = [
+        (parsed, version)
+        for version in listed or []
+        if _stable(version)
+        and (parsed := semver(version)) is not None
+        and parsed < top
+        and builtin_supported(backend, version)
+    ]
+    return max(eligible)[1] if eligible else None
+
+
+def fix_target(
+    backend: str, latest: str | None, versions: Callable[[str], list[str] | None]
+) -> str | None:
+    """`fix_version`, asking npm for its list of releases only when `latest` is unsupported."""
+    if latest is None:
+        return None
+    listed = None if builtin_supported(backend, latest) else versions(backend)
+    return fix_version(backend, latest, listed)
+
+
+def fix_held(report: Report) -> bool:
+    """Whether a fix release may keep this backend below npm's latest: `latest` is outside
+    the shipped contract, and the installed CLI is the newest stable release it supports."""
+    return (
+        report.fix
+        and report.fix_target is not None
+        and report.fix_target != report.latest
+        and release(report.version) == (report.fix_target, "")
+    )
+
+
+def no_fix_target(backend: str, latest: str) -> str:
+    return (
+        f"{backend}: npm's `{NPM_DIST_TAG}` ({latest}) is outside the shipped contract, and npm "
+        "lists no earlier stable release the contract supports (or its list could not be "
+        f"read), so even a fix release has no {backend} to record evidence on"
+    )
+
+
+def not_fix_target(report: Report) -> str:
+    """A fix release off the version it holds this backend at: which way, and its install."""
+    installed, target = semver(report.version), semver(report.fix_target)
+    way = (
+        "ahead of"
+        if installed and target and installed > target
+        else "behind"
+        if installed and target and installed < target
+        else "not"
+    )
+    return (
+        f"{report.backend}: installed {report.version} is {way} {report.fix_target}, the newest "
+        f"release the shipped contract supports below npm's `{NPM_DIST_TAG}` "
+        f"({report.latest}), which is what a fix release records evidence on; install it with "
+        f"{_install(report.backend, report.fix_target)}"
+    )
+
+
+def _install(backend: str, version: str | None) -> str:
+    command = PIN_COMMANDS.get(backend)
+    return (
+        f"`{command.format(version=version)}`"
+        if command
+        else f"installing {version} however this CLI was installed"
+    )
+
+
 def not_latest(report: Report) -> str:
     """Which way the installed CLI is off npm's latest, since the fix is opposite (#323):
     behind, upgrade; ahead, the build came from another dist-tag, so pin back or wait."""
     installed, latest = semver(report.version), semver(report.latest)
     head = f"{report.backend}: installed {report.version}"
     tag = f"npm's `{NPM_DIST_TAG}` dist-tag ({report.latest})"
-    command = PIN_COMMANDS.get(report.backend)
-    install = (
-        f"`{command.format(version=report.latest)}`"
-        if command
-        else f"installing {report.latest} however this CLI was installed"
-    )
+    install = _install(report.backend, report.latest)
     if installed is not None and latest is not None and installed > latest:
         return (
             f"{head} is ahead of {tag}, so it is not the latest release (a build from another "
@@ -428,6 +538,12 @@ def _describe(report: Report, *, show_diff: bool = False) -> list[str]:
         lines.append(
             f"    frozen: {report.backend} is deprecated, so staying behind latest "
             f"({report.latest}) is expected and not a failure"
+        )
+    if report.latest and fix_held(report):
+        lines.append(
+            f"    held: a fix release, so {report.backend} stays on {report.version}, the newest "
+            f"release the shipped contract supports; latest ({report.latest}) waits for its "
+            "support PR"
         )
     name = report.capture.name if report.capture else None
     if report.capture_state == "none":
@@ -1612,18 +1728,25 @@ def watch_main(argv: list[str]) -> int:
 
 @dataclass
 class Update:
-    """One backend's install of npm's `latest`: the argv to run and what to add to its env."""
+    """One backend's install of npm's `latest`: the argv to run and what to add to its env.
+    `held_below` is npm's `latest` when a fix release installs an earlier version instead."""
 
     backend: str
     version: str
     argv: list[str]
     env: dict[str, str] = field(default_factory=dict)
+    held_below: str | None = None
 
 
 def update_plan(
     latest: Callable[[str], str | None] = latest_upstream,
+    *,
+    fix: bool = False,
+    versions: Callable[[str], list[str] | None] | None = None,
 ) -> tuple[list[Update], list[str]]:
     """The installs that bring every backend to npm's `latest`, and the lookups that failed.
+    With `fix`, a backend whose `latest` the shipped contract does not support gets the
+    newest stable release npm lists that it does (`fix_version`) instead.
 
     Claude Code's install is held with DISABLE_AUTOUPDATER=1 because a running session can
     otherwise move it again before the evidence run (#323).
@@ -1631,13 +1754,18 @@ def update_plan(
     plan: list[Update] = []
     failed: list[str] = []
     for backend in BACKENDS:
-        version = latest(backend)
-        if version is None:
+        newest = latest(backend)
+        if newest is None:
             failed.append(f"{backend}: the latest release could not be read from npm")
+            continue
+        version = fix_target(backend, newest, versions or published_versions) if fix else newest
+        if version is None:
+            failed.append(no_fix_target(backend, newest))
             continue
         env = {"DISABLE_AUTOUPDATER": "1"} if backend == "claude" else {}
         argv = PIN_COMMANDS[backend].format(version=version).split()
-        plan.append(Update(backend, version, argv, env))
+        held = newest if version != newest else None
+        plan.append(Update(backend, version, argv, env, held))
     return plan, failed
 
 
@@ -1654,7 +1782,8 @@ def update_commands(
 
 
 def print_updates_main(argv: list[str]) -> int:
-    """`print-updates`: the commands that bring every backend CLI to npm's `latest`."""
+    """`print-updates`: the commands that bring every backend CLI to npm's `latest`, or, with
+    `--fix`, to the newest release the shipped contract supports where it lacks `latest`."""
     parser = argparse.ArgumentParser(
         prog="check_backend_compat.py print-updates",
         description=print_updates_main.__doc__,
@@ -1665,13 +1794,24 @@ def print_updates_main(argv: list[str]) -> int:
         help="print each install as an argv and the variables its environment adds, for a "
         "script that runs them (`release.py session`)",
     )
+    parser.add_argument(
+        "--fix",
+        action="store_true",
+        help="a bug or security fix release: install the newest stable release the shipped "
+        "contract supports for a backend whose latest it does not",
+    )
     args = parser.parse_args(argv)
-    plan, failed = update_plan(latest_upstream)
+    plan, failed = update_plan(latest_upstream, fix=args.fix)
     if args.json:
         print(json.dumps({"updates": [asdict(u) for u in plan], "failed": failed}, indent=2))
     else:
         print("# close every Claude Code session first, or restart it with DISABLE_AUTOUPDATER=1")
         for update in plan:
+            if update.held_below:
+                print(
+                    f"# {update.backend}: held at {update.version} for a fix release; npm's "
+                    f"latest {update.held_below} is outside the shipped contract"
+                )
             print(_shell_line(update))
     for problem in failed:
         print(f"FAIL {problem}", file=sys.stderr)
@@ -1696,19 +1836,31 @@ class BriefRow:
     backend: str
     previous: str | None = None  # the CLI version the previous tag's evidence record names
     latest: str | None = None  # npm's `latest` dist-tag, None when it could not be read
-    published: list[str] | None = None  # stable releases after `previous`, up to `latest`
+    published: list[str] | None = None  # stable releases after `previous`, up to `subject`
     supported: bool = False  # the SHIPPED contract names `latest`
     deprecated: bool = False  # frozen at its supported set, so behind `latest` is no failure
-    capture: str | None = None  # the committed capture of `latest`, if any
+    held: str | None = None  # a fix release's version below an unsupported `latest`
+    capture: str | None = None  # the committed capture of `subject`, if any
     baseline: str | None = None  # the newest capture at or before `previous`
     flags_added: list[str] = field(default_factory=list)
     flags_removed: list[str] = field(default_factory=list)
     findings: list[str] = field(default_factory=list)  # FINDINGS.md since `previous`
 
     @property
+    def subject(self) -> str | None:
+        """The version the evidence will be recorded on: `held` when set, else `latest`."""
+        return self.held or self.latest
+
+    @property
     def blocks(self) -> bool:
-        """Preflight fails on this backend's `latest` until a support PR merges."""
-        return self.latest is not None and not self.supported and not self.deprecated
+        """Preflight fails on this backend's `latest` until a support PR merges, unless a fix
+        release holds it at an earlier supported version."""
+        return (
+            self.latest is not None
+            and not self.supported
+            and not self.deprecated
+            and self.held is None
+        )
 
 
 @dataclass
@@ -1717,6 +1869,7 @@ class Brief:
     recorded_at: str | None
     rows: list[BriefRow]
     problems: list[str]
+    fix: bool = False  # drafted for a bug or security fix release (`--fix`)
 
 
 def run_git(args: list[str]) -> tuple[int, str]:
@@ -1843,20 +1996,27 @@ def brief_row(
     previous: str | None,
     latest: str | None,
     versions: Callable[[str], list[str] | None],
+    *,
+    fix: bool = False,
 ) -> BriefRow:
     row = BriefRow(backend, previous, latest)
     row.deprecated = in_tree.backend_deprecation(backend) is not None
     if latest is None:
         return row
     row.supported = builtin_supported(backend, latest)
-    low, high = semver(previous), semver(latest)
-    if low is not None and high is not None:
+    listed: list[str] | None = None
+    if fix and not row.supported:
         listed = versions(backend)
+        row.held = fix_version(backend, latest, listed)
+    subject = row.subject or latest
+    low, high = semver(previous), semver(subject)
+    if low is not None and high is not None:
+        listed = listed if listed is not None else versions(backend)
         if listed is not None:
             newer = {v for v in listed if _stable(v) and low < (semver(v) or low) <= high}
             row.published = sorted(newer, key=lambda v: semver(v) or (0, 0, 0))
     captures = _captures(docs_root, backend)
-    exact = next((folder for _, folder in captures if folder.name == latest), None)
+    exact = next((folder for _, folder in captures if folder.name == subject), None)
     base = [folder for version, folder in captures if low is not None and version <= low]
     row.capture = exact.as_posix() if exact else None
     row.baseline = base[-1].name if base else None
@@ -1894,9 +2054,12 @@ def release_brief(
     git: Callable[[list[str]], tuple[int, str]] = run_git,
     latest: Callable[[str], str | None] = latest_upstream,
     versions: Callable[[str], list[str] | None] = published_versions,
+    fix: bool = False,
 ) -> Brief:
     """What changed in every backend CLI since the previous release's evidence. Spends nothing:
-    it reads origin's tags, one tag's message, npm's metadata and the committed captures."""
+    it reads origin's tags, one tag's message, npm's metadata and the committed captures.
+    With `fix`, for a bug or security fix release, a backend whose `latest` the shipped
+    contract does not support is described at the version `fix_version` holds it at."""
     problems: list[str] = []
     tags = remote_release_tags(git)
     if tags is None:
@@ -1923,7 +2086,9 @@ def release_brief(
             record_read = not unparsed
     rows = []
     for backend in BACKENDS:
-        row = brief_row(backend, docs_root, previous.get(backend), latest(backend), versions)
+        row = brief_row(
+            backend, docs_root, previous.get(backend), latest(backend), versions, fix=fix
+        )
         rows.append(row)
         if record_read and row.previous is None:
             problems.append(f"{backend}: {tag}'s evidence record names no version for it")
@@ -1931,13 +2096,16 @@ def release_brief(
             problems.append(f"{backend}: the latest release could not be read from npm")
         elif row.previous is not None and row.published is None:
             problems.append(f"{backend}: npm's list of published versions could not be read")
-        if row.blocks:
+        if row.blocks and fix:
+            problems.append(no_fix_target(backend, row.latest or ""))
+        elif row.blocks:
             problems.append(
                 f"{backend}: npm's latest {row.latest} is outside the shipped contract's "
                 "supported versions, so preflight fails until support for it merges in its own "
-                "PR, and so does the evidence run"
+                "PR, and so does the evidence run, unless the release ships only bug or "
+                "security fixes (`--fix`)"
             )
-    return Brief(tag, recorded_at, rows, problems)
+    return Brief(tag, recorded_at, rows, problems, fix)
 
 
 def _published_cell(published: list[str] | None) -> str:
@@ -1955,6 +2123,8 @@ def _contract_cell(row: BriefRow) -> str:
         return "unknown"
     if row.blocks:
         return "**not supported: blocks the evidence run**"
+    if row.held:
+        return f"not supported; this fix release holds it at {row.held}"
     if row.deprecated and not row.supported:
         return "deprecated, frozen at its supported set"
     return "supported"
@@ -1962,40 +2132,41 @@ def _contract_cell(row: BriefRow) -> str:
 
 def _flag_line(row: BriefRow) -> str:
     head = f"{row.backend}:"
-    if row.latest is None:
+    if row.subject is None:
         return f"{head} not compared, because npm's latest is unknown."
     if row.capture is None:
         return (
-            f"{head} not compared; no capture of {row.latest} is committed yet "
+            f"{head} not compared; no capture of {row.subject} is committed yet "
             "(`check_backend_compat.py --write` saves one with the change that supports it)."
         )
     if row.baseline is None:
         return f"{head} not compared; no capture at or before {row.previous or 'the previous'}."
-    if row.baseline == row.latest:
-        return f"{head} still {row.latest}, so nothing to compare."
+    if row.baseline == row.subject:
+        return f"{head} still {row.subject}, so nothing to compare."
     if not row.flags_added and not row.flags_removed:
-        return f"{head} same flags from {row.baseline} to {row.latest}."
+        return f"{head} same flags from {row.baseline} to {row.subject}."
     changes = []
     if row.flags_added:
         changes.append("added " + ", ".join(f"`{f}`" for f in row.flags_added))
     if row.flags_removed:
         changes.append("removed " + ", ".join(f"`{f}`" for f in row.flags_removed))
-    return f"{head} from {row.baseline} to {row.latest}, {'; '.join(changes)}."
+    return f"{head} from {row.baseline} to {row.subject}, {'; '.join(changes)}."
 
 
 def _carrier_line(row: BriefRow, tag: str) -> str:
-    if row.latest is None:
+    version = row.subject
+    if version is None:
         return f"{row.backend}: npm's latest could not be read, so the version to check is unknown."
     carrier = EXEMPT_CARRIERS.get(row.backend)
     if carrier is None:
         return (
-            f"{row.backend} {row.latest}: holds no carrier exemption under rule 18 (its prompt "
+            f"{row.backend} {version}: holds no carrier exemption under rule 18 (its prompt "
             "rides stdin), so there is no carrier to re-check."
         )
     since = _published_cell(row.published) if row.published else f"the releases since {tag}"
     return (
-        f"{row.backend} {row.latest}: the exempt carrier is {carrier}. Read `{row.backend} "
-        f"--help` on {row.latest} and the release notes for {since} for any other channel for "
+        f"{row.backend} {version}: the exempt carrier is {carrier}. Read `{row.backend} "
+        f"--help` on {version} and the release notes for {since} for any other channel for "
         f"developer instructions. Verdict: {TO_WRITE}."
     )
 
@@ -2010,6 +2181,7 @@ def describe_brief(brief: Brief) -> list[str]:
     source = f"{tag}'s evidence record"
     if brief.recorded_at:
         source += f" ({brief.recorded_at})"
+    captured = "the version held" if brief.fix else f"`{NPM_DIST_TAG}`"
     lines = [
         f"### Backend CLIs since {tag}",
         "",
@@ -2017,7 +2189,7 @@ def describe_brief(brief: Brief) -> list[str]:
         f"`{NPM_DIST_TAG}` dist-tag. It installed and ran nothing.",
         "",
         f"| Backend | {tag} evidence | npm `{NPM_DIST_TAG}` | Published since | "
-        f"Shipped contract | Capture of `{NPM_DIST_TAG}` |",
+        f"Shipped contract | Capture of {captured} |",
         "| --- | --- | --- | --- | --- | --- |",
     ]
     for row in brief.rows:
@@ -2031,11 +2203,18 @@ def describe_brief(brief: Brief) -> list[str]:
     findings = [f"`{path}`" for row in brief.rows for path in row.findings]
     lines += ["", f"Findings committed since {tag}: {', '.join(findings) or 'none'}."]
     lines += ["", "### Rule-18 carrier re-check (draft)", ""]
-    named = [f"{row.backend} {row.latest}" for row in brief.rows if row.latest]
+    named = [f"{row.backend} {row.subject}" for row in brief.rows if row.subject]
     if named:
         lines += [
             f"The evidence will be recorded on {_join(named)}, unless npm's `{NPM_DIST_TAG}` "
             "moves before the run.",
+            "",
+        ]
+    held = [f"{row.backend} at {row.held} (npm's {row.latest})" for row in brief.rows if row.held]
+    if held:
+        lines += [
+            "This release ships only bug or security fixes, so it holds "
+            f"{_join(held)}: the shipped contract does not support that `{NPM_DIST_TAG}` yet.",
             "",
         ]
     lines += [f"- {_carrier_line(row, tag)}" for row in brief.rows]
@@ -2060,6 +2239,12 @@ def release_brief_main(argv: list[str]) -> int:
     )
     parser.add_argument("--docs-root", type=Path, default=Path("docs"))
     parser.add_argument("--json", action="store_true")
+    parser.add_argument(
+        "--fix",
+        action="store_true",
+        help="a bug or security fix release: hold a backend whose latest the shipped contract "
+        "does not support at the newest stable release it does",
+    )
     args = parser.parse_args(argv)
     brief = release_brief(
         args.docs_root,
@@ -2067,12 +2252,16 @@ def release_brief_main(argv: list[str]) -> int:
         git=run_git,
         latest=latest_upstream,
         versions=published_versions,
+        fix=args.fix,
     )
     if args.json:
         payload = {
             "tag": brief.tag,
             "recorded_at": brief.recorded_at,
-            "backends": [{**asdict(row), "blocks": row.blocks} for row in brief.rows],
+            "fix": brief.fix,
+            "backends": [
+                {**asdict(row), "subject": row.subject, "blocks": row.blocks} for row in brief.rows
+            ],
             "problems": brief.problems,
         }
         print(json.dumps(payload, indent=2))
@@ -2105,9 +2294,15 @@ def check_main(argv: list[str]) -> int:
     parser.add_argument("--write", action="store_true")
     parser.add_argument("--offline", action="store_true")
     parser.add_argument("--diff", action="store_true")
+    parser.add_argument(
+        "--fix",
+        action="store_true",
+        help="a bug or security fix release: a backend whose latest the shipped contract does "
+        "not support may be on the newest stable release it does",
+    )
     args = parser.parse_args(argv)
     latest = (lambda _backend: None) if args.offline else latest_upstream
-    reports = check_all(args.docs_root, latest=latest, offline=args.offline)
+    reports = check_all(args.docs_root, latest=latest, offline=args.offline, fix=args.fix)
     found: list[str] = []
     for report in reports:
         print("\n".join(_describe(report, show_diff=args.diff)))
