@@ -36,6 +36,11 @@ per-change, as its own lead says.
   the workspace-write network and writable-roots pins were re-probed with paid runs: both still
   hold under a user config and a profile that open them, against a passing unpinned control.
 
+- `docs/claude-help/2.1.332/` records the `--help` of Claude Code 2.1.332, which every 2.x
+  release already satisfied: it is identical to the 2.1.330 capture, and the 2.1.331 and 2.1.332
+  notes change no flag amicus sends; the one that names one, `--bare`, fixes Code Mode not telling
+  the model what its scripts can call. No paid call was made.
+
 - Release tooling asks for less by hand. `scripts/release.py preflight` now also prints the
   rest of the release with the PR number and release commit filled in, every pre-push check
   included and chained with `&&` so the first failure stops the push. `scripts/check_backend_compat.py print-updates` prints the commands that
