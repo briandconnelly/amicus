@@ -247,3 +247,23 @@ async def test_unavailable_skill_advertises_no_extension(monkeypatch):
     monkeypatch.setattr(amicus.skill, "build_skill", unavailable)
     async with _skills_client(_app(serve=True)) as c:
         assert SKILLS_EXTENSION not in _extensions(c)
+
+
+def test_a_symlinked_references_dir_is_rejected(tmp_path):
+    real = _fake_skill(tmp_path / "real")
+    root = tmp_path / "skill"
+    root.mkdir()
+    (root / "SKILL.md").write_bytes((real / "SKILL.md").read_bytes())
+    (root / "references").symlink_to(real / "references")
+    with pytest.raises(SkillUnavailable, match=r"references is a symlink"):
+        served_files(root)
+
+
+def test_a_symlinked_skill_md_is_rejected(tmp_path):
+    real = _fake_skill(tmp_path / "real")
+    root = tmp_path / "skill"
+    (root / "references").mkdir(parents=True)
+    (root / "references" / "a.md").write_text("a")
+    (root / "SKILL.md").symlink_to(real / "SKILL.md")
+    with pytest.raises(SkillUnavailable, match=r"SKILL\.md is a symlink"):
+        served_files(root)
