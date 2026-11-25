@@ -530,61 +530,6 @@ def _version_problems(version: str) -> list[str]:
     return [f"version {version!r} is not X.Y.Z"]
 
 
-FIX_CATEGORIES = ("Fixed", "Security")
-_CATEGORY_RE = re.compile(r"^### +(?P<name>.+?)[ \t]*$")
-# What ends a release's section: the next release's heading, or the link definitions below.
-_SECTION_END_RE = re.compile(r"^(?:## \[|\[[^\]]+\]: )", re.MULTILINE)
-
-
-def fix_changelog_problems(repo_root: Path, version: str) -> list[str]:
-    """Why `version`'s CHANGELOG.md section is not a fix release's, or [] when it is: at least
-    one entry, and every entry under `### Fixed` or `### Security` (docs/RELEASING.md,
-    "Bug-fix and security releases"). The lead paragraph before the first category is allowed.
-    A heading says nothing about whether an entry under it is a fix; that stays the
-    maintainer's reading."""
-    try:
-        text = (repo_root / "CHANGELOG.md").read_text(encoding="utf-8")
-    except OSError as exc:
-        return [
-            f"CHANGELOG.md could not be read, so whether {version} ships only fixes is "
-            f"unknown: {exc}"
-        ]
-    heading = re.search(
-        rf"^## \[{re.escape(version)}\] - \d{{4}}-\d{{2}}-\d{{2}}[ \t]*$", text, re.MULTILINE
-    )
-    if heading is None:
-        return [
-            f"CHANGELOG.md has no dated section for {version}, so whether it ships only "
-            "fixes is unknown"
-        ]
-    after = _SECTION_END_RE.search(text, heading.end() + 1)
-    body = text[heading.end() : after.start() if after else len(text)]
-    problems: list[str] = []
-    category: str | None = None
-    entries = 0
-    for line in body.splitlines():
-        found = _CATEGORY_RE.match(line)
-        if found:
-            category = found["name"]
-            if category not in FIX_CATEGORIES:
-                problems.append(
-                    f"CHANGELOG.md's {version} section has `### {category}`; a fix release has "
-                    "only `### Fixed` and `### Security`"
-                )
-        elif line.startswith("- "):
-            if category is None:
-                problems.append(
-                    f"CHANGELOG.md's {version} section has an entry under no `###` category"
-                )
-            elif category in FIX_CATEGORIES:
-                entries += 1
-    if not entries:
-        problems.append(
-            f"CHANGELOG.md's {version} section has no entry under `### Fixed` or `### Security`"
-        )
-    return problems
-
-
 def _fix_mode_problems(
     ctx: Context, version: str, *, fix: bool, override: bool
 ) -> tuple[list[str], list[str]]:
@@ -593,7 +538,7 @@ def _fix_mode_problems(
         return ["--override-fix-changelog applies only with --fix"], []
     if not fix or _version_problems(version):
         return [], []
-    found = fix_changelog_problems(ctx.repo_root, version)
+    found = release_state.fix_changelog_problems(version, repo_root=ctx.repo_root)
     if not found:
         return [], []
     if override:
@@ -725,10 +670,18 @@ def _script_problems(ctx: Context, script: str, *args: str) -> list[str]:
     return []
 
 
-def evidence_command(repo_root: Path, version: str) -> str:
+def evidence_flags(*, fix: bool = False, override: bool = False) -> list[str]:
+    """What the evidence recorder records about the release's mode (issue #582)."""
+    return [*(["--fix"] if fix else []), *(["--override-fix-changelog"] if override else [])]
+
+
+def evidence_command(
+    repo_root: Path, version: str, *, fix: bool = False, override: bool = False
+) -> str:
+    flags = "".join(f" {flag}" for flag in evidence_flags(fix=fix, override=override))
     return (
         f"cd {shlex.quote(str(repo_root))} && "
-        f"AMICUS_REQUIRE_LIVE=1 uv run python {EVIDENCE_SCRIPT} --version {version}"
+        f"AMICUS_REQUIRE_LIVE=1 uv run python {EVIDENCE_SCRIPT} --version {version}{flags}"
     )
 
 
@@ -808,7 +761,10 @@ def cmd_preflight(ctx: Context, args: argparse.Namespace) -> int:
     print("The evidence run spends live quota on all three backends (codex, claude and pi)")
     print("and needs the maintainer's authorization in the session that runs it. This script")
     print("never runs it. The command:")
-    print(f"  {evidence_command(ctx.repo_root, version)}")
+    command = evidence_command(
+        ctx.repo_root, version, fix=args.fix, override=args.override_fix_changelog
+    )
+    print(f"  {command}")
     print()
     print("Then, if every suite passed, the rest of the release with this commit filled in.")
     print("Run it the same day as the evidence (its freshness window is 24 hours); each block")
@@ -1220,7 +1176,9 @@ def _session_checks(
     return []
 
 
-def _session_evidence(ctx: Context, cwd: Path, version: str, head: str) -> list[str] | None:
+def _session_evidence(
+    ctx: Context, cwd: Path, version: str, head: str, *, fix: bool = False, override: bool = False
+) -> list[str] | None:
     """Step 5: the evidence run, only on a typed confirmation. None when it was declined."""
     print("\n== 5. The live-gate evidence ==")
     print(f"It runs every live suite the release gate requires at {head} and spends real quota")
@@ -1232,7 +1190,15 @@ def _session_evidence(ctx: Context, cwd: Path, version: str, head: str) -> list[
         answer = ""
     if answer.strip() != phrase:
         return None
-    cmd = ["uv", "run", "python", EVIDENCE_SCRIPT, "--version", version]
+    cmd = [
+        "uv",
+        "run",
+        "python",
+        EVIDENCE_SCRIPT,
+        "--version",
+        version,
+        *evidence_flags(fix=fix, override=override),
+    ]
     return _run_step(ctx, cwd, cmd, {"AMICUS_REQUIRE_LIVE": "1"})
 
 
@@ -1302,7 +1268,7 @@ def cmd_session(ctx: Context, args: argparse.Namespace) -> int:
     models_note = models_json_note(ctx.environ, ctx.home())
     print("\n".join(models_note))
 
-    problems = _session_evidence(ctx, cwd, version, head)
+    problems = _session_evidence(ctx, cwd, version, head, fix=fix, override=override)
     if problems is None:
         return _stop(["you did not confirm the evidence run"])
     if problems:

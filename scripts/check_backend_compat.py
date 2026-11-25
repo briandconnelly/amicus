@@ -1731,13 +1731,16 @@ def watch_main(argv: list[str]) -> int:
 @dataclass
 class Update:
     """One backend's install of npm's `latest`: the argv to run and what to add to its env.
-    `held_below` is npm's `latest` when a fix release installs an earlier version instead."""
+    `held_below` is npm's `latest` when a fix release installs an earlier version instead.
+    `deprecated` marks a backend frozen at its supported set, which the evidence recorder lets
+    stay behind `version` (AGENTS.md rule 20)."""
 
     backend: str
     version: str
     argv: list[str]
     env: dict[str, str] = field(default_factory=dict)
     held_below: str | None = None
+    deprecated: bool = False
 
 
 def update_plan(
@@ -1767,7 +1770,8 @@ def update_plan(
         env = {"DISABLE_AUTOUPDATER": "1"} if backend == "claude" else {}
         argv = PIN_COMMANDS[backend].format(version=version).split()
         held = newest if version != newest else None
-        plan.append(Update(backend, version, argv, env, held))
+        deprecated = in_tree.backend_deprecation(backend) is not None
+        plan.append(Update(backend, version, argv, env, held, deprecated))
     return plan, failed
 
 

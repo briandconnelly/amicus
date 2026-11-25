@@ -45,6 +45,14 @@ def _record(**overrides):
             }
             for name in evidence.BACKENDS
         },
+        "release": {
+            "mode": "ordinary",
+            "changelog_override": False,
+            "observed_at": "2026-09-08T11:00:00+00:00",
+            "backends": {
+                name: {"latest": "1.0.0", "selected": "1.0.0"} for name in evidence.BACKENDS
+            },
+        },
     }
     record.update(overrides)
     return record
@@ -235,25 +243,41 @@ def test_a_codex_entry_duplicated_from_pis_is_rejected():
 VERSION = "9.9.9"
 _ARGV = ["--version", VERSION]
 # The wrong-checkout seams, answering as the release worktree for VERSION would.
-_RELEASE_TREE = {"declared_version": lambda: VERSION, "tag_exists": lambda tag: False}
+_PLAN = {
+    name: {
+        "backend": name,
+        "version": "1.0.0",
+        "argv": ["install", name],
+        "env": {"DISABLE_AUTOUPDATER": "1"} if name == "claude" else {},
+        "held_below": None,
+        "deprecated": False,
+    }
+    for name in evidence.BACKENDS
+}
+_RELEASE_TREE = {
+    "declared_version": lambda: VERSION,
+    "tag_exists": lambda tag: False,
+    "plan_updates": lambda fix: (_PLAN, []),
+    "cli_version": lambda backend: f"{backend}-cli 1.0.0",
+}
 
 
-def _passing_gate(backend, batch_id):
+def _passing_gate(backend, batch_id, env=None):
     return {
         "test_file": f"tests/test_{backend}_live.py",
         "exit_status": 0,
-        "cli_version": "x 1.0",
+        "cli_version": f"{backend}-cli 1.0.0",
         "batch_id": batch_id,
     }
 
 
 def _failing_gate(failing_backend):
-    def run_gate(backend, batch_id):
+    def run_gate(backend, batch_id, env=None):
         exit_status = 1 if backend == failing_backend else 0
         return {
             "test_file": f"tests/test_{backend}_live.py",
             "exit_status": exit_status,
-            "cli_version": "x 1.0",
+            "cli_version": f"{backend}-cli 1.0.0",
             "batch_id": batch_id,
         }
 
@@ -567,3 +591,236 @@ def test_the_recorded_evidence_covers_this_exact_commit():
         now=datetime.now(UTC),
     )
     assert problems == [], "; ".join(problems)
+
+
+# --- which CLI versions the evidence is on (issue #582) ---------------------------------
+
+
+def _release(record, **overrides):
+    record["release"].update(overrides)
+    return record
+
+
+@pytest.mark.parametrize(
+    ("line", "want"),
+    [
+        ("codex-cli 0.172.0", ("0.172.0", "")),
+        ("2.1.331 (Claude Code)", ("2.1.331", "")),
+        ("1.6.0", ("1.6.0", "")),
+        ("pi 1.6.0-beta.1", ("1.6.0", "-beta.1")),
+        ("v11.6.0", ("11.6.0", "")),
+        ("no version here", None),
+        (None, None),
+    ],
+)
+def test_cli_release_reads_every_backends_version_line(line, want):
+    assert evidence.cli_release(line) == want
+
+
+def test_a_record_without_a_release_block_is_rejected():
+    record = _record()
+    del record["release"]
+    problems = evidence.validate(record, head=HEAD, tree_clean=True, now=NOW)
+    assert "record is missing required field 'release'" in problems, problems
+
+
+@pytest.mark.parametrize(
+    ("change", "reason"),
+    [
+        ({"mode": "patch"}, "'release.mode' must be one of"),
+        ({"changelog_override": "yes"}, "'release.changelog_override' must be a boolean"),
+        ({"changelog_override": True}, "is true outside a fix release"),
+        ({"observed_at": "yesterday"}, "'release.observed_at' is not an ISO 8601"),
+        ({"observed_at": None}, "'release.observed_at' is not an ISO 8601"),
+        ({"backends": {"codex": {"latest": "1.0.0", "selected": "1.0.0"}}}, "must name exactly"),
+    ],
+)
+def test_a_malformed_release_block_is_rejected(change, reason):
+    problems = evidence.validate(_release(_record(), **change), head=HEAD, tree_clean=True, now=NOW)
+    assert any(reason in p for p in problems), problems
+
+
+@pytest.mark.parametrize(
+    ("cli_version", "selected"),
+    [
+        ("pi-cli 11.0.0", "1.0.0"),  # a longer number is not this release
+        ("pi-cli 1.0.0-beta.1", "1.0.0"),  # a prerelease is not the stable release
+        ("pi-cli 1.0.1", "1.0.0"),
+        (None, "1.0.0"),
+    ],
+)
+def test_the_selected_version_must_be_exactly_the_recorded_cli(cli_version, selected):
+    record = _record()
+    record["backends"]["pi"]["cli_version"] = cli_version
+    problems = evidence.validate(record, head=HEAD, tree_clean=True, now=NOW)
+    assert any("is not the stable release" in p for p in problems), problems
+
+
+def test_a_selected_version_ahead_of_latest_is_rejected():
+    record = _record()
+    record["release"]["backends"]["pi"]["latest"] = "0.9.0"
+    problems = evidence.validate(record, head=HEAD, tree_clean=True, now=NOW)
+    assert "backend 'pi' selected 1.0.0 is ahead of latest 0.9.0" in problems, problems
+
+
+def test_a_fix_release_holding_a_backend_below_latest_has_a_valid_shape():
+    record = _record()
+    _release(record, mode="fix", changelog_override=True)
+    record["release"]["backends"]["codex"]["latest"] = "1.1.0"
+    assert evidence.validate(record, head=HEAD, tree_clean=True, now=NOW) == []
+
+
+def _main(tmp_path, *argv, **seams):
+    kwargs = {
+        **_RELEASE_TREE,
+        "git_head": lambda: HEAD,
+        "git_dirty_paths": list,
+        "run_gate": _passing_gate,
+        **seams,
+    }
+    return evidence.main([*_ARGV, *argv], repo_root=tmp_path, **kwargs)
+
+
+def test_main_records_the_mode_and_each_backends_version(tmp_path):
+    held = {**_PLAN, "codex": {**_PLAN["codex"], "held_below": "1.1.0"}}
+    calls = []
+    assert _main(tmp_path, "--fix", plan_updates=lambda fix: calls.append(fix) or (held, [])) == 0
+    assert calls == [True]
+    record = json.loads((tmp_path / evidence.EVIDENCE_PATH).read_text())
+    assert record["release"]["mode"] == "fix"
+    assert record["release"]["changelog_override"] is False
+    assert record["release"]["backends"]["codex"] == {"latest": "1.1.0", "selected": "1.0.0"}
+    assert record["release"]["backends"]["pi"] == {"latest": "1.0.0", "selected": "1.0.0"}
+    assert evidence.validate(record, head=HEAD, tree_clean=True, now=datetime.now(UTC)) == []
+
+
+def test_main_records_the_changelog_override(tmp_path):
+    assert _main(tmp_path, "--fix", "--override-fix-changelog") == 0
+    record = json.loads((tmp_path / evidence.EVIDENCE_PATH).read_text())
+    assert record["release"]["changelog_override"] is True
+
+
+def test_the_changelog_override_without_fix_is_refused_before_anything(tmp_path, capsys):
+    calls: list[str] = []
+    rc = _main(
+        tmp_path,
+        "--override-fix-changelog",
+        git_dirty_paths=_never_called("git_dirty_paths", calls),
+        plan_updates=_never_called("plan_updates", calls),
+    )
+    assert rc == 2
+    assert calls == []
+    assert "applies only with --fix" in capsys.readouterr().err
+
+
+def test_main_refuses_before_any_gate_when_a_cli_is_not_the_one_planned(tmp_path, capsys):
+    calls: list[str] = []
+    rc = _main(
+        tmp_path,
+        cli_version=lambda backend: "2.1.0 (Claude Code)" if backend == "claude" else "x 1.0.0",
+        run_gate=_never_called("run_gate", calls),
+    )
+    assert rc == 1
+    assert calls == []
+    err = capsys.readouterr().err
+    assert "claude: installed '2.1.0 (Claude Code)' is not 1.0.0" in err
+    assert "install claude" in err
+    assert not (tmp_path / evidence.EVIDENCE_PATH).exists()
+
+
+def test_main_refuses_before_any_gate_when_the_plan_cannot_be_made(tmp_path, capsys):
+    calls: list[str] = []
+    rc = _main(
+        tmp_path,
+        plan_updates=lambda fix: ({}, ["the update plan could not be made: pi: npm is down"]),
+        run_gate=_never_called("run_gate", calls),
+    )
+    assert rc == 1
+    assert calls == []
+    assert "npm is down" in capsys.readouterr().err
+
+
+def test_a_deprecated_backend_may_stay_behind_its_planned_version(tmp_path):
+    plan = {**_PLAN, "pi": {**_PLAN["pi"], "version": "1.2.0", "deprecated": True}}
+    assert _main(tmp_path, plan_updates=lambda fix: (plan, [])) == 0
+    record = json.loads((tmp_path / evidence.EVIDENCE_PATH).read_text())
+    assert record["release"]["backends"]["pi"] == {"latest": "1.2.0", "selected": "1.0.0"}
+
+
+def test_a_deprecated_backend_still_may_not_be_on_a_prerelease(tmp_path, capsys):
+    plan = {**_PLAN, "pi": {**_PLAN["pi"], "version": "1.2.0", "deprecated": True}}
+    rc = _main(
+        tmp_path,
+        plan_updates=lambda fix: (plan, []),
+        cli_version=lambda b: "pi 1.0.0-rc.1" if b == "pi" else f"{b} 1.0.0",
+    )
+    assert rc == 1
+    assert "pi: installed 'pi 1.0.0-rc.1' is not 1.2.0" in capsys.readouterr().err
+
+
+def test_each_gate_runs_with_its_planned_environment(tmp_path):
+    seen: dict[str, object] = {}
+
+    def run_gate(backend, batch_id, env=None):
+        seen[backend] = env
+        return _passing_gate(backend, batch_id)
+
+    assert _main(tmp_path, run_gate=run_gate) == 0
+    assert seen == {"codex": {}, "claude": {"DISABLE_AUTOUPDATER": "1"}, "pi": {}}
+
+
+def test_a_cli_that_moved_during_its_gate_fails_the_record(tmp_path, capsys):
+    def run_gate(backend, batch_id, env=None):
+        entry = _passing_gate(backend, batch_id)
+        if backend == "claude":
+            entry["cli_version"] = "1.0.1 (Claude Code)"
+        return entry
+
+    assert _main(tmp_path, run_gate=run_gate) == 1
+    assert not (tmp_path / evidence.EVIDENCE_PATH).exists()
+    assert (tmp_path / evidence.FAILURE_PATH).exists()
+    assert "a CLI's version changed during the run: claude" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    ("payload", "reason"),
+    [
+        ([], "not a JSON object"),
+        ({"updates": [], "failed": "x"}, "`failed` is not a list"),
+        ({"updates": [], "failed": ["codex: down"]}, "could not be made: codex: down"),
+        ({"updates": [{"backend": "kimi"}], "failed": []}, "unexpected update"),
+        ({"updates": list(_PLAN.values())[:2], "failed": []}, "not every backend"),
+        (
+            {"updates": [*_PLAN.values(), _PLAN["pi"]], "failed": []},
+            "malformed update",
+        ),
+        (
+            {"updates": [{**_PLAN["pi"], "version": "1.0"}, *list(_PLAN.values())[:2]]},
+            "`failed` is not a list",
+        ),
+        (
+            {
+                "updates": [{**_PLAN["pi"], "version": "1.0"}, *list(_PLAN.values())[:2]],
+                "failed": [],
+            },
+            "malformed update",
+        ),
+        (
+            {
+                "updates": [{**_PLAN["pi"], "env": {"A": 1}}, *list(_PLAN.values())[:2]],
+                "failed": [],
+            },
+            "malformed update",
+        ),
+    ],
+)
+def test_a_plan_of_the_wrong_shape_is_refused(payload, reason):
+    plan, problems = evidence.parse_plan(payload)
+    assert plan == {}
+    assert any(reason in p for p in problems), problems
+
+
+def test_a_well_formed_plan_is_read_per_backend():
+    plan, problems = evidence.parse_plan({"updates": list(_PLAN.values()), "failed": []})
+    assert problems == []
+    assert plan == _PLAN

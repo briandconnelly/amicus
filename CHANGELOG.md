@@ -51,6 +51,15 @@ per-change, as its own lead says.
   still running or failing stops the release before any quota is spent, and the commands it
   prints start with it again.
 
+- The live-gate evidence record now says which CLI versions it is on and why. Its `release`
+  block names the mode (ordinary or fix), whether `--override-fix-changelog` was used, when
+  npm was read, and each backend's `latest` and the version the evidence ran on.
+  `scripts/record_live_gate_evidence.py` takes `--fix` and `--override-fix-changelog`, reads
+  the plan `print-updates --json` makes, and refuses before spending when an installed CLI is
+  not the version planned; each gate runs with its planned environment, so Claude Code's
+  autoupdater stays held. The publish workflow's `verify` job checks the block against the
+  tagged tree's contracts and changelog, and its summary shows each held backend.
+
 ### Fixed
 
 - A fresh install of 0.16.0 resolves FastMCP 4.2.5, which serves `subscriptions/listen` by

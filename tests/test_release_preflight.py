@@ -452,7 +452,7 @@ def test_the_fix_changelog_check_needs_categorized_fix_entries(tmp_path, body, r
         "## [1.2.2] - 2025-12-01\n\n### Added\n\n- Older.\n\n[Unreleased]: x\n",
         encoding="utf-8",
     )
-    problems = release.fix_changelog_problems(tmp_path, "1.2.3")
+    problems = release.release_state.fix_changelog_problems("1.2.3", repo_root=tmp_path)
     assert any(reason in p for p in problems), problems
     # An earlier section's categories are not this release's.
     assert not any("Added" in p for p in problems)
@@ -462,3 +462,13 @@ def test_a_gate_that_has_not_passed_in_ci_stops_preflight_before_any_spend(layou
     run = FakeRun(layout.head)
     run.check_runs[0]["conclusion"] = "failure"
     _assert_refused(layout, capsys, run, f"{run.check_runs[0]['name']}: failure")
+
+
+def test_the_printed_evidence_command_records_the_fix_mode(layout, capsys):
+    """Issue #582: the record carries the mode, so the command preflight prints passes it on."""
+    run = FakeRun(layout.head)
+    extra = ["--fix", "--override-fix-changelog"]
+    assert _preflight(layout.worktree, run, extra=extra) == 0
+    command = release.evidence_command(layout.worktree, NEXT, fix=True, override=True)
+    assert command.endswith(f"--version {NEXT} --fix --override-fix-changelog")
+    assert command in capsys.readouterr().out

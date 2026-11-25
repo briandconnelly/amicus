@@ -191,6 +191,15 @@ The check prints a `held:` line for that backend instead of a `FAIL`.
 The brief drafts the carrier re-check for the version held, which is the one the evidence runs on, and says in the paragraph for the release PR which backend is held and below what.
 `session --fix` stops before the evidence when the `latest` a backend is held below moves after you confirmed the re-check, even if the version held stays the same.
 
+The evidence record says all of this too, so the tag carries it to the publish workflow rather than leaving it only in the release PR (issue #582).
+The evidence script takes `--fix` and `--override-fix-changelog` as the preflight was given them, and the command the preflight prints passes them on.
+Before any gate runs, it reads the plan `print-updates --json` makes, with `--fix` when given, and the `--version` of each installed CLI, and it refuses, spending nothing, when the plan cannot be made or an installed CLI is not the version planned; only a deprecated backend may be behind its planned version, on a stable release.
+Each gate runs with the environment its install was planned with, so Claude Code's autoupdater stays held, and a CLI whose version changed during the run fails the record.
+The record's `release` block names the mode, whether the override was used, when npm was read, and for each backend the `latest` npm named and the version the evidence is on.
+The `verify` job checks that block against the tagged tree: every version the evidence is on must be one the tagged contract supports, a backend may be below its `latest` only when it is deprecated there or when a fix release holds it below a `latest` the tagged contract does not support, and a fix release without the override must have a changelog section of fixes only.
+Its summary lists the mode, the override and each backend's version, with any `latest` it is held below, for the pypi reviewer.
+`latest` there is the maintainer's observation of npm when the evidence ran, which `verify` cannot read again, so like the rest of the record it is the maintainer's assertion, checked for shape and against the tree.
+
 ## The release sequence
 
 Rules 19 and 20 together shape this sequence, and a future maintainer should not "simplify" it back.
@@ -283,7 +292,7 @@ The tag therefore deliberately points at a commit that is in `main`'s history bu
    If the PR C branch gains any commit after this point — an "Update branch" click, or a review pushing a change — this step must be redone from the new tip: the evidence would otherwise cover a commit that is no longer what step 4 actually merges.
    Redoing it after the local tag below exists starts with `git tag -d vX.Y.Z`, because the evidence script refuses to run while that tag exists; delete it only if it was never pushed.
    The evidence run below spends real quota on all three backends; a maintainer who has to redo this step must not reuse the earlier record, even though re-spending that quota is tempting.
-   Run the command the preflight printed, which is `uv run python scripts/record_live_gate_evidence.py --version X.Y.Z` in the worktree.
+   Run the command the preflight printed, which is `uv run python scripts/record_live_gate_evidence.py --version X.Y.Z` in the worktree, with `--fix` and `--override-fix-changelog` when the preflight had them.
    The script itself forces `AMICUS_REQUIRE_LIVE=1` into each backend's subprocess environment, so prefixing the command with it is optional; its own usage string documents `AMICUS_REQUIRE_LIVE=1 uv run python scripts/record_live_gate_evidence.py --version X.Y.Z`, and either form runs the same live gates.
    The pi gate also needs `AMICUS_PI_MODEL` exported as an exact `provider/id` whose provider is ready, or it fails rather than skips.
    That gate's spend-cap test fails when the run finishes under the 0.01 USD cap, so a model whose provider reports its cost and prices a twenty-call task far below a cent cannot serve as `AMICUS_PI_MODEL` for it.

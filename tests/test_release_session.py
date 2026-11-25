@@ -113,7 +113,11 @@ class FakeRun:
             *flag,
             *(["--override-fix-changelog"] if override else []),
         ]
-        self.evidence = [*EVIDENCE[:-1], version]
+        self.evidence = [
+            *EVIDENCE[:-1],
+            version,
+            *release.evidence_flags(fix=fix, override=override),
+        ]
         self.pr = {
             "headRefOid": head,
             "headRefName": BRANCH,

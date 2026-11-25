@@ -63,10 +63,23 @@ def _record(**overrides):
             }
             for name in BACKENDS
         },
+        "release": {
+            "mode": "ordinary",
+            "changelog_override": False,
+            "observed_at": "2026-09-08T11:00:00+00:00",
+            "backends": {name: {"latest": "1.0.0", "selected": "1.0.0"} for name in BACKENDS},
+        },
     }
     record.update(overrides)
     return record
 
+
+# The fixture's contracts support every CLI the fixture record names (1.0.0), and codex 1.1.
+CONTRACTS = {
+    "codex": "%s = frozenset(\n    {\n        (1, 0),  # a comment\n        (1, 1),\n    }\n)\n",
+    "claude": "%s = frozenset({1})\n",
+    "pi": "%s = frozenset({(1, 0)})\n",
+}
 
 CHANGELOG_BASE = "https://github.com/briandconnelly/amicus"
 CHANGELOG = f"""# Changelog
@@ -199,6 +212,9 @@ def repo(tmp_path):
     (tmp_path / "src" / "amicus" / "config").mkdir()
     (tmp_path / release_state.LEGACY_ENV_SPEC_PATH).write_text(ENVSPEC, encoding="utf-8")
     (tmp_path / release_state.GLOBAL_ENV_PATH).write_text(ENV_DECLARATIONS, encoding="utf-8")
+    for backend, (rel_path, name) in release_state.CLI_CONTRACTS.items():
+        (tmp_path / rel_path).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel_path).write_text(CONTRACTS[backend] % name, encoding="utf-8")
     return tmp_path
 
 
@@ -1558,3 +1574,120 @@ def test_a_real_tag_message_survives_git_cleanup_verbatim(git_repo):
 
     message = _git(git_repo, "tag", "-l", "--format=%(contents)", f"v{VERSION}")
     assert json.loads(message) == record
+
+
+# --- the evidence's CLI versions against the tagged tree (issue #582) --------------------
+
+FIXES_ONLY_CHANGELOG = CHANGELOG.replace(
+    f"## [{VERSION}] - 2026-09-08\n\n### Added\n\n- A thing.",
+    f"## [{VERSION}] - 2026-09-08\n\n### Security\n\n- An unsafe thing.",
+)
+
+
+def test_the_static_read_of_the_cli_contracts_matches_the_runtime_sets():
+    from amicus.backends.claude import contract as claude_contract
+    from amicus.backends.codex import contract as codex_contract
+    from amicus.backends.pi import contract as pi_contract
+
+    sets, problems = release_state.supported_cli_sets(Path(__file__).resolve().parent.parent)
+    assert problems == []
+    assert sets == {
+        "codex": codex_contract.SUPPORTED_VERSIONS,
+        "claude": claude_contract.SUPPORTED_MAJORS,
+        "pi": pi_contract.SUPPORTED_VERSIONS,
+    }
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "SUPPORTED_VERSIONS = {(1, 0)}\n",
+        "SUPPORTED_VERSIONS = frozenset(VERSIONS)\n",
+        "SUPPORTED_VERSIONS = frozenset({(1, 'x')})\n",
+        "SUPPORTED_VERSIONS = frozenset(set())\n",
+        "OTHER = 1\n",
+        "this is not python(\n",
+    ],
+)
+def test_a_contract_this_cannot_read_is_a_problem_not_an_empty_set(repo, text):
+    (repo / release_state.CLI_CONTRACTS["pi"][0]).write_text(text, encoding="utf-8")
+    sets, problems = release_state.supported_cli_sets(repo)
+    assert "pi" not in sets
+    assert any("contract.py" in p for p in problems), problems
+
+
+def _held(record, backend, latest, *, mode="fix", override=False):
+    record["release"].update(mode=mode, changelog_override=override)
+    record["release"]["backends"][backend]["latest"] = latest
+    return record
+
+
+def test_an_ordinary_release_on_every_latest_is_accepted(repo):
+    assert release_state.check_release_selection(_record(), VERSION, repo_root=repo) == []
+
+
+def test_a_fix_release_holding_below_an_unsupported_latest_is_accepted(repo):
+    (repo / "CHANGELOG.md").write_text(FIXES_ONLY_CHANGELOG, encoding="utf-8")
+    record = _held(_record(), "pi", "1.1.0")
+    assert release_state.check_release_selection(record, VERSION, repo_root=repo) == []
+
+
+def test_an_ordinary_release_below_latest_is_rejected(repo):
+    record = _held(_record(), "pi", "1.1.0", mode="ordinary")
+    problems = release_state.check_release_selection(record, VERSION, repo_root=repo)
+    assert any("pi's evidence is on 1.0.0, below npm's latest 1.1.0" in p for p in problems)
+
+
+def test_a_fix_release_holding_below_a_supported_latest_is_rejected(repo):
+    (repo / "CHANGELOG.md").write_text(FIXES_ONLY_CHANGELOG, encoding="utf-8")
+    record = _held(_record(), "codex", "1.1.0")  # the fixture's codex contract supports 1.1
+    problems = release_state.check_release_selection(record, VERSION, repo_root=repo)
+    assert any("codex is held at 1.0.0 below npm's latest 1.1.0" in p for p in problems)
+
+
+def test_evidence_on_a_version_the_tagged_contract_does_not_support_is_rejected(repo):
+    record = _record()
+    for field in ("latest", "selected"):
+        record["release"]["backends"]["claude"][field] = "3.0.0"
+    problems = release_state.check_release_selection(record, VERSION, repo_root=repo)
+    assert any("claude 3.0.0, which the evidence is on, is outside" in p for p in problems)
+
+
+def test_a_deprecated_backend_may_be_behind_latest_in_an_ordinary_release(repo):
+    deprecation = BACKEND_DEPRECATIONS.replace('"old_backend"', '"pi"')
+    (repo / release_state.BACKEND_DEPRECATIONS_PATH).write_text(deprecation, encoding="utf-8")
+    record = _held(_record(), "pi", "1.1.0", mode="ordinary")
+    assert release_state.check_release_selection(record, VERSION, repo_root=repo) == []
+
+
+def test_a_fix_release_without_the_override_needs_a_fixes_only_changelog(repo):
+    """The fixture's section has `### Added`."""
+    record = _held(_record(), "pi", "1.1.0")
+    problems = release_state.check_release_selection(record, VERSION, repo_root=repo)
+    assert any("section has `### Added`" in p for p in problems), problems
+    record = _held(_record(), "pi", "1.1.0", override=True)
+    assert release_state.check_release_selection(record, VERSION, repo_root=repo) == []
+
+
+def test_the_summary_shows_the_mode_and_each_hold(git_repo, tmp_path):
+    head = _git(git_repo, "rev-parse", "HEAD")
+    record = _held(_record(commit=head), "pi", "1.1.0", override=True)
+    _tag_annotated(git_repo, f"v{VERSION}", record)
+    summary = tmp_path / "summary.md"
+    args = ["--tag", f"v{VERSION}", "--commit", head, "--summary", str(summary)]
+    assert release_state.main(args, repo_root=git_repo) == 0
+    text = summary.read_text(encoding="utf-8")
+    assert "- mode: fix release" in text
+    assert "`--override-fix-changelog`" in text
+    assert "- pi: evidence on 1.0.0, held below npm's latest 1.1.0" in text
+    assert "- codex: evidence on 1.0.0\n" in text
+    assert "not an attestation" in text
+
+
+def test_main_rejects_a_tag_whose_hold_the_tagged_tree_does_not_allow(git_repo, capsys):
+    head = _git(git_repo, "rev-parse", "HEAD")
+    _tag_annotated(
+        git_repo, f"v{VERSION}", _held(_record(commit=head), "pi", "1.1.0", mode="ordinary")
+    )
+    assert release_state.main(["--tag", f"v{VERSION}", "--commit", head], repo_root=git_repo) == 1
+    assert "below npm's latest 1.1.0" in capsys.readouterr().err
