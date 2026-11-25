@@ -95,8 +95,25 @@ def repo(tmp_path) -> Repo:
 class FakeRun:
     """`gh pr view`, the session's commands and the evidence stub; anything else fails."""
 
-    def __init__(self, head: str, **returncodes: int):
+    def __init__(
+        self,
+        head: str,
+        *,
+        version: str = NEXT,
+        fix: bool = False,
+        override: bool = False,
+        **returncodes: int,
+    ):
         self.calls: list[tuple[list[str], dict]] = []
+        flag = ["--fix"] if fix else []
+        self.updates_command = [*release.UPDATES_COMMAND, *flag]
+        self.preflight = [
+            *PREFLIGHT[:-1],
+            version,
+            *flag,
+            *(["--override-fix-changelog"] if override else []),
+        ]
+        self.evidence = [*EVIDENCE[:-1], version]
         self.pr = {
             "headRefOid": head,
             "headRefName": BRANCH,
@@ -119,7 +136,7 @@ class FakeRun:
         self.calls.append((cmd, kwargs))
         if cmd[:3] == ["gh", "pr", "view"]:
             return self._done(cmd, "gh", json.dumps(self.pr))
-        if cmd == list(release.UPDATES_COMMAND):
+        if cmd == self.updates_command:
             self.plans += 1
             plan = self.replan if self.plans > 1 and self.replan is not None else self.updates
             return self._done(cmd, "updates", json.dumps(plan))
@@ -127,11 +144,11 @@ class FakeRun:
             return self._done(cmd, cmd[0] if cmd[0] == "claude" else "npm")
         if cmd == POLICY:
             return self._done(cmd, "policy")
-        if cmd == PREFLIGHT:
+        if cmd == self.preflight:
             return self._done(cmd, "preflight")
         if cmd == PRICING:
             return self._done(cmd, "pricing")
-        if cmd == EVIDENCE:
+        if cmd == self.evidence:
             record = {
                 "recorded_at": "2026-11-24T20:00:00+00:00",
                 "commit": self.pr["headRefOid"],
@@ -171,7 +188,9 @@ class Answers:
         return answer
 
 
-def _session(r: Repo, run: FakeRun, ask: Answers, *, interactive=True, environ=None, extra=()):
+def _session(
+    r: Repo, run: FakeRun, ask: Answers, *, interactive=True, environ=None, extra=(), version=NEXT
+):
     env = {"PATH": os.environ.get("PATH", ""), release.PI_MODEL_ENV: MODEL}
     ctx = release.Context(
         repo_root=r.main,
@@ -181,7 +200,7 @@ def _session(r: Repo, run: FakeRun, ask: Answers, *, interactive=True, environ=N
         environ=env if environ is None else environ,
         home=lambda: r.home,
     )
-    return release.main(["session", "--pr", str(PR), "--version", NEXT, *extra], context=ctx)
+    return release.main(["session", "--pr", str(PR), "--version", version, *extra], context=ctx)
 
 
 # --- positive control ------------------------------------------------------------------
@@ -612,3 +631,69 @@ def test_a_recorded_key_with_a_value_of_the_wrong_shape_is_named_not_printed(tmp
     assert f"`{key}` (value not recorded)" in note
     shown = value if isinstance(value, str) else json.dumps(value)
     assert shown not in note.replace(f"`{key}` (value not recorded)", "")
+
+
+# --- a bug or security fix release (`--fix`) -------------------------------------------------
+
+PATCH = "1.3.1"
+HELD = {**UPDATES[0], "version": "0.171.1", "argv": ["npm", "i", "-g", "c@0.171.1"]}
+
+
+def test_a_fix_session_plans_and_checks_with_fix_and_says_what_it_holds(repo, capsys):
+    run = FakeRun(repo.head, version=PATCH, fix=True)
+    run.updates = {"updates": [{**HELD, "held_below": "0.172.0"}, *UPDATES[1:]], "failed": []}
+    ask = Answers("n", "y", f"spend {PATCH}")
+    assert _session(repo, run, ask, extra=["--fix"], version=PATCH) == 0
+    out = capsys.readouterr().out
+    assert run.commands() == [
+        ["gh", "pr", "view", str(PR), "--json", GH_FIELDS],
+        run.updates_command,
+        POLICY,
+        run.preflight,
+        PRICING,
+        run.updates_command,
+        run.evidence,
+    ]
+    assert run.updates_command[-1] == "--fix" and run.preflight[-1] == "--fix"
+    assert "== 1. Backend CLIs for a fix release ==" in out
+    assert "codex stays on 0.171.1: npm's latest 0.172.0 is outside the shipped contract" in out
+    assert "Skipped. The preflight below fails if a CLI is not at these versions." in out
+    assert "check_backend_compat.py release-brief --fix` drafts the re-check" in out
+    assert "codex 0.171.1 (held below 0.172.0), claude 2.1.331, pi 1.6.0" in out
+
+
+def test_a_fix_session_passes_the_changelog_override_to_the_preflight(repo, capsys):
+    run = FakeRun(repo.head, version=PATCH, fix=True, override=True)
+    ask = Answers("n", "y", f"spend {PATCH}")
+    extra = ["--fix", "--override-fix-changelog"]
+    assert _session(repo, run, ask, extra=extra, version=PATCH) == 0
+    assert run.preflight in run.commands()
+    assert run.preflight[-2:] == extra
+
+
+def test_a_held_backends_latest_moving_stops_the_fix_session_before_the_spend_prompt(repo, capsys):
+    """The version held can stay the same while the `latest` the PR names as skipped moves."""
+    run = FakeRun(repo.head, version=PATCH, fix=True)
+    run.updates = {"updates": [{**HELD, "held_below": "0.172.0"}, *UPDATES[1:]], "failed": []}
+    run.replan = {"updates": [{**HELD, "held_below": "0.173.0"}, *UPDATES[1:]], "failed": []}
+    ask = Answers("n", "y")
+    assert _session(repo, run, ask, extra=["--fix"], version=PATCH) == 1
+    err = capsys.readouterr().err
+    assert "npm's latest moved from" in err
+    assert "held below 0.173.0" in err
+    assert run.evidence not in run.commands()
+
+
+def test_the_changelog_override_without_fix_is_refused_before_anything_runs(repo, capsys):
+    run = FakeRun(repo.head)
+    assert _session(repo, run, Answers(), extra=["--override-fix-changelog"]) == 1
+    assert run.calls == []
+    assert not repo.worktree.exists()
+    assert "applies only with --fix" in capsys.readouterr().err
+
+
+def test_an_update_plan_with_a_malformed_hold_stops_the_session(repo, capsys):
+    run = FakeRun(repo.head)
+    run.updates = {"updates": [{**UPDATES[0], "held_below": 172}, *UPDATES[1:]], "failed": []}
+    assert _session(repo, run, Answers()) == 1
+    assert "malformed update" in capsys.readouterr().err

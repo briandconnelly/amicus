@@ -30,7 +30,14 @@ PR N is open against `main`, that the tree is clean (untracked files included, w
 exists on `origin` or locally, that `check_release_state.check_tree_pre_tag` holds, and that
 `scripts/check_backend_compat.py` passes. On success it prints the evidence command, and never
 runs it: that spends live quota, which only the maintainer authorizes (AGENTS.md rules 5
-and 20).
+and 20). It also requires every rule-2 gate job CI ran on the release commit to have passed,
+as `ci` below checks, so a failing gate stops the release before anything is spent.
+`--fix` is for a release that ships an important bug or security fix: it refuses unless the
+release's CHANGELOG.md section holds only `### Fixed` and `### Security` entries, and runs
+`check_backend_compat.py --fix`, which lets a backend whose npm `latest` the shipped contract
+does not support yet stay on the newest stable release it does (docs/RELEASING.md, "Bug-fix and
+security releases"). `--override-fix-changelog`, only with `--fix`, turns a failed category
+check into a warning; the release PR then says why the other changes ship with the fix.
 
 `session --pr N --version X.Y.Z [--worktree PATH]` is RELEASING step 3 as one command, for
 the maintainer at a terminal. It refuses unless stdin and stdout are a terminal, `CI` is unset
@@ -44,7 +51,17 @@ secret. Only then, and only once the maintainer types `spend X.Y.Z`, does it run
 script, which spends live quota on every backend: typing that phrase is the authorization in
 the session that AGENTS.md rule 20 and RELEASING step 3 require, and a passing preflight is
 not. On success it prints the notes for the PR and the rest of the release, as `preflight`
-does. It never tags, merges or pushes.
+does. It never tags, merges or pushes. `--fix` plans the installs with `print-updates --json
+--fix` and passes `--fix`, and `--override-fix-changelog` when given, to `preflight`.
+
+`ci --sha SHA` reads, read-only, the check runs GitHub reports for SHA and passes only when
+every job of the AGENTS.md rule-2 gate CI runs (`.github/workflows/test.yml`'s `gate` job, once
+for each Python version in its matrix, called from `ci.yml`) completed with success, and when
+origin's `main`, which it fetches, is in SHA's history: CI on a pull request tests the head
+merged with `main`, and only then is that SHA's own tree. Only check runs GitHub Actions
+created count. `preflight` runs the same check before the evidence, and the block it prints
+after the evidence opens with it again, in place of running the gate by hand: CI already ran
+it on the release commit, on every supported Python.
 
 `post-merge --release-sha SHA --version X.Y.Z` runs in the same worktree after the release PR
 merges (RELEASING step 5). It fetches `main` from `origin` first and fails if it cannot, then
@@ -91,7 +108,10 @@ whoever's token ran it. Only the maintainer's own token can make it pass.
 Usage:
     uv run python scripts/release.py prepare X.Y.Z [--check]
     uv run python scripts/release.py preflight --pr N --version X.Y.Z
+                                               [--fix [--override-fix-changelog]]
     uv run python scripts/release.py session --pr N --version X.Y.Z [--worktree PATH]
+                                             [--fix [--override-fix-changelog]]
+    uv run python scripts/release.py ci --sha SHA
     uv run python scripts/release.py post-merge --release-sha SHA --version X.Y.Z
     uv run python scripts/release.py post-publish --version X.Y.Z [--timeout SECONDS]
     uv run python scripts/release.py pointer --version X.Y.Z [--timeout SECONDS]
@@ -510,6 +530,82 @@ def _version_problems(version: str) -> list[str]:
     return [f"version {version!r} is not X.Y.Z"]
 
 
+FIX_CATEGORIES = ("Fixed", "Security")
+_CATEGORY_RE = re.compile(r"^### +(?P<name>.+?)[ \t]*$")
+# What ends a release's section: the next release's heading, or the link definitions below.
+_SECTION_END_RE = re.compile(r"^(?:## \[|\[[^\]]+\]: )", re.MULTILINE)
+
+
+def fix_changelog_problems(repo_root: Path, version: str) -> list[str]:
+    """Why `version`'s CHANGELOG.md section is not a fix release's, or [] when it is: at least
+    one entry, and every entry under `### Fixed` or `### Security` (docs/RELEASING.md,
+    "Bug-fix and security releases"). The lead paragraph before the first category is allowed.
+    A heading says nothing about whether an entry under it is a fix; that stays the
+    maintainer's reading."""
+    try:
+        text = (repo_root / "CHANGELOG.md").read_text(encoding="utf-8")
+    except OSError as exc:
+        return [
+            f"CHANGELOG.md could not be read, so whether {version} ships only fixes is "
+            f"unknown: {exc}"
+        ]
+    heading = re.search(
+        rf"^## \[{re.escape(version)}\] - \d{{4}}-\d{{2}}-\d{{2}}[ \t]*$", text, re.MULTILINE
+    )
+    if heading is None:
+        return [
+            f"CHANGELOG.md has no dated section for {version}, so whether it ships only "
+            "fixes is unknown"
+        ]
+    after = _SECTION_END_RE.search(text, heading.end() + 1)
+    body = text[heading.end() : after.start() if after else len(text)]
+    problems: list[str] = []
+    category: str | None = None
+    entries = 0
+    for line in body.splitlines():
+        found = _CATEGORY_RE.match(line)
+        if found:
+            category = found["name"]
+            if category not in FIX_CATEGORIES:
+                problems.append(
+                    f"CHANGELOG.md's {version} section has `### {category}`; a fix release has "
+                    "only `### Fixed` and `### Security`"
+                )
+        elif line.startswith("- "):
+            if category is None:
+                problems.append(
+                    f"CHANGELOG.md's {version} section has an entry under no `###` category"
+                )
+            elif category in FIX_CATEGORIES:
+                entries += 1
+    if not entries:
+        problems.append(
+            f"CHANGELOG.md's {version} section has no entry under `### Fixed` or `### Security`"
+        )
+    return problems
+
+
+def _fix_mode_problems(
+    ctx: Context, version: str, *, fix: bool, override: bool
+) -> tuple[list[str], list[str]]:
+    """`--fix`'s eligibility: the problems that stop it, and the warnings an override leaves."""
+    if override and not fix:
+        return ["--override-fix-changelog applies only with --fix"], []
+    if not fix or _version_problems(version):
+        return [], []
+    found = fix_changelog_problems(ctx.repo_root, version)
+    if not found:
+        return [], []
+    if override:
+        return [], found
+    return [
+        *found,
+        "--fix is for a release that ships an important bug or security fix; if other changes "
+        "must ship with it, pass --override-fix-changelog and say why in the release PR "
+        "(docs/RELEASING.md)",
+    ], []
+
+
 def _stderr_line(proc: subprocess.CompletedProcess) -> str:
     text = proc.stderr if isinstance(proc.stderr, str) else (proc.stderr or b"").decode()
     lines = text.strip().splitlines()
@@ -636,10 +732,30 @@ def evidence_command(repo_root: Path, version: str) -> str:
     )
 
 
+def _print_fix_notes(*, fix: bool, warnings: list[str]) -> None:
+    """What a passing `preflight --fix` adds: the PR's disclosure, and an override's warning."""
+    if fix:
+        print("This is a fix release: a backend whose latest the shipped contract does not")
+        print("support stays on the newest release it does (`print-updates --fix` names it).")
+        print("Name each held backend and the latest it skipped in the release PR.")
+    if warnings:
+        print(
+            "WARNING: --override-fix-changelog: this fix release ships more than fixes:",
+            file=sys.stderr,
+        )
+        for warning in warnings:
+            print(f"  - {warning}", file=sys.stderr)
+        print("Say in the release PR why these changes ship with the fix.", file=sys.stderr)
+
+
 def cmd_preflight(ctx: Context, args: argparse.Namespace) -> int:
     version: str = args.version
     tag = f"v{version}"
     problems = _version_problems(version)
+    fix_problems, fix_warnings = _fix_mode_problems(
+        ctx, version, fix=args.fix, override=args.override_fix_changelog
+    )
+    problems += fix_problems
     problems += _linked_worktree_problems(ctx)
     head = _rev(ctx, "HEAD")
     if head is None:
@@ -664,13 +780,19 @@ def cmd_preflight(ctx: Context, args: argparse.Namespace) -> int:
         problems += release_state.check_tree_pre_tag(
             version, repo_root=ctx.repo_root, run=ctx.run, git=ctx.git
         )
+    compat = ["scripts/check_backend_compat.py", *(["--fix"] if args.fix else [])]
     if pr is None or pr_problems:
         # A PR that cannot be read, or that comes from a fork, gets none of its checkout's
         # scripts run on its behalf.
         print("skipping scripts/check_backend_compat.py until the PR checks pass", flush=True)
     else:
-        print("running scripts/check_backend_compat.py (spends nothing):", flush=True)
-        problems += _script_problems(ctx, "scripts/check_backend_compat.py")
+        print(f"running {' '.join(compat)} (spends nothing):", flush=True)
+        problems += _script_problems(ctx, *compat)
+        if head is not None and head == pr["headRefOid"]:
+            # The gate CI ran on the release commit: a failure found after the evidence would
+            # mean a new commit and spending the quota again.
+            print(f"reading the rule-2 gate's check runs on {head} (read-only):", flush=True)
+            problems += ci_problems(ctx, head)[1]
 
     if problems:
         print(f"preflight for {version} does NOT hold; do not record evidence:", file=sys.stderr)
@@ -682,6 +804,7 @@ def cmd_preflight(ctx: Context, args: argparse.Namespace) -> int:
     print(f"Record that SHA: it is the release commit, the one {tag} will point at.")
     print("Still yours before the evidence run (docs/RELEASING.md step 3): the backend CLIs at")
     print("npm's latest with Claude Code's autoupdater held, and the rule-18 carrier re-check.")
+    _print_fix_notes(fix=args.fix, warnings=fix_warnings)
     print("The evidence run spends live quota on all three backends (codex, claude and pi)")
     print("and needs the maintainer's authorization in the session that runs it. This script")
     print("never runs it. The command:")
@@ -702,6 +825,11 @@ def next_steps(repo_root: Path, version: str, pr: int, release_sha: str) -> list
     Each inner list is one block, printed joined with `&&` so a failing check stops everything
     after it; the blocks break only where the maintainer must act between them. Printed, never
     run: tagging, merging and pushing are the maintainer's alone.
+
+    The first block opens with `ci`, the AGENTS.md rule-2 gate as CI ran it on the release
+    commit, so a gate still running or failing stops it before anything is tagged, and the
+    block can simply be run again. The gate is not run again locally: CI is authoritative for
+    it, on every supported Python, where a local run covers one.
     """
     tag = f"v{version}"
     record = shlex.quote(str(repo_root / EVIDENCE_PATH))
@@ -717,14 +845,13 @@ def next_steps(repo_root: Path, version: str, pr: int, release_sha: str) -> list
     pkg = f"git+https://github.com/briandconnelly/amicus.git@{release_sha}"
     return [
         [
+            f"uv run python scripts/release.py ci --sha {release_sha}",
             f'grep -q \'"commit": "{release_sha}"\' {record}',
             "AMICUS_RELEASE_CHECK=1 uv run pytest tests/test_release_evidence.py -v --no-cov",
             f"git tag -a {tag} --cleanup=verbatim -F {record} {release_sha}",
             f"uv run python scripts/check_release_state.py --tag {tag} --commit {release_sha}",
             f"printf '%s\\n' {handshake} | UV_CACHE_DIR=\"$(mktemp -d)\" "
             f"uvx --from {pkg} amicus-mcp | python3 -c {expect}",
-            "uv run ruff check . && uv run ruff format --check . && uv run ty check "
-            "&& uv run lint-imports && uv run pytest",
             f"gh pr merge {pr} --merge",
             f"uv run python scripts/release.py post-merge --release-sha {release_sha} "
             f"--version {version}",
@@ -847,9 +974,10 @@ def _run_step(ctx: Context, cwd: Path, cmd: list[str], extra_env: Mapping[str, s
     return []
 
 
-def _update_plan(ctx: Context, cwd: Path) -> tuple[list[dict], list[str]]:
-    """`print-updates --json` from the worktree's own script, checked for shape."""
-    cmd = list(UPDATES_COMMAND)
+def _update_plan(ctx: Context, cwd: Path, *, fix: bool = False) -> tuple[list[dict], list[str]]:
+    """`print-updates --json` (with `--fix` for a fix release) from the worktree's own script,
+    checked for shape."""
+    cmd = [*UPDATES_COMMAND, *(["--fix"] if fix else [])]
     try:
         proc = ctx.run(
             cmd, cwd=cwd, env=dict(ctx.environ), capture_output=True, text=True, check=False
@@ -866,6 +994,7 @@ def _update_plan(ctx: Context, cwd: Path) -> tuple[list[dict], list[str]]:
                 and all(isinstance(part, str) for part in argv)
                 and isinstance(env, dict)
                 and all(isinstance(k, str) and isinstance(v, str) for k, v in env.items())
+                and isinstance(update.get("held_below"), str | None)
             ):
                 raise TypeError(f"malformed update {update!r}")
         if not isinstance(failed, list):
@@ -1017,9 +1146,14 @@ def _stop(problems: list[str], *, spent: bool = False) -> int:
     return 1
 
 
-def _session_refusals(ctx: Context, version: str) -> list[str]:
-    """What stops a session before it touches anything."""
+def _session_refusals(
+    ctx: Context, version: str, *, fix: bool = False, override: bool = False
+) -> list[str]:
+    """What stops a session before it touches anything. The changelog check `--fix` needs runs
+    in the preflight, on the release worktree's own CHANGELOG.md."""
     problems = _version_problems(version)
+    if override and not fix:
+        problems.append("--override-fix-changelog applies only with --fix")
     if not ctx.interactive():
         problems.append(
             "session asks before it installs or spends, so it runs only with stdin and stdout "
@@ -1035,18 +1169,27 @@ def _session_refusals(ctx: Context, version: str) -> list[str]:
     return problems
 
 
-def _session_updates(ctx: Context, cwd: Path) -> tuple[list[dict], list[str]]:
-    """Step 1: show the installs of npm's `latest` and run them on a yes."""
-    print("\n== 1. Backend CLIs at npm's latest ==")
-    updates, problems = _update_plan(ctx, cwd)
+def _session_updates(ctx: Context, cwd: Path, *, fix: bool = False) -> tuple[list[dict], list[str]]:
+    """Step 1: show the installs of npm's `latest`, or a fix release's, and run them on a yes."""
+    heading = "for a fix release" if fix else "at npm's latest"
+    print(f"\n== 1. Backend CLIs {heading} ==")
+    updates, problems = _update_plan(ctx, cwd, fix=fix)
     if problems:
         return updates, problems
     for update in updates:
         print(f"  {_shown(update['argv'], update['env'])}")
+    for update in updates:
+        if update.get("held_below"):
+            print(
+                f"{update['backend']} stays on {update['version']}: npm's latest "
+                f"{update['held_below']} is outside the shipped contract, and this release "
+                "ships only fixes."
+            )
     print("Close every other Claude Code session first, or restart it with DISABLE_AUTOUPDATER=1,")
     print("so nothing moves Claude Code between these installs and the evidence run.")
     if not _yes(ctx, "Run these installs now? [y/N] "):
-        print("Skipped. The preflight below fails if a CLI is not at npm's latest.")
+        target = "these versions" if fix else "npm's latest"
+        print(f"Skipped. The preflight below fails if a CLI is not at {target}.")
         return updates, []
     for update in updates:
         problems = _run_step(ctx, cwd, update["argv"], update["env"])
@@ -1055,13 +1198,20 @@ def _session_updates(ctx: Context, cwd: Path) -> tuple[list[dict], list[str]]:
     return updates, []
 
 
-def _session_checks(ctx: Context, cwd: Path, pr: int, version: str) -> list[str]:
+def _session_checks(
+    ctx: Context, cwd: Path, pr: int, version: str, *, fix: bool = False, override: bool = False
+) -> list[str]:
     """Step 3: the policy read-back, the preflight and pi's pricing check, which spend nothing."""
     print("\n== 3. Checks that spend nothing ==")
     script = ["uv", "run", "python", "scripts/release.py"]
+    preflight = [*script, "preflight", "--pr", str(pr), "--version", version]
     for cmd in (
         [*script, "policy"],
-        [*script, "preflight", "--pr", str(pr), "--version", version],
+        [
+            *preflight,
+            *(["--fix"] if fix else []),
+            *(["--override-fix-changelog"] if override else []),
+        ],
         list(PI_PRICING_COMMAND),
     ):
         problems = _run_step(ctx, cwd, cmd, {})
@@ -1086,18 +1236,26 @@ def _session_evidence(ctx: Context, cwd: Path, version: str, head: str) -> list[
     return _run_step(ctx, cwd, cmd, {"AMICUS_REQUIRE_LIVE": "1"})
 
 
-def _versions(updates: list[dict]) -> dict[str, str]:
-    return {update["backend"]: update["version"] for update in updates}
+def _versions(updates: list[dict]) -> dict[str, tuple[str, str | None]]:
+    """Each backend's planned version and, for a fix release, the `latest` it is held below,
+    so a moved `latest` is noticed even when the held version stays the same."""
+    return {update["backend"]: (update["version"], update.get("held_below")) for update in updates}
 
 
 def _named(updates: list[dict]) -> str:
-    return ", ".join(f"{u['backend']} {u['version']}" for u in updates)
+    return ", ".join(
+        f"{u['backend']} {u['version']}"
+        + (f" (held below {u['held_below']})" if u.get("held_below") else "")
+        for u in updates
+    )
 
 
 def cmd_session(ctx: Context, args: argparse.Namespace) -> int:
     version: str = args.version
     pr: int = args.pr
-    problems = _session_refusals(ctx, version)
+    fix: bool = args.fix
+    override: bool = args.override_fix_changelog
+    problems = _session_refusals(ctx, version, fix=fix, override=override)
     if problems:
         return _stop(problems)
     pr_info, problems = _pull_request(ctx, pr)
@@ -1110,24 +1268,25 @@ def cmd_session(ctx: Context, args: argparse.Namespace) -> int:
         return _stop(problems)
     cwd = worktree.repo_root
 
-    updates, problems = _session_updates(ctx, cwd)
+    updates, problems = _session_updates(ctx, cwd, fix=fix)
     if problems:
         return _stop(problems)
 
     print("\n== 2. Rule-18 carrier re-check ==")
     print(f"The evidence will vouch for {_named(updates)}.")
-    print("`uv run python scripts/check_backend_compat.py release-brief` drafts the re-check.")
+    brief = "check_backend_compat.py release-brief" + (" --fix" if fix else "")
+    print(f"`uv run python scripts/{brief}` drafts the re-check.")
     if not _yes(ctx, f"Is the re-check for these versions in PR #{pr}'s description? [y/N] "):
         return _stop(["write the carrier re-check into the release PR first (RELEASING step 3)"])
 
-    problems = _session_checks(ctx, cwd, pr, version)
+    problems = _session_checks(ctx, cwd, pr, version, fix=fix, override=override)
     if problems:
         return _stop(problems)
 
     # npm's `latest` can move between the plan confirmed above and the preflight; the
     # preflight checks the installs against the newer one, so the re-check would name
     # versions the evidence does not run on.
-    replanned, problems = _update_plan(ctx, cwd)
+    replanned, problems = _update_plan(ctx, cwd, fix=fix)
     if problems:
         return _stop(problems)
     moved = _versions(replanned) != _versions(updates)
@@ -1991,6 +2150,140 @@ def cmd_policy(ctx: Context, _args: argparse.Namespace) -> int:
     return 0
 
 
+# --- ci: the rule-2 gate as CI ran it on the release commit ----------------------------
+
+CI_WORKFLOW = ".github/workflows/ci.yml"
+GATE_WORKFLOW = ".github/workflows/test.yml"
+GATE_JOB = "gate"
+GITHUB_ACTIONS_APP = "github-actions"
+_CALLER_RE = re.compile(
+    r"^  (?P<job>[A-Za-z0-9_-]+):\n    uses: \./" + re.escape(GATE_WORKFLOW) + r"[ \t]*$",
+    re.MULTILINE,
+)
+# A job's key under `jobs:`; a two-space key with nothing after its colon ends the job above it.
+_JOB_KEY_RE = re.compile(r"^  (?P<job>[A-Za-z0-9_-]+):[ \t]*$", re.MULTILINE)
+_GATE_NAME_RE = re.compile(r"^    name: (?P<name>.+?)[ \t]*$", re.MULTILINE)
+_MATRIX_RE = re.compile(r"^ +python-version: \[(?P<versions>[^\]]*)\][ \t]*$", re.MULTILINE)
+# `include` can add a job the version list does not name, so a matrix with either is refused
+# rather than read short.
+_MATRIX_EDIT_RE = re.compile(r"^ +-? *(?:include|exclude):", re.MULTILINE)
+_MATRIX_SLOT = "${{ matrix.python-version }}"
+
+
+def _job_text(workflow: str, job: str) -> str:
+    """The lines of `job` in a workflow, from its key to the next job's, or "" when absent."""
+    keys = list(_JOB_KEY_RE.finditer(workflow))
+    for here, after in zip(keys, [*keys[1:], None], strict=True):
+        if here["job"] == job:
+            return workflow[here.start() : after.start() if after else len(workflow)]
+    return ""
+
+
+def gate_checks(repo_root: Path) -> list[str]:
+    """The check-run name of every rule-2 gate job CI runs: `ci.yml`'s job that calls
+    `test.yml`, then the `gate` job's name for each Python version in its matrix, as GitHub
+    names the check run of a called workflow's job. Raises ValueError when the workflows no
+    longer have the shape this reads, so a change to them cannot pass unseen."""
+    ci = (repo_root / CI_WORKFLOW).read_text(encoding="utf-8")
+    gate = _job_text((repo_root / GATE_WORKFLOW).read_text(encoding="utf-8"), GATE_JOB)
+    if _MATRIX_EDIT_RE.search(gate):
+        raise ValueError(
+            f"the `{GATE_JOB}` job's matrix in {GATE_WORKFLOW} has an include or exclude, which "
+            "this does not read, so it cannot tell which gate jobs CI runs"
+        )
+    callers = _CALLER_RE.findall(ci)
+    names = _GATE_NAME_RE.findall(gate)[:1]
+    matrices = _MATRIX_RE.findall(gate)
+    if len(callers) != 1 or len(names) != 1 or len(matrices) != 1:
+        raise ValueError(
+            f"expected one job in {CI_WORKFLOW} calling {GATE_WORKFLOW}, and one `{GATE_JOB}` "
+            f"job with one python-version matrix in it; found {len(callers)}, {len(names)} and "
+            f"{len(matrices)}"
+        )
+    versions = [v.strip().strip("\"'") for v in matrices[0].split(",") if v.strip()]
+    if not versions or _MATRIX_SLOT not in names[0]:
+        raise ValueError(f"could not read the `{GATE_JOB}` job's matrix from {GATE_WORKFLOW}")
+    return [f"{callers[0]} / {names[0].replace(_MATRIX_SLOT, v)}" for v in versions]
+
+
+def _tested_tree_problems(ctx: Context, sha: str) -> list[str]:
+    """Whether CI's runs on `sha` tested `sha`'s own tree. On a pull request CI checks out the
+    head merged with `main` as `main` stood at the push, not the head alone. When origin's
+    `main`, freshly fetched, is in `sha`'s history, so was every earlier `main`, and merging an
+    ancestor leaves `sha`'s tree as it is; otherwise CI may have passed on code `sha` lacks."""
+    fetch = ctx.git_out("fetch", "--no-tags", "origin", "+refs/heads/main:refs/remotes/origin/main")
+    if fetch.returncode != 0:
+        return [
+            f"`git fetch origin` failed, so whether CI tested {sha}'s own tree is unknown: "
+            f"{_stderr_line(fetch)}"
+        ]
+    tip = _rev(ctx, "refs/remotes/origin/main^{commit}")
+    if tip is None:
+        return ["could not resolve origin/main after fetching it"]
+    contained = _is_ancestor(ctx, tip, sha)
+    if contained is None:
+        return [f"could not tell whether origin/main ({tip}) is in {sha}'s history"]
+    if not contained:
+        return [
+            f"origin/main ({tip}) is not in {sha}'s history, so CI tested the release merged "
+            "with commits it lacks rather than its own tree; bring the release branch up to "
+            "date with main, which makes a new release commit and needs new evidence"
+        ]
+    return []
+
+
+def ci_problems(ctx: Context, sha: str) -> tuple[list[str], list[str]]:
+    """Whether every rule-2 gate job passed on `sha`, from GitHub's check runs, on `sha`'s own
+    tree. Returns the jobs that passed and the problems; a job that has not run, is still
+    running, or ended any way but success is a problem. The newest run of a job decides, so a
+    rerun that passed replaces a failure."""
+    if not _FULL_SHA_RE.fullmatch(sha):
+        return [], [f"{sha!r} is not a full commit SHA"]
+    try:
+        expected = gate_checks(ctx.repo_root)
+    except (OSError, ValueError) as exc:
+        return [], [f"could not tell which jobs are the gate: {exc}"]
+    tree_problems = _tested_tree_problems(ctx, sha)
+    try:
+        pages = cast(
+            "list[dict]",
+            _gh_api(
+                ctx, f"repos/{REPOSITORY}/commits/{sha}/check-runs?per_page=100", paginate=True
+            ),
+        )
+        runs = [run for page in pages for run in page["check_runs"]]
+        newest: dict[str, dict] = {}
+        for run in sorted(runs, key=lambda run: run["id"]):
+            # A check run any other app created can carry the same name; only CI's counts.
+            if (run.get("app") or {}).get("slug") == GITHUB_ACTIONS_APP:
+                newest[run["name"]] = run
+    except (ApiError, KeyError, TypeError) as exc:
+        return [], [*tree_problems, f"could not read the check runs on {sha}: {exc}"]
+    passed, problems = [], list(tree_problems)
+    for name in expected:
+        run = newest.get(name)
+        if run is None:
+            problems.append(f"{name}: has not run on {sha}")
+        elif run.get("status") != "completed":
+            problems.append(f"{name}: still {run.get('status')}; wait for it, then run this again")
+        elif run.get("conclusion") != "success":
+            problems.append(f"{name}: {run.get('conclusion')} ({run.get('html_url')})")
+        else:
+            passed.append(name)
+    return passed, problems
+
+
+def cmd_ci(ctx: Context, args: argparse.Namespace) -> int:
+    passed, problems = ci_problems(ctx, args.sha)
+    if problems:
+        print(f"the rule-2 gate has NOT passed in CI on {args.sha}:", file=sys.stderr)
+        for problem in problems:
+            print(f"  - {problem}", file=sys.stderr)
+        return 1
+    print(f"the rule-2 gate passed in CI on {args.sha}: {', '.join(passed)}.")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     commands = parser.add_subparsers(dest="command", required=True, metavar="COMMAND")
@@ -2013,6 +2306,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     preflight.add_argument("--pr", type=int, required=True, help="the release PR's number")
     preflight.add_argument("--version", required=True, help="the version being released, X.Y.Z")
+    preflight.add_argument(
+        "--fix",
+        action="store_true",
+        help="a release that ships an important bug or security fix: its CHANGELOG.md section "
+        "has only Fixed and Security entries, and a backend whose npm latest the shipped "
+        "contract does not support yet stays on the newest one it does (docs/RELEASING.md)",
+    )
+    preflight.add_argument(
+        "--override-fix-changelog",
+        action="store_true",
+        help="with --fix: warn rather than fail when the CHANGELOG.md section has other "
+        "entries; say why in the release PR",
+    )
     preflight.set_defaults(handler=cmd_preflight)
 
     session = commands.add_parser(
@@ -2029,7 +2335,28 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         help="the release worktree (default: amicus-wt-release-X-Y-Z beside this checkout)",
     )
+    session.add_argument(
+        "--fix",
+        action="store_true",
+        help="a release that ships an important bug or security fix: its CHANGELOG.md section "
+        "has only Fixed and Security entries, and a backend whose npm latest the shipped "
+        "contract does not support yet stays on the newest one it does (docs/RELEASING.md)",
+    )
+    session.add_argument(
+        "--override-fix-changelog",
+        action="store_true",
+        help="with --fix: warn rather than fail when the CHANGELOG.md section has other "
+        "entries; say why in the release PR",
+    )
     session.set_defaults(handler=cmd_session)
+
+    ci = commands.add_parser(
+        "ci",
+        help="check that CI ran the rule-2 gate on the release commit and it passed",
+        description="Read the release commit's check runs from GitHub; read-only.",
+    )
+    ci.add_argument("--sha", required=True, help="the release commit")
+    ci.set_defaults(handler=cmd_ci)
 
     post_merge = commands.add_parser(
         "post-merge",

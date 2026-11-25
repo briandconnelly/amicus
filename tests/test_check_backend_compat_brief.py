@@ -157,7 +157,7 @@ def test_brief_reads_the_previous_tag_and_compares_every_backend(docs):
     assert brief.problems == [
         f"codex: npm's latest {CODEX_NEW} is outside the shipped contract's supported "
         "versions, so preflight fails until support for it merges in its own PR, and so does "
-        "the evidence run"
+        "the evidence run, unless the release ships only bug or security fixes (`--fix`)"
     ]
 
 
@@ -371,6 +371,42 @@ def test_a_deprecated_backend_behind_latest_does_not_block(docs, monkeypatch):
     assert compat._contract_cell(codex) == "deprecated, frozen at its supported set"
 
 
+def test_a_fix_brief_holds_the_unsupported_backend_and_does_not_block(docs):
+    brief = _brief(docs, fix=True)
+    assert brief.fix and brief.problems == []
+    codex = brief.rows[0]
+    # The newest stable release below 99.0.0 that the contract supports; npm lists no other.
+    assert codex.held == CODEX_OLD and codex.subject == CODEX_OLD and not codex.blocks
+    assert codex.published == [] and codex.capture is not None
+    text = "\n".join(compat.describe_brief(brief))
+    assert "Capture of the version held |" in text
+    assert f"not supported; this fix release holds it at {CODEX_OLD}" in text
+    assert f"codex: still {CODEX_OLD}, so nothing to compare." in text
+    assert f"recorded on codex {CODEX_OLD}, claude {CLAUDE_NEW} and pi {PI}" in text
+    assert f"holds codex at {CODEX_OLD} (npm's {CODEX_NEW})" in text
+    assert any(line.startswith(f"- codex {CODEX_OLD}:") for line in text.splitlines())
+    # A supported latest is never held, fix or not.
+    assert brief.rows[1].held is None and brief.rows[1].subject == CLAUDE_NEW
+
+
+def test_a_fix_brief_with_nothing_to_hold_at_still_blocks(docs):
+    brief = _brief(docs, fix=True, versions={**PUBLISHED, "codex": [CODEX_NEW]}.get)
+    assert brief.rows[0].held is None and brief.rows[0].blocks
+    (problem,) = brief.problems
+    assert problem.startswith("codex:") and "even a fix release has no codex" in problem
+
+
+def test_release_brief_fix_json_says_so_and_names_the_version_held(docs, monkeypatch, capsys):
+    monkeypatch.setattr(compat, "run_git", _git())
+    monkeypatch.setattr(compat, "latest_upstream", LATEST.get)
+    monkeypatch.setattr(compat, "published_versions", PUBLISHED.get)
+    assert compat.main(["release-brief", "--docs-root", str(docs), "--json", "--fix"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["fix"] is True and payload["problems"] == []
+    codex = payload["backends"][0]
+    assert (codex["held"], codex["subject"], codex["blocks"]) == (CODEX_OLD, CODEX_OLD, False)
+
+
 def test_published_versions_reads_npms_list(monkeypatch):
     seen = []
 
@@ -412,18 +448,21 @@ def test_print_updates_json_gives_each_install_as_argv_and_its_env(capsys, monke
             "version": "0.171.0",
             "argv": ["npm", "install", "-g", "@openai/codex@0.171.0"],
             "env": {},
+            "held_below": None,
         },
         {
             "backend": "claude",
             "version": "2.1.330",
             "argv": ["claude", "install", "2.1.330"],
             "env": {"DISABLE_AUTOUPDATER": "1"},
+            "held_below": None,
         },
         {
             "backend": "pi",
             "version": "1.6.0",
             "argv": ["npm", "install", "-g", "@earendil-works/pi-coding-agent@1.6.0"],
             "env": {},
+            "held_below": None,
         },
     ]
 
