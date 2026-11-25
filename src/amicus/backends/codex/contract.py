@@ -22,7 +22,10 @@ disable controls were unobserved, so 0.169.0's catalog for those six is captured
 controls passing, but not compared; 0.171.0 the same checks against 0.169.0, plus the
 model-facing tool catalog of every model in KNOWN_MODEL_SLUGS with both controls passing on
 both binaries, the served catalog, and the spending workspace-write network and writable-roots
-pin probes).
+pin probes; 0.172.0 the same zero-spend checks against 0.171.0, including the model-facing tool
+catalog of every model in KNOWN_MODEL_SLUGS with both controls passing on both binaries, the
+served catalog and upstream's SandboxWorkspaceWrite struct, plus the spending workspace-write
+network and writable-roots pin probes).
 
 Every assumption amicus makes about the `codex` CLI — subcommands, flags, sandbox values,
 config keys it pins, the event/result extraction surface, and the stderr phrasings that
@@ -66,8 +69,8 @@ VALID_SANDBOXES = (SANDBOX_READ_ONLY, SANDBOX_WORKSPACE_WRITE, SANDBOX_DANGER_FU
 # channel outside the sandbox); sleep_tool (0.152+, a native sleep of up to 12h that can
 # burn a run's budget into `timeout`; 0.154.0's gpt-6-astra advertises `clock`, so its default
 # exec path offers `clock.sleep`); and goals (#222: `stable` on 0.152.0, 0.153.4, 0.154.0,
-# 0.155.1, 0.156.1, 0.157.0, 0.157.1 through 0.167.0, 0.169.0 and 0.171.0, and 0.156.1 onward also
-# offers its create/get/update_goal tools to gpt-5.5).
+# 0.155.1, 0.156.1, 0.157.0, 0.157.1 through 0.167.0, 0.169.0, 0.171.0 and 0.172.0, and 0.156.1
+# onward also offers its create/get/update_goal tools to gpt-5.5).
 # Under the `--ephemeral` amicus always sends, create_goal is refused ("Goal tools require a
 # persistent thread"); on a persistent thread an active goal can make exec send a "continue
 # working toward the active thread goal" request after the final answer, a turn its JSONL
@@ -353,6 +356,7 @@ SUPPORTED_VERSIONS = frozenset(
         (0, 167),
         (0, 169),
         (0, 171),
+        (0, 172),
     }
 )
 

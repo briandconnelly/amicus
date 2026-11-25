@@ -421,9 +421,9 @@ def test_the_lookup_names_the_latest_dist_tag(monkeypatch):
 
 # --- a bug or security fix release (`--fix`) -------------------------------------------------
 
-# npm's list for codex when its `latest` (0.172.0) is newer than the shipped contract: a
+# npm's list for codex when its `latest` (0.999.0) is newer than the shipped contract: a
 # prerelease and an unsupported release sit around the one a fix release may record on.
-CODEX_LISTED = ["0.169.0", "0.170.0", "0.171.0", "0.171.1", "0.172.0", "0.173.0-alpha.1"]
+CODEX_LISTED = ["0.169.0", "0.170.0", "0.171.0", "0.171.1", "0.999.0", "0.1000.0-alpha.1"]
 
 
 def _fix_report(installed: str, latest: str, listed=CODEX_LISTED) -> object:
@@ -437,43 +437,43 @@ def _fix_report(installed: str, latest: str, listed=CODEX_LISTED) -> object:
 
 
 def test_a_fix_release_holds_an_unsupported_latest_at_the_newest_supported_release():
-    assert compat.fix_version("codex", "0.172.0", CODEX_LISTED) == "0.171.1"
+    assert compat.fix_version("codex", "0.999.0", CODEX_LISTED) == "0.171.1"
     # A supported latest is the version, as for any release, and npm's list is never read.
     assert (
         compat.fix_target("codex", "0.171.0", lambda b: pytest.fail("read the list")) == "0.171.0"
     )
     # No supported stable release below latest, or no list at all, holds nothing.
-    assert compat.fix_version("codex", "0.172.0", ["0.170.0", "0.172.0"]) is None
-    assert compat.fix_version("codex", "0.172.0", None) is None
+    assert compat.fix_version("codex", "0.999.0", ["0.170.0", "0.999.0"]) is None
+    assert compat.fix_version("codex", "0.999.0", None) is None
     assert compat.fix_version("codex", None, CODEX_LISTED) is None
     # A prerelease the contract would support is never the version held.
-    assert compat.fix_version("codex", "0.172.0", ["0.171.2-beta.1", "0.171.0"]) == "0.171.0"
+    assert compat.fix_version("codex", "0.999.0", ["0.171.2-beta.1", "0.171.0"]) == "0.171.0"
     # A suffixed `latest` is no stable release to record on or hold below, even if supported.
     assert compat.fix_version("codex", "0.171.1-beta.1", CODEX_LISTED) is None
 
 
 def test_a_fix_release_on_the_held_version_passes_and_says_why():
-    report = _fix_report("0.171.1", "0.172.0")
+    report = _fix_report("0.171.1", "0.999.0")
     assert compat.problems(report) == []
     held = [line for line in compat._describe(report) if "held:" in line]
-    assert held and "0.171.1" in held[0] and "0.172.0" in held[0], held
+    assert held and "0.171.1" in held[0] and "0.999.0" in held[0], held
     # Without --fix, the same CLI is behind latest, as before.
     report.fix = False
     (behind,) = compat.problems(report)
-    assert "behind" in behind and "0.172.0" in behind, behind
+    assert "behind" in behind and "0.999.0" in behind, behind
 
 
 def test_a_fix_release_off_the_held_version_is_told_which_to_install():
-    (behind,) = compat.problems(_fix_report("0.171.0", "0.172.0"))
+    (behind,) = compat.problems(_fix_report("0.171.0", "0.999.0"))
     assert "behind 0.171.1" in behind and "npm install -g @openai/codex@0.171.1" in behind, behind
     # On latest itself, which the contract does not support: support it, or hold.
-    found = compat.problems(_fix_report("0.172.0", "0.172.0"))
+    found = compat.problems(_fix_report("0.999.0", "0.999.0"))
     assert any(
         "outside the built-in contract" in p and "npm install -g @openai/codex@0.171.1" in p
         for p in found
     ), found
     # Nothing to hold at: a fix release still fails, and says so.
-    (none,) = compat.problems(_fix_report("0.171.1", "0.172.0", listed=["0.172.0"]))
+    (none,) = compat.problems(_fix_report("0.171.1", "0.999.0", listed=["0.999.0"]))
     assert "even a fix release has no codex" in none, none
 
 
@@ -481,26 +481,26 @@ def test_a_fix_release_waives_nothing_when_latest_is_supported():
     """`--fix` only waives an unsupported `latest`: behind a supported one still fails."""
     (behind,) = compat.problems(_fix_report("0.169.0", "0.171.0"))
     assert "behind" in behind and "@openai/codex@0.171.0" in behind, behind
-    (pre,) = compat.problems(_fix_report("0.171.1-beta.1", "0.172.0"))
+    (pre,) = compat.problems(_fix_report("0.171.1-beta.1", "0.999.0"))
     assert "prerelease" in pre, pre
 
 
 def test_print_updates_fix_holds_the_unsupported_backend_and_says_so(capsys, monkeypatch):
-    latest = {"codex": "0.172.0", "claude": "2.1.330", "pi": "1.6.0"}
+    latest = {"codex": "0.999.0", "claude": "2.1.330", "pi": "1.6.0"}
     monkeypatch.setattr(compat, "latest_upstream", latest.get)
     monkeypatch.setattr(compat, "published_versions", {"codex": CODEX_LISTED}.get)
     assert compat.main(["print-updates", "--fix"]) == 0
     out = capsys.readouterr().out
-    assert "# codex: held at 0.171.1 for a fix release; npm's latest 0.172.0" in out
+    assert "# codex: held at 0.171.1 for a fix release; npm's latest 0.999.0" in out
     assert "npm install -g @openai/codex@0.171.1" in out
     assert "DISABLE_AUTOUPDATER=1 claude install 2.1.330" in out
     # Without --fix, the same lookups ask for latest.
     assert compat.main(["print-updates"]) == 0
-    assert "npm install -g @openai/codex@0.172.0" in capsys.readouterr().out
+    assert "npm install -g @openai/codex@0.999.0" in capsys.readouterr().out
 
 
 def test_print_updates_fix_fails_when_there_is_nothing_to_hold_at(capsys, monkeypatch):
-    latest = {"codex": "0.172.0", "claude": "2.1.330", "pi": "1.6.0"}
+    latest = {"codex": "0.999.0", "claude": "2.1.330", "pi": "1.6.0"}
     monkeypatch.setattr(compat, "latest_upstream", latest.get)
     monkeypatch.setattr(compat, "published_versions", lambda backend: None)
     assert compat.main(["print-updates", "--fix", "--json"]) == 1
