@@ -273,7 +273,7 @@ def _identifier(value: object) -> str:
 # pydantic's error list it now logs ``{"error_count": N, "error_types": [...]}``, built with
 # ``include_input=False``/``include_context=False`` and every non-builtin type collapsed to
 # ``custom_error``. That summary carries no ``loc``, so no field name survives to render.
-# This package's ``fastmcp>=4.1.4`` floor admits no release that logs the list, so the list
+# This package's ``fastmcp>=4.2.0`` floor admits no release that logs the list, so the list
 # shape is no longer read: an argument record carrying one is withheld whole.
 # The count and the types are re-checked rather than trusted, because this module echoes only
 # shapes it has checked itself.
