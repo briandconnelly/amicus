@@ -14,10 +14,11 @@ from typing import TYPE_CHECKING, Any
 
 import fastmcp
 from fastmcp import FastMCP
+from fastmcp.skills.provider import SkillCatalogProvider
 from mcp.server.caching import CacheHint
 from mcp.types import ReadResourceResult
 
-from amicus import ISSUES_URL, SERVER_NAME, __version__, config, obs, tools
+from amicus import ISSUES_URL, SERVER_NAME, __version__, config, obs, skill, tools
 from amicus.appstate import AppState
 from amicus.compaction import NullDefaultStrip
 from amicus.jobs.lifecycle import SYNC_AWAIT_GRACE_S
@@ -360,7 +361,17 @@ def create_app(
             )
     tools.register_all(app, settings, registry, state)
     resources.register_resources(app, settings, registry, state)
+    if settings.serve_skill:
+        _serve_skill(app, state)
     return app
+
+
+def _serve_skill(app: FastMCP, state: AppState) -> None:
+    """ADR 0055: serve the skill over the MCP skills extension, or record why it cannot be."""
+    try:
+        app.add_provider(SkillCatalogProvider([skill.build_skill()]))
+    except skill.SkillUnavailable as exc:
+        state.config_errors.append(f"AMICUS_SERVE_SKILL=1 but the skill could not be served: {exc}")
 
 
 def _make_signal_handler(log: logging.Logger, previous: Any) -> Callable[[int, object], None]:

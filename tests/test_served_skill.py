@@ -10,8 +10,12 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from fastmcp import Client
+from fastmcp.skills.client import SkillsClientExtension
+from tests.support.fingerprint_pins import load_pins
 
-from amicus import config, server
+from amicus import config, server, surface
+from amicus.registry import BackendRegistry
 from amicus.skill import SKILL_NAME, SkillUnavailable, build_skill, served_files
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -164,3 +168,82 @@ def test_cli_passes_sys_argv(clean_env, restored_signal_handlers):
     seen = _capture_settings(clean_env)
     server.cli()
     assert seen[0].serve_skill is False
+
+
+# --- Task 4: serving from create_app --------------------------------------------------------
+
+SKILLS_EXTENSION = "io.modelcontextprotocol/skills"
+
+
+def _app(serve: bool):
+    env = {"AMICUS_SERVE_SKILL": "1"} if serve else {}
+    return server.create_app(config.settings(env), BackendRegistry({}, {}))
+
+
+def _skills_client(app) -> Client:
+    return Client(app, extensions=[SkillsClientExtension()])
+
+
+def _extensions(client: Client) -> dict:
+    caps = client.server_capabilities
+    return dict(caps.extensions or {}) if caps else {}
+
+
+async def test_enabled_server_advertises_and_serves_the_whole_skill():
+    async with _skills_client(_app(serve=True)) as c:
+        assert c.protocol_version == "2026-07-28"
+        assert SKILLS_EXTENSION in _extensions(c)
+        (entry,) = await c.list_skills()
+        assert entry.frontmatter.name == SKILL_NAME
+        served = await c.read_skill(str(entry.uri))
+    assert dict(served.files) == {
+        p: (REPO_SKILL / p).read_bytes() for p in expected_files(REPO_SKILL)
+    }
+
+
+async def test_enabled_skill_resource_set_is_pinned():
+    async with _skills_client(_app(serve=True)) as c:
+        uris = {str(r.uri) for r in await c.list_resources() if str(r.uri).startswith("skill://")}
+    base = f"skill://{SKILL_NAME}/"
+    assert uris == {base + p for p in expected_files(REPO_SKILL)} | {base + "_manifest"}
+
+
+async def test_default_surface_has_no_skill_trace():
+    app = _app(serve=False)
+    async with _skills_client(app) as c:
+        assert SKILLS_EXTENSION not in _extensions(c)
+        resources = await c.list_resources()
+    assert not any(str(r.uri).startswith("skill://") for r in resources)
+    assert await surface.surface_digest(app) == load_pins()["surface_digest"]["all"]
+
+
+async def test_enabled_surface_digest_differs_from_the_default():
+    assert await surface.surface_digest(_app(serve=True)) != await surface.surface_digest(
+        _app(serve=False)
+    )
+
+
+def test_unavailable_skill_is_one_config_error(monkeypatch):
+    import amicus.skill
+
+    def unavailable():
+        raise SkillUnavailable("the skill's files are not installed")
+
+    monkeypatch.setattr(amicus.skill, "build_skill", unavailable)
+    app = _app(serve=True)
+    errors = [e for e in server.state_of(app).config_errors if "AMICUS_SERVE_SKILL" in e]
+    assert errors == [
+        "AMICUS_SERVE_SKILL=1 but the skill could not be served: "
+        "the skill's files are not installed"
+    ]
+
+
+async def test_unavailable_skill_advertises_no_extension(monkeypatch):
+    import amicus.skill
+
+    def unavailable():
+        raise SkillUnavailable("x")
+
+    monkeypatch.setattr(amicus.skill, "build_skill", unavailable)
+    async with _skills_client(_app(serve=True)) as c:
+        assert SKILLS_EXTENSION not in _extensions(c)
