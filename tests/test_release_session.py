@@ -95,11 +95,24 @@ def repo(tmp_path) -> Repo:
 class FakeRun:
     """`gh pr view`, the session's commands and the evidence stub; anything else fails."""
 
-    def __init__(self, head: str, *, version: str = NEXT, fix: bool = False, **returncodes: int):
+    def __init__(
+        self,
+        head: str,
+        *,
+        version: str = NEXT,
+        fix: bool = False,
+        override: bool = False,
+        **returncodes: int,
+    ):
         self.calls: list[tuple[list[str], dict]] = []
         flag = ["--fix"] if fix else []
         self.updates_command = [*release.UPDATES_COMMAND, *flag]
-        self.preflight = [*PREFLIGHT[:-1], version, *flag]
+        self.preflight = [
+            *PREFLIGHT[:-1],
+            version,
+            *flag,
+            *(["--override-fix-changelog"] if override else []),
+        ]
         self.evidence = [*EVIDENCE[:-1], version]
         self.pr = {
             "headRefOid": head,
@@ -646,15 +659,37 @@ def test_a_fix_session_plans_and_checks_with_fix_and_says_what_it_holds(repo, ca
     assert "codex stays on 0.171.1: npm's latest 0.172.0 is outside the shipped contract" in out
     assert "Skipped. The preflight below fails if a CLI is not at these versions." in out
     assert "check_backend_compat.py release-brief --fix` drafts the re-check" in out
-    assert "codex 0.171.1, claude 2.1.331, pi 1.6.0" in out
+    assert "codex 0.171.1 (held below 0.172.0), claude 2.1.331, pi 1.6.0" in out
 
 
-def test_a_fix_session_refuses_a_release_that_is_not_a_patch_before_anything_runs(repo, capsys):
-    run = FakeRun(repo.head, fix=True)
-    assert _session(repo, run, Answers(), extra=["--fix"]) == 1
+def test_a_fix_session_passes_the_changelog_override_to_the_preflight(repo, capsys):
+    run = FakeRun(repo.head, version=PATCH, fix=True, override=True)
+    ask = Answers("n", "y", f"spend {PATCH}")
+    extra = ["--fix", "--override-fix-changelog"]
+    assert _session(repo, run, ask, extra=extra, version=PATCH) == 0
+    assert run.preflight in run.commands()
+    assert run.preflight[-2:] == extra
+
+
+def test_a_held_backends_latest_moving_stops_the_fix_session_before_the_spend_prompt(repo, capsys):
+    """The version held can stay the same while the `latest` the PR names as skipped moves."""
+    run = FakeRun(repo.head, version=PATCH, fix=True)
+    run.updates = {"updates": [{**HELD, "held_below": "0.172.0"}, *UPDATES[1:]], "failed": []}
+    run.replan = {"updates": [{**HELD, "held_below": "0.173.0"}, *UPDATES[1:]], "failed": []}
+    ask = Answers("n", "y")
+    assert _session(repo, run, ask, extra=["--fix"], version=PATCH) == 1
+    err = capsys.readouterr().err
+    assert "npm's latest moved from" in err
+    assert "held below 0.173.0" in err
+    assert run.evidence not in run.commands()
+
+
+def test_the_changelog_override_without_fix_is_refused_before_anything_runs(repo, capsys):
+    run = FakeRun(repo.head)
+    assert _session(repo, run, Answers(), extra=["--override-fix-changelog"]) == 1
     assert run.calls == []
     assert not repo.worktree.exists()
-    assert "--fix is for a release that ships only bug" in capsys.readouterr().err
+    assert "applies only with --fix" in capsys.readouterr().err
 
 
 def test_an_update_plan_with_a_malformed_hold_stops_the_session(repo, capsys):

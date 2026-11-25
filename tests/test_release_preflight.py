@@ -21,7 +21,13 @@ import sys
 from pathlib import Path
 
 import pytest
-from tests.support.releasefixture import NEXT, TODAY, build_released_repo
+from tests.support.releasefixture import (
+    NEXT,
+    TODAY,
+    UNRELEASED_BODY,
+    build_released_repo,
+    changelog,
+)
 from tests.support.releasefixture import git as _git
 
 _SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
@@ -42,6 +48,15 @@ BRANCH = f"chore/release-{NEXT}"
 PATCH = "1.2.3"  # a patch release after PREVIOUS, as a fix release is
 
 PR = 42
+REPO = Path(__file__).resolve().parent.parent
+FIXES_ONLY = """### Fixed
+
+- A broken thing.
+
+### Security
+
+- An unsafe thing.
+"""
 
 
 class Layout:
@@ -66,16 +81,22 @@ def layout(tmp_path) -> Layout:
 
 @pytest.fixture
 def patch_layout(tmp_path) -> Layout:
-    """The same for a patch release, as a bug or security fix release is."""
-    return _layout(tmp_path, PATCH)
+    """The same for a patch release whose changelog has only fixes, as a fix release's has."""
+    return _layout(tmp_path, PATCH, unreleased=FIXES_ONLY)
 
 
-def _layout(tmp_path: Path, version: str) -> Layout:
+def _layout(tmp_path: Path, version: str, *, unreleased: str = UNRELEASED_BODY) -> Layout:
     lay = Layout(tmp_path)
     _git(tmp_path, "init", "-q", "--bare", "-b", "main", str(lay.origin))
     build_released_repo(lay.main, release)
+    # The gate's job names are read from the release worktree's own workflows.
+    for workflow in (release.CI_WORKFLOW, release.GATE_WORKFLOW):
+        (lay.main / workflow).parent.mkdir(parents=True, exist_ok=True)
+        (lay.main / workflow).write_text((REPO / workflow).read_text(encoding="utf-8"))
+    if unreleased != UNRELEASED_BODY:
+        (lay.main / "CHANGELOG.md").write_text(changelog("\n" + unreleased), encoding="utf-8")
     (lay.main / ".gitignore").write_text(".release-evidence/\n", encoding="utf-8")
-    _git(lay.main, "add", ".gitignore")
+    _git(lay.main, "add", ".gitignore", ".github", "CHANGELOG.md")
     _git(lay.main, "commit", "-q", "-m", "ignore the evidence record")
     _git(lay.main, "remote", "add", "origin", str(lay.origin))
     _git(lay.main, "push", "-q", "origin", "main")
@@ -108,6 +129,18 @@ class FakeRun:
         self.gh_returncode = gh_returncode
         self.compat = compat
         self.lock_check = lock_check
+        self.head = head
+        # The check runs GitHub reports on the release commit: every gate job passed.
+        self.check_runs = [
+            {
+                "id": n,
+                "name": name,
+                "status": "completed",
+                "conclusion": "success",
+                "app": {"slug": "github-actions"},
+            }
+            for n, name in enumerate(release.gate_checks(REPO), start=1)
+        ]
 
     def __call__(self, cmd, *args, **kwargs):
         cmd = [str(part) for part in cmd]
@@ -119,6 +152,10 @@ class FakeRun:
             return subprocess.CompletedProcess(
                 cmd, self.gh_returncode, stdout=stdout, stderr="gh: not found\n"
             )
+        if cmd[:2] == ["gh", "api"]:
+            assert cmd[-1].endswith(f"/commits/{self.head}/check-runs?per_page=100"), cmd
+            pages = [{"total_count": len(self.check_runs), "check_runs": self.check_runs}]
+            return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps(pages), stderr="")
         if cmd == ["uv", "lock", "--check"]:
             return subprocess.CompletedProcess(
                 cmd, self.lock_check, stdout="", stderr="error: the lockfile needs updating\n"
@@ -168,7 +205,10 @@ def test_preflight_holds_in_the_release_worktree_and_prints_the_command(layout, 
     assert command.endswith(f"scripts/record_live_gate_evidence.py --version {NEXT}")
     assert run.ran_compat()
     assert run.ran("uv", "lock", "--check")
-    assert [c[:3] for c in run.calls if c[0] == "gh"] == [["gh", "pr", "view"]]
+    assert [c[:3] for c in run.calls if c[0] == "gh"] == [
+        ["gh", "pr", "view"],
+        ["gh", "api", "--paginate"],
+    ]
     # The rest of the release, with this PR and commit filled in, printed after the command.
     after = out.out.split(command, 1)[1]
     for block in release.next_steps(layout.worktree, NEXT, PR, layout.head):
@@ -364,8 +404,61 @@ def test_preflight_fix_holds_for_a_patch_release_and_checks_the_clis_as_one(patc
     assert "This is a fix release" not in capsys.readouterr().out
 
 
-def test_preflight_fix_refuses_a_release_that_is_not_a_patch(layout, capsys):
+def test_preflight_fix_refuses_a_changelog_with_more_than_fixes(layout, capsys):
+    """The default fixture's section has `### Added` beside `### Fixed`."""
+    run = FakeRun(layout.head)
+    _assert_refused(layout, capsys, run, "section has `### Added`", extra=["--fix"])
+    run = FakeRun(layout.head)
+    _assert_refused(layout, capsys, run, "pass --override-fix-changelog", extra=["--fix"])
+
+
+def test_preflight_fix_override_warns_and_holds(layout, capsys):
+    run = FakeRun(layout.head)
+    extra = ["--fix", "--override-fix-changelog"]
+    assert _preflight(layout.worktree, run, extra=extra) == 0
+    out = capsys.readouterr()
+    assert f"preflight holds for {NEXT}" in out.out
+    assert "WARNING: --override-fix-changelog" in out.err
+    assert "section has `### Added`" in out.err
+    assert "Say in the release PR why" in out.err
+    assert _compat_calls(run) == [["--fix"]]
+
+
+def test_override_fix_changelog_applies_only_with_fix(layout, capsys):
     run = FakeRun(layout.head)
     _assert_refused(
-        layout, capsys, run, "--fix is for a release that ships only bug", extra=["--fix"]
+        layout, capsys, run, "applies only with --fix", extra=["--override-fix-changelog"]
     )
+
+
+def test_a_fix_release_need_not_be_a_patch_release(tmp_path, capsys):
+    """Eligibility follows what the release ships, not its version number."""
+    lay = _layout(tmp_path, NEXT, unreleased=FIXES_ONLY)
+    run = FakeRun(lay.head)
+    assert _preflight(lay.worktree, run, extra=["--fix"]) == 0
+    assert "WARNING" not in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    ("body", "reason"),
+    [
+        ("### Fixed\n", "no entry under `### Fixed` or `### Security`"),
+        ("- An uncategorized thing.\n\n### Fixed\n\n- A fix.\n", "under no `###` category"),
+    ],
+)
+def test_the_fix_changelog_check_needs_categorized_fix_entries(tmp_path, body, reason):
+    (tmp_path / "CHANGELOG.md").write_text(
+        f"# Changelog\n\n## [Unreleased]\n\n## [1.2.3] - 2026-01-01\n\nLead.\n\n{body}\n"
+        "## [1.2.2] - 2025-12-01\n\n### Added\n\n- Older.\n\n[Unreleased]: x\n",
+        encoding="utf-8",
+    )
+    problems = release.fix_changelog_problems(tmp_path, "1.2.3")
+    assert any(reason in p for p in problems), problems
+    # An earlier section's categories are not this release's.
+    assert not any("Added" in p for p in problems)
+
+
+def test_a_gate_that_has_not_passed_in_ci_stops_preflight_before_any_spend(layout, capsys):
+    run = FakeRun(layout.head)
+    run.check_runs[0]["conclusion"] = "failure"
+    _assert_refused(layout, capsys, run, f"{run.check_runs[0]['name']}: failure")

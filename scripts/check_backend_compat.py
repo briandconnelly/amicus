@@ -429,7 +429,8 @@ def fix_version(backend: str, latest: str | None, listed: list[str] | None) -> s
     could not be read or holds no such release. Only a `latest` the contract does not support
     yet is waived: a release that could be on `latest` must be."""
     top = semver(latest)
-    if latest is None or top is None:
+    if latest is None or top is None or not _stable(latest):
+        # A suffixed `latest` is no release to record evidence on, nor to hold below.
         return None
     if builtin_supported(backend, latest):
         return latest
@@ -477,14 +478,14 @@ def not_fix_target(report: Report) -> str:
     """A fix release off the version it holds this backend at: which way, and its install."""
     installed, target = semver(report.version), semver(report.fix_target)
     way = (
-        "ahead of"
+        "is ahead of"
         if installed and target and installed > target
-        else "behind"
+        else "is behind"
         if installed and target and installed < target
-        else "not"
+        else "does not match"
     )
     return (
-        f"{report.backend}: installed {report.version} is {way} {report.fix_target}, the newest "
+        f"{report.backend}: installed {report.version} {way} {report.fix_target}, the newest "
         f"release the shipped contract supports below npm's `{NPM_DIST_TAG}` "
         f"({report.latest}), which is what a fix release records evidence on; install it with "
         f"{_install(report.backend, report.fix_target)}"
@@ -2006,7 +2007,7 @@ def brief_row(
         return row
     row.supported = builtin_supported(backend, latest)
     listed: list[str] | None = None
-    if fix and not row.supported:
+    if fix and not row.supported and not row.deprecated:
         listed = versions(backend)
         row.held = fix_version(backend, latest, listed)
     subject = row.subject or latest

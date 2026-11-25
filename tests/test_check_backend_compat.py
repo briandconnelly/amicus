@@ -448,6 +448,8 @@ def test_a_fix_release_holds_an_unsupported_latest_at_the_newest_supported_relea
     assert compat.fix_version("codex", None, CODEX_LISTED) is None
     # A prerelease the contract would support is never the version held.
     assert compat.fix_version("codex", "0.172.0", ["0.171.2-beta.1", "0.171.0"]) == "0.171.0"
+    # A suffixed `latest` is no stable release to record on or hold below, even if supported.
+    assert compat.fix_version("codex", "0.171.1-beta.1", CODEX_LISTED) is None
 
 
 def test_a_fix_release_on_the_held_version_passes_and_says_why():

@@ -30,10 +30,14 @@ PR N is open against `main`, that the tree is clean (untracked files included, w
 exists on `origin` or locally, that `check_release_state.check_tree_pre_tag` holds, and that
 `scripts/check_backend_compat.py` passes. On success it prints the evidence command, and never
 runs it: that spends live quota, which only the maintainer authorizes (AGENTS.md rules 5
-and 20). `--fix` is for a release that ships only bug or security fixes: it refuses a version
-that is not a patch release (X.Y.Z with Z above 0) and runs `check_backend_compat.py --fix`,
-which lets a backend whose npm `latest` the shipped contract does not support yet stay on the
-newest stable release it does (docs/RELEASING.md, "Bug-fix and security releases").
+and 20). It also requires every rule-2 gate job CI ran on the release commit to have passed,
+as `ci` below checks, so a failing gate stops the release before anything is spent.
+`--fix` is for a release that ships an important bug or security fix: it refuses unless the
+release's CHANGELOG.md section holds only `### Fixed` and `### Security` entries, and runs
+`check_backend_compat.py --fix`, which lets a backend whose npm `latest` the shipped contract
+does not support yet stay on the newest stable release it does (docs/RELEASING.md, "Bug-fix and
+security releases"). `--override-fix-changelog`, only with `--fix`, turns a failed category
+check into a warning; the release PR then says why the other changes ship with the fix.
 
 `session --pr N --version X.Y.Z [--worktree PATH]` is RELEASING step 3 as one command, for
 the maintainer at a terminal. It refuses unless stdin and stdout are a terminal, `CI` is unset
@@ -47,16 +51,17 @@ secret. Only then, and only once the maintainer types `spend X.Y.Z`, does it run
 script, which spends live quota on every backend: typing that phrase is the authorization in
 the session that AGENTS.md rule 20 and RELEASING step 3 require, and a passing preflight is
 not. On success it prints the notes for the PR and the rest of the release, as `preflight`
-does. It never tags, merges or pushes. `--fix` refuses as `preflight --fix` does, plans the
-installs with `print-updates --json --fix` and passes `--fix` to `preflight`.
+does. It never tags, merges or pushes. `--fix` plans the installs with `print-updates --json
+--fix` and passes `--fix`, and `--override-fix-changelog` when given, to `preflight`.
 
 `ci --sha SHA` reads, read-only, the check runs GitHub reports for SHA and passes only when
 every job of the AGENTS.md rule-2 gate CI runs (`.github/workflows/test.yml`'s `gate` job, once
 for each Python version in its matrix, called from `ci.yml`) completed with success, and when
 origin's `main`, which it fetches, is in SHA's history: CI on a pull request tests the head
-merged with `main`, and only then is that SHA's own tree. It is the first command of the block
-`preflight` prints after the evidence, in place of running the gate again by hand: CI already
-ran it on the release commit, on every supported Python.
+merged with `main`, and only then is that SHA's own tree. Only check runs GitHub Actions
+created count. `preflight` runs the same check before the evidence, and the block it prints
+after the evidence opens with it again, in place of running the gate by hand: CI already ran
+it on the release commit, on every supported Python.
 
 `post-merge --release-sha SHA --version X.Y.Z` runs in the same worktree after the release PR
 merges (RELEASING step 5). It fetches `main` from `origin` first and fails if it cannot, then
@@ -102,8 +107,10 @@ whoever's token ran it. Only the maintainer's own token can make it pass.
 
 Usage:
     uv run python scripts/release.py prepare X.Y.Z [--check]
-    uv run python scripts/release.py preflight --pr N --version X.Y.Z [--fix]
-    uv run python scripts/release.py session --pr N --version X.Y.Z [--worktree PATH] [--fix]
+    uv run python scripts/release.py preflight --pr N --version X.Y.Z
+                                               [--fix [--override-fix-changelog]]
+    uv run python scripts/release.py session --pr N --version X.Y.Z [--worktree PATH]
+                                             [--fix [--override-fix-changelog]]
     uv run python scripts/release.py ci --sha SHA
     uv run python scripts/release.py post-merge --release-sha SHA --version X.Y.Z
     uv run python scripts/release.py post-publish --version X.Y.Z [--timeout SECONDS]
@@ -523,15 +530,80 @@ def _version_problems(version: str) -> list[str]:
     return [f"version {version!r} is not X.Y.Z"]
 
 
-def _fix_problems(version: str) -> list[str]:
-    """`--fix` is for a release that ships only bug or security fixes, so a patch release."""
-    if not release_state.VERSION_RE.fullmatch(version) or int(version.split(".")[2]) > 0:
-        return []
+FIX_CATEGORIES = ("Fixed", "Security")
+_CATEGORY_RE = re.compile(r"^### +(?P<name>.+?)[ \t]*$")
+# What ends a release's section: the next release's heading, or the link definitions below.
+_SECTION_END_RE = re.compile(r"^(?:## \[|\[[^\]]+\]: )", re.MULTILINE)
+
+
+def fix_changelog_problems(repo_root: Path, version: str) -> list[str]:
+    """Why `version`'s CHANGELOG.md section is not a fix release's, or [] when it is: at least
+    one entry, and every entry under `### Fixed` or `### Security` (docs/RELEASING.md,
+    "Bug-fix and security releases"). The lead paragraph before the first category is allowed.
+    A heading says nothing about whether an entry under it is a fix; that stays the
+    maintainer's reading."""
+    try:
+        text = (repo_root / "CHANGELOG.md").read_text(encoding="utf-8")
+    except OSError as exc:
+        return [
+            f"CHANGELOG.md could not be read, so whether {version} ships only fixes is "
+            f"unknown: {exc}"
+        ]
+    heading = re.search(
+        rf"^## \[{re.escape(version)}\] - \d{{4}}-\d{{2}}-\d{{2}}[ \t]*$", text, re.MULTILINE
+    )
+    if heading is None:
+        return [
+            f"CHANGELOG.md has no dated section for {version}, so whether it ships only "
+            "fixes is unknown"
+        ]
+    after = _SECTION_END_RE.search(text, heading.end() + 1)
+    body = text[heading.end() : after.start() if after else len(text)]
+    problems: list[str] = []
+    category: str | None = None
+    entries = 0
+    for line in body.splitlines():
+        found = _CATEGORY_RE.match(line)
+        if found:
+            category = found["name"]
+            if category not in FIX_CATEGORIES:
+                problems.append(
+                    f"CHANGELOG.md's {version} section has `### {category}`; a fix release has "
+                    "only `### Fixed` and `### Security`"
+                )
+        elif line.startswith("- "):
+            if category is None:
+                problems.append(
+                    f"CHANGELOG.md's {version} section has an entry under no `###` category"
+                )
+            elif category in FIX_CATEGORIES:
+                entries += 1
+    if not entries:
+        problems.append(
+            f"CHANGELOG.md's {version} section has no entry under `### Fixed` or `### Security`"
+        )
+    return problems
+
+
+def _fix_mode_problems(
+    ctx: Context, version: str, *, fix: bool, override: bool
+) -> tuple[list[str], list[str]]:
+    """`--fix`'s eligibility: the problems that stop it, and the warnings an override leaves."""
+    if override and not fix:
+        return ["--override-fix-changelog applies only with --fix"], []
+    if not fix or _version_problems(version):
+        return [], []
+    found = fix_changelog_problems(ctx.repo_root, version)
+    if not found:
+        return [], []
+    if override:
+        return [], found
     return [
-        f"--fix is for a release that ships only bug or security fixes, which is a patch "
-        f"release (X.Y.Z with Z above 0), and {version} is not one; any other release supports "
-        "every backend's npm latest (docs/RELEASING.md)"
-    ]
+        *found,
+        "--fix is for a release that ships an important bug or security fix; if other changes "
+        "must ship with it, pass --override-fix-changelog and say why in the release PR "
+        "(docs/RELEASING.md)",
+    ], []
 
 
 def _stderr_line(proc: subprocess.CompletedProcess) -> str:
@@ -660,12 +732,30 @@ def evidence_command(repo_root: Path, version: str) -> str:
     )
 
 
+def _print_fix_notes(*, fix: bool, warnings: list[str]) -> None:
+    """What a passing `preflight --fix` adds: the PR's disclosure, and an override's warning."""
+    if fix:
+        print("This is a fix release: a backend whose latest the shipped contract does not")
+        print("support stays on the newest release it does (`print-updates --fix` names it).")
+        print("Name each held backend and the latest it skipped in the release PR.")
+    if warnings:
+        print(
+            "WARNING: --override-fix-changelog: this fix release ships more than fixes:",
+            file=sys.stderr,
+        )
+        for warning in warnings:
+            print(f"  - {warning}", file=sys.stderr)
+        print("Say in the release PR why these changes ship with the fix.", file=sys.stderr)
+
+
 def cmd_preflight(ctx: Context, args: argparse.Namespace) -> int:
     version: str = args.version
     tag = f"v{version}"
     problems = _version_problems(version)
-    if args.fix:
-        problems += _fix_problems(version)
+    fix_problems, fix_warnings = _fix_mode_problems(
+        ctx, version, fix=args.fix, override=args.override_fix_changelog
+    )
+    problems += fix_problems
     problems += _linked_worktree_problems(ctx)
     head = _rev(ctx, "HEAD")
     if head is None:
@@ -698,6 +788,11 @@ def cmd_preflight(ctx: Context, args: argparse.Namespace) -> int:
     else:
         print(f"running {' '.join(compat)} (spends nothing):", flush=True)
         problems += _script_problems(ctx, *compat)
+        if head is not None and head == pr["headRefOid"]:
+            # The gate CI ran on the release commit: a failure found after the evidence would
+            # mean a new commit and spending the quota again.
+            print(f"reading the rule-2 gate's check runs on {head} (read-only):", flush=True)
+            problems += ci_problems(ctx, head)[1]
 
     if problems:
         print(f"preflight for {version} does NOT hold; do not record evidence:", file=sys.stderr)
@@ -709,9 +804,7 @@ def cmd_preflight(ctx: Context, args: argparse.Namespace) -> int:
     print(f"Record that SHA: it is the release commit, the one {tag} will point at.")
     print("Still yours before the evidence run (docs/RELEASING.md step 3): the backend CLIs at")
     print("npm's latest with Claude Code's autoupdater held, and the rule-18 carrier re-check.")
-    if args.fix:
-        print("This is a fix release: a backend whose latest the shipped contract does not")
-        print("support stays on the newest release it does (`print-updates --fix` names it).")
+    _print_fix_notes(fix=args.fix, warnings=fix_warnings)
     print("The evidence run spends live quota on all three backends (codex, claude and pi)")
     print("and needs the maintainer's authorization in the session that runs it. This script")
     print("never runs it. The command:")
@@ -1053,11 +1146,14 @@ def _stop(problems: list[str], *, spent: bool = False) -> int:
     return 1
 
 
-def _session_refusals(ctx: Context, version: str, *, fix: bool = False) -> list[str]:
-    """What stops a session before it touches anything."""
+def _session_refusals(
+    ctx: Context, version: str, *, fix: bool = False, override: bool = False
+) -> list[str]:
+    """What stops a session before it touches anything. The changelog check `--fix` needs runs
+    in the preflight, on the release worktree's own CHANGELOG.md."""
     problems = _version_problems(version)
-    if fix:
-        problems += _fix_problems(version)
+    if override and not fix:
+        problems.append("--override-fix-changelog applies only with --fix")
     if not ctx.interactive():
         problems.append(
             "session asks before it installs or spends, so it runs only with stdin and stdout "
@@ -1103,7 +1199,7 @@ def _session_updates(ctx: Context, cwd: Path, *, fix: bool = False) -> tuple[lis
 
 
 def _session_checks(
-    ctx: Context, cwd: Path, pr: int, version: str, *, fix: bool = False
+    ctx: Context, cwd: Path, pr: int, version: str, *, fix: bool = False, override: bool = False
 ) -> list[str]:
     """Step 3: the policy read-back, the preflight and pi's pricing check, which spend nothing."""
     print("\n== 3. Checks that spend nothing ==")
@@ -1111,7 +1207,11 @@ def _session_checks(
     preflight = [*script, "preflight", "--pr", str(pr), "--version", version]
     for cmd in (
         [*script, "policy"],
-        [*preflight, *(["--fix"] if fix else [])],
+        [
+            *preflight,
+            *(["--fix"] if fix else []),
+            *(["--override-fix-changelog"] if override else []),
+        ],
         list(PI_PRICING_COMMAND),
     ):
         problems = _run_step(ctx, cwd, cmd, {})
@@ -1136,19 +1236,26 @@ def _session_evidence(ctx: Context, cwd: Path, version: str, head: str) -> list[
     return _run_step(ctx, cwd, cmd, {"AMICUS_REQUIRE_LIVE": "1"})
 
 
-def _versions(updates: list[dict]) -> dict[str, str]:
-    return {update["backend"]: update["version"] for update in updates}
+def _versions(updates: list[dict]) -> dict[str, tuple[str, str | None]]:
+    """Each backend's planned version and, for a fix release, the `latest` it is held below,
+    so a moved `latest` is noticed even when the held version stays the same."""
+    return {update["backend"]: (update["version"], update.get("held_below")) for update in updates}
 
 
 def _named(updates: list[dict]) -> str:
-    return ", ".join(f"{u['backend']} {u['version']}" for u in updates)
+    return ", ".join(
+        f"{u['backend']} {u['version']}"
+        + (f" (held below {u['held_below']})" if u.get("held_below") else "")
+        for u in updates
+    )
 
 
 def cmd_session(ctx: Context, args: argparse.Namespace) -> int:
     version: str = args.version
     pr: int = args.pr
     fix: bool = args.fix
-    problems = _session_refusals(ctx, version, fix=fix)
+    override: bool = args.override_fix_changelog
+    problems = _session_refusals(ctx, version, fix=fix, override=override)
     if problems:
         return _stop(problems)
     pr_info, problems = _pull_request(ctx, pr)
@@ -1172,7 +1279,7 @@ def cmd_session(ctx: Context, args: argparse.Namespace) -> int:
     if not _yes(ctx, f"Is the re-check for these versions in PR #{pr}'s description? [y/N] "):
         return _stop(["write the carrier re-check into the release PR first (RELEASING step 3)"])
 
-    problems = _session_checks(ctx, cwd, pr, version, fix=fix)
+    problems = _session_checks(ctx, cwd, pr, version, fix=fix, override=override)
     if problems:
         return _stop(problems)
 
@@ -2048,6 +2155,7 @@ def cmd_policy(ctx: Context, _args: argparse.Namespace) -> int:
 CI_WORKFLOW = ".github/workflows/ci.yml"
 GATE_WORKFLOW = ".github/workflows/test.yml"
 GATE_JOB = "gate"
+GITHUB_ACTIONS_APP = "github-actions"
 _CALLER_RE = re.compile(
     r"^  (?P<job>[A-Za-z0-9_-]+):\n    uses: \./" + re.escape(GATE_WORKFLOW) + r"[ \t]*$",
     re.MULTILINE,
@@ -2146,7 +2254,9 @@ def ci_problems(ctx: Context, sha: str) -> tuple[list[str], list[str]]:
         runs = [run for page in pages for run in page["check_runs"]]
         newest: dict[str, dict] = {}
         for run in sorted(runs, key=lambda run: run["id"]):
-            newest[run["name"]] = run
+            # A check run any other app created can carry the same name; only CI's counts.
+            if (run.get("app") or {}).get("slug") == GITHUB_ACTIONS_APP:
+                newest[run["name"]] = run
     except (ApiError, KeyError, TypeError) as exc:
         return [], [*tree_problems, f"could not read the check runs on {sha}: {exc}"]
     passed, problems = [], list(tree_problems)
@@ -2199,9 +2309,15 @@ def build_parser() -> argparse.ArgumentParser:
     preflight.add_argument(
         "--fix",
         action="store_true",
-        help="a release that ships only bug or security fixes: a patch version, and a backend "
-        "whose npm latest the shipped contract does not support yet stays on the newest one "
-        "it does (docs/RELEASING.md)",
+        help="a release that ships an important bug or security fix: its CHANGELOG.md section "
+        "has only Fixed and Security entries, and a backend whose npm latest the shipped "
+        "contract does not support yet stays on the newest one it does (docs/RELEASING.md)",
+    )
+    preflight.add_argument(
+        "--override-fix-changelog",
+        action="store_true",
+        help="with --fix: warn rather than fail when the CHANGELOG.md section has other "
+        "entries; say why in the release PR",
     )
     preflight.set_defaults(handler=cmd_preflight)
 
@@ -2222,9 +2338,15 @@ def build_parser() -> argparse.ArgumentParser:
     session.add_argument(
         "--fix",
         action="store_true",
-        help="a release that ships only bug or security fixes: a patch version, and a backend "
-        "whose npm latest the shipped contract does not support yet stays on the newest one "
-        "it does (docs/RELEASING.md)",
+        help="a release that ships an important bug or security fix: its CHANGELOG.md section "
+        "has only Fixed and Security entries, and a backend whose npm latest the shipped "
+        "contract does not support yet stays on the newest one it does (docs/RELEASING.md)",
+    )
+    session.add_argument(
+        "--override-fix-changelog",
+        action="store_true",
+        help="with --fix: warn rather than fail when the CHANGELOG.md section has other "
+        "entries; say why in the release PR",
     )
     session.set_defaults(handler=cmd_session)
 

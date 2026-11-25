@@ -37,17 +37,19 @@ per-change, as its own lead says.
   runs the checks that spend nothing, prints the note on pi's `models.json` with no credential,
   header value or command in it, and runs the live-gate evidence only once the maintainer
   types `spend X.Y.Z`.
-- A release that ships only bug or security fixes no longer waits for a backend CLI's newest
-  release. With `--fix`, `scripts/check_backend_compat.py` (its check, `print-updates` and
-  `release-brief`) and `scripts/release.py preflight` and `session` hold a backend whose npm
+- A release that ships an important bug or security fix no longer waits for a backend CLI's
+  newest release. With `--fix`, `scripts/check_backend_compat.py` (its check, `print-updates`
+  and `release-brief`) and `scripts/release.py preflight` and `session` hold a backend whose npm
   `latest` the shipped contract does not support yet at the newest stable release it does, and
-  say so; every other check still applies, and `preflight --fix` refuses a version that is not
-  a patch release. Every other release still supports each backend's `latest` first.
+  say so; every other check still applies. `preflight --fix` refuses unless the release's
+  changelog section has only `Fixed` and `Security` entries, and `--override-fix-changelog`
+  turns that into a warning. Every other release still supports each backend's `latest` first.
 - The release steps no longer run the AGENTS.md rule-2 gate again by hand. `scripts/release.py
   ci --sha SHA` reads the release commit's check runs from GitHub and passes only when every
-  gate job CI ran on it succeeded and `main` is in its history, so the merge CI tested is the
-  release commit's own tree. The commands `preflight` prints start with it, so a gate still
-  running or failing stops them before anything is tagged.
+  gate job GitHub Actions ran on it succeeded and `main` is in its history, so the merge CI
+  tested is the release commit's own tree. `preflight` runs it before the evidence, so a gate
+  still running or failing stops the release before any quota is spent, and the commands it
+  prints start with it again.
 
 ### Fixed
 

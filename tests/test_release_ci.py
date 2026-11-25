@@ -30,8 +30,11 @@ GATE = release.gate_checks(REPO)
 PATH = f"repos/{release.REPOSITORY}/commits/{SHA}/check-runs?per_page=100"
 
 
-def _run(name: str, run_id: int, status="completed", conclusion="success") -> dict:
+def _run(
+    name: str, run_id: int, status="completed", conclusion="success", app="github-actions"
+) -> dict:
     return {
+        "app": {"slug": app},
         "id": run_id,
         "name": name,
         "status": status,
@@ -144,6 +147,16 @@ def test_a_gate_job_that_never_ran_fails():
 def test_no_check_runs_at_all_fails_rather_than_passing_vacuously(capsys):
     assert _ci(FakeGh([[]])) == 1
     assert capsys.readouterr().err.count("has not run on") == len(GATE)
+
+
+def test_a_same_named_check_run_from_another_app_does_not_count(capsys):
+    """Any app can create a check run named like the gate; only GitHub Actions' runs count."""
+    impostor = [_run(name, 100 + n, app="some-other-app") for n, name in enumerate(GATE)]
+    assert _ci(FakeGh([impostor])) == 1
+    assert f"{GATE[0]}: has not run" in capsys.readouterr().err
+    # Nor does a newer passing impostor hide a failed gate job.
+    failed = [_run(GATE[0], 1, conclusion="failure"), *_passing(start=2)[1:]]
+    assert _ci(FakeGh([[*failed, _run(GATE[0], 99, app="some-other-app")]])) == 1
 
 
 def test_the_newest_run_of_a_job_decides():
