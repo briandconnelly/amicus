@@ -48,6 +48,12 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/amicus"]
 
+# ADR 0055: the served skill is the plugin's own copy, shipped inside the package. Only
+# SKILL.md and references/ go in; the skill's tests/ never do.
+[tool.hatch.build.targets.wheel.force-include]
+"skills/collaborating-with-amicus/SKILL.md" = "amicus/_skill/collaborating-with-amicus/SKILL.md"
+"skills/collaborating-with-amicus/references" = "amicus/_skill/collaborating-with-amicus/references"
+
 [dependency-groups]
 dev = [
     "actionlint-py>=1.7.12.25",

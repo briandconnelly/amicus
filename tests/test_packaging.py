@@ -13,6 +13,7 @@ import re
 import shutil
 import subprocess
 import tomllib
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -446,3 +447,71 @@ def test_unreleased_content_without_a_subsection_is_rejected(dated_section_follo
         "\n- A bare bullet.\n", dated_section_follows=dated_section_follows
     )
     assert problems and "subsection" in problems[0]
+
+
+# --- ADR 0055: the served skill ships in the wheel, and only the plugin turns it off ----------
+
+_SKILL_PREFIX = "amicus/_skill/collaborating-with-amicus/"
+
+
+@pytest.fixture(scope="module")
+def built_wheel(tmp_path_factory) -> Path:
+    out = tmp_path_factory.mktemp("wheel")
+    subprocess.run(
+        ["uv", "build", "--wheel", "--out-dir", str(out), str(REPO_ROOT)],
+        check=True,
+        capture_output=True,
+    )
+    return next(out.glob("*.whl"))
+
+
+@pytest.mark.slow
+def test_the_wheel_ships_exactly_the_served_skill(built_wheel):
+    from tests.test_served_skill import REPO_SKILL, expected_files
+
+    with zipfile.ZipFile(built_wheel) as wheel:
+        members = {
+            name.removeprefix(_SKILL_PREFIX): wheel.read(name)
+            for name in wheel.namelist()
+            if name.startswith(_SKILL_PREFIX)
+        }
+    assert members == {p: (REPO_SKILL / p).read_bytes() for p in expected_files(REPO_SKILL)}
+
+
+async def _skill_view(wheel: Path, extra_args: list[str], tmp_path: Path) -> tuple[bool, set]:
+    """Launch the installed wheel from a cwd outside the checkout, with the skill opted in."""
+    from fastmcp.skills.client import SkillsClientExtension
+
+    env = {
+        "PATH": _minimal_subprocess_path("uvx"),
+        "HOME": str(tmp_path),
+        "AMICUS_SERVE_SKILL": "1",
+    }
+    transport = StdioTransport(
+        command="uvx",
+        args=["--from", str(wheel), "amicus-mcp", *extra_args],
+        env=env,
+        cwd=str(tmp_path),
+    )
+    async with Client(transport, extensions=[SkillsClientExtension()]) as client:
+        caps = client.server_capabilities
+        advertised = "io.modelcontextprotocol/skills" in dict((caps and caps.extensions) or {})
+        uris = {
+            str(r.uri) for r in await client.list_resources() if str(r.uri).startswith("skill://")
+        }
+    return advertised, uris
+
+
+@pytest.mark.slow
+async def test_the_installed_wheel_honours_the_plugin_flag(built_wheel, tmp_path):
+    assert await _skill_view(built_wheel, ["--no-serve-skill"], tmp_path) == (False, set())
+
+
+@pytest.mark.slow
+async def test_the_installed_wheel_serves_the_whole_skill_without_the_flag(built_wheel, tmp_path):
+    from tests.test_served_skill import REPO_SKILL, expected_files
+
+    advertised, uris = await _skill_view(built_wheel, [], tmp_path)
+    base = "skill://collaborating-with-amicus/"
+    assert advertised
+    assert uris == {base + p for p in expected_files(REPO_SKILL)} | {base + "_manifest"}
