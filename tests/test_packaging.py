@@ -74,8 +74,8 @@ def test_runtime_dependencies_are_exactly_the_spec_set():
     assert names == ["anyio", "fastmcp", "mcp", "pydantic"]
 
 
-def test_console_script_points_at_server_main():
-    assert _pyproject()["project"]["scripts"] == {"amicus-mcp": "amicus.server:main"}
+def test_console_script_points_at_server_cli():
+    assert _pyproject()["project"]["scripts"] == {"amicus-mcp": "amicus.server:cli"}
 
 
 def test_declared_names_cover_the_global_namespace():
@@ -102,7 +102,7 @@ def test_vendor_auth_includes_the_claude_credentials():
 EXPECTED_ENV_VARS = [
     # Pinned by review, not derived: comparing a generated file to its own generator is not an
     # oracle. This list is the independent expectation; the generator must reproduce it exactly.
-    # 33 declared (16 global + 6 codex + 7 claude + 4 pi) + 2 vendor = 35.
+    # 34 declared (17 global + 6 codex + 7 claude + 4 pi) + 2 vendor = 36.
     "AMICUS_ALLOW_CWD_WORKSPACE",
     "AMICUS_BACKENDS",
     "AMICUS_CLAUDE_ACCESS",
@@ -134,6 +134,7 @@ EXPECTED_ENV_VARS = [
     "AMICUS_PI_MODEL",
     "AMICUS_PI_REASONING_EFFORT",
     "AMICUS_PI_SUPPORTED_VERSIONS",
+    "AMICUS_SERVE_SKILL",
     "AMICUS_STATE_DIR",
     "AMICUS_TASKS",
     "AMICUS_TASKS_BACKEND_URL",
@@ -172,7 +173,9 @@ def test_mcp_json_env_vars_equal_the_declared_list():
 def test_mcp_json_invokes_the_console_script():
     server = _read(".mcp.json")["mcpServers"]["amicus"]
     assert server["command"] == "uvx"
-    assert server["args"][-1] == "amicus-mcp"
+    args = server["args"]
+    # ADR 0055: a plugin's server never serves the skill, whatever its environment holds.
+    assert args[args.index("--from") + 2 :] == ["amicus-mcp", "--no-serve-skill"]
 
 
 def test_mcp_json_installs_this_repo_at_its_own_release_tag():
@@ -327,7 +330,9 @@ async def test_the_committed_manifest_command_starts_a_real_server(tmp_path):
     )
     wheel = next(tmp_path.glob("*.whl"))
     args = [str(wheel) if a.startswith("git+") else a for a in server["args"]]
-    assert args[-1] == "amicus-mcp", "the console script name must survive substitution"
+    assert args[args.index("--from") + 2 :] == ["amicus-mcp", "--no-serve-skill"], (
+        "the console script and the plugin's flag must survive substitution"
+    )
     env = {"PATH": _minimal_subprocess_path(server["command"]), "HOME": str(tmp_path)}
     transport = StdioTransport(command=server["command"], args=args, env=env)
     async with Client(transport) as client:

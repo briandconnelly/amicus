@@ -121,6 +121,12 @@ GLOBAL_ENV = EnvNamespace(
             "AMICUS_TASKS", "`1` to register the paid sync tools with the tasks extension.", "0"
         ),
         EnvVar(
+            "AMICUS_SERVE_SKILL",
+            "`1` to serve the collaborating-with-amicus skill over the MCP skills extension; "
+            "ignored under `--no-serve-skill`.",
+            "0",
+        ),
+        EnvVar(
             "AMICUS_TASKS_BACKEND_URL",
             "Docket backend for the tasks extension (memory:// or redis://).",
             "memory://",
@@ -160,6 +166,7 @@ class Settings:
     log_file: str | None
     tasks_enabled: bool
     tasks_backend_url: str
+    serve_skill: bool
     host_name: str | None
     allow_cwd_workspace: bool
     model_policy: ModelPolicy
@@ -329,6 +336,7 @@ def settings(environ: Mapping[str, str] | None = None) -> Settings:
         log_file=get("AMICUS_LOG_FILE") or None,
         tasks_enabled=(get("AMICUS_TASKS") or "0").strip().lower() in _TRUE,
         tasks_backend_url=get("AMICUS_TASKS_BACKEND_URL") or "memory://",
+        serve_skill=(get("AMICUS_SERVE_SKILL") or "0").strip().lower() in _TRUE,
         host_name=get("AMICUS_HOST_NAME") or None,
         allow_cwd_workspace=(get("AMICUS_ALLOW_CWD_WORKSPACE") or "0").strip().lower() in _TRUE,
         model_policy=parsed_policy if isinstance(parsed_policy, ModelPolicy) else ModelPolicy(),

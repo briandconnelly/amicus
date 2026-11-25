@@ -5,7 +5,8 @@
       "args": [
         "--from",
         "git+https://github.com/briandconnelly/amicus.git@v0.16.0",
-        "amicus-mcp"
+        "amicus-mcp",
+        "--no-serve-skill"
       ],
       "env_vars": [
         "AMICUS_ALLOW_CWD_WORKSPACE",
@@ -39,6 +40,7 @@
         "AMICUS_PI_MODEL",
         "AMICUS_PI_REASONING_EFFORT",
         "AMICUS_PI_SUPPORTED_VERSIONS",
+        "AMICUS_SERVE_SKILL",
         "AMICUS_STATE_DIR",
         "AMICUS_TASKS",
         "AMICUS_TASKS_BACKEND_URL",

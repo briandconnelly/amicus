@@ -39,7 +39,7 @@ Repository = "https://github.com/briandconnelly/amicus"
 Issues = "https://github.com/briandconnelly/amicus/issues"
 
 [project.scripts]
-amicus-mcp = "amicus.server:main"
+amicus-mcp = "amicus.server:cli"
 
 [build-system]
 requires = ["hatchling"]

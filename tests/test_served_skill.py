@@ -5,10 +5,13 @@ from `skills/` independently of `amicus.skill`'s own selector."""
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
+from amicus import config, server
 from amicus.skill import SKILL_NAME, SkillUnavailable, build_skill, served_files
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -109,3 +112,55 @@ def test_invalid_frontmatter_is_unavailable(tmp_path, monkeypatch):
     monkeypatch.setattr(amicus.skill, "skill_root", lambda: root)
     with pytest.raises(SkillUnavailable, match="not a valid Agent Skill"):
         build_skill()
+
+
+# --- Task 3: AMICUS_SERVE_SKILL, cli() and --no-serve-skill ---------------------------------
+
+
+def test_serve_skill_defaults_off(clean_env):
+    assert config.settings().serve_skill is False
+
+
+def test_serve_skill_reads_the_env(clean_env):
+    clean_env.setenv("AMICUS_SERVE_SKILL", "1")
+    assert config.settings().serve_skill is True
+
+
+def _capture_settings(monkeypatch) -> list:
+    seen: list = []
+
+    def fake_create_app(settings):
+        seen.append(settings)
+        return SimpleNamespace(run=lambda: None)
+
+    monkeypatch.setattr(server, "create_app", fake_create_app)
+    return seen
+
+
+def test_the_flag_outranks_the_env(clean_env, restored_signal_handlers):
+    clean_env.setenv("AMICUS_SERVE_SKILL", "1")
+    seen = _capture_settings(clean_env)
+    server.main(["--no-serve-skill"])
+    assert seen[0].serve_skill is False
+
+
+def test_without_the_flag_the_env_stands(clean_env, restored_signal_handlers):
+    clean_env.setenv("AMICUS_SERVE_SKILL", "1")
+    seen = _capture_settings(clean_env)
+    server.main([])
+    assert seen[0].serve_skill is True
+
+
+def test_unknown_argv_is_ignored_with_a_warning(clean_env, restored_signal_handlers, capsys):
+    seen = _capture_settings(clean_env)
+    server.main(["--bogus"])
+    assert len(seen) == 1
+    assert "--bogus" in capsys.readouterr().err
+
+
+def test_cli_passes_sys_argv(clean_env, restored_signal_handlers):
+    clean_env.setenv("AMICUS_SERVE_SKILL", "1")
+    clean_env.setattr(sys, "argv", ["amicus-mcp", "--no-serve-skill"])
+    seen = _capture_settings(clean_env)
+    server.cli()
+    assert seen[0].serve_skill is False

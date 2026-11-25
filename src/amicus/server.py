@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import argparse
 import contextlib
+import dataclasses
 import os
 import signal
 import sys
@@ -33,7 +35,7 @@ from amicus.tools import resources
 
 if TYPE_CHECKING:  # pragma: no cover
     import logging
-    from collections.abc import Callable, Generator
+    from collections.abc import Callable, Generator, Sequence
 
     from amicus.config import Settings
 
@@ -400,10 +402,28 @@ def _enforce_posix_platform(os_name: str | None = None) -> None:
     raise SystemExit(1)
 
 
-def main() -> None:
-    """Console-script entrypoint: run the MCP server over stdio, failing legibly."""
+def _parse_args(argv: Sequence[str]) -> argparse.Namespace:
+    """`--no-serve-skill` is the one flag; anything else is ignored, as v0.16.0 ignored all argv.
+
+    `add_help=False` keeps `--help` an ignored argument rather than an exit."""
+    parser = argparse.ArgumentParser(prog="amicus-mcp", add_help=False)
+    parser.add_argument("--no-serve-skill", action="store_true")
+    known, unknown = parser.parse_known_args(list(argv))
+    if unknown:
+        sys.stderr.write(f"amicus: ignoring unrecognized arguments: {' '.join(unknown)}\n")
+    return known
+
+
+def main(argv: Sequence[str] = ()) -> None:
+    """Run the MCP server over stdio, failing legibly.
+
+    `--no-serve-skill` turns off the served skill whatever `AMICUS_SERVE_SKILL` holds; the
+    plugin's `.mcp.json` passes it so a plugin's server never serves the skill (ADR 0055)."""
     _enforce_posix_platform()
+    args = _parse_args(argv)
     settings = config.settings()
+    if args.no_serve_skill:
+        settings = dataclasses.replace(settings, serve_skill=False)
     if settings.fatal_errors:
         for problem in settings.fatal_errors:
             sys.stderr.write(f"amicus cannot start: {problem}.\n")
@@ -432,5 +452,10 @@ def main() -> None:
         log.info("amicus %s: stdio transport closed, shutting down", __version__)
 
 
+def cli() -> None:
+    """Console-script entrypoint: `main` with this process's own arguments."""
+    main(sys.argv[1:])
+
+
 if __name__ == "__main__":  # pragma: no cover
-    main()
+    cli()
