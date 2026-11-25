@@ -319,13 +319,17 @@ MODEL_SLUG_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 # On 2026-10-29 0.164.0 and 0.165.0 were both served gpt-6.1-terra after gpt-6-astra, so it is a
 # server-side addition, not a 0.165 one. 0.166.0 was served the same list that day, and 0.166.0
 # and 0.167.0 were both served it again on 2026-11-08, 0.167.0 and 0.169.0 on 2026-11-14, and
-# 0.169.0 and 0.171.0 on 2026-11-21.
+# 0.169.0 and 0.171.0 on 2026-11-21. On 2026-11-25 0.169.0, 0.171.0 and 0.172.0 were all served
+# gpt-6.2-sol and gpt-6.2-astra first, then gpt-6.1-terra, gpt-reserve and gpt-6.1-sol ahead of
+# gpt-6-astra, so the 6.2 models are a server-side addition; the tuple follows that order.
 KNOWN_MODEL_SLUGS: tuple[str, ...] = (
+    "gpt-6.2-sol",
+    "gpt-6.2-astra",
+    "gpt-6.1-terra",
+    "gpt-reserve",
     "gpt-6.1-sol",
     "gpt-6-astra",
-    "gpt-6.1-terra",
     "gpt-6-sol",
-    "gpt-reserve",
     "gpt-6-luna",
     "gpt-5.6-sol",
     "gpt-5.6-terra",
