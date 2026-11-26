@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import argparse
 import contextlib
 import dataclasses
 import os
@@ -413,16 +412,19 @@ def _enforce_posix_platform(os_name: str | None = None) -> None:
     raise SystemExit(1)
 
 
-def _parse_args(argv: Sequence[str]) -> argparse.Namespace:
-    """`--no-serve-skill` is the one flag; anything else is ignored, as v0.16.0 ignored all argv.
+NO_SERVE_SKILL = "--no-serve-skill"
 
-    `add_help=False` keeps `--help` an ignored argument rather than an exit."""
-    parser = argparse.ArgumentParser(prog="amicus-mcp", add_help=False)
-    parser.add_argument("--no-serve-skill", action="store_true")
-    known, unknown = parser.parse_known_args(list(argv))
+
+def _parse_args(argv: Sequence[str]) -> bool:
+    """Whether argv carries `--no-serve-skill`, matched as an exact token.
+
+    Every other argument, an abbreviation or `--no-serve-skill=...` included, is ignored with a
+    warning, as v0.16.0 ignored all argv."""
+    args = list(argv)
+    unknown = [a for a in args if a != NO_SERVE_SKILL]
     if unknown:
         sys.stderr.write(f"amicus: ignoring unrecognized arguments: {' '.join(unknown)}\n")
-    return known
+    return NO_SERVE_SKILL in args
 
 
 def main(argv: Sequence[str] = ()) -> None:
@@ -431,9 +433,9 @@ def main(argv: Sequence[str] = ()) -> None:
     `--no-serve-skill` turns off the served skill whatever `AMICUS_SERVE_SKILL` holds; the
     plugin's `.mcp.json` passes it so a plugin's server never serves the skill (ADR 0055)."""
     _enforce_posix_platform()
-    args = _parse_args(argv)
+    no_serve_skill = _parse_args(argv)
     settings = config.settings()
-    if args.no_serve_skill:
+    if no_serve_skill:
         settings = dataclasses.replace(settings, serve_skill=False)
     if settings.fatal_errors:
         for problem in settings.fatal_errors:

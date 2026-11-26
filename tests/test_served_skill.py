@@ -267,3 +267,20 @@ def test_a_symlinked_skill_md_is_rejected(tmp_path):
     (root / "SKILL.md").symlink_to(real / "SKILL.md")
     with pytest.raises(SkillUnavailable, match=r"SKILL\.md is a symlink"):
         served_files(root)
+
+
+def test_a_symlinked_skill_root_is_rejected(tmp_path):
+    real = _fake_skill(tmp_path / "real")
+    root = tmp_path / "skill"
+    root.symlink_to(real)
+    with pytest.raises(SkillUnavailable, match=r"skill root is a symlink"):
+        served_files(root)
+
+
+@pytest.mark.parametrize("token", ["--no-serve", "--no-serve-skill=false", "--no-serve-skil"])
+def test_only_the_exact_flag_disables_serving(clean_env, restored_signal_handlers, capsys, token):
+    clean_env.setenv("AMICUS_SERVE_SKILL", "1")
+    seen = _capture_settings(clean_env)
+    server.main([token])
+    assert seen[0].serve_skill is True
+    assert token in capsys.readouterr().err
