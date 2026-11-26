@@ -50,7 +50,7 @@ Point your client at the same command the plugins use, pinned to a published rel
   "mcpServers": {
     "amicus": {
       "command": "uvx",
-      "args": ["--from", "git+https://github.com/briandconnelly/amicus.git@v0.16.0", "amicus-mcp"],
+      "args": ["--from", "git+https://github.com/briandconnelly/amicus.git@v0.17.0", "amicus-mcp"],
       "env": { "AMICUS_BACKENDS": "codex,claude" }
     }
   }
@@ -69,10 +69,9 @@ If your client doesn't pass a working directory, your first calls look like this
 3. If a result has `ok: false`, branch on `error.code`, and when `error.repair` is present,
    its `next_step` says what to do next.
 
-Without the plugin you don't get its skill automatically. The next release, 0.17.0, adds
-`AMICUS_SERVE_SKILL=1`, which has the server offer the same skill over MCP; the v0.16.0 pin above
-doesn't have it yet. Claude Code loads MCP skills in public beta from v2.1.331, though not in
-every setup ([ADR 0055](docs/adr/0055-the-server-serves-the-skill-only-where-the-plugin-cannot.md)
+Without the plugin you don't get its skill automatically. Set `AMICUS_SERVE_SKILL=1` (from
+0.17.0) and the server offers the same skill over MCP. Claude Code loads MCP skills in public
+beta from v2.1.331, though not in every setup ([ADR 0055](docs/adr/0055-the-server-serves-the-skill-only-where-the-plugin-cannot.md)
 lists the exceptions); Codex can't load them yet.
 
 ## Try it
@@ -167,9 +166,9 @@ settings onto the new ones.
 
 ## Status and known limits
 
-amicus 0.16.0 adds model pricing, reasoning levels and a filtering `query` to `amicus_models`,
-an operator model deny-list (`AMICUS_DENY_MODELS`), and `amicus_job_export_diff`. See
-[`docs/MIGRATION.md`](docs/MIGRATION.md#upgrading-from-0150) for upgrade notes and
+amicus 0.17.0 can serve the `collaborating-with-amicus` skill over the MCP skills extension
+(`AMICUS_SERVE_SKILL=1`) for clients installed without the plugin. See
+[`docs/MIGRATION.md`](docs/MIGRATION.md#upgrading-from-0160) for upgrade notes and
 [`CHANGELOG.md`](CHANGELOG.md) for every user-visible change.
 
 Known limits:

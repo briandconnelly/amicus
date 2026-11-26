@@ -198,6 +198,15 @@ A `null` there means no loaded plugin declares one.
 The `amicus://backends/{backend}` resource is always the full entry.
 `amicus_capabilities(detail="contracts")` is removed: pass `include_tool_details=false` for the same rowless payload, and `detail` now selects only how much each `tool_details` row carries (`summary` is `name`, `cost`, `stability`, `backends`; `full` adds the rest, including `error_codes`).
 
+## Upgrading from 0.16.0
+
+Nothing in this release breaks a 0.16.0 caller, and `RESULT_FORMAT` does not move, so a result a 0.16.0 server stored stays readable.
+The fingerprint stays `amicus/0.1/schema-83`, so a fingerprint-aware client need not re-read the catalog.
+amicus now requires `fastmcp>=4.2.2`, because 4.2.0 and 4.2.1 list no served skill.
+The new `AMICUS_SERVE_SKILL` is off by default; an install made without the plugin can set it to `1` to have the server serve the `collaborating-with-amicus` skill over the MCP skills extension (ADR 0055).
+A plugin install needs no change: its `.mcp.json` passes `--no-serve-skill`, which outranks the variable.
+The server now warns on stderr, with a count and never the values, when it is launched with arguments other than `--no-serve-skill`, which it still ignores.
+
 ## Upgrading from 0.15.0
 
 Nothing in this release breaks a 0.15.0 caller, and `RESULT_FORMAT` does not move, so a result a 0.15.0 server stored stays readable.
