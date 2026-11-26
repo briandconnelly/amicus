@@ -66,7 +66,8 @@ If your client doesn't pass a working directory, your first calls look like this
    logged in, and what each one sends where.
 2. Call `amicus_consult` with `backend`, `question` and an absolute `workspace_root`. Every paid
    tool needs `workspace_root` from such a client; the free discovery tools reject it.
-3. If a result has `ok: false`, its `error.repair.next_step` says what to do next.
+3. If a result has `ok: false`, branch on `error.code`, and when `error.repair` is present,
+   its `next_step` says what to do next.
 
 Without the plugin you don't get its skill automatically. The next release, 0.17.0, adds
 `AMICUS_SERVE_SKILL=1`, which has the server offer the same skill over MCP; the v0.16.0 pin above
@@ -120,8 +121,11 @@ including provider keys and prepaid balances; see [`docs/PI.md`](docs/PI.md).
 - **Every paid call's full answer is saved on your machine**, after best-effort secret
   redaction, and it can quote what you sent; your inputs themselves are never written there.
   It's kept so a background job can be fetched later, until `amicus_job_consume_result` removes
-  it or it expires (`AMICUS_JOB_TTL`, default 24 hours). An expired record is cleaned up on a
-  later job call, so an idle server can hold it longer. A diff you export with
+  it, it expires (`AMICUS_JOB_TTL`, default 24 hours), or, once amicus has returned it, the
+  per-workspace job cap evicts it to make room, so don't count on fetching a returned answer
+  twice. A result nobody has fetched is never evicted; a new paid call is refused with
+  `job_cap_reached` instead. An expired record is cleaned up on a later job call, so an idle
+  server can hold it longer. A diff you export with
   `amicus_job_export_diff` is yours to delete. ADRs
   [0035](docs/adr/0035-a-backend-answer-is-kept-on-the-job-record.md),
   [0038](docs/adr/0038-the-job-cap-never-evicts-an-unreturned-result.md) and
