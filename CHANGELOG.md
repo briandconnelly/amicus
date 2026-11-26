@@ -31,7 +31,7 @@ per-change, as its own lead says.
 
 ### Changed
 
-- amicus now requires `fastmcp>=4.2.0`, the first release with the skills extension.
+- amicus now requires `fastmcp>=4.2.2`, the first release whose skills extension lists a served skill.
 
 - `amicus_models`'s bundled codex fallback, used only when codex's own model cache cannot be
   read, now lists `gpt-6.2-sol` and `gpt-6.2-astra` first and follows the priority order codex

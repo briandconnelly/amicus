@@ -16,7 +16,7 @@ logger configuration `obs.configure` installs.
 FastMCP 4.0.4 closed the same leak on its own side (PrefectHQ/fastmcp#5106): it now logs a
 `{"error_count", "error_types"}` summary instead of pydantic's error list, so no `loc` and
 no rejected value reach amicus at all, and the rewritten record names no field. The
-`fastmcp>=4.2.0` floor admits no release that logs the list, so amicus no longer renders it:
+`fastmcp>=4.2.2` floor admits no release that logs the list, so amicus no longer renders it:
 a list detail is withheld whole. amicus keeps its own rewrite rather than deferring to
 upstream's, because the filter covers the rest of the logger's records regardless."""
 
