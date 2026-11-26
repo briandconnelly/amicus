@@ -515,3 +515,31 @@ async def test_the_installed_wheel_serves_the_whole_skill_without_the_flag(built
     base = "skill://collaborating-with-amicus/"
     assert advertised
     assert uris == {base + p for p in expected_files(REPO_SKILL)} | {base + "_manifest"}
+
+
+@pytest.mark.slow
+def test_the_wheel_leaves_out_files_the_server_skips(tmp_path):
+    """Junk in a dirty source tree (a backup, a hidden file) never reaches a built wheel."""
+    tracked = (
+        subprocess.run(["git", "ls-files", "-z"], cwd=REPO_ROOT, check=True, capture_output=True)
+        .stdout.decode()
+        .split("\0")
+    )
+    src = tmp_path / "src-tree"
+    for rel in filter(None, tracked):
+        if (REPO_ROOT / rel).is_file():
+            (src / rel).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(REPO_ROOT / rel, src / rel)
+    refs = src / "skills" / "collaborating-with-amicus" / "references"
+    (refs / "notes.md.bak").write_text("junk")
+    (refs / ".DS_Store").write_bytes(b"junk")
+    out = tmp_path / "dist"
+    subprocess.run(
+        ["uv", "build", "--wheel", "--out-dir", str(out), str(src)],
+        check=True,
+        capture_output=True,
+    )
+    with zipfile.ZipFile(next(out.glob("*.whl"))) as wheel:
+        names = [n for n in wheel.namelist() if n.startswith(_SKILL_PREFIX)]
+    assert names
+    assert not [n for n in names if n.endswith(("notes.md.bak", ".DS_Store"))]
