@@ -2,21 +2,27 @@
 
 Give your coding agent a second opinion from a different model.
 
-amicus is one MCP server that fronts **Codex**, **Pi** and **Claude**. The backend is a
-parameter, not a separate installation — so instead of running a server per model and learning a
-tool surface for each, you ask for a consult, a review, or a delegated task and say which model should
-answer.
+When you're about to commit to a design, stuck on a bug after two fixes, or about to call risky
+work done, it helps to ask someone else. amicus lets the agent you're already working with ask
+**Codex**, **Claude** or **Pi** (which reaches models from many providers) without leaving your
+session. It is one [MCP](https://modelcontextprotocol.io) server: you pick the model per request,
+rather than installing and learning a separate tool for each.
 
-- **Consult** — a read-only second opinion on an approach, a bug, or a design.
-- **Review** — a structured review of changes gathered from git, with findings tied to evidence.
-- **Delegate** — a task implemented in a throwaway git worktree, returned as a diff you review.
-  It is never applied to your working tree.
-- **Adversarial review** — a fixed critic aimed at a plan, claim, or decision.
+You can ask another model to:
 
-Long-running calls can be started in the background and polled, so a broad review does not block
-your session.
+- **Consult**: give a read-only second opinion on an approach, a bug or a design.
+- **Review**: review your changes in git, with each finding tied to evidence.
+- **Delegate**: implement a task in a throwaway git worktree and hand back a diff. amicus never
+  applies it; you read it and decide.
+- **Adversarial review**: attack a plan, claim or decision before you commit to it.
+
+Long jobs can run in the background while you keep working.
 
 ## Install
+
+You need macOS or Linux, Python 3.11 or newer, [`uv`](https://docs.astral.sh/uv/), and the CLI
+for each model you want to use (`codex`, `claude`, `pi`), installed and logged in. amicus drives
+those CLIs; it never talks to the providers itself and stores no credentials.
 
 ### Claude Code
 
@@ -32,176 +38,132 @@ codex plugin marketplace add briandconnelly/amicus
 codex plugin add amicus@amicus
 ```
 
-Start a new session afterwards so the host loads the bundled skill and tools.
+Start a new session afterwards. The plugin brings the server and a skill that teaches your agent
+when and how to use it.
 
 ### Any other MCP client
 
-The plugins launch the server from a published release tag, pinned in
-[`.mcp.json`](.mcp.json). Point your client at the same command:
+Point your client at the same command the plugins use, pinned to a published release:
 
 ```json
 {
   "mcpServers": {
     "amicus": {
       "command": "uvx",
-      "args": ["--from", "git+https://github.com/briandconnelly/amicus.git@v0.16.0", "amicus-mcp"]
+      "args": ["--from", "git+https://github.com/briandconnelly/amicus.git@v0.16.0", "amicus-mcp"],
+      "env": { "AMICUS_BACKENDS": "codex,claude" }
     }
   }
 }
 ```
 
-Environment variables go wherever your client sets them for a stdio server (most accept an
-`"env"` object beside `"command"`; check your client's documentation). A first session from a
-client that has no notion of a working directory looks like this:
+Set `AMICUS_BACKENDS` to the CLIs you have installed. Most clients take environment variables in
+an `"env"` object like this one; check your client's documentation.
 
-1. Set `AMICUS_BACKENDS` to the backends you have installed and logged in to.
-2. Call `amicus_backends` with `detail: "full"`. It is free, and it reports each enabled
-   backend's installed and authenticated state plus the disclosures you should read before
-   spending; a backend you did not enable is listed with `status: null`.
-3. Call `amicus_consult` with `backend`, `question` and an absolute `workspace_root`. Every paid
-   tool needs `workspace_root` from such a client; the three free discovery tools reject it.
-4. If a result has `ok: false`, branch on `error.code` and, when present, follow
-   `error.repair`: its `next_step` says what to do, and when one call recovers, its `tool` and
-   `arguments` name that call.
+If your client doesn't pass a working directory, your first calls look like this:
 
-The plugins install the `collaborating-with-amicus` skill beside the server; a client without
-the plugin can have the server serve it instead. In releases after 0.16.0, set
-`AMICUS_SERVE_SKILL=1` and the server offers the skill over the MCP skills extension. Claude
-Code loads it from v2.1.331, in public beta, and not under `claude -p`, the Agent SDK, API-key
-login or several other setups (ADR 0055 lists them); Codex does not load MCP skills yet. How
-reliably a host triggers the served skill has not been measured.
+1. Call `amicus_backends` with `detail: "full"` (free) to see which backends are installed and
+   logged in, and what each one sends where.
+2. Call `amicus_consult` with `backend`, `question` and an absolute `workspace_root`. Every paid
+   tool needs `workspace_root` from such a client; the free discovery tools reject it.
+3. If a result has `ok: false`, branch on `error.code`, and when `error.repair` is present,
+   its `next_step` says what to do next.
 
-### Requirements
+Without the plugin you don't get its skill automatically. The next release, 0.17.0, adds
+`AMICUS_SERVE_SKILL=1`, which has the server offer the same skill over MCP; the v0.16.0 pin above
+doesn't have it yet. Claude Code loads MCP skills in public beta from v2.1.331, though not in
+every setup ([ADR 0055](docs/adr/0055-the-server-serves-the-skill-only-where-the-plugin-cannot.md)
+lists the exceptions); Codex can't load them yet.
 
-- macOS or Linux: amicus refuses to start on a non-POSIX platform, because its background-job
-  safety layer depends on POSIX process semantics.
-- Python 3.11 or newer, and [`uv`](https://docs.astral.sh/uv/).
-- The CLI for each backend you enable, installed and authenticated: `codex`, `pi`, `claude`.
-  amicus drives those CLIs; it does not talk to the providers itself, and it stores no credentials.
+## Try it
 
-## Using it
+Ask in your own words:
 
-Choose which backends are available with `AMICUS_BACKENDS` — a comma-separated list of `codex`,
-`pi` and `claude` (case-sensitive). Unset, all three are enabled; set, only the backends you
-name are. An enabled backend whose CLI is missing or not logged in still appears in
-`amicus_backends`, with `status.installed` and `status.authenticated` saying so.
+- "Which amicus backends are installed and logged in?"
+- "Get a second opinion on this approach from Codex."
+- "Have Claude review my current changes."
+- "Delegate this task to Codex and show me the diff."
 
-`pi` has no default model. Set `AMICUS_PI_MODEL` to an exact `provider/id`, as `pi --list-models`
-prints it, or pass `model` on each call; a call with neither is refused before it spends. Pi
-authenticates either from credentials saved by its interactive `/login <provider>`, which need
-nothing more, or from the provider's API-key environment variable (for OpenRouter,
-`OPENROUTER_API_KEY`), which has to reach the amicus server's environment: the plugin's
-`.mcp.json` does not forward it, so your host must.
-If you set `PI_CODING_AGENT_DIR`, make it an absolute path (or `~/…`): a relative one is refused
-before any spend and reported on `amicus_backends`, because pi would resolve it against a
-different directory for amicus's free probes than for a paid run.
-pi asks the provider for the model's whole output limit on every call, which `amicus_models`
-lists as `max_output_tokens`, and a prepaid provider such as OpenRouter refuses the call
-(HTTP 402) unless your balance covers that limit at the model's output price, however little the
-call would spend. `amicus_models` lists pi's catalog price as the row's `pricing.output`, in USD
-per million tokens, where the catalog has one; a request whose input, cached tokens
-included, exceeds a `pricing.tiers` threshold is charged that tier's `output` rate instead. amicus reports that refusal as not retryable. Either add credit, or cap the
-model's output in pi's `models.json` (in `$PI_CODING_AGENT_DIR` when that is set, otherwise
-`~/.pi/agent/`), for example
-`{"providers":{"openrouter":{"modelOverrides":{"moonshotai/kimi-k3":{"maxTokens":32000}}}}}`.
-amicus reports a provider's bodiless 404 as not temporary, because retrying the same call
-unchanged is unlikely to help: check that the provider in the model id's prefix serves that
-model (`amicus_models` lists pi's), and that no `baseUrl` in pi's `models.json` points pi at the
-wrong endpoint.
-A provider client's "Region is missing" is reported as not temporary for the same reason: for
-Amazon Bedrock, set `AWS_REGION` in the environment the amicus server starts with and restart
-the server; for another provider, set the region its configuration asks for, or pass a model
-from a provider that needs none.
-A `pi` delegate runs shell commands with no sandbox, and a command it starts (a hung or
-backgrounded process) can outlive the run, because amicus cannot yet find and stop it.
+Start with the first one. It's free, and it tells you which backends are set up before
+anything is spent. A backend is the CLI amicus runs (`codex`, `claude` or `pi`); you choose a
+model through it.
 
-Then just ask, in your own words:
+## What each backend can do
 
-- "Get a second opinion on this approach from another model."
-- "Have another model review my current changes."
-- "Delegate this task to another model and show me the proposed diff."
-
-Start by asking which backends are available: the answer is free, and it tells you which
-backends are actually usable before you spend anything.
-
-## The tools
-
-Eighteen tools, in five groups. Discovery, previews and job
-management are free; the verbs and their background twins invoke the selected backend and spend
-its quota.
-
-| Group | Tools |
-| --- | --- |
-| Discovery — free | `amicus_backends`, `amicus_capabilities`, `amicus_models` (an optional `query` filters it by slug prefix, price and context) |
-| Verbs — paid | `amicus_consult`, `amicus_review_changes`, `amicus_delegate`, `amicus_adversarial_review` |
-| Previews — free | `amicus_review_changes_dry_run` (review), `amicus_delegate_dry_run` |
-| Background twins — paid | the four verbs again, each with an `_async` suffix |
-| Jobs — free | `amicus_job_status`, `amicus_job_result`, `amicus_job_consume_result`, `amicus_job_export_diff`, `amicus_job_list`, `amicus_job_cancel` |
-
-Not every backend does everything:
-
-| Verb | Codex | Pi | Claude |
+| | Codex | Claude | Pi |
 | --- | --- | --- | --- |
-| `consult`, `review_changes` | yes | yes | yes |
-| `delegate` | yes | yes | no |
-| `adversarial_review` | no | no | yes |
+| Consult, review | yes | yes | yes |
+| Delegate | yes | no | yes |
+| Adversarial review | no | yes | no |
 
-A `no` is amicus's routing policy, not a model limitation. Claude is review-only, and the
-dedicated adversarial-review verb is scoped to Claude. To ask Codex or Pi for an adversarial
-review, use `consult` or `review_changes` and supply the stance yourself; the dedicated verb adds
-a fixed critic stance and the `target` and `evidence` inputs.
+These are amicus's choices, not limits of the models: Claude handles consults and reviews and has
+no delegate tool, and the dedicated adversarial critic runs only on Claude. You can still ask Codex or Pi to argue against a
+plan through an ordinary consult.
 
-Asking a tool for a backend outside its `backend` enum, in-tree or not, is rejected before any
-spend as an `invalid_arguments` error whose `details.allowed_values` lists the backends that tool
-accepts (the enum is that set). `feature_unsupported` is only a defensive check: it is returned
-if the named backend's declared features lack the verb, which no backend a tool's enum accepts
-does today.
+**Pi** has no default model, so name one per request as an exact `provider/id` (for example
+`openrouter/moonshotai/kimi-k3`), or set `AMICUS_PI_MODEL`. Pi has its own setup details,
+including provider keys and prepaid balances; see [`docs/PI.md`](docs/PI.md).
 
-## Safety
+## What it costs, and where your data goes
 
-- **A delegated diff is never applied.** It runs in a throwaway git worktree and comes back for
-  you to read and apply yourself.
-- **Every verb call spends the selected backend's quota.** The dry runs and the discovery and job
-  tools do not.
-- **Enabling a backend that can write** makes the tool surface carry that backend's approval
-  annotations — see [`docs/MIGRATION.md`](docs/MIGRATION.md).
-- **Your prompts go to whichever provider you selected**, through that provider's own CLI. Each
-  backend discloses how it carries your text — visible on `amicus_backends`. On `pi`, a
-  `baseUrl` override in pi's own `models.json` can send it to a different endpoint.
-- **A paid call's whole answer stays on disk** in the job record under `AMICUS_STATE_DIR`,
-  whatever `detail` delivered it and after only best-effort secret redaction, until it expires
-  (`AMICUS_JOB_TTL`, default 24h; an expired record is removed on a later job call, not by a
-  daemon), `amicus_job_consume_result` removes it or, once amicus has returned it, the
-  per-workspace cap evicts it. The cap never evicts a result nobody has fetched that was
-  recorded since delivery tracking (#244), whichever release recorded it. When only running jobs
-  and such results remain, a new paid call is refused with `job_cap_reached` instead ([ADR 0038](docs/adr/0038-the-job-cap-never-evicts-an-unreturned-result.md)). It can
-  quote what you sent. Your inputs themselves are never written there ([ADR 0035](docs/adr/0035-a-backend-answer-is-kept-on-the-job-record.md)).
-- **A delegate's diff is written to one other place only when you ask**:
-  `amicus_job_export_diff` writes it to a new file at the absolute path you name, mode `0o600`,
-  never overwriting anything and never inside the job store, and returns its byte count and
-  SHA-256 in `meta.diff_export`. That file is yours to delete; the job retention above does not
-  cover it ([ADR 0054](docs/adr/0054-a-delegates-diff-can-be-exported-to-a-path-the-caller-names.md)).
-- Codex, Pi and Claude run with their session persistence disabled.
+- **Asking a model spends that model's quota or credit.** Discovery, previews and job management
+  are free.
+- **What you send goes through the CLI you picked, to the endpoint it's configured for.** A
+  backend can also read files on your machine beyond the project you point it at and send them,
+  so treat every call as sharing with that provider. Before your first paid call,
+  `amicus_backends` with `detail: "full"` describes what each backend can send and how. On Pi,
+  a `baseUrl` in its own config can change the endpoint; see
+  [`docs/PI.md`](docs/PI.md#containment).
+- **A delegated diff is never applied for you.** It comes back for you to review and apply
+  yourself. That's a promise about the diff, not a sandbox: a Pi delegate runs shell commands
+  with no sandbox. Enabling a backend that can write also changes the approval prompts your host
+  shows; see [`docs/MIGRATION.md`](docs/MIGRATION.md).
+- **Every paid call's full answer is saved on your machine**, after best-effort secret
+  redaction, and it can quote what you sent; your inputs themselves are never written there.
+  It's kept so a background job can be fetched later, until `amicus_job_consume_result` removes
+  it, it expires (`AMICUS_JOB_TTL`, default 24 hours), or, once amicus has returned it, the
+  per-workspace job cap evicts it to make room, so don't count on fetching a returned answer
+  twice. A result nobody has fetched is never evicted; a new paid call is refused with
+  `job_cap_reached` instead. An expired record is cleaned up on a later job call, so an idle
+  server can hold it longer. A diff you export with
+  `amicus_job_export_diff` is yours to delete. ADRs
+  [0035](docs/adr/0035-a-backend-answer-is-kept-on-the-job-record.md),
+  [0038](docs/adr/0038-the-job-cap-never-evicts-an-unreturned-result.md) and
+  [0054](docs/adr/0054-a-delegates-diff-can-be-exported-to-a-path-the-caller-names.md) have the
+  details.
+- Codex, Claude and Pi run with their own session history turned off.
 
 ## Configuration
 
-`AMICUS_BACKENDS` is the one most people set. Beyond it, each backend takes an optional model,
-reasoning effort, and binary path (`AMICUS_CODEX_MODEL`, `AMICUS_PI_REASONING_EFFORT`,
-`AMICUS_CLAUDE_BIN`, and so on), and there are limits for timeouts, job retention and payload
-sizes. `AMICUS_DENY_MODELS` blocks models per backend with `backend:glob` entries, such as
-`claude:*opus-5-0*,pi:openrouter/deepseek/*`. It checks the model name amicus sends, not the
-model a CLI or router resolves that name to, and a backend with rules refuses a call that names
-no model. Every variable, what it does and its default is in [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md), rendered from the declarations in the code.
+Most people set only `AMICUS_BACKENDS`, a comma-separated list of `codex`, `claude` and `pi`. If
+you leave it unset, all three are enabled. Each backend also takes an optional model, reasoning
+effort and binary path, and you can block requested model names with
+[`AMICUS_DENY_MODELS`](docs/CONFIGURATION.md#amicus_deny_models). Every setting and its
+default is in [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md).
 
-Logging goes to stderr, and `AMICUS_LOG_FILE` mirrors amicus's own records to a file. To reduce
-the risk of prompt text leaking through dependency logs, `fastmcp` and `mcp` records are limited
-to WARNING or higher on stderr, reduced to non-message diagnostics, and never written to that
-file (ADR 0023).
+Logs go to stderr, and `AMICUS_LOG_FILE` also writes amicus's own log to a file. To lower the
+risk of your prompts leaking into logs, the MCP libraries' messages are limited to warnings,
+stripped of message content, and never written to that file.
+
+## The tools
+
+Your agent normally picks these for you. For reference, there are eighteen:
+
+| Group | Tools |
+| --- | --- |
+| Discovery (free) | `amicus_backends`, `amicus_capabilities`, `amicus_models` |
+| Ask a model (paid) | `amicus_consult`, `amicus_review_changes`, `amicus_delegate`, `amicus_adversarial_review` |
+| Run in the background (paid) | the same four, each with an `_async` suffix |
+| Preview (free) | `amicus_review_changes_dry_run`, `amicus_delegate_dry_run` |
+| Jobs (free) | `amicus_job_status`, `amicus_job_result`, `amicus_job_consume_result`, `amicus_job_export_diff`, `amicus_job_list`, `amicus_job_cancel` |
+
+`amicus_capabilities` lists every tool and error code; pass `detail: "full"` for each tool's
+parameters.
 
 ## Coming from codex-in-claude, moonbridge, or claude-in-codex
 
-amicus replaces all three. [`docs/MIGRATION.md`](docs/MIGRATION.md) maps the old tool names onto
-the new ones.
+amicus replaces all three. [`docs/MIGRATION.md`](docs/MIGRATION.md) maps the old tool names and
+settings onto the new ones.
 
 ## Status and known limits
 
@@ -210,34 +172,16 @@ an operator model deny-list (`AMICUS_DENY_MODELS`), and `amicus_job_export_diff`
 [`docs/MIGRATION.md`](docs/MIGRATION.md#upgrading-from-0150) for upgrade notes and
 [`CHANGELOG.md`](CHANGELOG.md) for every user-visible change.
 
-Two known limits: a third-party backend distribution can load through the `amicus.backends`
-entry-point group, but cannot yet be enabled or called, since `AMICUS_BACKENDS` and the
-`backend` parameter accept only the three in-tree ids; and a shell command a `pi` delegate
-leaves running in the background can outlive the run (#424).
+Known limits:
 
-## Development
+- A Pi delegate runs shell commands with no sandbox, and a command it leaves running in the
+  background can outlive the run (#424).
+- Backends from other packages can be installed but not yet enabled or called.
 
-```sh
-uv sync
-uv run prek install --prepare-hooks   # one-time local hooks
-```
+## Contributing
 
-The gate is defined once, in `AGENTS.md` (Rules, item 2); CI runs it on every supported Python
-version.
-
-| Question | Read |
-| --- | --- |
-| What is being built and why | `docs/superpowers/specs/2026-09-04-amicus-design.md`; for M8, `docs/superpowers/specs/2026-09-15-amicus-M8-sdk-in-tree-design.md` |
-| How milestones are executed by agents | `docs/superpowers/plans/2026-09-04-amicus-execution-model.md` |
-| Architecture decisions | `docs/adr/` |
-| How a release is cut | `docs/RELEASING.md` |
-| How a new codex minor becomes supported | `docs/UPGRADING-CODEX.md` |
-| How new pi, claude, fastmcp and mcp releases become issues | `docs/WATCHING.md` |
-| How a `FINGERPRINT` bump regenerates its test pins | `scripts/regenerate_fingerprint_pins.py` (its docstring) |
-| Every environment variable, its meaning and default | `docs/CONFIGURATION.md` |
-| The router skill an agent loads to call amicus | `skills/collaborating-with-amicus/` |
-| Host captures and CLI evidence | `docs/host-captures/`, `docs/claude-help/`, `docs/codex-help/`, `docs/kimi-help/`, `docs/pi-help/` |
-| How past milestones were built | git history — executed plans are removed once merged |
+Bug reports and pull requests are welcome. [`CONTRIBUTING.md`](CONTRIBUTING.md) explains how to
+set up a checkout, run the checks and find your way around the design docs.
 
 ## License
 

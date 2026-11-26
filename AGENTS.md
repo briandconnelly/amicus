@@ -88,7 +88,7 @@ The design spec is `docs/superpowers/specs/2026-09-04-amicus-design.md`; its "Mi
 The execution model, `docs/superpowers/plans/2026-09-04-amicus-execution-model.md`, is the source of rules 7 and 8; rule 9 widens its rule 6 (workflows, CODEOWNERS, AGENTS.md) to the whole `.github/` tree and `CLAUDE.md`, so every governance file changes the same way.
 Each milestone is planned as `docs/superpowers/plans/YYYY-MM-DD-amicus-M<n>-<slug>.md` and executed task by task in a sibling worktree (`~/projects/amicus-wt-<slug>`) on a `feat/` branch.
 Decisions with lasting consequences are ADRs under `docs/adr/`.
-The README's "Where things are" table indexes the rest.
+The "Finding your way around" table in `CONTRIBUTING.md` indexes the rest.
 
 ### Releases
 
