@@ -419,11 +419,13 @@ def _parse_args(argv: Sequence[str]) -> bool:
     """Whether argv carries `--no-serve-skill`, matched as an exact token.
 
     Every other argument, an abbreviation or `--no-serve-skill=...` included, is ignored with a
-    warning, as v0.16.0 ignored all argv."""
+    warning, as v0.16.0 ignored all argv. The warning gives only a count: an argument can carry
+    a credential or a prompt, and the host captures stderr."""
     args = list(argv)
-    unknown = [a for a in args if a != NO_SERVE_SKILL]
+    unknown = sum(a != NO_SERVE_SKILL for a in args)
     if unknown:
-        sys.stderr.write(f"amicus: ignoring unrecognized arguments: {' '.join(unknown)}\n")
+        noun = "argument" if unknown == 1 else "arguments"
+        sys.stderr.write(f"amicus: ignoring {unknown} unrecognized {noun}\n")
     return NO_SERVE_SKILL in args
 
 

@@ -157,9 +157,12 @@ def test_without_the_flag_the_env_stands(clean_env, restored_signal_handlers):
 
 def test_unknown_argv_is_ignored_with_a_warning(clean_env, restored_signal_handlers, capsys):
     seen = _capture_settings(clean_env)
-    server.main(["--bogus"])
+    server.main(["--bogus", "--api-key=SENTINEL-SECRET"])
     assert len(seen) == 1
-    assert "--bogus" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "ignoring 2 unrecognized arguments" in err
+    assert "SENTINEL" not in err
+    assert "--bogus" not in err
 
 
 def test_cli_passes_sys_argv(clean_env, restored_signal_handlers):
@@ -283,4 +286,6 @@ def test_only_the_exact_flag_disables_serving(clean_env, restored_signal_handler
     seen = _capture_settings(clean_env)
     server.main([token])
     assert seen[0].serve_skill is True
-    assert token in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "ignoring 1 unrecognized argument" in err
+    assert token not in err
