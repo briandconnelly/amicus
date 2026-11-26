@@ -4,7 +4,7 @@
       "command": "uvx",
       "args": [
         "--from",
-        "git+https://github.com/briandconnelly/amicus.git@v0.16.0",
+        "git+https://github.com/briandconnelly/amicus.git@v0.17.0",
         "amicus-mcp",
         "--no-serve-skill"
       ],

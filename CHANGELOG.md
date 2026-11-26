@@ -20,6 +20,15 @@ per-change, as its own lead says.
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-11-26
+
+This release lets an install made without the plugin get the `collaborating-with-amicus` skill:
+with `AMICUS_SERVE_SKILL=1` the server serves it over the MCP skills extension, which Claude
+Code loads in public beta (ADR 0055). It is off by default, and a plugin's server never serves
+it, so a plugin install sees the skill once. amicus now requires `fastmcp>=4.2.2`. Nothing else
+breaks: the fingerprint and `RESULT_FORMAT` do not move, so results a 0.16.0 server stored stay
+readable.
+
 ### Added
 
 - `AMICUS_SERVE_SKILL=1` serves the `collaborating-with-amicus` skill over the MCP skills
@@ -2288,7 +2297,8 @@ per-change rather than net, so they also name intermediate states that no releas
 - The tagged publish path to pypi.org has never run. Only the TestPyPI dispatch path has been exercised.
 - Eval scenario S6 in `skills/collaborating-with-amicus/tests/scenarios.md` passed on one run (status: `pass`, validated by that run alone); an M7 follow-up run against the current skill text did not isolate the still-open F3 finding, so F3 remains open. S7 (real-host approval friction) has failed both of its recorded runs (status: `fail`); an M7 zero-spend recheck reached neither a pass nor a fail and is recorded as inconclusive, so it does not move S7's status. See their `status` fields and ADR 0012.
 
-[Unreleased]: https://github.com/briandconnelly/amicus/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/briandconnelly/amicus/compare/v0.17.0...HEAD
+[0.17.0]: https://github.com/briandconnelly/amicus/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/briandconnelly/amicus/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/briandconnelly/amicus/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/briandconnelly/amicus/compare/v0.13.0...v0.14.0
