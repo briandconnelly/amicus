@@ -77,6 +77,7 @@ def _walk(node: Traversable, prefix: str, out: dict[str, bytes]) -> None:
 def served_files(root: Traversable) -> dict[str, bytes]:
     """`SKILL.md` and every regular file under `references/`, keyed by POSIX path."""
     try:
+        _reject_symlink(root, "the skill root")
         _reject_symlink(root.joinpath("SKILL.md"), "SKILL.md")
         if not root.joinpath("SKILL.md").is_file():
             raise SkillUnavailable("SKILL.md is missing")
