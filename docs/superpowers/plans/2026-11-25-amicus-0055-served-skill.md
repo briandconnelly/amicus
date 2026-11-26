@@ -30,7 +30,7 @@ A new console entry point `cli()` parses `--no-serve-skill`, which forces `serve
 ## Fingerprint decision
 
 Default-profile pins stay the fingerprint baseline and do not move; `FINGERPRINT_COVERS` gains nothing.
-The enabled app has its own live `surface_digest`, because `surface.py` hashes the provider's resource records; that is expected and is pinned by a focused opt-in test (Task 4), not by the global fingerprint.
+The enabled app has its own live `surface_digest`, because `surface.py` hashes the provider's resource records; that is expected, and no test pins it: the Task 4 tests check only that it differs from the default and that the served resource URIs match.
 If any default pin moves during implementation, stop: this decision is wrong and goes back to the maintainer.
 
 ## Review Focus

@@ -46,7 +46,7 @@ A test asserts that every served file is byte-identical to its copy under `skill
 
 **The served skill is outside the fingerprint.**
 The default surface, with the variable unset, is unchanged, so every fingerprint and `surface_digest` pin stays the baseline and `FINGERPRINT_COVERS` gains nothing.
-An app with the skill enabled has its own live `surface_digest`, because the skill's resources are among the records it hashes; a focused test pins that surface instead.
+An app with the skill enabled has its own live `surface_digest`, because the skill's resources are among the records it hashes; no test pins that digest, and focused tests check only that it differs from the default and that the served resource URIs and file bytes match the plugin's copy.
 
 ## Consequences
 
