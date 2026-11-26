@@ -1,6 +1,6 @@
 # ADR 0055: the server serves the skill only where the plugin cannot
 
-**Status:** Proposed (2026-11-25)
+**Status:** Accepted (2026-11-25)
 
 Amends the packaging in [ADR 0012](0012-m6-packaging-decisions.md) and [ADR 0049](0049-the-plugin-ships-no-slash-commands.md), which otherwise stand.
 
@@ -34,17 +34,19 @@ It remains the carrier for every install made through a plugin.
 
 **The server serves the same skill over `io.modelcontextprotocol/skills` only when `AMICUS_SERVE_SKILL=1`.**
 It serves `SKILL.md` and `references/` from the package, and never `tests/`.
-README's "Any other MCP client" example sets it.
+README's "Any other MCP client" section tells a user without the plugin to set it.
 
 **A plugin's server never serves the skill, whatever its environment holds.**
 Leaving the variable unset in the plugin's `.mcp.json` is not enough: a host can hand the server an inherited environment, and `env_vars_list()` in `src/amicus/packaging.py` passes every declared `AMICUS_*` name through.
 So the plugin's `.mcp.json` launches the server with an argv flag that turns serving off and outranks the variable, and a packaging test asserts that both manifests' server entries carry it.
-The flag's name is settled in the implementing plan.
+The flag is `--no-serve-skill`; any other argument is ignored, as releases up to 0.16.0 ignored every argument.
 
 **The served files are the files the plugin ships.**
 A test asserts that every served file is byte-identical to its copy under `skills/collaborating-with-amicus/`, and that the served set fits the Claude Code limits above.
 
-**Whether the served skill falls under `FINGERPRINT_COVERS` and `surface_digest` is decided in the plan that implements this ADR.**
+**The served skill is outside the fingerprint.**
+The default surface, with the variable unset, is unchanged, so every fingerprint and `surface_digest` pin stays the baseline and `FINGERPRINT_COVERS` gains nothing.
+An app with the skill enabled has its own live `surface_digest`, because the skill's resources are among the records it hashes; no test pins that digest, and focused tests check only that it differs from the default and that the served resource URIs and file bytes match the plugin's copy.
 
 ## Consequences
 

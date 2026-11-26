@@ -20,7 +20,18 @@ per-change, as its own lead says.
 
 ## [Unreleased]
 
+### Added
+
+- `AMICUS_SERVE_SKILL=1` serves the `collaborating-with-amicus` skill over the MCP skills
+  extension (`io.modelcontextprotocol/skills`), for installs made without the plugin
+  (ADR 0055). It is off by default. The plugin's `.mcp.json` now launches the server with
+  `--no-serve-skill`, which outranks the variable, so a plugin install never sees the skill
+  twice. The served files are the plugin's own `SKILL.md` and `references/`, shipped inside
+  the wheel. Claude Code loads MCP skills from v2.1.331, in public beta; Codex does not yet.
+
 ### Changed
+
+- amicus now requires `fastmcp>=4.2.2`, the first release whose skills extension lists a served skill.
 
 - `amicus_models`'s bundled codex fallback, used only when codex's own model cache cannot be
   read, now lists `gpt-6.2-sol` and `gpt-6.2-astra` first and follows the priority order codex

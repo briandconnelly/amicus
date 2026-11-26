@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import dataclasses
 import os
 import signal
 import sys
@@ -12,10 +13,11 @@ from typing import TYPE_CHECKING, Any
 
 import fastmcp
 from fastmcp import FastMCP
+from fastmcp.skills.provider import SkillCatalogProvider
 from mcp.server.caching import CacheHint
 from mcp.types import ReadResourceResult
 
-from amicus import ISSUES_URL, SERVER_NAME, __version__, config, obs, tools
+from amicus import ISSUES_URL, SERVER_NAME, __version__, config, obs, skill, tools
 from amicus.appstate import AppState
 from amicus.compaction import NullDefaultStrip
 from amicus.jobs.lifecycle import SYNC_AWAIT_GRACE_S
@@ -33,7 +35,7 @@ from amicus.tools import resources
 
 if TYPE_CHECKING:  # pragma: no cover
     import logging
-    from collections.abc import Callable, Generator
+    from collections.abc import Callable, Generator, Sequence
 
     from amicus.config import Settings
 
@@ -358,7 +360,17 @@ def create_app(
             )
     tools.register_all(app, settings, registry, state)
     resources.register_resources(app, settings, registry, state)
+    if settings.serve_skill:
+        _serve_skill(app, state)
     return app
+
+
+def _serve_skill(app: FastMCP, state: AppState) -> None:
+    """ADR 0055: serve the skill over the MCP skills extension, or record why it cannot be."""
+    try:
+        app.add_provider(SkillCatalogProvider([skill.build_skill()]))
+    except skill.SkillUnavailable as exc:
+        state.config_errors.append(f"AMICUS_SERVE_SKILL=1 but the skill could not be served: {exc}")
 
 
 def _make_signal_handler(log: logging.Logger, previous: Any) -> Callable[[int, object], None]:
@@ -400,10 +412,33 @@ def _enforce_posix_platform(os_name: str | None = None) -> None:
     raise SystemExit(1)
 
 
-def main() -> None:
-    """Console-script entrypoint: run the MCP server over stdio, failing legibly."""
+NO_SERVE_SKILL = "--no-serve-skill"
+
+
+def _parse_args(argv: Sequence[str]) -> bool:
+    """Whether argv carries `--no-serve-skill`, matched as an exact token.
+
+    Every other argument, an abbreviation or `--no-serve-skill=...` included, is ignored with a
+    warning, as v0.16.0 ignored all argv. The warning gives only a count: an argument can carry
+    a credential or a prompt, and the host captures stderr."""
+    args = list(argv)
+    unknown = sum(a != NO_SERVE_SKILL for a in args)
+    if unknown:
+        noun = "argument" if unknown == 1 else "arguments"
+        sys.stderr.write(f"amicus: ignoring {unknown} unrecognized {noun}\n")
+    return NO_SERVE_SKILL in args
+
+
+def main(argv: Sequence[str] = ()) -> None:
+    """Run the MCP server over stdio, failing legibly.
+
+    `--no-serve-skill` turns off the served skill whatever `AMICUS_SERVE_SKILL` holds; the
+    plugin's `.mcp.json` passes it so a plugin's server never serves the skill (ADR 0055)."""
     _enforce_posix_platform()
+    no_serve_skill = _parse_args(argv)
     settings = config.settings()
+    if no_serve_skill:
+        settings = dataclasses.replace(settings, serve_skill=False)
     if settings.fatal_errors:
         for problem in settings.fatal_errors:
             sys.stderr.write(f"amicus cannot start: {problem}.\n")
@@ -432,5 +467,10 @@ def main() -> None:
         log.info("amicus %s: stdio transport closed, shutting down", __version__)
 
 
+def cli() -> None:
+    """Console-script entrypoint: `main` with this process's own arguments."""
+    main(sys.argv[1:])
+
+
 if __name__ == "__main__":  # pragma: no cover
-    main()
+    cli()

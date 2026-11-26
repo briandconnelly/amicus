@@ -13,6 +13,7 @@ import re
 import shutil
 import subprocess
 import tomllib
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -74,8 +75,8 @@ def test_runtime_dependencies_are_exactly_the_spec_set():
     assert names == ["anyio", "fastmcp", "mcp", "pydantic"]
 
 
-def test_console_script_points_at_server_main():
-    assert _pyproject()["project"]["scripts"] == {"amicus-mcp": "amicus.server:main"}
+def test_console_script_points_at_server_cli():
+    assert _pyproject()["project"]["scripts"] == {"amicus-mcp": "amicus.server:cli"}
 
 
 def test_declared_names_cover_the_global_namespace():
@@ -102,7 +103,7 @@ def test_vendor_auth_includes_the_claude_credentials():
 EXPECTED_ENV_VARS = [
     # Pinned by review, not derived: comparing a generated file to its own generator is not an
     # oracle. This list is the independent expectation; the generator must reproduce it exactly.
-    # 33 declared (16 global + 6 codex + 7 claude + 4 pi) + 2 vendor = 35.
+    # 34 declared (17 global + 6 codex + 7 claude + 4 pi) + 2 vendor = 36.
     "AMICUS_ALLOW_CWD_WORKSPACE",
     "AMICUS_BACKENDS",
     "AMICUS_CLAUDE_ACCESS",
@@ -134,6 +135,7 @@ EXPECTED_ENV_VARS = [
     "AMICUS_PI_MODEL",
     "AMICUS_PI_REASONING_EFFORT",
     "AMICUS_PI_SUPPORTED_VERSIONS",
+    "AMICUS_SERVE_SKILL",
     "AMICUS_STATE_DIR",
     "AMICUS_TASKS",
     "AMICUS_TASKS_BACKEND_URL",
@@ -172,7 +174,9 @@ def test_mcp_json_env_vars_equal_the_declared_list():
 def test_mcp_json_invokes_the_console_script():
     server = _read(".mcp.json")["mcpServers"]["amicus"]
     assert server["command"] == "uvx"
-    assert server["args"][-1] == "amicus-mcp"
+    args = server["args"]
+    # ADR 0055: a plugin's server never serves the skill, whatever its environment holds.
+    assert args[args.index("--from") + 2 :] == ["amicus-mcp", "--no-serve-skill"]
 
 
 def test_mcp_json_installs_this_repo_at_its_own_release_tag():
@@ -327,7 +331,9 @@ async def test_the_committed_manifest_command_starts_a_real_server(tmp_path):
     )
     wheel = next(tmp_path.glob("*.whl"))
     args = [str(wheel) if a.startswith("git+") else a for a in server["args"]]
-    assert args[-1] == "amicus-mcp", "the console script name must survive substitution"
+    assert args[args.index("--from") + 2 :] == ["amicus-mcp", "--no-serve-skill"], (
+        "the console script and the plugin's flag must survive substitution"
+    )
     env = {"PATH": _minimal_subprocess_path(server["command"]), "HOME": str(tmp_path)}
     transport = StdioTransport(command=server["command"], args=args, env=env)
     async with Client(transport) as client:
@@ -441,3 +447,99 @@ def test_unreleased_content_without_a_subsection_is_rejected(dated_section_follo
         "\n- A bare bullet.\n", dated_section_follows=dated_section_follows
     )
     assert problems and "subsection" in problems[0]
+
+
+# --- ADR 0055: the served skill ships in the wheel, and only the plugin turns it off ----------
+
+_SKILL_PREFIX = "amicus/_skill/collaborating-with-amicus/"
+
+
+@pytest.fixture(scope="module")
+def built_wheel(tmp_path_factory) -> Path:
+    out = tmp_path_factory.mktemp("wheel")
+    subprocess.run(
+        ["uv", "build", "--wheel", "--out-dir", str(out), str(REPO_ROOT)],
+        check=True,
+        capture_output=True,
+    )
+    return next(out.glob("*.whl"))
+
+
+@pytest.mark.slow
+def test_the_wheel_ships_exactly_the_served_skill(built_wheel):
+    from tests.test_served_skill import REPO_SKILL, expected_files
+
+    with zipfile.ZipFile(built_wheel) as wheel:
+        members = {
+            name.removeprefix(_SKILL_PREFIX): wheel.read(name)
+            for name in wheel.namelist()
+            if name.startswith(_SKILL_PREFIX)
+        }
+    assert members == {p: (REPO_SKILL / p).read_bytes() for p in expected_files(REPO_SKILL)}
+
+
+async def _skill_view(wheel: Path, extra_args: list[str], tmp_path: Path) -> tuple[bool, set]:
+    """Launch the installed wheel from a cwd outside the checkout, with the skill opted in."""
+    from fastmcp.skills.client import SkillsClientExtension
+
+    env = {
+        "PATH": _minimal_subprocess_path("uvx"),
+        "HOME": str(tmp_path),
+        "AMICUS_SERVE_SKILL": "1",
+    }
+    transport = StdioTransport(
+        command="uvx",
+        args=["--from", str(wheel), "amicus-mcp", *extra_args],
+        env=env,
+        cwd=str(tmp_path),
+    )
+    async with Client(transport, extensions=[SkillsClientExtension()]) as client:
+        caps = client.server_capabilities
+        advertised = "io.modelcontextprotocol/skills" in dict((caps and caps.extensions) or {})
+        uris = {
+            str(r.uri) for r in await client.list_resources() if str(r.uri).startswith("skill://")
+        }
+    return advertised, uris
+
+
+@pytest.mark.slow
+async def test_the_installed_wheel_honours_the_plugin_flag(built_wheel, tmp_path):
+    assert await _skill_view(built_wheel, ["--no-serve-skill"], tmp_path) == (False, set())
+
+
+@pytest.mark.slow
+async def test_the_installed_wheel_serves_the_whole_skill_without_the_flag(built_wheel, tmp_path):
+    from tests.test_served_skill import REPO_SKILL, expected_files
+
+    advertised, uris = await _skill_view(built_wheel, [], tmp_path)
+    base = "skill://collaborating-with-amicus/"
+    assert advertised
+    assert uris == {base + p for p in expected_files(REPO_SKILL)} | {base + "_manifest"}
+
+
+@pytest.mark.slow
+def test_the_wheel_leaves_out_files_the_server_skips(tmp_path):
+    """Junk in a dirty source tree (a backup, a hidden file) never reaches a built wheel."""
+    tracked = (
+        subprocess.run(["git", "ls-files", "-z"], cwd=REPO_ROOT, check=True, capture_output=True)
+        .stdout.decode()
+        .split("\0")
+    )
+    src = tmp_path / "src-tree"
+    for rel in filter(None, tracked):
+        if (REPO_ROOT / rel).is_file():
+            (src / rel).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(REPO_ROOT / rel, src / rel)
+    refs = src / "skills" / "collaborating-with-amicus" / "references"
+    (refs / "notes.md.bak").write_text("junk")
+    (refs / ".DS_Store").write_bytes(b"junk")
+    out = tmp_path / "dist"
+    subprocess.run(
+        ["uv", "build", "--wheel", "--out-dir", str(out), str(src)],
+        check=True,
+        capture_output=True,
+    )
+    with zipfile.ZipFile(next(out.glob("*.whl"))) as wheel:
+        names = [n for n in wheel.namelist() if n.startswith(_SKILL_PREFIX)]
+    assert names
+    assert not [n for n in names if n.endswith(("notes.md.bak", ".DS_Store"))]

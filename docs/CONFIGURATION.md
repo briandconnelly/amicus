@@ -85,6 +85,11 @@ Former names, no longer read: `CODEX_IN_CLAUDE_LOG_FILE`, `MOONBRIDGE_LOG_FILE`.
 `1` to register the paid sync tools with the tasks extension.
 Default: `0`.
 
+### `AMICUS_SERVE_SKILL`
+
+`1` to serve the collaborating-with-amicus skill over the MCP skills extension; ignored under `--no-serve-skill`.
+Default: `0`.
+
 ### `AMICUS_TASKS_BACKEND_URL`
 
 Docket backend for the tasks extension (memory:// or redis://).

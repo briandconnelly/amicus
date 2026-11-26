@@ -64,6 +64,13 @@ client that has no notion of a working directory looks like this:
    `error.repair`: its `next_step` says what to do, and when one call recovers, its `tool` and
    `arguments` name that call.
 
+The plugins install the `collaborating-with-amicus` skill beside the server; a client without
+the plugin can have the server serve it instead. In releases after 0.16.0, set
+`AMICUS_SERVE_SKILL=1` and the server offers the skill over the MCP skills extension. Claude
+Code loads it from v2.1.331, in public beta, and not under `claude -p`, the Agent SDK, API-key
+login or several other setups (ADR 0055 lists them); Codex does not load MCP skills yet. How
+reliably a host triggers the served skill has not been measured.
+
 ### Requirements
 
 - macOS or Linux: amicus refuses to start on a non-POSIX platform, because its background-job

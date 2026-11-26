@@ -26,9 +26,9 @@ dependencies = [
     # Minor-line caps: fastmcp documents that breaking changes may land in minor releases.
     # Widening either cap is a hand-written upgrade PR, not a resolver decision:
     # .github/dependabot.yml ignores minor and major updates to both packages.
-    # The fastmcp floor is 4.1.4 because several FastMCP advisories are fixed only on the
-    # 4.1 line (#394), and fastmcp 4.1.4 requires mcp 2.3.
-    "fastmcp>=4.1.4,<4.3",
+    # The fastmcp floor is 4.2.2: 4.2.0 and 4.2.1 list no served skill (ADR 0055); it
+    # also carries the advisory fixes that once set the floor at 4.1.4 (#394).
+    "fastmcp>=4.2.2,<4.3",
     "mcp>=2.3,<2.4",
     "pydantic>=2",
 ]
@@ -39,7 +39,7 @@ Repository = "https://github.com/briandconnelly/amicus"
 Issues = "https://github.com/briandconnelly/amicus/issues"
 
 [project.scripts]
-amicus-mcp = "amicus.server:main"
+amicus-mcp = "amicus.server:cli"
 
 [build-system]
 requires = ["hatchling"]
@@ -48,11 +48,16 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/amicus"]
 
+# ADR 0055: the served skill is the plugin's own copy, shipped inside the package.
+# hatch_build.py adds exactly the files the server serves: SKILL.md and references/, never
+# the skill's tests/, backups or hidden files.
+[tool.hatch.build.targets.wheel.hooks.custom]
+
 [dependency-groups]
 dev = [
     "actionlint-py>=1.7.12.25",
     # The tasks spike (M0) needs the real extension; production wiring lands in M5.
-    "fastmcp[tasks]>=4.1.4,<4.3",
+    "fastmcp[tasks]>=4.2.2,<4.3",
     "import-linter>=2",
     "jsonschema>=4.26",
     "prek>=0.4.5",
@@ -179,6 +184,8 @@ forbidden_modules = [
     "amicus.result_format_snapshot",
     "amicus.schemas",
     "amicus.server",
+    "amicus.skill",
+    "amicus.skill_files",
     "amicus.surface",
     "amicus.tools",
     "amicus.wire_shape_snapshot",
